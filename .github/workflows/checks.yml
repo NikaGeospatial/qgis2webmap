@@ -78,4 +78,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pytest
+      # Build first: some tests inspect the packaged zip (that the help guides
+      # ship, for instance) and would otherwise skip silently in CI.
+      - run: python scripts/package_plugin.py
       - run: python -m pytest tests/unit -q
