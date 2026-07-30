@@ -241,6 +241,7 @@ class SymbolSpec:
     radius: float | None = None
     opacity: float = 1.0
     icon_path: str | None = None
+    marker_shape: str | None = None
     symbol_layer_count: int = 1
 
     def snapshot(self) -> dict[str, Any]:
@@ -252,8 +253,16 @@ class SymbolSpec:
             "radius": self.radius,
             "opacity": round(self.opacity, 4),
             "iconPath": self.icon_path,
+            "markerShape": self.marker_shape,
             "symbolLayerCount": self.symbol_layer_count,
         }
+
+
+# Marker shapes a circle-based renderer draws correctly without an icon atlas.
+# QGIS offers around forty; everything outside this set has to be either drawn as
+# an icon or reported as approximated. qgis2web silently collapses all of them to
+# circles - upstream qgis2web#1218, open since June 2026.
+NATIVELY_ROUND_MARKER_SHAPES = frozenset({"circle"})
 
 
 @dataclass(frozen=True)

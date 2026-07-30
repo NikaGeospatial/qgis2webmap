@@ -13,12 +13,19 @@ Two halves, deliberately separated:
 
 * **Detection** is unconditional and useful under every policy -- the counts feed
   the Fidelity tab whether or not they block anything.
-* **Enforcement** is a swappable policy, because whether exports carry a licence
-  key is an open product decision. When it lands, it is a policy swap rather than
-  a rewrite.
+* **Enforcement** is a swappable policy. Decided 2026-07-30: **exports ship
+  without a licence key**, so `FreeTierPolicy` is the one in play. Retention does
+  not need a gate - the artifact is built from `<om-map>` custom elements, so
+  only OnlyMapJS renders it at all. `LicensedPolicy` stays because it costs
+  nothing and saves a rewrite if that ever changes.
 
-The interim default is `FreeTierPolicy`, which **blocks**, per the project's
-non-negotiable: never write a knowingly broken artifact.
+Worth stating because it is easy to assume otherwise: **opening the file from the
+filesystem does not lift the caps.** The runtime's own licence module says "NO
+localhost exemption (gates apply identically everywhere)". A `file://` artifact is
+gated exactly like a hosted one.
+
+`FreeTierPolicy` **blocks**, per the project's non-negotiable: never write a
+knowingly broken artifact.
 
 Pure Python: no PyQGIS, no Qt, unit-tested in CI.
 

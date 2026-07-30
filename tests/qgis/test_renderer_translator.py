@@ -199,3 +199,37 @@ class TestUnsupportedRenderer:
         assert spec.unsupported_reason == "QgsRuleBasedRenderer"
         unsupported = report.by_status(FidelityStatus.UNSUPPORTED)
         assert any("QgsRuleBasedRenderer" in i.detail for i in unsupported)
+
+
+class TestMarkerShape:
+    """Guards against upstream qgis2web#1218 - every marker becoming a circle."""
+
+    @pytest.mark.parametrize(
+        "shape", ["circle", "square", "triangle", "star", "diamond", "pentagon"]
+    )
+    def test_shape_is_captured_not_flattened(self, qgis_app, shape) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"name": shape})
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.marker_shape == shape
+
+    def test_non_circle_shape_is_reported(self, qgis_app) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"name": "star"})
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        assert any(
+            "star" in i.detail for i in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_circle_needs_no_note(self, qgis_app) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"name": "circle"})
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        assert not any(
+            "marker shape" in i.detail
+            for i in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_line_symbol_has_no_marker_shape(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple({"color": "#000000"})
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.marker_shape is None

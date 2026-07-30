@@ -31,6 +31,7 @@ from qgis.core import (
 )
 
 from .export_ir import (
+    NATIVELY_ROUND_MARKER_SHAPES,
     CategorySpec,
     ClassificationMethod,
     Color,
@@ -175,6 +176,16 @@ def translate_symbol(
             layer_id,
         )
 
+    marker_shape = read_marker_shape(symbol_layer)
+    if marker_shape and marker_shape not in NATIVELY_ROUND_MARKER_SHAPES:
+        report.approximated(
+            subject,
+            f"The marker shape is '{marker_shape}'. It is recorded and drawn as "
+            "that shape where the renderer can, rather than being silently "
+            "replaced by a circle.",
+            layer_id,
+        )
+
     return SymbolSpec(
         fill_color=fill_color,
         stroke_color=stroke_color,
@@ -183,8 +194,32 @@ def translate_symbol(
         radius=radius,
         opacity=float(symbol.opacity()),
         icon_path=str(icon_path) if icon_path else None,
+        marker_shape=marker_shape,
         symbol_layer_count=layer_count,
     )
+
+
+def read_marker_shape(symbol_layer: Any) -> str | None:
+    """Name the marker shape, e.g. `square`, `star`, `triangle`.
+
+    QGIS offers around forty simple-marker shapes. qgis2web reads none of them
+    and every marker comes out a circle - upstream qgis2web#1218, open since
+    June 2026, with a side-by-side screenshot of squares becoming circles.
+
+    Capturing the shape here is what makes it possible to draw it correctly
+    later, or at minimum to *tell* the user it changed. `encodeShape` is the
+    QGIS-blessed enum-to-string mapping, so the names stay stable across
+    versions.
+    """
+    shape = _safe(symbol_layer, "shape")
+    if shape is None:
+        return None
+    try:
+        from qgis.core import QgsSimpleMarkerSymbolLayerBase
+
+        return str(QgsSimpleMarkerSymbolLayerBase.encodeShape(shape))
+    except (ImportError, AttributeError, TypeError):  # pragma: no cover
+        return None
 
 
 def _safe(obj: Any, method: str) -> Any:

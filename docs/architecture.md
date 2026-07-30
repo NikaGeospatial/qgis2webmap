@@ -145,6 +145,27 @@ Recorded so they are designed around rather than discovered late:
   and some locked-down remote-desktop environments will render nothing.
   `<om-fallback>` covers the no-JavaScript case but not the no-WebGL case.
 
+## Symbology fidelity
+
+The renderer choice is settled and defensible on its own: the artifact is built
+from `<om-map>` / `<om-layer>` custom elements, so only OnlyMapJS renders it, and
+it brings 3D/WebGL capability that Leaflet and OpenLayers do not. Nothing needs to
+gate users into it.
+
+What a QGIS user actually judges is whether their map still looks like their map.
+That is where the incumbent is weakest, and it is where our effort goes:
+
+- **Nothing is silently swapped.** qgis2web turns every QGIS simple-marker shape
+  into a circle (upstream #1218, open since June 2026). We capture the shape and,
+  where the renderer cannot draw it, say so in the fidelity report.
+- **One renderer means no divergence.** Upstream #1095 has labels working in
+  OpenLayers and broken in Leaflet - the direct consequence of two code paths. We
+  have one, so that class of bug cannot occur.
+- **Unsupported is a named outcome.** An untranslatable renderer is reported with
+  its class name, not defaulted quietly (upstream #1041).
+
+The fidelity report is the mechanism, and upstream has no equivalent.
+
 ## Non-negotiables
 
 These exist because the alternative was observed to fail in the incumbent:
