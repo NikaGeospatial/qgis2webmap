@@ -19,3 +19,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - Project and layer readers translating single, categorized and graduated
   renderers, labels, popups and groups, and normalising all vector data to
   WGS84 GeoJSON.
+- Marker shapes are captured rather than flattened to circles.
+- OnlyMap manifest builder emitting declarative markup, using the canonical
+  expression shapes so the legend renders categories and class ranges without a
+  hand-built legend.
+- `OnlyMapWriter` producing a self-contained `index.html` with the runtime, the
+  styles and the data inlined - no network requests, no tracking - plus an
+  `ArtifactResult` recording sizes, runtime provenance and a deterministic
+  manifest snapshot.

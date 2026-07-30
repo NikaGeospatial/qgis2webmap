@@ -1,0 +1,133 @@
+<!doctype html>
+<!--
+  @GENERATOR@
+
+  This file is a complete, self-contained OnlyMap application. Everything it
+  needs is inside it: the map runtime, the styles, and the data.
+
+  Editing it, by hand or with an AI assistant:
+    - The <om-map> block below IS the map. Layers, styling and widgets are
+      declarative attributes - change them and reload.
+    - Styling attributes take an expression language: $field reads a column,
+      and scale(...) maps values to colours.
+    - Do not edit the runtime <script> block. It is minified library code, and
+      nothing in it needs changing to alter the map.
+
+  Documentation: https://docs.nikaplanet.com
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@TITLE@</title>
+
+    <!--
+      The stylesheet is inlined raw, never compressed. <om-fallback> is gated by
+      a pure-CSS rule (om-map:not(:defined)), which is what makes the no-script
+      message appear in mail previews and iOS QuickLook. If this arrived only
+      after JavaScript ran, the fallback would fail in exactly the places it
+      exists for.
+    -->
+    <style>
+@RUNTIME_CSS@
+    </style>
+
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        background: #f8f9fa;
+      }
+      /* A custom element is display:inline by default and would collapse to
+         zero height. */
+      om-map {
+        display: block;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .om-popup {
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 22rem;
+      }
+      .om-popup-title {
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .om-popup-row {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: space-between;
+      }
+      .om-popup-label {
+        color: #6b7280;
+      }
+      .om-popup-value {
+        font-variant-numeric: tabular-nums;
+      }
+      .om-fallback {
+        padding: 2rem;
+        max-width: 40rem;
+        margin: 0 auto;
+      }
+      /* Credits sit below the map rather than over it, so they never cover a
+         control or compete with the runtime's own corner chrome. */
+      .om-credit {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: baseline;
+        padding: 0.5rem 0.9rem;
+        font-size: 12px;
+        color: #4b5563;
+        background: #ffffff;
+        border-top: 1px solid #e5e7eb;
+      }
+      .om-credit a {
+        color: #0d9488;
+      }
+      .om-credit-title {
+        font-weight: 600;
+        color: #111827;
+        margin-right: auto;
+      }
+      @media print {
+        .om-credit {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+@MANIFEST@
+
+    <footer class="om-credit">
+      <span class="om-credit-title">@TITLE@</span>
+      <span>Built with <a href="https://www.nikaplanet.com/onlymap">OnlyMap</a>
+        by <a href="https://nikaplanet.com">NIKA</a></span>
+      <a href="https://docs.nikaplanet.com/onlymap/enhance-with-ai">Enhance with AI</a>
+      <a href="https://docs.nikaplanet.com/onlymap/hosting">Host with OnlyMap</a>
+    </footer>
+
+    <!--
+      The runtime. Inlined so this file works from a filesystem with no server
+      and no internet: file:// blocks fetch of sibling files, so a src= URL
+      would not load.
+    -->
+    <script type="module">
+@RUNTIME_JS@
+    </script>
+  </body>
+</html>
