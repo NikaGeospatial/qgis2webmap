@@ -1,0 +1,247 @@
+"""One QGIS vector layer to one `ExportLayer`.
+
+Imports PyQGIS; exercised in `tests/qgis/`.
+
+Normalises everything to **WGS84 GeoJSON**, per issue #29's 0.1.0 scope. That one
+decision removes a whole class of downstream work: the writer never learns what a
+Shapefile is, and reprojection happens exactly once, here.
+
+Copyright (C) 2026 NIKA
+SPDX-License-Identifier: GPL-2.0-or-later
+"""
+
+from __future__ import annotations
+
+import json
+from typing import TYPE_CHECKING, Any
+
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsJsonExporter,
+    QgsMapLayerType,
+    QgsWkbTypes,
+)
+
+from .export_ir import (
+    AssetDependency,
+    AssetDisposition,
+    ExportLayer,
+    GeometryKind,
+    ScaleRange,
+    SourceKind,
+)
+from .fidelity_report import FidelityReportBuilder
+from .labeling_translator import translate_labeling
+from .popup_translator import translate_popup
+from .renderer_translator import translate_renderer
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from qgis.core import QgsVectorLayer
+
+WGS84 = "EPSG:4326"
+
+# Full double precision is meaningless for a web map and inflates the artifact
+# for nothing. 9 decimal places is roughly 0.1 mm at the equator - far beyond any
+# survey requirement, so this is not the lossy quantisation that stays opt-in.
+GEOJSON_PRECISION = 9
+
+_GEOMETRY_BY_WKB = {
+    QgsWkbTypes.PointGeometry: GeometryKind.POINT,
+    QgsWkbTypes.LineGeometry: GeometryKind.LINE,
+    QgsWkbTypes.PolygonGeometry: GeometryKind.POLYGON,
+}
+
+# Provider keys that mean "the data lives in a file next to the project".
+_FILE_PROVIDERS = frozenset({"ogr", "gdal", "delimitedtext", "gpx", "spatialite"})
+_DATABASE_PROVIDERS = frozenset({"postgres", "mssql", "oracle", "db2", "hana"})
+_SERVICE_PROVIDERS = frozenset({"wfs", "arcgisfeatureserver", "ows", "wms"})
+
+
+def geometry_kind(layer: QgsVectorLayer) -> GeometryKind:
+    return _GEOMETRY_BY_WKB.get(layer.geometryType(), GeometryKind.UNKNOWN)
+
+
+def source_kind(layer: QgsVectorLayer) -> SourceKind:
+    provider = (layer.providerType() or "").lower()
+    if provider == "memory":
+        return SourceKind.MEMORY
+    if provider in _FILE_PROVIDERS:
+        return SourceKind.FILE
+    if provider in _DATABASE_PROVIDERS:
+        return SourceKind.DATABASE
+    if provider in _SERVICE_PROVIDERS:
+        return SourceKind.SERVICE
+    return SourceKind.UNKNOWN
+
+
+def scale_range(layer: QgsVectorLayer) -> ScaleRange:
+    if not layer.hasScaleBasedVisibility():
+        return ScaleRange()
+    return ScaleRange(
+        min_scale=float(layer.minimumScale()), max_scale=float(layer.maximumScale())
+    )
+
+
+def read_attribution(layer: QgsVectorLayer) -> str | None:
+    """Attribution text a map must display for this layer's data.
+
+    `QgsMapLayer.attribution()` is deprecated in QGIS 3.32+; the value moved to
+    `serverProperties()`. Metadata rights are a second, independent place a user
+    can record a credit, so both are checked - a missing attribution on a
+    licensed dataset is a legal problem, not a cosmetic one.
+    """
+    server_properties = getattr(layer, "serverProperties", None)
+    if server_properties is not None:
+        attribution = (server_properties().attribution() or "").strip()
+        if attribution:
+            return attribution
+
+    rights = [r.strip() for r in (layer.metadata().rights() or []) if r.strip()]
+    if rights:
+        return "; ".join(rights)
+
+    return None
+
+
+def describe_source(layer: QgsVectorLayer) -> AssetDependency:
+    """Classify where the data comes from, without capturing credentials.
+
+    A database or service URI can carry a password. We record only *that* one was
+    present - never the value - because knowing is enough to block or warn, and a
+    secret must never reach the model, a snapshot, or an artifact.
+    """
+    kind = source_kind(layer)
+    uri = layer.dataProvider().uri() if layer.dataProvider() else None
+    has_credentials = bool(uri and (uri.password() or uri.username()))
+
+    if kind in (SourceKind.FILE, SourceKind.MEMORY):
+        disposition = AssetDisposition.EMBEDDABLE
+        note = None
+    elif kind is SourceKind.SERVICE:
+        disposition = AssetDisposition.EMBEDDABLE
+        note = (
+            "Features are downloaded once and embedded, so the exported map does "
+            "not call the service. It is a snapshot, not a live feed."
+        )
+    else:
+        disposition = AssetDisposition.EMBEDDABLE
+        note = (
+            "Features are read from the database once and embedded. The exported "
+            "map contains no connection details."
+        )
+
+    return AssetDependency(
+        identifier=f"{layer.providerType()}:{layer.name()}",
+        disposition=disposition,
+        credentials_detected=has_credentials,
+        note=note,
+    )
+
+
+def export_geojson(
+    layer: QgsVectorLayer,
+    report: FidelityReportBuilder,
+    precision: int = GEOJSON_PRECISION,
+) -> dict[str, Any] | None:
+    """Read every feature as WGS84 GeoJSON.
+
+    `QgsJsonExporter` handles reprojection through `setDestinationCrs`, so this
+    is the single place a CRS transform happens in the whole plugin.
+    """
+    layer_id = layer.id()
+    subject = f"Data of '{layer.name()}'"
+
+    exporter = QgsJsonExporter(layer)
+    exporter.setDestinationCrs(QgsCoordinateReferenceSystem(WGS84))
+    exporter.setTransformGeometries(True)
+    exporter.setIncludeGeometry(True)
+    exporter.setIncludeAttributes(True)
+    exporter.setPrecision(precision)
+
+    try:
+        features = list(layer.getFeatures())
+        text = exporter.exportFeatures(features)
+        collection = json.loads(text)
+    except (OSError, ValueError, RuntimeError) as exc:
+        report.blocked(
+            subject,
+            f"The layer's features could not be read: {exc}. Check that the data "
+            "source is reachable and not locked by another program.",
+            layer_id,
+        )
+        return None
+
+    source_crs = layer.crs()
+    if source_crs.isValid() and source_crs.authid() != WGS84:
+        report.preserved(
+            subject,
+            f"Reprojected from {source_crs.authid()} to {WGS84} for the web map.",
+            layer_id,
+        )
+
+    return collection
+
+
+def read_layer(
+    layer: QgsVectorLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read one vector layer into the normalized model.
+
+    Returns `None` for layers 0.1.0 cannot handle at all - rasters, and vector
+    layers with no geometry - after recording why.
+    """
+    layer_id = layer.id()
+    name = layer.name()
+
+    if layer.type() != QgsMapLayerType.VectorLayer:
+        report.unsupported(
+            f"Layer '{name}'",
+            "Raster layers are not exported in 0.1.0. The layer is omitted from "
+            "the map.",
+            layer_id,
+        )
+        return None
+
+    kind = geometry_kind(layer)
+    if kind is GeometryKind.UNKNOWN:
+        report.unsupported(
+            f"Layer '{name}'",
+            "The layer has no geometry (an attribute-only table), so there is "
+            "nothing to draw on a map. It is omitted.",
+            layer_id,
+        )
+        return None
+
+    geojson = export_geojson(layer, report)
+    if geojson is None:
+        return None
+
+    feature_count = len(geojson.get("features") or ())
+    if feature_count == 0:
+        report.unsupported(
+            f"Layer '{name}'",
+            "The layer contains no features. It is exported but will show "
+            "nothing - check for an active filter or an empty data source.",
+            layer_id,
+        )
+
+    return ExportLayer(
+        layer_id=layer_id,
+        name=name,
+        geometry_kind=kind,
+        source_kind=source_kind(layer),
+        visible=visible,
+        opacity=float(layer.opacity()),
+        scale_range=scale_range(layer),
+        renderer=translate_renderer(layer, report),
+        labeling=translate_labeling(layer, report),
+        popup=translate_popup(layer, report),
+        attribution=read_attribution(layer),
+        feature_count=feature_count,
+        geojson=geojson,
+        group_path=group_path,
+        dependencies=(describe_source(layer),),
+    )
