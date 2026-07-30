@@ -95,11 +95,23 @@ class TestFreeTierPolicy:
         assert verdict.allowed is True
         assert verdict.license_key is None
 
-    def test_blocks_an_over_cap_project(self) -> None:
+    def test_warns_but_allows_an_over_cap_project(self) -> None:
+        """Blocking would make the plugin useless for an ordinary project."""
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
         verdict = FreeTierPolicy().evaluate(make_project(layers))
-        assert verdict.allowed is False
+        assert verdict.allowed is True
         assert verdict.has_violations
+
+    def test_over_cap_export_asks_for_runtime_validation(self) -> None:
+        """`validate` mounts the runtime's error panel, so the recipient sees
+        why a layer is missing instead of an unexplained gap."""
+        layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
+        verdict = FreeTierPolicy().evaluate(make_project(layers))
+        assert verdict.needs_runtime_validation is True
+
+    def test_clean_export_carries_no_diagnostic_panel(self) -> None:
+        verdict = FreeTierPolicy().evaluate(make_project([make_layer("a")]))
+        assert verdict.needs_runtime_validation is False
 
 
 class TestLicensedPolicy:
@@ -131,13 +143,26 @@ class TestDefaultPolicy:
 
 
 class TestReportVerdict:
-    def test_blocking_verdict_records_blockers(self) -> None:
+    def test_unlicensed_verdict_reports_unsupported_not_blocked(self) -> None:
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
         verdict = FreeTierPolicy().evaluate(make_project(layers))
         report = FidelityReportBuilder()
         report_verdict(verdict, report)
-        assert report.has_blockers
-        assert len(report.by_status(FidelityStatus.BLOCKED)) == 1
+        assert not report.has_blockers
+        assert len(report.by_status(FidelityStatus.UNSUPPORTED)) == 1
+
+    def test_unlicensed_report_states_the_remedy(self) -> None:
+        layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
+        verdict = FreeTierPolicy().evaluate(make_project(layers))
+        report = FidelityReportBuilder()
+        report_verdict(verdict, report)
+        detail = report.by_status(FidelityStatus.UNSUPPORTED)[0].detail
+        assert "split the project" in detail
+
+    def test_licensed_verdict_needs_no_diagnostic_panel(self) -> None:
+        layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
+        verdict = LicensedPolicy("om_live_x").evaluate(make_project(layers))
+        assert verdict.needs_runtime_validation is False
 
     def test_licensed_verdict_records_advisories_not_blockers(self) -> None:
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]

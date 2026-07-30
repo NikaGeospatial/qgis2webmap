@@ -178,8 +178,20 @@ These exist because the alternative was observed to fail in the incumbent:
    remote basemap unless explicitly chosen.
 4. **Lossless by default.** Gzip shrinks bytes without changing data. Coordinate
    quantisation and geometry simplification are opt-in and reported.
-5. **Never write a knowingly broken artifact.** Over a licence cap, missing a
-   required asset, or unable to embed — fail with an actionable message.
+5. **Never write a *silently* broken artifact.** The word doing the work is
+   "silently". Breakage the user has been shown and accepted is their call;
+   breakage they discover when a client opens the file is ours.
+
+   In practice that means two surfaces, not one:
+   - **At export time**, the fidelity report names exactly what will not appear,
+     and the dialog shows it before the Export button is pressed.
+   - **In the artifact**, the map explains itself. Over a licence cap the writer
+     sets `validate` on `<om-map>`, which mounts the runtime's error panel, so a
+     recipient sees why a layer is missing rather than an unexplained gap. A
+     clean export carries no such panel.
+
+   A genuinely unrecoverable condition — a required asset missing, nothing
+   exportable at all — still fails with an actionable message.
 6. **One writer serves preview and export.** Preview cannot drift from output if
    there is one code path producing both.
 7. **Refresh must not mutate settings.** Derive the layer list from the project;

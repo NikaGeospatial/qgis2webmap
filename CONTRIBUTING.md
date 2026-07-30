@@ -7,9 +7,11 @@
    entry.
 2. **No dependency installers.** The plugin must not shell out to a package
    manager. Everything it needs ships with it.
-3. **Never write a knowingly broken artifact.** If an export cannot be produced
-   correctly, fail with an actionable message and record it in the fidelity
-   report.
+3. **Never write a *silently* broken artifact.** Anything that will not survive
+   the export must appear in the fidelity report before the user exports, and
+   the artifact itself must explain any gap to whoever opens it. Informed
+   breakage is the user's decision; undiscovered breakage is a defect. Only a
+   genuinely unrecoverable export fails outright.
 4. **Lossless by default.** Compression may shrink bytes; it must not discard
    data. Lossy transforms are opt-in and reported.
 5. **Exports make no network requests.** `telemetry="off"`, no `map-id`, no

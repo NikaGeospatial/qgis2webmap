@@ -78,6 +78,17 @@ class CapVerdict:
     def has_violations(self) -> bool:
         return bool(self.violations)
 
+    @property
+    def needs_runtime_validation(self) -> bool:
+        """Whether the writer should set `validate` on `<om-map>`.
+
+        Only when something will actually go wrong. `validate` mounts the
+        runtime's error panel, which is exactly right when layers are missing and
+        pure noise on a clean deliverable - a client should not receive a map
+        wearing a diagnostic badge for no reason.
+        """
+        return self.has_violations and self.license_key is None
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "allowed": self.allowed,
@@ -140,16 +151,26 @@ def detect_violations(project: ExportProject) -> tuple[CapViolation, ...]:
 
 
 class FreeTierPolicy:
-    """No licence key: caps apply and a breach blocks the export.
+    """No licence key: caps apply, and a breach warns rather than blocks.
 
-    Blocking rather than warning is deliberate. A warning would let the user
-    produce a file that looks fine locally and is missing layers for the person
-    they send it to -- the exact silent failure this project exists to avoid.
+    Decided 2026-07-30. Blocking an ordinary six-layer project would make the
+    plugin useless for the common case, and the breakage is not silent from
+    either end:
+
+    * **At export time** the fidelity report names every layer that will not
+      render, and the dialog surfaces it before the user clicks Export.
+    * **In the artifact** the runtime enforces the caps itself and reports each
+      violation on its validation stream. The writer sets `validate` on
+      `<om-map>` when violations exist, which mounts the runtime's error panel -
+      a corner badge that expands to the list and flashes the offending element -
+      so a recipient sees an explanation rather than an unexplained gap.
+
+    That is the distinction that matters: never write a *silently* broken
+    artifact. Informed breakage is the user's call to make.
     """
 
     def evaluate(self, project: ExportProject) -> CapVerdict:
-        violations = detect_violations(project)
-        return CapVerdict(allowed=not violations, violations=violations)
+        return CapVerdict(allowed=True, violations=detect_violations(project))
 
 
 class LicensedPolicy:
@@ -184,16 +205,25 @@ def default_policy(license_key: str | None = None) -> LicensePolicy:
 def report_verdict(verdict: CapVerdict, report: FidelityReportBuilder) -> None:
     """Fold a verdict into the fidelity report.
 
-    Under a blocking policy a violation is a blocker; under a licensed one the
-    same finding is advisory, since the key lifts it. Same detection, different
-    severity -- which is the whole point of separating the two.
+    Severity follows the policy. With a key the caps are lifted, so a violation
+    is advisory - worth knowing because someone else may export the same project
+    without one. Without a key the layer genuinely will not render, so it is
+    reported as unsupported, with the remedy stated.
     """
     for violation in verdict.violations:
-        if verdict.allowed:
+        if verdict.license_key is not None:
             report.approximated(
                 violation.subject,
-                f"{violation.detail} Your licence key lifts this limit.",
+                f"{violation.detail} Your licence key lifts this limit, so the "
+                "map you export is complete.",
                 violation.layer_id,
             )
         else:
-            report.blocked(violation.subject, violation.detail, violation.layer_id)
+            report.unsupported(
+                violation.subject,
+                f"{violation.detail} The exported map shows an explanation in "
+                "its corner so the recipient is not left guessing. To include "
+                "everything, split the project across several maps or reduce the "
+                "number of features.",
+                violation.layer_id,
+            )
