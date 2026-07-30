@@ -79,7 +79,7 @@ def make_layer(**overrides) -> ExportLayer:
 def make_project(layers=None, **overrides) -> ExportProject:
     defaults = dict(
         title="Test map",
-        layers=tuple(layers or [make_layer()]),
+        layers=tuple([make_layer()] if layers is None else layers),
         extent=Extent(west=0.0, south=0.0, east=10.0, north=10.0),
     )
     defaults.update(overrides)

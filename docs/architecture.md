@@ -145,6 +145,29 @@ Recorded so they are designed around rather than discovered late:
   and some locked-down remote-desktop environments will render nothing.
   `<om-fallback>` covers the no-JavaScript case but not the no-WebGL case.
 
+## Packaging
+
+Measured on a real export: **5.45 MB uncompressed, 1.84 MB packed** - a 3.0x
+reduction, entirely lossless.
+
+The runtime is embedded as gzipped base64 and inflated in the browser by a small
+bootstrap using `DecompressionStream`. Verified working from `file://` in
+Chromium; Firefox is checked at release verification.
+
+Two rules that are easy to break:
+
+1. **The stylesheet is never compressed.** `<om-fallback>` is gated by a pure-CSS
+   rule (`om-map:not(:defined)`), which is what shows a message instead of a
+   blank frame in mail previews and iOS QuickLook. CSS that only arrives after a
+   script has run cannot do that.
+2. **The bootstrap inflates data before importing the runtime.** Importing
+   defines the custom elements, which immediately upgrades every `<om-layer>` and
+   reads its inline data. Inflating afterwards would be too late.
+
+Layer data is compressed only above a size threshold. Readable GeoJSON is what
+lets a person or an AI assistant edit the exported map, and that is worth more
+than a few hundred kilobytes on a small file.
+
 ## Symbology fidelity
 
 The renderer choice is settled and defensible on its own: the artifact is built

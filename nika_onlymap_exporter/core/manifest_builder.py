@@ -190,12 +190,19 @@ def _attrs_to_string(attributes: list[tuple[str, str | None]], indent: str) -> s
     return "\n".join(rendered)
 
 
-def build_layer_element(layer: ExportLayer, indent: str = "    ") -> str:
+def build_layer_element(
+    layer: ExportLayer, indent: str = "    ", compress_data: bool = False
+) -> str:
     """One `<om-layer>`, with its data inline as a direct child.
 
     Inline JSON is what makes a single-file artifact possible: `file://` blocks
     `fetch` of sibling files, so a `data="./x.geojson"` URL cannot work from
     disk. The JSON must be a *direct* child of the layer element.
+
+    With `compress_data`, the block is gzipped base64 under a distinct script
+    type, which the artifact's bootstrap converts back to JSON before the runtime
+    defines the custom elements. Off by default: readable data is what lets a
+    person or an agent edit the map afterwards.
     """
     renderer = layer.renderer
     symbol = renderer.symbol or SymbolSpec()
@@ -250,11 +257,19 @@ def build_layer_element(layer: ExportLayer, indent: str = "    ") -> str:
         attributes.append(("auto-highlight", "true"))
         attributes.append(("highlight-color", "'#ffffff55'"))
 
+    payload = json.dumps(layer.geojson, separators=(",", ":"), ensure_ascii=False)
+
     lines = [f"{indent}<om-layer"]
     lines.append(_attrs_to_string(attributes, inner))
     lines.append(f"{indent}>")
-    lines.append(f'{inner}<script type="application/json">')
-    lines.append(json.dumps(layer.geojson, separators=(",", ":"), ensure_ascii=False))
+    if compress_data:
+        from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
+
+        lines.append(f'{inner}<script type="{GZIP_SCRIPT_TYPE}">')
+        lines.append(gzip_base64(payload.encode("utf-8")))
+    else:
+        lines.append(f'{inner}<script type="application/json">')
+        lines.append(payload)
     lines.append(f"{inner}</script>")
     lines.append(f"{indent}</om-layer>")
     return "\n".join(lines)
@@ -349,6 +364,7 @@ def build_manifest(
     project: ExportProject,
     cap_verdict: CapVerdict | None = None,
     indent: str = "  ",
+    compress_data: bool = False,
 ) -> str:
     """The complete `<om-map>` element for a project.
 
@@ -388,7 +404,7 @@ def build_manifest(
     ]
 
     for layer in project.exportable_layers:
-        sections.append(build_layer_element(layer, inner))
+        sections.append(build_layer_element(layer, inner, compress_data=compress_data))
         popup = build_popup_elements(layer, inner)
         if popup:
             sections.append(popup)

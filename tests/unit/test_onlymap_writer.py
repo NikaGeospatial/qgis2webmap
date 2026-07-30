@@ -105,14 +105,25 @@ class TestWriter:
         assert result.entry_path.name == "index.html"
         assert result.entry_path.exists()
 
-    def test_artifact_inlines_the_runtime_and_the_data(self, tmp_path) -> None:
+    def test_uncompressed_artifact_inlines_the_runtime_verbatim(self, tmp_path) -> None:
         result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
-            make_project(), tmp_path
+            make_project(), tmp_path, compress=False
         )
         html = result.entry_path.read_text()
         assert "/* fake runtime */" in html
         assert '<script type="application/json">' in html
         assert "om-map:not(:defined)" in html, "the fallback CSS gate must be present"
+
+    def test_compressed_artifact_carries_a_bootstrap(self, tmp_path) -> None:
+        """Compressed by default: the runtime becomes base64 plus an inflater."""
+        result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            make_project(), tmp_path, compress=True
+        )
+        html = result.entry_path.read_text()
+        assert "DecompressionStream" in html
+        assert "/* fake runtime */" not in html
+        # Small data stays readable so the map can still be hand-edited.
+        assert '<script type="application/json">' in html
 
     def test_reports_itself_as_offline(self, tmp_path) -> None:
         result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(

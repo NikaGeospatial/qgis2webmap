@@ -27,3 +27,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   styles and the data inlined - no network requests, no tracking - plus an
   `ArtifactResult` recording sizes, runtime provenance and a deterministic
   manifest snapshot.
+- Lossless gzip packaging: the runtime is embedded compressed and inflated in the
+  browser, taking a 5.45 MB artifact to 1.84 MB. The stylesheet is never
+  compressed, because the no-JavaScript fallback depends on a pure-CSS rule.
+- Dependency scanning before any bytes are written, so an export that cannot work
+  for its recipient fails while there is still time to fix it.
+- Three output tiers - Standalone HTML, Share ZIP and folder - with a README for
+  the recipient in the tiers that need one.

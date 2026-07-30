@@ -20,8 +20,15 @@ from pathlib import Path
 from typing import Any
 
 from ..core.export_ir import ExportProject, FidelityItem, OutputMode
+from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import build_manifest
+from ..packaging.asset_embedder import (
+    build_bootstrap,
+    gzip_base64,
+    should_compress_data,
+)
+from ..packaging.dependency_scanner import ScanResult, scan
 from ..packaging.runtime_manager import (
     RuntimeBundle,
     RuntimeProvider,
@@ -30,6 +37,19 @@ from ..packaging.runtime_manager import (
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 PLUGIN_VERSION = "0.1.0"
+
+
+class ExportBlockedError(RuntimeError):
+    """The export cannot produce a working artifact.
+
+    Raised only for genuinely unrecoverable conditions - nothing to export, a
+    required asset missing. Licence-cap breaches are *not* in this category: they
+    warn, and the map explains itself to the recipient.
+    """
+
+    def __init__(self, reasons: tuple[str, ...]) -> None:
+        self.reasons = reasons
+        super().__init__("; ".join(reasons))
 
 
 @dataclass(frozen=True)
@@ -55,6 +75,7 @@ class ArtifactResult:
     files: tuple[ArtifactFile, ...] = ()
     runtime_version: str = "unknown"
     runtime_sha256: str = ""
+    compressed: bool = False
     network_dependencies: tuple[str, ...] = ()
     fidelity: tuple[FidelityItem, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -76,6 +97,7 @@ class ArtifactResult:
             "files": [f.snapshot() for f in self.files],
             "runtimeVersion": self.runtime_version,
             "runtimeSha256": self.runtime_sha256,
+            "compressed": self.compressed,
             "networkDependencies": list(self.network_dependencies),
             "fidelity": [i.snapshot() for i in self.fidelity],
             "warnings": list(self.warnings),
@@ -115,10 +137,19 @@ class OnlyMapWriter:
         runtime: RuntimeBundle,
         verdict: CapVerdict,
         when: datetime | None = None,
+        compress: bool = True,
+        compress_data: bool = False,
     ) -> str:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
-        manifest = build_manifest(project, verdict)
+        manifest = build_manifest(project, verdict, compress_data=compress_data)
+
+        if compress:
+            # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
+            # of the raw size, and nobody edits minified runtime code anyway.
+            script_body = build_bootstrap(gzip_base64(runtime.javascript))
+        else:
+            script_body = runtime.javascript.decode("utf-8")
 
         # Replacement, not format(): the template is full of CSS braces, and
         # str.format would choke on every one of them.
@@ -126,8 +157,9 @@ class OnlyMapWriter:
             "@GENERATOR@": generator_line(runtime, when),
             "@TITLE@": _escape_text(project.title),
             "@MANIFEST@": manifest,
+            # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
-            "@RUNTIME_JS@": runtime.javascript.decode("utf-8"),
+            "@RUNTIME_JS@": script_body,
         }
         for token, value in replacements.items():
             template = template.replace(token, value)
@@ -139,19 +171,32 @@ class OnlyMapWriter:
         destination: Path,
         mode: OutputMode = OutputMode.STANDALONE_HTML,
         when: datetime | None = None,
+        compress: bool = True,
     ) -> ArtifactResult:
         """Write the artifact and describe what was produced.
 
         `destination` is a directory; the entry file is always `index.html` so a
         recipient never has to guess which file to open.
+
+        Scanning happens first: an export that cannot work for its recipient
+        should fail before anything is written, not after.
         """
         runtime = self.runtime_provider.load()
         verdict = self.license_policy.evaluate(project)
 
+        scan_report = FidelityReportBuilder()
+        scan_result: ScanResult = scan(project, scan_report, mode)
+        if not scan_result.can_export:
+            raise ExportBlockedError(scan_result.blocking_reasons)
+
+        # Small maps keep readable data so a person or an agent can edit them.
+        compress_data = compress and should_compress_data(scan_result.data_bytes)
+
         destination.mkdir(parents=True, exist_ok=True)
         entry = destination / "index.html"
         entry.write_text(
-            self.render_html(project, runtime, verdict, when), encoding="utf-8"
+            self.render_html(project, runtime, verdict, when, compress, compress_data),
+            encoding="utf-8",
         )
 
         warnings = [v.detail for v in verdict.violations]
@@ -167,8 +212,9 @@ class OnlyMapWriter:
             files=(ArtifactFile(entry, entry.stat().st_size),),
             runtime_version=runtime.version,
             runtime_sha256=runtime.sha256,
-            network_dependencies=_network_dependencies(project),
-            fidelity=project.fidelity,
+            compressed=compress,
+            network_dependencies=scan_result.remote_dependencies,
+            fidelity=project.fidelity + scan_report.items,
             warnings=tuple(warnings),
             manifest_snapshot=project.snapshot(),
         )
