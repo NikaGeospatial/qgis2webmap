@@ -1,0 +1,25 @@
+# Tooling config only. The plugin itself is not pip-installable — QGIS loads
+# `nika_onlymap_exporter/` directly from its plugin directory.
+[project]
+name = "nika-onlymap-exporter"
+version = "0.1.0"
+description = "Export QGIS projects to portable OnlyMap web maps"
+requires-python = ">=3.9"
+license = { text = "GPL-2.0-or-later" }
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+exclude = ["nika_onlymap_exporter/resources_rc.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_ignores = true
+# PyQGIS ships no stubs; do not fail on its untyped surface.
+ignore_missing_imports = true

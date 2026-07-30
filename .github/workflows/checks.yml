@@ -1,0 +1,81 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  compile:
+    # Byte-compiles every module. PyQGIS is unavailable on the runner, so this
+    # catches syntax errors, not import errors — cheap and worth having before
+    # a QGIS-in-Docker tier arrives with the project reader.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m compileall -q nika_onlymap_exporter scripts
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build plugin zip
+        run: python scripts/package_plugin.py
+      - name: Verify zip shape against QGIS repository requirements
+        run: |
+          zip=$(ls dist/nika_onlymap_exporter-*.zip)
+          python scripts/verify_package.py "$zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: dist/*.zip
+          if-no-files-found: error
+
+  security:
+    # Static security scan. The QGIS plugin repository runs its own scanner at
+    # submission; failing here first is cheaper than failing there.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit
+      - run: bandit -r nika_onlymap_exporter -ll
+
+  guards:
+    # Enforces CONTRIBUTING.md rules 1 and 2. Implemented as pytest rather than
+    # grep because a text search cannot tell a forbidden call from a docstring
+    # explaining why it is forbidden — see tests/unit/test_metadata.py.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: python -m pytest tests/unit -q

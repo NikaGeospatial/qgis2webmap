@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"
+     role="img" aria-label="QGIS2WebMap by NIKA">
+  <title>QGIS2WebMap by NIKA</title>
+  <!--
+    Placeholder mark: a folded map plane with an export arrow. Deliberately does
+    NOT use or resemble the QGIS logo — the QGIS trademark guidelines require
+    separate permission for that, and the plugin carries a NIKA identity instead.
+    Replace with the approved NIKA/OnlyMap mark before repository submission.
+  -->
+  <defs>
+    <linearGradient id="om-plane" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="12" fill="#0f172a"/>
+
+  <!-- folded map plane -->
+  <path d="M10 40 L32 28 L54 40 L32 52 Z" fill="url(#om-plane)" opacity="0.95"/>
+  <path d="M10 40 L32 28 L32 52 Z" fill="#0f172a" opacity="0.14"/>
+
+  <!-- graticule hint -->
+  <path d="M21 34 L43 34 M18 43 L46 43" stroke="#0f172a" stroke-opacity="0.28"
+        stroke-width="1.6" stroke-linecap="round" fill="none"/>
+
+  <!-- export arrow, leaving the plane -->
+  <path d="M32 24 L32 8" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 14 L32 6 L40 14" stroke="#f8fafc" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

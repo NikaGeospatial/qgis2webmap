@@ -1,0 +1,35 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Tag must match metadata.txt version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          meta=$(python -c "import configparser;p=configparser.ConfigParser();p.read('nika_onlymap_exporter/metadata.txt');print(p['general']['version'].strip())")
+          if [ "$tag" != "$meta" ]; then
+            echo "::error::tag v$tag does not match metadata.txt version $meta"
+            exit 1
+          fi
+
+      - run: python scripts/package_plugin.py
+      - name: Verify zip
+        run: python scripts/verify_package.py dist/nika_onlymap_exporter-*.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true

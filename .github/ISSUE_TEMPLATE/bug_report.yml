@@ -1,0 +1,41 @@
+name: Bug report
+description: Something the plugin or an exported map does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include whether the problem is in QGIS or in the exported map.
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Load ...
+        2. Web → QGIS2WebMap by NIKA → Create web map
+        3. ...
+    validations: { required: true }
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "Plugin 0.1.0, QGIS 3.40 LTR, Windows 11, Chrome 131"
+    validations: { required: true }
+  - type: textarea
+    id: log
+    attributes:
+      label: QGIS message log
+      description: View → Panels → Log Messages → "QGIS2WebMap" tab.
+      render: text
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console (if the exported map misbehaves)
+      render: text

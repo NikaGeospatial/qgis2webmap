@@ -1,0 +1,23 @@
+# Build output
+dist/
+build/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.orig
+*.rej
+
+# Compiled Qt resources are generated, not committed
+nika_onlymap_exporter/resources_rc.py
