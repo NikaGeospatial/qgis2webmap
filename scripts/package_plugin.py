@@ -61,7 +61,7 @@ def build(outdir: Path) -> Path:
         for path in files:
             # arcname keeps the required single top-level directory.
             zf.write(path, path.relative_to(REPO_ROOT))
-        # Ship the licence inside the zip — the plugin is redistributed on its own.
+        # Ship the licence inside the zip -- the plugin is redistributed on its own.
         zf.write(REPO_ROOT / "LICENSE", f"{PACKAGE_NAME}/LICENSE")
 
     size_kb = target.stat().st_size / 1024

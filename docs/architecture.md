@@ -43,6 +43,33 @@ One place to test QGIS semantics, one place to build markup, one place to packag
 `core/export_ir.py` is the boundary: it holds no `QWidget` and, after project
 reading completes, minimises live `Qgs*` references.
 
+### Pure versus QGIS-dependent modules
+
+`core/` splits again along a line worth stating, because it determines what CI
+can test. PyQGIS is unavailable on a GitHub runner, so anything importing `qgis`
+can only be exercised in `tests/qgis/`. Everything else runs in `tests/unit/` on
+every push.
+
+| Pure — testable in CI | Imports PyQGIS — `tests/qgis/` only |
+|---|---|
+| `export_ir.py` — the dataclasses | `project_reader.py` |
+| `extent_math.py` — extent + antimeridian | `layer_reader.py` |
+| `fidelity_report.py` — the accumulator | `renderer_translator.py` |
+| `license_policy.py` — cap detection and policies | `labeling_translator.py`, `popup_translator.py` |
+
+Two of these are not in issue #29's file list and are deliberate additions:
+
+- **`extent_math.py`** exists so the antimeridian logic — the fix for the
+  incumbent's worst first impression — is unit-tested without QGIS. Folding it
+  into `project_reader.py` would have made it untestable in CI, which is exactly
+  the wrong place for maths that is easy to get subtly wrong.
+- **`license_policy.py`** separates cap *detection* (unconditional, feeds the
+  Fidelity tab) from *enforcement* (swappable), because whether exports carry a
+  licence key is still an open product decision.
+
+The rule for new code: if it can be pure, make it pure. Push PyQGIS access to the
+edge so the logic underneath stays testable.
+
 ## Why declarative markup, not generated JavaScript
 
 OnlyMapJS is driven by HTML custom elements — `<om-map>`, `<om-layer>`,

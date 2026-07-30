@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assert the built zip is shaped the way the QGIS plugin repository requires.
 
-Written to be independent of `package_plugin.py` — it inspects the zip as an
+Written to be independent of `package_plugin.py` -- it inspects the zip as an
 opaque artifact, so a bug in the builder cannot hide itself here. Run in CI on
 every push.
 
@@ -61,7 +61,7 @@ def verify(zip_path: Path) -> None:
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
 
-        # 6. path safety first — everything else trusts these paths
+        # 6. path safety first -- everything else trusts these paths
         for name in names:
             p = PurePosixPath(name)
             check(not p.is_absolute(), f"absolute path in zip: {name}")
@@ -139,12 +139,12 @@ def main() -> int:
     verify(args.zip)
 
     if failures:
-        print(f"FAILED — {len(failures)} of {checks_run} checks:", file=sys.stderr)
+        print(f"FAILED -- {len(failures)} of {checks_run} checks:", file=sys.stderr)
         for f in failures:
             print(f"  - {f}", file=sys.stderr)
         return 1
 
-    print(f"package verification passed ({checks_run} checks) — {args.zip.name}")
+    print(f"package verification passed ({checks_run} checks) -- {args.zip.name}")
     return 0
 
 

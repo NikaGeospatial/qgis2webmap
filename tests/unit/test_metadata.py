@@ -83,7 +83,7 @@ def test_licence_file_is_gpl2() -> None:
 
 
 def _code_text(path: Path) -> str:
-    """Return only executable tokens — comments and string literals removed.
+    """Return only executable tokens -- comments and string literals removed.
 
     A plain text search over the source cannot distinguish a forbidden call from
     a docstring explaining why it is forbidden. `plugin.py` does exactly that, so
@@ -107,7 +107,7 @@ def _offenders(pattern: re.Pattern[str]) -> list[Path]:
 
 
 def test_no_process_terminating_calls() -> None:
-    """CONTRIBUTING.md rule 1 — the plugin must never close QGIS.
+    """CONTRIBUTING.md rule 1 -- the plugin must never close QGIS.
 
     qgis2web's worst defect was `subprocess(["sudo", "apt-get", ...])` followed by
     `os._exit(0)`, which made QGIS vanish with no explanation on every non-Debian
@@ -119,7 +119,7 @@ def test_no_process_terminating_calls() -> None:
 
 
 def test_no_package_manager_invocations() -> None:
-    """CONTRIBUTING.md rule 2 — no shelling out to a package manager.
+    """CONTRIBUTING.md rule 2 -- no shelling out to a package manager.
 
     Checks call syntax, not string contents: a package-manager name can only
     reach a subprocess through a string literal, and those are stripped here, so

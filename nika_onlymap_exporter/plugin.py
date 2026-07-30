@@ -1,4 +1,4 @@
-"""Plugin controller — QGIS lifecycle only.
+"""Plugin controller -- QGIS lifecycle only.
 
 Deliberately small, mirroring the one pattern qgis2web gets right: a single
 controller that registers exactly one Web-menu action plus a toolbar action, and
@@ -45,7 +45,7 @@ class Qgis2WebMapPlugin:
 
     # ---- QGIS lifecycle -------------------------------------------------
 
-    def initGui(self) -> None:  # noqa: N802 — QGIS plugin API
+    def initGui(self) -> None:  # noqa: N802 -- QGIS plugin API
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "qgis2webmap.svg"))
         self.action = QAction(icon, ACTION_TEXT, self.iface.mainWindow())
         self.action.setObjectName("qgis2webmapCreateWebMap")
@@ -54,7 +54,7 @@ class Qgis2WebMapPlugin:
         )
         self.action.triggered.connect(self.run)
 
-        # One Web-menu entry and one toolbar button — nothing else.
+        # One Web-menu entry and one toolbar button -- nothing else.
         self.iface.addPluginToWebMenu(MENU_TITLE, self.action)
         self.iface.addToolBarIcon(self.action)
 
@@ -77,7 +77,7 @@ class Qgis2WebMapPlugin:
         """Open the export dialog.
 
         Wrapped so an unexpected error surfaces as a message and a log entry
-        rather than a traceback dialog — and never as a closed QGIS.
+        rather than a traceback dialog -- and never as a closed QGIS.
         """
         try:
             from .ui.main_dialog import MainDialog

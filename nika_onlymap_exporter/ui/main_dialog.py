@@ -1,6 +1,6 @@
 """The single export dialog.
 
-One window owns the whole export — layer selection, appearance, output tier,
+One window owns the whole export -- layer selection, appearance, output tier,
 fidelity report and help. This mirrors the one structural thing qgis2web gets
 right (one dialog, one workflow) while avoiding its split between a per-layer
 checkbox grid and a separate global Setting/Value table.
@@ -92,7 +92,7 @@ class MainDialog(QDialog):
             self.tabs.addTab(self._build_tab(title), title)
         layout.addWidget(self.tabs)
 
-        # Close only for now — Export arrives with the writer in a later task.
+        # Close only for now -- Export arrives with the writer in a later task.
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -127,7 +127,7 @@ class MainDialog(QDialog):
 
         label = QLabel(
             f"<h3>{title}</h3>"
-            "<p>Not implemented yet — this tab is part of the 0.1.0 build-out.</p>"
+            "<p>Not implemented yet -- this tab is part of the 0.1.0 build-out.</p>"
             f'<p><a href="{REPO_URL}">Follow progress on GitHub</a></p>',
             page,
         )
