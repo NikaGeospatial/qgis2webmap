@@ -26,8 +26,11 @@ def qgis_app():
 
     `QgsApplication` must exist before any provider registry is touched, and it
     must not be torn down and recreated within a process - hence session scope.
+
+    GUI enabled so widget tests can construct real dialogs; `QT_QPA_PLATFORM=
+    offscreen` keeps that headless.
     """
-    app = qgis_core.QgsApplication([], False)
+    app = qgis_core.QgsApplication([], True)
     qgis_core.QgsApplication.initQgis()
     yield app
     qgis_core.QgsApplication.exitQgis()

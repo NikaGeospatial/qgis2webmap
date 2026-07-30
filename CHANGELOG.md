@@ -34,3 +34,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   for its recipient fails while there is still time to fix it.
 - Three output tiers - Standalone HTML, Share ZIP and folder - with a README for
   the recipient in the tiers that need one.
+- Export dialog with Map, Layers, Appearance, Fidelity and Help tabs. The map
+  name is set in one place, widgets are on by default, and Export is disabled
+  with the reason beside it rather than producing a broken artifact.
+- The layer list follows the QGIS Layers panel live. Bursts of signals coalesce
+  into one rebuild, and per-layer settings survive it because they are keyed by
+  layer id rather than held in widgets - so there is no refresh button.
+- Settings persist in the QGIS project, so reopening it restores export choices.
+- Preview runs through the production writer to a stable path per project and
+  opens in the user's default browser, remembering the camera across reloads.
