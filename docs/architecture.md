@@ -62,6 +62,62 @@ emits *attributes*, not code. Consequences:
 **Do not create per-renderer string-generation modules.** If a change feels like
 it needs one, the normalized model is missing a field.
 
+## Why the output is an HTML file
+
+The goal is an artifact a recipient can open with **zero setup** — no install, no
+extraction, no server, no account. Working backwards from that, the browser is the
+only runtime already present on every machine that can render an interactive
+WebGL map, and a single `.html` file is the only thing a browser opens by
+double-click from a local disk.
+
+Alternatives, and why each fails:
+
+| Option | Why not |
+|---|---|
+| `.html.gz` | Browsers do not transparently decompress a **local** file. Double-click fails |
+| `.mhtml` / `.webarchive` | Chromium-only in practice — Firefox dropped MHTML. Loses the universality that is the entire point |
+| `.zip` | Requires extraction. Correct for the Share ZIP tier, wrong as the default — and it is precisely the incumbent's failure mode |
+| Custom extension (`.ommap`) + viewer | Requires installing a viewer. That *is* the problem we are solving |
+| Electron / Tauri desktop app | Produces a double-clickable binary, but: per-platform builds, 50 MB+, code signing, antivirus false positives, and a recipient must trust an executable. #29 forbids it in the standalone path, correctly |
+| Self-extracting archive | Same trust and platform problems as a binary |
+| PDF / GeoPDF | No WebGL. Layer toggling at best; not an interactive map |
+| SVG | No tiles, no WebGL, no data binding at scale |
+| PWA | Needs a server and a service worker. Not a file |
+| Notebook (Jupyter / Observable) | Needs a runtime the recipient does not have |
+
+So `.html` is not a compromise — it is the only format that satisfies the
+constraint. The differentiation is **what the file contains**: the whole runtime
+and all data inline, an `<om-fallback>` for previewers that run no JavaScript, and
+a manifest that is readable, declarative markup rather than generated JavaScript —
+which is what makes later AI-assisted editing tractable.
+
+### Honest limitations of the format
+
+Recorded so they are designed around rather than discovered late:
+
+- **`file://` is a restricted origin.** No `fetch` of sibling files, no service
+  workers, no CORS-dependent features. This is *why* data must be inlined rather
+  than loaded — it is the same constraint that forces qgis2web to write GeoJSON
+  into `.js` files instead of `.geojson`.
+- **Parse cost is real.** Multi-MB of inline JavaScript takes measurable time to
+  parse before first paint. It argues for the smallest viable runtime build.
+- **No transit compression.** A file copied to a USB stick or attached to an email
+  is not gzipped by any server, which is why compression has to happen *inside*
+  the artifact.
+- **Mail systems are suspicious of HTML attachments.** Some providers and many
+  corporate filters quarantine or strip `.html` attachments, because HTML is a
+  phishing vector. This is a genuine deliverability risk for the "email someone a
+  map" story, and it is an argument for offering the **Share ZIP tier even when
+  size does not require it** — a zipped artifact passes filters that a bare
+  `.html` does not.
+- **Previewers may run no JavaScript.** iOS QuickLook renders HTML attachments
+  with scripts disabled. Hence `<om-fallback>` on every export, which the
+  OnlyMap stylesheet gates with a pure-CSS `om-map:not(:defined)` rule — and why
+  the CSS must be inlined raw rather than inflated by script.
+- **WebGL is required and does not degrade.** Old hardware, software rasterisers
+  and some locked-down remote-desktop environments will render nothing.
+  `<om-fallback>` covers the no-JavaScript case but not the no-WebGL case.
+
 ## Non-negotiables
 
 These exist because the alternative was observed to fail in the incumbent:

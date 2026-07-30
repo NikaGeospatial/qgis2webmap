@@ -86,7 +86,8 @@ scripts/                   package_plugin.py, verify_package.py
 tests/                     unit / qgis / browser / fixtures
 ```
 
-Architecture notes: [`docs/architecture.md`](docs/architecture.md).
+Architecture notes: [`docs/architecture.md`](docs/architecture.md) ·
+Dialog design: [`docs/ui-design.md`](docs/ui-design.md).
 
 ```bash
 python scripts/package_plugin.py                                   # build the zip
