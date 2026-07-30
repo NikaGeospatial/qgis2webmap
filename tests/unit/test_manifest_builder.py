@@ -14,6 +14,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -41,7 +42,9 @@ from nika_onlymap_exporter.core.manifest_builder import (
     build_layer_element,
     build_manifest,
     color_literal,
+    escape_attr,
     fill_expression,
+    json_for_script,
     scale_to_zoom,
 )
 
@@ -368,3 +371,157 @@ class TestAttributeContract:
         markup = build_manifest(make_project())
         for element in set(re.findall(r"<(om-[a-z]+)", markup)):
             assert element in known_attributes, f"{element} is not an OnlyMap element"
+
+
+class TestRepresentativeSymbol:
+    """Regression: categorized and graduated layers lost width and radius.
+
+    `renderer.symbol` is None for those kinds, so reading it directly meant the
+    layer drew at defaults with nothing reporting why - the exact class of
+    silent symbology loss this project exists to avoid.
+    """
+
+    STYLED = SymbolSpec(fill_color=RED, stroke_width=3.0, radius=8.0)
+
+    def test_single_symbol_is_its_own_representative(self) -> None:
+        renderer = RendererSpec(kind=RendererKind.SINGLE, symbol=self.STYLED)
+        assert renderer.representative_symbol is self.STYLED
+
+    def test_categorized_uses_its_first_class(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="k",
+            categories=(CategorySpec("a", "A", self.STYLED),),
+        )
+        assert renderer.representative_symbol is self.STYLED
+
+    def test_graduated_uses_its_first_class(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="v",
+            classes=(GraduatedClassSpec(0.0, 1.0, "a", self.STYLED),),
+        )
+        assert renderer.representative_symbol is self.STYLED
+
+    def test_unsupported_renderer_has_none(self) -> None:
+        assert RendererSpec(kind=RendererKind.UNSUPPORTED).representative_symbol is None
+
+    def test_categorized_point_layer_keeps_radius_and_width(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="k",
+            categories=(CategorySpec("a", "A", self.STYLED),),
+        )
+        markup = build_layer_element(make_layer(renderer=renderer))
+        assert "get-point-radius=" in markup
+        assert "get-line-width=" in markup
+
+    def test_graduated_polygon_layer_keeps_stroke_width(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="v",
+            classes=(GraduatedClassSpec(0.0, 1.0, "a", self.STYLED),),
+        )
+        layer = make_layer(geometry_kind=GeometryKind.POLYGON, renderer=renderer)
+        assert "get-line-width=" in build_layer_element(layer)
+
+
+class TestTemplateTokenSafety:
+    """Regression: sequential token replacement could inject the runtime.
+
+    Replacing tokens one after another rescans already-inserted content, so a
+    layer named `@RUNTIME_JS@` had five megabytes of library pasted into its
+    label. A single-pass substitution can only match the template's own tokens.
+    """
+
+    def test_layer_named_like_a_token_is_left_alone(self, tmp_path) -> None:
+        from nika_onlymap_exporter.packaging.runtime_manager import (
+            RuntimeBundle,
+            sha256_of,
+        )
+        from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
+
+        class FakeRuntime:
+            def load(self) -> RuntimeBundle:
+                js = b"/* RUNTIME BODY */"
+                return RuntimeBundle(
+                    javascript=js, css=b"", version="t", sha256=sha256_of(js)
+                )
+
+        hostile = make_project([make_layer(name="@RUNTIME_JS@")])
+        result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            hostile, tmp_path, compress=False
+        )
+        html = result.entry_path.read_text()
+
+        # The label keeps the literal text; the runtime appears exactly once.
+        assert 'label="@RUNTIME_JS@"' in html
+        assert html.count("/* RUNTIME BODY */") == 1
+
+
+class TestScriptEmbeddingSafety:
+    """Regression: a feature attribute could close the inline JSON block.
+
+    `json.dumps` leaves `<` literal, so a value containing `</script>` ended the
+    script element early - breaking the map, and turning the rest of the
+    attribute into live markup. Reachable with ordinary QGIS data.
+    """
+
+    HOSTILE: ClassVar[dict] = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                "properties": {"note": "</script><img src=x onerror=alert(1)>"},
+            }
+        ],
+    }
+
+    def test_closing_tag_cannot_survive(self) -> None:
+        payload = json_for_script(self.HOSTILE)
+        assert "</script>" not in payload
+        assert "<" not in payload
+
+    def test_escaping_round_trips(self) -> None:
+        """The data must be unchanged for the map that reads it."""
+        assert json.loads(json_for_script(self.HOSTILE)) == self.HOSTILE
+
+    def test_javascript_line_terminators_are_escaped(self) -> None:
+        """U+2028/9 are legal in JSON strings but break JavaScript source.
+
+        Written as escape sequences, not literals: the characters are
+        invisible in an editor, which is precisely why they cause trouble.
+        """
+        line_sep, para_sep = "\u2028", "\u2029"
+        original = f"x{line_sep}y{para_sep}z"
+        payload = json_for_script({"a": original})
+
+        # The raw characters must not reach the script body...
+        assert line_sep not in payload
+        assert para_sep not in payload
+        # ...but the data is unchanged for whatever reads it back.
+        assert json.loads(payload)["a"] == original
+
+    def test_a_hostile_layer_produces_a_well_formed_element(self) -> None:
+        markup = build_layer_element(make_layer(geojson=self.HOSTILE))
+        # Exactly one opening and one closing script tag for the data block.
+        assert markup.count("<script") == 1
+        assert markup.count("</script>") == 1
+
+
+class TestAttributeEscaping:
+    def test_single_quotes_stay_readable(self) -> None:
+        """Accessors are full of single quotes; entities make them unreadable."""
+        assert escape_attr("$k == 'a' ? 'b' : 'c'") == "$k == 'a' ? 'b' : 'c'"
+
+    def test_double_quotes_are_escaped(self) -> None:
+        assert escape_attr('say "hi"') == "say &quot;hi&quot;"
+
+    def test_markup_characters_are_escaped(self) -> None:
+        assert escape_attr("a & b <c>") == "a &amp; b &lt;c&gt;"
+
+    def test_a_layer_name_cannot_inject_an_attribute(self) -> None:
+        markup = build_layer_element(make_layer(name='" onload="evil()'))
+        assert 'onload="evil()' not in markup
+        assert "&quot;" in markup

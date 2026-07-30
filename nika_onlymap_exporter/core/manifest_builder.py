@@ -26,7 +26,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import html
 import json
 import math
 from typing import TYPE_CHECKING
@@ -63,8 +62,45 @@ BASEMAP = "none"
 
 
 def escape_attr(value: str) -> str:
-    """Escape a value for an HTML attribute delimited by double quotes."""
-    return html.escape(str(value), quote=True)
+    """Escape a value for an HTML attribute delimited by double quotes.
+
+    Single quotes are left alone deliberately. `html.escape(quote=True)` turns
+    them into `&#x27;`, which is functionally fine - browsers decode entities
+    when reading an attribute - but the styling accessors are full of single
+    quotes, and `$kind == &#x27;civil&#x27;` is far harder for a person or an AI
+    assistant to read and edit than `$kind == 'civil'`. Since the attribute is
+    delimited by double quotes, a single quote needs no escaping.
+    """
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def json_for_script(data: object) -> str:
+    """Serialise JSON safely for embedding inside a `<script>` element.
+
+    `json.dumps` leaves `<` literal, so a feature attribute containing
+    `</script>` closes the block early: the map breaks, and anything after the
+    attribute becomes live markup. QGIS attributes hold arbitrary text - a
+    description field, a scraped note - so this is reachable with ordinary data,
+    not just malice.
+
+    Escaping as `\u003c` keeps the JSON valid and decodes back to the original
+    string. U+2028 and U+2029 are escaped too: they are valid in JSON strings but
+    are line terminators in JavaScript source.
+    """
+    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+    return (
+        payload.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
 
 def color_literal(color: Color | None) -> str:
@@ -119,7 +155,7 @@ def fill_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
         return _graduated_expression(renderer)
 
-    symbol = renderer.symbol or SymbolSpec()
+    symbol = renderer.representative_symbol or SymbolSpec()
     fill = symbol.fill_color or (
         symbol.stroke_color if geometry is GeometryKind.LINE else DEFAULT_FILL
     )
@@ -172,7 +208,7 @@ def _number(value: float) -> str:
 def line_color_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     if geometry is GeometryKind.LINE:
         return fill_expression(renderer, geometry)
-    symbol = renderer.symbol or SymbolSpec()
+    symbol = renderer.representative_symbol or SymbolSpec()
     return color_literal(symbol.stroke_color or DEFAULT_STROKE)
 
 
@@ -205,7 +241,9 @@ def build_layer_element(
     person or an agent edit the map afterwards.
     """
     renderer = layer.renderer
-    symbol = renderer.symbol or SymbolSpec()
+    # Not `renderer.symbol`: categorized and graduated renderers have none, and
+    # reading it directly silently drops stroke width and marker radius.
+    symbol = renderer.representative_symbol or SymbolSpec()
     inner = indent + "  "
 
     attributes: list[tuple[str, str | None]] = [
@@ -257,7 +295,7 @@ def build_layer_element(
         attributes.append(("auto-highlight", "true"))
         attributes.append(("highlight-color", "'#ffffff55'"))
 
-    payload = json.dumps(layer.geojson, separators=(",", ":"), ensure_ascii=False)
+    payload = json_for_script(layer.geojson)
 
     lines = [f"{indent}<om-layer"]
     lines.append(_attrs_to_string(attributes, inner))

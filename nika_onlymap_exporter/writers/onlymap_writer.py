@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -139,6 +140,7 @@ class OnlyMapWriter:
         when: datetime | None = None,
         compress: bool = True,
         compress_data: bool = False,
+        preview_hook: str = "",
     ) -> str:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -160,10 +162,16 @@ class OnlyMapWriter:
             # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
             "@RUNTIME_JS@": script_body,
+            "@PREVIEW_HOOK@": preview_hook,
         }
-        for token, value in replacements.items():
-            template = template.replace(token, value)
-        return template
+
+        # One pass, not a loop of replaces. Substituting sequentially would let
+        # earlier-inserted content be scanned again: a layer named
+        # "@RUNTIME_JS@" would have five megabytes of runtime pasted into its
+        # label. A single regex pass can only ever match the template's own
+        # tokens.
+        pattern = re.compile("|".join(re.escape(t) for t in replacements))
+        return pattern.sub(lambda m: replacements[m.group(0)], template)
 
     def write(
         self,
@@ -172,6 +180,7 @@ class OnlyMapWriter:
         mode: OutputMode = OutputMode.STANDALONE_HTML,
         when: datetime | None = None,
         compress: bool = True,
+        preview_hook: str = "",
     ) -> ArtifactResult:
         """Write the artifact and describe what was produced.
 
@@ -195,7 +204,15 @@ class OnlyMapWriter:
         destination.mkdir(parents=True, exist_ok=True)
         entry = destination / "index.html"
         entry.write_text(
-            self.render_html(project, runtime, verdict, when, compress, compress_data),
+            self.render_html(
+                project,
+                runtime,
+                verdict,
+                when,
+                compress,
+                compress_data,
+                preview_hook,
+            ),
             encoding="utf-8",
         )
 

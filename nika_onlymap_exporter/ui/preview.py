@@ -115,15 +115,14 @@ def write_preview(
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
 
-    result = writer.write(
+    # Passed through the template's own hook rather than string-matching the
+    # rendered output. The runtime contains a literal "</body>" inside a template
+    # literal, so a naive replace would paste this script into the middle of the
+    # minified library and break the map.
+    return writer.write(
         project,
         destination,
         mode=OutputMode.STANDALONE_HTML,
         compress=final,
+        preview_hook=CAMERA_SCRIPT,
     )
-
-    html = result.entry_path.read_text(encoding="utf-8")
-    result.entry_path.write_text(
-        html.replace("</body>", CAMERA_SCRIPT + "  </body>"), encoding="utf-8"
-    )
-    return result

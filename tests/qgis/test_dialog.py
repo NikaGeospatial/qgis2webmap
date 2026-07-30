@@ -270,3 +270,47 @@ class TestHelpTab:
         assert "no tracking" in text
         assert "Sharing a map" in text
         dialog.close()
+
+
+class TestPreviewInjectionSafety:
+    """Regression: the camera script was pasted into the runtime.
+
+    `str.replace("</body>", ...)` replaces every occurrence, and the OnlyMap
+    runtime contains a literal `</body>` inside a template literal - so the
+    preview script landed in the middle of the minified library. It now goes
+    through the template's own hook instead.
+    """
+
+    def _preview(self, project, make_memory_layer):
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.core.project_reader import read_project
+        from nika_onlymap_exporter.ui.preview import write_preview
+
+        project.addMapLayer(make_memory_layer("pts", features=[("a", [1.0, 2.0])]))
+        export = read_project(project, FidelityReportBuilder())
+        return write_preview(export, "injection-safety-test")
+
+    def test_camera_script_appears_exactly_once(
+        self, project, make_memory_layer
+    ) -> None:
+        html = self._preview(project, make_memory_layer).entry_path.read_text()
+        assert html.count('const KEY = "qgis2webmap.camera"') == 1
+
+    def test_it_sits_before_the_runtime_not_inside_it(
+        self, project, make_memory_layer
+    ) -> None:
+        html = self._preview(project, make_memory_layer).entry_path.read_text()
+        camera = html.index("qgis2webmap.camera")
+        # Anchored on the template's own comment above the runtime block. Using
+        # `<script type="module">` would match the camera script's own opening
+        # tag, since it is a module too.
+        runtime = html.index("The runtime. Inlined so this file works")
+        assert camera < runtime, "the preview script must not be inside the runtime"
+
+    def test_the_runtime_body_is_not_split_by_the_hook(
+        self, project, make_memory_layer
+    ) -> None:
+        """The bug this guards: the runtime contains one literal `</body>`."""
+        html = self._preview(project, make_memory_layer).entry_path.read_text()
+        runtime_start = html.index("The runtime. Inlined so this file works")
+        assert "qgis2webmap.camera" not in html[runtime_start:]

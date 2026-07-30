@@ -316,6 +316,28 @@ class RendererSpec:
     ramp_name: str | None = None
     unsupported_reason: str | None = None
 
+    @property
+    def representative_symbol(self) -> SymbolSpec | None:
+        """A symbol carrying this renderer's non-colour geometry.
+
+        Colour varies per class and is expressed as an accessor, but stroke
+        width and marker radius are single values on the layer. A categorized or
+        graduated renderer has no top-level `symbol`, so reading that directly
+        loses the width and radius entirely - the layer draws at defaults and
+        nothing says why.
+
+        The first class is the representative. If classes differ in width or
+        size, that difference is reported by the translator rather than guessed
+        at here.
+        """
+        if self.symbol is not None:
+            return self.symbol
+        if self.categories:
+            return self.categories[0].symbol
+        if self.classes:
+            return self.classes[0].symbol
+        return None
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "kind": self.kind.value,
