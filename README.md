@@ -59,6 +59,18 @@ Requires QGIS 3.22 or newer (QGIS 4 supported).
 
 ---
 
+## Documentation
+
+- [Installation](docs/installation.md)
+- [Your first export](docs/first-export.md)
+- [Sharing a map](docs/sharing.md)
+- [Enhance a map with AI](docs/enhance-with-ai.md)
+- [What gets exported](docs/supported-features.md)
+- [Privacy](docs/privacy.md)
+
+The same guides are in the plugin's Help tab, and on
+[GitHub Pages](https://nikageospatial.github.io/qgis2webmap/).
+
 ## Usage
 
 **Web → QGIS2WebMap by NIKA → Create web map**, or the toolbar icon.

@@ -43,3 +43,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - Settings persist in the QGIS project, so reopening it restores export choices.
 - Preview runs through the production writer to a stable path per project and
   opens in the user's default browser, remembering the camera across reloads.
+- User guides for installation, first export, sharing, AI enhancement, supported
+  features and privacy. The plugin's Help tab renders the same files the website
+  serves, so the two cannot drift.
+- GitHub Pages workflow serving `docs/`.

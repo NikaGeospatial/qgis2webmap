@@ -30,6 +30,19 @@ EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".orig", ".rej"}
 EXCLUDE_NAMES = {".DS_Store", ".gitkeep"}
 
+# User guides live in docs/ so GitHub Pages can serve them, and are copied into
+# the zip so the plugin's Help tab shows the same text offline. One source, two
+# consumers - qgis2web's local-and-online docs pattern, which is worth copying.
+HELP_DOCS = (
+    "index.md",
+    "installation.md",
+    "first-export.md",
+    "sharing.md",
+    "enhance-with-ai.md",
+    "supported-features.md",
+    "privacy.md",
+)
+
 
 def read_version() -> str:
     """Read the single source of truth for the plugin version."""
@@ -64,11 +77,15 @@ def build(outdir: Path) -> Path:
         # Ship the licence inside the zip -- the plugin is redistributed on its own.
         zf.write(REPO_ROOT / "LICENSE", f"{PACKAGE_NAME}/LICENSE")
 
+        for name in HELP_DOCS:
+            source = REPO_ROOT / "docs" / name
+            if not source.exists():
+                raise SystemExit(f"error: missing help document docs/{name}")
+            zf.write(source, f"{PACKAGE_NAME}/help/{name}")
+
     size_kb = target.stat().st_size / 1024
-    print(
-        f"built {target.relative_to(REPO_ROOT)}  "
-        f"({len(files) + 1} files, {size_kb:.1f} KB)"
-    )
+    total = len(files) + 1 + len(HELP_DOCS)
+    print(f"built {target.relative_to(REPO_ROOT)}  ({total} files, {size_kb:.1f} KB)")
     return target
 
 

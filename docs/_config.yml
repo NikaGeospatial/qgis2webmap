@@ -1,0 +1,6 @@
+# GitHub Pages serves this folder. The theme renders the Markdown guides; the
+# plugin's Help tab renders the same files with Qt, so keep them plain Markdown -
+# no Jekyll-specific includes or Liquid tags.
+title: QGIS2WebMap by NIKA
+description: Turn a QGIS project into a portable OnlyMap web map
+theme: jekyll-theme-minimal

@@ -93,29 +93,60 @@ STATUS_ORDER = {
     FidelityStatus.PRESERVED: 4,
 }
 
-HELP_HTML = f"""
-<h2>QGIS2WebMap by NIKA</h2>
-<p><b>Built by NIKA, powered by OnlyMap.</b></p>
+# Installed plugins carry the guides at `help/`, copied there by
+# scripts/package_plugin.py. A git checkout has no such directory, so fall back
+# to the authored source in `docs/` - which means a contributor running from a
+# clone sees exactly what a user sees, with no duplicated copy to drift.
+_PACKAGE_DIR = Path(__file__).resolve().parent.parent
+HELP_DIRS = (_PACKAGE_DIR / "help", _PACKAGE_DIR.parent / "docs")
 
-<h3>What it produces</h3>
-<p>The default export is a <b>single HTML file</b> another person can
-double-click and use without QGIS installed.</p>
 
-<h3>Privacy</h3>
-<p>Exported maps contain <b>no tracking</b> and make <b>no network requests</b>.
-An exported file works with no internet connection.</p>
+def help_directory() -> Path | None:
+    return next((d for d in HELP_DIRS if (d / "index.md").is_file()), None)
 
-<h3>Links</h3>
-<ul>
-  <li><a href="{DOCS_URL}">NIKA Documentation</a></li>
-  <li><a href="{COMPANY_URL}">NIKA</a></li>
-  <li><a href="{REPO_URL}">Source code</a> (GPL-2.0-or-later)</li>
-  <li><a href="{REPO_URL}/issues">Report an issue</a></li>
-</ul>
 
-<hr>
-<p><small>QGIS2WebMap is built by NIKA and is not endorsed by QGIS.org.</small></p>
-"""
+# Order shown in the Help tab. The same files are served on GitHub Pages, so the
+# in-plugin help and the website can never drift apart.
+HELP_PAGES = (
+    ("Overview", "index.md"),
+    ("Your first export", "first-export.md"),
+    ("Sharing a map", "sharing.md"),
+    ("Enhance with AI", "enhance-with-ai.md"),
+    ("What gets exported", "supported-features.md"),
+    ("Privacy", "privacy.md"),
+)
+
+HELP_UNAVAILABLE = (
+    "# Help\n\n"
+    "The bundled guides could not be found in this installation.\n\n"
+    f"They are also online at <{DOCS_URL}>.\n"
+)
+
+
+def load_help_markdown() -> str:
+    """Concatenate the bundled guides into one scrollable document.
+
+    Read from disk rather than embedded in this file so the plugin's help and
+    the published website are literally the same text.
+    """
+    directory = help_directory()
+    if directory is None:
+        return HELP_UNAVAILABLE
+
+    sections: list[str] = []
+    for title, filename in HELP_PAGES:
+        path = directory / filename
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        # Strip any YAML front matter, which is for the website only.
+        if text.startswith("---"):
+            _, _, text = text.partition("---\n")[2].partition("---\n")
+        sections.append(f"# {title}\n\n{text.strip()}")
+
+    if not sections:
+        return HELP_UNAVAILABLE
+    return "\n\n---\n\n".join(sections)
 
 
 class MainDialog(QDialog):
@@ -333,10 +364,16 @@ class MainDialog(QDialog):
         page = QWidget(self)
         layout = QVBoxLayout(page)
         browser = QTextBrowser(page)
-        browser.setHtml(HELP_HTML)
+        # setMarkdown keeps one source of truth: the same files the website
+        # serves. Qt renders them well enough for reference material.
+        browser.setMarkdown(load_help_markdown())
         browser.setOpenLinks(False)
         browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
         layout.addWidget(browser)
+
+        docs_button = QPushButton("Open the full documentation", page)
+        docs_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
+        layout.addWidget(docs_button)
         return page
 
     # ---- Buttons --------------------------------------------------------

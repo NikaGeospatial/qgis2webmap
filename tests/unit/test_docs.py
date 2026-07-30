@@ -1,0 +1,119 @@
+"""Documentation integrity.
+
+Docs rot quietly. These checks are cheap and catch the two ways it happens: a
+link that no longer resolves, and a guide that stops shipping with the plugin so
+the Help tab and the website drift apart.
+
+Copyright (C) 2026 NIKA
+SPDX-License-Identifier: GPL-2.0-or-later
+"""
+
+from __future__ import annotations
+
+import re
+import zipfile
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DOCS = REPO_ROOT / "docs"
+
+# The guides bundled into the plugin, mirroring scripts/package_plugin.py.
+HELP_DOCS = (
+    "index.md",
+    "installation.md",
+    "first-export.md",
+    "sharing.md",
+    "enhance-with-ai.md",
+    "supported-features.md",
+    "privacy.md",
+)
+
+MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+
+def markdown_files() -> list[Path]:
+    return sorted(DOCS.glob("*.md"))
+
+
+class TestDocsExist:
+    def test_every_bundled_guide_is_present(self) -> None:
+        for name in HELP_DOCS:
+            assert (DOCS / name).is_file(), f"docs/{name} is missing"
+
+    def test_pages_config_exists(self) -> None:
+        """Without it GitHub Pages serves raw Markdown."""
+        assert (DOCS / "_config.yml").is_file()
+
+
+class TestLinks:
+    def test_relative_links_resolve(self) -> None:
+        """A link to a moved or renamed guide is a 404 for a real user."""
+        broken: list[str] = []
+        for path in markdown_files():
+            for target in MARKDOWN_LINK.findall(path.read_text(encoding="utf-8")):
+                if target.startswith(("http://", "https://", "#", "mailto:")):
+                    continue
+                resolved = (path.parent / target.split("#")[0]).resolve()
+                if not resolved.exists():
+                    broken.append(f"{path.name} -> {target}")
+        assert not broken, f"broken relative links: {broken}"
+
+    def test_no_placeholder_urls(self) -> None:
+        placeholders = ("example.com", "TODO", "FIXME", "XXX")
+        offenders = [
+            f"{path.name}: {placeholder}"
+            for path in markdown_files()
+            for placeholder in placeholders
+            if placeholder in path.read_text(encoding="utf-8")
+        ]
+        assert not offenders, offenders
+
+
+class TestPrivacyClaim:
+    """The privacy promise is made in several places; they must agree."""
+
+    def test_readme_and_privacy_guide_both_state_it(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        privacy = (DOCS / "privacy.md").read_text(encoding="utf-8")
+        for text in (readme, privacy):
+            assert "no tracking" in text
+            assert "no network requests" in text
+
+    def test_the_claim_is_verifiable_by_the_reader(self) -> None:
+        """A promise a user cannot check is just marketing."""
+        privacy = (DOCS / "privacy.md").read_text(encoding="utf-8")
+        assert "Network tab" in privacy
+
+
+class TestPackagedHelp:
+    """The Help tab reads these files; a build that drops them shows nothing."""
+
+    ZIP_GLOB = "nika_onlymap_exporter-*.zip"
+
+    def _zip(self) -> Path | None:
+        candidates = sorted((REPO_ROOT / "dist").glob(self.ZIP_GLOB))
+        return candidates[-1] if candidates else None
+
+    def test_guides_are_inside_the_built_zip(self) -> None:
+        archive = self._zip()
+        if archive is None:
+            pytest.skip("no built zip; run scripts/package_plugin.py first")
+        with zipfile.ZipFile(archive) as zf:
+            names = set(zf.namelist())
+        for name in HELP_DOCS:
+            expected = f"nika_onlymap_exporter/help/{name}"
+            assert expected in names, f"{expected} missing from the plugin zip"
+
+    def test_help_loader_lists_only_files_that_ship(self) -> None:
+        """The dialog's page list and the packager's list must not diverge."""
+        source = (
+            REPO_ROOT / "nika_onlymap_exporter" / "ui" / "main_dialog.py"
+        ).read_text(encoding="utf-8")
+        referenced = set(re.findall(r'"([a-z-]+\.md)"', source))
+        assert referenced, "the Help tab references no guides"
+        assert referenced <= set(HELP_DOCS), (
+            f"Help tab references guides that are not packaged: "
+            f"{referenced - set(HELP_DOCS)}"
+        )

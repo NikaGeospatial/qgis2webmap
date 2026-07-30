@@ -224,3 +224,49 @@ class TestDialogConstruction:
         # Settings live outside the widgets, so the rebuild did not reset them.
         assert dialog.state.for_layer(layer_id).include is False
         dialog.close()
+
+
+class TestHelpTab:
+    """Help must show the same guides the website serves."""
+
+    def test_loads_every_bundled_guide(self, qgis_app) -> None:
+        from nika_onlymap_exporter.ui.main_dialog import HELP_PAGES, load_help_markdown
+
+        markdown = load_help_markdown()
+        assert len(markdown) > 1000
+        for title, _filename in HELP_PAGES:
+            assert title in markdown
+
+    def test_strips_website_front_matter(self, qgis_app) -> None:
+        """YAML front matter is for Jekyll; Qt would render it as text."""
+        from nika_onlymap_exporter.ui.main_dialog import load_help_markdown
+
+        assert "title: QGIS2WebMap" not in load_help_markdown()
+
+    def test_falls_back_to_docs_in_a_git_checkout(self, qgis_app) -> None:
+        """An installed plugin has help/; a clone has only docs/."""
+        from nika_onlymap_exporter.ui.main_dialog import help_directory
+
+        directory = help_directory()
+        assert directory is not None
+        assert (directory / "index.md").is_file()
+
+    def test_help_tab_renders_the_guides(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QTextBrowser
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("pts", features=[("a", [1.0, 2.0])]))
+        dialog = MainDialog(FakeIface(), None)
+        browser = dialog.tabs.widget(4).findChild(QTextBrowser)
+
+        text = browser.toPlainText()
+        assert "no tracking" in text
+        assert "Sharing a map" in text
+        dialog.close()
