@@ -86,8 +86,8 @@ jobs:
   qgis:
     # The PyQGIS tiers, in QGIS's own container so no PyQGIS install is needed.
     # `tests/fixtures` runs every fixture project through issue #29's release
-    # gates; without the OnlyMap runtime its export checks skip and the
-    # model-level ones still run.
+    # gates. Those gates need the real runtime to export anything, so the fetch
+    # step below is what makes them assert rather than skip.
     runs-on: ubuntu-latest
     container: qgis/qgis:ltr
     env:
@@ -97,6 +97,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: QGIS and PyQGIS versions
         run: python3 -c "import qgis.core; print(qgis.core.Qgis.version())"
+      - name: Fetch the pinned OnlyMap runtime
+        run: |
+          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> $GITHUB_ENV
+      # `-rs` keeps any remaining skip visible. A skip here is a gate that did
+      # not run, which must not read as a pass.
       - run: python3 -m pytest tests/qgis tests/fixtures -q -rs
 
   browser:
@@ -104,10 +109,11 @@ jobs:
     # it makes no network request, and the credit component is reachable by
     # keyboard without covering the map controls.
     #
-    # Needs the OnlyMap runtime to mount a real map. Until the runtime ships
-    # with the plugin (see docs/architecture.md) there is nothing for this job
-    # to point ONLYMAP_RUNTIME_DIR at on a clean runner, so the tier skips and
-    # says so. `-rs` keeps that visible rather than reading as a pass.
+    # Needs the OnlyMap runtime to mount a real map. It is not vendored (see
+    # docs/architecture.md), so the job fetches the pinned build from the
+    # registry first - through the plugin's own download-and-verify path, not a
+    # curl, so the code that reaches the network on a user's machine is exercised
+    # here too.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +122,11 @@ jobs:
           python-version: "3.11"
       - run: pip install pytest pytest-playwright
       - run: playwright install --with-deps chromium firefox webkit
+      - name: Fetch the pinned OnlyMap runtime
+        run: |
+          echo "ONLYMAP_RUNTIME_DIR=$(python scripts/fetch_runtime.py)" >> $GITHUB_ENV
+      # `-rs` keeps skips visible. Firefox skips the WebGL2 tests where the
+      # runner has no WebGL2; that is an environment limit, not a pass.
       - run: python -m pytest tests/browser -q -rs
              --browser chromium --browser firefox --browser webkit
         env:
