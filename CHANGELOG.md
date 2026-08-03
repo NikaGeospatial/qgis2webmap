@@ -31,6 +31,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   free space, and the position list now says what each corner shares.
 - **The map title is drawn by default**, and the legend gives up its own heading
   while it is, so the title appears exactly once rather than twice.
+- A **minimum drawn width of 2px for line layers**. deck.gl hit-tests against
+  what it drew, so a QGIS hairline exported as a sub-pixel line that was visible
+  and effectively impossible to click - making its popup unreachable. Lines only:
+  on a polygon this is the outline, and thickening that would eat into small
+  features for no benefit, since a polygon is picked by its interior.
+- A **fidelity warning when the project has a tile layer and the export has no
+  basemap**, which is how a map of bare shapes on white gets sent without anyone
+  noticing until the recipient asks what they are looking at.
+- **A light and dark theme switcher on the documentation site**, following the
+  reader's system preference by default and remembering an explicit choice. It
+  lives in `_includes/head-custom.html` rather than in the pages, because the
+  plugin's Help tab renders those same Markdown files with Qt and understands no
+  Jekyll syntax.
+- **One-line explainers under the settings that lacked them** - map name, extent,
+  control colours, caption and basemap. Several previously explained themselves
+  only in a tooltip, which is invisible unless you already suspect there is
+  something to read.
 - **Live preview.** The preview is served from `127.0.0.1` on an ephemeral port
   and the open tab reloads itself as settings change, keeping the camera. A
   `Live preview` checkbox controls it, remembered per machine in `QSettings`
