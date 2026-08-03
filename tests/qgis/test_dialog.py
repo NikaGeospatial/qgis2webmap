@@ -494,6 +494,54 @@ class TestLivePreviewLifecycle:
         assert dialog.open_export_button.isEnabled() is False
         dialog.close()
 
+    def test_a_refused_port_falls_back_to_a_file_preview(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """A firewall or sandbox must downgrade the preview, not destroy it.
+
+        The user asked for a preview and one exists on disk; raising a modal and
+        opening nothing would be the worst of both.
+        """
+        dialog = self._dialog(project, make_memory_layer)
+        entry = tmp_path / "index.html"
+        entry.write_text("<p>x</p>", encoding="utf-8")
+
+        opened: list[str] = []
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()),
+        )
+
+        dialog._fall_back_to_file_preview(entry)
+
+        assert opened, "the preview should still open"
+        assert dialog.live_check.isChecked() is False, "the checkbox must match reality"
+        assert dialog._server is None
+        assert "could not start" in dialog.status_label.text()
+        dialog.close()
+
+    def test_the_fallback_does_not_re_enter_teardown(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """Clearing the checkbox must not fire `_on_live_toggled` recursively."""
+        dialog = self._dialog(project, make_memory_layer)
+        entry = tmp_path / "index.html"
+        entry.write_text("<p>x</p>", encoding="utf-8")
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: None,
+        )
+
+        calls: list[bool] = []
+        original = dialog._on_live_toggled
+        monkeypatch.setattr(
+            dialog, "_on_live_toggled", lambda value: calls.append(value) or original
+        )
+
+        dialog._fall_back_to_file_preview(entry)
+        assert calls == [], "the signal should be blocked while correcting the box"
+        dialog.close()
+
 
 class TestDialogConstruction:
     """The dialog is real code and has to be executed, not just imported."""

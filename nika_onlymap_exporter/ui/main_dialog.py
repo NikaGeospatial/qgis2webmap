@@ -170,6 +170,20 @@ def _apply_saved_color(button: QgsColorButton, value: str) -> None:
         button.setToNull()
 
 
+def _help_label(text: str, parent: QWidget) -> QLabel:
+    """A quiet line of guidance under a control.
+
+    Several settings explained themselves only in a tooltip, which is invisible
+    unless you already suspect there is something to read - and the setting most
+    in need of explaining, coordinate precision, is the one that throws data
+    away. Colour comes from the palette so it stays legible in a dark theme.
+    """
+    label = QLabel(text, parent)
+    label.setWordWrap(True)
+    label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+    return label
+
+
 def _summarise(detail: str) -> str:
     """The one-line form of a fidelity note, cut on a word boundary."""
     if len(detail) <= DETAIL_SUMMARY_LENGTH:
@@ -404,6 +418,16 @@ class MainDialog(QDialog):
         )
         self.precision_combo.currentIndexChanged.connect(self._on_precision_changed)
         data_form.addRow("Coordinate precision", self.precision_combo)
+        # The only setting in this dialog that discards data, so it says so on
+        # screen rather than only on hover.
+        data_form.addRow(
+            "",
+            _help_label(
+                "Rounding makes the file smaller and cannot be undone. "
+                "6 places is about 0.1 m at the equator.",
+                data_box,
+            ),
+        )
         layout.addWidget(data_box)
 
         layout.addStretch(1)
@@ -846,6 +870,12 @@ class MainDialog(QDialog):
         )
         self.hover_check.toggled.connect(self._on_hover_toggled)
         layout.addWidget(self.hover_check)
+        layout.addWidget(
+            _help_label(
+                "Hover replaces click rather than adding to it.",
+                box,
+            )
+        )
 
         # qgis2web has no control for this at all: it reuses the QGIS *editing
         # selection* colour as a web hover cue, opaque yellow out of the box, and
@@ -1302,7 +1332,15 @@ class MainDialog(QDialog):
                 return
 
             self._last_snapshot = self.state.snapshot()
-            url = self._ensure_server(preview_directory(identity))
+            try:
+                url = self._ensure_server(preview_directory(identity))
+            except OSError:
+                # A refused port is a local firewall or a sandbox, not a bug in
+                # the map. The artifact is already written, so fall back to
+                # opening it directly rather than losing the preview entirely.
+                self._fall_back_to_file_preview(result.entry_path)
+                return
+
             QDesktopServices.openUrl(QUrl(url))
             self._watch_timer.start()
             self.status_label.setText(
@@ -1310,6 +1348,32 @@ class MainDialog(QDialog):
             )
         except Exception as exc:
             self._report_failure("Preview failed", exc)
+
+    def _fall_back_to_file_preview(self, entry_path: Path) -> None:
+        """Open the preview as a file, and say why it is not live.
+
+        Deliberately not a modal: the user asked for a preview and there is one,
+        so interrupting them to explain a downgrade they did not choose would be
+        worse than the downgrade. The checkbox is cleared so the state on screen
+        matches what is actually happening.
+        """
+        QgsMessageLog.logMessage(
+            f"Could not start the live preview server:\n{traceback.format_exc()}",
+            LOG_TAG,
+            level=Qgis.Warning,
+        )
+        self._stop_live_preview()
+        with contextlib.suppress(Exception):
+            # Reflect reality without re-entering `_on_live_toggled`'s teardown.
+            self.live_check.blockSignals(True)
+            self.live_check.setChecked(False)
+            self.live_check.blockSignals(False)
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
+        self.status_label.setText(
+            "Live preview could not start on this machine, so the preview opened "
+            "as a file. Reload the tab after making changes."
+        )
 
     def _ensure_server(self, root: Path) -> str:
         """Start the preview server if it is not already running.
