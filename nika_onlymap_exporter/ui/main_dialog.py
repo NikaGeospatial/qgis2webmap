@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import Qt, QUrl
+from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -80,7 +80,8 @@ from ..packaging.artifact_builder import build_artifact
 from ..packaging.dependency_scanner import standalone_ineligible_reason
 from ..writers.onlymap_writer import ExportBlockedError
 from .layer_watcher import LayerTreeWatcher
-from .preview import write_preview
+from .live_server import PreviewServer
+from .preview import preview_directory, write_preview
 from .runtime_setup import ensure_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -114,6 +115,20 @@ DETAIL_SUMMARY_LENGTH = 110
 
 # Keeps the mode combos aligned down the list however long the field names are.
 FIELD_NAME_COLUMN_WIDTH = 160
+
+# How often the live preview checks whether any setting changed. Comparing one
+# short JSON string, so the cost is noise; the interval only bounds how long a
+# change waits before the debounce even starts.
+LIVE_POLL_MS = 300
+
+# How long a change must settle before a rebuild. Dragging a colour picker emits
+# a change per pixel, and each rebuild re-runs the production writer.
+LIVE_DEBOUNCE_MS = 400
+
+# Where the live-preview preference lives. QSettings, not the project file: it
+# describes how someone likes to work, not what the map is, so it should follow
+# the person between projects rather than travel inside one.
+LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 
 # Marks the per-layer options row, so it is never mistaken for a field row.
 LAYER_OPTIONS_ROLE = "__layer_options__"
@@ -297,6 +312,26 @@ class MainDialog(QDialog):
         # Close would lose every setting they had just made.
         self._shut_down = False
         self.finished.connect(lambda _code: self._shutdown())
+
+        # ---- Live preview ------------------------------------------------
+        # The server is created on first use, not here: a user with live preview
+        # switched off must never have a socket opened on their behalf.
+        self._server: PreviewServer | None = None
+        self._last_snapshot = self.state.snapshot()
+        self._rebuilding = False
+
+        # Polls the settings snapshot rather than the widgets. See
+        # `DialogState.snapshot` for why signals were the wrong hook.
+        self._watch_timer = QTimer(self)
+        self._watch_timer.setInterval(LIVE_POLL_MS)
+        self._watch_timer.timeout.connect(self._poll_for_changes)
+
+        # Coalesces a burst of edits - dragging a colour picker emits a change
+        # per pixel - into one rebuild.
+        self._rebuild_timer = QTimer(self)
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.setInterval(LIVE_DEBOUNCE_MS)
+        self._rebuild_timer.timeout.connect(self._rebuild_live_preview)
 
         self.refresh_layers()
 
@@ -948,7 +983,19 @@ class MainDialog(QDialog):
         self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, 1)
 
-        self.preview_button = QPushButton("Preview in browser", self)
+        # Remembered per machine. Ticking it does not open anything on its own -
+        # the user asked for nothing to auto-launch a browser - it only decides
+        # what Preview does when they press it.
+        self.live_check = QCheckBox("Live preview", self)
+        self.live_check.setChecked(QSettings().value(LIVE_PREVIEW_KEY, True, type=bool))
+        self.live_check.setToolTip(
+            "Serve the preview from this machine and reload the open tab as you "
+            "change settings. Switch off to open the preview as a file instead."
+        )
+        self.live_check.toggled.connect(self._on_live_toggled)
+        row.addWidget(self.live_check)
+
+        self.preview_button = QPushButton("Preview", self)
         self.preview_button.clicked.connect(self.on_preview)
         row.addWidget(self.preview_button)
 
@@ -957,10 +1004,88 @@ class MainDialog(QDialog):
         self.export_button.clicked.connect(self.on_export)
         row.addWidget(self.export_button)
 
+        # Enabled only once there is something to open. The file:// path is
+        # exercised here, against the artifact that actually ships, rather than
+        # against a preview copy of it.
+        self.open_export_button = QPushButton("Open exported map", self)
+        self.open_export_button.setEnabled(False)
+        self.open_export_button.clicked.connect(self._on_open_export)
+        self._last_export_path: Path | None = None
+        row.addWidget(self.open_export_button)
+
         close = QPushButton("Close", self)
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row
+
+    # ---- Live preview ---------------------------------------------------
+
+    def _on_live_toggled(self, enabled: bool) -> None:
+        QSettings().setValue(LIVE_PREVIEW_KEY, enabled)
+        if not enabled:
+            self._stop_live_preview()
+
+    def _on_open_export(self) -> None:
+        if self._last_export_path is None:
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_export_path)))
+
+    def _poll_for_changes(self) -> None:
+        """Restart the debounce whenever any setting differs from last build."""
+        if self._shut_down or self._server is None:
+            return
+        current = self.state.snapshot()
+        if current == self._last_snapshot:
+            return
+        self._last_snapshot = current
+        self._rebuild_timer.start()
+
+    def _rebuild_live_preview(self) -> None:
+        """Rewrite the artifact and tell the open tab to reload.
+
+        Reentrancy matters here: a rebuild runs the full production writer, and
+        on a large project that is slower than the debounce. Without the guard a
+        burst of edits would stack rebuilds on top of each other.
+        """
+        if self._shut_down or self._server is None or self._rebuilding:
+            # Try again once the in-flight rebuild finishes, so the last edit is
+            # never the one that gets dropped.
+            if self._rebuilding and not self._shut_down:
+                self._rebuild_timer.start()
+            return
+
+        self._rebuilding = True
+        try:
+            export, report = self._read_current_project()
+            self._show_fidelity(report)
+            write_preview(export, self._project_identity(), live=True)
+            self._server.notify_reload()
+            self.status_label.setText("Live preview updated.")
+        except Exception:
+            # A failed rebuild must not switch live preview off or spawn a modal
+            # on every keystroke: the user is mid-edit and the next change may
+            # well fix it. Report quietly and keep going.
+            self.status_label.setText(
+                "Live preview could not be updated - see the QGIS log."
+            )
+            QgsMessageLog.logMessage(
+                f"Live preview rebuild failed:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.Warning,
+            )
+        finally:
+            self._rebuilding = False
+
+    def _stop_live_preview(self) -> None:
+        self._watch_timer.stop()
+        self._rebuild_timer.stop()
+        server, self._server = self._server, None
+        if server is not None:
+            with contextlib.suppress(Exception):
+                server.stop()
+
+    def _project_identity(self) -> str:
+        return self.project.fileName() or self.project.baseName() or "untitled"
 
     def _available_layer_ids(self) -> list[str]:
         return [
@@ -1045,7 +1170,7 @@ class MainDialog(QDialog):
         return False
 
     def on_preview(self) -> None:
-        """Write a preview and open it in the user's own default browser."""
+        """Open the preview: served from this machine, or as a file."""
         try:
             # Read and report *before* asking for the runtime. Reading the
             # project is what fills the Fidelity tab, and it needs no runtime -
@@ -1058,16 +1183,44 @@ class MainDialog(QDialog):
             if not self._runtime_ready():
                 return
 
-            identity = self.project.fileName() or self.project.baseName() or "untitled"
-            result = write_preview(export, identity)
+            identity = self._project_identity()
+            live = self.live_check.isChecked()
+            result = write_preview(export, identity, live=live)
 
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
+            if not live:
+                self._stop_live_preview()
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
+                self.status_label.setText(
+                    "Preview opened. Reload the browser tab after making changes - "
+                    "your position on the map is kept."
+                )
+                return
+
+            self._last_snapshot = self.state.snapshot()
+            url = self._ensure_server(preview_directory(identity))
+            QDesktopServices.openUrl(QUrl(url))
+            self._watch_timer.start()
             self.status_label.setText(
-                "Preview opened. Reload the browser tab after making changes - "
-                "your position on the map is kept."
+                "Live preview open. Changes here update the tab automatically."
             )
         except Exception as exc:
             self._report_failure("Preview failed", exc)
+
+    def _ensure_server(self, root: Path) -> str:
+        """Start the preview server if it is not already running.
+
+        Rebound if the project identity changed, because the preview directory
+        is keyed by project and a stale root would serve the previous map.
+        """
+        if self._server is not None:
+            if self._server.root == root:
+                return self._server.url
+            self._stop_live_preview()
+
+        server = PreviewServer(root)
+        url = server.start()
+        self._server = server
+        return url
 
     def on_export(self) -> None:
         """Write the artifact wherever the user asks for it."""
@@ -1124,6 +1277,10 @@ class MainDialog(QDialog):
 
             result, outcome = build_artifact(export, Path(chosen), mode=mode)
             save_state(self.project, self.state)
+
+            # The file:// check happens here, against the bytes that ship.
+            self._last_export_path = Path(outcome.path)
+            self.open_export_button.setEnabled(True)
 
             self.status_label.setText(outcome.summary())
             # The writer's warnings (licence caps, a runtime that does not match
@@ -1204,6 +1361,9 @@ class MainDialog(QDialog):
                 LOG_TAG,
                 level=Qgis.Warning,
             )
+        # Before the watcher, because a rebuild triggered mid-teardown would run
+        # against a half-disconnected dialog.
+        self._stop_live_preview()
         self.watcher.disconnect_all()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API

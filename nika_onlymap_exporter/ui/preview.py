@@ -35,6 +35,7 @@ from pathlib import Path
 
 from ..core.export_ir import ExportProject, OutputMode
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
+from .live_server import RELOAD_PATH
 
 PREVIEW_DIR_NAME = "qgis2webmap-preview"
 
@@ -86,6 +87,37 @@ CAMERA_SCRIPT = """
 """
 
 
+RELOAD_SCRIPT = f"""
+    <script>
+      // Preview only: reload when the plugin rebuilds the artifact.
+      //
+      // Opened from a file:// path this does nothing at all, deliberately. The
+      // preview file is a real artifact and someone will eventually
+      // double-click it; a dead EventSource retrying against a port that was
+      // never there would be pure noise.
+      (function () {{
+        if (location.protocol === "file:") return;
+        var attempts = 0;
+        function connect() {{
+          var source = new EventSource("{RELOAD_PATH}");
+          source.onmessage = function (event) {{
+            if (event.data === "reload") location.reload();
+          }};
+          source.onerror = function () {{
+            // The dialog closed, or the server went away. Retry briefly and
+            // then give up: a tab left open for hours must not sit in an
+            // endless reconnect loop against a dead port.
+            source.close();
+            attempts += 1;
+            if (attempts <= 5) setTimeout(connect, 1000);
+          }};
+        }}
+        connect();
+      }})();
+    </script>
+"""
+
+
 def preview_directory(project_identity: str) -> Path:
     """A stable directory for this project's preview.
 
@@ -104,6 +136,7 @@ def write_preview(
     project_identity: str,
     writer: OnlyMapWriter | None = None,
     final: bool = False,
+    live: bool = False,
 ) -> ArtifactResult:
     """Build a preview artifact through the production writer.
 
@@ -111,9 +144,14 @@ def write_preview(
     what ships. The default skips compression, which makes each preview write
     quick while iterating; only the final mode may claim to show what a recipient
     receives.
+
+    `live` adds the reload listener, for previews served by `PreviewServer`. It
+    is off by default so that a preview written for any other reason carries
+    nothing that expects a server to exist.
     """
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
+    hook = CAMERA_SCRIPT + RELOAD_SCRIPT if live else CAMERA_SCRIPT
 
     # Passed through the template's own hook rather than string-matching the
     # rendered output. The runtime contains a literal "</body>" inside a template
@@ -124,5 +162,5 @@ def write_preview(
         destination,
         mode=OutputMode.STANDALONE_HTML,
         compress=final,
-        preview_hook=CAMERA_SCRIPT,
+        preview_hook=hook,
     )

@@ -266,6 +266,99 @@ class TestPreview:
         assert "om-view-changed" not in outcome.path.read_text()
 
 
+class TestLivePreviewLifecycle:
+    """The dialog owns a server and a thread; both must die with it.
+
+    A leaked server keeps a socket open and a thread alive for the rest of the
+    QGIS session, and a timer that fires against a closed dialog is a crash the
+    user experiences as QGIS vanishing.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_no_server_starts_until_a_preview_is_asked_for(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Opening the dialog must not open a socket on the user's behalf."""
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog._server is None
+        dialog.close()
+
+    def test_shutdown_stops_the_server_and_its_thread(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        import threading
+
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        dialog._server = PreviewServer(tmp_path)
+        dialog._server.start()
+        assert dialog._server.port > 0
+
+        dialog.close()
+
+        assert dialog._server is None
+        remaining = [
+            t.name for t in threading.enumerate() if t.name.startswith("qgis2webmap")
+        ]
+        assert not remaining, f"threads left running: {remaining}"
+
+    def test_shutdown_stops_the_timers(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """A rebuild fired after close would run against a destroyed dialog."""
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._watch_timer.start()
+        dialog._rebuild_timer.start()
+
+        dialog.close()
+
+        assert not dialog._watch_timer.isActive()
+        assert not dialog._rebuild_timer.isActive()
+
+    def test_turning_live_preview_off_stops_the_server(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        dialog._server = PreviewServer(tmp_path)
+        dialog._server.start()
+
+        dialog.live_check.setChecked(False)
+
+        assert dialog._server is None
+        dialog.close()
+
+    def test_polling_does_nothing_without_a_server(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """The watcher must be inert when live preview was never started."""
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.state.map_name = "changed"
+        dialog._poll_for_changes()
+        assert not dialog._rebuild_timer.isActive()
+        dialog.close()
+
+    def test_open_exported_map_is_disabled_until_there_is_one(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.open_export_button.isEnabled() is False
+        dialog.close()
+
+
 class TestDialogConstruction:
     """The dialog is real code and has to be executed, not just imported."""
 

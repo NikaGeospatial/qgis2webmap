@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import json
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from .export_ir import (
@@ -217,6 +218,50 @@ class DialogState:
     quantize_precision: int | None = None
     extent_source: ExtentSource = ExtentSource.DATA
     layers: dict[str, LayerSettings] = field(default_factory=dict)
+
+    def snapshot(self) -> str:
+        """A deterministic string that changes whenever any setting does.
+
+        The live preview compares this rather than hooking each widget's signal:
+        there are eighteen change handlers and only some of them mark state
+        dirty, so a signal-based approach would already miss half the settings
+        and would silently rot as new ones are added. Deriving it from the
+        dataclass fields means a setting added tomorrow is watched for free.
+
+        **It watches this dialog's state, not the QGIS project.** Restyling a
+        layer in QGIS does not change any field here, so the live preview will
+        not notice it; the layer tree is watched separately for add, remove and
+        rename. Catching style edits would mean subscribing to every layer's
+        repaint, which is a much larger change than it looks.
+        """
+        return json.dumps(
+            {
+                **{
+                    name: getattr(self, name).value
+                    if isinstance(getattr(self, name), Enum)
+                    else getattr(self, name)
+                    for name in (
+                        "map_name",
+                        "output_mode",
+                        "show_legend",
+                        "show_layer_switcher",
+                        "show_zoom_controls",
+                        "show_scale_bar",
+                        "popup_on_hover",
+                        "show_title",
+                        "show_abstract",
+                        "title_corner",
+                        "widget_background",
+                        "widget_foreground",
+                        "highlight_color",
+                        "quantize_precision",
+                        "extent_source",
+                    )
+                },
+                "layers": {k: v.to_dict() for k, v in sorted(self.layers.items())},
+            },
+            sort_keys=True,
+        )
 
     def for_layer(self, layer_id: str) -> LayerSettings:
         """Settings for a layer, creating defaults on first sight.
