@@ -31,6 +31,22 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   free space, and the position list now says what each corner shares.
 - **The map title is drawn by default**, and the legend gives up its own heading
   while it is, so the title appears exactly once rather than twice.
+- **A size control for the map chrome** - Small through Largest - scaling the
+  legend, layer switcher, zoom controls, scale bar and caption together. The
+  credit component is deliberately excluded: attribution carries licence
+  obligations, and a control that can shrink it towards illegibility is a
+  control for quietly failing to attribute.
+
+  Implemented as `transform: scale()` rather than a font size, because measuring
+  proved the obvious approach insufficient. Setting `font-size` on a widget host
+  *does* reach inside its shadow root - text went from 12px to 24px at scale 2 -
+  but the controls did not follow: the zoom buttons stayed 30x60 and the scale
+  bar stayed 81x23, their internals being sized in pixels. Text grew while the
+  things you click did not. A transform scales the rendered box and its contents,
+  with `transform-origin` per widget so each grows into the map from the corner
+  it is pinned to. The fixed bottom-left offsets that stack the zoom controls
+  above the scale bar are scaled too - left alone, a scaled scale bar landed on
+  top of the zoom controls.
 - A **minimum drawn width of 2px for line layers**. deck.gl hit-tests against
   what it drew, so a QGIS hairline exported as a sub-pixel line that was visible
   and effectively impossible to click - making its popup unreachable. Lines only:
