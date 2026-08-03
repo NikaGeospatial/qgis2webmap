@@ -32,6 +32,27 @@ def qgis_app():
     app = qgis_core.QgsApplication([], True)
     qgis_core.QgsApplication.initQgis()
     yield app
+
+    # Destroy every widget still alive before shutting QGIS down.
+    #
+    # A dialog that was closed but not deleted keeps its C++ object, and Python
+    # frees that during interpreter teardown - after `exitQgis` has torn down the
+    # provider and symbol registries the widget's children reach into. The result
+    # is a segfault *after* the last test passes, so the suite reports success
+    # and then dies with exit 139.
+    #
+    # It surfaced only when `tests/qgis/test_dialog.py` and `tests/fixtures` ran
+    # in one process, which is how CI runs them; either alone left few enough
+    # widgets to get away with it.
+    from qgis.PyQt.QtWidgets import QApplication
+
+    for widget in QApplication.topLevelWidgets():
+        widget.close()
+        widget.deleteLater()
+    QApplication.sendPostedEvents(None, 0)
+    QApplication.processEvents()
+
+    qgis_core.QgsProject.instance().clear()
     qgis_core.QgsApplication.exitQgis()
 
 

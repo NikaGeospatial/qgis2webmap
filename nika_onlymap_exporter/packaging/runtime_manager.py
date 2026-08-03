@@ -298,13 +298,17 @@ def download_tarball(
     request = urllib.request.Request(url, headers={"User-Agent": "QGIS2WebMap-by-NIKA"})
 
     try:
-        # nosec B310 - the scheme is checked immediately above. B310 exists to
-        # catch `urlopen` on an attacker-controlled string that could name
-        # `file://` or a custom handler; this URL is built by `tarball_url`
-        # from a version in our own lock file and is rejected unless it is
-        # https. QGIS's plugin scanner runs Bandit as a blocking check, so this
-        # pragma is the documented way to record a reviewed finding rather than
-        # leave one outstanding.
+        # B310 is suppressed on the call below. The scheme is checked
+        # immediately above: B310 exists to catch `urlopen` on an
+        # attacker-controlled string that could name `file://` or a custom
+        # handler, and this URL is built by `tarball_url` from a version in our
+        # own lock file and rejected unless it is https. QGIS's plugin scanner
+        # runs Bandit as a blocking check, so the pragma records a reviewed
+        # finding rather than leaving one outstanding.
+        #
+        # This comment must not begin with the pragma word itself: Bandit reads
+        # the rest of such a line as a list of test IDs and warns once per word,
+        # burying real findings in its output.
         with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
             total = response.getheader("Content-Length")
             total_bytes = int(total) if total and total.isdigit() else None

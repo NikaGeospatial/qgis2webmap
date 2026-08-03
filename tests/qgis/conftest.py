@@ -71,6 +71,32 @@ def _build_memory_layer(
     return layer
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path_factory):
+    """Point `QSettings` at a scratch directory for the whole tier.
+
+    The dialog stores the live-preview preference in `QSettings`, which is
+    machine-wide and persistent. Two consequences, both bad:
+
+    - Tests wrote into the developer's real QGIS configuration.
+    - A test that flips the preference changed the *next run's* starting state,
+      so `setChecked(False)` on an already-false box emitted no signal and the
+      assertion failed - passing or failing depending on run history rather than
+      on the code.
+
+    Ini format because it is the only one `setPath` redirects; the native
+    backend on each platform ignores it.
+    """
+    from qgis.PyQt.QtCore import QSettings
+
+    directory = str(tmp_path_factory.mktemp("qsettings"))
+    previous_format = QSettings.defaultFormat()
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, directory)
+    yield
+    QSettings.setDefaultFormat(previous_format)
+
+
 @pytest.fixture
 def runtime_required() -> None:
     """Skip a test that cannot run without the OnlyMap runtime.

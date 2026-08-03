@@ -7,6 +7,33 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Live preview.** The preview is served from `127.0.0.1` on an ephemeral port
+  and the open tab reloads itself as settings change, keeping the camera. A
+  `Live preview` checkbox controls it, remembered per machine in `QSettings`
+  rather than in the project, because it describes how someone works rather than
+  what the map is. Nothing opens a browser on its own.
+
+  `file://` is why this needs a server at all: Chrome treats file documents as
+  opaque origins, so the page cannot be reached from the plugin - the camera
+  script had already hit the same wall with `sessionStorage`. The server is
+  loopback-only, serves one directory, refuses writes, and dies with the dialog.
+  Change detection compares a snapshot of the dialog state rather than hooking
+  eighteen widget signals, only eight of which marked anything dirty; a test
+  fails if a field is added to `DialogState` without being added to the snapshot.
+- **Open exported map**, enabled after a successful export. This is where the
+  `file://` path is exercised - against the bytes that ship, rather than against
+  a preview copy of them, which was the weaker check it replaces.
+- **An always-visible fidelity strip** above the buttons, so what the export
+  changes is readable from every tab instead of only from inside one. It stays
+  empty when nothing changes: a permanent "0 changes" trains people to ignore it.
+- **An export summary** on the Map tab, naming what pressing Export will produce.
+- Visible help under the settings that most needed it, coordinate precision
+  above all - the only control here that discards data, and previously explained
+  only in a tooltip.
+- `scripts/fetch_runtime.py`, used by CI to fetch the pinned runtime through the
+  plugin's own download-and-verify path. Six of issue #29's release gates had
+  been skipping for want of a runtime, and the code that reaches the network on a
+  user's machine was the only code CI never ran.
 - Repository bootstrap: plugin lifecycle (one Web-menu action + toolbar icon),
   export-dialog shell with a populated Help tab, NIKA iconography,
   packaging and package-verification scripts, and CI.
@@ -130,6 +157,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the guides all now say.
 
 ### Fixed
+- The three **How to share it** options are radio buttons. They were checkboxes
+  that unpicked each other by hand, which promises multi-select without
+  delivering it and reads wrong to a screen reader.
+- Five preview tests failed, rather than skipping, on a machine with no cached
+  runtime. Every other tier guarded on `discover_runtime_dir`; these did not, so
+  a red run that only meant "this machine has not fetched the runtime" trained
+  people to ignore red.
+- Secondary text in the dialog comes from the palette instead of a fixed grey,
+  so it stays legible in a dark Qt theme.
+- A Bandit pragma written as a prose comment beginning with the pragma word made
+  the scanner read the sentence as a list of test IDs and emit a warning per
+  word. QGIS runs Bandit as a blocking check, so its output has to stay readable.
 - Single-symbol layers showed a grey legend swatch beside correctly-coloured
   geometry. The legend takes its swatch from the layer's `color` shorthand and
   only derives one from an expression it can read structure out of; a single

@@ -1,4 +1,4 @@
-"""Preview: the production writer, a stable path, and the system browser.
+"""Preview: the production writer, a stable path, and the user's own browser.
 
 Three decisions worth stating, all reacting to something measured in the
 incumbent.
@@ -12,16 +12,28 @@ rasterizer`, leaving nothing able to draw. Our runtime is WebGL, which is the
 worst case for an embedded Chromium. The external browser is also the *real*
 target environment, so it is the more faithful preview.
 
+This was measured rather than assumed. On QGIS 4.0.3 / Qt 6.11.1, a
+`QWebEngineView` constructs but **can create no WebGL context at all**
+(`GL_VENDOR = Disabled`, `BindToCurrentSequence failed`), with
+`AA_ShareOpenGLContexts` already set and `--enable-unsafe-swiftshader` making no
+difference. An embedded pane would be blank. Separately, `pyqt6-webengine` is not
+in the QGIS closure, so most users would have no view to put in it.
+
 **A stable path per project.** qgis2web stamps a new timestamped directory on
 every write, so the URL changes each time: the browser's reload button is
 useless, the camera resets, and `/tmp` grows without bound. One path per project
 means reload works and temp files are reused.
 
-**`file://`, not a localhost server.** Previewing over `http://` would test a
-different origin with different rules than the artifact the recipient opens -
-`fetch` of siblings works there and not from a file, so a bug could sail through
-preview and land on the recipient. The missing live-reload is the price of
-testing what actually ships.
+**Served from localhost while you work; a file once you export.** `file://`
+leaves the plugin no way to reach the page - Chrome treats file documents as
+opaque origins, which `CAMERA_SCRIPT` below already ran into with
+`sessionStorage` - so a live preview has to be served. See `live_server.py`.
+
+The origin does differ from the `file://` an artifact is usually opened from, and
+that gap is closed deliberately rather than ignored: the *exported* map is opened
+over `file://` from the dialog's **Open exported map**, so the shipping bytes are
+what get checked on the shipping origin. Testing a preview copy would have been
+the weaker check. Live preview is the working loop, not the final word.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later

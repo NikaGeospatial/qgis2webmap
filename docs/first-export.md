@@ -29,15 +29,31 @@ project.
 
 ## 5. Preview
 
-**Preview in browser** writes the map and opens it in your default browser. After
-making changes in QGIS, press Preview again, or just reload the browser tab - the
-address does not change and your position on the map is kept.
+**Preview** builds the map and opens it in your default browser. Nothing opens a
+browser on its own - only this button does.
+
+With **Live preview** ticked, the map is served from your own machine and the tab
+updates by itself as you change settings, keeping your position on the map. Change
+a colour or switch a layer off and watch it happen; there is no need to press
+Preview again.
+
+Untick **Live preview** to open the map as a file instead. The tab then only
+changes when you press Preview again or reload it. The setting is remembered
+between projects.
+
+If the preview cannot be served - a firewall or a locked-down machine - it opens
+as a file automatically and tells you so. Nothing is lost.
 
 ## 6. Export
 
 Pick how you want to share it on the Map tab, then press **Export**.
 
-If Export is greyed out, the reason is shown beside it.
+The line under those choices says what you are about to produce, and the strip
+above the buttons says what will change on the way out. If Export is greyed out,
+the reason is shown beside it.
+
+Once an export succeeds, **Open exported map** opens the real file - the one you
+would send to someone - so you can check it before sharing.
 
 ## 7. Check the Fidelity tab
 

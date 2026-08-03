@@ -469,6 +469,10 @@ class TestLivePreviewLifecycle:
 
         dialog = self._dialog(project, make_memory_layer)
         (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        # Establish the starting state rather than inheriting it: `setChecked`
+        # emits nothing when the value already matches, so a box that was
+        # already unticked would make this pass for the wrong reason.
+        dialog.live_check.setChecked(True)
         dialog._server = PreviewServer(tmp_path)
         dialog._server.start()
 
