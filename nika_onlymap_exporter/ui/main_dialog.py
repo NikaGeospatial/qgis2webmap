@@ -161,6 +161,16 @@ BASEMAP_LABELS = {
     "bright": "Bright - high contrast",
 }
 
+# A short list rather than a spinner: the useful range is narrow, and naming the
+# sizes means nobody has to reason about what 1.35 looks like.
+CHROME_SCALE_LABELS = {
+    1.0: "Normal",
+    0.85: "Small",
+    1.25: "Large",
+    1.5: "Extra large",
+    2.0: "Largest - for presentations and big screens",
+}
+
 EXTENT_LABELS = {
     ExtentSource.DATA: "The data - every feature is visible",
     ExtentSource.CANVAS: "The current QGIS view",
@@ -519,6 +529,10 @@ class MainDialog(QDialog):
             with contextlib.suppress(ValueError):
                 self.state.extent_source = ExtentSource(value)
         self._fidelity_is_stale = True
+
+    def _on_chrome_scale_changed(self) -> None:
+        value = self.scale_combo.currentData()
+        self.state.chrome_scale = float(value) if value is not None else 1.0
 
     def _on_basemap_changed(self) -> None:
         value = self.basemap_combo.currentData()
@@ -965,6 +979,22 @@ class MainDialog(QDialog):
         )
         _apply_saved_color(self.foreground_button, self.state.widget_foreground)
         form.addRow("Text and icons", self.foreground_button)
+        self.scale_combo = QComboBox(box)
+        for value, label in CHROME_SCALE_LABELS.items():
+            self.scale_combo.addItem(label, value)
+        scale_index = self.scale_combo.findData(self.state.chrome_scale)
+        self.scale_combo.setCurrentIndex(scale_index if scale_index >= 0 else 0)
+        self.scale_combo.currentIndexChanged.connect(self._on_chrome_scale_changed)
+        form.addRow("Size", self.scale_combo)
+        form.addRow(
+            "",
+            _help_label(
+                "Scales the legend, layer switcher, zoom controls, scale bar "
+                "and title together. The credit stays fixed so attribution "
+                "cannot be shrunk out of legibility.",
+                box,
+            ),
+        )
         form.addRow(
             "",
             _help_label(

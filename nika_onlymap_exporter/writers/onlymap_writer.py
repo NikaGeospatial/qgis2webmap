@@ -365,9 +365,93 @@ def _widget_color_block(project: ExportProject) -> str:
         declarations.append(f"        --om-widget-fg: {foreground};")
         declarations.append(f"        --om-widget-muted: {foreground};")
 
-    if not declarations:
+    blocks: list[str] = []
+    if declarations:
+        blocks.append("\n".join(["      :root {", *declarations, "      }"]))
+
+    scale_block = _chrome_scale_block(settings.chrome_scale)
+    if scale_block:
+        blocks.append(scale_block)
+
+    return "\n\n".join(blocks)
+
+
+# Which corner each widget is pinned to, so a scale transform grows it *into*
+# the map rather than off the edge. Mirrors `WIDGET_POSITIONS` in the manifest
+# builder; kept here because it is a CSS concern, not a manifest one.
+_WIDGET_ORIGINS = {
+    "legend": "top right",
+    "layer-switcher": "top left",
+    "zoom-controls": "bottom left",
+    "scale-bar": "bottom left",
+}
+
+
+def _chrome_scale_block(scale: float) -> str:
+    """Scale the map chrome with a transform, not a font size.
+
+    **The runtime exposes no size property.** Its theming surface is six custom
+    properties and all six are colours, so there is nothing to set.
+
+    Setting `font-size` on the host was the obvious alternative and it is not
+    enough. It does reach inside - inheritance crosses a shadow boundary where
+    ordinary rules do not - and measuring it confirmed the text grew from 12px to
+    24px at scale 2. But the controls did not: the zoom buttons stayed 30x60 and
+    the scale bar stayed 81x23, because their internals are sized in pixels.
+    Text alone got bigger while the things you click did not.
+
+    `transform: scale()` scales the rendered box and everything in it, which is
+    what "make the map controls bigger" has to mean. `transform-origin` is set
+    per widget so each one grows into the map from the corner it is pinned to,
+    instead of sliding off the edge.
+
+    The credit component is deliberately absent. Attribution carries licence
+    obligations, and a control that can shrink it towards illegibility is a
+    control for quietly failing to attribute.
+    """
+    if abs(scale - 1.0) < 0.01:
         return ""
-    return "\n".join(["      :root {", *declarations, "      }"])
+
+    rules: list[str] = []
+    for widget, origin in _WIDGET_ORIGINS.items():
+        rules.extend(
+            [
+                f'      om-widget[type="{widget}"] {{',
+                f"        transform: scale({scale});",
+                f"        transform-origin: {origin};",
+                "      }",
+            ]
+        )
+
+    # `map.html` stacks these two in the bottom-left corner with fixed offsets,
+    # to clear the runtime's licence notice. Those offsets are in unscaled
+    # pixels, so a scaled widget grows straight through its neighbour - measured
+    # at scale 2, where the scale bar landed on top of the zoom controls. The
+    # gaps have to scale with the things they are separating.
+    rules.extend(
+        [
+            '      om-widget[type="zoom-controls"] {',
+            f"        bottom: {round(58.0 * scale, 1)}px !important;",
+            "      }",
+            '      om-widget[type="scale-bar"] {',
+            f"        bottom: {round(30.0 * scale, 1)}px !important;",
+            "      }",
+        ]
+    )
+
+    # The caption is our own element, so it scales by type rather than by
+    # transform - sharper text, and it reflows instead of overflowing.
+    rules.extend(
+        [
+            "      .om-caption-title {",
+            f"        font-size: {round(15.0 * scale, 2)}px;",
+            "      }",
+            "      .om-caption-abstract {",
+            f"        font-size: {round(12.0 * scale, 2)}px;",
+            "      }",
+        ]
+    )
+    return "\n".join(rules)
 
 
 def _attribution_block(project: ExportProject) -> str:

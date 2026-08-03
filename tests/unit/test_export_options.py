@@ -331,3 +331,58 @@ class TestBasemap:
             if preset == "none":
                 continue
             assert basemap_note(preset) is not None, preset
+
+
+class TestChromeScale:
+    """Sizing the map controls, measured rather than assumed.
+
+    `font-size` on the widget host was the obvious approach and it is not
+    enough: it does cross the shadow boundary, but the controls' internals are
+    sized in pixels, so the text grew while the buttons stayed 30x60. A
+    transform scales the rendered box and everything in it.
+    """
+
+    @staticmethod
+    def _block(scale: float) -> str:
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        return _widget_color_block(make_project(chrome_scale=scale))
+
+    def test_normal_size_emits_nothing(self) -> None:
+        """A default export must stay byte-identical."""
+        assert self._block(1.0) == ""
+
+    def test_it_scales_with_a_transform_not_a_font_size(self) -> None:
+        block = self._block(2.0)
+        assert "transform: scale(2.0)" in block
+        assert "font-size" not in block.split(".om-caption")[0]
+
+    def test_every_scaled_widget_gets_an_origin(self) -> None:
+        """Without one, a widget grows off its own edge instead of into the map."""
+        block = self._block(1.5)
+        assert block.count("transform: scale(") == block.count("transform-origin:")
+
+    def test_the_stacked_corner_offsets_scale_too(self) -> None:
+        """Fixed offsets let a scaled scale-bar land on the zoom controls."""
+        block = self._block(2.0)
+        assert "bottom: 116.0px !important" in block
+        assert "bottom: 60.0px !important" in block
+
+    def test_the_caption_scales_as_type(self) -> None:
+        """It is our own element, so it can reflow rather than be stretched."""
+        block = self._block(2.0)
+        assert "font-size: 30.0px" in block
+        assert "font-size: 24.0px" in block
+
+    def test_the_credit_component_is_never_scaled(self) -> None:
+        """Attribution carries licence obligations; it must not be shrinkable."""
+        for scale in (0.75, 1.5, 2.0):
+            assert "om-credit" not in self._block(scale)
+
+    def test_colours_and_scale_can_coexist(self) -> None:
+        project = make_project(widget_background=TEAL, chrome_scale=1.5)
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        block = _widget_color_block(project)
+        assert "--om-widget-bg" in block
+        assert "transform: scale(1.5)" in block

@@ -138,6 +138,26 @@ def _read_layer_precision(raw: Any) -> int | None:
     return value
 
 
+MIN_CHROME_SCALE = 0.75
+MAX_CHROME_SCALE = 2.0
+
+
+def _read_scale(raw: Any) -> float:
+    """A persisted chrome scale, clamped to something legible.
+
+    Out of range or unparseable falls back to 1.0 rather than raising: a bad
+    value here would otherwise render the map controls unusably small or large,
+    which is harder to recover from than simply ignoring it.
+    """
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 1.0
+    if not MIN_CHROME_SCALE <= value <= MAX_CHROME_SCALE:
+        return 1.0
+    return round(value, 2)
+
+
 def _read_precision(raw: Any) -> int | None:
     """A persisted coordinate precision, or None for "maintain"."""
     if raw is None or isinstance(raw, bool):
@@ -219,6 +239,8 @@ class DialogState:
     # streamed - but it ends the "opens offline, contacts nobody" guarantee, so
     # it has to be chosen rather than inherited.
     basemap: str = "none"
+    # A multiplier on the size of the map's chrome. 1.0 is the runtime default.
+    chrome_scale: float = 1.0
     widget_background: str = ""
     widget_foreground: str = ""
     highlight_color: str = ""
@@ -259,6 +281,7 @@ class DialogState:
                         "show_abstract",
                         "title_corner",
                         "basemap",
+                        "chrome_scale",
                         "widget_background",
                         "widget_foreground",
                         "highlight_color",
@@ -297,6 +320,7 @@ class DialogState:
             show_abstract=self.show_abstract,
             title_corner=self.title_corner,
             basemap=self.basemap,
+            chrome_scale=self.chrome_scale,
             widget_background=parse_hex_color(self.widget_background),
             widget_foreground=parse_hex_color(self.widget_foreground),
             highlight_color=parse_hex_color(self.highlight_color),
@@ -337,6 +361,7 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
             state.basemap = str(widgets.get("basemap", "none") or "none")
+            state.chrome_scale = _read_scale(widgets.get("chromeScale"))
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
             state.highlight_color = str(widgets.get("highlightColor", "") or "")
@@ -377,6 +402,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "showAbstract": state.show_abstract,
                 "titleCorner": state.title_corner.value,
                 "basemap": state.basemap,
+                "chromeScale": state.chrome_scale,
                 "widgetBackground": state.widget_background,
                 "widgetForeground": state.widget_foreground,
                 "highlightColor": state.highlight_color,

@@ -625,6 +625,11 @@ class ExportSettings:
     # which is a privacy and longevity trade rather than a size one - tiles are
     # streamed, so the file does not grow at all.
     basemap: str = "none"
+    # A multiplier on the map chrome's text and controls: 1.0 is the runtime's
+    # own sizing. Applies to the caption, legend, layer switcher, zoom controls
+    # and scale bar - not the credit component, which stays fixed so attribution
+    # cannot be shrunk out of legibility.
+    chrome_scale: float = 1.0
     widget_background: Color | None = None
     widget_foreground: Color | None = None
     # None leaves the runtime's own highlight alone. qgis2web has no equivalent:
@@ -658,6 +663,7 @@ class ExportSettings:
             "showAbstract": self.show_abstract,
             "titleCorner": self.title_corner.value,
             "basemap": self.basemap,
+            "chromeScale": self.chrome_scale,
             "widgetBackground": (
                 self.widget_background.snapshot() if self.widget_background else None
             ),
