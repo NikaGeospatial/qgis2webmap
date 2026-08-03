@@ -25,15 +25,19 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qgis.core import Qgis, QgsMessageLog, QgsProject
+from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
+from qgis.gui import QgsColorButton
 from qgis.PyQt.QtCore import Qt, QUrl
-from qgis.PyQt.QtGui import QDesktopServices
+from qgis.PyQt.QtGui import QDesktopServices, QTextDocument
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QFormLayout,
@@ -52,14 +56,32 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..core.export_ir import FidelityStatus, OutputMode
+from ..core.export_ir import (
+    ExtentSource,
+    FidelityStatus,
+    OutputMode,
+    OverlayCorner,
+    PopupFieldMode,
+)
 from ..core.fidelity_report import FidelityReportBuilder
-from ..core.project_reader import read_project, resolve_title
-from ..core.settings import DialogState, load_state, save_state
+from ..core.license_policy import default_policy, report_verdict
+from ..core.popup_translator import hidden_field_names, popup_field_names
+from ..core.project_reader import extent_from_canvas, read_project, resolve_title
+from ..core.settings import (
+    MAX_PRECISION,
+    MIN_PRECISION,
+    PRECISION_FULL,
+    DialogState,
+    LayerSettings,
+    load_state,
+    save_state,
+)
 from ..packaging.artifact_builder import build_artifact
+from ..packaging.dependency_scanner import standalone_ineligible_reason
 from ..writers.onlymap_writer import ExportBlockedError
 from .layer_watcher import LayerTreeWatcher
 from .preview import write_preview
+from .runtime_setup import ensure_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
@@ -75,6 +97,69 @@ MODE_LABELS = {
     OutputMode.SHARE_ZIP: "Share ZIP - a zip to email or upload",
     OutputMode.FOLDER: "Folder - for publishing to a web server",
 }
+
+# Worded so the choice is readable without knowing the model: "with data" says
+# what happens, where qgis2web's "visible with data" needs its manual.
+POPUP_MODE_LABELS = {
+    PopupFieldMode.NO_LABEL: "Value only, no label",
+    PopupFieldMode.INLINE_ALWAYS: "Label beside value - always show",
+    PopupFieldMode.INLINE_WITH_DATA: "Label beside value - only if it has data",
+    PopupFieldMode.HEADER_ALWAYS: "Label above value - always show",
+    PopupFieldMode.HEADER_WITH_DATA: "Label above value - only if it has data",
+    PopupFieldMode.HIDDEN: "Do not show this field",
+}
+
+# Long enough to say what happened, short enough that every row stays one line.
+DETAIL_SUMMARY_LENGTH = 110
+
+# Keeps the mode combos aligned down the list however long the field names are.
+FIELD_NAME_COLUMN_WIDTH = 160
+
+# Marks the per-layer options row, so it is never mistaken for a field row.
+LAYER_OPTIONS_ROLE = "__layer_options__"
+
+CAPTION_CORNER_LABELS = {
+    OverlayCorner.TOP_LEFT: "Top left",
+    OverlayCorner.TOP_RIGHT: "Top right",
+    OverlayCorner.BOTTOM_LEFT: "Bottom left",
+    OverlayCorner.BOTTOM_RIGHT: "Bottom right",
+}
+
+EXTENT_LABELS = {
+    ExtentSource.DATA: "The data - every feature is visible",
+    ExtentSource.CANVAS: "The current QGIS view",
+}
+
+
+def _apply_saved_color(button: QgsColorButton, value: str) -> None:
+    """Restore a stored `#rrggbb`, leaving the button null when unset.
+
+    Set before the signal matters: a null button means "the runtime's own
+    colour", which is what keeps a default export byte-identical.
+    """
+    from qgis.PyQt.QtGui import QColor
+
+    if not value:
+        button.setToNull()
+        return
+
+    # Stored CSS-style with alpha last; QColor's own hex form puts it first.
+    text = value.lstrip("#")
+    color = QColor(f"#{text[6:8]}{text[0:6]}") if len(text) == 8 else QColor(value)
+
+    if color.isValid():
+        button.setColor(color)
+    else:
+        button.setToNull()
+
+
+def _summarise(detail: str) -> str:
+    """The one-line form of a fidelity note, cut on a word boundary."""
+    if len(detail) <= DETAIL_SUMMARY_LENGTH:
+        return detail
+    cut = detail[:DETAIL_SUMMARY_LENGTH].rsplit(" ", 1)[0]
+    return f"{cut} ..."
+
 
 STATUS_LABELS = {
     FidelityStatus.PRESERVED: "Kept",
@@ -112,6 +197,7 @@ HELP_PAGES = (
     ("Your first export", "first-export.md"),
     ("Sharing a map", "sharing.md"),
     ("Enhance with AI", "enhance-with-ai.md"),
+    ("Host with OnlyMap", "hosting.md"),
     ("What gets exported", "supported-features.md"),
     ("Privacy", "privacy.md"),
 )
@@ -149,6 +235,32 @@ def load_help_markdown() -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def markdown_features():
+    """Qt markdown features for the Help tab: GitHub dialect, **HTML off**.
+
+    HTML must be off. The guides are full of literal `<om-map>`, `<om-layer>`
+    and `<script>` inside code fences, and with HTML enabled Qt treats those as
+    real elements and swallows everything after the first one - the Help tab
+    lost more than half its text (5,330 characters rendered out of 12,439) and
+    showed empty bullets where the content used to be.
+
+    Built through `MarkdownFeatures(...)` rather than passing the OR'd value
+    straight in: PyQt rejects a bare `int` for this argument. The flags are
+    reached through their enum scope so this works on PyQt5 and PyQt6 alike.
+    """
+    feature = getattr(QTextDocument, "MarkdownFeature", QTextDocument)
+    return QTextDocument.MarkdownFeatures(
+        feature.MarkdownDialectGitHub | feature.MarkdownNoHTML
+    )
+
+
+def render_help_document() -> QTextDocument:
+    """The bundled guides as a rendered document."""
+    document = QTextDocument()
+    document.setMarkdown(load_help_markdown(), markdown_features())
+    return document
+
+
 class MainDialog(QDialog):
     """Export dialog. Non-modal, so QGIS stays usable behind it."""
 
@@ -169,6 +281,8 @@ class MainDialog(QDialog):
         self.tabs.addTab(self._build_appearance_tab(), "Appearance")
         self.tabs.addTab(self._build_fidelity_tab(), "Fidelity")
         self.tabs.addTab(self._build_help_tab(), "Help")
+        self._fidelity_is_stale = True
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
         layout.addLayout(self._build_button_row())
 
@@ -176,6 +290,13 @@ class MainDialog(QDialog):
         # nothing to refresh.
         self.watcher = LayerTreeWatcher(self.project, self)
         self.watcher.changed.connect(self.refresh_layers)
+
+        # `finished` covers every way the dialog can close, including the Close
+        # button. `closeEvent` alone does not: on Qt5, `QDialog::done()` hides
+        # the dialog without delivering a QCloseEvent, so a user who pressed
+        # Close would lose every setting they had just made.
+        self._shut_down = False
+        self.finished.connect(lambda _code: self._shutdown())
 
         self.refresh_layers()
 
@@ -209,8 +330,50 @@ class MainDialog(QDialog):
             self.mode_checks[mode] = check
         layout.addWidget(self.mode_box)
 
+        data_box = QGroupBox("Data", page)
+        data_form = QFormLayout(data_box)
+
+        self.extent_combo = QComboBox(data_box)
+        for source, label in EXTENT_LABELS.items():
+            self.extent_combo.addItem(label, source.value)
+        extent_index = self.extent_combo.findData(self.state.extent_source.value)
+        self.extent_combo.setCurrentIndex(extent_index if extent_index >= 0 else 0)
+        self.extent_combo.currentIndexChanged.connect(self._on_extent_changed)
+        data_form.addRow("Open the map on", self.extent_combo)
+
+        # "Maintain" first and selected: rounding coordinates is the only
+        # setting in this dialog that throws data away, so it is opt-in and
+        # says so in the fidelity report when chosen.
+        self.precision_combo = QComboBox(data_box)
+        self.precision_combo.addItem("Maintain full precision", None)
+        for places in range(MIN_PRECISION, MAX_PRECISION + 1):
+            self.precision_combo.addItem(f"{places} decimal place(s)", places)
+        precision_index = self.precision_combo.findData(self.state.quantize_precision)
+        self.precision_combo.setCurrentIndex(
+            precision_index if precision_index >= 0 else 0
+        )
+        self.precision_combo.setToolTip(
+            "Rounding coordinates makes the file smaller and is irreversible. "
+            "Around 6 decimal places is roughly 0.1 m at the equator."
+        )
+        self.precision_combo.currentIndexChanged.connect(self._on_precision_changed)
+        data_form.addRow("Coordinate precision", self.precision_combo)
+        layout.addWidget(data_box)
+
         layout.addStretch(1)
         return page
+
+    def _on_extent_changed(self) -> None:
+        value = self.extent_combo.currentData()
+        if isinstance(value, str):
+            with contextlib.suppress(ValueError):
+                self.state.extent_source = ExtentSource(value)
+        self._fidelity_is_stale = True
+
+    def _on_precision_changed(self) -> None:
+        value = self.precision_combo.currentData()
+        self.state.quantize_precision = value if isinstance(value, int) else None
+        self._fidelity_is_stale = True
 
     def _on_name_changed(self, text: str) -> None:
         self.state.map_name = text
@@ -228,7 +391,8 @@ class MainDialog(QDialog):
         layout.addWidget(
             QLabel(
                 "Layers come from the QGIS Layers panel and follow it live - "
-                "reorder or rename them there and this list updates.",
+                "reorder or rename them there and this list updates. Expand a "
+                "layer to choose how each of its fields appears in popups.",
                 page,
             )
         )
@@ -239,6 +403,30 @@ class MainDialog(QDialog):
         self.layer_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         layout.addWidget(self.layer_tree)
+
+        # Bulk action. Setting a mode field-by-field across a dozen layers is
+        # exactly the tedium qgis2web users report, so the escape hatch is here
+        # too - but as a button, because it is the one control on this tab that
+        # overwrites every layer at once and should not fire on a stray scroll.
+        bulk = QHBoxLayout()
+        bulk.addWidget(QLabel("Set every field to", page))
+        self.bulk_mode_combo = QComboBox(page)
+        for mode, label in POPUP_MODE_LABELS.items():
+            self.bulk_mode_combo.addItem(label, mode.value)
+        self.bulk_mode_combo.setCurrentIndex(
+            self.bulk_mode_combo.findData(PopupFieldMode.INLINE_WITH_DATA.value)
+        )
+        bulk.addWidget(self.bulk_mode_combo)
+
+        apply_all = QPushButton("Apply to all layers", page)
+        apply_all.setToolTip(
+            "Give every popup field in every layer this setting, replacing the "
+            "choices below."
+        )
+        apply_all.clicked.connect(self._on_apply_mode_to_all)
+        bulk.addWidget(apply_all)
+        bulk.addStretch(1)
+        layout.addLayout(bulk)
         return page
 
     def refresh_layers(self) -> None:
@@ -248,6 +436,10 @@ class MainDialog(QDialog):
         never in the widgets being discarded here. That is what lets the list
         follow QGIS without a refresh button that mutates settings.
         """
+        # The layers changed, so any report already on screen describes a
+        # project that no longer exists. Marked rather than recomputed: it is
+        # only worth building when the user actually looks at it.
+        self._fidelity_is_stale = True
         if not hasattr(self, "layer_tree"):
             return
 
@@ -274,8 +466,191 @@ class MainDialog(QDialog):
                     Qt.CheckState.Checked if value else Qt.CheckState.Unchecked,
                 )
 
+            self._add_field_rows(item, layer, settings)
+
         self.layer_tree.blockSignals(False)
         self._update_export_readiness()
+
+    def _add_field_rows(
+        self,
+        parent: QTreeWidgetItem,
+        layer: QgsMapLayer,
+        settings: LayerSettings,
+    ) -> None:
+        """A popup-mode combo per attribute, behind the layer's disclosure arrow.
+
+        One level of nesting, not two. qgis2web puts the same choice behind
+        expand-layer *then* expand-"Popups", which is a large part of why its
+        users never find it.
+        """
+        hidden = hidden_field_names(layer)
+        layer_id = layer.id()
+
+        self._add_layer_options_row(parent, layer_id, settings)
+
+        for field_name in popup_field_names(layer):
+            child = QTreeWidgetItem(parent)
+            # The row spans every column and carries its own widgets. Putting the
+            # combo in the "Include" column instead crops it to a checkbox's
+            # width - the mode labels are sentences, and "Label beside" tells a
+            # user nothing about what the rest of it said.
+            child.setFirstColumnSpanned(True)
+            # The name is drawn by the row widget, not by the item: item text
+            # would show *through* the widget's transparent background. Kept in
+            # UserRole so the row is still identifiable without reading widgets.
+            child.setData(0, Qt.ItemDataRole.UserRole, field_name)
+            # No check boxes on a field row: the mode combo is the whole choice,
+            # and an inherited tristate box here would mean nothing.
+            child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+
+            row = QWidget(self.layer_tree)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
+            name_label = QLabel(field_name, row)
+            name_label.setMinimumWidth(FIELD_NAME_COLUMN_WIDTH)
+            row_layout.addWidget(name_label)
+
+            combo = QComboBox(row)
+            for mode, label in POPUP_MODE_LABELS.items():
+                combo.addItem(label, mode.value)
+
+            # With no explicit choice the combo must show what the export will
+            # actually do, which for a column hidden in the QGIS attribute table
+            # is "do not show" - not the global default.
+            fallback = (
+                PopupFieldMode.HIDDEN
+                if field_name in hidden
+                else PopupFieldMode.INLINE_WITH_DATA
+            )
+            index = combo.findData(settings.fields.get(field_name, fallback.value))
+            combo.setCurrentIndex(index if index >= 0 else 0)
+
+            # Connected only once the value is in place, so restoring saved
+            # settings never registers as the user changing one.
+            combo.currentIndexChanged.connect(
+                lambda _index, lid=layer_id, name=field_name, box=combo: (
+                    self._on_field_mode_changed(lid, name, box)
+                )
+            )
+            row_layout.addWidget(combo, 1)
+            row_layout.addStretch(1)
+            self.layer_tree.setItemWidget(child, 0, row)
+
+    def _add_layer_options_row(
+        self, parent: QTreeWidgetItem, layer_id: str, settings: LayerSettings
+    ) -> None:
+        """Per-layer overrides of three map-wide settings.
+
+        Every control starts on "Same as map", so a project that never touches
+        this row behaves exactly as before. qgis2web has carried these three as
+        global-only since 2015 - its issues #131, #132 and #133 each ask for
+        this and each is still open - and the reason it matters is that "all
+        layers alike except one" otherwise means configuring every layer.
+        """
+        item = QTreeWidgetItem(parent)
+        item.setFirstColumnSpanned(True)
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setData(0, Qt.ItemDataRole.UserRole, LAYER_OPTIONS_ROLE)
+
+        row = QWidget(self.layer_tree)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        label = QLabel("This layer only", row)
+        label.setMinimumWidth(FIELD_NAME_COLUMN_WIDTH)
+        layout.addWidget(label)
+
+        hover = QComboBox(row)
+        for text, value in (
+            ("Popups: same as map", None),
+            ("Popups: on hover", True),
+            ("Popups: on click", False),
+        ):
+            hover.addItem(text, value)
+        hover.setCurrentIndex(max(0, hover.findData(settings.popup_on_hover)))
+        hover.currentIndexChanged.connect(
+            lambda _i, lid=layer_id, box=hover: self._on_layer_hover_changed(lid, box)
+        )
+        layout.addWidget(hover)
+
+        precision = QComboBox(row)
+        precision.addItem("Precision: same as map", None)
+        precision.addItem("Precision: keep it all", PRECISION_FULL)
+        for places in range(MIN_PRECISION, MAX_PRECISION + 1):
+            precision.addItem(f"Precision: {places} decimal place(s)", places)
+        precision.setCurrentIndex(
+            max(0, precision.findData(settings.quantize_precision))
+        )
+        precision.currentIndexChanged.connect(
+            lambda _i, lid=layer_id, box=precision: self._on_layer_precision_changed(
+                lid, box
+            )
+        )
+        layout.addWidget(precision)
+
+        highlight = QgsColorButton(row)
+        highlight.setAllowOpacity(True)
+        highlight.setShowNull(True, "Highlight: same as map")
+        highlight.setToolTip("Highlight colour for this layer only.")
+        _apply_saved_color(highlight, settings.highlight_color or "")
+        highlight.colorChanged.connect(
+            lambda _c, lid=layer_id, button=highlight: self._on_layer_highlight_changed(
+                lid, button
+            )
+        )
+        layout.addWidget(highlight)
+
+        layout.addStretch(1)
+        self.layer_tree.setItemWidget(item, 0, row)
+
+    def _on_layer_hover_changed(self, layer_id: str, combo: QComboBox) -> None:
+        self.state.for_layer(layer_id).popup_on_hover = combo.currentData()
+        self._fidelity_is_stale = True
+
+    def _on_layer_precision_changed(self, layer_id: str, combo: QComboBox) -> None:
+        self.state.for_layer(layer_id).quantize_precision = combo.currentData()
+        self._fidelity_is_stale = True
+
+    def _on_layer_highlight_changed(
+        self, layer_id: str, button: QgsColorButton
+    ) -> None:
+        settings = self.state.for_layer(layer_id)
+        color = button.color()
+        if button.isNull() or color is None or not color.isValid():
+            settings.highlight_color = None
+            return
+        settings.highlight_color = (
+            f"#{color.red():02x}{color.green():02x}"
+            f"{color.blue():02x}{color.alpha():02x}"
+        )
+        self._fidelity_is_stale = True
+
+    def _on_field_mode_changed(
+        self, layer_id: str, field_name: str, combo: QComboBox
+    ) -> None:
+        value = combo.currentData()
+        if not isinstance(value, str):
+            return
+        self.state.for_layer(layer_id).fields[field_name] = value
+        self._fidelity_is_stale = True
+
+    def _on_apply_mode_to_all(self) -> None:
+        value = self.bulk_mode_combo.currentData()
+        if not isinstance(value, str):
+            return
+
+        for tree_layer in self.project.layerTreeRoot().findLayers():
+            layer = tree_layer.layer()
+            if layer is None:
+                continue
+            settings = self.state.for_layer(layer.id())
+            for field_name in popup_field_names(layer):
+                settings.fields[field_name] = value
+
+        self.refresh_layers()
 
     def _on_layer_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
         layer_id = item.data(0, Qt.ItemDataRole.UserRole)
@@ -304,6 +679,8 @@ class MainDialog(QDialog):
             )
         )
 
+        chrome = QGroupBox("Map controls", page)
+        chrome_layout = QVBoxLayout(chrome)
         self.widget_checks: dict[str, QCheckBox] = {}
         for key, label, current in (
             ("legend", "Legend", self.state.show_legend),
@@ -314,11 +691,112 @@ class MainDialog(QDialog):
             check = QCheckBox(label, page)
             check.setChecked(current)
             check.toggled.connect(lambda v, k=key: self._on_widget_toggled(k, v))
-            layout.addWidget(check)
+            chrome_layout.addWidget(check)
             self.widget_checks[key] = check
+        layout.addWidget(chrome)
+
+        layout.addWidget(self._build_caption_group(page))
+        layout.addWidget(self._build_colors_group(page))
+        layout.addWidget(self._build_behaviour_group(page))
 
         layout.addStretch(1)
         return page
+
+    def _build_caption_group(self, page: QWidget) -> QWidget:
+        """Title and description, drawn over the map.
+
+        The project abstract is read on every export and, until now, thrown
+        away - the incumbent does the same thing with a title set in Project
+        Properties. Both are off by default because an unwanted caption over
+        someone's map is worse than a missing one.
+        """
+        box = QGroupBox("Caption", page)
+        form = QFormLayout(box)
+
+        self.title_check = QCheckBox("Show the map name on the map", box)
+        self.title_check.setChecked(self.state.show_title)
+        self.title_check.toggled.connect(self._on_title_toggled)
+        form.addRow(self.title_check)
+
+        self.abstract_check = QCheckBox("Show the project description", box)
+        self.abstract_check.setChecked(self.state.show_abstract)
+        self.abstract_check.setToolTip(
+            "The abstract from Project Properties > Metadata. Nothing is shown "
+            "if the project has none."
+        )
+        self.abstract_check.toggled.connect(self._on_abstract_toggled)
+        form.addRow(self.abstract_check)
+
+        self.corner_combo = QComboBox(box)
+        for corner, label in CAPTION_CORNER_LABELS.items():
+            self.corner_combo.addItem(label, corner.value)
+        index = self.corner_combo.findData(self.state.title_corner.value)
+        self.corner_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.corner_combo.setToolTip(
+            "Corners are shared with the map controls: the layer switcher sits "
+            "top left, the legend top right, the zoom and scale bottom left, "
+            "and the OnlyMap credit bottom right."
+        )
+        self.corner_combo.currentIndexChanged.connect(self._on_corner_changed)
+        form.addRow("Corner", self.corner_combo)
+        return box
+
+    def _build_colors_group(self, page: QWidget) -> QWidget:
+        """Widget colours, as CSS custom properties the runtime already reads."""
+        box = QGroupBox("Control colours", page)
+        form = QFormLayout(box)
+
+        self.background_button = QgsColorButton(box)
+        self.background_button.setAllowOpacity(False)
+        self.background_button.setShowNull(True, "Default")
+        self.background_button.colorChanged.connect(
+            lambda color: self._on_widget_color("widget_background", color)
+        )
+        _apply_saved_color(self.background_button, self.state.widget_background)
+        form.addRow("Background", self.background_button)
+
+        self.foreground_button = QgsColorButton(box)
+        self.foreground_button.setAllowOpacity(False)
+        self.foreground_button.setShowNull(True, "Default")
+        self.foreground_button.colorChanged.connect(
+            lambda color: self._on_widget_color("widget_foreground", color)
+        )
+        _apply_saved_color(self.foreground_button, self.state.widget_foreground)
+        form.addRow("Text and icons", self.foreground_button)
+        return box
+
+    def _build_behaviour_group(self, page: QWidget) -> QWidget:
+        box = QGroupBox("Behaviour", page)
+        layout = QVBoxLayout(box)
+
+        self.hover_check = QCheckBox("Open popups on hover instead of click", box)
+        self.hover_check.setChecked(self.state.popup_on_hover)
+        self.hover_check.setToolTip(
+            "Hover replaces click rather than adding to it: bound together, a "
+            "click on an already-open popup appears to do nothing."
+        )
+        self.hover_check.toggled.connect(self._on_hover_toggled)
+        layout.addWidget(self.hover_check)
+
+        # qgis2web has no control for this at all: it reuses the QGIS *editing
+        # selection* colour as a web hover cue, opaque yellow out of the box, and
+        # the only way to change it is Project Properties - outside the plugin.
+        # Reported as far back as 2015 (qgis2web#132) and still open.
+        highlight_row = QHBoxLayout()
+        highlight_row.addWidget(QLabel("Highlight under the cursor", box))
+        self.highlight_button = QgsColorButton(box)
+        self.highlight_button.setAllowOpacity(True)
+        self.highlight_button.setShowNull(True, "Default (white, see-through)")
+        self.highlight_button.setToolTip(
+            "Shown when the cursor is over a feature. Keep some transparency: a "
+            "solid colour hides whatever the feature is drawn on top of."
+        )
+        self.highlight_button.colorChanged.connect(self._on_highlight_color)
+        _apply_saved_color(self.highlight_button, self.state.highlight_color)
+        highlight_row.addWidget(self.highlight_button)
+        highlight_row.addStretch(1)
+        layout.addLayout(highlight_row)
+        return box
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {
@@ -329,6 +807,43 @@ class MainDialog(QDialog):
         }[key]
         setattr(self.state, attribute, value)
 
+    def _on_title_toggled(self, value: bool) -> None:
+        self.state.show_title = value
+
+    def _on_abstract_toggled(self, value: bool) -> None:
+        self.state.show_abstract = value
+
+    def _on_hover_toggled(self, value: bool) -> None:
+        self.state.popup_on_hover = value
+
+    def _on_corner_changed(self) -> None:
+        value = self.corner_combo.currentData()
+        if isinstance(value, str):
+            with contextlib.suppress(ValueError):
+                self.state.title_corner = OverlayCorner(value)
+
+    def _on_widget_color(self, attribute: str, color: object) -> None:
+        """A null colour means "leave the runtime's own default alone"."""
+        if color is None or not color.isValid() or color.alpha() == 0:
+            setattr(self.state, attribute, "")
+            return
+        setattr(self.state, attribute, color.name())
+
+    def _on_highlight_color(self, color: object) -> None:
+        """Kept in CSS order with alpha last, the form the manifest emits.
+
+        A fully transparent pick is a real choice here - "no visible highlight" -
+        so it cannot double as the null the other pickers use. The button's own
+        null state carries "unset" instead.
+        """
+        if color is None or not color.isValid() or self.highlight_button.isNull():
+            self.state.highlight_color = ""
+            return
+        self.state.highlight_color = (
+            f"#{color.red():02x}{color.green():02x}"
+            f"{color.blue():02x}{color.alpha():02x}"
+        )
+
     # ---- Fidelity tab ---------------------------------------------------
 
     def _build_fidelity_tab(self) -> QWidget:
@@ -336,27 +851,77 @@ class MainDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.addWidget(
             QLabel(
-                "What survives the export, and what does not. Filled in when you "
-                "preview or export - nothing is left to discover later.",
+                "What survives the export, and what does not - checked before "
+                "you export, so nothing is left to discover later.",
                 page,
             )
         )
         self.fidelity_tree = QTreeWidget(page)
         self.fidelity_tree.setColumnCount(3)
         self.fidelity_tree.setHeaderLabels(["Item", "Result", "Detail"])
-        self.fidelity_tree.header().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
+        # The item names identify *which* layer a note is about, so eliding them
+        # to "Data of 'al..." makes the report unreadable on a project with
+        # several similarly-named layers. They size to their content; the detail
+        # is what gets shortened, and it expands on click.
+        header = self.fidelity_tree.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.fidelity_tree.setWordWrap(True)
         layout.addWidget(self.fidelity_tree)
         return page
 
     def _show_fidelity(self, report: FidelityReportBuilder) -> None:
         self.fidelity_tree.clear()
+        self._fidelity_is_stale = False
         for entry in sorted(report.items, key=lambda i: STATUS_ORDER[i.status]):
             item = QTreeWidgetItem(self.fidelity_tree)
             item.setText(0, entry.subject)
             item.setText(1, STATUS_LABELS[entry.status])
-            item.setText(2, entry.detail)
+            item.setText(2, _summarise(entry.detail))
+            item.setToolTip(2, entry.detail)
+
+            # The full text goes on a child row rather than wrapping in place:
+            # a dozen wrapped paragraphs is a wall, and the point of this tab is
+            # that a user can scan it and then read the one that matters.
+            if len(entry.detail) > DETAIL_SUMMARY_LENGTH:
+                detail = QTreeWidgetItem(item)
+                detail.setFirstColumnSpanned(True)
+                detail.setText(0, entry.detail)
+                detail.setFlags(Qt.ItemFlag.ItemIsEnabled)
+
+    def _on_tab_changed(self, index: int) -> None:
+        """Fill the Fidelity tab when the user opens it.
+
+        The report used to appear only after a preview or an export, so a user
+        checking what their map would lose *before* committing to one found an
+        empty table - which reads as "nothing to report" rather than "not
+        computed yet", the exact inversion this tab exists to prevent.
+
+        Computed on open rather than on every layer change because building it
+        reads every feature of every layer, which is far too expensive to run
+        on each tick of a checkbox.
+        """
+        if self.tabs.tabText(index) != "Fidelity" or not self._fidelity_is_stale:
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            _, report = self._read_current_project()
+            self._show_fidelity(report)
+        except Exception as exc:  # a broken project must not break the tab
+            self.fidelity_tree.clear()
+            item = QTreeWidgetItem(self.fidelity_tree)
+            item.setText(0, "Report unavailable")
+            item.setText(1, STATUS_LABELS[FidelityStatus.BLOCKED])
+            item.setText(2, f"The project could not be read: {exc}")
+            QgsMessageLog.logMessage(
+                f"Fidelity preview failed:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.Warning,
+            )
+        finally:
+            QApplication.restoreOverrideCursor()
 
     # ---- Help tab -------------------------------------------------------
 
@@ -364,9 +929,8 @@ class MainDialog(QDialog):
         page = QWidget(self)
         layout = QVBoxLayout(page)
         browser = QTextBrowser(page)
-        # setMarkdown keeps one source of truth: the same files the website
-        # serves. Qt renders them well enough for reference material.
-        browser.setMarkdown(load_help_markdown())
+        # Markdown keeps one source of truth: the same files the website serves.
+        browser.setDocument(render_help_document())
         browser.setOpenLinks(False)
         browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
         layout.addWidget(browser)
@@ -427,6 +991,23 @@ class MainDialog(QDialog):
 
     # ---- Actions --------------------------------------------------------
 
+    def _canvas_extent(self):
+        """The QGIS view, for the "current view" extent choice.
+
+        Read on every project read rather than cached: the user pans between
+        opening the dialog and pressing Export, and the extent they meant is the
+        one on screen when they pressed it.
+        """
+        if self.state.extent_source is not ExtentSource.CANVAS:
+            return None
+        canvas = getattr(self.iface, "mapCanvas", None)
+        if canvas is None:
+            return None
+        try:
+            return extent_from_canvas(canvas())
+        except Exception:  # never let a canvas quirk block an export
+            return None
+
     def _read_current_project(self):
         report = FidelityReportBuilder()
         export = read_project(
@@ -437,14 +1018,45 @@ class MainDialog(QDialog):
             selected_layer_ids=self.state.selected_layer_ids(
                 self._available_layer_ids()
             ),
+            layer_settings=self.state.layers,
+            canvas_extent=self._canvas_extent(),
         )
+        # Licence caps are evaluated here, not left to the writer, because the
+        # writer's verdict arrives after the file is on disk. A layer past the
+        # free-tier cap renders nothing for the recipient, so the Fidelity tab
+        # has to name it while the user can still do something about it.
+        report_verdict(default_policy().evaluate(export), report)
         return export, report
+
+    def _runtime_ready(self) -> bool:
+        """Make sure the OnlyMap runtime is installed before building anything.
+
+        Both preview and export need it: the artifact is inert markup until the
+        runtime defines its custom elements, so a preview without one opens a
+        blank page rather than a map. Asking here, before any work, means the
+        user sees the licence and the download once - not a failure at the end
+        of an export they thought had succeeded.
+        """
+        if ensure_runtime(self) is not None:
+            return True
+        self.status_label.setText(
+            "The OnlyMap runtime is needed to build a map. Nothing was written."
+        )
+        return False
 
     def on_preview(self) -> None:
         """Write a preview and open it in the user's own default browser."""
         try:
+            # Read and report *before* asking for the runtime. Reading the
+            # project is what fills the Fidelity tab, and it needs no runtime -
+            # so gating it behind the download left the tab blank whenever the
+            # runtime was missing or the user declined, hiding the one thing
+            # that would have told them what their map was going to lose.
             export, report = self._read_current_project()
             self._show_fidelity(report)
+
+            if not self._runtime_ready():
+                return
 
             identity = self.project.fileName() or self.project.baseName() or "untitled"
             result = write_preview(export, identity)
@@ -460,10 +1072,41 @@ class MainDialog(QDialog):
     def on_export(self) -> None:
         """Write the artifact wherever the user asks for it."""
         try:
+            # Reading fills the Fidelity tab and needs no runtime; see on_preview.
             export, report = self._read_current_project()
             self._show_fidelity(report)
 
+            # A blocked item means a layer could not be read at all. Exporting
+            # anyway writes a map that is quietly missing data while the dialog
+            # reports success, and the Processing algorithm already refuses on
+            # the same input - the two entry points must not disagree.
+            if not export.is_exportable:
+                self._warn_not_exportable(export)
+                return
+
+            # After the blocking checks: no point downloading 3 MB for a project
+            # that was never going to export.
+            if not self._runtime_ready():
+                return
+
             mode = self.state.output_mode
+            # Issue #29: never quietly hand over a single file that will not
+            # travel. If Standalone HTML is not eligible, say exactly why and
+            # move the selection to the next viable tier - the user can still
+            # override it, but not by accident.
+            if mode is OutputMode.STANDALONE_HTML:
+                reason = standalone_ineligible_reason(export)
+                if reason is not None:
+                    self._on_mode_selected(OutputMode.SHARE_ZIP)
+                    QMessageBox.information(
+                        self,
+                        "Switched to Share ZIP",
+                        reason
+                        + "\n\nShare ZIP is now selected. Choose Standalone HTML "
+                        "again if you want the single file anyway.",
+                    )
+                    return
+
             suggested, filter_text = {
                 OutputMode.STANDALONE_HTML: ("map.html", "Web page (*.html)"),
                 OutputMode.SHARE_ZIP: ("map.zip", "Zip archive (*.zip)"),
@@ -479,11 +1122,26 @@ class MainDialog(QDialog):
             if not chosen:
                 return
 
-            _result, outcome = build_artifact(export, Path(chosen), mode=mode)
+            result, outcome = build_artifact(export, Path(chosen), mode=mode)
             save_state(self.project, self.state)
 
             self.status_label.setText(outcome.summary())
-            QMessageBox.information(self, "Export complete", outcome.summary())
+            # The writer's warnings (licence caps, a runtime that does not match
+            # the lock, an oversized single file) are things the recipient will
+            # experience. Dropping them here is how a user ends up handing over
+            # a map with layers missing and no idea it happened.
+            summary = outcome.summary()
+            if result.warnings:
+                QMessageBox.warning(
+                    self,
+                    "Exported, with warnings",
+                    summary
+                    + "\n\nThe exported map has known limitations:\n\n"
+                    + "\n".join(f"- {warning}" for warning in result.warnings)
+                    + "\n\nThe Fidelity tab lists the detail.",
+                )
+            else:
+                QMessageBox.information(self, "Export complete", summary)
 
         except ExportBlockedError as exc:
             # Recoverable and the user's to fix, so a warning with the reasons,
@@ -496,6 +1154,20 @@ class MainDialog(QDialog):
             )
         except Exception as exc:
             self._report_failure("Export failed", exc)
+
+    def _warn_not_exportable(self, export) -> None:
+        """Explain a refusal in terms of what the user has to fix in QGIS."""
+        reasons = [item.detail for item in export.blocking_items] or [
+            "No layer in the selection could be read."
+        ]
+        QMessageBox.warning(
+            self,
+            "Cannot export",
+            "This map cannot be exported yet:\n\n"
+            + "\n".join(f"- {reason}" for reason in reasons)
+            + "\n\nFix these in QGIS, then export again. The Fidelity tab lists "
+            "everything that was checked.",
+        )
 
     def _report_failure(self, title: str, exc: Exception) -> None:
         """Surface a failure without ever taking QGIS down with it."""
@@ -511,12 +1183,19 @@ class MainDialog(QDialog):
 
     # ---- Lifecycle ------------------------------------------------------
 
-    def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+    def _shutdown(self) -> None:
         """Persist settings and drop every signal connection.
 
         A rebuild scheduled against a destroyed dialog is a crash, and the user
         experiences that as QGIS vanishing.
+
+        Idempotent: reached from both `finished` and `closeEvent`, and a
+        window-manager close fires both.
         """
+        if self._shut_down:
+            return
+        self._shut_down = True
+
         try:
             save_state(self.project, self.state)
         except Exception:
@@ -526,4 +1205,7 @@ class MainDialog(QDialog):
                 level=Qgis.Warning,
             )
         self.watcher.disconnect_all()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        self._shutdown()
         super().closeEvent(event)

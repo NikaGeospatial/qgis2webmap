@@ -14,12 +14,15 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .export_ir import PopupFieldMode, PopupFieldSpec, PopupSpec
 from .fidelity_report import FidelityReportBuilder
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Mapping
+
     from qgis.core import QgsVectorLayer
 
 # Field types QGIS can hold that carry no useful popup text.
@@ -44,12 +47,67 @@ def hidden_field_names(layer: QgsVectorLayer) -> frozenset[str]:
     return frozenset(hidden)
 
 
+def popup_field_names(layer: QgsVectorLayer) -> tuple[str, ...]:
+    """Fields a popup can show, in layer order.
+
+    Shared with the dialog so the per-field list it offers is exactly the list
+    `translate_popup` builds rows from. A field offered in one and dropped by
+    the other is a control whose effect the user can never see.
+    """
+    try:
+        fields = layer.fields()
+    except AttributeError:  # a raster, or any layer without an attribute table
+        return ()
+
+    return tuple(
+        field.name()
+        for field in fields
+        if (field.typeName() or "").lower() not in _UNPRINTABLE_TYPE_NAMES
+    )
+
+
+def apply_field_modes(
+    fields: tuple[PopupFieldSpec, ...],
+    overrides: Mapping[str, str] | None,
+) -> tuple[PopupFieldSpec, ...]:
+    """Overlay the dialog's per-field choices on translated fields.
+
+    Applied *after* the layer's own configuration is read, so QGIS's hidden
+    columns remain the default and an explicit choice in the dialog wins over
+    them. A field with no entry, or an entry this build cannot parse, keeps the
+    derived mode - persisted settings are never trusted to be well-formed.
+    """
+    if not overrides:
+        return fields
+
+    applied: list[PopupFieldSpec] = []
+    for spec in fields:
+        raw = overrides.get(spec.name)
+        if raw is None:
+            applied.append(spec)
+            continue
+        try:
+            mode = PopupFieldMode(raw)
+        except ValueError:
+            applied.append(spec)
+            continue
+        applied.append(replace(spec, mode=mode))
+    return tuple(applied)
+
+
 def translate_popup(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
     enabled: bool = True,
+    field_modes: Mapping[str, str] | None = None,
+    on_hover: bool = False,
 ) -> PopupSpec:
-    """Build a popup spec from the layer's fields, aliases and hidden columns."""
+    """Build a popup spec from the layer's fields, aliases and hidden columns.
+
+    `field_modes` carries the dialog's per-field overrides. They are applied
+    before the all-fields-hidden check below so the warning describes what the
+    user will actually see, not what QGIS alone implied.
+    """
     layer_id = layer.id()
     subject = f"Popup fields of '{layer.name()}'"
     hidden = hidden_field_names(layer)
@@ -71,6 +129,8 @@ def translate_popup(
         )
         fields.append(PopupFieldSpec(name=name, alias=alias, mode=mode))
 
+    chosen = apply_field_modes(tuple(fields), field_modes)
+
     if skipped:
         report.unsupported(
             subject,
@@ -87,7 +147,7 @@ def translate_popup(
             layer_id,
         )
 
-    visible = sum(1 for f in fields if f.mode is not PopupFieldMode.HIDDEN)
+    visible = sum(1 for f in chosen if f.mode is not PopupFieldMode.HIDDEN)
     if enabled and visible == 0:
         report.unsupported(
             subject,
@@ -97,4 +157,4 @@ def translate_popup(
             layer_id,
         )
 
-    return PopupSpec(enabled=enabled, fields=tuple(fields))
+    return PopupSpec(enabled=enabled, fields=chosen, on_hover=on_hover)

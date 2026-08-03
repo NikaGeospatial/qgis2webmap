@@ -20,29 +20,10 @@ qgis_core = pytest.importorskip(
 )
 
 
-@pytest.fixture(scope="session")
-def qgis_app():
-    """A headless QGIS application, started once per session.
-
-    `QgsApplication` must exist before any provider registry is touched, and it
-    must not be torn down and recreated within a process - hence session scope.
-
-    GUI enabled so widget tests can construct real dialogs; `QT_QPA_PLATFORM=
-    offscreen` keeps that headless.
-    """
-    app = qgis_core.QgsApplication([], True)
-    qgis_core.QgsApplication.initQgis()
-    yield app
-    qgis_core.QgsApplication.exitQgis()
-
-
-@pytest.fixture
-def project(qgis_app):
-    """An empty project, cleared before and after each test."""
-    instance = qgis_core.QgsProject.instance()
-    instance.clear()
-    yield instance
-    instance.clear()
+# `qgis_app` and `project` come from tests/conftest.py. They were defined here
+# too, and a duplicate session-scoped QgsApplication is not a harmless copy: a
+# second instance in one process segfaults the interpreter, so this tier and the
+# fixture tier each passed alone and crashed when run together.
 
 
 def _build_memory_layer(
@@ -88,6 +69,23 @@ def _build_memory_layer(
         layer.updateExtents()
 
     return layer
+
+
+@pytest.fixture
+def runtime_required() -> None:
+    """Skip a test that cannot run without the OnlyMap runtime.
+
+    Anything going through the writer - `write_preview` included - needs the real
+    runtime bytes, and `FetchingRuntime` raises rather than degrading when they
+    are absent. Every other tier already guards on `discover_runtime_dir`; the
+    preview tests did not, so on a machine with no cached runtime they failed
+    where the rest of the suite skipped. A failure that only means "this machine
+    has not fetched the runtime" trains people to ignore red.
+    """
+    from nika_onlymap_exporter.packaging.runtime_manager import discover_runtime_dir
+
+    if discover_runtime_dir() is None:
+        pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
 
 
 @pytest.fixture

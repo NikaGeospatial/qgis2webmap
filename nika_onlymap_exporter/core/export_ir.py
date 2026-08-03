@@ -110,6 +110,32 @@ class PopupFieldMode(str, Enum):
     HIDDEN = "hidden"
 
 
+class OverlayCorner(str, Enum):
+    """Where a title or abstract block sits over the map.
+
+    Screen corners, not map coordinates: a caption pinned to a longitude would
+    slide off as soon as the reader panned.
+    """
+
+    TOP_LEFT = "top_left"
+    TOP_RIGHT = "top_right"
+    BOTTOM_LEFT = "bottom_left"
+    BOTTOM_RIGHT = "bottom_right"
+
+
+class ExtentSource(str, Enum):
+    """Which extent the exported map opens on.
+
+    `DATA` stays the default: it is antimeridian-aware, which the canvas extent
+    cannot be, and it guarantees every feature is visible. `CANVAS` matches what
+    the author had on screen, which is what qgis2web does and the only thing it
+    offers.
+    """
+
+    DATA = "data"
+    CANVAS = "canvas"
+
+
 class AssetDisposition(str, Enum):
     """What packaging can do with a dependency."""
 
@@ -315,6 +341,11 @@ class RendererSpec:
     classification: ClassificationMethod = ClassificationMethod.UNKNOWN
     ramp_name: str | None = None
     unsupported_reason: str | None = None
+    # Category values whose class is switched off in QGIS. Carried here rather
+    # than resolved at translation time because the reader needs it to drop the
+    # matching features from the exported data - an expression alone cannot hide
+    # them, and leaving them in draws them in the "other" fallback colour.
+    hidden_values: tuple[str | int | float | None, ...] = ()
 
     @property
     def representative_symbol(self) -> SymbolSpec | None:
@@ -348,6 +379,7 @@ class RendererSpec:
             "classification": self.classification.value,
             "rampName": self.ramp_name,
             "unsupportedReason": self.unsupported_reason,
+            "hiddenValues": list(self.hidden_values),
         }
 
 
@@ -409,6 +441,9 @@ class PopupSpec:
 
     enabled: bool = True
     fields: tuple[PopupFieldSpec, ...] = ()
+    # Resolved per layer, not read from `ExportSettings`: qgis2web#133 has asked
+    # for exactly this since 2015 and it is still open there.
+    on_hover: bool = False
 
     @property
     def visible_fields(self) -> tuple[PopupFieldSpec, ...]:
@@ -418,6 +453,7 @@ class PopupSpec:
         return {
             "enabled": self.enabled,
             "fields": [f.snapshot() for f in self.fields],
+            "onHover": self.on_hover,
         }
 
 
@@ -518,6 +554,9 @@ class ExportLayer:
     geojson: dict[str, Any] | None = None
     group_path: tuple[str, ...] = ()
     dependencies: tuple[AssetDependency, ...] = ()
+    # None keeps the manifest's own default. Per layer for the same reason as
+    # `PopupSpec.on_hover` - qgis2web#132, open since 2015.
+    highlight_color: Color | None = None
 
     def snapshot(self, include_geometry: bool = False) -> dict[str, Any]:
         """Snapshot the layer.
@@ -541,6 +580,9 @@ class ExportLayer:
             "featureCount": self.feature_count,
             "groupPath": list(self.group_path),
             "dependencies": [d.snapshot() for d in self.dependencies],
+            "highlightColor": (
+                self.highlight_color.snapshot() if self.highlight_color else None
+            ),
         }
         if include_geometry:
             data["geojson"] = self.geojson
@@ -563,12 +605,28 @@ class ExportSettings:
     show_scale_bar: bool = True
     quantize_precision: int | None = None
     simplify_tolerance: float | None = None
+    popup_on_hover: bool = False
+    show_title: bool = False
+    show_abstract: bool = False
+    title_corner: OverlayCorner = OverlayCorner.TOP_LEFT
+    widget_background: Color | None = None
+    widget_foreground: Color | None = None
+    # None leaves the runtime's own highlight alone. qgis2web has no equivalent:
+    # it reuses `mapSettings.selectionColor()`, the QGIS *editing selection*
+    # colour, as a web hover cue - opaque yellow out of the box, overridable
+    # only from Project Properties, outside the plugin entirely.
+    highlight_color: Color | None = None
+    extent_source: ExtentSource = ExtentSource.DATA
 
     @property
     def has_lossy_transform(self) -> bool:
         return (
             self.quantize_precision is not None or self.simplify_tolerance is not None
         )
+
+    @property
+    def has_widget_colors(self) -> bool:
+        return self.widget_background is not None or self.widget_foreground is not None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -579,6 +637,20 @@ class ExportSettings:
             "showScaleBar": self.show_scale_bar,
             "quantizePrecision": self.quantize_precision,
             "simplifyTolerance": self.simplify_tolerance,
+            "popupOnHover": self.popup_on_hover,
+            "showTitle": self.show_title,
+            "showAbstract": self.show_abstract,
+            "titleCorner": self.title_corner.value,
+            "widgetBackground": (
+                self.widget_background.snapshot() if self.widget_background else None
+            ),
+            "widgetForeground": (
+                self.widget_foreground.snapshot() if self.widget_foreground else None
+            ),
+            "highlightColor": (
+                self.highlight_color.snapshot() if self.highlight_color else None
+            ),
+            "extentSource": self.extent_source.value,
         }
 
 

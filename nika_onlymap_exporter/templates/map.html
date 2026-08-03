@@ -55,70 +55,194 @@
         flex: 1 1 auto;
         min-height: 0;
       }
-      .om-popup {
-        font-size: 13px;
-        line-height: 1.5;
-        max-width: 22rem;
-      }
-      .om-popup-title {
-        font-weight: 600;
-        margin-bottom: 0.35rem;
-      }
-      .om-popup-row {
-        display: flex;
-        gap: 0.75rem;
-        justify-content: space-between;
-      }
-      .om-popup-label {
-        color: #6b7280;
-      }
-      .om-popup-value {
-        font-variant-numeric: tabular-nums;
-      }
+      /* Popup styling deliberately does NOT live here. `om-overlay` renders the
+         popup inside a shadow root, which document rules cannot reach, so these
+         selectors would match nothing. The stylesheet travels inside the overlay
+         instead - see `POPUP_STYLES` in `core/manifest_builder.py`. */
       .om-fallback {
         padding: 2rem;
         max-width: 40rem;
         margin: 0 auto;
       }
-      /* Credits sit below the map rather than over it, so they never cover a
-         control or compete with the runtime's own corner chrome. */
+      /* The credit component sits in the map's bottom-right corner.
+
+         Safe to overlay: the manifest puts zoom controls and the scale bar in
+         `bottom-left` and the legend in `top-right`, so the bottom-right corner
+         is empty in an export. The 12px inset matches the runtime's own widget
+         inset, so the chip lines up with the widgets instead of floating near
+         them. See `WIDGET_POSITIONS` for why those are corner names.
+
+         `position: absolute` against the body works because <om-map> is the only
+         other child and fills it. */
+      body {
+        position: relative;
+      }
       .om-credit {
-        flex: 0 0 auto;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        align-items: baseline;
-        padding: 0.5rem 0.9rem;
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        z-index: 2;
+        max-width: min(22rem, calc(100% - 24px));
+        padding: 0.4rem 0.6rem;
+        border-radius: 6px;
         font-size: 12px;
+        line-height: 1.5;
         color: #4b5563;
-        background: #ffffff;
-        border-top: 1px solid #e5e7eb;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
       }
       .om-credit a {
         color: #0d9488;
       }
-      .om-credit-title {
-        font-weight: 600;
-        color: #111827;
-        margin-right: auto;
+      .om-credit-sep {
+        color: #9ca3af;
+        padding: 0 0.15rem;
+      }
+      /* Data credits carry licence obligations, so they are never behind the
+         disclosure -- only the OnlyMap row collapses. */
+      .om-credit-data {
+        display: block;
+        color: #374151;
+        margin-bottom: 0.2rem;
+      }
+      .om-credit-mark {
+        display: none;
+        appearance: none;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: #0d9488;
+        cursor: pointer;
+        text-align: left;
+      }
+      /* Small screens: collapse the OnlyMap row to its mark, expand on click or
+         keyboard focus. `:focus-within` is what makes the keyboard path work
+         without script -- tabbing to the button reveals the links.
+
+         The mark deliberately stays visible once expanded. Hiding it with
+         `display: none` on `:focus-within` collapses the component the instant
+         it opens: the focused element disappears, focus is dropped, the
+         selector stops matching, and the row hides again. A keyboard user
+         could never reach the links. */
+      @media (max-width: 640px) {
+        .om-credit-mark {
+          display: block;
+        }
+        .om-credit-row {
+          display: none;
+        }
+        .om-credit:focus-within .om-credit-row,
+        .om-credit:hover .om-credit-row {
+          display: block;
+        }
+        .om-credit:focus-within .om-credit-mark,
+        .om-credit:hover .om-credit-mark {
+          /* Shrunk, not removed, so focus survives the transition. */
+          width: auto;
+          color: #9ca3af;
+        }
       }
       @media print {
         .om-credit {
+          position: static;
+          background: none;
+          border: 0;
+          box-shadow: none;
+        }
+        .om-credit-mark {
           display: none;
         }
+        .om-credit-row {
+          display: block;
+        }
       }
+
+      /* The map's own title and description, pinned to the viewport rather than
+         to a coordinate - see `_caption_block`. Corners are shared with the map
+         chrome, so the corner is the author's choice: the layer switcher sits
+         top-left, the legend top-right, the zoom and scale bottom-left, and the
+         credit chip bottom-right. */
+      .om-caption {
+        position: absolute;
+        z-index: 3;
+        max-width: min(24rem, calc(100% - 24px));
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        color: #111827;
+      }
+      .om-caption-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .om-caption-abstract {
+        margin-top: 0.2rem;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #4b5563;
+      }
+      .om-caption-top-left {
+        top: 12px;
+        left: 12px;
+      }
+      .om-caption-top-right {
+        top: 12px;
+        right: 12px;
+      }
+      .om-caption-bottom-left {
+        bottom: 12px;
+        left: 12px;
+      }
+      .om-caption-bottom-right {
+        bottom: 12px;
+        right: 12px;
+      }
+
+      /* The runtime prints its licence notice in the bottom-left corner, where
+         the manifest also puts the zoom controls and the scale bar - they
+         overlapped. Document rules style a custom element's host, and beat the
+         `:host` rule the widget writes for itself, so the stack is lifted clear
+         of the notice here. */
+      om-widget[type="zoom-controls"] {
+        bottom: 58px !important;
+      }
+      om-widget[type="scale-bar"] {
+        bottom: 30px !important;
+      }
+
+@WIDGET_COLORS@
     </style>
   </head>
 
   <body>
 @MANIFEST@
+@CAPTION@
 
+    <!--
+      The OnlyMap corner component. Every link is a plain static href to a
+      public documentation page: the artifact never posts anywhere, so opening
+      it cannot move the map's data off the recipient's machine.
+    -->
     <footer class="om-credit">
-      <span class="om-credit-title">@TITLE@</span>
-      <span>Built with <a href="https://www.nikaplanet.com/onlymap">OnlyMap</a>
-        by <a href="https://nikaplanet.com">NIKA</a></span>
-      <a href="https://docs.nikaplanet.com/onlymap/enhance-with-ai">Enhance with AI</a>
-      <a href="https://docs.nikaplanet.com/onlymap/hosting">Host with OnlyMap</a>
+@ATTRIBUTION@
+      <button
+        class="om-credit-mark"
+        type="button"
+        aria-label="Show map credits"
+      >&#9673;</button>
+      <span class="om-credit-row">Built with
+        <a href="https://www.nikaplanet.com/onlymap">OnlyMap</a>
+        by <a href="https://nikaplanet.com">NIKA</a><span
+          class="om-credit-sep">&middot;</span><a
+          href="https://docs.nikaplanet.com/onlymap/enhance-with-ai"
+        >Enhance</a><span class="om-credit-sep">&middot;</span><a
+          href="https://docs.nikaplanet.com/onlymap/hosting"
+        >Host</a></span>
     </footer>
 
 @PREVIEW_HOOK@

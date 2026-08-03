@@ -27,6 +27,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     GeometryKind,
     GraduatedClassSpec,
+    LabelingSpec,
     PopupFieldMode,
     PopupFieldSpec,
     PopupSpec,
@@ -39,8 +40,12 @@ from nika_onlymap_exporter.core.export_ir import (
 from nika_onlymap_exporter.core.license_policy import FreeTierPolicy
 from nika_onlymap_exporter.core.manifest_builder import (
     SCALE_DENOMINATOR_AT_ZOOM_0,
+    WIDGET_POSITIONS,
+    build_label_element,
     build_layer_element,
     build_manifest,
+    build_popup_elements,
+    collect_attributions,
     color_literal,
     escape_attr,
     fill_expression,
@@ -177,6 +182,82 @@ class TestFillExpression:
             categories=(CategorySpec("O'Hare", "OHare", SymbolSpec(fill_color=RED)),),
         )
         assert "O\\'Hare" in fill_expression(renderer, GeometryKind.POINT)
+
+
+class TestPopupFieldModes:
+    """Each mode has to produce its own markup shape, or the choice is a no-op.
+
+    The `*_WITH_DATA` behaviour itself is not testable here: emptiness is a
+    per-feature fact and this markup is one template shared by every feature,
+    so all these tests can assert is that the row is left *hideable* - the
+    stylesheet the overlay carries does the rest.
+    """
+
+    @staticmethod
+    def _row(mode: PopupFieldMode) -> str:
+        layer = make_layer(
+            popup=PopupSpec(
+                enabled=True, fields=(PopupFieldSpec("name", alias="Name", mode=mode),)
+            )
+        )
+        markup = build_popup_elements(layer)
+        # Matched on the opening tag: the overlay also carries the stylesheet,
+        # which names every one of these classes in its selectors.
+        (row,) = [
+            line.strip()
+            for line in markup.splitlines()
+            if '<div class="om-popup-row' in line
+        ]
+        return row
+
+    def test_default_mode_markup_is_unchanged(self) -> None:
+        """The default must stay byte-identical, or every artifact test churns."""
+        assert self._row(PopupFieldMode.INLINE_WITH_DATA) == (
+            '<div class="om-popup-row">'
+            '<span class="om-popup-label">Name</span>'
+            '<span class="om-popup-value">{{name}}</span></div>'
+        )
+
+    def test_no_label_emits_the_value_alone(self) -> None:
+        row = self._row(PopupFieldMode.NO_LABEL)
+        assert "om-popup-label" not in row
+        assert '<span class="om-popup-value">{{name}}</span>' in row
+
+    def test_header_modes_are_marked_for_stacked_layout(self) -> None:
+        for mode in (PopupFieldMode.HEADER_ALWAYS, PopupFieldMode.HEADER_WITH_DATA):
+            assert "om-popup-row-header" in self._row(mode)
+
+    def test_always_modes_opt_out_of_empty_hiding(self) -> None:
+        for mode in (
+            PopupFieldMode.NO_LABEL,
+            PopupFieldMode.INLINE_ALWAYS,
+            PopupFieldMode.HEADER_ALWAYS,
+        ):
+            assert "om-popup-always" in self._row(mode)
+
+    def test_with_data_modes_stay_hideable(self) -> None:
+        for mode in (PopupFieldMode.INLINE_WITH_DATA, PopupFieldMode.HEADER_WITH_DATA):
+            assert "om-popup-always" not in self._row(mode)
+
+    def test_hidden_fields_produce_no_row_at_all(self) -> None:
+        layer = make_layer(
+            popup=PopupSpec(
+                enabled=True,
+                fields=(
+                    PopupFieldSpec("name", mode=PopupFieldMode.HIDDEN),
+                    PopupFieldSpec("kind", mode=PopupFieldMode.INLINE_ALWAYS),
+                ),
+            )
+        )
+        markup = build_popup_elements(layer)
+        assert "{{name}}" not in markup
+        assert "{{kind}}" in markup
+
+    def test_every_visible_mode_still_interpolates_its_field(self) -> None:
+        for mode in PopupFieldMode:
+            if mode is PopupFieldMode.HIDDEN:
+                continue
+            assert "{{name}}" in self._row(mode)
 
 
 class TestLayerElement:
@@ -328,6 +409,106 @@ def known_attributes() -> dict[str, set[str]]:
     }
 
 
+class TestLegendSwatch:
+    """The legend reads `color`, not the accessor expression.
+
+    Its swatch source is `layer.color ?? <derived legend entry> ?? "#999"`. A
+    single symbol compiles to a bare colour literal, which it cannot pull
+    structure from - so without the shorthand every single-symbol layer showed
+    a grey swatch next to correctly-coloured geometry.
+    """
+
+    # `get-fill-color` ends in the same six characters, so the shorthand has to
+    # be matched as a whole attribute rather than as a substring.
+    SHORTHAND = re.compile(r'(?<![-\w])color="([^"]+)"')
+
+    def test_a_single_symbol_layer_carries_the_shorthand(self) -> None:
+        match = self.SHORTHAND.search(build_layer_element(make_layer()))
+        assert match is not None
+        assert match.group(1) == "#ff0000"
+
+    def test_a_line_layer_uses_its_stroke(self) -> None:
+        layer = make_layer(
+            geometry_kind=GeometryKind.LINE,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE, symbol=SymbolSpec(stroke_color=BLUE)
+            ),
+        )
+        match = self.SHORTHAND.search(build_layer_element(layer))
+        assert match is not None
+        assert match.group(1) == "#0000ff"
+
+    def test_a_categorized_layer_does_not_carry_it(self) -> None:
+        """Its derived entries are richer than one colour; this would win."""
+        layer = make_layer(
+            renderer=RendererSpec(
+                kind=RendererKind.CATEGORIZED,
+                field_name="kind",
+                categories=(
+                    CategorySpec("civil", "Civil", SymbolSpec(fill_color=RED)),
+                ),
+            )
+        )
+        assert self.SHORTHAND.search(build_layer_element(layer)) is None
+
+
+class TestPopupTrigger:
+    def test_click_is_the_default(self) -> None:
+        layer = make_layer(
+            popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("name"),))
+        )
+        assert 'on="click"' in build_popup_elements(layer)
+
+    def test_hover_replaces_click_rather_than_adding_to_it(self) -> None:
+        """Both bound at once leaves a click on an open popup doing nothing."""
+        layer = make_layer(
+            popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("name"),))
+        )
+        markup = build_popup_elements(layer, hover=True)
+        assert 'on="hover"' in markup
+        assert 'on="click"' not in markup
+
+
+class TestWidgetPositions:
+    """The one place a value is asserted, not just an attribute name.
+
+    The schema documents eight logical slots plus four legacy corner aliases,
+    but the shipped runtime implements only the corners - it looks `position`
+    up in a four-entry table and silently falls back to `top-left`. Emitting
+    `top-end` therefore does not place the legend on the right; it stacks every
+    widget in one corner, on top of each other. The schema alone cannot catch
+    that, which is why these values are pinned here.
+    """
+
+    RUNTIME_CORNERS = frozenset(
+        {"top-left", "top-right", "bottom-left", "bottom-right"}
+    )
+
+    def test_every_position_is_one_the_runtime_implements(self) -> None:
+        assert set(WIDGET_POSITIONS.values()) <= self.RUNTIME_CORNERS
+
+    def test_the_manifest_only_emits_those_corners(self) -> None:
+        markup = build_manifest(
+            make_project([make_layer(), make_layer(layer_id="second")])
+        )
+        emitted = re.findall(r'<om-widget[^>]*position="([^"]+)"', markup)
+        assert emitted, "the default export should carry widgets"
+        assert set(emitted) <= self.RUNTIME_CORNERS
+
+    def test_the_chrome_does_not_all_land_in_one_corner(self) -> None:
+        """The actual defect: four widgets, one corner, piled up."""
+        markup = build_manifest(
+            make_project([make_layer(), make_layer(layer_id="second")])
+        )
+        emitted = re.findall(r'<om-widget[^>]*position="([^"]+)"', markup)
+        assert len(set(emitted)) >= 3
+
+    def test_the_legend_and_the_credit_chip_do_not_share_a_corner(self) -> None:
+        """`map.html` pins the credit component to the bottom-right."""
+        assert WIDGET_POSITIONS["legend"] != "bottom-right"
+        assert "bottom-right" not in set(WIDGET_POSITIONS.values())
+
+
 class TestAttributeContract:
     """Every attribute we emit must exist in the runtime's own schema.
 
@@ -354,7 +535,22 @@ class TestAttributeContract:
                         ),
                     ),
                     popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("name"),)),
-                )
+                ),
+                # A labelled layer too, so the companion TextLayer's attributes
+                # are checked against the schema rather than assumed.
+                make_layer(
+                    layer_id="labelled",
+                    labeling=LabelingSpec(
+                        enabled=True,
+                        field_name="name",
+                        font_family="Inter",
+                        font_size=14.0,
+                        color=RED,
+                        halo_color=BLUE,
+                        halo_width=1.5,
+                        character_set="Zü",
+                    ),
+                ),
             ]
         )
         markup = build_manifest(project)
@@ -525,3 +721,140 @@ class TestAttributeEscaping:
         markup = build_layer_element(make_layer(name='" onload="evil()'))
         assert 'onload="evil()' not in markup
         assert "&quot;" in markup
+
+
+class TestLabelLayer:
+    """Labels were translated into `LabelingSpec` and then dropped.
+
+    The reader built the spec - font, colour, halo, character set - and the
+    manifest builder never referenced it, so a labelled QGIS project exported to
+    a map with no labels and nothing in the fidelity report saying so.
+    """
+
+    LABELLED: ClassVar[dict] = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [1.0, 2.0]},
+                "properties": {"name": "Alpha"},
+            }
+        ],
+    }
+
+    def labelled_layer(self, **labeling_overrides) -> ExportLayer:
+        defaults = dict(enabled=True, field_name="name")
+        defaults.update(labeling_overrides)
+        return make_layer(geojson=self.LABELLED, labeling=LabelingSpec(**defaults))
+
+    def test_an_unlabelled_layer_emits_no_text_layer(self) -> None:
+        assert build_label_element(make_layer()) == ""
+
+    def test_a_labelled_layer_emits_a_text_layer(self) -> None:
+        markup = build_label_element(self.labelled_layer())
+        assert 'type="TextLayer"' in markup
+        assert 'get-text="$label"' in markup
+
+    def test_the_text_layer_carries_only_label_points(self) -> None:
+        """Not the source geometry: that would embed the data twice."""
+        markup = build_label_element(self.labelled_layer())
+        payload = json.loads(
+            markup.split('<script type="application/json">')[1].split("</script>")[0]
+        )
+
+        (label_feature,) = payload["features"]
+        assert label_feature["geometry"] == {
+            "type": "Point",
+            "coordinates": [1.0, 2.0],
+        }
+        assert label_feature["properties"] == {"label": "Alpha"}
+
+    def test_labels_are_not_pickable(self) -> None:
+        """A pickable text layer swallows the clicks meant for the geometry."""
+        markup = build_label_element(self.labelled_layer())
+        assert "pickable" not in markup
+
+    def test_font_size_is_in_pixels(self) -> None:
+        """In metres, labels balloon on zoom-in and vanish on zoom-out."""
+        markup = build_label_element(self.labelled_layer(font_size=18.0))
+        assert 'get-text-size="18"' in markup
+        assert 'text-size-units="pixels"' in markup
+
+    def test_a_qgis_buffer_becomes_a_deck_outline(self) -> None:
+        markup = build_label_element(
+            self.labelled_layer(halo_width=2.0, halo_color=BLUE)
+        )
+        assert 'text-outline-width="2"' in markup
+        assert "text-outline-color" in markup
+
+    def test_the_readers_character_set_wins(self) -> None:
+        markup = build_label_element(self.labelled_layer(character_set="Zü"))
+        assert 'text-character-set="Zü"' in markup
+
+    def test_a_label_field_with_no_values_emits_nothing(self) -> None:
+        layer = make_layer(
+            geojson=self.LABELLED,
+            labeling=LabelingSpec(enabled=True, field_name="gone"),
+        )
+        assert build_label_element(layer) == ""
+
+    def test_labels_follow_their_layers_scale_visibility(self) -> None:
+        """A label outliving the feature it names reads as a rendering bug."""
+        layer = make_layer(
+            geojson=self.LABELLED,
+            labeling=LabelingSpec(enabled=True, field_name="name"),
+            scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+        )
+        markup = build_label_element(layer)
+        assert "visible-min-zoom" in markup
+        assert "visible-max-zoom" in markup
+
+    def test_label_layers_are_emitted_after_every_geometry_layer(self) -> None:
+        """Otherwise the layer stacked above paints over the labels below it."""
+        bottom = self.labelled_layer()
+        top = make_layer(layer_id="top", name="Top", geojson=self.LABELLED)
+        markup = build_manifest(make_project([bottom, top]))
+
+        assert markup.index('id="top"') < markup.index('id="layer1-labels"')
+
+
+class TestAttributionCollection:
+    """Attribution was read from QGIS, stored, snapshotted - and never rendered.
+
+    OnlyMap has no layer-level attribution: its control credits the *basemap*
+    provider, and 0.1.0 ships no basemap. So the artifact must render these
+    itself or the credit never reaches the recipient.
+    """
+
+    def test_no_credits_yields_an_empty_tuple(self) -> None:
+        assert collect_attributions(make_project()) == ()
+
+    def test_credits_are_collected_in_draw_order(self) -> None:
+        project = make_project(
+            [
+                make_layer(layer_id="a", attribution="Statistics Canada"),
+                make_layer(layer_id="b", attribution="OSM contributors"),
+            ]
+        )
+        assert collect_attributions(project) == (
+            "Statistics Canada",
+            "OSM contributors",
+        )
+
+    def test_duplicate_credits_appear_once(self) -> None:
+        project = make_project(
+            [
+                make_layer(layer_id="a", attribution="OSM contributors"),
+                make_layer(layer_id="b", attribution="OSM contributors"),
+            ]
+        )
+        assert collect_attributions(project) == ("OSM contributors",)
+
+    def test_blank_credits_are_ignored(self) -> None:
+        project = make_project(
+            [
+                make_layer(layer_id="a", attribution="   "),
+                make_layer(layer_id="b", attribution=None),
+            ]
+        )
+        assert collect_attributions(project) == ()

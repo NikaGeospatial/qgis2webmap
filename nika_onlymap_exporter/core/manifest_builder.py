@@ -35,9 +35,16 @@ from .export_ir import (
     ExportLayer,
     ExportProject,
     GeometryKind,
+    PopupFieldMode,
+    PopupFieldSpec,
     RendererKind,
     RendererSpec,
     SymbolSpec,
+)
+from .label_points import (
+    LABEL_PROPERTY,
+    build_label_collection,
+    collect_character_set,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -53,6 +60,15 @@ MAX_WEB_ZOOM = 24
 # geometry in one file. Using a different class per geometry kind would fragment
 # the styling attributes for no benefit.
 LAYER_CLASS = "GeoJsonLayer"
+
+# Labels are a second layer, not a property of the first: `GeoJsonLayer` cannot
+# draw text, so QGIS labelling becomes a companion `TextLayer` fed by computed
+# label points. See `label_points.py` for why it carries its own reduced data.
+TEXT_LAYER_CLASS = "TextLayer"
+
+# Fallbacks for a QGIS label whose text format carried no explicit value.
+DEFAULT_LABEL_COLOR = Color(r=0, g=0, b=0, a=1.0)
+DEFAULT_LABEL_SIZE = 12.0
 
 DEFAULT_FILL = Color(r=136, g=136, b=136, a=0.8)
 DEFAULT_STROKE = Color(r=51, g=51, b=51, a=1.0)
@@ -226,8 +242,19 @@ def _attrs_to_string(attributes: list[tuple[str, str | None]], indent: str) -> s
     return "\n".join(rendered)
 
 
+# White at a third opacity. Deliberately translucent and deliberately *ours*:
+# qgis2web reuses `mapSettings.selectionColor()` - the QGIS editing-selection
+# colour, opaque yellow by default - as a web hover cue, which fills the map and
+# hides everything under it (evaluation 5.7). Overridable on the Appearance tab,
+# which qgis2web has never offered: its only workaround is Project Properties.
+DEFAULT_HIGHLIGHT = "'#ffffff55'"
+
+
 def build_layer_element(
-    layer: ExportLayer, indent: str = "    ", compress_data: bool = False
+    layer: ExportLayer,
+    indent: str = "    ",
+    compress_data: bool = False,
+    highlight_color: Color | None = None,
 ) -> str:
     """One `<om-layer>`, with its data inline as a direct child.
 
@@ -253,6 +280,17 @@ def build_layer_element(
         ("get-fill-color", fill_expression(renderer, layer.geometry_kind)),
         ("get-line-color", line_color_expression(renderer, layer.geometry_kind)),
     ]
+
+    # `color` is the legend's swatch source. The legend derives its own swatches
+    # from a ternary chain or a `scale()`, but a *single* symbol is a bare colour
+    # literal it cannot read structure out of, so it fell back to a grey `#999`
+    # and every single-symbol layer sat behind the wrong swatch. Emitted only for
+    # single symbols: for categorized and graduated layers the derived entries
+    # are richer than one colour, and this would override them.
+    if renderer.kind is RendererKind.SINGLE:
+        swatch = symbol.fill_color or symbol.stroke_color
+        if swatch is not None:
+            attributes.append(("color", color_literal(swatch).strip("'")))
 
     if symbol.stroke_width:
         attributes.append(("get-line-width", _number(symbol.stroke_width)))
@@ -293,7 +331,14 @@ def build_layer_element(
         # Hover feedback stays in z-order and is explicitly coloured, unlike the
         # incumbent's opaque overlay drawn above every layer.
         attributes.append(("auto-highlight", "true"))
-        attributes.append(("highlight-color", "'#ffffff55'"))
+        attributes.append(
+            (
+                "highlight-color",
+                DEFAULT_HIGHLIGHT
+                if highlight_color is None
+                else (color_literal(highlight_color)),
+            )
+        )
 
     payload = json_for_script(layer.geojson)
 
@@ -313,36 +358,295 @@ def build_layer_element(
     return "\n".join(lines)
 
 
-def build_popup_elements(layer: ExportLayer, indent: str = "    ") -> str:
-    """An `<om-overlay>` plus the `<om-behavior>` that opens it on click.
+def build_label_element(
+    layer: ExportLayer, indent: str = "    ", compress_data: bool = False
+) -> str:
+    """The companion `<om-layer type="TextLayer">` carrying a layer's labels.
+
+    Returns `""` when the layer is not labelled, or when no feature produced a
+    usable label point -- an empty TextLayer is pure cost.
+
+    The label layer is deliberately NOT pickable: labels sit on top of their
+    features, and a pickable text layer would swallow the clicks meant for the
+    geometry underneath, silently breaking popups on exactly the layers a user
+    cared enough about to label.
+    """
+    labeling = layer.labeling
+    if not (labeling.enabled and labeling.field_name):
+        return ""
+
+    collection = build_label_collection(layer.geojson, labeling.field_name)
+    if collection is None:
+        return ""
+
+    inner = indent + "  "
+    color = labeling.color or DEFAULT_LABEL_COLOR
+    size = labeling.font_size or DEFAULT_LABEL_SIZE
+
+    attributes: list[tuple[str, str | None]] = [
+        ("id", f"{layer.layer_id}-labels"),
+        ("type", TEXT_LAYER_CLASS),
+        ("label", f"{layer.name} labels"),
+        ("get-text", f"${LABEL_PROPERTY}"),
+        ("get-text-color", color_literal(color)),
+        ("get-text-size", _number(size)),
+        # Without this deck.gl scales text in metres, so labels balloon as the
+        # user zooms in and vanish as they zoom out.
+        ("text-size-units", "pixels"),
+    ]
+
+    if labeling.font_family:
+        attributes.append(("text-font-family", labeling.font_family))
+
+    # A QGIS label buffer is a halo; deck.gl calls the same thing an outline.
+    if labeling.halo_width and labeling.halo_color:
+        attributes.append(("text-outline-color", color_literal(labeling.halo_color)))
+        attributes.append(("text-outline-width", _number(labeling.halo_width)))
+
+    # The reader's set is authoritative -- it saw the QGIS field values. The
+    # fallback covers label collections built outside a project read.
+    character_set = labeling.character_set or collect_character_set(collection)
+    if character_set:
+        attributes.append(("text-character-set", character_set))
+
+    if not layer.visible:
+        attributes.append(("visible", "false"))
+
+    # Labels follow their layer's scale visibility; a label surviving past the
+    # geometry it names reads as a rendering bug.
+    if layer.scale_range.is_set:
+        if layer.scale_range.min_scale:
+            attributes.append(
+                (
+                    "visible-min-zoom",
+                    _number(scale_to_zoom(layer.scale_range.min_scale)),
+                )
+            )
+        if layer.scale_range.max_scale:
+            attributes.append(
+                (
+                    "visible-max-zoom",
+                    _number(scale_to_zoom(layer.scale_range.max_scale)),
+                )
+            )
+
+    payload = json_for_script(collection)
+
+    lines = [f"{indent}<om-layer"]
+    lines.append(_attrs_to_string(attributes, inner))
+    lines.append(f"{indent}>")
+    if compress_data:
+        from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
+
+        lines.append(f'{inner}<script type="{GZIP_SCRIPT_TYPE}">')
+        lines.append(gzip_base64(payload.encode("utf-8")))
+    else:
+        lines.append(f'{inner}<script type="application/json">')
+        lines.append(payload)
+    lines.append(f"{inner}</script>")
+    lines.append(f"{indent}</om-layer>")
+    return "\n".join(lines)
+
+
+def collect_attributions(project: ExportProject) -> tuple[str, ...]:
+    """Every distinct data credit the exported layers carry.
+
+    OnlyMap has no layer-level attribution: its attribution control renders the
+    *basemap provider's* credit, and 0.1.0 ships no basemap. So a credit a user
+    set in QGIS reaches the recipient only if the artifact renders it itself --
+    which is what the template's credit component does with this list.
+
+    Order follows the layers, deduplicated, because that is the draw order the
+    user arranged and any other order would look arbitrary.
+    """
+    return tuple(
+        dict.fromkeys(
+            layer.attribution.strip()
+            for layer in project.exportable_layers
+            if layer.attribution and layer.attribution.strip()
+        )
+    )
+
+
+# Modes whose row shows even when the feature's value is empty. The two absent
+# from this set - `INLINE_WITH_DATA` and `HEADER_WITH_DATA` - are the ones the
+# stylesheet hides; see `_popup_row`.
+_ALWAYS_MODES = frozenset(
+    {
+        PopupFieldMode.NO_LABEL,
+        PopupFieldMode.INLINE_ALWAYS,
+        PopupFieldMode.HEADER_ALWAYS,
+    }
+)
+
+# Label above the value rather than beside it.
+_HEADER_MODES = frozenset(
+    {PopupFieldMode.HEADER_ALWAYS, PopupFieldMode.HEADER_WITH_DATA}
+)
+
+# **This has to travel inside the overlay, not in the document's stylesheet.**
+# `om-overlay` clones its children into a shadow root and renders the popup
+# there, and a shadow root does not see document rules - so popup CSS written in
+# `map.html` never applies to anything. A `<style>` among those children lands in
+# the shadow root with them, which is the only way to reach the rows.
+#
+# Selectors can stay this plain precisely because of that boundary: nothing else
+# in the document can match them, and nothing here can leak out.
+POPUP_STYLES = """.om-popup {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 22rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.om-popup-title {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.om-popup-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+.om-popup-label {
+  color: #6b7280;
+}
+.om-popup-value {
+  font-variant-numeric: tabular-nums;
+}
+/* "Label above value": the name gets its own line. */
+.om-popup-row-header {
+  display: block;
+}
+.om-popup-row-header .om-popup-label {
+  display: block;
+  font-weight: 600;
+}
+/* "Only if it has data" rows hide themselves when this feature has no value.
+   That is a per-feature question and this markup is one template shared by every
+   feature, so it cannot be settled when the file is written - the runtime
+   substitutes an empty string for the field and this rule does the rest. Rows
+   that must always show carry .om-popup-always. Without :has() the row shows
+   empty instead, which is the behaviour these modes replaced. */
+.om-popup-row:not(.om-popup-always):has(.om-popup-value:empty) {
+  display: none;
+}"""
+
+
+def _popup_style_element(indent: str) -> list[str]:
+    return [
+        f"{indent}  <style>",
+        *(f"{indent}    {line}" if line else "" for line in POPUP_STYLES.splitlines()),
+        f"{indent}  </style>",
+    ]
+
+
+def _popup_row(field: PopupFieldSpec, indent: str) -> str:
+    """One attribute's row, its mode expressed entirely in class names.
+
+    **The `*_WITH_DATA` modes are resolved by CSS, not here.** Whether a value is
+    empty is a per-feature fact, and the popup is one template interpolated for
+    whichever feature was clicked - so this function cannot know. The runtime's
+    interpolator is a flat `{{name}}` substitution with no conditional syntax,
+    which leaves the value span empty when the value is null. `map.html` hides
+    those rows with `:has(.om-popup-value:empty)`.
+
+    `INLINE_WITH_DATA` is the default and deliberately emits no extra class, so
+    a default export's markup is byte-identical to what it was before modes
+    existed.
+    """
+    classes = ["om-popup-row"]
+    if field.mode in _HEADER_MODES:
+        classes.append("om-popup-row-header")
+    if field.mode in _ALWAYS_MODES:
+        classes.append("om-popup-always")
+
+    label = (
+        ""
+        if field.mode is PopupFieldMode.NO_LABEL
+        else f'<span class="om-popup-label">{escape_attr(field.display_name)}</span>'
+    )
+    return (
+        f'{indent}    <div class="{" ".join(classes)}">'
+        f"{label}"
+        f'<span class="om-popup-value">{{{{{field.name}}}}}</span></div>'
+    )
+
+
+def build_popup_elements(
+    layer: ExportLayer, indent: str = "    ", hover: bool | None = None
+) -> str:
+    """An `<om-overlay>` plus the `<om-behavior>` that opens it.
 
     Field labels are emitted because they are the point: qgis2web defaults to no
-    label and produces popups of bare values that read as broken.
+    label and produces popups of bare values that read as broken. Authors who
+    want that can still choose `NO_LABEL` per field.
     """
     if not (layer.popup.enabled and layer.popup.visible_fields):
         return ""
 
     overlay_id = f"{layer.layer_id}-popup"
-    rows = [
-        f'{indent}    <div class="om-popup-row">'
-        f'<span class="om-popup-label">{escape_attr(field.display_name)}</span>'
-        f'<span class="om-popup-value">{{{{{field.name}}}}}</span></div>'
-        for field in layer.popup.visible_fields
-    ]
+    rows = [_popup_row(field, indent) for field in layer.popup.visible_fields]
 
     return "\n".join(
         [
             f'{indent}<om-overlay id="{escape_attr(overlay_id)}" '
             f'anchor-from="selection" visible="false">',
+            *_popup_style_element(indent),
             f'{indent}  <div class="om-popup">',
             f'{indent}    <div class="om-popup-title">{escape_attr(layer.name)}</div>',
             *rows,
             f"{indent}  </div>",
             f"{indent}</om-overlay>",
-            f'{indent}<om-behavior on="click" layer="{escape_attr(layer.layer_id)}" '
-            f'action="show-overlay" target="{escape_attr(overlay_id)}"></om-behavior>',
+            _popup_behavior(
+                layer,
+                overlay_id,
+                layer.popup.on_hover if hover is None else hover,
+                indent,
+            ),
         ]
     )
+
+
+def _popup_behavior(
+    layer: ExportLayer, overlay_id: str, hover: bool, indent: str
+) -> str:
+    """What opens the popup.
+
+    Hover and click are alternatives, not additions: bound together the popup
+    opens under the cursor and then a click "does nothing", because the overlay
+    is already open. qgis2web offers hover as a plain toggle for the same
+    reason.
+    """
+    trigger = "hover" if hover else "click"
+    return (
+        f'{indent}<om-behavior on="{trigger}" '
+        f'layer="{escape_attr(layer.layer_id)}" '
+        f'action="show-overlay" target="{escape_attr(overlay_id)}"></om-behavior>'
+    )
+
+
+# **Corner aliases, not the logical slot names.** The schema documents eight
+# logical positions (`top-start`, `top-end`, ...) plus four legacy corner
+# aliases, but the shipped runtime implements only the corners: it looks the
+# attribute up in a four-entry table and falls back to `top-left` on a miss. A
+# logical name therefore does not place a widget somewhere sensible - it places
+# every widget in the same corner, stacked on top of each other, which is what
+# an export looked like before this was found.
+#
+# `tests/unit/test_manifest_builder.py` pins these values for that reason. It is
+# the one place we assert on an attribute's *value* rather than its name.
+WIDGET_POSITIONS = {
+    "legend": "top-right",
+    "layer-switcher": "top-left",
+    "zoom-controls": "bottom-left",
+    "scale-bar": "bottom-left",
+}
 
 
 def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
@@ -358,21 +662,22 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     if settings.show_legend:
         widgets.append(
             f'{indent}<om-widget type="legend" title="{escape_attr(project.title)}" '
-            f'position="top-end"></om-widget>'
+            f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
         )
     if settings.show_layer_switcher and len(project.layers) > 1:
         widgets.append(
             f'{indent}<om-widget type="layer-switcher" '
-            'position="top-start"></om-widget>'
+            f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'
         )
     if settings.show_zoom_controls:
         widgets.append(
-            f'{indent}<om-widget type="zoom-controls" position="bottom-start">'
-            "</om-widget>"
+            f'{indent}<om-widget type="zoom-controls" '
+            f'position="{WIDGET_POSITIONS["zoom-controls"]}"></om-widget>'
         )
     if settings.show_scale_bar:
         widgets.append(
-            f'{indent}<om-widget type="scale-bar" position="bottom-start"></om-widget>'
+            f'{indent}<om-widget type="scale-bar" '
+            f'position="{WIDGET_POSITIONS["scale-bar"]}"></om-widget>'
         )
 
     return "\n".join(widgets)
@@ -442,10 +747,25 @@ def build_manifest(
     ]
 
     for layer in project.exportable_layers:
-        sections.append(build_layer_element(layer, inner, compress_data=compress_data))
+        sections.append(
+            build_layer_element(
+                layer,
+                inner,
+                compress_data=compress_data,
+                highlight_color=layer.highlight_color,
+            )
+        )
         popup = build_popup_elements(layer, inner)
         if popup:
             sections.append(popup)
+
+    # Every label layer after every geometry layer, not interleaved: OnlyMap
+    # stacks children in document order, so labels emitted next to their own
+    # layer would be painted over by whatever draws above it.
+    for layer in project.exportable_layers:
+        labels = build_label_element(layer, inner, compress_data=compress_data)
+        if labels:
+            sections.append(labels)
 
     widgets = build_widget_elements(project, inner)
     if widgets:
