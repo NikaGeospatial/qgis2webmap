@@ -90,6 +90,30 @@ markers are possible), `ClusterLayer` and `AggregationLayer` (clustering),
 only `GeoJsonLayer` with flat colours today, so most of the list above is a
 matter of emitting manifest we are not yet emitting - not of runtime support.
 
+## Popup investigation (2026-08-03)
+
+Run against a two-layer export with identical overlapping polygons, in headless
+Chromium.
+
+**Click popups following the cursor: reproduced, and it is the runtime's.**
+Clicking the overlap opened the popup over the click point; then *moving the
+mouse without clicking* moved the popup with it. We emit
+`anchor-from="selection"`, which is the only dynamic anchor the schema offers -
+the alternative, `anchor-layer` plus `anchor-feature-id`, needs a feature id
+known when the file is written, which is impossible for one template shared by
+every feature. So the anchor is right and the runtime's notion of "selection"
+tracks the pointer rather than the last click.
+
+**Stacking in click mode: not reproduced.** One click on two overlapping
+pickable layers opened exactly one overlay - `upper-popup` visible,
+`lower-popup` not - so the runtime already resolves to the topmost pick. The
+theory that our one-behaviour-per-layer emission makes them all fire is wrong.
+
+**Stacking in hover mode: not reproduced, and the test is not trustworthy.**
+Synthetic `mouse.move` opened no overlay at all, which means it never drove
+deck.gl's hover picking rather than that hover behaves. This one still needs a
+real pointer, so it stays open pending Abhijay's observation.
+
 ## Notes
 
 Items 7 and 9 touch the OnlyMap runtime, which is sha256-pinned and not ours.
