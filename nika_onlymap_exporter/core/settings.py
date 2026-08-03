@@ -215,6 +215,10 @@ class DialogState:
     show_title: bool = True
     show_abstract: bool = False
     title_corner: OverlayCorner = OverlayCorner.TOP_CENTER
+    # Off by default. A basemap does not change the file size - tiles are
+    # streamed - but it ends the "opens offline, contacts nobody" guarantee, so
+    # it has to be chosen rather than inherited.
+    basemap: str = "none"
     widget_background: str = ""
     widget_foreground: str = ""
     highlight_color: str = ""
@@ -254,6 +258,7 @@ class DialogState:
                         "show_title",
                         "show_abstract",
                         "title_corner",
+                        "basemap",
                         "widget_background",
                         "widget_foreground",
                         "highlight_color",
@@ -291,6 +296,7 @@ class DialogState:
             show_title=self.show_title,
             show_abstract=self.show_abstract,
             title_corner=self.title_corner,
+            basemap=self.basemap,
             widget_background=parse_hex_color(self.widget_background),
             widget_foreground=parse_hex_color(self.widget_foreground),
             highlight_color=parse_hex_color(self.highlight_color),
@@ -330,6 +336,7 @@ def load_state(project: QgsProject) -> DialogState:
             # the new default rather than be pinned to the old one by its silence.
             state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
+            state.basemap = str(widgets.get("basemap", "none") or "none")
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
             state.highlight_color = str(widgets.get("highlightColor", "") or "")
@@ -369,6 +376,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "showTitle": state.show_title,
                 "showAbstract": state.show_abstract,
                 "titleCorner": state.title_corner.value,
+                "basemap": state.basemap,
                 "widgetBackground": state.widget_background,
                 "widgetForeground": state.widget_foreground,
                 "highlightColor": state.highlight_color,

@@ -36,6 +36,7 @@ from .export_ir import (
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
+from .manifest_builder import basemap_note
 from .settings import LayerSettings
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -209,6 +210,13 @@ def read_project(
             "discards data - the exported geometry is no longer identical to "
             "the source.",
         )
+
+    # A basemap is the only setting whose cost falls on the *recipient*, and it
+    # cannot be undone once the file is sent - so it belongs in the report the
+    # user reads before exporting, not only in the dialog they already left.
+    note = basemap_note(settings.basemap)
+    if note is not None:
+        report.approximated("Basemap", note)
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     title = resolve_title(project, title_override)

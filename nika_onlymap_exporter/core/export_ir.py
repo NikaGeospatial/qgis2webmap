@@ -620,6 +620,11 @@ class ExportSettings:
     show_title: bool = True
     show_abstract: bool = False
     title_corner: OverlayCorner = OverlayCorner.TOP_CENTER
+    # "none" keeps the export self-contained and silent. Any other value makes
+    # the map fetch tiles from a third party every time a recipient opens it,
+    # which is a privacy and longevity trade rather than a size one - tiles are
+    # streamed, so the file does not grow at all.
+    basemap: str = "none"
     widget_background: Color | None = None
     widget_foreground: Color | None = None
     # None leaves the runtime's own highlight alone. qgis2web has no equivalent:
@@ -652,6 +657,7 @@ class ExportSettings:
             "showTitle": self.show_title,
             "showAbstract": self.show_abstract,
             "titleCorner": self.title_corner.value,
+            "basemap": self.basemap,
             "widgetBackground": (
                 self.widget_background.snapshot() if self.widget_background else None
             ),

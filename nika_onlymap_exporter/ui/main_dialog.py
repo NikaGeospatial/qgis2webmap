@@ -67,6 +67,7 @@ from ..core.export_ir import (
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy, report_verdict
+from ..core.manifest_builder import basemap_note
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
 from ..core.settings import (
@@ -144,6 +145,20 @@ CAPTION_CORNER_LABELS = {
     OverlayCorner.TOP_RIGHT: "Top right - shared with the legend",
     OverlayCorner.BOTTOM_LEFT: "Bottom left - shared with zoom and scale",
     OverlayCorner.BOTTOM_RIGHT: "Bottom right - shared with the credit",
+}
+
+# "None" first and default: it is the only choice that keeps the export working
+# offline and contacting nobody. The rest are the runtime's registered presets,
+# minus the MapTiler ones, which need an API key the file would have to carry in
+# plain text for every recipient to read.
+BASEMAP_LABELS = {
+    "none": "None - the export stays offline and contacts nobody",
+    "osm": "OpenStreetMap",
+    "positron": "Positron - pale, for data on top",
+    "dark-matter": "Dark Matter - dark background",
+    "voyager": "Voyager - general purpose",
+    "liberty": "Liberty - detailed street map",
+    "bright": "Bright - high contrast",
 }
 
 EXTENT_LABELS = {
@@ -405,6 +420,21 @@ class MainDialog(QDialog):
         self.extent_combo.currentIndexChanged.connect(self._on_extent_changed)
         data_form.addRow("Open the map on", self.extent_combo)
 
+        self.basemap_combo = QComboBox(data_box)
+        for value, label in BASEMAP_LABELS.items():
+            self.basemap_combo.addItem(label, value)
+        basemap_index = self.basemap_combo.findData(self.state.basemap)
+        self.basemap_combo.setCurrentIndex(basemap_index if basemap_index >= 0 else 0)
+        self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
+        data_form.addRow("Basemap", self.basemap_combo)
+
+        # Warning rather than help: this is the only setting that changes what
+        # the *recipient's* machine does, and it cannot be undone after sending.
+        self.basemap_warning = QLabel("", data_box)
+        self.basemap_warning.setWordWrap(True)
+        data_form.addRow("", self.basemap_warning)
+        self._update_basemap_warning()
+
         # "Maintain" first and selected: rounding coordinates is the only
         # setting in this dialog that throws data away, so it is opt-in and
         # says so in the fidelity report when chosen.
@@ -465,6 +495,32 @@ class MainDialog(QDialog):
             with contextlib.suppress(ValueError):
                 self.state.extent_source = ExtentSource(value)
         self._fidelity_is_stale = True
+
+    def _on_basemap_changed(self) -> None:
+        value = self.basemap_combo.currentData()
+        self.state.basemap = value if isinstance(value, str) else "none"
+        self._update_basemap_warning()
+        self._fidelity_is_stale = True
+
+    def _update_basemap_warning(self) -> None:
+        """Say what a basemap costs, in the terms it actually costs them.
+
+        Not file size: tiles are streamed, so the export does not grow by a byte.
+        What it costs is the offline guarantee and the promise that opening the
+        map contacts nobody - and unlike every other setting here, that lands on
+        the recipient rather than on the person choosing it.
+        """
+        note = basemap_note(self.state.basemap)
+        if note is None:
+            self.basemap_warning.setText("")
+            self.basemap_warning.setStyleSheet("")
+            return
+
+        self.basemap_warning.setText(note)
+        # The one place a fixed colour is right: this is a warning, and warning
+        # red has to read as red in both light and dark themes rather than
+        # following the palette into something quiet.
+        self.basemap_warning.setStyleSheet("color: #c0392b;")
 
     def _on_precision_changed(self) -> None:
         value = self.precision_combo.currentData()

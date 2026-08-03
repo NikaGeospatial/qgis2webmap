@@ -73,8 +73,54 @@ DEFAULT_LABEL_SIZE = 12.0
 DEFAULT_FILL = Color(r=136, g=136, b=136, a=0.8)
 DEFAULT_STROKE = Color(r=51, g=51, b=51, a=1.0)
 
-# Deliberate: no basemap in 0.1.0, so an export makes no network request at all.
+# The default, and what keeps an export self-contained: no basemap means no
+# network request at all, which is the promise the privacy release gate measures.
+#
+# It is a choice rather than a rule, because a map of a place with no context
+# around it is often unreadable. The alternatives are the presets the runtime
+# registers; each streams tiles from a third party, so the file does not grow but
+# the export stops working offline. `basemap_note` states that in the fidelity
+# report rather than leaving the user to discover it.
 BASEMAP = "none"
+
+# Presets the runtime accepts, from `onlymapjs.html-data.json`. The MapTiler
+# entries are omitted deliberately: they need an API key the exported file would
+# have to carry in plain text, where every recipient can read and spend it.
+BASEMAP_PRESETS = (
+    "none",
+    "osm",
+    "positron",
+    "dark-matter",
+    "voyager",
+    "liberty",
+    "bright",
+)
+
+# Where each preset's tiles come from, for the fidelity note. A user deciding
+# whether to accept a network dependency should be told who they are depending on.
+BASEMAP_HOSTS = {
+    "osm": "openstreetmap.org",
+    "positron": "carto.com",
+    "dark-matter": "carto.com",
+    "voyager": "carto.com",
+    "liberty": "openfreemap.org",
+    "bright": "openfreemap.org",
+}
+
+
+def basemap_note(basemap: str) -> str | None:
+    """What choosing this basemap costs the recipient, in plain terms.
+
+    `None` when there is nothing to say, which is the default case.
+    """
+    if not basemap or basemap == "none":
+        return None
+    host = BASEMAP_HOSTS.get(basemap, "a third-party tile server")
+    return (
+        f"The map loads basemap tiles from {host} every time it is opened. "
+        "It will not work offline, and each recipient's browser will contact "
+        f"{host} directly. The exported file itself is no larger."
+    )
 
 
 def escape_attr(value: str) -> str:
@@ -733,8 +779,17 @@ def build_manifest(
     attributes: list[tuple[str, str | None]] = [
         ("center", f"[{center_lon:.6f}, {center_lat:.6f}]"),
         ("zoom", _number(round(zoom, 2))),
-        ("basemap", BASEMAP),
-        # No tracking, no network requests. Stated in the README as a promise.
+        # Falls back to "none" rather than trusting the value: an unknown preset
+        # would make the runtime request a style it cannot resolve, and a broken
+        # basemap is worse than the absent one the user could have had.
+        (
+            "basemap",
+            project.settings.basemap
+            if project.settings.basemap in BASEMAP_PRESETS
+            else BASEMAP,
+        ),
+        # No tracking. With `basemap="none"` there are no network requests at
+        # all; a chosen basemap adds tile requests and nothing else.
         ("telemetry", "off"),
     ]
 

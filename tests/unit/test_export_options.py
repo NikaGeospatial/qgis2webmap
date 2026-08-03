@@ -29,6 +29,11 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
     SymbolSpec,
 )
+from nika_onlymap_exporter.core.manifest_builder import (
+    BASEMAP_PRESETS,
+    basemap_note,
+    build_manifest,
+)
 from nika_onlymap_exporter.core.settings import (
     MAX_PRECISION,
     PRECISION_FULL,
@@ -278,3 +283,51 @@ class TestExtentSource:
     def test_the_choice_survives_into_the_export_settings(self) -> None:
         state = DialogState(extent_source=ExtentSource.CANVAS)
         assert state.to_export_settings().extent_source is ExtentSource.CANVAS
+
+
+class TestBasemap:
+    """The one setting whose cost lands on the recipient rather than the author.
+
+    Tiles are streamed, so the file does not grow - what a basemap ends is the
+    "opens offline, contacts nobody" guarantee, and that cannot be walked back
+    once the map has been sent.
+    """
+
+    def test_the_default_contacts_nobody(self) -> None:
+        markup = build_manifest(make_project())
+        assert 'basemap="none"' in markup
+
+    def test_a_chosen_preset_reaches_the_map(self) -> None:
+        markup = build_manifest(make_project(basemap="osm"))
+        assert 'basemap="osm"' in markup
+
+    def test_an_unknown_preset_falls_back_to_none(self) -> None:
+        """A style the runtime cannot resolve is worse than no basemap at all."""
+        markup = build_manifest(make_project(basemap="not-a-real-preset"))
+        assert 'basemap="none"' in markup
+
+    def test_maptiler_presets_are_not_offered(self) -> None:
+        """They need an API key, which the file would carry in clear text."""
+        assert not any(name.startswith("maptiler") for name in BASEMAP_PRESETS)
+
+    def test_no_note_when_there_is_no_basemap(self) -> None:
+        assert basemap_note("none") is None
+        assert basemap_note("") is None
+
+    def test_the_note_names_the_host_being_depended_on(self) -> None:
+        note = basemap_note("osm")
+        assert note is not None
+        assert "openstreetmap.org" in note
+
+    def test_the_note_corrects_the_size_assumption(self) -> None:
+        """The intuitive worry is file size, and it is the wrong one."""
+        note = basemap_note("osm")
+        assert note is not None
+        assert "no larger" in note
+        assert "offline" in note
+
+    def test_every_offered_preset_has_a_note(self) -> None:
+        for preset in BASEMAP_PRESETS:
+            if preset == "none":
+                continue
+            assert basemap_note(preset) is not None, preset
