@@ -7,6 +7,30 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **An opt-in basemap**, defaulting to none: OpenStreetMap, Positron, Dark
+  Matter, Voyager, Liberty or Bright. The MapTiler presets the runtime also
+  registers are deliberately not offered - they need an API key, which the
+  exported file would have to carry in clear text for every recipient to read
+  and spend.
+
+  The warning beside it is about the network, not the file: **tiles are streamed,
+  so a basemap does not make the export any bigger.** What it ends is the "opens
+  offline, contacts nobody" guarantee, and it does so on the recipient's machine
+  rather than the author's - which is why it is also written into the fidelity
+  report, naming the provider being depended on, rather than living only in a
+  dialog the user has already left.
+
+  Tiles are not bundled for offline use and will not be. Beyond the size - the
+  Alaska region alone is ~6.5 GB across zoom levels 0-12 - the OpenStreetMap
+  [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
+  prohibits bulk downloading and offline use outright.
+- **Caption positions for top centre and bottom centre**, and top centre is now
+  the default. All four corners were already occupied by map chrome - the layer
+  switcher, the legend, the zoom controls and scale bar, the credit component -
+  so every corner a user picked collided with something. The centres are the only
+  free space, and the position list now says what each corner shares.
+- **The map title is drawn by default**, and the legend gives up its own heading
+  while it is, so the title appears exactly once rather than twice.
 - **Live preview.** The preview is served from `127.0.0.1` on an ephemeral port
   and the open tab reloads itself as settings change, keeping the camera. A
   `Live preview` checkbox controls it, remembered per machine in `QSettings`
@@ -157,6 +181,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the guides all now say.
 
 ### Fixed
+- The caption drew behind the map controls. It carried `z-index: 3` against
+  widgets that set `9999` on their own `:host`, so it appeared in front of the
+  credit chip (`z-index: 2`) in the bottom corners and behind the legend and
+  scale bar everywhere else - meaning whether the title showed at all depended on
+  which corner it was in.
 - The three **How to share it** options are radio buttons. They were checkboxes
   that unpicked each other by hand, which promises multi-select without
   delivering it and reads wrong to a screen reader.

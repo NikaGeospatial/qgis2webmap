@@ -136,5 +136,26 @@ choose otherwise; rounding makes the file smaller and is the one setting here
 that throws data away, so it is listed in the fidelity report whenever it is
 set. Roughly, six decimal places is 0.1 m at the equator.
 
-No basemap is included in 0.1.0, which is what lets an exported map work with no
-internet connection.
+## Basemaps
+
+There is no basemap by default, and that is what lets an exported map work with
+no internet connection at all.
+
+You can choose one on the Map tab - OpenStreetMap, Positron, Dark Matter,
+Voyager, Liberty or Bright. It is worth understanding what that changes, because
+it is the only setting whose cost falls on whoever you send the map to:
+
+- **The file does not get any bigger.** Tiles are fetched as the map is used,
+  not packed into the export.
+- **The map stops working offline.** Without a connection the data still draws,
+  but the background does not.
+- **Each recipient's browser contacts the tile provider directly** every time
+  they open the map.
+
+Tiles cannot be bundled for offline use. Beyond the size - the Alaska region
+alone is several gigabytes at usable zoom levels - the OpenStreetMap
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
+prohibits bulk downloading and offline use of its tiles.
+
+The Fidelity tab names the provider you are depending on whenever a basemap is
+set.

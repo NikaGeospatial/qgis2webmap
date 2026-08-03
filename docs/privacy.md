@@ -8,12 +8,26 @@ unplugged, on a machine that has never had QGIS installed.
 ## What that means concretely
 
 - No analytics, no beacons, no telemetry.
-- No basemap tiles fetched from a server.
+- No basemap tiles fetched from a server - unless you choose a basemap; see below.
 - No fonts, scripts or styles loaded from a CDN - everything is inside the file.
 - No identifier of any kind for the map, its author, or whoever opens it.
 
 You can check this yourself: open an exported map in a browser, open the
 developer tools Network tab, and reload. It stays empty.
+
+## The one exception: basemaps
+
+There is no basemap by default, and a default export makes no requests at all.
+
+If you choose one on the Map tab, that changes for everyone you send the map to:
+their browser fetches tiles from the provider each time they open it. The
+provider necessarily sees those requests, including the approximate area being
+looked at.
+
+Nothing else about the export changes - no analytics are added, no identifier
+travels with it, and the file is no larger. But the "opens offline, contacts
+nobody" guarantee only holds with the basemap set to None, so the dialog warns
+in red when it is not, and the Fidelity tab names the provider.
 
 ## What is in the file
 
