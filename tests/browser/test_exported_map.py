@@ -126,10 +126,22 @@ class TestItStaysOffline:
 
 
 class TestTheCreditComponent:
-    def test_both_calls_to_action_are_visible(self, page, exported_map) -> None:
+    def test_the_attribution_is_visible(self, page, exported_map) -> None:
+        """`.first` because the data credit can name NIKA too, and two matches
+        is a strict-mode error rather than a pass."""
         open_map(page, exported_map)
-        assert page.get_by_role("link", name="Enhance").is_visible()
-        assert page.get_by_role("link", name="Host").is_visible()
+        assert page.get_by_role("link", name="OnlyMap").first.is_visible()
+        assert page.get_by_role("link", name="NIKA").first.is_visible()
+
+    def test_the_removed_calls_to_action_are_gone(self, page, exported_map) -> None:
+        """ "Enhance" and "Host" pointed at pages that 404ed.
+
+        Asserted from the rendered page rather than the markup: the point is
+        that no recipient can click through to a dead end.
+        """
+        open_map(page, exported_map)
+        assert page.get_by_role("link", name="Enhance").count() == 0
+        assert page.get_by_role("link", name="Host").count() == 0
 
     def test_the_data_credit_is_visible(self, page, exported_map) -> None:
         """Attribution behind a click would not satisfy a licence obligation."""
@@ -141,7 +153,10 @@ class TestTheCreditComponent:
         """A release gate, and the reason the component is anchors not divs."""
         open_map(page, exported_map)
         handles = page.locator(".om-credit a")
-        assert handles.count() >= 3
+        # Two: OnlyMap and NIKA. It was three before "Enhance" and "Host" were
+        # removed for pointing at 404s, and the data credit adds more when the
+        # fixture carries attribution.
+        assert handles.count() >= 2
         for index in range(handles.count()):
             link = handles.nth(index)
             link.focus()
