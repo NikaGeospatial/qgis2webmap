@@ -21,3 +21,15 @@ venv/
 
 # Compiled Qt resources are generated, not committed
 nika_onlymap_exporter/resources_rc.py
+
+# QGIS scratch databases. The style manager and the form designer drop these in
+# whatever directory QGIS was launched from, which during development is this
+# repository root. Two were committed before this rule existed.
+*.db
+*.db-journal
+*.gpkg-journal
+
+# The OnlyMap runtime, when a contributor symlinks or copies a build in to work
+# against it. The vendored copy that ships is added deliberately, not by glob.
+nika_onlymap_exporter/runtime/*.js
+nika_onlymap_exporter/runtime/*.css
