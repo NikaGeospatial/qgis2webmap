@@ -39,6 +39,7 @@ HELP_DOCS = (
     "first-export.md",
     "sharing.md",
     "enhance-with-ai.md",
+    "hosting.md",
     "supported-features.md",
     "privacy.md",
 )

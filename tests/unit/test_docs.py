@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import zipfile
 from pathlib import Path
@@ -19,16 +20,22 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS = REPO_ROOT / "docs"
 
-# The guides bundled into the plugin, mirroring scripts/package_plugin.py.
-HELP_DOCS = (
-    "index.md",
-    "installation.md",
-    "first-export.md",
-    "sharing.md",
-    "enhance-with-ai.md",
-    "supported-features.md",
-    "privacy.md",
-)
+
+# Imported, never copied. This file exists to catch the packager and the Help tab
+# drifting apart, so a third hand-maintained copy of the list here would be the
+# very bug under test - as it was: adding a guide to both real lists left this
+# stale duplicate failing, which is the wrong end to find out from.
+def _load_packager():
+    """Import `scripts/package_plugin.py`, which is a script, not a package."""
+    spec = importlib.util.spec_from_file_location(
+        "_package_plugin", REPO_ROOT / "scripts" / "package_plugin.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+HELP_DOCS = _load_packager().HELP_DOCS
 
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 

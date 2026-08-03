@@ -19,6 +19,7 @@ another person can double-click and use without QGIS installed.
 - [Your first export](first-export.md)
 - [Sharing a map](sharing.md)
 - [Enhance a map with AI](enhance-with-ai.md)
+- [Host with OnlyMap](hosting.md)
 - [What gets exported](supported-features.md)
 - [Privacy](privacy.md)
 

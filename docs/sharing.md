@@ -21,7 +21,14 @@ someone says your map "never arrived", try this.
 
 ## Folder
 
-The map and its README as loose files, for uploading to a web server yourself.
+For uploading to a web server yourself. You get a small `index.html`, the
+OnlyMap runtime as a separate `onlymap.js`, and a README. Splitting them is the
+point: a browser caches `onlymap.js` once and reuses it for every map on your
+site, instead of downloading the same few megabytes inside every page.
+
+**This one does not open by double-clicking it.** Browsers refuse to load the
+runtime that way, so the folder has to be served over `http://` or `https://`.
+Use Standalone HTML if you want a file that opens straight off a disk.
 
 ## Which to pick
 

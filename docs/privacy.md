@@ -25,6 +25,25 @@ Be aware that the data itself is in the file, in full. If a layer contains
 information that should not be shared, do not include that layer in the export.
 The Fidelity tab lists exactly which layers were included.
 
+## The one thing the plugin downloads
+
+The claims above are about **exported maps**, and they hold absolutely.
+
+The plugin itself makes exactly one network request in its entire life: the
+first time you build a map, it downloads the OnlyMap runtime from npm — about
+3 MB, once per computer, after showing you the licence and asking. See
+[installation](installation.md).
+
+That request sends nothing about you or your data. It is an anonymous download
+of a public package: no account, no token, no identifier, and nothing about
+your project, your layers or your machine. npm can see that some computer at
+your IP address downloaded a public file, which is what any software download
+looks like.
+
+After that, the plugin never contacts anything again. Exporting is entirely
+local — your data is read from disk and written into the file, and no part of
+it leaves your computer.
+
 ## If you publish or host a map
 
 Publishing to NIKA hosting, and asking an AI assistant to modify a map, are

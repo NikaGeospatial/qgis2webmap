@@ -82,3 +82,41 @@ jobs:
       # ship, for instance) and would otherwise skip silently in CI.
       - run: python scripts/package_plugin.py
       - run: python -m pytest tests/unit -q
+
+  qgis:
+    # The PyQGIS tiers, in QGIS's own container so no PyQGIS install is needed.
+    # `tests/fixtures` runs every fixture project through issue #29's release
+    # gates; without the OnlyMap runtime its export checks skip and the
+    # model-level ones still run.
+    runs-on: ubuntu-latest
+    container: qgis/qgis:ltr
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: QGIS and PyQGIS versions
+        run: python3 -c "import qgis.core; print(qgis.core.Qgis.version())"
+      - run: python3 -m pytest tests/qgis tests/fixtures -q -rs
+
+  browser:
+    # The release gates that are only true if a browser says so: the map mounts,
+    # it makes no network request, and the credit component is reachable by
+    # keyboard without covering the map controls.
+    #
+    # Needs the OnlyMap runtime to mount a real map. Until the runtime ships
+    # with the plugin (see docs/architecture.md) there is nothing for this job
+    # to point ONLYMAP_RUNTIME_DIR at on a clean runner, so the tier skips and
+    # says so. `-rs` keeps that visible rather than reading as a pass.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest pytest-playwright
+      - run: playwright install --with-deps chromium firefox webkit
+      - run: python -m pytest tests/browser -q -rs
+             --browser chromium --browser firefox --browser webkit
+        env:
+          PYTHONPATH: ${{ github.workspace }}

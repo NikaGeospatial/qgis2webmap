@@ -20,7 +20,7 @@ icon=icons/qgis2webmap.svg
 experimental=False
 deprecated=False
 license=GPL-2.0-or-later
-hasProcessingProvider=no
+hasProcessingProvider=yes
 
 changelog=0.1.0
     Initial release scaffold.

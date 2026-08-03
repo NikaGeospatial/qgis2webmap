@@ -27,6 +27,23 @@ files, and describe what you want:
 > Read this exported map. Add a filter widget for the `kind` field, and change
 > the civil airports to blue. Keep the data and the attribution unchanged.
 
+### Give the assistant the OnlyMap skill first
+
+An assistant that has not seen OnlyMap's attribute vocabulary will guess, and
+guesses produce a map that no longer opens. OnlyMap publishes a skill file that
+teaches it the real syntax. Point your assistant at it before asking for
+changes:
+
+> Read the OnlyMap skill at
+> <https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/skills/onlymapjs/SKILL.md>.
+> Inspect this exported map, preserve its data and attribution, then add
+> <what you want>. Validate the result by opening it locally, and keep the map
+> portable.
+
+**Claude Code** users can install it once instead of pasting the link each time:
+copy [`skills/onlymapjs/`](https://github.com/NikaGeospatial/onlymap-js/tree/main/skills/onlymapjs)
+into `~/.claude/skills/`, and it loads whenever you work on an OnlyMap file.
+
 Useful things to ask for:
 
 - new colours, or a different colour scheme

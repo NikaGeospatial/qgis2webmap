@@ -32,13 +32,19 @@ This is a deliberate default, stated here rather than buried in a privacy page.
 | Mode | What the recipient does | When it is used |
 |---|---|---|
 | **Standalone HTML** | Double-click one file | Default. All resources embed and no remote resource is required |
-| **Share ZIP** | Extract, then open `index.html` | Data too large for one practical HTML file |
-| **Large Local Package** | Run the included launcher, open localhost | Tiled or range-request assets |
-| **Publish with OnlyMap** | Open a share link | Explicit, opt-in, with a data-inventory confirmation |
+| **Share ZIP** | Extract, then open `index.html` | Data too large for one practical HTML file, or a mail filter that quarantines `.html` |
+| **Folder** | Copy to a web server, or open `index.html` | Publishing the result yourself |
 
 Compression is **lossless** — no coordinate precision is discarded to shrink a
 file. Where a project genuinely will not fit one file, the plugin recommends the
 next mode rather than degrading the data.
+
+Two further modes are designed but **not in `0.1.0`**: a Large Local Package
+with a bundled launcher, for tiled or range-request assets, and Publish with
+OnlyMap for one-click hosting. See [issue #29][issue] for the full output
+policy.
+
+[issue]: https://github.com/NikaGeospatial/onlymap-js/issues/29
 
 ---
 
@@ -57,6 +63,13 @@ choose `dist/nika_onlymap_exporter-<version>.zip`.
 
 Requires QGIS 3.22 or newer (QGIS 4 supported).
 
+**The first export downloads the map runtime** — about 3 MB, once per computer,
+after showing you its licence. Everything works offline after that. The runtime
+is the code that draws the map in a browser and is built into every map you
+export; it is a separate commercial product with its own licence, which is why
+it is fetched rather than bundled into this GPL plugin. See
+[installation](docs/installation.md) for the offline and proxy paths.
+
 ---
 
 ## Documentation
@@ -69,7 +82,35 @@ Requires QGIS 3.22 or newer (QGIS 4 supported).
 - [Privacy](docs/privacy.md)
 
 The same guides are in the plugin's Help tab, and on
-[GitHub Pages](https://nikageospatial.github.io/qgis2webmap/).
+[GitHub Pages](https://nikageospatial.github.io/qgis2webmap/). Deeper articles
+live at [NIKA Documentation](https://docs.nikaplanet.com).
+
+## What gets exported
+
+Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
+sources, with single-symbol, categorized and graduated styling; layer order,
+groups, visibility, scale ranges, field aliases and hidden fields; labels,
+popups, and data attribution. Every map ships a legend, layer switcher, zoom
+controls and a scale bar.
+
+Anything that will not survive the trip is listed in the **Fidelity** tab
+*before* you export, classified as preserved, approximated, raster-fallback,
+unsupported or blocked. Nothing is dropped silently. Full list:
+[what gets exported](docs/supported-features.md).
+
+## Enhance with AI
+
+An exported map is a readable HTML document, not a compiled bundle — so an AI
+assistant can edit it. Point Claude Code or Codex at the OnlyMap skill and ask
+for filters, charts, stories or custom branding, and the map stays portable.
+See [enhance a map with AI](docs/enhance-with-ai.md).
+
+## Host with OnlyMap
+
+Every exported map carries a **Host with OnlyMap** link. Hosting is always an
+explicit action you start: the artifact never uploads anything on its own, and
+publishing asks you to confirm you are authorised to and to choose Public,
+Unlisted or Private. See [hosting](docs/hosting.md).
 
 ## Usage
 
@@ -108,6 +149,14 @@ python -m pytest tests/unit                                        # unit tests
 ```
 
 Contributions: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## Support
+
+- Questions and bug reports: [GitHub issues](https://github.com/NikaGeospatial/qgis2webmap/issues)
+- Documentation: [NIKA Documentation](https://docs.nikaplanet.com)
+- Email: support@nikaplanet.com
 
 ---
 
