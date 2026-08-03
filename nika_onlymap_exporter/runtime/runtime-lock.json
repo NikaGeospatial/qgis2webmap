@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "The OnlyMap runtime build this plugin is developed and tested against.",
+    "The bytes themselves are NOT in this directory: whether they are vendored",
+    "here or fetched on first export is an open licensing question (see",
+    "docs/architecture.md). This file pins what the answer must produce, so a",
+    "runtime that is not the expected build is caught rather than shipped.",
+    "Regenerate with scripts/lock_runtime.py after changing the pinned build."
+  ],
+  "package": "@nika-js/onlymap",
+  "version": "0.3.3",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "files": {
+    "onlymap.standalone.js": {
+      "sha256": "6249efcd9a010ac629000716be3adfd11b01ca5f320422875713ee6d06946c67",
+      "bytes": 5634118
+    },
+    "onlymapjs.css": {
+      "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c",
+      "bytes": 70893
+    }
+  }
+}
