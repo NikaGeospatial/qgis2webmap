@@ -42,10 +42,34 @@ class Qgis2WebMapPlugin:
         self.plugin_dir = os.path.dirname(__file__)
         self.action: QAction | None = None
         self.dialog = None
+        self.provider = None
 
     # ---- QGIS lifecycle -------------------------------------------------
 
+    def initProcessing(self) -> None:  # noqa: N802 -- QGIS plugin API
+        """Register the Processing provider.
+
+        Wrapped like `run`: a Processing failure must not stop the menu action
+        from working, and must never take QGIS down with it.
+        """
+        try:
+            from qgis.core import QgsApplication
+
+            from .processing.provider import Qgis2WebMapProvider
+
+            self.provider = Qgis2WebMapProvider()
+            QgsApplication.processingRegistry().addProvider(self.provider)
+        except Exception:
+            self.provider = None
+            QgsMessageLog.logMessage(
+                f"Failed to register the Processing provider:\n"
+                f"{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.Warning,
+            )
+
     def initGui(self) -> None:  # noqa: N802 -- QGIS plugin API
+        self.initProcessing()
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "qgis2webmap.svg"))
         self.action = QAction(icon, ACTION_TEXT, self.iface.mainWindow())
         self.action.setObjectName("qgis2webmapCreateWebMap")
@@ -60,6 +84,12 @@ class Qgis2WebMapPlugin:
 
     def unload(self) -> None:
         """Remove everything `initGui` added. Must be idempotent-safe."""
+        if self.provider is not None:
+            from qgis.core import QgsApplication
+
+            QgsApplication.processingRegistry().removeProvider(self.provider)
+            self.provider = None
+
         if self.action is not None:
             self.iface.removePluginWebMenu(MENU_TITLE, self.action)
             self.iface.removeToolBarIcon(self.action)

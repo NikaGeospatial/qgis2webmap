@@ -20,10 +20,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..core.export_ir import ExportProject, FidelityItem, OutputMode
+from ..core.export_ir import (
+    Color,
+    ExportProject,
+    FidelityItem,
+    OutputMode,
+    OverlayCorner,
+)
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
-from ..core.manifest_builder import build_manifest
+from ..core.manifest_builder import build_manifest, collect_attributions
 from ..packaging.asset_embedder import (
     build_bootstrap,
     gzip_base64,
@@ -38,6 +44,10 @@ from ..packaging.runtime_manager import (
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 PLUGIN_VERSION = "0.1.0"
+
+# The unbundled runtime's file name. Stable on purpose: a server can cache it,
+# and re-exporting a map does not invalidate every other map on the site.
+RUNTIME_FILE_NAME = "onlymap.js"
 
 
 class ExportBlockedError(RuntimeError):
@@ -141,12 +151,18 @@ class OnlyMapWriter:
         compress: bool = True,
         compress_data: bool = False,
         preview_hook: str = "",
+        runtime_file: str | None = None,
     ) -> str:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
 
-        if compress:
+        if runtime_file:
+            # An import rather than a `src=` attribute, so the template's single
+            # script block serves both shapes. The inline module resolves it
+            # against the document URL, which is the sibling file we wrote.
+            script_body = f'      import "./{runtime_file}";'
+        elif compress:
             # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
             # of the raw size, and nobody edits minified runtime code anyway.
             script_body = build_bootstrap(gzip_base64(runtime.javascript))
@@ -159,6 +175,9 @@ class OnlyMapWriter:
             "@GENERATOR@": generator_line(runtime, when),
             "@TITLE@": _escape_text(project.title),
             "@MANIFEST@": manifest,
+            "@ATTRIBUTION@": _attribution_block(project),
+            "@CAPTION@": _caption_block(project),
+            "@WIDGET_COLORS@": _widget_color_block(project),
             # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
             "@RUNTIME_JS@": script_body,
@@ -181,11 +200,19 @@ class OnlyMapWriter:
         when: datetime | None = None,
         compress: bool = True,
         preview_hook: str = "",
+        unbundle: bool = False,
     ) -> ArtifactResult:
         """Write the artifact and describe what was produced.
 
         `destination` is a directory; the entry file is always `index.html` so a
         recipient never has to guess which file to open.
+
+        `unbundle` writes the runtime beside the page instead of inside it. That
+        is the whole point of the folder tier: a served map gets a small HTML
+        file and a runtime the browser caches across every map on the site,
+        rather than the same two megabytes re-downloaded each time. It is
+        **only** valid over HTTP - the runtime loads as a module, and a module
+        cannot be fetched from `file://` - so the other tiers stay inlined.
 
         Scanning happens first: an export that cannot work for its recipient
         should fail before anything is written, not after.
@@ -202,6 +229,15 @@ class OnlyMapWriter:
         compress_data = compress and should_compress_data(scan_result.data_bytes)
 
         destination.mkdir(parents=True, exist_ok=True)
+        written: list[ArtifactFile] = []
+
+        runtime_file = None
+        if unbundle:
+            runtime_file = RUNTIME_FILE_NAME
+            runtime_path = destination / runtime_file
+            runtime_path.write_bytes(runtime.javascript)
+            written.append(ArtifactFile(runtime_path, runtime_path.stat().st_size))
+
         entry = destination / "index.html"
         entry.write_text(
             self.render_html(
@@ -212,11 +248,16 @@ class OnlyMapWriter:
                 compress,
                 compress_data,
                 preview_hook,
+                runtime_file,
             ),
             encoding="utf-8",
         )
+        written.insert(0, ArtifactFile(entry, entry.stat().st_size))
 
         warnings = [v.detail for v in verdict.violations]
+        # An unexpected runtime build is worth saying out loud: the artifact is
+        # still written, but "it worked on my machine" usually starts here.
+        warnings.extend(runtime.lock_warnings)
         if project.settings.has_lossy_transform:
             warnings.append(
                 "A lossy transform was applied, so the exported coordinates are "
@@ -226,7 +267,7 @@ class OnlyMapWriter:
         return ArtifactResult(
             entry_path=entry,
             mode=mode,
-            files=(ArtifactFile(entry, entry.stat().st_size),),
+            files=tuple(written),
             runtime_version=runtime.version,
             runtime_sha256=runtime.sha256,
             compressed=compress,
@@ -255,3 +296,89 @@ def _network_dependencies(project: ExportProject) -> tuple[str, ...]:
 def _escape_text(value: str) -> str:
     """Escape for HTML text content (the title appears in <title> and a footer)."""
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+CAPTION_CORNER_CLASSES = {
+    OverlayCorner.TOP_LEFT: "om-caption-top-left",
+    OverlayCorner.TOP_RIGHT: "om-caption-top-right",
+    OverlayCorner.BOTTOM_LEFT: "om-caption-bottom-left",
+    OverlayCorner.BOTTOM_RIGHT: "om-caption-bottom-right",
+}
+
+
+def _hex(color: Color) -> str:
+    return f"#{color.r:02x}{color.g:02x}{color.b:02x}"
+
+
+def _caption_block(project: ExportProject) -> str:
+    """The map's title and description, pinned to a corner of the viewport.
+
+    **A plain block, not an `om-overlay`.** Every overlay anchor the runtime has
+    is a *map* anchor - a coordinate, or the current selection - so a caption
+    built from one would slide off the screen the moment the reader panned. A
+    caption belongs to the viewport, so it is positioned the same way the credit
+    component is.
+
+    Both strings come from QGIS project metadata, so they are escaped rather
+    than trusted as markup.
+    """
+    settings = project.settings
+    parts: list[str] = []
+
+    if settings.show_title and project.title:
+        parts.append(
+            f'      <div class="om-caption-title">{_escape_text(project.title)}</div>'
+        )
+    if settings.show_abstract and project.abstract:
+        parts.append(
+            '      <div class="om-caption-abstract">'
+            f"{_escape_text(project.abstract)}</div>"
+        )
+
+    if not parts:
+        return ""
+
+    corner = CAPTION_CORNER_CLASSES[settings.title_corner]
+    return "\n".join([f'    <div class="om-caption {corner}">', *parts, "    </div>"])
+
+
+def _widget_color_block(project: ExportProject) -> str:
+    """Widget colours as CSS custom properties.
+
+    Custom properties are the runtime's own theming surface, and unlike ordinary
+    rules they *inherit through shadow boundaries* - which is the only reason
+    this reaches widgets that render into shadow roots. Empty when neither
+    colour is set, so a default export is byte-identical to one built before
+    this existed.
+    """
+    settings = project.settings
+    declarations: list[str] = []
+
+    if settings.widget_background is not None:
+        background = _hex(settings.widget_background)
+        declarations.append(f"        --om-widget-bg: {background};")
+        declarations.append(f"        --om-widget-hover-bg: {background};")
+    if settings.widget_foreground is not None:
+        foreground = _hex(settings.widget_foreground)
+        declarations.append(f"        --om-widget-fg: {foreground};")
+        declarations.append(f"        --om-widget-muted: {foreground};")
+
+    if not declarations:
+        return ""
+    return "\n".join(["      :root {", *declarations, "      }"])
+
+
+def _attribution_block(project: ExportProject) -> str:
+    """The data-credit line for the artifact's credit component.
+
+    Empty when no layer carries a credit -- an export of unattributed data
+    should not grow a "Data: " label with nothing after it.
+
+    These strings come from `QgsMapLayer` metadata, which is author-controlled
+    text, so they are escaped rather than trusted as markup.
+    """
+    credits = collect_attributions(project)
+    if not credits:
+        return ""
+    joined = "; ".join(_escape_text(credit) for credit in credits)
+    return f'      <span class="om-credit-data">Data: {joined}</span>'

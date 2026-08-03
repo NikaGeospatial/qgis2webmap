@@ -37,6 +37,7 @@ from nika_onlymap_exporter.packaging.asset_embedder import (
 from nika_onlymap_exporter.packaging.dependency_scanner import (
     measure_data_bytes,
     scan,
+    standalone_ineligible_reason,
 )
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle, sha256_of
 from nika_onlymap_exporter.writers.onlymap_writer import (
@@ -106,6 +107,23 @@ class TestCompression:
         """Base64 adds a third; gzip has to save more than that to be worth it."""
         repetitive = b'{"key":"value"}' * 500
         assert len(gzip_base64(repetitive)) < len(repetitive)
+
+    def test_compression_is_reproducible(self) -> None:
+        """Regression: the gzip header defaults its mtime to *now*.
+
+        Two exports of one project differed by four bytes inside a base64 blob,
+        which broke byte-for-byte comparison of artifacts and wrote the export
+        time into a file that is supposed to carry nothing incidental.
+        """
+        data = b'{"type":"FeatureCollection"}' * 100
+        assert gzip_base64(data) == gzip_base64(data)
+
+    def test_no_timestamp_is_embedded(self) -> None:
+        """Bytes 4-8 of a gzip stream are the modified time. They must be zero."""
+        import base64
+
+        raw = base64.b64decode(gzip_base64(b"x" * 100))
+        assert raw[4:8] == b"\x00\x00\x00\x00"
 
     def test_small_data_stays_readable(self) -> None:
         assert should_compress_data(1024) is False
@@ -178,6 +196,22 @@ class TestDependencyScanner:
         assert any("needs no credentials" in i.detail for i in report.items)
 
 
+class TestStandaloneEligibility:
+    """Issue #29: the single file is the default only when it can travel."""
+
+    def test_an_ordinary_project_is_eligible(self) -> None:
+        assert standalone_ineligible_reason(make_project()) is None
+
+    def test_an_oversized_project_says_why_and_names_the_size(self) -> None:
+        big = dict(GEOJSON)
+        big["features"] = GEOJSON["features"] * 300_000
+        reason = standalone_ineligible_reason(make_project([make_layer(geojson=big)]))
+
+        assert reason is not None
+        assert "MB" in reason
+        assert "Share ZIP" in reason
+
+
 class TestWriterCompression:
     def test_compressed_artifact_is_much_smaller(self, tmp_path) -> None:
         writer = OnlyMapWriter(runtime_provider=FakeRuntime())
@@ -244,6 +278,25 @@ class TestExporters:
             readme = archive.read("map/README.txt").decode()
         assert "HOW TO OPEN IT" in readme
         assert "no tracking" in readme
+
+    def test_a_title_that_looks_like_a_token_is_not_substituted_twice(
+        self, tmp_path
+    ) -> None:
+        """The README builder gets the same single-pass rule as the HTML writer.
+
+        Replacing tokens in a loop rescans content already inserted, so a
+        project titled "@GENERATOR@" had the provenance line pasted into its own
+        heading. The title must survive verbatim.
+        """
+        _, outcome = build_artifact(
+            make_project(title="@GENERATOR@"),
+            tmp_path / "mapdir",
+            mode=OutputMode.FOLDER,
+            writer=self._writer(),
+        )
+        readme = (outcome.path / "README.txt").read_text()
+        assert "@GENERATOR@" in readme
+        assert readme.count("OnlyMap runtime") == 1
 
     def test_folder_export_contains_the_entry_file(self, tmp_path) -> None:
         _, outcome = build_artifact(

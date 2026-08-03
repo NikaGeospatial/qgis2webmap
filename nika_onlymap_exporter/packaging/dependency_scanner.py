@@ -63,6 +63,24 @@ def measure_data_bytes(project: ExportProject) -> int:
     return total
 
 
+def standalone_ineligible_reason(project: ExportProject) -> str | None:
+    """Why this project cannot ship as one HTML file, or `None` if it can.
+
+    Issue #29's rule: Standalone HTML is the default *when it is eligible*, and
+    when it is not the user is told exactly why rather than handed a file that
+    is impractical to send. Pure, so the dialog can call it on every change
+    without touching disk.
+    """
+    data_bytes = measure_data_bytes(project)
+    if data_bytes > SINGLE_FILE_WARN_BYTES:
+        return (
+            f"The layer data is {data_bytes / 1024 / 1024:.0f} MB. A single HTML "
+            f"file over {SINGLE_FILE_WARN_BYTES // 1024 // 1024} MB is rejected "
+            "by most mail services, so Share ZIP is the practical choice."
+        )
+    return None
+
+
 def scan(
     project: ExportProject,
     report: FidelityReportBuilder,

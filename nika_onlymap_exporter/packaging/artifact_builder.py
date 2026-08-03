@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -52,9 +53,12 @@ def build_readme(
         "@SIZE_LINE@": size_line,
         "@GENERATOR@": "-- " + generator_line_first_line(result),
     }
-    for token, value in replacements.items():
-        template = template.replace(token, value)
-    return template
+    # One regex pass, for the same reason `OnlyMapWriter.render_html` uses one:
+    # a sequential loop rescans content it has already inserted, so a project
+    # titled "@GENERATOR@" would have the provenance line substituted into its
+    # own heading. A single pass can only ever match the template's own tokens.
+    pattern = re.compile("|".join(re.escape(token) for token in replacements))
+    return pattern.sub(lambda match: replacements[match.group(0)], template)
 
 
 def generator_line_first_line(result: ArtifactResult) -> str:
@@ -81,7 +85,16 @@ def build_artifact(
 
     with tempfile.TemporaryDirectory(prefix="qgis2webmap-") as staging:
         staging_path = Path(staging)
-        result = writer.write(project, staging_path, mode=mode, compress=compress)
+        # Only the folder tier unbundles. The other two are opened straight from
+        # a filesystem, where a module script cannot be fetched from a sibling
+        # file - and the folder tier exists precisely to be served over HTTP.
+        result = writer.write(
+            project,
+            staging_path,
+            mode=mode,
+            compress=compress,
+            unbundle=mode is OutputMode.FOLDER,
+        )
 
         # Folder and zip tiers carry a README; a single file has nowhere to put
         # one, and its filename already says what it is.
@@ -89,7 +102,13 @@ def build_artifact(
             instruction = (
                 "Extract this zip, then open index.html."
                 if mode is OutputMode.SHARE_ZIP
-                else "Open index.html in this folder."
+                else (
+                    "Upload this folder to a web server and open index.html "
+                    "from there. Keep index.html and onlymap.js together. "
+                    "Opening index.html straight off your disk will not work: "
+                    "browsers refuse to load the runtime that way, which is "
+                    "what the single-file export is for."
+                )
             )
             (staging_path / "README.txt").write_text(
                 build_readme(project, result, instruction), encoding="utf-8"

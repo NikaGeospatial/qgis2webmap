@@ -38,7 +38,9 @@ class FolderExporter:
             mode=self.mode,
             size_bytes=total,
             open_instruction=(
-                "Open index.html inside this folder. Keep the folder's contents "
-                "together."
+                "Upload this folder to a web server, then open index.html from "
+                "there. Keep index.html and onlymap.js together. This tier does "
+                "not open straight off your disk - use the single-file export "
+                "for that."
             ),
         )

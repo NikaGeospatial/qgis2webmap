@@ -8,7 +8,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from dataclasses import fields
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -25,11 +27,15 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
     SymbolSpec,
 )
+from nika_onlymap_exporter.core.license_policy import CapVerdict
+from nika_onlymap_exporter.packaging import runtime_manager
 from nika_onlymap_exporter.packaging.runtime_manager import (
     LocalRuntime,
     RuntimeBundle,
     RuntimeUnavailableError,
     discover_runtime_dir,
+    lock_mismatches,
+    read_lock,
     sha256_of,
 )
 from nika_onlymap_exporter.writers.onlymap_writer import (
@@ -171,6 +177,80 @@ class TestWriter:
         assert result.mode is OutputMode.STANDALONE_HTML
 
 
+class TestCreditComponent:
+    """The OnlyMap corner component and its data credits.
+
+    Issue #29 makes both acquisition calls to action part of the artifact
+    contract, and sets release gates on them: keyboard accessible, not covering
+    map controls, and no exfiltration of map data.
+    """
+
+    def html(self, **project_overrides) -> str:
+        return OnlyMapWriter(runtime_provider=FakeRuntime()).render_html(
+            make_project(**project_overrides),
+            FakeRuntime().load(),
+            verdict=CapVerdict(allowed=True),
+        )
+
+    def test_both_calls_to_action_are_present(self) -> None:
+        markup = self.html()
+        assert "Built with" in markup
+        assert ">Enhance</a>" in markup
+        assert ">Host</a>" in markup
+
+    def test_the_component_sits_in_the_bottom_right(self) -> None:
+        markup = self.html()
+        credit_css = markup.split(".om-credit {")[1].split("}")[0]
+        assert "position: absolute" in credit_css
+        assert "right: 12px" in credit_css
+        assert "bottom: 12px" in credit_css
+
+    def test_it_is_reachable_by_keyboard(self) -> None:
+        """`:focus-within` is what expands it for a tabbing user, no script."""
+        markup = self.html()
+        assert ".om-credit:focus-within .om-credit-row" in markup
+        assert "<button" in markup.split('class="om-credit"')[1]
+
+    def test_it_never_posts_anywhere(self) -> None:
+        """The release gate: opening the map must not move its data."""
+        credit = (
+            self.html().split('<footer class="om-credit">')[1].split("</footer>")[0]
+        )
+        for forbidden in ("fetch(", "XMLHttpRequest", "<form", "navigator.sendBeacon"):
+            assert forbidden not in credit
+
+    def test_no_credits_means_no_data_line(self) -> None:
+        assert 'class="om-credit-data"' not in self.html()
+
+    def test_layer_attribution_reaches_the_artifact(self) -> None:
+        """The gap this closes: read from QGIS, stored, and never rendered."""
+        layer = make_project().layers[0]
+        credited = ExportLayer(
+            **{
+                **{f.name: getattr(layer, f.name) for f in fields(layer)},
+                "attribution": "© OSM contributors",
+            }
+        )
+        markup = self.html(layers=(credited,))
+
+        assert 'class="om-credit-data"' in markup
+        assert "© OSM contributors" in markup
+
+    def test_a_credit_cannot_inject_markup(self) -> None:
+        """Layer metadata is author-controlled text, not trusted markup."""
+        layer = make_project().layers[0]
+        hostile = ExportLayer(
+            **{
+                **{f.name: getattr(layer, f.name) for f in fields(layer)},
+                "attribution": "<img src=x onerror=alert(1)>",
+            }
+        )
+        markup = self.html(layers=(hostile,))
+
+        assert "<img src=x" not in markup
+        assert "&lt;img src=x" in markup
+
+
 class TestRuntimeManager:
     def test_missing_runtime_raises_rather_than_degrading(self, tmp_path) -> None:
         """A placeholder runtime is a blank page for the recipient."""
@@ -191,3 +271,51 @@ class TestRuntimeManager:
         assert bundle.total_bytes > 1_000_000
         assert bundle.version != ""
         assert len(bundle.sha256) == 64
+
+    def test_no_developer_paths_anywhere_in_the_module(self) -> None:
+        """It ships to macOS and Windows, where `~/Nika/...` does not exist.
+
+        A hardcoded checkout path also *hides* a missing runtime on the one
+        machine that has a checkout, so the packaging gap only ever surfaces on
+        a user's machine.
+
+        `Path.home()` itself is fine and necessary - `default_cache_dir` builds
+        the per-platform cache location from it. What must never appear is a
+        path naming somebody's project directory.
+        """
+        source = Path(runtime_manager.__file__).read_text(encoding="utf-8")
+        for developer_path in ("Nika/nika-agent", "/Users/", "C:\\", "/nix/store"):
+            assert developer_path not in source, f"{developer_path} is hardcoded"
+
+    def test_discovery_uses_only_relative_candidates(self) -> None:
+        """Discovery must resolve from a checkout and resolve to nothing else."""
+        source = Path(runtime_manager.__file__).read_text(encoding="utf-8")
+        body = source.split("def discover_runtime_dir")[1].split("\ndef ")[0]
+        assert "Path.home()" not in body
+
+
+class TestRuntimeLock:
+    """`runtime-lock.json` pins the OnlyMap build the plugin is tested against."""
+
+    def test_the_lock_file_ships_and_parses(self) -> None:
+        lock = read_lock()
+        assert lock, "runtime-lock.json is missing or unreadable"
+        assert lock["version"]
+        assert set(lock["files"]) == {"onlymap.standalone.js", "onlymapjs.css"}
+
+    def test_matching_bytes_produce_no_warning(self) -> None:
+        directory = discover_runtime_dir()
+        if directory is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        bundle = LocalRuntime(directory).load()
+        assert bundle.lock_warnings == (), (
+            "the runtime on disk is not the pinned build; "
+            "run scripts/lock_runtime.py if the move was deliberate"
+        )
+
+    def test_an_unexpected_build_is_reported(self) -> None:
+        assert lock_mismatches(b"not the runtime", b"not the css")
+
+    def test_a_test_double_trips_nothing(self) -> None:
+        """Providers own the check, so a fake bundle carries no warnings."""
+        assert FakeRuntime().load().lock_warnings == ()

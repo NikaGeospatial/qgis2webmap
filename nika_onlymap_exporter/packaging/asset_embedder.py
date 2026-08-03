@@ -41,8 +41,17 @@ GZIP_LEVEL = 9
 
 
 def gzip_base64(data: bytes) -> str:
-    """Compress and base64-encode. Base64 costs 33%; gzip saves far more."""
-    return base64.b64encode(gzip.compress(data, GZIP_LEVEL)).decode("ascii")
+    """Compress and base64-encode. Base64 costs 33%; gzip saves far more.
+
+    `mtime=0` is load-bearing, not tidiness. The gzip header carries a modified
+    time, and `gzip.compress` defaults it to *now* - so the same project
+    exported twice produced two different files, differing only in four bytes
+    buried inside a base64 blob. That defeats the deterministic-artifact promise
+    in `ArtifactResult`, makes a diff between two exports unreadable, and leaks
+    the export time into a file whose whole point is that it carries no
+    incidental data about its author.
+    """
+    return base64.b64encode(gzip.compress(data, GZIP_LEVEL, mtime=0)).decode("ascii")
 
 
 def compression_ratio(original: bytes) -> float:
