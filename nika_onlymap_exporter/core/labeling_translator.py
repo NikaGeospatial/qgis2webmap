@@ -39,15 +39,21 @@ def _color_from_qcolor(qcolor: object) -> Color | None:
 
 
 def collect_character_set(layer: QgsVectorLayer, field_name: str) -> str | None:
-    """Distinct non-ASCII characters present in the label field.
+    """Every distinct character the label field uses, or `None` if all ASCII.
 
-    Returns `None` when everything is ASCII, since the default atlas already
-    covers that and an unnecessary `character-set` attribute is noise.
+    `text-character-set` *replaces* the runtime's atlas rather than extending
+    it, so this must return the whole set. Returning only the non-ASCII
+    additions would evict every ASCII glyph: "Zurich, Geneve" would keep the
+    accents and lose the letters, and the labels would render as blanks.
+
+    `None` when everything is ASCII, since the default atlas already covers
+    that and an unnecessary attribute is noise.
     """
     if not field_name or field_name not in layer.fields().names():
         return None
 
-    extra: set[str] = set()
+    characters: set[str] = set()
+    has_extra = False
     for index, feature in enumerate(layer.getFeatures()):
         if index >= CHARACTER_SCAN_LIMIT:
             break
@@ -55,13 +61,14 @@ def collect_character_set(layer: QgsVectorLayer, field_name: str) -> str | None:
         if value is None:
             continue
         for char in str(value):
+            characters.add(char)
             if char not in ASCII_PRINTABLE:
-                extra.add(char)
+                has_extra = True
 
-    if not extra:
+    if not has_extra:
         return None
     # Sorted so the attribute is byte-stable across runs.
-    return "".join(sorted(extra))
+    return "".join(sorted(characters))
 
 
 def translate_labeling(
@@ -117,8 +124,9 @@ def translate_labeling(
     if character_set:
         report.preserved(
             subject,
-            f"Label text uses {len(character_set)} non-ASCII character(s); the "
-            "font atlas is extended to cover them.",
+            "Label text uses characters outside the default font atlas; the "
+            f"atlas is rebuilt to cover all {len(character_set)} character(s) "
+            "the labels use.",
             layer_id,
         )
 
