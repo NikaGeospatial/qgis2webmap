@@ -33,9 +33,10 @@ from typing import TYPE_CHECKING
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
 from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QTextDocument
+from qgis.PyQt.QtGui import QDesktopServices, QPalette, QTextDocument
 from qgis.PyQt.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -48,6 +49,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QTabWidget,
     QTextBrowser,
     QTreeWidget,
@@ -299,6 +301,7 @@ class MainDialog(QDialog):
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
+        layout.addWidget(self._build_fidelity_strip())
         layout.addLayout(self._build_button_row())
 
         # The list tracks QGIS live; there is no refresh button because there is
@@ -354,15 +357,23 @@ class MainDialog(QDialog):
         form.addRow("Map name", self.name_edit)
         layout.addLayout(form)
 
+        # Radio buttons, not checkboxes. These three are mutually exclusive, and
+        # the previous checkbox version had to unpick the others by hand on every
+        # click - which promises multi-select, does not deliver it, and reads
+        # wrong to a screen reader. A QButtonGroup enforces the exclusivity that
+        # the model already had.
         self.mode_box = QGroupBox("How to share it", page)
         mode_layout = QVBoxLayout(self.mode_box)
-        self.mode_checks: dict[OutputMode, QCheckBox] = {}
+        self.mode_group = QButtonGroup(self.mode_box)
+        self.mode_group.setExclusive(True)
+        self.mode_checks: dict[OutputMode, QRadioButton] = {}
         for mode, label in MODE_LABELS.items():
-            check = QCheckBox(label, self.mode_box)
-            check.setChecked(mode is self.state.output_mode)
-            check.clicked.connect(lambda _c, m=mode: self._on_mode_selected(m))
-            mode_layout.addWidget(check)
-            self.mode_checks[mode] = check
+            button = QRadioButton(label, self.mode_box)
+            button.setChecked(mode is self.state.output_mode)
+            button.clicked.connect(lambda _c, m=mode: self._on_mode_selected(m))
+            self.mode_group.addButton(button)
+            mode_layout.addWidget(button)
+            self.mode_checks[mode] = button
         layout.addWidget(self.mode_box)
 
         data_box = QGroupBox("Data", page)
@@ -396,7 +407,29 @@ class MainDialog(QDialog):
         layout.addWidget(data_box)
 
         layout.addStretch(1)
+
+        # The tab's dead space, spent saying what pressing Export will produce.
+        # Kept at the bottom so it reads as a consequence of the choices above
+        # rather than another setting.
+        self.export_summary = QLabel("", page)
+        self.export_summary.setWordWrap(True)
+        self.export_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        layout.addWidget(self.export_summary)
         return page
+
+    def _update_export_summary(self, selected_count: int) -> None:
+        """Name the artifact in the same words the buttons use."""
+        if not selected_count:
+            self.export_summary.setText("")
+            return
+
+        produced = {
+            OutputMode.STANDALONE_HTML: "one HTML file that opens by double-click",
+            OutputMode.SHARE_ZIP: "a zip to email or upload",
+            OutputMode.FOLDER: "a folder to publish to a web server",
+        }[self.state.output_mode]
+        layers = f"{selected_count} layer{'s' if selected_count != 1 else ''}"
+        self.export_summary.setText(f"Export writes {produced}, carrying {layers}.")
 
     def _on_extent_changed(self) -> None:
         value = self.extent_combo.currentData()
@@ -414,9 +447,10 @@ class MainDialog(QDialog):
         self.state.map_name = text
 
     def _on_mode_selected(self, mode: OutputMode) -> None:
+        # The button group handles deselecting the others; this only records the
+        # choice and refreshes what the summary says will be produced.
         self.state.output_mode = mode
-        for candidate, check in self.mode_checks.items():
-            check.setChecked(candidate is mode)
+        self._update_export_readiness()
 
     # ---- Layers tab -----------------------------------------------------
 
@@ -909,6 +943,7 @@ class MainDialog(QDialog):
     def _show_fidelity(self, report: FidelityReportBuilder) -> None:
         self.fidelity_tree.clear()
         self._fidelity_is_stale = False
+        self._update_fidelity_strip(report)
         for entry in sorted(report.items, key=lambda i: STATUS_ORDER[i.status]):
             item = QTreeWidgetItem(self.fidelity_tree)
             item.setText(0, entry.subject)
@@ -1018,6 +1053,74 @@ class MainDialog(QDialog):
         row.addWidget(close)
         return row
 
+    # ---- Fidelity strip -------------------------------------------------
+
+    def _build_fidelity_strip(self) -> QWidget:
+        """What the export changes, visible from every tab.
+
+        This plugin's one real advantage over the incumbent is telling you what
+        your recipient loses. Putting that behind a tab means it is read after
+        the decision it should have informed, if at all - so the count lives
+        here, always on screen, and opens the detail when clicked.
+        """
+        strip = QWidget(self)
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(0, 0, 0, 0)
+
+        self.fidelity_summary = QLabel("", strip)
+        # Derived from the palette rather than a hardcoded grey: this dialog sits
+        # inside whatever Qt theme the user runs, light or dark, and a fixed
+        # colour is unreadable in one of them.
+        self.fidelity_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        row.addWidget(self.fidelity_summary, 1)
+
+        self.fidelity_link = QPushButton("What changes?", strip)
+        self.fidelity_link.setFlat(True)
+        self.fidelity_link.clicked.connect(self._show_fidelity_tab)
+        row.addWidget(self.fidelity_link)
+        return strip
+
+    def _show_fidelity_tab(self) -> None:
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == "Fidelity":
+                self.tabs.setCurrentIndex(index)
+                return
+
+    def _update_fidelity_strip(self, report) -> None:
+        """Summarise the report in one line, problems first.
+
+        Says nothing rather than "0 things change" when the export is clean:
+        an always-present count trains people to ignore it, and the absence of a
+        warning is itself the message.
+        """
+        items = list(getattr(report, "items", ()) or ())
+        notable = [
+            item
+            for item in items
+            if item.status
+            in (
+                FidelityStatus.BLOCKED,
+                FidelityStatus.UNSUPPORTED,
+                FidelityStatus.APPROXIMATED,
+                FidelityStatus.RASTER_FALLBACK,
+            )
+        ]
+        blocked = sum(1 for item in notable if item.status is FidelityStatus.BLOCKED)
+
+        if blocked:
+            self.fidelity_summary.setText(
+                f"{blocked} layer{'s' if blocked != 1 else ''} cannot be exported."
+            )
+        elif notable:
+            count = len(notable)
+            self.fidelity_summary.setText(
+                f"{count} thing{'s' if count != 1 else ''} change on export."
+            )
+        else:
+            self.fidelity_summary.setText("")
+
+        self.fidelity_link.setVisible(bool(items))
+
     # ---- Live preview ---------------------------------------------------
 
     def _on_live_toggled(self, enabled: bool) -> None:
@@ -1108,6 +1211,8 @@ class MainDialog(QDialog):
             self._set_ready(
                 True, f"{count} layer{'s' if count != 1 else ''} will be exported."
             )
+
+        self._update_export_summary(len(selected))
 
     def _set_ready(self, ready: bool, message: str) -> None:
         self.export_button.setEnabled(ready)

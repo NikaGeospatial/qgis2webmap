@@ -266,6 +266,142 @@ class TestPreview:
         assert "om-view-changed" not in outcome.path.read_text()
 
 
+class TestOutputModeIsExclusive:
+    """Three mutually exclusive choices, expressed as such.
+
+    They were checkboxes that unpicked each other by hand, which promises
+    multi-select without delivering it and reads wrong to a screen reader.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_they_are_radio_buttons(self, qgis_app, project, make_memory_layer) -> None:
+        from qgis.PyQt.QtWidgets import QRadioButton
+
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.mode_checks
+        for button in dialog.mode_checks.values():
+            assert isinstance(button, QRadioButton)
+        dialog.close()
+
+    def test_exactly_one_is_ever_selected(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        for mode in OutputMode:
+            dialog.mode_checks[mode].click()
+            chosen = [m for m, b in dialog.mode_checks.items() if b.isChecked()]
+            assert chosen == [mode]
+            assert dialog.state.output_mode is mode
+        dialog.close()
+
+    def test_the_group_enforces_it_rather_than_the_handler(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.mode_group.exclusive()
+        dialog.close()
+
+
+class TestFidelityStrip:
+    """The count is on screen from every tab, not only inside one."""
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_a_clean_export_says_nothing(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """An always-present "0 changes" trains people to ignore the strip."""
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._update_fidelity_strip(FidelityReportBuilder())
+        assert dialog.fidelity_summary.text() == ""
+        dialog.close()
+
+    def test_it_counts_things_that_change(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        dialog = self._dialog(project, make_memory_layer)
+        report = FidelityReportBuilder()
+        report.unsupported("Layer 'a'", "Uses a renderer that does not travel.")
+        dialog._update_fidelity_strip(report)
+        assert "1 thing" in dialog.fidelity_summary.text()
+        dialog.close()
+
+    def test_blocked_layers_outrank_a_plain_count(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """ "Cannot be exported" is a different message from "will change"."""
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        dialog = self._dialog(project, make_memory_layer)
+        report = FidelityReportBuilder()
+        report.unsupported("Layer 'a'", "Something changes.")
+        report.blocked("Layer 'b'", "Could not be read at all.")
+        dialog._update_fidelity_strip(report)
+        assert "cannot be exported" in dialog.fidelity_summary.text()
+        dialog.close()
+
+
+class TestExportSummary:
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_it_names_the_artifact_the_chosen_mode_produces(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.mode_checks[OutputMode.SHARE_ZIP].click()
+        assert "zip" in dialog.export_summary.text()
+
+        dialog.mode_checks[OutputMode.STANDALONE_HTML].click()
+        assert "HTML" in dialog.export_summary.text()
+        dialog.close()
+
+    def test_it_says_nothing_when_no_layer_is_selected(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        dialog = self._dialog(project, make_memory_layer)
+        for index in range(dialog.layer_tree.topLevelItemCount()):
+            dialog.layer_tree.topLevelItem(index).setCheckState(
+                1, Qt.CheckState.Unchecked
+            )
+        assert dialog.export_summary.text() == ""
+        dialog.close()
+
+
 class TestLivePreviewLifecycle:
     """The dialog owns a server and a thread; both must die with it.
 
