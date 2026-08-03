@@ -882,3 +882,76 @@ class TestAttributionCollection:
             ]
         )
         assert collect_attributions(project) == ()
+
+
+class TestThinLinesStayClickable:
+    """deck.gl picks against what it drew, so drawn width *is* hit width.
+
+    A QGIS hairline exports as a sub-pixel line: visible, and effectively
+    impossible to click, which makes its popup unreachable. Testing found this.
+    """
+
+    def _line_layer(self, width: float):
+        from nika_onlymap_exporter.core.export_ir import (
+            Color,
+            ExportLayer,
+            GeometryKind,
+            RendererKind,
+            RendererSpec,
+            SourceKind,
+            SymbolSpec,
+        )
+
+        return ExportLayer(
+            layer_id="l",
+            name="Rivers",
+            geometry_kind=GeometryKind.LINE,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson={"type": "FeatureCollection", "features": []},
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(
+                    stroke_color=Color(r=0, g=0, b=255), stroke_width=width
+                ),
+            ),
+        )
+
+    def test_a_hairline_gets_a_minimum_drawn_width(self) -> None:
+        markup = build_layer_element(self._line_layer(0.26))
+        assert "line-width-min-pixels" in markup
+
+    def test_the_authored_width_is_still_emitted(self) -> None:
+        """The floor must not overwrite what QGIS actually said."""
+        markup = build_layer_element(self._line_layer(0.26))
+        assert 'get-line-width="0.26"' in markup
+
+    def test_polygons_do_not_get_a_thickened_outline(self) -> None:
+        """A polygon is picked by its interior; a fat outline would eat it."""
+        from nika_onlymap_exporter.core.export_ir import (
+            Color,
+            ExportLayer,
+            GeometryKind,
+            RendererKind,
+            RendererSpec,
+            SourceKind,
+            SymbolSpec,
+        )
+
+        layer = ExportLayer(
+            layer_id="p",
+            name="Parcels",
+            geometry_kind=GeometryKind.POLYGON,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson={"type": "FeatureCollection", "features": []},
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(
+                    fill_color=Color(r=1, g=2, b=3),
+                    stroke_color=Color(r=0, g=0, b=0),
+                    stroke_width=0.26,
+                ),
+            ),
+        )
+        assert "line-width-min-pixels" not in build_layer_element(layer)

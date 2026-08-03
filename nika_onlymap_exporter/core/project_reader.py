@@ -55,6 +55,27 @@ def group_path_for(node: QgsLayerTreeNode) -> tuple[str, ...]:
     return tuple(reversed(path))
 
 
+def _has_tile_layer(project: QgsProject) -> bool:
+    """Does the project carry an XYZ/WMS backdrop of its own?
+
+    Detected by provider name rather than layer class: `wms` is what QGIS uses
+    for XYZ tile layers as well as real WMS, and both are backdrops we do not
+    export. Anything unexpected is treated as "no", because a false warning
+    about a missing basemap is worse than a missing one.
+    """
+    tile_providers = {"wms", "xyz", "arcgismapserver", "arcgisrest"}
+    for layer in project.mapLayers().values():
+        provider = getattr(layer, "providerType", None)
+        if provider is None:
+            continue
+        try:
+            if str(provider()).lower() in tile_providers:
+                return True
+        except Exception:  # pragma: no cover - defensive against provider quirks
+            continue
+    return False
+
+
 def resolve_title(project: QgsProject, override: str | None = None) -> str:
     """Pick the exported map title.
 
@@ -217,6 +238,17 @@ def read_project(
     note = basemap_note(settings.basemap)
     if note is not None:
         report.approximated("Basemap", note)
+    elif _has_tile_layer(project):
+        # The project has a backdrop and the export will not. Silence here is
+        # how someone ships a map of bare shapes floating on white and only
+        # finds out when the recipient asks what they are looking at.
+        report.unsupported(
+            "Basemap",
+            "This project has a tile layer, but the export has no basemap, so "
+            "the map will have a blank background. Choose one under Basemap on "
+            "the Map tab if you want a backdrop - note that it makes the map "
+            "load tiles from the internet each time it is opened.",
+        )
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     title = resolve_title(project, title_override)

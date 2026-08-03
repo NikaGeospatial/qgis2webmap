@@ -388,6 +388,14 @@ class MainDialog(QDialog):
         )
         self.name_edit.textChanged.connect(self._on_name_changed)
         form.addRow("Map name", self.name_edit)
+        form.addRow(
+            "",
+            _help_label(
+                "Shown on the map and in the browser tab. Leave blank to use "
+                "the project title.",
+                page,
+            ),
+        )
         layout.addLayout(form)
 
         # Radio buttons, not checkboxes. These three are mutually exclusive, and
@@ -409,6 +417,29 @@ class MainDialog(QDialog):
             self.mode_checks[mode] = button
         layout.addWidget(self.mode_box)
 
+        # Its own group rather than a row inside "Data": a basemap is not the
+        # project's data, it is the backdrop behind it - and it is the only
+        # setting whose consequence lands on the recipient, so it should be
+        # found rather than come across.
+        basemap_box = QGroupBox("Basemap", page)
+        basemap_form = QFormLayout(basemap_box)
+
+        self.basemap_combo = QComboBox(basemap_box)
+        for value, label in BASEMAP_LABELS.items():
+            self.basemap_combo.addItem(label, value)
+        basemap_index = self.basemap_combo.findData(self.state.basemap)
+        self.basemap_combo.setCurrentIndex(basemap_index if basemap_index >= 0 else 0)
+        self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
+        basemap_form.addRow("Show behind the map", self.basemap_combo)
+
+        # Warning rather than help: this is the only setting that changes what
+        # the *recipient's* machine does, and it cannot be undone after sending.
+        self.basemap_warning = QLabel("", basemap_box)
+        self.basemap_warning.setWordWrap(True)
+        basemap_form.addRow("", self.basemap_warning)
+        self._update_basemap_warning()
+        layout.addWidget(basemap_box)
+
         data_box = QGroupBox("Data", page)
         data_form = QFormLayout(data_box)
 
@@ -419,21 +450,14 @@ class MainDialog(QDialog):
         self.extent_combo.setCurrentIndex(extent_index if extent_index >= 0 else 0)
         self.extent_combo.currentIndexChanged.connect(self._on_extent_changed)
         data_form.addRow("Open the map on", self.extent_combo)
-
-        self.basemap_combo = QComboBox(data_box)
-        for value, label in BASEMAP_LABELS.items():
-            self.basemap_combo.addItem(label, value)
-        basemap_index = self.basemap_combo.findData(self.state.basemap)
-        self.basemap_combo.setCurrentIndex(basemap_index if basemap_index >= 0 else 0)
-        self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
-        data_form.addRow("Basemap", self.basemap_combo)
-
-        # Warning rather than help: this is the only setting that changes what
-        # the *recipient's* machine does, and it cannot be undone after sending.
-        self.basemap_warning = QLabel("", data_box)
-        self.basemap_warning.setWordWrap(True)
-        data_form.addRow("", self.basemap_warning)
-        self._update_basemap_warning()
+        data_form.addRow(
+            "",
+            _help_label(
+                "Where the map is positioned when someone opens it. They can "
+                "still pan and zoom anywhere afterwards.",
+                data_box,
+            ),
+        )
 
         # "Maintain" first and selected: rounding coordinates is the only
         # setting in this dialog that throws data away, so it is opt-in and
@@ -941,6 +965,14 @@ class MainDialog(QDialog):
         )
         _apply_saved_color(self.foreground_button, self.state.widget_foreground)
         form.addRow("Text and icons", self.foreground_button)
+        form.addRow(
+            "",
+            _help_label(
+                "Applies to the legend, layer switcher, zoom controls and "
+                "scale bar. Leave both unset to keep the map's own styling.",
+                box,
+            ),
+        )
         return box
 
     def _build_behaviour_group(self, page: QWidget) -> QWidget:

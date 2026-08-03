@@ -70,6 +70,13 @@ TEXT_LAYER_CLASS = "TextLayer"
 DEFAULT_LABEL_COLOR = Color(r=0, g=0, b=0, a=1.0)
 DEFAULT_LABEL_SIZE = 12.0
 
+# The narrowest a line may be drawn, in screen pixels. deck.gl has no separate
+# hit width - it picks against the rendered geometry - so this is simultaneously
+# the smallest clickable target. Two rather than one: a 1px line at a device
+# pixel ratio of 1 is a coin-flip to hit, and the visual difference against a
+# QGIS hairline is slight where the usability difference is not.
+MIN_LINE_PICK_PIXELS = 2.0
+
 DEFAULT_FILL = Color(r=136, g=136, b=136, a=0.8)
 DEFAULT_STROKE = Color(r=51, g=51, b=51, a=1.0)
 
@@ -343,6 +350,16 @@ def build_layer_element(
         # Without this deck.gl treats the width as metres and lines vanish at
         # most zoom levels.
         attributes.append(("line-width-units", "pixels"))
+        # A floor on the drawn width, because deck.gl hit-tests against what it
+        # drew: a QGIS hairline exports as a sub-pixel line that is technically
+        # visible and practically impossible to click, so its popup may as well
+        # not exist. Testing found exactly that.
+        #
+        # It applies to lines only. On a polygon this is the outline, and
+        # thickening that would eat into the fill of small features for no
+        # benefit - a polygon is picked by its interior.
+        if layer.geometry_kind is GeometryKind.LINE:
+            attributes.append(("line-width-min-pixels", _number(MIN_LINE_PICK_PIXELS)))
 
     if layer.geometry_kind is GeometryKind.POINT and symbol.radius:
         attributes.append(("get-point-radius", _number(symbol.radius)))
