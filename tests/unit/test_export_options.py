@@ -54,8 +54,24 @@ def make_project(**settings) -> ExportProject:
 
 
 class TestCaption:
-    def test_nothing_is_emitted_by_default(self) -> None:
-        assert _caption_block(make_project()) == ""
+    def test_the_title_is_drawn_by_default(self) -> None:
+        """Changed deliberately: a map that does not say what it is has no context.
+
+        Testing found people expected the title on the map and did not think to
+        look for a setting. The legend gives up its own heading in exchange, so
+        the title still appears exactly once.
+        """
+        markup = _caption_block(make_project())
+        assert "om-caption-title" in markup
+        assert "Test map" in markup
+
+    def test_the_default_position_is_clear_of_the_map_controls(self) -> None:
+        """All four corners hold chrome; only the centres are free."""
+        assert "om-caption-top-center" in _caption_block(make_project())
+
+    def test_nothing_is_emitted_when_both_parts_are_switched_off(self) -> None:
+        project = make_project(show_title=False, show_abstract=False)
+        assert _caption_block(project) == ""
 
     def test_the_title_appears_when_asked_for(self) -> None:
         markup = _caption_block(make_project(show_title=True))
@@ -70,7 +86,7 @@ class TestCaption:
         project = ExportProject(
             title="Test map",
             abstract=None,
-            settings=ExportSettings(show_abstract=True),
+            settings=ExportSettings(show_abstract=True, show_title=False),
         )
         assert _caption_block(project) == ""
 

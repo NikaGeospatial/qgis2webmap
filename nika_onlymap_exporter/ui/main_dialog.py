@@ -135,11 +135,15 @@ LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 # Marks the per-layer options row, so it is never mistaken for a field row.
 LAYER_OPTIONS_ROLE = "__layer_options__"
 
+# Centres first: they are the only positions not already holding map chrome, so
+# they are what most people should pick.
 CAPTION_CORNER_LABELS = {
-    OverlayCorner.TOP_LEFT: "Top left",
-    OverlayCorner.TOP_RIGHT: "Top right",
-    OverlayCorner.BOTTOM_LEFT: "Bottom left",
-    OverlayCorner.BOTTOM_RIGHT: "Bottom right",
+    OverlayCorner.TOP_CENTER: "Top centre - clear of the controls",
+    OverlayCorner.BOTTOM_CENTER: "Bottom centre - clear of the controls",
+    OverlayCorner.TOP_LEFT: "Top left - shared with the layer switcher",
+    OverlayCorner.TOP_RIGHT: "Top right - shared with the legend",
+    OverlayCorner.BOTTOM_LEFT: "Bottom left - shared with zoom and scale",
+    OverlayCorner.BOTTOM_RIGHT: "Bottom right - shared with the credit",
 }
 
 EXTENT_LABELS = {
@@ -533,6 +537,15 @@ class MainDialog(QDialog):
         # project that no longer exists. Marked rather than recomputed: it is
         # only worth building when the user actually looks at it.
         self._fidelity_is_stale = True
+
+        # Adding or removing a layer in QGIS changes the map, but it changes
+        # nothing in `DialogState` unless that layer already had settings - so
+        # the snapshot the live preview watches stays identical and the preview
+        # silently goes stale. The watcher already coalesces bursts, so this is
+        # one rebuild per change rather than one per signal.
+        if getattr(self, "_server", None) is not None:
+            self._rebuild_timer.start()
+
         if not hasattr(self, "layer_tree"):
             return
 
@@ -806,32 +819,48 @@ class MainDialog(QDialog):
         box = QGroupBox("Caption", page)
         form = QFormLayout(box)
 
-        self.title_check = QCheckBox("Show the map name on the map", box)
+        self.title_check = QCheckBox("Map title", box)
         self.title_check.setChecked(self.state.show_title)
         self.title_check.toggled.connect(self._on_title_toggled)
         form.addRow(self.title_check)
-
-        self.abstract_check = QCheckBox("Show the project description", box)
-        self.abstract_check.setChecked(self.state.show_abstract)
-        self.abstract_check.setToolTip(
-            "The abstract from Project Properties > Metadata. Nothing is shown "
-            "if the project has none."
+        form.addRow(
+            "",
+            _help_label(
+                "Draws the map name over the map. The legend drops its own "
+                "heading while this is on, so the title is not shown twice.",
+                box,
+            ),
         )
+
+        self.abstract_check = QCheckBox("Project description", box)
+        self.abstract_check.setChecked(self.state.show_abstract)
         self.abstract_check.toggled.connect(self._on_abstract_toggled)
         form.addRow(self.abstract_check)
+        form.addRow(
+            "",
+            _help_label(
+                "The abstract from Project Properties > Metadata. Nothing "
+                "appears if the project has none.",
+                box,
+            ),
+        )
 
         self.corner_combo = QComboBox(box)
         for corner, label in CAPTION_CORNER_LABELS.items():
             self.corner_combo.addItem(label, corner.value)
         index = self.corner_combo.findData(self.state.title_corner.value)
         self.corner_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.corner_combo.setToolTip(
-            "Corners are shared with the map controls: the layer switcher sits "
-            "top left, the legend top right, the zoom and scale bottom left, "
-            "and the OnlyMap credit bottom right."
-        )
         self.corner_combo.currentIndexChanged.connect(self._on_corner_changed)
-        form.addRow("Corner", self.corner_combo)
+        form.addRow("Position", self.corner_combo)
+        form.addRow(
+            "",
+            _help_label(
+                "All four corners already hold map controls - switcher top "
+                "left, legend top right, zoom and scale bottom left, credit "
+                "bottom right. The centres are the only clear space.",
+                box,
+            ),
+        )
         return box
 
     def _build_colors_group(self, page: QWidget) -> QWidget:

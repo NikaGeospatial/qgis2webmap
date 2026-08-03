@@ -300,8 +300,10 @@ def _escape_text(value: str) -> str:
 
 CAPTION_CORNER_CLASSES = {
     OverlayCorner.TOP_LEFT: "om-caption-top-left",
+    OverlayCorner.TOP_CENTER: "om-caption-top-center",
     OverlayCorner.TOP_RIGHT: "om-caption-top-right",
     OverlayCorner.BOTTOM_LEFT: "om-caption-bottom-left",
+    OverlayCorner.BOTTOM_CENTER: "om-caption-bottom-center",
     OverlayCorner.BOTTOM_RIGHT: "om-caption-bottom-right",
 }
 

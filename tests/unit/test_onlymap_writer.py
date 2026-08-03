@@ -192,11 +192,23 @@ class TestCreditComponent:
             verdict=CapVerdict(allowed=True),
         )
 
-    def test_both_calls_to_action_are_present(self) -> None:
+    def test_the_attribution_is_present(self) -> None:
         markup = self.html()
         assert "Built with" in markup
-        assert ">Enhance</a>" in markup
-        assert ">Host</a>" in markup
+        assert "OnlyMap" in markup
+
+    def test_no_link_in_the_credit_is_dead(self) -> None:
+        """ "Enhance" and "Host" pointed at pages that returned 404.
+
+        Every exported map carried them, so every recipient met a dead link. They
+        are gone until there is something behind them - for Enhance, something
+        that hands the file to an AI assistant rather than describing how to.
+        """
+        markup = self.html()
+        assert ">Enhance</a>" not in markup
+        assert ">Host</a>" not in markup
+        assert "enhance-with-ai" not in markup
+        assert "onlymap/hosting" not in markup
 
     def test_the_component_sits_in_the_bottom_right(self) -> None:
         markup = self.html()

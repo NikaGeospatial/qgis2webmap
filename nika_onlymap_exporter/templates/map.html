@@ -167,7 +167,12 @@
          credit chip bottom-right. */
       .om-caption {
         position: absolute;
-        z-index: 3;
+        /* Above the runtime's widgets, which set `z-index: 9999` on their own
+           `:host`. At the old value of 3 the caption sat in front of the credit
+           chip (z-index 2) in the bottom corners and behind the legend and scale
+           bar in every other one - so whether the title appeared at all depended
+           on which corner it was in. */
+        z-index: 10000;
         max-width: min(24rem, calc(100% - 24px));
         padding: 0.5rem 0.75rem;
         border-radius: 6px;
@@ -189,6 +194,23 @@
       .om-caption-top-left {
         top: 12px;
         left: 12px;
+      }
+      /* The centres are the only space the map chrome does not already claim:
+         the switcher, legend, zoom controls, scale bar and credit chip take all
+         four corners. `max-width` is reduced here because a centred block grows
+         in both directions and would otherwise reach the corner widgets. */
+      .om-caption-top-center,
+      .om-caption-bottom-center {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: min(24rem, calc(100% - 220px));
+        text-align: center;
+      }
+      .om-caption-top-center {
+        top: 12px;
+      }
+      .om-caption-bottom-center {
+        bottom: 12px;
       }
       .om-caption-top-right {
         top: 12px;
@@ -225,8 +247,14 @@
 
     <!--
       The OnlyMap corner component. Every link is a plain static href to a
-      public documentation page: the artifact never posts anywhere, so opening
-      it cannot move the map's data off the recipient's machine.
+      public page: the artifact never posts anywhere, so opening it cannot move
+      the map's data off the recipient's machine.
+
+      It carried "Enhance" and "Host" calls to action, and both were removed:
+      the pages they pointed at returned 404, and shipping a dead link in every
+      exported map is worse than shipping no link. "Enhance" is only worth
+      restoring if it can hand the file straight to an AI assistant rather than
+      explain in prose how to do that by hand.
     -->
     <footer class="om-credit">
 @ATTRIBUTION@
@@ -237,12 +265,7 @@
       >&#9673;</button>
       <span class="om-credit-row">Built with
         <a href="https://www.nikaplanet.com/onlymap">OnlyMap</a>
-        by <a href="https://nikaplanet.com">NIKA</a><span
-          class="om-credit-sep">&middot;</span><a
-          href="https://docs.nikaplanet.com/onlymap/enhance-with-ai"
-        >Enhance</a><span class="om-credit-sep">&middot;</span><a
-          href="https://docs.nikaplanet.com/onlymap/hosting"
-        >Host</a></span>
+        by <a href="https://nikaplanet.com">NIKA</a></span>
     </footer>
 
 @PREVIEW_HOOK@

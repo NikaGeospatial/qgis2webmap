@@ -57,7 +57,7 @@ class TestSensitivity:
             ("show_zoom_controls", False),
             ("show_scale_bar", False),
             ("popup_on_hover", True),
-            ("show_title", True),
+            ("show_title", False),
             ("show_abstract", True),
             ("title_corner", OverlayCorner.BOTTOM_RIGHT),
             ("widget_background", "#123456"),

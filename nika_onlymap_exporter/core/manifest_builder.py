@@ -660,8 +660,15 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     widgets: list[str] = []
 
     if settings.show_legend:
+        # The legend carries the map title only when nothing else is showing it.
+        # With the caption on - now the default - the title appeared twice on
+        # one screen, once as the caption and once as the legend's heading.
+        legend_title = "" if settings.show_title else project.title
+        title_attribute = (
+            f'title="{escape_attr(legend_title)}" ' if legend_title else ""
+        )
         widgets.append(
-            f'{indent}<om-widget type="legend" title="{escape_attr(project.title)}" '
+            f'{indent}<om-widget type="legend" {title_attribute}'
             f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
         )
     if settings.show_layer_switcher and len(project.layers) > 1:

@@ -10,7 +10,12 @@ email=support@nikaplanet.com
 
 tracker=https://github.com/NikaGeospatial/qgis2webmap/issues
 repository=https://github.com/NikaGeospatial/qgis2webmap
-homepage=https://nikaplanet.com
+# The QGIS approval rules require this to describe the plugin, not the author:
+# "This link should direct users to a page on a website that describes the plugin
+# functionality ... Any other links will result in the plugin being rejected."
+# NIKA is credited through `author`, the About text, the Pages footer and the
+# exported map's own credit component, so nothing is lost by obeying it.
+homepage=https://nikageospatial.github.io/qgis2webmap/
 
 # Exports contain no tracking and make no network requests.
 tags=html,webmap,web,export,offline,map,javascript,onlymap

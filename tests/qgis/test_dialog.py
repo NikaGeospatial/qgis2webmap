@@ -155,7 +155,8 @@ class TestSettingsPersistence:
         from nika_onlymap_exporter.core.export_ir import OverlayCorner
 
         project.writeEntry("qgis2webmap", "widgets", '{"titleCorner": "middle-ish"}')
-        assert load_state(project).title_corner is OverlayCorner.TOP_LEFT
+        # Top centre, because every corner already holds map chrome.
+        assert load_state(project).title_corner is OverlayCorner.TOP_CENTER
 
     def test_settings_for_removed_layers_are_kept(self, project) -> None:
         """QGIS undo restores the layer; its configuration should return too."""

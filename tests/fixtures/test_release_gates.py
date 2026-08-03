@@ -123,8 +123,11 @@ class TestEveryFixtureExports:
         html = result.entry_path.read_text(encoding="utf-8")
 
         assert 'class="om-credit"' in html, name
-        assert ">Enhance</a>" in html, name
-        assert ">Host</a>" in html, name
+        assert "OnlyMap" in html, name
+        # The "Enhance" and "Host" calls to action were removed: both pointed at
+        # pages that 404ed, and a dead link shipped in every exported map.
+        assert ">Enhance</a>" not in html, name
+        assert ">Host</a>" not in html, name
 
     def test_share_zip_is_openable_and_self_contained(
         self, fixture_project, runtime_available, tmp_path

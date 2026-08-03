@@ -209,9 +209,12 @@ class DialogState:
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
     popup_on_hover: bool = False
-    show_title: bool = False
+    # On by default: a map that does not say what it is arrives with no context,
+    # and testing found people expected the title without having to look for a
+    # setting. Top centre because every corner already holds map chrome.
+    show_title: bool = True
     show_abstract: bool = False
-    title_corner: OverlayCorner = OverlayCorner.TOP_LEFT
+    title_corner: OverlayCorner = OverlayCorner.TOP_CENTER
     widget_background: str = ""
     widget_foreground: str = ""
     highlight_color: str = ""
@@ -322,7 +325,10 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_zoom_controls = bool(widgets.get("zoomControls", True))
             state.show_scale_bar = bool(widgets.get("scaleBar", True))
             state.popup_on_hover = bool(widgets.get("popupOnHover", False))
-            state.show_title = bool(widgets.get("showTitle", False))
+            # Defaults to on, matching `DialogState`. A project saved before the
+            # caption existed has no `showTitle` key at all, and should pick up
+            # the new default rather than be pinned to the old one by its silence.
+            state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")

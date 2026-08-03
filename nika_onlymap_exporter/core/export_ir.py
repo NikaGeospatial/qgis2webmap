@@ -115,11 +115,19 @@ class OverlayCorner(str, Enum):
 
     Screen corners, not map coordinates: a caption pinned to a longitude would
     slide off as soon as the reader panned.
+
+    The two centre positions exist because **all four corners are already
+    occupied** by map chrome: the layer switcher top-left, the legend top-right,
+    the zoom controls and scale bar bottom-left, and the credit component
+    bottom-right. A caption in any corner therefore lands on top of something,
+    which is precisely what testing found. The centres are the only free space.
     """
 
     TOP_LEFT = "top_left"
+    TOP_CENTER = "top_center"
     TOP_RIGHT = "top_right"
     BOTTOM_LEFT = "bottom_left"
+    BOTTOM_CENTER = "bottom_center"
     BOTTOM_RIGHT = "bottom_right"
 
 
@@ -606,9 +614,12 @@ class ExportSettings:
     quantize_precision: int | None = None
     simplify_tolerance: float | None = None
     popup_on_hover: bool = False
-    show_title: bool = False
+    # Kept in step with `DialogState`: a Processing run and a dialog export of
+    # the same project must produce the same map, and these are the defaults a
+    # headless caller gets when it passes no settings at all.
+    show_title: bool = True
     show_abstract: bool = False
-    title_corner: OverlayCorner = OverlayCorner.TOP_LEFT
+    title_corner: OverlayCorner = OverlayCorner.TOP_CENTER
     widget_background: Color | None = None
     widget_foreground: Color | None = None
     # None leaves the runtime's own highlight alone. qgis2web has no equivalent:

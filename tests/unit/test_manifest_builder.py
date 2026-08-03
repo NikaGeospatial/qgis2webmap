@@ -508,6 +508,30 @@ class TestWidgetPositions:
         assert WIDGET_POSITIONS["legend"] != "bottom-right"
         assert "bottom-right" not in set(WIDGET_POSITIONS.values())
 
+    def test_the_legend_drops_its_heading_when_the_caption_shows_the_title(
+        self,
+    ) -> None:
+        """Otherwise the title is on screen twice, which testing found."""
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        markup = build_manifest(
+            make_project([make_layer()], settings=ExportSettings(show_title=True))
+        )
+        legend = re.search(r'<om-widget type="legend"[^>]*>', markup)
+        assert legend is not None, "the legend should still be emitted"
+        assert "title=" not in legend.group(0)
+
+    def test_the_legend_keeps_its_heading_when_the_caption_is_off(self) -> None:
+        """With no caption the legend is the only thing that can name the map."""
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        markup = build_manifest(
+            make_project([make_layer()], settings=ExportSettings(show_title=False))
+        )
+        legend = re.search(r'<om-widget type="legend"[^>]*>', markup)
+        assert legend is not None
+        assert "title=" in legend.group(0)
+
 
 class TestAttributeContract:
     """Every attribute we emit must exist in the runtime's own schema.
