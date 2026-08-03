@@ -6,6 +6,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import pytest
+
 from nika_onlymap_exporter.core.export_ir import (
     FidelityStatus,
     GeometryKind,
@@ -20,6 +22,9 @@ from nika_onlymap_exporter.core.project_reader import (
     read_project,
     resolve_title,
 )
+from nika_onlymap_exporter.core.settings import LayerSettings
+
+qgis_core = pytest.importorskip("qgis.core")
 
 
 class TestReadLayer:
@@ -86,6 +91,47 @@ class TestReadLayer:
         assert export_layer is not None
         assert export_layer.feature_count == 0
         assert any("no features" in i.detail for i in report.items)
+
+    def test_features_of_a_switched_off_category_leave_the_data(
+        self, project, make_memory_layer
+    ) -> None:
+        """The report said they were omitted; they were not.
+
+        A category unchecked in QGIS was dropped from the styling expression but
+        left in the GeoJSON, so its features rendered in the "other" fallback
+        grey - the opposite of what the author asked for and of what the
+        fidelity report claimed had happened.
+        """
+        layer = make_memory_layer(
+            "airports",
+            fields="kind:string",
+            features=[("civil", [0.0, 0.0]), ("military", [1.0, 1.0])],
+        )
+        layer.setRenderer(
+            qgis_core.QgsCategorizedSymbolRenderer(
+                "kind",
+                [
+                    qgis_core.QgsRendererCategory(
+                        "civil",
+                        qgis_core.QgsMarkerSymbol.createSimple({"color": "#00ff00"}),
+                        "Civil",
+                    ),
+                    qgis_core.QgsRendererCategory(
+                        "military",
+                        qgis_core.QgsMarkerSymbol.createSimple({"color": "#ff0000"}),
+                        "Military",
+                    ),
+                ],
+            )
+        )
+        layer.renderer().updateCategoryRenderState(1, False)
+
+        export_layer = read_layer(layer, FidelityReportBuilder())
+
+        assert export_layer is not None
+        kinds = [f["properties"]["kind"] for f in export_layer.geojson["features"]]
+        assert kinds == ["civil"]
+        assert export_layer.feature_count == 1
 
 
 class TestResolveTitle:
@@ -200,3 +246,102 @@ class TestReadProject:
 
         approximated = report.by_status(FidelityStatus.APPROXIMATED)
         assert any("Original" in i.detail for i in approximated)
+
+
+class TestPerLayerToggles:
+    """The dialog's per-layer Popup and Label checkboxes.
+
+    Both were persisted to the project and read back into the dialog, and then
+    consulted by nothing: `read_project` never received them, so unticking
+    either changed the saved settings and not the exported map. `include` was
+    wired (via `selected_layer_ids`); these two were not.
+    """
+
+    def labelled_layer(self, make_memory_layer):
+        layer = make_memory_layer("towns", features=[("Ashford", [1.0, 2.0])])
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        return layer
+
+    def test_defaults_keep_popups_and_labels(self, project, make_memory_layer) -> None:
+        project.addMapLayer(self.labelled_layer(make_memory_layer))
+
+        result = read_project(project, FidelityReportBuilder())
+
+        (layer,) = result.layers
+        assert layer.popup.enabled
+        assert layer.labeling.enabled
+
+    def test_unticking_popup_drops_it(self, project, make_memory_layer) -> None:
+        layer = self.labelled_layer(make_memory_layer)
+        project.addMapLayer(layer)
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(popup=False)},
+        )
+
+        assert not result.layers[0].popup.enabled
+        assert result.layers[0].labeling.enabled, "labels are a separate choice"
+
+    def test_a_chosen_field_mode_reaches_the_exported_markup(
+        self, project, make_memory_layer
+    ) -> None:
+        """The whole chain in one test: dialog state to shipped popup markup.
+
+        Every link is covered elsewhere, but nothing checked that they are
+        actually joined up - which is what a user setting a mode and exporting
+        depends on.
+        """
+        from nika_onlymap_exporter.core.export_ir import PopupFieldMode
+        from nika_onlymap_exporter.core.manifest_builder import build_popup_elements
+
+        layer = self.labelled_layer(make_memory_layer)
+        project.addMapLayer(layer)
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={
+                layer.id(): LayerSettings(
+                    fields={"name": PopupFieldMode.HEADER_ALWAYS.value}
+                )
+            },
+        )
+
+        (field,) = result.layers[0].popup.visible_fields
+        assert field.mode is PopupFieldMode.HEADER_ALWAYS
+        markup = build_popup_elements(result.layers[0])
+        assert (
+            '<div class="om-popup-row om-popup-row-header om-popup-always">' in markup
+        )
+
+    def test_unticking_label_drops_it(self, project, make_memory_layer) -> None:
+        layer = self.labelled_layer(make_memory_layer)
+        project.addMapLayer(layer)
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(label=False)},
+        )
+
+        assert not result.layers[0].labeling.enabled
+        assert result.layers[0].popup.enabled, "popups are a separate choice"
+
+    def test_an_unlisted_layer_keeps_the_defaults(
+        self, project, make_memory_layer
+    ) -> None:
+        """So a caller with no dialog - Processing, a test - need not supply any."""
+        project.addMapLayer(self.labelled_layer(make_memory_layer))
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={"other-id": LayerSettings()},
+        )
+
+        assert result.layers[0].labeling.enabled

@@ -21,6 +21,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
@@ -108,10 +109,29 @@ def _color_from_qcolor(qcolor: Any) -> Color | None:
     )
 
 
-def _first_symbol_layer(symbol: QgsSymbol) -> Any | None:
-    if symbol is None or symbol.symbolLayerCount() == 0:
+def _visible_symbol_layer(symbol: QgsSymbol) -> Any | None:
+    """The top-most enabled symbol layer - the one the reader actually sees.
+
+    QGIS paints symbol layers bottom-up, so index 0 is drawn *first* and anything
+    above it covers it. Reading index 0 therefore reports the colour underneath:
+    a river drawn as a neon line over a grey casing exports as the casing, and
+    the map comes out drained compared to QGIS.
+
+    Disabled layers are skipped - an unticked top layer is not on the map, so it
+    must not decide the colour either.
+    """
+    if symbol is None:
         return None
-    return symbol.symbolLayer(0)
+
+    for index in reversed(range(symbol.symbolLayerCount())):
+        candidate = symbol.symbolLayer(index)
+        if candidate is None:
+            continue
+        enabled = _safe(candidate, "enabled")
+        if enabled is False:
+            continue
+        return candidate
+    return None
 
 
 def translate_symbol(
@@ -122,15 +142,15 @@ def translate_symbol(
 ) -> SymbolSpec:
     """Flatten one QGIS symbol into the web-expressible subset.
 
-    Reads the *bottom* symbol layer, which is the one a stacked symbol draws
-    first and the one that carries the base fill in almost every real style.
+    Reads the *top* symbol layer - see `_visible_symbol_layer` for why that is
+    the one worth keeping when only one can survive.
     """
     if symbol is None:
         report.unsupported(subject, "The layer has no symbol to translate.", layer_id)
         return SymbolSpec()
 
     layer_count = symbol.symbolLayerCount()
-    symbol_layer = _first_symbol_layer(symbol)
+    symbol_layer = _visible_symbol_layer(symbol)
     if symbol_layer is None:
         report.unsupported(subject, "The symbol has no symbol layers.", layer_id)
         return SymbolSpec()
@@ -138,24 +158,36 @@ def translate_symbol(
     if layer_count > 1:
         report.approximated(
             subject,
-            f"The symbol stacks {layer_count} symbol layers; only the bottom one "
-            "is translated. Effects built from stacked layers - casing on roads, "
-            "hatching, glow - will not appear.",
+            f"The symbol stacks {layer_count} symbol layers; only the top one - "
+            "the one you see - is translated. Effects built from stacked layers, "
+            "such as a casing under a road or a glow behind a line, will not "
+            "appear.",
             layer_id,
         )
 
     fill_color = _color_from_qcolor(_safe(symbol_layer, "fillColor"))
     stroke_color = _color_from_qcolor(_safe(symbol_layer, "strokeColor"))
 
+    # **Every symbol layer answers `color()`; only fills and markers answer
+    # `fillColor()`/`strokeColor()` with anything valid.** A line symbol layer
+    # returns an invalid QColor from both, so reading only those exported every
+    # line as the `#888888` placeholder - the drained grey that made a teal
+    # river come out the colour of nothing in particular.
+    own_color = _color_from_qcolor(_safe(symbol_layer, "color"))
+
     # Lines expose their width as `width()`; fills and markers as `strokeWidth()`.
-    stroke_width = _safe(symbol_layer, "width")
+    line_width = _safe(symbol_layer, "width")
+    stroke_width = line_width
     if stroke_width is None:
         stroke_width = _safe(symbol_layer, "strokeWidth")
     stroke_width = float(stroke_width or 0.0) * MM_TO_PIXELS
 
-    # A line symbol's own colour is its stroke, not a fill.
-    if stroke_color is None and fill_color is not None and _safe(symbol_layer, "width"):
-        stroke_color, fill_color = fill_color, None
+    if line_width is not None:
+        # A line symbol's own colour is its stroke, not a fill.
+        stroke_color = stroke_color or own_color or fill_color
+        fill_color = None
+    else:
+        fill_color = fill_color or own_color
 
     radius = _safe(symbol_layer, "size")
     if radius is not None:
@@ -274,6 +306,44 @@ def translate_renderer(
     return RendererSpec(kind=RendererKind.UNSUPPORTED, unsupported_reason=kind_name)
 
 
+# A `$field` reference in an OnlyMap accessor is a bare identifier; the
+# expression language has no quoted or bracketed form. QGIS field names have no
+# such restriction - shapefile and CSV columns are routinely called "Land Use" -
+# and interpolating one straight into `$field == ...` produces markup the parser
+# cannot read, which loses the symbology with nothing said about it.
+EXPRESSION_SAFE_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _unreferenceable_field(
+    field_name: str,
+    symbols: list[SymbolSpec],
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> RendererSpec | None:
+    """A single-symbol fallback when the class field cannot be referenced.
+
+    Returns `None` when the field is fine and the caller should carry on. The
+    first class's symbol stands in, so the layer still draws with a colour the
+    author chose rather than the generic grey.
+    """
+    if EXPRESSION_SAFE_FIELD.match(field_name):
+        return None
+
+    report.unsupported(
+        subject,
+        f"The classification field '{field_name}' cannot be referenced in a web "
+        "map expression - only letters, digits and underscores are allowed, and "
+        "it cannot start with a digit. The layer is drawn in a single colour "
+        "instead. Rename the field in QGIS to keep the symbology.",
+        layer_id,
+    )
+    return RendererSpec(
+        kind=RendererKind.SINGLE,
+        symbol=symbols[0] if symbols else SymbolSpec(),
+    )
+
+
 def _translate_categorized(
     renderer: QgsCategorizedSymbolRenderer,
     report: FidelityReportBuilder,
@@ -281,12 +351,15 @@ def _translate_categorized(
     layer_id: str,
 ) -> RendererSpec:
     categories: list[CategorySpec] = []
-    skipped = 0
+    hidden: list[str | int | float | None] = []
 
     for index, category in enumerate(renderer.categories()):
         if not category.renderState():
-            # An unchecked class in QGIS means "do not draw these features".
-            skipped += 1
+            # An unchecked class in QGIS means "do not draw these features". The
+            # value is recorded so the reader can drop the matching features -
+            # omitting the class from the expression only sends them to the
+            # "other" fallback colour, which draws exactly what the author hid.
+            hidden.append(_python_value(category.value()))
             continue
         symbol = translate_symbol(
             category.symbol(), report, f"{subject}, class {index + 1}", layer_id
@@ -299,24 +372,33 @@ def _translate_categorized(
             )
         )
 
-    if skipped:
+    if hidden:
+        count = len(hidden)
         report.approximated(
             subject,
-            f"{skipped} categor{'y is' if skipped == 1 else 'ies are'} switched "
+            f"{count} categor{'y is' if count == 1 else 'ies are'} switched "
             "off in QGIS; matching features are omitted from the export.",
             layer_id,
         )
 
+    field_name = renderer.classAttribute()
+    fallback = _unreferenceable_field(
+        field_name, [c.symbol for c in categories], report, subject, layer_id
+    )
+    if fallback is not None:
+        return fallback
+
     report.preserved(
         subject,
-        f"Categorized on '{renderer.classAttribute()}' with {len(categories)} classes.",
+        f"Categorized on '{field_name}' with {len(categories)} classes.",
         layer_id,
     )
     return RendererSpec(
         kind=RendererKind.CATEGORIZED,
-        field_name=renderer.classAttribute(),
+        field_name=field_name,
         categories=tuple(categories),
         ramp_name=_ramp_name(renderer),
+        hidden_values=tuple(hidden),
     )
 
 
@@ -341,6 +423,13 @@ def _translate_graduated(
             )
         )
 
+    field_name = renderer.classAttribute()
+    fallback = _unreferenceable_field(
+        field_name, [c.symbol for c in classes], report, subject, layer_id
+    )
+    if fallback is not None:
+        return fallback
+
     classification = classification_of(renderer)
     if classification is ClassificationMethod.UNKNOWN:
         report.approximated(
@@ -353,13 +442,13 @@ def _translate_graduated(
 
     report.preserved(
         subject,
-        f"Graduated on '{renderer.classAttribute()}' with {len(classes)} classes "
+        f"Graduated on '{field_name}' with {len(classes)} classes "
         f"({classification.value}).",
         layer_id,
     )
     return RendererSpec(
         kind=RendererKind.GRADUATED,
-        field_name=renderer.classAttribute(),
+        field_name=field_name,
         classes=tuple(classes),
         classification=classification,
         ramp_name=_ramp_name(renderer),

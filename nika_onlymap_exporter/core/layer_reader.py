@@ -25,8 +25,12 @@ from qgis.core import (
 from .export_ir import (
     AssetDependency,
     AssetDisposition,
+    Color,
     ExportLayer,
     GeometryKind,
+    LabelingSpec,
+    PopupSpec,
+    RendererSpec,
     ScaleRange,
     SourceKind,
 )
@@ -36,6 +40,8 @@ from .popup_translator import translate_popup
 from .renderer_translator import translate_renderer
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Mapping
+
     from qgis.core import QgsVectorLayer
 
 WGS84 = "EPSG:4326"
@@ -182,16 +188,52 @@ def export_geojson(
     return collection
 
 
+def drop_hidden_features(
+    collection: dict[str, Any],
+    renderer: RendererSpec,
+) -> dict[str, Any]:
+    """Remove features belonging to categories switched off in QGIS.
+
+    The comparison is on the string form of the value: a category value arrives
+    from QGIS as a Python scalar while the GeoJSON property may have been
+    serialised as a number or a string, and `'1' != 1` would silently keep the
+    features the author hid.
+    """
+    if not renderer.hidden_values or not renderer.field_name:
+        return collection
+
+    hidden = {"" if v is None else str(v) for v in renderer.hidden_values}
+    field = renderer.field_name
+    kept = [
+        feature
+        for feature in collection.get("features") or ()
+        if str((feature.get("properties") or {}).get(field, "")) not in hidden
+    ]
+    return {**collection, "features": kept}
+
+
 def read_layer(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
     group_path: tuple[str, ...] = (),
     visible: bool = True,
+    with_popup: bool = True,
+    with_labels: bool = True,
+    field_modes: Mapping[str, str] | None = None,
+    precision: int | None = None,
+    popup_on_hover: bool = False,
+    highlight_color: Color | None = None,
 ) -> ExportLayer | None:
     """Read one vector layer into the normalized model.
 
     Returns `None` for layers 0.1.0 cannot handle at all - rasters, and vector
     layers with no geometry - after recording why.
+
+    `with_popup` and `with_labels` carry the dialog's per-layer checkboxes. They
+    suppress the feature *here*, at the point of translation, rather than in the
+    manifest builder: a user who unticked labels should not pay for the label
+    points in the artifact, and the fidelity report should not list translation
+    notes for something the user asked not to export.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -215,9 +257,19 @@ def read_layer(
         )
         return None
 
-    geojson = export_geojson(layer, report)
+    geojson = export_geojson(
+        layer,
+        report,
+        precision=GEOJSON_PRECISION if precision is None else precision,
+    )
     if geojson is None:
         return None
+
+    # Before counting: a switched-off category means the author does not want
+    # those features on the map at all, so they must leave the data, not just
+    # the style. The count has to reflect what actually ships.
+    renderer = translate_renderer(layer, report)
+    geojson = drop_hidden_features(geojson, renderer)
 
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:
@@ -236,9 +288,15 @@ def read_layer(
         visible=visible,
         opacity=float(layer.opacity()),
         scale_range=scale_range(layer),
-        renderer=translate_renderer(layer, report),
-        labeling=translate_labeling(layer, report),
-        popup=translate_popup(layer, report),
+        renderer=renderer,
+        labeling=(translate_labeling(layer, report) if with_labels else LabelingSpec()),
+        # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
+        popup=translate_popup(
+            layer, report, field_modes=field_modes, on_hover=popup_on_hover
+        )
+        if with_popup
+        else PopupSpec(enabled=False),
+        highlight_color=highlight_color,
         attribution=read_attribution(layer),
         feature_count=feature_count,
         geojson=geojson,

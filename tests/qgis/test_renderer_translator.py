@@ -29,6 +29,78 @@ def marker_symbol(color: str = "#ff0000", size: float = 2.0):
     return symbol
 
 
+class TestLineColour:
+    """Lines kept exporting grey, and no test noticed.
+
+    A line symbol layer answers `fillColor()` and `strokeColor()` with an
+    invalid QColor - only `color()` holds its real colour - so reading the first
+    two alone produced the `#888888` placeholder for every line in every export.
+    On a real project that turned a neon teal river into drained grey, and the
+    map looked nothing like QGIS.
+    """
+
+    @staticmethod
+    def _line(colour: str, width: float = 0.5):
+        return qgis_core.QgsLineSymbol.createSimple(
+            {"color": colour, "line_width": str(width)}
+        )
+
+    def test_a_line_keeps_its_own_colour(self, qgis_app) -> None:
+        spec = translate_symbol(self._line("#1de9c8"), FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None
+        assert (spec.stroke_color.r, spec.stroke_color.g, spec.stroke_color.b) == (
+            0x1D,
+            0xE9,
+            0xC8,
+        )
+
+    def test_a_line_never_falls_back_to_the_placeholder(self, qgis_app) -> None:
+        """The symptom, stated directly: grey where QGIS showed a colour."""
+        spec = translate_symbol(self._line("#1de9c8"), FidelityReportBuilder(), "test")
+        assert spec.stroke_color is not None
+        grey = (0x88, 0x88, 0x88)
+        assert (spec.stroke_color.r, spec.stroke_color.g, spec.stroke_color.b) != grey
+
+    def test_a_lines_colour_is_a_stroke_not_a_fill(self, qgis_app) -> None:
+        spec = translate_symbol(self._line("#1de9c8"), FidelityReportBuilder(), "test")
+        assert spec.fill_color is None
+
+    def test_a_casing_stack_exports_the_line_on_top(self, qgis_app) -> None:
+        """QGIS paints bottom-up, so index 0 is the casing hidden underneath."""
+        symbol = self._line("#9a9a9a", width=1.2)
+        symbol.appendSymbolLayer(
+            qgis_core.QgsSimpleLineSymbolLayer.create(
+                {"color": "#1de9c8", "line_width": "0.5"}
+            )
+        )
+
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None
+        assert (spec.stroke_color.r, spec.stroke_color.g, spec.stroke_color.b) == (
+            0x1D,
+            0xE9,
+            0xC8,
+        ), "the visible top layer should win, not the casing beneath it"
+
+    def test_a_disabled_top_layer_does_not_decide_the_colour(self, qgis_app) -> None:
+        """An unticked layer is not on the map, so it must not set the colour."""
+        symbol = self._line("#1de9c8")
+        hidden = qgis_core.QgsSimpleLineSymbolLayer.create({"color": "#9a9a9a"})
+        hidden.setEnabled(False)
+        symbol.appendSymbolLayer(hidden)
+
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None
+        assert (spec.stroke_color.r, spec.stroke_color.g, spec.stroke_color.b) == (
+            0x1D,
+            0xE9,
+            0xC8,
+        )
+
+
 class TestTranslateSymbol:
     def test_reads_colour_and_converts_units(self, qgis_app) -> None:
         symbol = marker_symbol("#3366cc", size=4.0)
@@ -111,6 +183,44 @@ class TestCategorized:
         assert any(
             "switched\noff" in i.detail or "switched off" in i.detail
             for i in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+        # The value has to travel out of the translator: dropping the class from
+        # the expression alone sends its features to the "other" fallback
+        # colour, which draws exactly what the author switched off.
+        assert spec.hidden_values == ("civil",)
+
+    def test_a_field_name_that_cannot_be_referenced_falls_back_and_says_so(
+        self, project, make_memory_layer
+    ) -> None:
+        """`$Land Use == ...` is not parseable, and used to ship anyway.
+
+        OnlyMap's expression language has no quoted field form, so a field name
+        with a space cannot be referenced at all. Emitting it produced markup
+        the runtime could not read: the symbology vanished with nothing said.
+        """
+        layer = make_memory_layer(
+            "parcels",
+            fields="Land Use:string",
+            features=[("residential", [0.0, 0.0])],
+        )
+        layer.setRenderer(
+            qgis_core.QgsCategorizedSymbolRenderer(
+                "Land Use",
+                [
+                    qgis_core.QgsRendererCategory(
+                        "residential", marker_symbol("#00ff00"), "Residential"
+                    )
+                ],
+            )
+        )
+
+        report = FidelityReportBuilder()
+        spec = translate_renderer(layer, report)
+
+        assert spec.kind is RendererKind.SINGLE
+        assert spec.symbol is not None
+        assert any(
+            "Land Use" in i.detail for i in report.by_status(FidelityStatus.UNSUPPORTED)
         )
 
 
