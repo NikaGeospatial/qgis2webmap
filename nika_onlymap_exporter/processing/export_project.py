@@ -80,7 +80,13 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             "Anything that cannot be translated exactly is reported in the log "
             "rather than dropped silently. For the full fidelity report, and "
             "for per-layer popup and label choices, use "
-            "Web → QGIS2WebMap by NIKA."
+            "Web → QGIS2WebMap by NIKA.\n\n"
+            "<b>First run on a new computer:</b> open Web → QGIS2WebMap by NIKA "
+            "and export once from there. It shows the OnlyMap runtime licence "
+            "and installs the runtime (about 4.5 MB, once per computer). This "
+            "algorithm cannot do that itself - there is no way to show a "
+            "licence during a batch run - so until then it stops immediately "
+            "and says so. Every run after that works offline."
         )
 
     def initAlgorithm(self, config=None) -> None:  # noqa: N802

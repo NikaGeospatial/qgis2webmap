@@ -29,6 +29,12 @@ anything.
 After that one download, **everything works offline**, on every project,
 forever. Exporting itself never touches the network.
 
+> **Start with the dialog, not with Processing.** The *Export to OnlyMap web map*
+> Processing algorithm cannot show you a licence — there is nobody to show it to
+> during a batch run — so on a computer that has never installed the runtime it
+> stops straight away and points you here. Export once from
+> **Web → QGIS2WebMap by NIKA** and the algorithm works from then on.
+
 The plugin is free and open source; the runtime is not, which is why it is not
 included in the plugin and why you are asked before it is fetched.
 
