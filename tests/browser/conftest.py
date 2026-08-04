@@ -18,6 +18,7 @@ import pytest
 
 from nika_onlymap_exporter.core.export_ir import (
     Color,
+    ElevationSpec,
     ExportLayer,
     ExportProject,
     Extent,
@@ -117,6 +118,58 @@ def exported_map(runtime, tmp_path_factory):
     )
 
     destination = tmp_path_factory.mktemp("artifact")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
+
+
+EXTRUDED_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [[0.0, 51.0], [0.1, 51.0], [0.1, 51.1], [0.0, 51.1], [0.0, 51.0]]
+                ],
+            },
+            "properties": {"name": "Block", "height": 400.0},
+        }
+    ],
+}
+
+
+@pytest.fixture(scope="session")
+def extruded_map(runtime, tmp_path_factory):
+    """A raised polygon, so the extrusion path is checked by a real renderer.
+
+    Markup tests can only say the attributes were written. deck.gl silently
+    ignores a prop it does not understand, so whether `extruded` actually
+    reaches the layer is a question only a browser can answer.
+    """
+    layer = ExportLayer(
+        layer_id="blocks",
+        name="Blocks",
+        geometry_kind=GeometryKind.POLYGON,
+        source_kind=SourceKind.FILE,
+        feature_count=1,
+        geojson=EXTRUDED_GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=200, g=80, b=40)),
+        ),
+        elevation=ElevationSpec(
+            extruded=True, height_field="height", wireframe=True, source="3d-renderer"
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title="Extruded map",
+        layers=(layer,),
+        extent=Extent(west=-0.1, south=50.9, east=0.2, north=51.2),
+    )
+
+    destination = tmp_path_factory.mktemp("extruded")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
 

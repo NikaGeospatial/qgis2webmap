@@ -418,6 +418,49 @@ class RendererSpec:
 
 
 @dataclass(frozen=True)
+class ElevationSpec:
+    """How far a layer's features stand up off the map.
+
+    QGIS expresses this twice, in two unrelated places, and a project may use
+    either: the **3D view properties** (`QgsVectorLayer3DRenderer`, a real 3D
+    scene) and the **2.5D renderer** (a 2D symbology trick that draws fake walls
+    with geometry generators). Both reduce to the same three questions a web
+    renderer can answer - how tall, driven by which attribute, and is the mesh
+    outlined - so both land here and `source` records which one it came from.
+
+    `height` and `height_field` are mutually exclusive: a constant applies to
+    every feature, a field varies per feature. QGIS heights are metres above the
+    base, which is what deck.gl's `getElevation` wants, so no conversion applies
+    - unlike symbol sizes, which are millimetres on paper.
+
+    There is no base elevation. deck.gl extrudes from zero, so a QGIS symbol
+    with a non-zero offset is reported rather than silently flattened.
+    """
+
+    extruded: bool = False
+    height: float | None = None
+    height_field: str | None = None
+    wireframe: bool = False
+    source: str | None = None
+
+    @property
+    def is_set(self) -> bool:
+        """Whether this would actually draw anything raised."""
+        return self.extruded and (
+            self.height is not None or self.height_field is not None
+        )
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "extruded": self.extruded,
+            "height": self.height,
+            "heightField": self.height_field,
+            "wireframe": self.wireframe,
+            "source": self.source,
+        }
+
+
+@dataclass(frozen=True)
 class LabelingSpec:
     """Layer labelling, when enabled.
 
@@ -602,6 +645,7 @@ class ExportLayer:
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )
     labeling: LabelingSpec = field(default_factory=LabelingSpec)
+    elevation: ElevationSpec = field(default_factory=ElevationSpec)
     popup: PopupSpec = field(default_factory=PopupSpec)
     attribution: str | None = None
     feature_count: int = 0
@@ -629,6 +673,7 @@ class ExportLayer:
             "scaleRange": self.scale_range.snapshot(),
             "renderer": self.renderer.snapshot(),
             "labeling": self.labeling.snapshot(),
+            "elevation": self.elevation.snapshot(),
             "popup": self.popup.snapshot(),
             "attribution": self.attribution,
             "featureCount": self.feature_count,
@@ -671,6 +716,12 @@ class ExportSettings:
     # which is a privacy and longevity trade rather than a size one - tiles are
     # streamed, so the file does not grow at all.
     basemap: str = "none"
+    # A relief surface under the map, off by default and carrying the same cost
+    # as a basemap: DEM tiles streamed from a third party on every open. It is
+    # NOT read from the project, because it cannot be - a QGIS terrain is a local
+    # DEM raster and OnlyMap needs a remote XYZ tileset, so this is an offer of
+    # global relief rather than a translation of theirs.
+    terrain: str = "none"
     # A multiplier on the map chrome's text and controls: 1.0 is the runtime's
     # own sizing. Applies to the caption, legend, layer switcher, zoom controls
     # and scale bar - not the credit component, which stays fixed so attribution
@@ -709,6 +760,7 @@ class ExportSettings:
             "showAbstract": self.show_abstract,
             "titleCorner": self.title_corner.value,
             "basemap": self.basemap,
+            "terrain": self.terrain,
             "chromeScale": self.chrome_scale,
             "widgetBackground": (
                 self.widget_background.snapshot() if self.widget_background else None

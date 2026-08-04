@@ -21,6 +21,7 @@ import pytest
 from nika_onlymap_exporter.core.export_ir import (
     CategorySpec,
     Color,
+    ElevationSpec,
     ExportLayer,
     ExportProject,
     ExportSettings,
@@ -52,6 +53,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     json_for_script,
     numeric_expression,
     scale_to_zoom,
+    terrain_note,
 )
 
 RED = Color(r=255, g=0, b=0)
@@ -661,7 +663,17 @@ class TestAttributeContract:
                         character_set="Zü",
                     ),
                 ),
-            ]
+                # And a raised one, so `extruded`, `get-elevation`, `wireframe`
+                # and the map's `pitch` are checked too.
+                make_layer(
+                    layer_id="raised",
+                    geometry_kind=GeometryKind.POLYGON,
+                    elevation=ElevationSpec(
+                        extruded=True, height_field="height", wireframe=True
+                    ),
+                ),
+            ],
+            settings=ExportSettings(terrain="terrarium"),
         )
         markup = build_manifest(project)
 
@@ -1074,3 +1086,87 @@ class TestThinLinesStayClickable:
             ),
         )
         assert "line-width-min-pixels" not in build_layer_element(layer)
+
+
+class TestExtrusion:
+    """Raised polygons, from either place QGIS keeps a height.
+
+    The invariant worth guarding is the pitch: without it the map opens looking
+    straight down, where an extruded scene and a flat one are the same picture,
+    and the whole feature reads as not working.
+    """
+
+    def _raised(self, **elevation):
+        return make_layer(
+            layer_id="buildings",
+            geometry_kind=GeometryKind.POLYGON,
+            elevation=ElevationSpec(**elevation),
+        )
+
+    def test_a_constant_height_becomes_a_number(self) -> None:
+        markup = build_layer_element(self._raised(extruded=True, height=12.0))
+        assert 'extruded="true"' in markup
+        assert 'get-elevation="12"' in markup
+
+    def test_a_field_driven_height_becomes_an_accessor(self) -> None:
+        markup = build_layer_element(self._raised(extruded=True, height_field="floors"))
+        assert 'get-elevation="$floors"' in markup
+
+    def test_a_flat_layer_emits_nothing(self) -> None:
+        markup = build_layer_element(make_layer())
+        assert "extruded" not in markup
+        assert "get-elevation" not in markup
+
+    def test_extruded_without_a_height_is_not_extruded(self) -> None:
+        # A 3D renderer set to zero height draws nothing in QGIS either; the
+        # attribute pair would only cost bytes.
+        markup = build_layer_element(self._raised(extruded=True))
+        assert "extruded" not in markup
+
+    def test_edges_become_a_wireframe(self) -> None:
+        markup = build_layer_element(
+            self._raised(extruded=True, height=5.0, wireframe=True)
+        )
+        assert 'wireframe="true"' in markup
+
+    def test_edges_off_emits_nothing(self) -> None:
+        markup = build_layer_element(self._raised(extruded=True, height=5.0))
+        assert "wireframe" not in markup
+
+    def test_a_raised_layer_tilts_the_map(self) -> None:
+        markup = build_manifest(make_project([self._raised(extruded=True, height=5.0)]))
+        assert 'pitch="45"' in markup
+
+    def test_a_flat_map_is_not_tilted(self) -> None:
+        assert "pitch" not in build_manifest(make_project())
+
+
+class TestTerrain:
+    def test_a_preset_is_emitted_and_tilts_the_map(self) -> None:
+        markup = build_manifest(
+            make_project(settings=ExportSettings(terrain="terrarium"))
+        )
+        assert 'terrain="terrarium"' in markup
+        assert 'pitch="45"' in markup
+
+    def test_off_by_default(self) -> None:
+        markup = build_manifest(make_project())
+        assert "terrain" not in markup
+
+    def test_an_unknown_preset_is_dropped_rather_than_passed_through(self) -> None:
+        # Same rule as the basemap: a DEM the runtime cannot resolve gives blank
+        # relief, which is worse than the flat map the user could have had.
+        markup = build_manifest(
+            make_project(settings=ExportSettings(terrain="whatever"))
+        )
+        assert "terrain=" not in markup
+        assert "pitch" not in markup
+
+    def test_the_note_names_the_host_and_the_tilt(self) -> None:
+        note = terrain_note("terrarium")
+        assert note is not None
+        assert "s3.amazonaws.com" in note
+        assert "tilted" in note
+
+    def test_no_note_when_flat(self) -> None:
+        assert terrain_note("none") is None

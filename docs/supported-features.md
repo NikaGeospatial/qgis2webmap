@@ -30,6 +30,42 @@ Data in any CRS is reprojected to WGS84 on the way out.
 | Rule-based, embedded-symbol renderers | Not in 0.1.0, reported by name |
 | Stacked symbol layers | Top layer only - the one you see - and reported |
 | Dashed and dotted lines | Not in 0.1.0, reported |
+| 2.5D renderer | Yes - becomes a real extrusion, keeping the roof and wall colours |
+
+## Height
+
+Polygons that stand up in QGIS stand up in the export. Both of the places QGIS
+keeps a height are read:
+
+- **Layer Properties → 3D View**, where an extrusion height can be a fixed
+  number or driven by a field, and *Show edges* becomes a wireframe outline.
+- **The 2.5D renderer** on the Symbology tab, whose height is kept as a project
+  variable.
+
+A map with anything raised on it **opens tilted**, because looking straight down
+at an extruded map and a flat one gives the same picture.
+
+What does not carry: a base height, because the web renderer extrudes from
+ground level; a height written as a QGIS expression rather than a single field
+or a number; and the 2.5D renderer's fixed viewing angle and painted shadows,
+which are replaced by real lighting. 3D point symbols - spheres, cylinders,
+imported models - are not drawn at all, and lines cannot be raised. Every one of
+these is named in the Fidelity tab rather than left to be discovered.
+
+## Terrain
+
+Relief is **off by default** and, unlike everything else here, it is not read
+from your project. A QGIS terrain is a DEM on your disk, and a web map needs
+elevation tiles it can fetch, so there is no route from one to the other short
+of hosting your DEM yourself.
+
+What the Map tab offers instead is global relief, streamed from a public
+elevation tileset. The trade is the same as a basemap's: the file does not get
+any bigger, but the map needs a connection to show relief. Switching it on also
+tilts the map, for the same reason extrusion does.
+
+If your project has its own terrain and you leave this off, the Fidelity tab
+says so rather than exporting a flat map silently.
 
 ## Labels
 

@@ -36,7 +36,7 @@ from .export_ir import (
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
-from .manifest_builder import basemap_note
+from .manifest_builder import basemap_note, terrain_note
 from .settings import LayerSettings
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -150,6 +150,56 @@ def extent_from_canvas(canvas: object) -> Extent | None:
     )
 
 
+def _project_terrain_kind(project: QgsProject) -> str | None:
+    """The project's own terrain source, or `None` if the ground is flat.
+
+    Guarded rather than called directly: `elevationProperties()` and its
+    `terrainProvider()` arrived in different QGIS releases, and the plugin
+    supports back to 3.22, where neither exists.
+    """
+    properties = getattr(project, "elevationProperties", lambda: None)()
+    provider = getattr(properties, "terrainProvider", lambda: None)()
+    kind = getattr(provider, "type", lambda: None)()
+    if not isinstance(kind, str) or kind == "flat":
+        return None
+    return kind
+
+
+def _report_terrain(
+    project: QgsProject,
+    settings: ExportSettings,
+    report: FidelityReportBuilder,
+) -> None:
+    """What happened to relief - which is never a translation, always a swap.
+
+    A QGIS terrain is a DEM on the user's disk, and the web map needs elevation
+    tiles it can fetch. There is no route from one to the other short of tiling
+    and hosting the DEM, so the honest options are global relief from a public
+    tileset or none at all. Both are stated rather than assumed.
+    """
+    note = terrain_note(settings.terrain)
+    if note is not None:
+        report.approximated("Terrain", note)
+        kind = _project_terrain_kind(project)
+        if kind is not None:
+            report.approximated(
+                "Terrain",
+                f"The relief is global elevation data, not this project's own "
+                f"{kind} terrain, which cannot be sent with the map. Heights "
+                "will be close but not identical to the QGIS 3D view.",
+            )
+        return
+
+    kind = _project_terrain_kind(project)
+    if kind is not None:
+        report.unsupported(
+            "Terrain",
+            f"This project uses a {kind} terrain, which is not exported - a DEM "
+            "on your disk cannot travel with the map. Switch Terrain on under "
+            "the Map tab for global relief instead, or the map exports flat.",
+        )
+
+
 def read_project(
     project: QgsProject,
     report: FidelityReportBuilder,
@@ -204,6 +254,7 @@ def read_project(
             highlight_color=per_layer.resolved_highlight(
                 _highlight_text(settings.highlight_color)
             ),
+            project=project,
         )
         if export_layer is not None:
             layers.append(export_layer)
@@ -249,6 +300,8 @@ def read_project(
             "the Map tab if you want a backdrop - note that it makes the map "
             "load tiles from the internet each time it is opened.",
         )
+
+    _report_terrain(project, settings, report)
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     title = resolve_title(project, title_override)

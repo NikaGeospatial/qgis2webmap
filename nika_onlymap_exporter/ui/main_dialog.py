@@ -67,7 +67,7 @@ from ..core.export_ir import (
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy, report_verdict
-from ..core.manifest_builder import basemap_note
+from ..core.manifest_builder import basemap_note, terrain_note
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
 from ..core.settings import (
@@ -159,6 +159,14 @@ BASEMAP_LABELS = {
     "voyager": "Voyager - general purpose",
     "liberty": "Liberty - detailed street map",
     "bright": "Bright - high contrast",
+}
+
+# Relief, not a backdrop, so it sits in the same group as the basemap but on its
+# own row. One entry beyond "off": the runtime's other preset needs a MapTiler
+# key, which an exported file would have to carry where anyone can read it.
+TERRAIN_LABELS = {
+    "none": "Flat - no elevation",
+    "terrarium": "Global relief - tilts the map so it shows",
 }
 
 # A short list rather than a spinner: the useful range is narrow, and naming the
@@ -448,6 +456,22 @@ class MainDialog(QDialog):
         self.basemap_warning.setWordWrap(True)
         basemap_form.addRow("", self.basemap_warning)
         self._update_basemap_warning()
+
+        # In the same group because it costs the recipient the same thing -
+        # tiles fetched from a third party on every open - and separating them
+        # would mean explaining that cost twice.
+        self.terrain_combo = QComboBox(basemap_box)
+        for value, label in TERRAIN_LABELS.items():
+            self.terrain_combo.addItem(label, value)
+        terrain_index = self.terrain_combo.findData(self.state.terrain)
+        self.terrain_combo.setCurrentIndex(terrain_index if terrain_index >= 0 else 0)
+        self.terrain_combo.currentIndexChanged.connect(self._on_terrain_changed)
+        basemap_form.addRow("Ground surface", self.terrain_combo)
+
+        self.terrain_warning = QLabel("", basemap_box)
+        self.terrain_warning.setWordWrap(True)
+        basemap_form.addRow("", self.terrain_warning)
+        self._update_terrain_warning()
         layout.addWidget(basemap_box)
 
         data_box = QGroupBox("Data", page)
@@ -559,6 +583,23 @@ class MainDialog(QDialog):
         # red has to read as red in both light and dark themes rather than
         # following the palette into something quiet.
         self.basemap_warning.setStyleSheet("color: #c0392b;")
+
+    def _on_terrain_changed(self) -> None:
+        value = self.terrain_combo.currentData()
+        self.state.terrain = value if isinstance(value, str) else "none"
+        self._update_terrain_warning()
+        self._fidelity_is_stale = True
+
+    def _update_terrain_warning(self) -> None:
+        """The same warning shape as the basemap, for the same reason."""
+        note = terrain_note(self.state.terrain)
+        if note is None:
+            self.terrain_warning.setText("")
+            self.terrain_warning.setStyleSheet("")
+            return
+
+        self.terrain_warning.setText(note)
+        self.terrain_warning.setStyleSheet("color: #c0392b;")
 
     def _on_precision_changed(self) -> None:
         value = self.precision_combo.currentData()

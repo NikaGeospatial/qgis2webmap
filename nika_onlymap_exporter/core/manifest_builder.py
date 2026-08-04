@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from .export_ir import (
     Color,
+    ElevationSpec,
     ExportLayer,
     ExportProject,
     GeometryKind,
@@ -113,6 +114,38 @@ BASEMAP_HOSTS = {
     "liberty": "openfreemap.org",
     "bright": "openfreemap.org",
 }
+
+
+# Relief presets the runtime registers, from `src/terrain.ts`. Only the keyless
+# one: `maptiler-terrain` needs an API key the exported file would carry in plain
+# text, which is the same reason the MapTiler basemaps are absent above.
+TERRAIN_PRESETS = ("none", "terrarium")
+
+TERRAIN_HOSTS = {"terrarium": "s3.amazonaws.com"}
+
+# Looking straight down, an extruded map and a flat one are the same picture. So
+# when anything stands up - the user's own buildings, or a relief surface - the
+# map has to open at an angle or the feature is invisible and reads as broken.
+# 45 degrees rather than something steeper: it shows the height clearly while
+# still letting the reader see the ground plan they recognise from QGIS.
+EXTRUDED_PITCH = 45.0
+
+
+def terrain_note(terrain: str) -> str | None:
+    """What switching relief on costs the recipient.
+
+    Deliberately parallel to `basemap_note`: the cost is the same shape - the
+    file does not grow, but every recipient's browser fetches tiles from a third
+    party - and a user should not have to learn it twice.
+    """
+    host = TERRAIN_HOSTS.get(terrain)
+    if host is None:
+        return None
+    return (
+        f"Terrain streams elevation tiles from {host} as the map is used. The "
+        "file does not get any bigger, but the map needs a connection to show "
+        "relief, and it opens tilted so the relief is visible."
+    )
 
 
 def basemap_note(basemap: str) -> str | None:
@@ -330,6 +363,20 @@ def numeric_expression(
     return f"scale(${field}, threshold, {sizes_literal}, domain={domain_literal})"
 
 
+def elevation_expression(elevation: ElevationSpec) -> str | None:
+    """`get-elevation` for a raised layer, or `None` if it is not raised.
+
+    Metres straight through, with no `MM_TO_PIXELS` in sight: a QGIS extrusion
+    height is a real-world distance, unlike a symbol size, and deck.gl's
+    `getElevation` is metres too.
+    """
+    if not elevation.is_set:
+        return None
+    if elevation.height_field:
+        return f"${elevation.height_field}"
+    return _number(elevation.height or 0.0)
+
+
 def line_color_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     if geometry is GeometryKind.LINE:
         return fill_expression(renderer, geometry)
@@ -436,6 +483,18 @@ def build_layer_element(
         radius = numeric_expression(renderer, "radius", fallback=symbol.radius)
         attributes.append(("get-point-radius", radius or _number(symbol.radius)))
         attributes.append(("point-radius-units", "pixels"))
+
+    # Raised polygons, from either the layer's 3D view properties or a 2.5D
+    # renderer. `extruded` is a `GeoJsonLayer` prop, so this needs no separate
+    # layer class - it reaches the `PolygonLayer` sublayer that draws the fill.
+    elevation = elevation_expression(layer.elevation)
+    if elevation is not None:
+        attributes.append(("extruded", "true"))
+        attributes.append(("get-elevation", elevation))
+        # QGIS's 3D edges, which read as a building outline rather than a
+        # rendering artefact, so they are worth carrying.
+        if layer.elevation.wireframe:
+            attributes.append(("wireframe", "true"))
 
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
@@ -915,6 +974,22 @@ def build_manifest(
         # all; a chosen basemap adds tile requests and nothing else.
         ("telemetry", "off"),
     ]
+
+    # Same guard as the basemap: an unknown preset would make the runtime
+    # request a DEM it cannot resolve, and blank relief is worse than none.
+    terrain = project.settings.terrain
+    has_terrain = terrain != "none" and terrain in TERRAIN_PRESETS
+    if has_terrain:
+        attributes.append(("terrain", terrain))
+
+    # Height is invisible from directly overhead. Tilting is therefore not a
+    # style preference but the difference between the extrusion showing and the
+    # map looking identical to a flat one - so it follows whatever raises the
+    # scene, rather than being a separate control the user has to find.
+    if has_terrain or any(
+        layer.elevation.is_set for layer in project.exportable_layers
+    ):
+        attributes.append(("pitch", _number(EXTRUDED_PITCH)))
 
     if cap_verdict is not None and cap_verdict.license_key:
         attributes.append(("license-key", cap_verdict.license_key))

@@ -356,3 +356,44 @@ class TestPopupFieldModes:
         assert inline["labelBox"]["top"] == inline["valueBox"]["top"]
 
         assert rows["no_label"]["hasLabel"] is False
+
+
+class TestExtrusion:
+    """A raised map has to be raised in the renderer, not only in the markup.
+
+    deck.gl ignores props it does not recognise without complaining, so an
+    attribute that reached the file but not the layer looks identical on disk
+    and draws flat.
+    """
+
+    def test_it_opens_without_console_errors(self, page, extruded_map) -> None:
+        errors: list[str] = []
+        page.on(
+            "console",
+            lambda message: (
+                errors.append(message.text) if message.type == "error" else None
+            ),
+        )
+        open_map(page, extruded_map)
+        require_webgl(page)
+        page.wait_for_timeout(1500)
+        assert errors == []
+
+    def test_the_layer_is_extruded_and_tilted(self, page, extruded_map) -> None:
+        open_map(page, extruded_map)
+        require_webgl(page)
+        assert (
+            page.evaluate(
+                "() => document.querySelector('om-layer').getAttribute('extruded')"
+            )
+            == "true"
+        )
+        # Without the tilt the extrusion is invisible, which is the whole point.
+        assert (
+            float(
+                page.evaluate(
+                    "() => document.querySelector('om-map').getAttribute('pitch')"
+                )
+            )
+            > 0
+        )

@@ -7,6 +7,26 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Extruded polygons**, read from both of the unrelated places QGIS keeps a
+  height: the layer's 3D View properties (a fixed extrusion height or a
+  data-defined one, plus *Show edges* as a wireframe) and the 2.5D renderer,
+  whose height is not on the renderer at all but in the project variable
+  `qgis_25d_height`.
+
+  A map with anything raised on it now opens tilted. That is not a style
+  preference: looking straight down, an extruded map and a flat one are the same
+  picture, so without it the feature is invisible and reads as broken.
+
+  Not carried, and each reported: a base height, because deck.gl extrudes from
+  ground level; a height written as a QGIS expression rather than one field or
+  one number; 3D point symbols, which are meshes with no equivalent; and
+  extruded lines, which deck.gl draws with a layer that has no elevation.
+- **Opt-in terrain**, defaulting to flat. This is the one setting that is *not*
+  a translation of the project: a QGIS terrain is a DEM on the author's disk and
+  a web map needs fetchable elevation tiles, so what is offered is global relief
+  from a public tileset, with the same recipient-side cost as a basemap. A
+  project whose own terrain is not flat gets a fidelity note either way - saying
+  the relief is global rather than theirs, or that it exported flat.
 - **Per-class symbol size and line width.** A graduated-by-size layer used to
   export every class at one radius, so a map whose entire point was "bigger dot
   means more" came out uniform. Each class now keeps its own size, as a
@@ -30,6 +50,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   to icons, and a point layer draws circles until the symbol atlas lands.
 
 ### Fixed
+- **A 2.5D layer exported grey, losing its symbology entirely.** `Qgs25DRenderer`
+  fell through to the unsupported branch. It is not a wrapper - `embeddedRenderer()`
+  is null - and its symbol is machinery rather than styling: two of its three
+  symbol layers are geometry generators that fake the walls, so reading the top
+  one the usual way finds nothing usable. Its colours come from `roofColor()` and
+  `wallColor()` instead.
 - **`docs/supported-features.md` claimed stacked symbol layers export the bottom
   one.** They have always exported the *top* layer - the one actually visible -
   which is what the code does and what the fidelity report says.

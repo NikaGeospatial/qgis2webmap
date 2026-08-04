@@ -22,6 +22,7 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
+from .elevation_translator import translate_elevation
 from .export_ir import (
     AssetDependency,
     AssetDisposition,
@@ -42,7 +43,7 @@ from .renderer_translator import translate_renderer
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
 
-    from qgis.core import QgsVectorLayer
+    from qgis.core import QgsProject, QgsVectorLayer
 
 WGS84 = "EPSG:4326"
 
@@ -223,11 +224,17 @@ def read_layer(
     precision: int | None = None,
     popup_on_hover: bool = False,
     highlight_color: Color | None = None,
+    project: QgsProject | None = None,
 ) -> ExportLayer | None:
     """Read one vector layer into the normalized model.
 
     Returns `None` for layers 0.1.0 cannot handle at all - rasters, and vector
     layers with no geometry - after recording why.
+
+    `project` is needed only to read a 2.5D renderer's height, which QGIS keeps
+    as a project variable rather than on the layer. Passed in rather than taken
+    from `QgsProject.instance()` so a caller reading a project it opened itself
+    gets that project's height and not the running QGIS session's.
 
     `with_popup` and `with_labels` carry the dialog's per-layer checkboxes. They
     suppress the feature *here*, at the point of translation, rather than in the
@@ -290,6 +297,7 @@ def read_layer(
         scale_range=scale_range(layer),
         renderer=renderer,
         labeling=(translate_labeling(layer, report) if with_labels else LabelingSpec()),
+        elevation=translate_elevation(layer, report, kind, project),
         # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
         popup=translate_popup(
             layer, report, field_modes=field_modes, on_hover=popup_on_hover

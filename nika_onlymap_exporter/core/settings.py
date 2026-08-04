@@ -239,6 +239,9 @@ class DialogState:
     # streamed - but it ends the "opens offline, contacts nobody" guarantee, so
     # it has to be chosen rather than inherited.
     basemap: str = "none"
+    # Off by default for the same reason as the basemap, plus one of its own: it
+    # tilts the map, which changes what the recipient sees first.
+    terrain: str = "none"
     # A multiplier on the size of the map's chrome. 1.0 is the runtime default.
     chrome_scale: float = 1.0
     widget_background: str = ""
@@ -281,6 +284,7 @@ class DialogState:
                         "show_abstract",
                         "title_corner",
                         "basemap",
+                        "terrain",
                         "chrome_scale",
                         "widget_background",
                         "widget_foreground",
@@ -320,6 +324,7 @@ class DialogState:
             show_abstract=self.show_abstract,
             title_corner=self.title_corner,
             basemap=self.basemap,
+            terrain=self.terrain,
             chrome_scale=self.chrome_scale,
             widget_background=parse_hex_color(self.widget_background),
             widget_foreground=parse_hex_color(self.widget_foreground),
@@ -361,6 +366,7 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
             state.basemap = str(widgets.get("basemap", "none") or "none")
+            state.terrain = str(widgets.get("terrain", "none") or "none")
             state.chrome_scale = _read_scale(widgets.get("chromeScale"))
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
@@ -402,6 +408,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "showAbstract": state.show_abstract,
                 "titleCorner": state.title_corner.value,
                 "basemap": state.basemap,
+                "terrain": state.terrain,
                 "chromeScale": state.chrome_scale,
                 "widgetBackground": state.widget_background,
                 "widgetForeground": state.widget_foreground,

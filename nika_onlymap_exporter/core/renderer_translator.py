@@ -319,6 +319,40 @@ def _safe(obj: Any, method: str) -> Any:
         return None
 
 
+def _translate_25d(
+    renderer: Any,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> RendererSpec:
+    """The 2.5D renderer's colours, which are not in its symbol.
+
+    Its `QgsFillSymbol` is machinery, not styling: two of its three symbol
+    layers are geometry generators that extrude and translate the polygon to
+    fake walls and a raised roof. Translating that symbol the normal way reads
+    the topmost layer - a geometry generator - and comes back with nothing
+    usable, which is how a 2.5D layer used to export grey.
+
+    The real colours are two plain accessors on the renderer itself. The roof is
+    the fill, because the roof is the face you look at; `elevation_translator`
+    separately turns the fake walls into a real extrusion.
+    """
+    roof = _color_from_qcolor(_safe(renderer, "roofColor"))
+    wall = _color_from_qcolor(_safe(renderer, "wallColor"))
+    report.approximated(
+        subject,
+        "The 2.5D renderer's roof colour becomes the layer's fill and its wall "
+        "colour the outline. A single colour per layer is all this renderer "
+        "offers, so nothing is lost - but shading each wall by its angle is a "
+        "QGIS drawing trick that the web map replaces with real lighting.",
+        layer_id,
+    )
+    return RendererSpec(
+        kind=RendererKind.SINGLE,
+        symbol=SymbolSpec(fill_color=roof, stroke_color=wall),
+    )
+
+
 def translate_renderer(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
@@ -333,6 +367,9 @@ def translate_renderer(
         return RendererSpec(
             kind=RendererKind.UNSUPPORTED, unsupported_reason="no renderer"
         )
+
+    if _safe(renderer, "type") == "25dRenderer":
+        return _translate_25d(renderer, report, subject, layer_id)
 
     if isinstance(renderer, QgsSingleSymbolRenderer):
         symbol = translate_symbol(renderer.symbol(), report, subject, layer_id)
