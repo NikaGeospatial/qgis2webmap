@@ -33,7 +33,6 @@ from qgis.core import (
 
 from .export_ir import (
     MM_TO_PIXELS,
-    NATIVELY_ROUND_MARKER_SHAPES,
     CategorySpec,
     ClassificationMethod,
     Color,
@@ -205,23 +204,15 @@ def translate_symbol(
         dash = tuple(float(v) * MM_TO_PIXELS for v in pattern)
 
     icon_path = _safe(symbol_layer, "path")
-    if icon_path:
-        report.approximated(
-            subject,
-            f"Uses the SVG marker '{icon_path}'. The file is embedded, but QGIS "
-            "SVG parameter overrides (dynamic fill and stroke) are not applied.",
-            layer_id,
-        )
-
     marker_shape = read_marker_shape(symbol_layer)
-    if marker_shape and marker_shape not in NATIVELY_ROUND_MARKER_SHAPES:
-        report.approximated(
-            subject,
-            f"The marker shape is '{marker_shape}'. It is recorded and drawn as "
-            "that shape where the renderer can, rather than being silently "
-            "replaced by a circle.",
-            layer_id,
-        )
+
+    # No note about the SVG or the shape here. On a point layer the symbol atlas
+    # takes over and reports the outcome once for the whole layer - QGIS draws
+    # the marker itself, parameter overrides and all - and a per-class note
+    # saying the shape "may" be lost, on a layer where it demonstrably was not,
+    # is worse than no note. `symbol_atlas.needs_atlas` is what decides; a
+    # non-point layer that reaches here with a marker (a marker line, a point
+    # pattern fill) is covered by the stacked-symbol-layer note above.
 
     return SymbolSpec(
         fill_color=fill_color,
@@ -599,6 +590,59 @@ def _translate_graduated(
         classification=classification,
         ramp_name=_ramp_name(renderer),
     )
+
+
+def class_symbols(renderer: QgsFeatureRenderer | None) -> list[QgsSymbol]:
+    """The live QGIS symbols behind a `RendererSpec`'s classes, in the same order.
+
+    The symbol atlas has to *draw* what the spec describes, and a `SymbolSpec`
+    is a flattened summary rather than something drawable - the whole point of
+    rasterising is to let QGIS render the original object. So the atlas needs
+    both, paired up, and pairing them positionally is only safe if this walk
+    applies exactly the same skip rules `_translate_categorized` does. It does:
+    a category with `renderState()` false is dropped in both.
+
+    Kept here, next to those rules, rather than in the atlas module, so the two
+    cannot drift apart unnoticed. `tests/qgis/test_renderer_translator.py` pins
+    the lengths against each other for all three renderer kinds.
+
+    **Clones, not the renderer's own symbols.** `renderer.categories()` hands
+    back a temporary list whose entries own the `QgsSymbol` pointers; once that
+    temporary is collected, a pointer held past the end of the comprehension
+    refers to freed memory. Using one crashes the interpreter rather than
+    raising - which is exactly what it did, as a segfault inside `clone()` two
+    tests after the list was built. Cloning makes Python the owner and the
+    lifetime obvious.
+    """
+    if renderer is None:
+        return []
+
+    # The 2.5D renderer is deliberately absent: its symbol is machinery (two of
+    # its three symbol layers are geometry generators), it applies to polygons,
+    # and `_translate_25d` synthesises a spec from the renderer's own colour
+    # accessors rather than from any drawable symbol.
+    if _safe(renderer, "type") == "25dRenderer":
+        return []
+
+    if isinstance(renderer, QgsSingleSymbolRenderer):
+        symbol = renderer.symbol()
+        return [symbol.clone()] if symbol is not None else []
+
+    if isinstance(renderer, QgsCategorizedSymbolRenderer):
+        return [
+            category.symbol().clone()
+            for category in renderer.categories()
+            if category.renderState() and category.symbol() is not None
+        ]
+
+    if isinstance(renderer, QgsGraduatedSymbolRenderer):
+        return [
+            value_range.symbol().clone()
+            for value_range in renderer.ranges()
+            if value_range.symbol() is not None
+        ]
+
+    return []
 
 
 def _ramp_name(renderer: Any) -> str | None:

@@ -39,6 +39,7 @@ from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import translate_popup
 from .renderer_translator import translate_renderer
+from .symbol_rasterizer import build_icon_atlas
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
@@ -278,6 +279,14 @@ def read_layer(
     renderer = translate_renderer(layer, report)
     geojson = drop_hidden_features(geojson, renderer)
 
+    # After the renderer, because the atlas rasterises the very symbols the
+    # renderer just described, and re-emits it with each class naming its icon.
+    # Layers that draw with plain circles - almost all of them - get `None` back
+    # and the renderer they came in with, untouched.
+    icon_atlas, renderer = build_icon_atlas(
+        layer.renderer(), renderer, kind, report, name, layer_id
+    )
+
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:
         report.unsupported(
@@ -296,6 +305,7 @@ def read_layer(
         opacity=float(layer.opacity()),
         scale_range=scale_range(layer),
         renderer=renderer,
+        icon_atlas=icon_atlas,
         labeling=(translate_labeling(layer, report) if with_labels else LabelingSpec()),
         elevation=translate_elevation(layer, report, kind, project),
         # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.

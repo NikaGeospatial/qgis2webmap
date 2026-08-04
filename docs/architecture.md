@@ -56,8 +56,9 @@ every push.
 | `extent_math.py` — extent + antimeridian | `layer_reader.py` |
 | `fidelity_report.py` — the accumulator | `renderer_translator.py` |
 | `license_policy.py` — cap detection and policies | `labeling_translator.py`, `popup_translator.py` |
+| `symbol_atlas.py` — which icons, and where in the sheet | `symbol_rasterizer.py` — drawing them |
 
-Two of these are not in issue #29's file list and are deliberate additions:
+Three of these are not in issue #29's file list and are deliberate additions:
 
 - **`extent_math.py`** exists so the antimeridian logic — the fix for the
   incumbent's worst first impression — is unit-tested without QGIS. Folding it
@@ -66,6 +67,11 @@ Two of these are not in issue #29's file list and are deliberate additions:
 - **`license_policy.py`** separates cap *detection* (unconditional, feeds the
   Fidelity tab) from *enforcement* (swappable), because whether exports carry a
   licence key is still an open product decision.
+- **`symbol_atlas.py`** is the same split applied to markers. Rasterising needs
+  QGIS, but deciding *which* layers need a sprite sheet and *where* each icon
+  sits in it is arithmetic — and arithmetic that fails invisibly, since an icon
+  at the wrong coordinates simply draws its neighbour. Keeping it pure puts
+  every gating rule and every cell coordinate in CI.
 
 The rule for new code: if it can be pure, make it pure. Push PyQGIS access to the
 edge so the logic underneath stays testable.

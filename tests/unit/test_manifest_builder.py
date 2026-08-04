@@ -28,6 +28,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     GeometryKind,
     GraduatedClassSpec,
+    IconAtlasSpec,
     LabelingSpec,
     PopupFieldMode,
     PopupFieldSpec,
@@ -44,13 +45,17 @@ from nika_onlymap_exporter.core.manifest_builder import (
     WIDGET_POSITIONS,
     build_label_element,
     build_layer_element,
+    build_legend_widget,
     build_manifest,
     build_popup_elements,
+    build_widget_elements,
     collect_attributions,
     color_literal,
     escape_attr,
     fill_expression,
+    icon_expression,
     json_for_script,
+    needs_image_legend,
     numeric_expression,
     scale_to_zoom,
     terrain_note,
@@ -1170,3 +1175,294 @@ class TestTerrain:
 
     def test_no_note_when_flat(self) -> None:
         assert terrain_note("none") is None
+
+
+# --------------------------------------------------------------------------
+# Symbol atlas: markers QGIS had to draw itself
+# --------------------------------------------------------------------------
+
+ATLAS = IconAtlasSpec(
+    data_uri="data:image/png;base64,SHEET",
+    mapping={
+        "i0": {
+            "x": 0,
+            "y": 0,
+            "width": 30,
+            "height": 30,
+            "anchorX": 15,
+            "anchorY": 15,
+            "mask": False,
+        },
+        "i1": {
+            "x": 30,
+            "y": 0,
+            "width": 30,
+            "height": 30,
+            "anchorX": 15,
+            "anchorY": 15,
+            "mask": False,
+        },
+    },
+    swatches={
+        "i0": "data:image/png;base64,SWATCH0",
+        "i1": "data:image/png;base64,SWATCH1",
+    },
+    supersample=3,
+)
+
+
+def icon_symbol(name: str, size: float, **overrides) -> SymbolSpec:
+    defaults = dict(fill_color=RED, marker_shape="star", radius=size / 2)
+    defaults.update(overrides)
+    return SymbolSpec(icon_name=name, icon_size=size, **defaults)
+
+
+def make_icon_layer(renderer: RendererSpec, **overrides) -> ExportLayer:
+    return make_layer(renderer=renderer, icon_atlas=ATLAS, **overrides)
+
+
+SINGLE_ICON = RendererSpec(kind=RendererKind.SINGLE, symbol=icon_symbol("i0", 12.0))
+
+CATEGORIZED_ICONS = RendererSpec(
+    kind=RendererKind.CATEGORIZED,
+    field_name="kind",
+    categories=(
+        CategorySpec(value="civil", label="Civil", symbol=icon_symbol("i0", 12.0)),
+        CategorySpec(value="metro", label="Metro", symbol=icon_symbol("i1", 20.0)),
+    ),
+)
+
+GRADUATED_ICONS = RendererSpec(
+    kind=RendererKind.GRADUATED,
+    field_name="pop",
+    classes=(
+        GraduatedClassSpec(
+            lower=0, upper=100, label="0 - 100", symbol=icon_symbol("i0", 12.0)
+        ),
+        GraduatedClassSpec(
+            lower=100, upper=500, label="100 - 500", symbol=icon_symbol("i1", 20.0)
+        ),
+    ),
+)
+
+
+class TestIconLayer:
+    """A point layer whose markers were rasterised.
+
+    The whole feature turns on one decision: the layer stays a `GeoJsonLayer`
+    and swaps its internal point sublayer via `point-type`, rather than becoming
+    an `IconLayer`. An `IconLayer` takes rows with a position accessor, not
+    GeoJSON, so that route would ship the coordinates a second time and drop any
+    non-point geometry sharing the file.
+    """
+
+    def test_the_layer_class_does_not_change(self) -> None:
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert 'type="GeoJsonLayer"' in markup
+        assert 'type="IconLayer"' not in markup
+
+    def test_the_point_sublayer_switches_to_icons(self) -> None:
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert 'point-type="icon"' in markup
+
+    def test_the_sheet_and_its_mapping_are_emitted(self) -> None:
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert 'icon-atlas="data:image/png;base64,SHEET"' in markup
+        assert "icon-mapping=" in markup
+        # The mapping travels as JSON, so its quotes are escaped for the
+        # attribute rather than ending it early.
+        assert "&quot;anchorX&quot;" in markup
+
+    def test_sizes_are_pixels(self) -> None:
+        """Without this deck.gl reads the size as metres: markers balloon on
+        zoom in and vanish on zoom out."""
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert 'icon-size-units="pixels"' in markup
+
+    def test_a_single_symbol_names_its_icon_as_a_literal(self) -> None:
+        assert icon_expression(SINGLE_ICON) == "'i0'"
+
+    def test_a_categorized_layer_gets_a_ternary_chain(self) -> None:
+        expression = icon_expression(CATEGORIZED_ICONS)
+        assert expression == (
+            "$kind == 'civil' ? 'i0' : $kind == 'metro' ? 'i1' : 'i0'"
+        )
+
+    def test_the_categorized_fallback_is_a_real_icon(self) -> None:
+        """deck.gl draws nothing at all for an icon name it cannot resolve, so
+        a feature outside every class would silently vanish."""
+        expression = icon_expression(CATEGORIZED_ICONS)
+        assert expression.rsplit(" : ", 1)[-1] in ("'i0'", "'i1'")
+
+    def test_a_graduated_layer_gets_a_threshold_scale(self) -> None:
+        assert icon_expression(GRADUATED_ICONS) == (
+            "scale($pop, threshold, ['i0', 'i1'], domain=[100])"
+        )
+
+    def test_per_class_sizes_survive(self) -> None:
+        """A graduated-by-size layer of icons is the case this rescues: without
+        it every class draws at one size and the map's whole point is lost."""
+        markup = build_layer_element(make_icon_layer(GRADUATED_ICONS))
+        assert (
+            'get-icon-size="scale($pop, threshold, [12, 20], domain=[100])"' in markup
+        )
+
+    def test_one_size_stays_a_constant(self) -> None:
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert 'get-icon-size="12"' in markup
+
+    def test_the_circle_radius_is_not_also_emitted(self) -> None:
+        """The circle sublayer is not drawn when `point-type` is icon, so a
+        radius alongside it is noise that reads as a contradiction."""
+        markup = build_layer_element(make_icon_layer(SINGLE_ICON))
+        assert "get-point-radius=" not in markup
+
+    def test_a_marker_offset_becomes_a_pixel_offset(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=icon_symbol("i0", 12.0, offset_x=3.0, offset_y=-4.0),
+        )
+        markup = build_layer_element(make_icon_layer(renderer))
+        assert 'get-icon-pixel-offset="[3, -4]"' in markup
+
+    def test_a_layer_without_an_atlas_is_untouched(self) -> None:
+        """Byte-for-byte the output it always had: almost every layer is this
+        one, and a change here would be a regression for all of them."""
+        markup = build_layer_element(
+            make_layer(
+                renderer=RendererSpec(
+                    kind=RendererKind.SINGLE,
+                    symbol=SymbolSpec(fill_color=RED, radius=5.0),
+                )
+            )
+        )
+        for attribute in ("point-type", "icon-atlas", "get-icon", "icon-mapping"):
+            assert attribute not in markup
+        assert "get-point-radius=" in markup
+
+    def test_an_atlas_without_icon_names_emits_nothing(self) -> None:
+        """A half-built atlas must not produce `get-icon` pointing at names the
+        mapping does not contain - that draws an empty map, not a fallback."""
+        renderer = RendererSpec(
+            kind=RendererKind.SINGLE, symbol=SymbolSpec(fill_color=RED, radius=5.0)
+        )
+        markup = build_layer_element(make_icon_layer(renderer))
+        assert "point-type=" not in markup
+
+    def test_every_icon_attribute_exists_in_the_schema(self, known_attributes) -> None:
+        project = make_project([make_icon_layer(CATEGORIZED_ICONS)])
+        markup = build_manifest(project)
+
+        unknown = [
+            f"{element}[{name}]"
+            for element, attributes in re.findall(r"<(om-[a-z]+)\b([^>]*)>", markup)
+            for name in re.findall(r'(?:^|\s)([a-z][a-z0-9-]*)="', attributes)
+            if name not in known_attributes.get(element, set())
+        ]
+        assert not unknown, f"attributes absent from the OnlyMap schema: {unknown}"
+
+
+class TestImageLegend:
+    """The legend has to show the markers the map draws, not an approximation.
+
+    A hand-drawn swatch beside a rasterised marker is exactly the divergence
+    this widget exists to prevent - and it is why the swatch is a picture cut
+    from the same rendering the map uses.
+    """
+
+    def test_a_project_without_icons_keeps_the_built_in_widget(self) -> None:
+        """The built-in legend is interactive and follows layer visibility. It
+        is kept for almost every project, so we do not fork it forever."""
+        widgets = build_widget_elements(make_project())
+        assert 'type="legend"' in widgets
+
+    def test_a_project_with_icons_needs_its_own(self) -> None:
+        assert needs_image_legend(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
+        assert not needs_image_legend(make_project())
+
+    def test_the_custom_legend_replaces_the_built_in_one(self) -> None:
+        widgets = build_widget_elements(
+            make_project([make_icon_layer(CATEGORIZED_ICONS)])
+        )
+        assert 'type="legend"' not in widgets
+        assert "omni-panel" in widgets
+
+    def test_it_carries_no_script(self) -> None:
+        """A widget with no type and no `om/widget` script is purely static, so
+        this stays markup rather than the generated JavaScript this project
+        exists not to write."""
+        markup = build_legend_widget(make_project([make_icon_layer(SINGLE_ICON)]))
+        assert "<script" not in markup
+
+    def test_swatches_come_from_the_atlas(self) -> None:
+        markup = build_legend_widget(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
+        assert "data:image/png;base64,SWATCH0" in markup
+        assert "data:image/png;base64,SWATCH1" in markup
+
+    def test_class_labels_are_shown(self) -> None:
+        markup = build_legend_widget(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
+        assert "Civil" in markup and "Metro" in markup
+
+    def test_a_categorized_layer_explains_its_other_row(self) -> None:
+        """Features outside every class are drawn in the fallback colour, so
+        the legend has to account for them."""
+        markup = build_legend_widget(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
+        assert ">other<" in markup
+
+    def test_a_graduated_layer_lists_its_ranges(self) -> None:
+        markup = build_legend_widget(make_project([make_icon_layer(GRADUATED_ICONS)]))
+        assert "0 - 100" in markup and "100 - 500" in markup
+
+    def test_a_colour_layer_beside_an_icon_layer_keeps_a_colour_swatch(self) -> None:
+        """A mixed project must not lose the plain layers: once the custom
+        legend takes over it is the only legend, so it renders everything."""
+        project = make_project(
+            [
+                make_icon_layer(SINGLE_ICON),
+                make_layer(
+                    layer_id="plain",
+                    name="Plain layer",
+                    renderer=RendererSpec(
+                        kind=RendererKind.SINGLE, symbol=SymbolSpec(fill_color=BLUE)
+                    ),
+                ),
+            ]
+        )
+        markup = build_legend_widget(project)
+        assert "Plain layer" in markup
+        assert "background:#0000ff" in markup
+
+    def test_its_styles_travel_inside_it(self) -> None:
+        """`om-widget` moves its children into a shadow root, which document
+        rules never reach - the same boundary the popup styles hit."""
+        markup = build_legend_widget(make_project([make_icon_layer(SINGLE_ICON)]))
+        opening = markup.index("<om-widget")
+        closing = markup.index("</om-widget>")
+        assert opening < markup.index("<style>") < closing
+
+    def test_it_uses_the_runtime_theming_hooks(self) -> None:
+        """Custom properties inherit through a shadow root, so a user theming
+        the map still themes this - and a map with SVG markers does not look
+        like a different product from one without."""
+        markup = build_legend_widget(make_project([make_icon_layer(SINGLE_ICON)]))
+        assert "--om-widget-bg" in markup
+        assert "--om-widget-fg" in markup
+
+    def test_it_sits_where_the_built_in_legend_sits(self) -> None:
+        markup = build_legend_widget(make_project([make_icon_layer(SINGLE_ICON)]))
+        assert f'position="{WIDGET_POSITIONS["legend"]}"' in markup
+
+    def test_it_is_suppressed_with_the_legend_setting(self) -> None:
+        project = make_project(
+            [make_icon_layer(SINGLE_ICON)],
+            settings=ExportSettings(show_legend=False),
+        )
+        assert "omni-panel" not in build_widget_elements(project)
+
+    def test_layer_names_are_escaped(self) -> None:
+        """Layer names are user text and reach the artifact as markup."""
+        project = make_project([make_icon_layer(SINGLE_ICON, name='<img onerror="x">')])
+        markup = build_legend_widget(project)
+        assert "<img onerror" not in markup
+        assert "&lt;img onerror" in markup
+

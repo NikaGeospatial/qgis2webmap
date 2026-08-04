@@ -397,3 +397,143 @@ class TestExtrusion:
             )
             > 0
         )
+
+
+class TestIconMarkers:
+    """Markers QGIS rasterised, drawn by a real deck.gl.
+
+    Everything here fails silently on disk. `point-type` reaching the file but
+    not the layer, a sprite sheet the browser will not decode, an icon name the
+    mapping does not contain - each produces a map with no markers at all and no
+    error, which looks exactly like a map that has not finished loading.
+    """
+
+    def test_it_opens_without_console_errors(self, page, icon_map) -> None:
+        errors: list[str] = []
+        page.on(
+            "console",
+            lambda message: (
+                errors.append(message.text) if message.type == "error" else None
+            ),
+        )
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        open_map(page, icon_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+        assert errors == [], f"console errors: {errors}"
+
+    def test_the_runtime_accepts_every_icon_attribute(self, page, icon_map) -> None:
+        """The runtime warns by name for an attribute it does not recognise, so
+        this catches a prop we invented or one deck.gl has since renamed -
+        which is otherwise invisible until someone looks at the map."""
+        warnings: list[str] = []
+        page.on(
+            "console",
+            lambda message: (
+                warnings.append(message.text) if message.type == "warning" else None
+            ),
+        )
+        open_map(page, icon_map)
+        require_webgl(page)
+        page.wait_for_timeout(1500)
+        unknown = [w for w in warnings if "Unknown attribute" in w]
+        assert unknown == [], f"the runtime rejected an attribute: {unknown}"
+
+    def test_the_point_sublayer_is_icons(self, page, icon_map) -> None:
+        open_map(page, icon_map)
+        assert (
+            page.evaluate(
+                "() => document.querySelector('om-layer').getAttribute('point-type')"
+            )
+            == "icon"
+        )
+
+    def test_the_sheet_is_a_decodable_image(self, page, icon_map) -> None:
+        """A sprite sheet the browser cannot decode leaves every marker
+        undrawn. Decoding it here is the only way to know the bytes are good."""
+        open_map(page, icon_map)
+        decoded = page.evaluate(
+            """
+            async () => {
+              const src = document.querySelector('om-layer')
+                .getAttribute('icon-atlas');
+              const image = new Image();
+              image.src = src;
+              try {
+                await image.decode();
+              } catch (error) {
+                return null;
+              }
+              return [image.naturalWidth, image.naturalHeight];
+            }
+            """
+        )
+        assert decoded is not None, "the browser could not decode the sprite sheet"
+        assert decoded[0] > 0 and decoded[1] > 0
+
+    def test_the_named_cell_is_inside_the_sheet(self, page, icon_map) -> None:
+        """deck.gl draws nothing for a cell that runs off the edge, and says
+        nothing about it."""
+        open_map(page, icon_map)
+        result = page.evaluate(
+            """
+            async () => {
+              const layer = document.querySelector('om-layer');
+              const mapping = JSON.parse(layer.getAttribute('icon-mapping'));
+              const name = layer.getAttribute('get-icon').replace(/'/g, '');
+              const image = new Image();
+              image.src = layer.getAttribute('icon-atlas');
+              await image.decode();
+              const cell = mapping[name];
+              if (!cell) return 'the named cell is missing from the mapping';
+              if (cell.x + cell.width > image.naturalWidth) return 'cell overruns';
+              if (cell.y + cell.height > image.naturalHeight) return 'cell overruns';
+              return 'ok';
+            }
+            """
+        )
+        assert result == "ok"
+
+    def test_the_map_still_draws(self, page, icon_map) -> None:
+        open_map(page, icon_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        box = page.locator("om-map canvas").first.bounding_box()
+        assert box is not None and box["width"] > 100
+
+    def test_the_legend_shows_the_markers_own_picture(self, page, icon_map) -> None:
+        """The custom legend's whole reason to exist: its swatch is cut from the
+        same rendering the map draws, so the two cannot disagree. A swatch that
+        failed to load reports a natural size of zero."""
+        open_map(page, icon_map)
+        # Search every widget rather than the first: the runtime's layout
+        # manager reparents widgets into slot containers, so document order is
+        # its business, not ours. Pinning to `querySelector('om-widget')` made
+        # this test fail on a runtime bump for a legend that rendered perfectly.
+        size = page.evaluate(
+            """
+            async () => {
+              for (const widget of document.querySelectorAll('om-widget')) {
+                const img = widget.shadowRoot
+                  && widget.shadowRoot.querySelector('img.omni-swatch');
+                if (!img) continue;
+                await img.decode();
+                return [img.naturalWidth, img.naturalHeight];
+              }
+              return null;
+            }
+            """
+        )
+        assert size is not None, "the legend has no image swatch"
+        assert size[0] > 0 and size[1] > 0
+
+    def test_the_legend_needs_no_script(self, page, icon_map) -> None:
+        """A static widget, so the export stays markup and the Content Security
+        Policy needs nothing beyond `data:` images for it."""
+        open_map(page, icon_map)
+        assert (
+            page.evaluate("() => document.querySelectorAll('om-widget script').length")
+            == 0
+        )
+

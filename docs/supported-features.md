@@ -26,11 +26,46 @@ Data in any CRS is reprojected to WGS84 on the way out.
 | Graduated | Yes, keeping your exact class breaks |
 | Per-class symbol size and line width | Yes, each class keeps its own |
 | Line cap and join style | Yes, where you chose rounded |
-| Marker shapes (square, star, triangle, …) | Recorded, and reported if approximated |
+| Marker shapes (square, star, triangle, …) | Yes - drawn by QGIS itself |
+| SVG markers, including parametrised fill and stroke | Yes - drawn by QGIS itself |
+| Stacked symbol layers on a **point** | Yes - drawn by QGIS itself |
+| Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
 | Rule-based, embedded-symbol renderers | Not in 0.1.0, reported by name |
-| Stacked symbol layers | Top layer only - the one you see - and reported |
 | Dashed and dotted lines | Not in 0.1.0, reported |
+| Markers along a line, or filling a polygon | Not in 0.1.0, reported |
 | 2.5D renderer | Yes - becomes a real extrusion, keeping the roof and wall colours |
+
+### Markers
+
+A point layer using anything a plain circle cannot express — an SVG file, one of
+QGIS's ~40 marker shapes, or several symbol layers stacked into one marker — is
+**drawn by QGIS** into the exported file as a small image sheet, and the map
+draws from that. Nothing about the symbol is re-created in the browser, so a
+parametrised SVG comes out in the colours you set it to, and a stacked marker
+comes out stacked.
+
+This is the single biggest gap in the incumbent: qgis2web draws every marker as
+a circle, in both of its renderers, and says nothing about it
+([qgis2web#1218](https://github.com/qgis2web/qgis2web/issues/1218)).
+
+Worth knowing:
+
+- **It applies to the whole layer.** If one class uses an SVG, every class in
+  that layer is drawn the same way, plain dots included. Splitting one layer in
+  two would make the halves fight over which draws on top.
+- **The legend switches with it.** A map with drawn markers gets a legend whose
+  swatches are those same markers, so the legend and the map cannot disagree.
+  That legend is static, so it does not grey a layer out when you hide it from
+  the layer switcher; every other map keeps the interactive legend.
+- **Marker size, rotation and offset are kept.** A layer whose classes differ in
+  size keeps each class's own size.
+- **Very elaborate layers fall back.** Past 256 distinct marker appearances in
+  one layer, or markers so large the sheet would exceed what some graphics
+  hardware accepts, the layer draws as plain circles in its own colours rather
+  than drawing some markers and not others. The Fidelity tab says which, and
+  why.
+- **If you host the map behind a strict Content Security Policy**, it needs to
+  allow `data:` images — see [Hosting](hosting.md).
 
 ## Height
 

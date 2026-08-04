@@ -14,6 +14,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import (
@@ -23,6 +25,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ExportProject,
     Extent,
     GeometryKind,
+    IconAtlasSpec,
     LabelingSpec,
     PopupFieldMode,
     PopupFieldSpec,
@@ -262,3 +265,105 @@ def page_with_network_log(page):
     page.on("request", lambda request: requests.append(request.url))
     page.requests_made = requests
     return page
+
+
+# --------------------------------------------------------------------------
+# Icon markers
+# --------------------------------------------------------------------------
+
+
+def _solid_png(side: int, rgb: tuple[int, int, int]) -> bytes:
+    """A square opaque PNG, built by hand.
+
+    This tier deliberately has no PyQGIS and no imaging library, and the point
+    of the icon fixtures is to prove the *browser* accepts what we emit - so the
+    bytes have to be a genuinely valid PNG rather than a placeholder string. A
+    dozen lines of zlib and CRC is cheaper than a dependency the release matrix
+    would then have to install everywhere.
+    """
+    import struct
+    import zlib
+
+    red, green, blue = rgb
+    raw = b"".join(b"\x00" + bytes([red, green, blue, 255]) * side for _ in range(side))
+
+    def chunk(tag: bytes, payload: bytes) -> bytes:
+        body = tag + payload
+        return (
+            struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+        )
+
+    return b"".join(
+        [
+            b"\x89PNG\r\n\x1a\n",
+            # 8-bit RGBA, no interlace.
+            chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 6, 0, 0, 0)),
+            chunk(b"IDAT", zlib.compress(raw, 9)),
+            chunk(b"IEND", b""),
+        ]
+    )
+
+
+def _png_data_uri(side: int, rgb: tuple[int, int, int]) -> str:
+    return "data:image/png;base64," + base64.b64encode(_solid_png(side, rgb)).decode()
+
+
+ICON_CELL = 48
+ICON_ATLAS = IconAtlasSpec(
+    data_uri=_png_data_uri(ICON_CELL, (220, 40, 120)),
+    mapping={
+        "i0": {
+            "x": 0,
+            "y": 0,
+            "width": ICON_CELL,
+            "height": ICON_CELL,
+            "anchorX": ICON_CELL / 2,
+            "anchorY": ICON_CELL / 2,
+            "mask": False,
+        }
+    },
+    swatches={"i0": _png_data_uri(16, (220, 40, 120))},
+    supersample=3,
+)
+
+
+@pytest.fixture(scope="session")
+def icon_map(runtime, tmp_path_factory):
+    """A point layer whose markers came from a sprite sheet.
+
+    Markup tests can only say the attributes were written. Whether deck.gl
+    accepts `point-type`, resolves a `data:` sprite sheet and finds the named
+    cell is a question only a browser can answer - and getting any of it wrong
+    draws an empty map, not a broken one, which is precisely the failure mode
+    that goes unnoticed.
+    """
+    layer = ExportLayer(
+        layer_id="markers",
+        name="Markers",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=2,
+        geojson=GEOJSON,
+        icon_atlas=ICON_ATLAS,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(
+                fill_color=Color(r=220, g=40, b=120),
+                marker_shape="star",
+                radius=8.0,
+                icon_name="i0",
+                icon_size=16.0,
+            ),
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title="Icon map",
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=50.9, east=1.1, north=51.9),
+    )
+
+    destination = tmp_path_factory.mktemp("icons")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
+

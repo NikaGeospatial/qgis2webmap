@@ -78,6 +78,16 @@ hosting the map, ideally scoped to just that page:
 Content-Security-Policy: script-src 'self' 'unsafe-eval'
 ```
 
+If the map uses layers with SVG or shaped markers, it also carries those markers
+as embedded images, so the policy has to allow `data:` images:
+
+```
+Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data:
+```
+
+Without it the markers do not appear and the rest of the map draws normally,
+which is easy to mistake for a data problem.
+
 If your organisation cannot relax that policy, serve the map from its own page
 or subdomain with its own policy, and link or iframe it from the strict one.
 

@@ -363,6 +363,46 @@ def numeric_expression(
     return f"scale(${field}, threshold, {sizes_literal}, domain={domain_literal})"
 
 
+def icon_expression(renderer: RendererSpec) -> str | None:
+    """`get-icon`: which cell of the sprite sheet each feature draws.
+
+    The same three canonical shapes the colour expressions use - a literal for a
+    single symbol, an equality ternary chain for categorized, a `threshold`
+    scale for graduated - so the accessor reads the same way whether it carries
+    a colour or an icon name, and so a reader editing the artifact by hand meets
+    one pattern rather than three.
+
+    `None` when any class is missing its icon, which means the atlas was not
+    built and the caller must emit nothing.
+    """
+    symbols = _class_symbols(renderer) or (
+        [renderer.symbol] if renderer.symbol is not None else []
+    )
+    names = [symbol.icon_name for symbol in symbols if symbol is not None]
+    if not names or any(name is None for name in names):
+        return None
+
+    if renderer.kind is RendererKind.CATEGORIZED:
+        field = renderer.field_name or ""
+        parts = [
+            f"${field} == {value_literal(category.value)} "
+            f"? {value_literal(category.symbol.icon_name)}"
+            for category in renderer.categories
+        ]
+        # The trailing fallback is the first class's icon rather than a blank:
+        # deck.gl draws nothing at all for an icon name it cannot resolve, so a
+        # feature outside every class would silently vanish from the map.
+        return " : ".join(parts) + f" : {value_literal(names[0])}"
+
+    if renderer.kind is RendererKind.GRADUATED:
+        field = renderer.field_name or ""
+        icons = "[" + ", ".join(value_literal(name) for name in names) + "]"
+        breaks = "[" + ", ".join(_number(k.upper) for k in renderer.classes[:-1]) + "]"
+        return f"scale(${field}, threshold, {icons}, domain={breaks})"
+
+    return value_literal(names[0])
+
+
 def elevation_expression(elevation: ElevationSpec) -> str | None:
     """`get-elevation` for a raised layer, or `None` if it is not raised.
 
@@ -476,7 +516,43 @@ def build_layer_element(
             if symbol.join_rounded:
                 attributes.append(("line-joint-rounded", "true"))
 
-    if layer.geometry_kind is GeometryKind.POINT and symbol.radius:
+    # Markers QGIS had to draw itself. **Still a `GeoJsonLayer`** - deck.gl's
+    # `pointType="icon"` swaps the internal circle sublayer for an icon one,
+    # leaving geometry handling, picking, popups and draw order exactly as they
+    # were. Switching the whole layer to an `IconLayer` was the obvious-looking
+    # alternative and is much worse: an `IconLayer` takes rows with a position
+    # accessor, not GeoJSON, so it would mean shipping the point coordinates a
+    # second time and would drop any non-point geometry in the same file.
+    icons = icon_expression(layer.renderer) if layer.icon_atlas else None
+    if layer.icon_atlas is not None and icons is not None:
+        attributes.append(("point-type", "icon"))
+        attributes.append(("icon-atlas", layer.icon_atlas.data_uri))
+        attributes.append(
+            ("icon-mapping", json.dumps(layer.icon_atlas.mapping, sort_keys=True))
+        )
+        attributes.append(("get-icon", icons))
+        # The size each cell was measured at, so a marker comes out the size
+        # QGIS drew it. Per class when the classes disagree, which is what makes
+        # a graduated-by-size layer of icons work.
+        size = numeric_expression(layer.renderer, "icon_size", fallback=None)
+        if size is None:
+            first = next(
+                (s.icon_size for s in _class_symbols(layer.renderer) if s.icon_size),
+                symbol.icon_size,
+            )
+            size = _number(first or 0.0)
+        attributes.append(("get-icon-size", size))
+        # Without this deck.gl reads the size as metres and the markers balloon
+        # on zoom in and vanish on zoom out - the same trap as line widths.
+        attributes.append(("icon-size-units", "pixels"))
+        if symbol.offset_x or symbol.offset_y:
+            attributes.append(
+                (
+                    "get-icon-pixel-offset",
+                    f"[{_number(symbol.offset_x)}, {_number(symbol.offset_y)}]",
+                )
+            )
+    elif layer.geometry_kind is GeometryKind.POINT and symbol.radius:
         # QGIS graduated-by-size is the common case this rescues: every class
         # used to export at the representative symbol's radius, so a map whose
         # whole point was "bigger dot means more" came out uniform.
@@ -877,6 +953,170 @@ WIDGET_POSITIONS = {
 }
 
 
+# **This travels inside the widget, not in the document's stylesheet.**
+# `om-widget` moves its children into a shadow root, which document rules never
+# reach - the same boundary as the popup's styles, and the same fix.
+#
+# The class names and the `--om-widget-*` custom properties are the runtime's
+# own, deliberately: a custom legend that looked different from the built-in one
+# would make a map with SVG markers look like a different product from a map
+# without them. Custom properties inherit *through* a shadow root, so a user
+# theming the map still themes this.
+LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; }
+.omni-panel {
+  background: var(--om-widget-bg, #fff);
+  color: var(--om-widget-fg, #1f2937);
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+}
+.omni-panel h4 { margin: 0 0 8px; font-size: 12px; }
+.omni-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.omni-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+  display: inline-block;
+}
+.omni-legend-sub { margin: 2px 0 6px 18px; }
+.omni-legend-field {
+  font-size: 10px;
+  color: var(--om-widget-muted, #6b7280);
+  margin-bottom: 2px;
+}
+.omni-legend-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+  font-size: 11px;
+}
+.omni-legend-entry .omni-swatch { width: 10px; height: 10px; }
+/* An image swatch keeps its own shape, so it must not be squared off by the
+   colour swatch's border-radius, and it must not be stretched: a star squashed
+   into a 10x10 box is a different marker from the one on the map. */
+.omni-legend-entry img.omni-swatch,
+.omni-row img.omni-swatch {
+  border-radius: 0;
+  object-fit: contain;
+  background: none;
+}"""
+
+
+def _legend_style_element(indent: str) -> list[str]:
+    return [
+        f"{indent}  <style>",
+        *(f"{indent}    {line}" if line else "" for line in LEGEND_STYLES.splitlines()),
+        f"{indent}  </style>",
+    ]
+
+
+def needs_image_legend(project: ExportProject) -> bool:
+    """Whether any layer's legend entry has to be a picture rather than a colour.
+
+    The built-in `type="legend"` widget derives its swatches from the styling
+    accessors, which is richer than anything we could hand it - it stays
+    interactive, it follows layer visibility, and it needs no markup from us. So
+    it is kept for every project that does not need image swatches, which is
+    almost all of them. Forking it unconditionally would mean maintaining a
+    legend forever against a runtime that improves its own.
+    """
+    return any(layer.icon_atlas is not None for layer in project.exportable_layers)
+
+
+def _swatch_markup(
+    symbol: SymbolSpec, layer: ExportLayer, fallback: Color | None
+) -> str:
+    """One legend swatch: the marker's own picture, or a colour chip.
+
+    The picture comes from the same rasterisation the map draws from, so the
+    legend and the map cannot disagree about what a class looks like - which is
+    the entire reason this widget exists rather than a hand-drawn approximation.
+    """
+    if layer.icon_atlas is not None and symbol.icon_name:
+        source = layer.icon_atlas.swatches.get(symbol.icon_name)
+        if source:
+            return f'<img class="omni-swatch" src="{escape_attr(source)}" alt="">'
+    color = symbol.fill_color or symbol.stroke_color or fallback
+    return (
+        f'<span class="omni-swatch" style="background:'
+        f'{escape_attr(color_literal(color).strip(chr(39)))}"></span>'
+    )
+
+
+def _legend_entries(layer: ExportLayer, indent: str) -> list[str]:
+    """The per-class rows under a layer, or nothing for a single symbol."""
+    renderer = layer.renderer
+    rows: list[tuple[str, SymbolSpec]] = []
+
+    if renderer.kind is RendererKind.CATEGORIZED:
+        rows = [(c.label or str(c.value), c.symbol) for c in renderer.categories]
+    elif renderer.kind is RendererKind.GRADUATED:
+        rows = [(k.label, k.symbol) for k in renderer.classes]
+
+    if not rows:
+        return []
+
+    lines = [f'{indent}    <div class="omni-legend-sub">']
+    if renderer.field_name:
+        lines.append(
+            f'{indent}      <div class="omni-legend-field">'
+            f"{escape_attr(renderer.field_name)}</div>"
+        )
+    for label, symbol in rows:
+        lines.append(
+            f'{indent}      <div class="omni-legend-entry">'
+            f"{_swatch_markup(symbol, layer, DEFAULT_FILL)}"
+            f"<span>{escape_attr(label)}</span></div>"
+        )
+    # The "other" row matches the trailing fallback in the colour expression:
+    # features outside every class are drawn, so they have to be explained.
+    if renderer.kind is RendererKind.CATEGORIZED:
+        lines.append(
+            f'{indent}      <div class="omni-legend-entry">'
+            f'<span class="omni-swatch" style="background:'
+            f'{escape_attr(color_literal(DEFAULT_FILL).strip(chr(39)))}"></span>'
+            f"<span>other</span></div>"
+        )
+    lines.append(f"{indent}    </div>")
+    return lines
+
+
+def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
+    """A static legend whose swatches are the map's own markers.
+
+    **No script.** An `<om-widget>` with no `type` and no `<script
+    type="om/widget">` is a purely static widget: its markup is moved into the
+    shadow root and left alone. So this stays markup rather than becoming the
+    generated JavaScript this project exists not to write, and it needs nothing
+    from the Content Security Policy beyond the `data:` images.
+
+    What it gives up against the built-in widget is reactivity: it cannot grey
+    a layer out when the layer switcher hides it. That is why it is used only
+    when a layer needs image swatches - see `needs_image_legend`.
+    """
+    title = "" if project.settings.show_title else project.title
+    lines = [f'{indent}<om-widget position="{WIDGET_POSITIONS["legend"]}">']
+    lines.extend(_legend_style_element(indent))
+    lines.append(f'{indent}  <div class="omni-panel">')
+    lines.append(f"{indent}    <h4>{escape_attr(title or 'Legend')}</h4>")
+
+    for layer in project.exportable_layers:
+        symbol = layer.renderer.representative_symbol or SymbolSpec()
+        lines.append(
+            f'{indent}    <div class="omni-row">'
+            f"{_swatch_markup(symbol, layer, DEFAULT_FILL)}"
+            f"<span>{escape_attr(layer.name)}</span></div>"
+        )
+        lines.extend(_legend_entries(layer, indent))
+
+    lines.append(f"{indent}  </div>")
+    lines.append(f"{indent}</om-widget>")
+    return "\n".join(lines)
+
+
 def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     """Widgets, on by default.
 
@@ -888,17 +1128,21 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     widgets: list[str] = []
 
     if settings.show_legend:
-        # The legend carries the map title only when nothing else is showing it.
-        # With the caption on - now the default - the title appeared twice on
-        # one screen, once as the caption and once as the legend's heading.
-        legend_title = "" if settings.show_title else project.title
-        title_attribute = (
-            f'title="{escape_attr(legend_title)}" ' if legend_title else ""
-        )
-        widgets.append(
-            f'{indent}<om-widget type="legend" {title_attribute}'
-            f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
-        )
+        if needs_image_legend(project):
+            widgets.append(build_legend_widget(project, indent))
+        else:
+            # The legend carries the map title only when nothing else is showing
+            # it. With the caption on - now the default - the title appeared
+            # twice on one screen, once as the caption and once as the legend's
+            # heading.
+            legend_title = "" if settings.show_title else project.title
+            title_attribute = (
+                f'title="{escape_attr(legend_title)}" ' if legend_title else ""
+            )
+            widgets.append(
+                f'{indent}<om-widget type="legend" {title_attribute}'
+                f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
+            )
     if settings.show_layer_switcher and len(project.layers) > 1:
         widgets.append(
             f'{indent}<om-widget type="layer-switcher" '

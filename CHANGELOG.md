@@ -7,6 +7,40 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Real markers.** A point layer using an SVG file, one of QGIS's ~40 marker
+  shapes, or a stack of symbol layers is now drawn *by QGIS* into a sprite sheet
+  carried inside the exported file, and the map draws from that. Nothing about
+  the symbol is re-created in the browser, so parametrised SVG fills, stacked
+  markers, sizes and rotations are correct by construction rather than by
+  translation.
+
+  This is the incumbent's single most visible gap: qgis2web draws every marker
+  as a circle in both of its renderers and says nothing about it
+  ([qgis2web#1218](https://github.com/qgis2web/qgis2web/issues/1218)).
+
+  The layer stays a `GeoJsonLayer` and switches its point sublayer with
+  `point-type="icon"`. Becoming an `IconLayer` was the obvious-looking route and
+  is much worse: an `IconLayer` takes rows with a position accessor rather than
+  GeoJSON, so it would mean shipping every coordinate a second time and dropping
+  any non-point geometry sharing the file.
+
+  Rasterisation is per layer, not per symbol - one SVG class pulls the layer's
+  plain dots in with it - because splitting one QGIS layer across two deck.gl
+  layers would make them fight over draw order. A layer needing more than 256
+  distinct marker appearances, or a sheet past the 4096-pixel texture limit some
+  hardware imposes, keeps its circles and says so, rather than drawing some
+  markers correctly and some not.
+- **A legend that cannot disagree with the map.** When a layer's markers were
+  rasterised, its legend swatches are cut from that same rendering, as a static
+  `<om-widget>` carrying image swatches. Every other project keeps the runtime's
+  built-in legend, which is interactive and follows layer visibility - forking
+  it unconditionally would mean maintaining a legend forever against a runtime
+  that improves its own.
+
+  The custom legend carries no script: an `om-widget` with no type and no
+  `om/widget` block is purely static, so this stays markup. Hosting it behind a
+  strict Content Security Policy now needs `img-src data:` as well as
+  `unsafe-eval`; both are documented in the hosting guide.
 - **Extruded polygons**, read from both of the unrelated places QGIS keeps a
   height: the layer's 3D View properties (a fixed extrusion height or a
   data-defined one, plus *Show edges* as a wireframe) and the 2.5D renderer,
@@ -46,10 +80,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   padding. Italic is dropped with a fidelity note, because the web renderer
   builds its font from a family and a weight only.
 
-  Marker rotation and offset are now read too, but not yet emitted: they apply
-  to icons, and a point layer draws circles until the symbol atlas lands.
+  Marker rotation and offset are read here and used by the symbol atlas above -
+  rotation drawn into the sprite sheet by QGIS, offset emitted as
+  `get-icon-pixel-offset`.
 
 ### Changed
+- **The marker-shape fidelity note moved to the symbol atlas.** It used to fire
+  once per class from the symbol translator, saying a shape *may* be
+  approximated. On a point layer that is now false - QGIS draws the shape
+  itself - so the note is emitted once per layer, after rasterising, and says
+  what actually happened. Markers on a line or polygon layer, which a sprite
+  sheet cannot reach, are still reported as unsupported.
 - **The pinned OnlyMap runtime moved from 0.3.3 to 0.5.11**, 18 releases in one
   step, with all three tiers re-run against it. The bundle grows from 5.6 MB to
   7.9 MB, which is a one-off download on first export rather than anything the

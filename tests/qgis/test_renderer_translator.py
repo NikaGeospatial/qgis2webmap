@@ -323,12 +323,21 @@ class TestMarkerShape:
         spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
         assert spec.marker_shape == shape
 
-    def test_non_circle_shape_is_reported(self, qgis_app) -> None:
+    def test_a_non_circle_shape_is_not_reported_per_class(self, qgis_app) -> None:
+        """The shape note moved to the symbol atlas, which reports once per
+        layer after actually rasterising - see
+        `tests/qgis/test_symbol_rasterizer.py::test_the_outcome_is_reported`.
+
+        Reporting here as well would be both noise and a falsehood: it fired
+        once per class, and it said the shape "may" be approximated on layers
+        where QGIS had drawn it exactly.
+        """
         symbol = qgis_core.QgsMarkerSymbol.createSimple({"name": "star"})
         report = FidelityReportBuilder()
         translate_symbol(symbol, report, "test")
-        assert any(
-            "star" in i.detail for i in report.by_status(FidelityStatus.APPROXIMATED)
+        assert not any(
+            "marker shape" in i.detail
+            for i in report.by_status(FidelityStatus.APPROXIMATED)
         )
 
     def test_circle_needs_no_note(self, qgis_app) -> None:

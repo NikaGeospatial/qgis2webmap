@@ -298,6 +298,12 @@ class SymbolSpec:
     rotation: float = 0.0
     offset_x: float = 0.0
     offset_y: float = 0.0
+    # Filled in by the symbol atlas, not by the reader: `icon_name` is this
+    # symbol's key in the layer's `IconAtlasSpec.mapping`, and `icon_size` the
+    # height in screen pixels it must be drawn at. Both stay `None` for the
+    # overwhelming majority of layers, which need no atlas at all.
+    icon_name: str | None = None
+    icon_size: float | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -315,6 +321,8 @@ class SymbolSpec:
             "rotation": round(self.rotation, 4),
             "offsetX": round(self.offset_x, 6),
             "offsetY": round(self.offset_y, 6),
+            "iconName": self.icon_name,
+            "iconSize": (None if self.icon_size is None else round(self.icon_size, 4)),
         }
 
 
@@ -414,6 +422,48 @@ class RendererSpec:
             "rampName": self.ramp_name,
             "unsupportedReason": self.unsupported_reason,
             "hiddenValues": list(self.hidden_values),
+        }
+
+
+@dataclass(frozen=True)
+class IconAtlasSpec:
+    """A layer's rasterised markers, packed into one image.
+
+    QGIS marker symbols that a circle cannot express - an SVG file, a star, a
+    stack of symbol layers - are drawn *by QGIS itself* into a sprite sheet and
+    referenced from the map by name. Nothing about the symbol is re-implemented,
+    so parametrised SVG fills, stacked layers and sizing are correct by
+    construction rather than by translation. qgis2web collapses every one of
+    these to a circle (upstream qgis2web#1218).
+
+    `data_uri` is a `data:image/png;base64,...` sheet. `mapping` is deck.gl's
+    `iconMapping`: name -> `{x, y, width, height, anchorX, anchorY, mask}`, in
+    sheet pixels. `swatches` holds the same icons again as individual images at
+    legend size - a legend swatch is an `<img>`, which cannot crop a sprite
+    sheet, so it needs its own picture.
+    """
+
+    data_uri: str
+    mapping: dict[str, dict[str, Any]] = field(default_factory=dict)
+    swatches: dict[str, str] = field(default_factory=dict)
+    # Supersampling used when rasterising, kept for the report and for tests
+    # that need to reason about the sheet's pixel dimensions.
+    supersample: int = 1
+
+    def snapshot(self) -> dict[str, Any]:
+        """Snapshot the atlas *without* its pixels.
+
+        The base64 sheet is the single largest thing an icon layer carries, and
+        a fixture snapshot exists to detect drift in interpretation - the same
+        reason `ExportLayer.snapshot` leaves geometry out by default. The
+        mapping is the interpretation, so that is what is recorded.
+        """
+        return {
+            "iconCount": len(self.mapping),
+            "mapping": {
+                name: dict(cell) for name, cell in sorted(self.mapping.items())
+            },
+            "supersample": self.supersample,
         }
 
 
@@ -646,6 +696,9 @@ class ExportLayer:
     )
     labeling: LabelingSpec = field(default_factory=LabelingSpec)
     elevation: ElevationSpec = field(default_factory=ElevationSpec)
+    # Present only when this layer's markers had to be rasterised. `None` - the
+    # common case - means the layer draws as circles exactly as it always has.
+    icon_atlas: IconAtlasSpec | None = None
     popup: PopupSpec = field(default_factory=PopupSpec)
     attribution: str | None = None
     feature_count: int = 0
@@ -674,6 +727,7 @@ class ExportLayer:
             "renderer": self.renderer.snapshot(),
             "labeling": self.labeling.snapshot(),
             "elevation": self.elevation.snapshot(),
+            "iconAtlas": self.icon_atlas.snapshot() if self.icon_atlas else None,
             "popup": self.popup.snapshot(),
             "attribution": self.attribution,
             "featureCount": self.feature_count,
