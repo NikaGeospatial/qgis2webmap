@@ -1594,7 +1594,7 @@ class MainDialog(QDialog):
                 self._warn_not_exportable(export)
                 return
 
-            # After the blocking checks: no point downloading 4.5 MB for a project
+            # After the blocking checks: no point downloading the runtime for a project
             # that was never going to export.
             if not self._runtime_ready():
                 return

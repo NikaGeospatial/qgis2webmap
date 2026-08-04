@@ -31,6 +31,7 @@ from ..core.fidelity_report import FidelityReportBuilder
 from ..core.project_reader import read_project
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.runtime_manager import (
+    RUNTIME_DOWNLOAD_SIZE,
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
@@ -83,7 +84,8 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             "Web → QGIS2WebMap by NIKA.\n\n"
             "<b>First run on a new computer:</b> open Web → QGIS2WebMap by NIKA "
             "and export once from there. It shows the OnlyMap runtime licence "
-            "and installs the runtime (about 4.5 MB, once per computer). This "
+            f"and installs the runtime ({RUNTIME_DOWNLOAD_SIZE}, once per "
+            "computer). This "
             "algorithm cannot do that itself - there is no way to show a "
             "licence during a batch run - so until then it stops immediately "
             "and says so. Every run after that works offline."

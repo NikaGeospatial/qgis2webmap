@@ -65,6 +65,17 @@ TARBALL_PREFIX = "package"
 # anything an order of magnitude past that is not the runtime.
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
 
+# **The one place this number lives.** It is a promise about someone's bandwidth,
+# shown in the licence dialog where they decide whether to accept - and it was
+# wrong for a whole release because the 0.3.3 -> 0.5.11 bump left four
+# hand-written copies saying "about 3 MB" for a download that had become 4.5 MB.
+#
+# It describes the *compressed tarball*, which is what actually crosses the
+# network, not the ~8 MB the files occupy once unpacked. `tests/unit` asserts the
+# user guide quotes this same string, so a bump cannot update the code and leave
+# the docs behind. Update it in `scripts/lock_runtime.py`'s output when re-pinning.
+RUNTIME_DOWNLOAD_SIZE = "about 4.5 MB"
+
 DOWNLOAD_TIMEOUT_SECONDS = 120
 
 # Called with (bytes_so_far, total_bytes_or_None) during a download, so the UI

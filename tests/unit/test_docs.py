@@ -124,3 +124,40 @@ class TestPackagedHelp:
             f"Help tab references guides that are not packaged: "
             f"{referenced - set(HELP_DOCS)}"
         )
+
+
+class TestRuntimeDownloadSize:
+    """The download size is a promise about someone's bandwidth.
+
+    It is shown in the licence dialog at the moment a user decides whether to
+    accept, so it has to be true. It was wrong for a whole release: the
+    0.3.3 -> 0.5.11 bump left four hand-written copies saying "about 3 MB" for a
+    download that had become 4.5 MB. One constant now, and this test stops the
+    guide drifting away from it.
+    """
+
+    @staticmethod
+    def _declared_size() -> str:
+        from nika_onlymap_exporter.packaging.runtime_manager import (
+            RUNTIME_DOWNLOAD_SIZE,
+        )
+
+        return RUNTIME_DOWNLOAD_SIZE
+
+    def test_the_installation_guide_quotes_the_same_size(self) -> None:
+        text = (DOCS / "installation.md").read_text(encoding="utf-8")
+        assert self._declared_size() in text, (
+            f"docs/installation.md does not mention {self._declared_size()!r}; "
+            "update it or the constant so the two agree"
+        )
+
+    def test_no_guide_states_a_different_size(self) -> None:
+        """Catches a stale figure left behind in another guide."""
+        pattern = re.compile(r"runtime[^.]{0,80}?about (\d+(?:\.\d+)?) ?MB", re.I)
+        declared = self._declared_size()
+        wrong: list[str] = []
+        for path in markdown_files():
+            for match in pattern.finditer(path.read_text(encoding="utf-8")):
+                if match.group(0).split("about ")[-1].rstrip() not in declared:
+                    wrong.append(f"{path.name}: {match.group(0)!r}")
+        assert not wrong, f"stale runtime download sizes: {wrong}"

@@ -116,6 +116,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **The runtime download size was stated in four hand-written places** and went
+  stale on the 0.3.3 → 0.5.11 bump, so the licence dialog promised "about 3 MB"
+  for a 4.5 MB download - at the exact moment a user decides whether to accept.
+  One constant now, `RUNTIME_DOWNLOAD_SIZE`, with a unit test asserting the
+  installation guide quotes it and that no other guide states a different figure.
 - **The Processing algorithm failed *after* doing all the work.** A first run on
   a machine where the runtime licence had not been accepted read the project,
   translated its symbology, logged the full fidelity report, and only then
