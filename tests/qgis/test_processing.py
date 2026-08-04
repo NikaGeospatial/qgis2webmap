@@ -123,3 +123,69 @@ class TestAlgorithmRuns:
                 context,
                 qgis_core.QgsProcessingFeedback(),
             )
+
+
+class TestRuntimePreflight:
+    """The licence gate has to fire before the work, not after it.
+
+    A team member's first Processing run read the project, translated 28
+    symbology classes and logged the whole fidelity report - then failed after
+    50 seconds because the runtime licence had not been accepted. Every second
+    of that was knowable up front, and a refusal at the end of a long job reads
+    as a crash where the same message at the start reads as a prompt.
+    """
+
+    def test_it_refuses_before_reading_the_project(self, qgis_app, monkeypatch) -> None:
+        from nika_onlymap_exporter.packaging.runtime_manager import (
+            RuntimeNotAcceptedError,
+        )
+        from nika_onlymap_exporter.processing import export_project as module
+
+        class Unaccepted:
+            def preflight(self) -> None:
+                raise RuntimeNotAcceptedError("licence not accepted")
+
+            def load(self):  # pragma: no cover - must never be reached
+                raise AssertionError("load() ran despite the preflight refusing")
+
+        read_calls: list[object] = []
+        monkeypatch.setattr(
+            module.runtime_manager if hasattr(module, "runtime_manager") else module,
+            "read_project",
+            lambda *a, **k: read_calls.append(1),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.packaging.runtime_manager.default_provider",
+            lambda *a, **k: Unaccepted(),
+        )
+
+        algorithm = module.ExportProjectAlgorithm()
+        with pytest.raises(module.QgsProcessingException) as excinfo:
+            algorithm._check_runtime_first()
+
+        assert "licence not accepted" in str(excinfo.value)
+        # The guidance is the actionable half; without it the message is a dead end.
+        assert "QGIS2WebMap by NIKA" in str(excinfo.value)
+        assert read_calls == [], "the project was read despite the runtime refusing"
+
+    def test_an_available_runtime_passes_quietly(self, qgis_app, monkeypatch) -> None:
+        from nika_onlymap_exporter.processing import export_project as module
+
+        class Ready:
+            def preflight(self) -> None:
+                return None
+
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.packaging.runtime_manager.default_provider",
+            lambda *a, **k: Ready(),
+        )
+        module.ExportProjectAlgorithm()._check_runtime_first()
+
+    def test_a_local_runtime_needs_no_acceptance(self, qgis_app, tmp_path) -> None:
+        """`LocalRuntime` answers `preflight()` too, so callers need no
+        `hasattr` dance - and a vendored or ONLYMAP_RUNTIME_DIR copy carries no
+        licence gate to trip over."""
+        from nika_onlymap_exporter.packaging.runtime_manager import LocalRuntime
+
+        LocalRuntime(tmp_path).preflight()

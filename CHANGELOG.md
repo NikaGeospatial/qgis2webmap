@@ -104,6 +104,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **The Processing algorithm failed *after* doing all the work.** A first run on
+  a machine where the runtime licence had not been accepted read the project,
+  translated its symbology, logged the full fidelity report, and only then
+  refused - 50 seconds, all of it discarded. The licence gate is a precondition
+  and is now checked before anything is read, so the same message arrives as a
+  prompt rather than as a crash. `RuntimeProvider` gained `preflight()`, which
+  answers cheaply and never downloads.
 - **Popups piled up instead of replacing each other.** Reported from a real
   project: hovering a spot covered by three layers left all three popups stacked
   on the same coordinate, so only the top one could be read - and a layer

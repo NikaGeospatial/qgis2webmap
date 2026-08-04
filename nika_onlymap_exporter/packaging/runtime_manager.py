@@ -126,6 +126,14 @@ class RuntimeBundle:
 class RuntimeProvider(Protocol):
     def load(self) -> RuntimeBundle: ...
 
+    def preflight(self) -> None:
+        """Raise if `load()` would refuse, cheaply and without side effects.
+
+        Separate from `load()` so a caller can check a precondition *before*
+        doing expensive work it would have to throw away - see
+        `FetchingRuntime.preflight`.
+        """
+
 
 def sha256_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -229,6 +237,13 @@ class LocalRuntime:
 
     def __init__(self, directory: Path | None = None) -> None:
         self._directory = directory
+
+    def preflight(self) -> None:
+        """Nothing to check: a local runtime carries no licence gate.
+
+        Present so every provider answers `preflight()` and callers need no
+        `hasattr` dance - a local copy is either there or `load()` says so.
+        """
 
     def load(self) -> RuntimeBundle:
         directory = self._directory or discover_runtime_dir()
@@ -489,20 +504,36 @@ class FetchingRuntime:
             return path.read_text(encoding="utf-8", errors="replace")
         return None
 
-    def load(self) -> RuntimeBundle:
+    def preflight(self) -> None:
+        """Raise now if `load()` would refuse, without reading or downloading.
+
+        The licence gate is a precondition, and a precondition that fires at the
+        *end* of a job reads as a failure rather than a prompt. A first
+        Processing run spent 50 seconds reading a project and translating its
+        symbology before being told the runtime licence had not been accepted -
+        knowable before any of that work started.
+
+        Deliberately does not fetch: the point is to answer cheaply. A cached
+        runtime, or one whose licence is already accepted, returns quietly and
+        `load()` does the real work.
+        """
         if not self._version:
             raise RuntimeUnavailableError(
                 "No runtime version is pinned. runtime/runtime-lock.json is "
                 "missing or unreadable, so there is nothing to fetch."
             )
+        if not self.is_cached() and not licence_accepted(
+            self._version, self._cache_dir
+        ):
+            raise RuntimeNotAcceptedError(
+                f"The OnlyMap runtime ({NPM_PACKAGE} {self._version}) is not "
+                "installed on this machine, and its licence has not been "
+                "accepted yet."
+            )
 
+    def load(self) -> RuntimeBundle:
+        self.preflight()
         if not self.is_cached():
-            if not licence_accepted(self._version, self._cache_dir):
-                raise RuntimeNotAcceptedError(
-                    f"The OnlyMap runtime ({NPM_PACKAGE} {self._version}) is not "
-                    "installed on this machine, and its licence has not been "
-                    "accepted yet."
-                )
             self.fetch()
 
         return LocalRuntime(self.cached_dir()).load()

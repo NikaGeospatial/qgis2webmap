@@ -113,7 +113,37 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+    RUNTIME_GUIDANCE = (
+        "Open Web -> QGIS2WebMap by NIKA once and run an export from the "
+        "dialog. It shows the OnlyMap licence and installs the runtime, after "
+        "which this algorithm works offline. On a machine with no internet "
+        "access, install the runtime pack and set ONLYMAP_RUNTIME_DIR."
+    )
+
+    @classmethod
+    def _check_runtime_first(cls) -> None:
+        """Refuse before reading the project, not after translating it.
+
+        The licence gate is a precondition, and a first run used to discover it
+        only at the write step - after 50 seconds of reading layers and
+        translating symbology, all of it discarded. The work was never going to
+        be usable, and a failure at the end of a long job reads as a crash where
+        the same message up front reads as a prompt.
+        """
+        from ..packaging.runtime_manager import default_provider
+
+        try:
+            default_provider().preflight()
+        except RuntimeNotAcceptedError as exc:
+            # Headless: there is no one to show a licence to, and accepting a
+            # commercial licence on a user's behalf from a batch run is not a
+            # thing this plugin will do. Point at the interactive path instead.
+            raise QgsProcessingException(f"{exc}\n\n{cls.RUNTIME_GUIDANCE}") from exc
+        except RuntimeUnavailableError as exc:
+            raise QgsProcessingException(str(exc)) from exc
+
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
+        self._check_runtime_first()
         mode = OUTPUT_MODES[self.parameterAsEnum(parameters, self.MODE, context)][0]
         destination = Path(self.parameterAsFileOutput(parameters, self.OUTPUT, context))
         title = (
@@ -170,16 +200,9 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
                 + "\n".join(exc.reasons)
             ) from exc
         except RuntimeNotAcceptedError as exc:
-            # Headless: there is no one to show a licence to, and accepting a
-            # commercial licence on a user's behalf from a batch run is not a
-            # thing this plugin will do. Point at the interactive path instead.
-            raise QgsProcessingException(
-                f"{exc}\n\nOpen Web -> QGIS2WebMap by NIKA once and run an "
-                "export from the dialog. It shows the OnlyMap licence and "
-                "installs the runtime, after which this algorithm works "
-                "offline. On a machine with no internet access, install the "
-                "runtime pack and set ONLYMAP_RUNTIME_DIR."
-            ) from exc
+            # Still guarded here as well as up front: acceptance can be revoked,
+            # or the cache cleared, between the preflight and the write.
+            raise QgsProcessingException(f"{exc}\n\n{self.RUNTIME_GUIDANCE}") from exc
         except RuntimeUnavailableError as exc:
             raise QgsProcessingException(str(exc)) from exc
 
