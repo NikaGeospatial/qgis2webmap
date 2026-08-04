@@ -54,3 +54,33 @@ works — GitHub Pages, S3, Netlify, or a folder on a web server. Choose the
 
 Nothing in the artifact phones home to NIKA, whether you host with OnlyMap or
 not.
+
+## If your site sets a Content Security Policy
+
+Opening the exported file directly, or putting it on an ordinary static host,
+needs nothing special. But if you serve it from a site that sets a strict
+**Content Security Policy**, the map will not draw unless that policy allows
+`unsafe-eval` for scripts.
+
+This is not a quirk of one feature. The map renderer turns your QGIS symbology
+into small expressions — the colour for each category, the class breaks of a
+graduated layer, label text — and compiles them in the browser. That
+compilation step is what a policy without `unsafe-eval` blocks, so a page that
+forbids it loses the whole map, not just the styling.
+
+What you will see: the map area stays empty and the browser console reports a
+Content Security Policy violation.
+
+The fix is to allow `unsafe-eval` in the `script-src` directive of the page
+hosting the map, ideally scoped to just that page:
+
+```
+Content-Security-Policy: script-src 'self' 'unsafe-eval'
+```
+
+If your organisation cannot relax that policy, serve the map from its own page
+or subdomain with its own policy, and link or iframe it from the strict one.
+
+Nothing here applies to double-clicking the exported file, sending it to
+someone, or hosting it on a static host that sets no policy of its own — which
+is how most exported maps are used.
