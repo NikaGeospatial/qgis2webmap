@@ -7,6 +7,32 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Per-class symbol size and line width.** A graduated-by-size layer used to
+  export every class at one radius, so a map whose entire point was "bigger dot
+  means more" came out uniform. Each class now keeps its own size, as a
+  threshold scale matching the class breaks already used for colour.
+
+  Threshold rather than a continuous `sqrt`/`log`/`pow` scale on purpose: a QGIS
+  graduated renderer assigns each class one discrete size, and interpolating
+  between them would draw sizes the author never chose. The continuous scales
+  belong to QGIS's data-defined size assistant, which needs a data-defined
+  override reader that does not exist yet.
+- **Line cap and join style.** Measured against QGIS rather than assumed: a
+  default simple line is square-capped and bevel-joined, which is also deck.gl's
+  default, so these are emitted only for the lines a user deliberately rounded -
+  where the export used to square off every dead end.
+- **The rest of the label properties**: the placement quadrant (as a text anchor
+  and baseline), pixel offset, rotation, bold, and the background shield with its
+  padding. Italic is dropped with a fidelity note, because the web renderer
+  builds its font from a family and a weight only.
+
+  Marker rotation and offset are now read too, but not yet emitted: they apply
+  to icons, and a point layer draws circles until the symbol atlas lands.
+
+### Fixed
+- **`docs/supported-features.md` claimed stacked symbol layers export the bottom
+  one.** They have always exported the *top* layer - the one actually visible -
+  which is what the code does and what the fidelity report says.
 - **An opt-in basemap**, defaulting to none: OpenStreetMap, Positron, Dark
   Matter, Voyager, Liberty or Bright. The MapTiler presets the runtime also
   registers are deliberately not offered - they need an API key, which the
