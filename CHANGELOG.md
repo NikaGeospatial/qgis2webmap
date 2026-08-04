@@ -49,6 +49,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Marker rotation and offset are now read too, but not yet emitted: they apply
   to icons, and a point layer draws circles until the symbol atlas lands.
 
+### Changed
+- **The pinned OnlyMap runtime moved from 0.3.3 to 0.5.11**, 18 releases in one
+  step, with all three tiers re-run against it. The bundle grows from 5.6 MB to
+  7.9 MB, which is a one-off download on first export rather than anything the
+  exported file carries. The runtime licence is unchanged, so the consent gate
+  is unaffected.
+
+  `scripts/check_runtime_updates.py` now runs at the end of every
+  `package_plugin.py` build and says when the pin is behind. It is advisory and
+  can never fail the build - offline, an unreachable registry and a trimmed
+  checkout all degrade to a quiet line - and it never moves the pin, because the
+  pinned build is the one every tier is green against.
+
 ### Fixed
 - **A 2.5D layer exported grey, losing its symbology entirely.** `Qgs25DRenderer`
   fell through to the unsupported branch. It is not a wrapper - `embeddedRenderer()`

@@ -18,7 +18,7 @@ A **Web → QGIS2WebMap by NIKA** menu entry and a toolbar button appear.
 ## The first export downloads the map runtime
 
 The first time you preview or export a map, the plugin asks to download the
-**OnlyMap runtime** — about 3 MB, once per computer.
+**OnlyMap runtime** — about 4.5 MB, once per computer.
 
 The runtime is the code that draws the map in a browser. It is built into every
 map you export, which is exactly what lets someone open your map with no

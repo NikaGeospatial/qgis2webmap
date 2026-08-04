@@ -56,7 +56,7 @@ INTRO = (
     "<p>The runtime is the code that draws the map in a browser. It is embedded "
     "in every map you export, which is what lets someone open your map with no "
     "internet connection and no software installed.</p>"
-    "<p>It is downloaded <b>once on this computer</b> (about 3&nbsp;MB). Every "
+    "<p>It is downloaded <b>once on this computer</b> (about 4.5&nbsp;MB). Every "
     "export after that works offline.</p>"
     "<p>QGIS2WebMap is free and open source. The OnlyMap runtime is a separate "
     "commercial product by NIKA with its own licence, shown below.</p>"
@@ -119,7 +119,7 @@ def make_qgis_downloader(feedback=None):
 
     **No byte progress.** Neither `downloadProgress` nor a `QgsFeedback`
     reports anything for this request on QGIS 3.44 - both were measured at zero
-    events for a 3 MB download. The caller therefore shows an indeterminate
+    events for a 4.5 MB download. The caller therefore shows an indeterminate
     bar rather than one stuck at 0%, and `feedback` is what makes Cancel work.
     """
 
@@ -214,7 +214,7 @@ def _download_with_progress(
 
     Synchronous on purpose. A background thread would need cancellation,
     partial-state cleanup and a way to stop the user starting a second export
-    mid-download; a 3 MB one-off does not earn that complexity.
+    mid-download; a 4.5 MB one-off does not earn that complexity.
 
     The bar is **indeterminate** (`0, 0`), because QGIS's network stack reports
     no byte progress for this request. A bar frozen at 0% for the whole
@@ -224,7 +224,7 @@ def _download_with_progress(
     from qgis.core import QgsFeedback
 
     progress = QProgressDialog(
-        "Downloading the OnlyMap runtime (about 3 MB)…", "Cancel", 0, 0, parent
+        "Downloading the OnlyMap runtime (about 4.5 MB)…", "Cancel", 0, 0, parent
     )
     progress.setWindowTitle("OnlyMap runtime")
     progress.setWindowModality(Qt.WindowModality.WindowModal)

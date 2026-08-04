@@ -8,12 +8,12 @@
     "Regenerate with scripts/lock_runtime.py after changing the pinned build."
   ],
   "package": "@nika-js/onlymap",
-  "version": "0.3.3",
+  "version": "0.5.11",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "6249efcd9a010ac629000716be3adfd11b01ca5f320422875713ee6d06946c67",
-      "bytes": 5634118
+      "sha256": "f5b9212cbb2ba86aa3f47754bfdff18edd548f676f247dbf5a46c03d53161df4",
+      "bytes": 7853368
     },
     "onlymapjs.css": {
       "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c",

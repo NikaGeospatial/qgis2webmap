@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import contextlib
 import sys
 import zipfile
 from pathlib import Path
@@ -90,11 +91,42 @@ def build(outdir: Path) -> Path:
     return target
 
 
+def announce_runtime_updates() -> None:
+    """Say whether a newer OnlyMap runtime exists, without ever failing the build.
+
+    Packaging is the right moment: a zip is what gets handed to someone else, so
+    it is when being 25 releases behind matters and when nobody is mid-thought
+    about something else. It stays advisory - the pinned build is the one every
+    test tier is green against, and moving it is a deliberate act. Import errors
+    are swallowed along with network ones so an air-gapped or trimmed checkout
+    still packages.
+    """
+    # Explicit rather than relying on `sys.path[0]`: this module is also loaded
+    # by `spec_from_file_location` from the docs tests, where the script's own
+    # directory is not on the path.
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    try:
+        from check_runtime_updates import check, report
+    except ImportError:  # pragma: no cover - the checker is optional
+        return
+    with contextlib.suppress(Exception):  # advisory only, never fatal
+        report(check())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--outdir", default="dist", type=Path)
+    ap.add_argument(
+        "--no-update-check",
+        action="store_true",
+        help="skip the check for a newer OnlyMap runtime",
+    )
     args = ap.parse_args()
     build(REPO_ROOT / args.outdir if not args.outdir.is_absolute() else args.outdir)
+    if not args.no_update_check:
+        announce_runtime_updates()
     return 0
 
 
