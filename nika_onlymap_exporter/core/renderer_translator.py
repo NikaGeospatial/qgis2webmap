@@ -135,11 +135,14 @@ def translate_symbol(
     report: FidelityReportBuilder,
     subject: str,
     layer_id: str | None = None,
+    depth: int = 0,
 ) -> SymbolSpec:
     """Flatten one QGIS symbol into the web-expressible subset.
 
     Reads the *top* symbol layer - see `_visible_symbol_layer` for why that is
     the one worth keeping when only one can survive.
+
+    `depth` guards the one recursive case, a geometry generator's sub-symbol.
     """
     if symbol is None:
         report.unsupported(subject, "The layer has no symbol to translate.", layer_id)
@@ -150,6 +153,12 @@ def translate_symbol(
     if symbol_layer is None:
         report.unsupported(subject, "The symbol has no symbol layers.", layer_id)
         return SymbolSpec()
+
+    generated = _translate_geometry_generator(
+        symbol_layer, report, subject, layer_id, depth
+    )
+    if generated is not None:
+        return generated
 
     if layer_count > 1:
         report.approximated(
@@ -230,6 +239,57 @@ def translate_symbol(
         offset_x=_offset(symbol_layer, "x"),
         offset_y=_offset(symbol_layer, "y"),
     )
+
+
+# How deep a geometry generator's sub-symbol is followed. A generator whose
+# sub-symbol is itself a generator is legal in QGIS and the nesting has no fixed
+# limit, so the recursion needs a stop that is not "trust the data".
+MAX_SUB_SYMBOL_DEPTH = 4
+
+
+def _translate_geometry_generator(
+    symbol_layer: Any,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str | None,
+    depth: int,
+) -> SymbolSpec | None:
+    """A geometry generator, which draws a shape the layer's data does not hold.
+
+    QGIS's geometry generator replaces a feature's geometry with the result of
+    an expression - `buffer($geometry, 50)`, `centroid($geometry)`,
+    `pole_of_inaccessibility(...)` - and then draws *that*. The exported data is
+    the original geometry, so the drawn shape simply is not in the file, and no
+    styling attribute can produce it.
+
+    Before this, one of these exported as a plain coloured layer with **nothing
+    said**: the generator answers `color()` like any symbol layer, so a buffer
+    ring came out as the un-buffered polygon in an arbitrary colour. That is the
+    silent loss this project exists to prevent, and it was found by diffing our
+    property coverage against GeoLibre's.
+
+    Returns `None` when this is not a generator, so the caller carries on.
+    """
+    if _safe(symbol_layer, "layerType") != "GeometryGenerator":
+        return None
+
+    expression = _safe(symbol_layer, "geometryExpression") or "an expression"
+    report.unsupported(
+        subject,
+        f"The symbology draws a generated geometry (`{expression}`) rather than "
+        "the layer's own. The web map has only the original geometry, so the "
+        "generated shape cannot be drawn - the features are exported in their "
+        "true positions instead. To keep the shape, run the equivalent "
+        "Processing tool in QGIS and export the resulting layer.",
+        layer_id,
+    )
+
+    # The generator's own colour is arbitrary; the sub-symbol holds the styling
+    # the author actually chose, so the layer at least draws in their colours.
+    sub_symbol = _safe(symbol_layer, "subSymbol")
+    if sub_symbol is None or depth >= MAX_SUB_SYMBOL_DEPTH:
+        return SymbolSpec()
+    return translate_symbol(sub_symbol, report, subject, layer_id, depth + 1)
 
 
 def read_cap_rounded(symbol_layer: Any) -> bool:

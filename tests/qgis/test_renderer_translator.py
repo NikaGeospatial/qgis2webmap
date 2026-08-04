@@ -394,3 +394,67 @@ class TestPenStyleAndMarkerGeometry:
         assert spec.rotation == pytest.approx(0.0)
         assert spec.offset_x == pytest.approx(0.0)
         assert spec.offset_y == pytest.approx(0.0)
+
+
+class TestGeometryGenerator:
+    """A generated geometry is not in the exported data, and must be said so.
+
+    QGIS's geometry generator replaces a feature's geometry with the result of
+    an expression and draws that. The export carries the original geometry, so
+    the drawn shape is simply absent - and before this it left *no* fidelity
+    item at all, exporting an arbitrary colour with nothing said. Found by
+    diffing our property coverage against GeoLibre's.
+    """
+
+    @staticmethod
+    def _generated(expression: str = "buffer($geometry, 0.1)"):
+        symbol = qgis_core.QgsFillSymbol.createSimple({"color": "#ff0000"})
+        generator = qgis_core.QgsGeometryGeneratorSymbolLayer.create(
+            {"geometryModifier": expression}
+        )
+        symbol.changeSymbolLayer(0, generator)
+        return symbol, generator
+
+    def test_it_is_reported(self, qgis_app) -> None:
+        symbol, _ = self._generated()
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        assert report.by_status(FidelityStatus.UNSUPPORTED)
+
+    def test_the_report_names_the_expression(self, qgis_app) -> None:
+        """A user cannot act on "something was lost"; they can act on which
+        symbol layer it was."""
+        symbol, _ = self._generated("centroid($geometry)")
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        details = " ".join(i.detail for i in report.items)
+        assert "centroid" in details
+
+    def test_it_never_passes_silently(self, qgis_app) -> None:
+        """The regression, stated directly: it used to record nothing."""
+        symbol, _ = self._generated()
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        assert len(report) > 0
+
+    def test_the_authors_colours_survive_where_possible(self, qgis_app) -> None:
+        """The generator's own colour is arbitrary. Its sub-symbol carries what
+        the author chose, so the layer draws in their colours rather than in a
+        default that looks like a bug."""
+        symbol, generator = self._generated()
+        generator.setSubSymbol(
+            qgis_core.QgsFillSymbol.createSimple({"color": "#1de9c8"})
+        )
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.fill_color is not None
+        assert (spec.fill_color.r, spec.fill_color.g, spec.fill_color.b) == (
+            0x1D,
+            0xE9,
+            0xC8,
+        )
+
+    def test_an_ordinary_symbol_is_unaffected(self, qgis_app) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple({"color": "#1de9c8"})
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "test")
+        assert not report.by_status(FidelityStatus.UNSUPPORTED)

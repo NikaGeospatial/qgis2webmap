@@ -63,6 +63,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **A geometry generator exported silently, in an arbitrary colour.** QGIS's
+  geometry generator draws the result of an expression - `buffer($geometry, 50)`,
+  `centroid($geometry)` - rather than the feature's own geometry, and that shape
+  is not in the exported data at all. The generator answers `color()` like any
+  symbol layer, so it flattened to a plain coloured layer and recorded **nothing**
+  in the fidelity report: the exact silent loss this project exists to prevent.
+
+  It is now reported by name, with the expression quoted and the Processing-tool
+  workaround stated, and the sub-symbol's colours are read so the layer at least
+  draws in the colours the author chose. Found by diffing our property coverage
+  against GeoLibre's style model.
 - **A 2.5D layer exported grey, losing its symbology entirely.** `Qgs25DRenderer`
   fell through to the unsupported branch. It is not a wrapper - `embeddedRenderer()`
   is null - and its symbol is machinery rather than styling: two of its three
