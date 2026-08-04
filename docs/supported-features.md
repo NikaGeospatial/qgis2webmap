@@ -24,14 +24,21 @@ Data in any CRS is reprojected to WGS84 on the way out.
 | Single symbol | Yes |
 | Categorized | Yes, with a category legend |
 | Graduated | Yes, keeping your exact class breaks |
+| Per-class symbol size and line width | Yes, each class keeps its own |
+| Line cap and join style | Yes, where you chose rounded |
 | Marker shapes (square, star, triangle, …) | Recorded, and reported if approximated |
 | Rule-based, embedded-symbol renderers | Not in 0.1.0, reported by name |
-| Stacked symbol layers | Bottom layer only, and reported |
+| Stacked symbol layers | Top layer only - the one you see - and reported |
+| Dashed and dotted lines | Not in 0.1.0, reported |
 
 ## Labels
 
-Text, font size, colour and halo are translated. Placement rules, collision
-handling and curved labels are not - the web renderer places labels itself.
+Text, font, colour, halo and background are translated, along with the
+placement quadrant, offset and rotation you set in QGIS.
+
+Collision handling, callouts and curved placement are not - the web renderer
+resolves overlapping labels with its own logic. Italic is dropped, because the
+web renderer builds its font from a family and a weight only; that is reported.
 
 Labels using an expression rather than a single field are not translated in
 0.1.0.

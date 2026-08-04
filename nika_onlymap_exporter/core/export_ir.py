@@ -258,6 +258,14 @@ class ScaleRange:
 # --------------------------------------------------------------------------
 
 
+# QGIS reports symbol sizes, widths and offsets in millimetres by default. Web
+# renderers work in pixels; 1 mm at 96 dpi is ~3.78 px. Approximate by nature --
+# recorded in the report rather than presented as exact. It lives here, in the
+# module with no PyQGIS import, so both translators can share it without
+# dragging QGIS into a pure import path.
+MM_TO_PIXELS = 96.0 / 25.4
+
+
 @dataclass(frozen=True)
 class SymbolSpec:
     """One resolved symbol, flattened to what a web renderer can express.
@@ -277,6 +285,19 @@ class SymbolSpec:
     icon_path: str | None = None
     marker_shape: str | None = None
     symbol_layer_count: int = 1
+    # Qt pen styles, reduced to the two booleans deck.gl exposes. Measured
+    # against QGIS rather than assumed: a default simple line is SquareCap (16)
+    # and BevelJoin (64), NOT round -- so `False` is both QGIS's default and
+    # deck.gl's, and an untouched line emits nothing. These earn their keep on
+    # the lines a user deliberately rounded, which is most roads and rivers.
+    cap_rounded: bool = False
+    join_rounded: bool = False
+    # Marker geometry. Meaningless for a plain circle, so these are read now and
+    # emitted with the symbol atlas, where `get-icon-angle` and
+    # `get-icon-pixel-offset` can carry them.
+    rotation: float = 0.0
+    offset_x: float = 0.0
+    offset_y: float = 0.0
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -289,6 +310,11 @@ class SymbolSpec:
             "iconPath": self.icon_path,
             "markerShape": self.marker_shape,
             "symbolLayerCount": self.symbol_layer_count,
+            "capRounded": self.cap_rounded,
+            "joinRounded": self.join_rounded,
+            "rotation": round(self.rotation, 4),
+            "offsetX": round(self.offset_x, 6),
+            "offsetY": round(self.offset_y, 6),
         }
 
 
@@ -408,6 +434,16 @@ class LabelingSpec:
     halo_color: Color | None = None
     halo_width: float = 0.0
     character_set: str | None = None
+    bold: bool = False
+    # QGIS's placement quadrant, already reduced to the two axes deck.gl takes.
+    # "middle"/"center" is the neutral pair, matching QGIS's "over point".
+    anchor: str = "middle"
+    baseline: str = "center"
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+    rotation: float = 0.0
+    background_color: Color | None = None
+    background_padding: tuple[float, float] = (0.0, 0.0)
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -419,6 +455,16 @@ class LabelingSpec:
             "haloColor": self.halo_color.snapshot() if self.halo_color else None,
             "haloWidth": round(self.halo_width, 4),
             "characterSet": self.character_set,
+            "bold": self.bold,
+            "anchor": self.anchor,
+            "baseline": self.baseline,
+            "offsetX": round(self.offset_x, 4),
+            "offsetY": round(self.offset_y, 4),
+            "rotation": round(self.rotation, 4),
+            "backgroundColor": (
+                self.background_color.snapshot() if self.background_color else None
+            ),
+            "backgroundPadding": [round(p, 4) for p in self.background_padding],
         }
 
 

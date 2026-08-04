@@ -32,6 +32,7 @@ from qgis.core import (
 )
 
 from .export_ir import (
+    MM_TO_PIXELS,
     NATIVELY_ROUND_MARKER_SHAPES,
     CategorySpec,
     ClassificationMethod,
@@ -45,11 +46,6 @@ from .fidelity_report import FidelityReportBuilder
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsFeatureRenderer, QgsVectorLayer
-
-# QGIS reports symbol sizes and widths in millimetres by default. Web renderers
-# work in pixels; 1 mm at 96 dpi is ~3.78 px. Approximate by nature — recorded in
-# the report rather than presented as exact.
-MM_TO_PIXELS = 96.0 / 25.4
 
 # QGIS 3.26+ exposes classification as a pluggable object with a string id;
 # `mode()` and its enum are deprecated and warn on QGIS 4. The ids come from the
@@ -228,7 +224,60 @@ def translate_symbol(
         icon_path=str(icon_path) if icon_path else None,
         marker_shape=marker_shape,
         symbol_layer_count=layer_count,
+        cap_rounded=read_cap_rounded(symbol_layer),
+        join_rounded=read_join_rounded(symbol_layer),
+        rotation=float(_safe(symbol_layer, "angle") or 0.0),
+        offset_x=_offset(symbol_layer, "x"),
+        offset_y=_offset(symbol_layer, "y"),
     )
+
+
+def read_cap_rounded(symbol_layer: Any) -> bool:
+    """Whether the line ends are round, in the one bit deck.gl accepts.
+
+    Qt has three cap styles and deck.gl has a boolean, so flat and square both
+    become "not round". Square extends past the endpoint and flat does not, but
+    that difference is a half-width of a line - invisible next to getting the
+    round/not-round distinction wrong, which shows at every dead end.
+    """
+    style = _safe(symbol_layer, "penCapStyle")
+    if style is None:
+        return False
+    try:
+        from qgis.PyQt.QtCore import Qt
+
+        return bool(style == Qt.PenCapStyle.RoundCap)
+    except (ImportError, AttributeError):  # pragma: no cover
+        return False
+
+
+def read_join_rounded(symbol_layer: Any) -> bool:
+    """Whether the line joins are round. Miter and bevel both read as not-round."""
+    style = _safe(symbol_layer, "penJoinStyle")
+    if style is None:
+        return False
+    try:
+        from qgis.PyQt.QtCore import Qt
+
+        return bool(style == Qt.PenJoinStyle.RoundJoin)
+    except (ImportError, AttributeError):  # pragma: no cover
+        return False
+
+
+def _offset(symbol_layer: Any, axis: str) -> float:
+    """One axis of a marker's offset, in pixels.
+
+    QGIS gives a `QPointF` in millimetres. Screen y grows downward in both QGIS
+    and deck.gl's pixel offsets, so no sign flip is needed.
+    """
+    point = _safe(symbol_layer, "offset")
+    if point is None:
+        return 0.0
+    try:
+        value = point.x() if axis == "x" else point.y()
+    except AttributeError:  # pragma: no cover
+        return 0.0
+    return float(value) * MM_TO_PIXELS
 
 
 def read_marker_shape(symbol_layer: Any) -> str | None:

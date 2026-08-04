@@ -50,6 +50,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     escape_attr,
     fill_expression,
     json_for_script,
+    numeric_expression,
     scale_to_zoom,
 )
 
@@ -157,6 +158,91 @@ class TestFillExpression:
         assert (
             expression == "scale($pop, threshold, ['#ff0000', '#0000ff'], domain=[50])"
         )
+
+    def test_a_rounded_line_carries_its_caps_and_joins(self) -> None:
+        layer = make_layer(
+            geometry_kind=GeometryKind.LINE,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(
+                    stroke_color=RED,
+                    stroke_width=2.0,
+                    cap_rounded=True,
+                    join_rounded=True,
+                ),
+            ),
+        )
+        element = build_layer_element(layer)
+        assert 'line-cap-rounded="true"' in element
+        assert 'line-joint-rounded="true"' in element
+
+    def test_a_default_line_emits_no_cap_attributes(self) -> None:
+        """A default QGIS line is square-capped and bevel-joined, like deck.gl."""
+        layer = make_layer(
+            geometry_kind=GeometryKind.LINE,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(stroke_color=RED, stroke_width=2.0),
+            ),
+        )
+        element = build_layer_element(layer)
+        assert "line-cap-rounded" not in element
+        assert "line-joint-rounded" not in element
+
+    def test_graduated_size_becomes_a_threshold_scale(self) -> None:
+        """Graduated-by-size used to export every class at one radius."""
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="pop",
+            classes=(
+                GraduatedClassSpec(0.0, 50.0, "0-50", SymbolSpec(radius=4.0)),
+                GraduatedClassSpec(50.0, 100.0, "50-100", SymbolSpec(radius=12.0)),
+            ),
+        )
+        assert (
+            numeric_expression(renderer, "radius")
+            == "scale($pop, threshold, [4, 12], domain=[50])"
+        )
+
+    def test_categorized_size_becomes_a_ternary_chain(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="kind",
+            categories=(
+                CategorySpec("civil", "Civil", SymbolSpec(radius=3.0)),
+                CategorySpec("military", "Military", SymbolSpec(radius=9.0)),
+            ),
+        )
+        expression = numeric_expression(renderer, "radius", fallback=5.0)
+        assert expression == "$kind == 'civil' ? 3 : $kind == 'military' ? 9 : 5"
+
+    def test_uniform_classes_stay_a_plain_scalar(self) -> None:
+        """An expression yielding one number for every feature is pure noise."""
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="pop",
+            classes=(
+                GraduatedClassSpec(0.0, 50.0, "0-50", SymbolSpec(radius=4.0)),
+                GraduatedClassSpec(50.0, 100.0, "50-100", SymbolSpec(radius=4.0)),
+            ),
+        )
+        assert numeric_expression(renderer, "radius") is None
+
+    def test_single_symbol_has_no_per_class_expression(self) -> None:
+        renderer = RendererSpec(kind=RendererKind.SINGLE, symbol=SymbolSpec(radius=4.0))
+        assert numeric_expression(renderer, "radius") is None
+
+    def test_a_class_missing_the_value_falls_back_to_the_scalar(self) -> None:
+        """Half an expression would draw the missing class at deck.gl's default."""
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="pop",
+            classes=(
+                GraduatedClassSpec(0.0, 50.0, "0-50", SymbolSpec(radius=4.0)),
+                GraduatedClassSpec(50.0, 100.0, "50-100", SymbolSpec(radius=None)),
+            ),
+        )
+        assert numeric_expression(renderer, "radius") is None
 
     def test_threshold_breaks_are_one_fewer_than_colours(self) -> None:
         """A d3 threshold scale takes N colours and N-1 interior breaks."""
@@ -778,6 +864,39 @@ class TestLabelLayer:
         markup = build_label_element(self.labelled_layer())
         assert 'type="TextLayer"' in markup
         assert 'get-text="$label"' in markup
+
+    def test_placement_quadrant_becomes_anchor_and_baseline(self) -> None:
+        """QGIS "above left" pins the text's end and bottom to the point."""
+        markup = build_label_element(
+            self.labelled_layer(anchor="end", baseline="bottom")
+        )
+        assert "get-text-anchor=\"'end'\"" in markup
+        assert "get-text-alignment-baseline=\"'bottom'\"" in markup
+
+    def test_a_centred_label_emits_no_placement_noise(self) -> None:
+        markup = build_label_element(self.labelled_layer())
+        assert "get-text-anchor" not in markup
+        assert "get-text-alignment-baseline" not in markup
+
+    def test_offset_rotation_and_weight_are_carried(self) -> None:
+        markup = build_label_element(
+            self.labelled_layer(offset_x=4.0, offset_y=-2.0, rotation=45.0, bold=True)
+        )
+        assert 'get-text-pixel-offset="[4, -2]"' in markup
+        assert 'get-text-angle="45"' in markup
+        assert 'text-font-weight="bold"' in markup
+
+    def test_label_background_needs_its_flag(self) -> None:
+        """Colour and padding are ignored silently without text-background."""
+        markup = build_label_element(
+            self.labelled_layer(
+                background_color=Color(r=255, g=255, b=255),
+                background_padding=(3.0, 2.0),
+            )
+        )
+        assert 'text-background="true"' in markup
+        assert "get-text-background-color=\"'#ffffff'\"" in markup
+        assert 'text-background-padding="[3, 2]"' in markup
 
     def test_the_text_layer_carries_only_label_points(self) -> None:
         """Not the source geometry: that would embed the data twice."""

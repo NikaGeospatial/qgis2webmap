@@ -22,6 +22,7 @@ from nika_onlymap_exporter.core.renderer_translator import (
 
 qgis_core = pytest.importorskip("qgis.core")
 QtGui = pytest.importorskip("qgis.PyQt.QtGui")
+QtCore = pytest.importorskip("qgis.PyQt.QtCore")
 
 
 def marker_symbol(color: str = "#ff0000", size: float = 2.0):
@@ -343,3 +344,53 @@ class TestMarkerShape:
         symbol = qgis_core.QgsLineSymbol.createSimple({"color": "#000000"})
         spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
         assert spec.marker_shape is None
+
+
+class TestPenStyleAndMarkerGeometry:
+    """Pen styles and marker geometry that used to be dropped on the floor.
+
+    Measured, not assumed: a default QGIS simple line is SquareCap (Qt 16) and
+    BevelJoin (Qt 64), so it reads as *not* round and emits nothing - which is
+    also deck.gl's default. These reads earn their keep on the lines a user
+    deliberately rounded, where the old exporter squared off every dead end.
+    """
+
+    def test_a_default_line_is_not_round(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple({"color": "#000000"})
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.cap_rounded is False
+        assert spec.join_rounded is False
+
+    def test_a_rounded_line_is_read_as_round(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple({"color": "#000000"})
+        layer = symbol.symbolLayer(0)
+        layer.setPenCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        layer.setPenJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.cap_rounded is True
+        assert spec.join_rounded is True
+
+    def test_a_fill_symbol_has_no_cap_style(self, qgis_app) -> None:
+        """A fill layer answers penJoinStyle but not penCapStyle."""
+        symbol = qgis_core.QgsFillSymbol.createSimple({"color": "#000000"})
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.cap_rounded is False
+
+    def test_marker_rotation_is_read_in_degrees(self, qgis_app) -> None:
+        symbol = marker_symbol()
+        symbol.symbolLayer(0).setAngle(45.0)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.rotation == pytest.approx(45.0)
+
+    def test_marker_offset_converts_millimetres_to_pixels(self, qgis_app) -> None:
+        symbol = marker_symbol()
+        symbol.symbolLayer(0).setOffset(QtCore.QPointF(2.0, -3.0))
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert spec.offset_x == pytest.approx(2.0 * MM_TO_PIXELS)
+        assert spec.offset_y == pytest.approx(-3.0 * MM_TO_PIXELS)
+
+    def test_an_unrotated_marker_reads_zero(self, qgis_app) -> None:
+        spec = translate_symbol(marker_symbol(), FidelityReportBuilder(), "test")
+        assert spec.rotation == pytest.approx(0.0)
+        assert spec.offset_x == pytest.approx(0.0)
+        assert spec.offset_y == pytest.approx(0.0)

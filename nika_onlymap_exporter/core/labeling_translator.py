@@ -18,7 +18,7 @@ from __future__ import annotations
 import string
 from typing import TYPE_CHECKING
 
-from .export_ir import Color, LabelingSpec
+from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
 from .fidelity_report import FidelityReportBuilder
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -130,11 +130,34 @@ def translate_labeling(
             layer_id,
         )
 
+    background_color = None
+    background_padding = (0.0, 0.0)
+    background = text_format.background()
+    if background is not None and background.enabled():
+        background_color = _color_from_qcolor(background.fillColor())
+        size = background.size()
+        if size is not None:
+            background_padding = (
+                float(size.width()) * MM_TO_PIXELS,
+                float(size.height()) * MM_TO_PIXELS,
+            )
+
+    if font is not None and font.italic():
+        report.approximated(
+            subject,
+            "The label font is italic. The web renderer builds its font atlas "
+            "from a family and a weight only, so the labels will be upright.",
+            layer_id,
+        )
+
+    anchor, baseline = read_quadrant(settings)
+
     report.approximated(
         subject,
-        "Label text, font size, colour and halo are translated. QGIS label "
-        "placement rules, collision handling and callouts are not - the web "
-        "renderer places labels with its own logic.",
+        "Label text, font, colour, halo, background, offset, rotation and the "
+        "placement quadrant are translated. QGIS collision handling, callouts "
+        "and curved placement are not - the web renderer resolves overlaps "
+        "with its own logic.",
         layer_id,
     )
 
@@ -147,4 +170,48 @@ def translate_labeling(
         halo_color=halo_color,
         halo_width=halo_width,
         character_set=character_set,
+        bold=bool(font.bold()) if font is not None else False,
+        anchor=anchor,
+        baseline=baseline,
+        offset_x=float(getattr(settings, "xOffset", 0.0) or 0.0) * MM_TO_PIXELS,
+        offset_y=float(getattr(settings, "yOffset", 0.0) or 0.0) * MM_TO_PIXELS,
+        rotation=float(getattr(settings, "angleOffset", 0.0) or 0.0),
+        background_color=background_color,
+        background_padding=background_padding,
     )
+
+
+# QGIS names the placement quadrant by where the label sits relative to the
+# point; deck.gl wants which edge of the text box is pinned, which is the
+# mirror image. A label placed to the LEFT of a point ends at the point, so its
+# anchor is "end" - getting this backwards puts every label on the wrong side.
+_QUADRANTS: dict[str, tuple[str, str]] = {
+    "AboveLeft": ("end", "bottom"),
+    "Above": ("middle", "bottom"),
+    "AboveRight": ("start", "bottom"),
+    "Left": ("end", "center"),
+    "Over": ("middle", "center"),
+    "Right": ("start", "center"),
+    "BelowLeft": ("end", "top"),
+    "Below": ("middle", "top"),
+    "BelowRight": ("start", "top"),
+}
+
+
+def read_quadrant(settings: object) -> tuple[str, str]:
+    """QGIS's placement quadrant as a deck.gl (anchor, baseline) pair.
+
+    Falls back to the neutral centre pair whenever the quadrant cannot be
+    identified - an unreadable enum should leave the label on its point, not
+    fling it to a corner.
+    """
+    quadrant = getattr(settings, "quadOffset", None)
+    if quadrant is None:
+        return ("middle", "center")
+    name = str(getattr(quadrant, "name", quadrant))
+    # Longest suffix first: "QuadrantBelowLeft" also ends with "Left", and
+    # matching that would move a below-left label onto the centre line.
+    for key in sorted(_QUADRANTS, key=len, reverse=True):
+        if name.endswith(key):
+            return _QUADRANTS[key]
+    return ("middle", "center")

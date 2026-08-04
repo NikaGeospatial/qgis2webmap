@@ -274,6 +274,62 @@ def _number(value: float) -> str:
     return repr(round(value, 6))
 
 
+def _class_symbols(renderer: RendererSpec) -> list[SymbolSpec]:
+    """The per-class symbols, in the order their expression must list them."""
+    if renderer.kind is RendererKind.CATEGORIZED:
+        return [category.symbol for category in renderer.categories]
+    if renderer.kind is RendererKind.GRADUATED:
+        return [klass.symbol for klass in renderer.classes]
+    return []
+
+
+def numeric_expression(
+    renderer: RendererSpec,
+    attribute: str,
+    fallback: float | None = None,
+) -> str | None:
+    """A per-class numeric accessor (`radius`, `stroke_width`), or `None`.
+
+    Mirrors the colour expressions exactly - a ternary chain for categorized, a
+    threshold scale for graduated - because sizes classify the same way colours
+    do, and QGIS's class breaks must survive both.
+
+    A **threshold** scale rather than `sqrt`/`log`/`pow`: a QGIS graduated
+    renderer assigns each class one discrete size, so interpolating between them
+    would draw sizes the author never chose. The continuous scales belong to
+    QGIS's data-defined size *assistant*, which is a different feature and needs
+    the data-defined override reader we do not have yet.
+
+    Returns `None` when every class agrees, or when any class is missing the
+    value: one constant is cheaper, reads better in the artifact, and an
+    expression evaluating to the same number for every feature is pure noise.
+    """
+    symbols = _class_symbols(renderer)
+    if len(symbols) < 2:
+        return None
+
+    values = [getattr(symbol, attribute, None) for symbol in symbols]
+    if any(value is None for value in values):
+        return None
+    numbers = [float(value) for value in values if value is not None]
+    if len(set(numbers)) < 2:
+        return None
+
+    field = renderer.field_name or ""
+    if renderer.kind is RendererKind.CATEGORIZED:
+        default = fallback if fallback is not None else numbers[-1]
+        parts = [
+            f"${field} == {value_literal(category.value)} ? {_number(number)}"
+            for category, number in zip(renderer.categories, numbers)
+        ]
+        return " : ".join(parts) + f" : {_number(default)}"
+
+    breaks = [klass.upper for klass in renderer.classes[:-1]]
+    sizes_literal = "[" + ", ".join(_number(n) for n in numbers) + "]"
+    domain_literal = "[" + ", ".join(_number(b) for b in breaks) + "]"
+    return f"scale(${field}, threshold, {sizes_literal}, domain={domain_literal})"
+
+
 def line_color_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     if geometry is GeometryKind.LINE:
         return fill_expression(renderer, geometry)
@@ -346,7 +402,12 @@ def build_layer_element(
             attributes.append(("color", color_literal(swatch).strip("'")))
 
     if symbol.stroke_width:
-        attributes.append(("get-line-width", _number(symbol.stroke_width)))
+        # A per-class width when the classes disagree, the representative
+        # symbol's constant when they do not.
+        width = numeric_expression(
+            renderer, "stroke_width", fallback=symbol.stroke_width
+        )
+        attributes.append(("get-line-width", width or _number(symbol.stroke_width)))
         # Without this deck.gl treats the width as metres and lines vanish at
         # most zoom levels.
         attributes.append(("line-width-units", "pixels"))
@@ -360,9 +421,20 @@ def build_layer_element(
         # benefit - a polygon is picked by its interior.
         if layer.geometry_kind is GeometryKind.LINE:
             attributes.append(("line-width-min-pixels", _number(MIN_LINE_PICK_PIXELS)))
+            # deck.gl defaults both to false, and so does a default QGIS line
+            # (square cap, bevel join), so these are emitted only for lines the
+            # user deliberately rounded.
+            if symbol.cap_rounded:
+                attributes.append(("line-cap-rounded", "true"))
+            if symbol.join_rounded:
+                attributes.append(("line-joint-rounded", "true"))
 
     if layer.geometry_kind is GeometryKind.POINT and symbol.radius:
-        attributes.append(("get-point-radius", _number(symbol.radius)))
+        # QGIS graduated-by-size is the common case this rescues: every class
+        # used to export at the representative symbol's radius, so a map whose
+        # whole point was "bigger dot means more" came out uniform.
+        radius = numeric_expression(renderer, "radius", fallback=symbol.radius)
+        attributes.append(("get-point-radius", radius or _number(symbol.radius)))
         attributes.append(("point-radius-units", "pixels"))
 
     if layer.opacity < 1.0:
@@ -461,10 +533,44 @@ def build_label_element(
     if labeling.font_family:
         attributes.append(("text-font-family", labeling.font_family))
 
+    if labeling.bold:
+        attributes.append(("text-font-weight", "bold"))
+
     # A QGIS label buffer is a halo; deck.gl calls the same thing an outline.
     if labeling.halo_width and labeling.halo_color:
         attributes.append(("text-outline-color", color_literal(labeling.halo_color)))
         attributes.append(("text-outline-width", _number(labeling.halo_width)))
+
+    # QGIS's placement quadrant. Emitted only when it differs from the neutral
+    # centre, so an ordinary over-point label stays free of noise.
+    if labeling.anchor != "middle":
+        attributes.append(("get-text-anchor", f"'{labeling.anchor}'"))
+    if labeling.baseline != "center":
+        attributes.append(("get-text-alignment-baseline", f"'{labeling.baseline}'"))
+
+    if labeling.offset_x or labeling.offset_y:
+        attributes.append(
+            (
+                "get-text-pixel-offset",
+                f"[{_number(labeling.offset_x)}, {_number(labeling.offset_y)}]",
+            )
+        )
+
+    if labeling.rotation:
+        attributes.append(("get-text-angle", _number(labeling.rotation)))
+
+    # A QGIS label background is deck.gl's text background: a filled box behind
+    # the glyphs. Without the flag the colour and padding are ignored silently.
+    if labeling.background_color is not None:
+        attributes.append(("text-background", "true"))
+        attributes.append(
+            ("get-text-background-color", color_literal(labeling.background_color))
+        )
+        pad_x, pad_y = labeling.background_padding
+        if pad_x or pad_y:
+            attributes.append(
+                ("text-background-padding", f"[{_number(pad_x)}, {_number(pad_y)}]")
+            )
 
     # The reader's set is authoritative -- it saw the QGIS field values. The
     # fallback covers label collections built outside a project read.
