@@ -48,6 +48,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     build_legend_widget,
     build_manifest,
     build_popup_elements,
+    build_popup_reset_behaviors,
     build_widget_elements,
     collect_attributions,
     color_literal,
@@ -1466,3 +1467,127 @@ class TestImageLegend:
         assert "<img onerror" not in markup
         assert "&lt;img onerror" in markup
 
+
+class TestPopupsDoNotStack:
+    """Only one popup may be open at a time.
+
+    `show-overlay` sets `visible="true"` and nothing ever sets it back, and the
+    runtime dispatches behaviours only when there *is* a pick - there is no
+    unhover event. So every popup ever opened stayed open, and both symptoms
+    below came back from a real project.
+    """
+
+    @staticmethod
+    def _project(hover: bool = True, count: int = 3) -> ExportProject:
+        return make_project(
+            [
+                make_layer(
+                    layer_id=f"layer{i}",
+                    name=f"Layer {i}",
+                    popup=PopupSpec(
+                        enabled=True,
+                        fields=(PopupFieldSpec("name"),),
+                        on_hover=hover,
+                    ),
+                )
+                for i in range(count)
+            ]
+        )
+
+    def test_every_popup_gets_a_close_behavior(self) -> None:
+        markup = build_manifest(self._project())
+        for i in range(3):
+            assert f'action="hide-overlay" target="layer{i}-popup"' in markup, (
+                f"layer{i} has no way to close"
+            )
+
+    def test_the_close_behaviors_are_not_scoped_to_a_layer(self) -> None:
+        """A pick on *any* layer has to close the others, so these must carry
+        no `layer` filter - the runtime skips a scoped behaviour whose layer
+        does not match the pick."""
+        for line in build_popup_reset_behaviors(self._project()).splitlines():
+            assert "layer=" not in line, line
+
+    def test_every_close_precedes_every_open(self) -> None:
+        """The load-bearing property. `dispatchToBehaviors` walks the behaviours
+        in document order and dispatches synchronously, so a hide emitted after
+        a show would close the popup that pick had just opened - turning a
+        stacking bug into a map where popups never appear at all."""
+        markup = build_manifest(self._project())
+        last_hide = markup.rindex('action="hide-overlay"')
+        first_show = markup.index('action="show-overlay"')
+        assert last_hide < first_show
+
+    def test_a_hover_project_emits_no_click_resets(self) -> None:
+        markup = build_popup_reset_behaviors(self._project(hover=True))
+        assert 'on="hover"' in markup
+        assert 'on="click"' not in markup
+
+    def test_a_click_project_emits_no_hover_resets(self) -> None:
+        markup = build_popup_reset_behaviors(self._project(hover=False))
+        assert 'on="click"' in markup
+        assert 'on="hover"' not in markup
+
+    def test_a_mixed_project_emits_both(self) -> None:
+        """A project can set hover per layer, and a pick of either kind has to
+        close whatever is open."""
+        project = make_project(
+            [
+                make_layer(
+                    layer_id="hovered",
+                    popup=PopupSpec(
+                        enabled=True, fields=(PopupFieldSpec("name"),), on_hover=True
+                    ),
+                ),
+                make_layer(
+                    layer_id="clicked",
+                    popup=PopupSpec(
+                        enabled=True, fields=(PopupFieldSpec("name"),), on_hover=False
+                    ),
+                ),
+            ]
+        )
+        markup = build_popup_reset_behaviors(project)
+        assert 'on="hover"' in markup and 'on="click"' in markup
+        for target in ("hovered-popup", "clicked-popup"):
+            assert markup.count(f'target="{target}"') == 2
+
+    def test_a_project_with_no_popups_emits_nothing(self) -> None:
+        assert build_popup_reset_behaviors(make_project()) == ""
+
+    def test_a_layer_without_a_popup_gets_no_reset(self) -> None:
+        """A layer whose popups the author turned off has no overlay to close,
+        and a hide aimed at a missing overlay logs a runtime warning."""
+        project = make_project(
+            [
+                make_layer(
+                    layer_id="withpopup",
+                    popup=PopupSpec(
+                        enabled=True, fields=(PopupFieldSpec("name"),), on_hover=True
+                    ),
+                ),
+                make_layer(layer_id="silent", popup=PopupSpec(enabled=False)),
+            ]
+        )
+        markup = build_popup_reset_behaviors(project)
+        assert "withpopup-popup" in markup
+        assert "silent" not in markup
+
+    def test_the_reset_attributes_exist_in_the_schema(self, known_attributes) -> None:
+        markup = build_manifest(self._project())
+        unknown = [
+            f"{element}[{name}]"
+            for element, attributes in re.findall(r"<(om-[a-z]+)\b([^>]*)>", markup)
+            for name in re.findall(r'(?:^|\s)([a-z][a-z0-9-]*)="', attributes)
+            if name not in known_attributes.get(element, set())
+        ]
+        assert not unknown, f"attributes absent from the OnlyMap schema: {unknown}"
+
+    def test_overlays_stay_unscoped(self) -> None:
+        """Scoping an overlay with `layer=` is the fix that suggests itself and
+        is wrong: an overlay hides because an *unscoped* one follows a null
+        selection to nowhere. Scoped, it would stay stranded on screen after the
+        cursor left every feature."""
+        markup = build_manifest(self._project())
+        for overlay in re.findall(r"<om-overlay\b[^>]*>", markup):
+            assert "layer=" not in overlay, overlay

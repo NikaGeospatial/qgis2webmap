@@ -367,3 +367,59 @@ def icon_map(runtime, tmp_path_factory):
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
 
+
+# --------------------------------------------------------------------------
+# Overlapping popups
+# --------------------------------------------------------------------------
+
+# Both layers put a feature on the SAME coordinate. That is the reported case:
+# three layers overlapping at one spot left three popups stacked on top of each
+# other, so only the top one could be read.
+STACKED_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [0.0, 51.0]},
+            "properties": {"name": "Same place"},
+        }
+    ],
+}
+
+
+@pytest.fixture(scope="session")
+def stacked_popups_map(runtime, tmp_path_factory):
+    """Two hover-popup layers with a feature at one coordinate.
+
+    Whether a popup ever *closes* cannot be seen in the markup: it depends on
+    the runtime dispatching behaviours in document order and on `show-overlay`
+    leaving `visible="true"` behind. Only a browser can answer it.
+    """
+    layers = tuple(
+        ExportLayer(
+            layer_id=f"stack{i}",
+            name=f"Stack {i}",
+            geometry_kind=GeometryKind.POINT,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson=STACKED_GEOJSON,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(
+                    fill_color=Color(r=200, g=40 + 80 * i, b=60), radius=14.0
+                ),
+            ),
+            popup=PopupSpec(
+                enabled=True, fields=(PopupFieldSpec("name"),), on_hover=True
+            ),
+        )
+        for i in range(3)
+    )
+    project = ExportProject(
+        title="Stacked popups",
+        layers=layers,
+        extent=Extent(west=-0.5, south=50.7, east=0.5, north=51.3),
+    )
+    destination = tmp_path_factory.mktemp("stacked")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path

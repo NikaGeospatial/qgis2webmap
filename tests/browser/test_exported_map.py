@@ -537,3 +537,71 @@ class TestIconMarkers:
             == 0
         )
 
+
+class TestPopupsDoNotStack:
+    """Reported from a real project: three overlapping layers, three popups.
+
+    `show-overlay` sets `visible="true"` and nothing ever sets it back, and the
+    runtime dispatches behaviours only when there is a pick - there is no
+    unhover event. So a popup opened once stayed open forever, and hovering a
+    spot covered by several layers left their popups piled on one coordinate.
+    """
+
+    @staticmethod
+    def _visible(page) -> list[str]:
+        return page.evaluate(
+            """() => [...document.querySelectorAll('om-overlay')]
+                 .filter(o => getComputedStyle(o).visibility !== 'hidden'
+                           && o.getBoundingClientRect().width > 0)
+                 .map(o => o.id)"""
+        )
+
+    def test_at_most_one_popup_is_ever_open(self, page, stacked_popups_map) -> None:
+        open_map(page, stacked_popups_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+
+        box = page.locator("om-map canvas").first.bounding_box()
+        worst = 0
+        # Sweep the middle of the canvas, where the shared coordinate sits.
+        for gx in range(10, 23):
+            for gy in range(6, 17):
+                page.mouse.move(
+                    box["x"] + box["width"] * gx / 32,
+                    box["y"] + box["height"] * gy / 22,
+                )
+                page.wait_for_timeout(60)
+                worst = max(worst, len(self._visible(page)))
+        assert worst <= 1, f"{worst} popups were open at once"
+
+    def test_hovering_empty_space_closes_the_popup(
+        self, page, stacked_popups_map
+    ) -> None:
+        """The reason the overlays stay unscoped: an unscoped overlay follows a
+        null selection to nowhere and hides itself. Scoping them would fix the
+        stacking and leave the last popup stranded on screen instead."""
+        open_map(page, stacked_popups_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+
+        box = page.locator("om-map canvas").first.bounding_box()
+        opened = False
+        for gx in range(10, 23):
+            for gy in range(6, 17):
+                page.mouse.move(
+                    box["x"] + box["width"] * gx / 32,
+                    box["y"] + box["height"] * gy / 22,
+                )
+                page.wait_for_timeout(60)
+                if self._visible(page):
+                    opened = True
+                    break
+            if opened:
+                break
+        assert opened, "no popup ever opened, so the close cannot be tested"
+
+        page.mouse.move(box["x"] + 5, box["y"] + box["height"] - 5)
+        page.wait_for_timeout(600)
+        assert self._visible(page) == []

@@ -104,6 +104,25 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **Popups piled up instead of replacing each other.** Reported from a real
+  project: hovering a spot covered by three layers left all three popups stacked
+  on the same coordinate, so only the top one could be read - and a layer
+  switched off in the layer switcher still showed its popup.
+
+  One cause for both. `show-overlay` sets `visible="true"` and nothing ever sets
+  it back, and the runtime dispatches behaviours only when there *is* a pick -
+  there is no unhover event. So every popup ever opened stayed open.
+
+  The fix is a `hide-overlay` behaviour per popup, carrying **no `layer`
+  attribute** so it fires on every pick, emitted *before* the layers: behaviours
+  dispatch in document order and synchronously, so every popup closes and then
+  the one whose layer matched re-opens. Only the triggers actually in use are
+  emitted, so an all-click project gets no hover behaviour and vice versa.
+
+  Scoping each overlay with `layer="..."` is the fix that suggests itself and is
+  wrong: an overlay hides *because* an unscoped one follows a null selection to
+  nowhere, so scoping it would have traded a stacking bug for a popup stranded
+  on screen after the cursor left every feature.
 - **A geometry generator exported silently, in an arbitrary colour.** QGIS's
   geometry generator draws the result of an expression - `buffer($geometry, 50)`,
   `centroid($geometry)` - rather than the feature's own geometry, and that shape

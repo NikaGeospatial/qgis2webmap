@@ -917,6 +917,58 @@ def build_popup_elements(
     )
 
 
+def build_popup_reset_behaviors(project: ExportProject, indent: str = "    ") -> str:
+    """Close every popup before any pick opens one.
+
+    **`show-overlay` sets `visible="true"` and nothing ever sets it back.** The
+    runtime dispatches behaviours only when there *is* a pick - there is no
+    unhover event - so a popup opened once stayed open for the life of the page.
+    Two visible symptoms, both reported from a real project:
+
+    * Hovering a spot where three layers overlap left all three popups stacked
+      on the same coordinate, so only the top one could be read.
+    * A layer switched off in the layer switcher still showed its popup, because
+      nothing had ever told that overlay to close.
+
+    The reset is a `hide-overlay` per popup carrying **no `layer` attribute**, so
+    it fires on every pick regardless of which layer was hit. Emitted *before*
+    the layers, because `dispatchToBehaviors` walks `:scope > om-behavior` in
+    document order and dispatches synchronously: every hide runs, then the one
+    scoped `show-overlay` whose layer matched re-opens exactly one popup.
+
+    Scoping each overlay with `layer="..."` is the fix that suggests itself and
+    is wrong. An overlay hides when its anchor goes away, and an anchor goes away
+    because an *unscoped* overlay follows a null selection. Scope it and it stops
+    following, so hovering empty space would leave the last popup stranded on
+    screen - trading a stacking bug for a stuck one.
+
+    Only the triggers actually in use are emitted, so an all-click project never
+    has a hover behaviour closing its popups, and vice versa.
+    """
+    targets = [
+        f"{layer.layer_id}-popup"
+        for layer in project.exportable_layers
+        if layer.popup.enabled and layer.popup.visible_fields
+    ]
+    if not targets:
+        return ""
+
+    triggers = sorted(
+        {
+            "hover" if layer.popup.on_hover else "click"
+            for layer in project.exportable_layers
+            if layer.popup.enabled and layer.popup.visible_fields
+        }
+    )
+
+    return "\n".join(
+        f'{indent}<om-behavior on="{trigger}" action="hide-overlay" '
+        f'target="{escape_attr(target)}"></om-behavior>'
+        for trigger in triggers
+        for target in targets
+    )
+
+
 def _popup_behavior(
     layer: ExportLayer, overlay_id: str, hover: bool, indent: str
 ) -> str:
@@ -1249,6 +1301,13 @@ def build_manifest(
         _attrs_to_string(attributes, inner),
         f"{indent}>",
     ]
+
+    # First, before any layer or any `show-overlay`: behaviours dispatch in
+    # document order, so these have to precede the shows to close the previous
+    # popup rather than the one just opened.
+    resets = build_popup_reset_behaviors(project, inner)
+    if resets:
+        sections.append(resets)
 
     for layer in project.exportable_layers:
         sections.append(
