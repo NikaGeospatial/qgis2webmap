@@ -16,10 +16,11 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import string
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
 from .fidelity_report import FidelityReportBuilder
+from .label_points import apply_capitalization
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
@@ -38,7 +39,9 @@ def _color_from_qcolor(qcolor: object) -> Color | None:
     return Color(r=qcolor.red(), g=qcolor.green(), b=qcolor.blue(), a=qcolor.alphaF())
 
 
-def collect_character_set(layer: QgsVectorLayer, field_name: str) -> str | None:
+def collect_character_set(
+    layer: QgsVectorLayer, field_name: str, capitalization: str = "none"
+) -> str | None:
     """Every distinct character the label field uses, or `None` if all ASCII.
 
     `text-character-set` *replaces* the runtime's atlas rather than extending
@@ -60,7 +63,7 @@ def collect_character_set(layer: QgsVectorLayer, field_name: str) -> str | None:
         value = feature[field_name]
         if value is None:
             continue
-        for char in str(value):
+        for char in apply_capitalization(str(value), capitalization):
             characters.add(char)
             if char not in ASCII_PRINTABLE:
                 has_extra = True
@@ -120,7 +123,14 @@ def translate_labeling(
         halo_width = float(buffer_settings.size())
         halo_color = _color_from_qcolor(buffer_settings.color())
 
-    character_set = collect_character_set(layer, field_name)
+    # **Before the character set, because it changes which glyphs are drawn.**
+    # Uppercasing "Zurich" gives "ZURICH" - a codepoint the raw values never
+    # contained. `text-character-set` *replaces* the atlas, so collecting from
+    # untransformed values would leave every accented capital out of it, and
+    # those labels would render blank: present, positioned, invisible.
+    capitalization = read_capitalization(text_format)
+
+    character_set = collect_character_set(layer, field_name, capitalization)
     if character_set:
         report.preserved(
             subject,
@@ -151,6 +161,8 @@ def translate_labeling(
         )
 
     anchor, baseline = read_quadrant(settings)
+    wrap_char = str(getattr(settings, "wrapChar", "") or "")
+    auto_wrap = int(getattr(settings, "autoWrapLength", 0) or 0)
 
     report.approximated(
         subject,
@@ -178,7 +190,37 @@ def translate_labeling(
         rotation=float(getattr(settings, "angleOffset", 0.0) or 0.0),
         background_color=background_color,
         background_padding=background_padding,
+        capitalization=capitalization,
+        wrap_char=wrap_char,
+        auto_wrap_length=auto_wrap,
     )
+
+
+# `QgsStringUtils::Capitalization`, by value rather than by name: the enum is
+# reachable as `QgsStringUtils.AllUppercase` on PyQt5 and only through the
+# scoped form on PyQt6, and the integers are stable across both. `TitleCase`
+# (1004) and `UpperCamelCase` (1005) are deliberately far from the rest.
+_CAPITALIZATION_BY_VALUE = {
+    0: "none",  # MixedCase - leave the data alone
+    1: "upper",  # AllUppercase
+    2: "lower",  # AllLowercase
+    4: "capitalize",  # ForceFirstLetterToCapital
+    1004: "title",  # TitleCase
+}
+
+
+def read_capitalization(text_format: Any) -> str:
+    """QGIS's text case, as one of the names `apply_capitalization` understands.
+
+    `UpperCamelCase` (1005) has no sensible label rendering - it would run words
+    together - so it falls through to "none" and the label keeps its own text
+    rather than becoming unreadable.
+    """
+    try:
+        value = int(text_format.capitalization())
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return "none"
+    return _CAPITALIZATION_BY_VALUE.get(value, "none")
 
 
 # QGIS names the placement quadrant by where the label sits relative to the

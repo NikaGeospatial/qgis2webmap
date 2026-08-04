@@ -645,7 +645,13 @@ def build_label_element(
     if not (labeling.enabled and labeling.field_name):
         return ""
 
-    collection = build_label_collection(layer.geojson, labeling.field_name)
+    collection = build_label_collection(
+        layer.geojson,
+        labeling.field_name,
+        capitalization=labeling.capitalization,
+        wrap_char=labeling.wrap_char,
+        auto_wrap_length=labeling.auto_wrap_length,
+    )
     if collection is None:
         return ""
 

@@ -7,6 +7,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Label text case and line breaking.** QGIS's uppercase / lowercase /
+  capitalise / title case, its wrap character, and its automatic wrap length
+  now reach the exported labels. All three are applied to the label *text*
+  rather than emitted as styling, because the web renderer has no
+  `text-transform` and QGIS does not have one either — it changes the glyphs it
+  draws.
+
+  The character-set collection had to move ahead of it: `text-character-set`
+  *replaces* the runtime's font atlas, so collecting glyphs from the raw field
+  values while drawing uppercased ones would leave every accented capital out of
+  the atlas, and those labels would render blank — present, positioned, and
+  invisible. Found by diffing our label coverage against GeoLibre's.
 - **Real markers.** A point layer using an SVG file, one of QGIS's ~40 marker
   shapes, or a stack of symbol layers is now drawn *by QGIS* into a sprite sheet
   carried inside the exported file, and the map draws from that. Nothing about

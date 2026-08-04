@@ -107,6 +107,11 @@ says so rather than exporting a flat map silently.
 Text, font, colour, halo and background are translated, along with the
 placement quadrant, offset and rotation you set in QGIS.
 
+**Text case** (uppercase, lowercase, capitalise, title case) and **line
+breaking** — both the wrap character you set and automatic wrapping at a
+character count — are applied to the label text itself, because that is what
+QGIS does too.
+
 Collision handling, callouts and curved placement are not - the web renderer
 resolves overlapping labels with its own logic. Italic is dropped, because the
 web renderer builds its font from a family and a weight only; that is reported.

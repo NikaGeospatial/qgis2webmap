@@ -136,3 +136,68 @@ class TestRealQgisSettings:
 
         spec = translate_labeling(layer, FidelityReportBuilder())
         assert spec.bold is True
+
+
+class TestCapitalizationAndWrapping:
+    """QGIS text case and line breaking, read from the label settings."""
+
+    @staticmethod
+    def _labelled(make_memory_layer, capitalization=None, wrap_char="", auto_wrap=0):
+        layer = make_memory_layer("places", features=[("Zurich", [0.0, 0.0])])
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        settings.wrapChar = wrap_char
+        settings.autoWrapLength = auto_wrap
+        if capitalization is not None:
+            fmt = settings.format()
+            fmt.setCapitalization(capitalization)
+            settings.setFormat(fmt)
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        return layer
+
+    def test_uppercase_is_read(self, qgis_app, make_memory_layer) -> None:
+        layer = self._labelled(
+            make_memory_layer,
+            capitalization=qgis_core.QgsStringUtils.AllUppercase,
+        )
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.capitalization == "upper"
+
+    def test_mixed_case_means_leave_it_alone(self, qgis_app, make_memory_layer) -> None:
+        layer = self._labelled(
+            make_memory_layer,
+            capitalization=qgis_core.QgsStringUtils.MixedCase,
+        )
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.capitalization == "none"
+
+    def test_the_wrap_character_is_read(self, qgis_app, make_memory_layer) -> None:
+        layer = self._labelled(make_memory_layer, wrap_char="|")
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.wrap_char == "|"
+
+    def test_the_auto_wrap_length_is_read(self, qgis_app, make_memory_layer) -> None:
+        layer = self._labelled(make_memory_layer, auto_wrap=12)
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.auto_wrap_length == 12
+
+    def test_the_character_set_covers_the_transformed_text(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """`text-character-set` replaces the atlas. Collecting glyphs from the
+        raw values while drawing uppercased ones leaves every accented capital
+        out - labels present, positioned, and invisible."""
+        layer = make_memory_layer("places", features=[("Zürich", [0.0, 0.0])])
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        fmt = settings.format()
+        fmt.setCapitalization(qgis_core.QgsStringUtils.AllUppercase)
+        settings.setFormat(fmt)
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+
+        spec = translate_labeling(layer, FidelityReportBuilder())
+
+        assert spec.character_set is not None
+        assert "Ü" in spec.character_set, "the drawn glyph is missing from the atlas"

@@ -143,9 +143,87 @@ def representative_point(geometry: dict[str, Any] | None) -> tuple[float, float]
     return None
 
 
+def apply_capitalization(text: str, capitalization: str) -> str:
+    """QGIS's text case, applied to the string rather than to a style.
+
+    The web renderer has no `text-transform`, and QGIS does not have one either
+    - it changes the glyphs it draws. So doing it here is not a workaround, it
+    is the same operation in the same place.
+
+    `title` uses `str.title()`'s word boundaries deliberately: QGIS's own title
+    case is `QgsStringUtils`, whose rules for apostrophes and hyphens differ in
+    edge cases ("O'Brien"), and reimplementing them from the outside would drift
+    against a version we do not control. The difference shows on a handful of
+    names; getting the common case right and staying predictable is worth more.
+    """
+    if capitalization == "upper":
+        return text.upper()
+    if capitalization == "lower":
+        return text.lower()
+    if capitalization == "capitalize":
+        # QGIS's "Force first letter to capital" raises the first letter and
+        # leaves the rest of the string exactly as the data has it, which is
+        # NOT `str.capitalize()` - that lowercases the remainder and would turn
+        # "USA Route" into "Usa route".
+        return text[:1].upper() + text[1:] if text else text
+    if capitalization == "title":
+        return text.title()
+    return text
+
+
+def apply_wrapping(text: str, wrap_char: str, auto_wrap_length: int) -> str:
+    """Turn QGIS's line breaking into real newlines, which deck.gl honours.
+
+    Two independent mechanisms, and QGIS applies the explicit one first:
+
+    * `wrap_char` is a character the author types to force a break (often `|`).
+    * `auto_wrap_length` breaks lines longer than N characters, on whitespace.
+
+    Emitting `\\n` rather than a `text-max-width` attribute keeps the break
+    where the author put it. A width-based wrap would re-flow on a different
+    font and put the break somewhere else.
+    """
+    if wrap_char:
+        for character in wrap_char:
+            text = text.replace(character, "\n")
+
+    if auto_wrap_length and auto_wrap_length > 0:
+        text = "\n".join(
+            _wrap_line(line, auto_wrap_length) for line in text.split("\n")
+        )
+    return text
+
+
+def _wrap_line(line: str, width: int) -> str:
+    """Greedy wrap on whitespace, never mid-word.
+
+    `textwrap` is not used: it collapses runs of whitespace and strips, so a
+    label's own spacing would change even when it was short enough to need no
+    wrapping at all.
+    """
+    if len(line) <= width:
+        return line
+
+    lines: list[str] = []
+    current = ""
+    for word in line.split(" "):
+        candidate = f"{current} {word}" if current else word
+        if current and len(candidate) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
+
+
 def build_label_collection(
     geojson: dict[str, Any] | None,
     field_name: str,
+    capitalization: str = "none",
+    wrap_char: str = "",
+    auto_wrap_length: int = 0,
 ) -> dict[str, Any] | None:
     """A point FeatureCollection carrying one label per labelled feature.
 
@@ -168,6 +246,12 @@ def build_label_collection(
         text = str(raw).strip()
         if not text:
             continue
+
+        # Case first, then wrapping: uppercasing after a wrap would not change
+        # where the breaks fell, but wrapping after uppercasing does - "st" and
+        # "ST" are the same width in characters, and QGIS counts characters too.
+        text = apply_capitalization(text, capitalization)
+        text = apply_wrapping(text, wrap_char, auto_wrap_length)
 
         point = representative_point(feature.get("geometry"))
         if point is None:

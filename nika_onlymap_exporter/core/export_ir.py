@@ -537,6 +537,16 @@ class LabelingSpec:
     rotation: float = 0.0
     background_color: Color | None = None
     background_padding: tuple[float, float] = (0.0, 0.0)
+    # QGIS text case, applied to the label *text* rather than emitted as a
+    # style: the web renderer has no text-transform, and changing the string is
+    # what QGIS itself does. One of "none", "upper", "lower", "capitalize",
+    # "title".
+    capitalization: str = "none"
+    # A character QGIS breaks lines on (often "|"), and its automatic wrap
+    # length in characters. Both reach the label text, not an attribute -
+    # `wrap_char` becomes a real newline, which deck.gl honours.
+    wrap_char: str = ""
+    auto_wrap_length: int = 0
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -558,6 +568,9 @@ class LabelingSpec:
                 self.background_color.snapshot() if self.background_color else None
             ),
             "backgroundPadding": [round(p, 4) for p in self.background_padding],
+            "capitalization": self.capitalization,
+            "wrapChar": self.wrap_char,
+            "autoWrapLength": self.auto_wrap_length,
         }
 
 

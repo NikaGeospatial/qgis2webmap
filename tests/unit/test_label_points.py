@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from nika_onlymap_exporter.core.label_points import (
     LABEL_PROPERTY,
+    apply_capitalization,
+    apply_wrapping,
     build_label_collection,
     collect_character_set,
     representative_point,
@@ -176,3 +178,120 @@ class TestCharacterSet:
         assert characters is not None
         assert "ü" in characters
         assert list(characters) == sorted(characters), "must be byte-stable"
+
+
+class TestCapitalization:
+    """QGIS's text case reaches the string, because there is nowhere else.
+
+    The web renderer has no `text-transform`, and neither does QGIS - it changes
+    the glyphs it draws. Doing it here is the same operation in the same place.
+    """
+
+    def test_none_leaves_the_text_alone(self) -> None:
+        assert apply_capitalization("mIxEd Case", "none") == "mIxEd Case"
+
+    def test_upper_and_lower(self) -> None:
+        assert apply_capitalization("Fort Yukon", "upper") == "FORT YUKON"
+        assert apply_capitalization("Fort Yukon", "lower") == "fort yukon"
+
+    def test_capitalize_keeps_the_rest_of_the_string(self) -> None:
+        """QGIS's "force first letter to capital" raises the first letter only.
+        `str.capitalize()` lowercases the remainder, which would turn "USA
+        Route" into "Usa route" - a different name."""
+        assert apply_capitalization("USA Route", "capitalize") == "USA Route"
+        assert apply_capitalization("usa route", "capitalize") == "Usa route"
+
+    def test_title_case(self) -> None:
+        assert apply_capitalization("fort yukon", "title") == "Fort Yukon"
+
+    def test_an_empty_string_survives_every_mode(self) -> None:
+        for mode in ("none", "upper", "lower", "capitalize", "title"):
+            assert apply_capitalization("", mode) == ""
+
+    def test_an_unknown_mode_leaves_the_text_alone(self) -> None:
+        """QGIS's UpperCamelCase has no readable label form, so it falls through
+        rather than running the words together."""
+        assert apply_capitalization("fort yukon", "camel") == "fort yukon"
+
+
+class TestWrapping:
+    """QGIS line breaks become real newlines, which deck.gl honours."""
+
+    def test_the_wrap_character_becomes_a_newline(self) -> None:
+        assert apply_wrapping("Fort|Yukon", "|", 0) == "Fort\nYukon"
+
+    def test_no_wrapping_configured_changes_nothing(self) -> None:
+        assert apply_wrapping("Fort Yukon", "", 0) == "Fort Yukon"
+
+    def test_auto_wrap_breaks_on_whitespace(self) -> None:
+        assert apply_wrapping("aaa bbb ccc", "", 7) == "aaa bbb\nccc"
+
+    def test_auto_wrap_never_splits_a_word(self) -> None:
+        """A broken word is unreadable, and QGIS does not do it either - so a
+        word longer than the wrap width overflows rather than being cut."""
+        assert apply_wrapping("Chugach Mountains", "", 5) == "Chugach\nMountains"
+        assert apply_wrapping("Antidisestablishmentarianism", "", 5) == (
+            "Antidisestablishmentarianism"
+        )
+
+    def test_a_short_label_keeps_its_own_spacing(self) -> None:
+        """`textwrap` collapses runs of whitespace and strips, so a label short
+        enough to need no wrapping would still come out changed."""
+        assert apply_wrapping("A  B", "", 40) == "A  B"
+
+    def test_the_explicit_break_is_applied_before_the_automatic_one(self) -> None:
+        assert apply_wrapping("aaa bbb|ccc ddd", "|", 7) == "aaa bbb\nccc ddd"
+
+
+class TestLabelCollectionTransforms:
+    def test_the_collection_carries_the_transformed_text(self) -> None:
+        collection = build_label_collection(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [1.0, 2.0]},
+                        "properties": {"name": "fort yukon"},
+                    }
+                ],
+            },
+            "name",
+            capitalization="upper",
+        )
+        assert collection["features"][0]["properties"][LABEL_PROPERTY] == "FORT YUKON"
+
+    def test_the_default_is_the_untouched_value(self) -> None:
+        collection = build_label_collection(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [1.0, 2.0]},
+                        "properties": {"name": "fort yukon"},
+                    }
+                ],
+            },
+            "name",
+        )
+        assert collection["features"][0]["properties"][LABEL_PROPERTY] == "fort yukon"
+
+    def test_a_wrapped_label_declares_its_newline_in_the_character_set(self) -> None:
+        """`text-character-set` replaces the atlas, so a newline that is not in
+        it would break the very labels the wrap was meant to lay out."""
+        collection = build_label_collection(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [1.0, 2.0]},
+                        "properties": {"name": "Fort|Yukon"},
+                    }
+                ],
+            },
+            "name",
+            wrap_char="|",
+        )
+        assert "\n" in collection["features"][0]["properties"][LABEL_PROPERTY]
