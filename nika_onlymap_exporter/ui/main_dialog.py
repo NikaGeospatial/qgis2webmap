@@ -821,18 +821,20 @@ class MainDialog(QDialog):
             parts.append("valid on " + ", ".join(info.domains))
         summary = "Key accepted - " + ("; ".join(parts) if parts else "limits lifted")
 
-        # The one thing that surprises everybody: a key issued for a domain does
-        # nothing for a file someone double-clicks, because a file:// page has
-        # no hostname to match against.
+        # A key issued for a domain does nothing for a file someone
+        # double-clicks, because a file:// page has no hostname to match
+        # against. Since runtime 0.6.0 that costs only the corner badge - the
+        # free plan is uncapped on a local file anyway - so this is a note in
+        # passing rather than the red warning it used to be.
         if not info.covers_local_files:
             self.license_note.setText(
-                f"{summary}.\nThis key only applies where the map is served from "
-                "one of those domains. A Standalone HTML file opened by "
-                "double-clicking has no domain, so it falls back to the free "
-                "plan - host the map, or ask NIKA for a key that covers local "
-                "files."
+                f"{summary}.\nA Standalone HTML file opened by double-clicking "
+                "has no domain to match, so the key does not apply there. The "
+                "map still draws in full - local files have no size limits - "
+                "but it keeps the OnlyMap badge. Ask NIKA for a key covering "
+                "local files if you need the badge gone."
             )
-            self.license_note.setStyleSheet("color: #c0392b;")
+            self.license_note.setStyleSheet("")
             return
 
         self.license_note.setText(f"{summary}, including local files.")
@@ -2450,25 +2452,23 @@ class MainDialog(QDialog):
         key = self._license_key()
 
         if key is None:
+            # Conditional since runtime 0.6.0: the caps apply on a hosted
+            # http(s) page and nowhere else. Stating it as a certain loss was
+            # true until 0.5.12 and is now wrong for the common case, which is a
+            # file the recipient double-clicks.
             message = (
                 f"{len(violations)} free-tier limit(s) exceeded ({subjects}). "
-                "Layers past the fifth will not render, and an over-size layer "
-                "shows only its first 25,000 features while looking complete. "
-                "Exporting anyway - the Fidelity tab has the detail."
-            )
-        elif self.state.output_mode is OutputMode.STANDALONE_HTML and not (
-            describe_license_key(key).covers_local_files
-        ):
-            # The combination that silently fails: a real key, an export that
-            # will be opened as a file, and a domain check that cannot match.
-            message = (
-                f"Your licence key is domain-locked, and a Standalone HTML file "
-                f"opened by double-clicking has no domain - so the free-tier "
-                f"limits still apply to it ({subjects}). Host the map, or ask "
-                "NIKA for a key covering local files."
+                "This only matters if you publish the map to a web server: "
+                "there, layers past the fifth do not render and an over-size "
+                "layer shows only its first 25,000 features while looking "
+                "complete. Opened from a file it draws everything. The Fidelity "
+                "tab has the detail."
             )
         else:
-            # Licensed and plausibly hosted: no cap applies, so nothing to say.
+            # Licensed: caps lifted where they applied at all. The domain-lock
+            # gap no longer brings them back on a local file - the free plan is
+            # itself uncapped there - so it costs only the badge, which is not
+            # worth a blocking-weight warning.
             return
         bar = getattr(self.iface, "messageBar", None)
         if bar is not None:

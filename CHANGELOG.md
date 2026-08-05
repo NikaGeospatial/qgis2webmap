@@ -152,11 +152,40 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the difference is visible.
 
 ### Changed
-- **The pinned OnlyMap runtime moved from 0.5.11 to 0.5.12.** One upstream fix,
-  for `highlight-color` being compiled to a function accessor on the library's
-  own selection path. The licence logic is byte-identical between the two
-  builds, checked rather than assumed, so nothing in `license_policy.py`
-  changes.
+- **The free-tier limits no longer apply to a map you open locally**, following
+  the pinned runtime's move to 0.6.0. The caps - 5 layers, 25,000 features per
+  layer, and a 20 MB fetch limit - now apply only to a page served over
+  `http(s)` from a real domain. A file opened from disk, any non-web address,
+  `localhost`, `*.localhost`, any `127.x`, `::1` and `0.0.0.0` are all exempt,
+  and the attribution badge stays in every case. Since the plugin's default
+  output is a single file the recipient double-clicks, most exports are now
+  uncapped.
+
+  Everything we say about the caps changed with it. A breach is reported in the
+  Fidelity tab as **approximated rather than unsupported**, because it is now a
+  conditional consequence of publishing rather than a fact about the artifact -
+  reporting a certain failure that will not happen is how people learn to skip
+  the tab. The message bar and the licence-key note say the same thing. We still
+  detect and report every breach: a Folder or Share ZIP put on a web server is
+  capped, and so is the same project exported by someone else.
+
+  One thing got smaller rather than larger: a domain-locked key still does not
+  apply to a double-clicked file, but that used to bring the caps back and now
+  costs only the on-map badge. The dialog says so in passing instead of in red.
+
+- **Uncapped is not the same as licensed.** The runtime's licence gained a
+  clause saying that technical limits are a convenience and that their
+  "presence, absence, or failure" grants nothing - commercial use, explicitly
+  including distribution inside a packaged or installable application, needs a
+  commercial key regardless. `docs/supported-features.md` states this and points
+  at NIKA. Nothing in the plugin checks it, and nothing should: it is a legal
+  condition, not a technical one.
+
+- **The pinned OnlyMap runtime moved from 0.5.11 to 0.5.12 to 0.6.0** over the
+  course of one day. 0.5.12 carried one upstream fix, for `highlight-color`
+  being compiled to a function accessor on the library's own selection path;
+  0.6.0 is the licensing rework above. The runtime's own `LICENSE.md` ships with
+  the plugin and was updated with it.
 
 - **The OnlyMap credit in every exported map points at the documentation site.**
   `onlymap.nikaplanet.com` rather than the product page, so someone who clicks

@@ -36,20 +36,44 @@ Two halves, deliberately separated:
   only OnlyMapJS renders it at all. `LicensedPolicy` stays because it costs
   nothing and saves a rewrite if that ever changes.
 
-Worth stating because it is easy to assume otherwise: **opening the file from the
-filesystem does not lift the caps.** The runtime's own licence module says "NO
-localhost exemption (gates apply identically everywhere)". A `file://` artifact is
-gated exactly like a hosted one.
+**The caps only bite on a hosted page.** Reworked by the runtime in **0.6.0**;
+until 0.5.12 they applied everywhere, and this module said so. Read out of the
+0.6.0 bundle on 2026-08-05 rather than from the release note:
 
-**Do not be misled by the dev-origin set in the bundle.** 0.5.12 does contain
-`["localhost", "127.0.0.1", "::1", "[::1]", ""]` plus a `.local` suffix test --
-note the empty string, which is a `file://` hostname -- behind a helper returning
-`{origin, dev}`. It belongs to the **telemetry** module (`om-api.nika.eco/v1/t`)
-and nothing in cap enforcement reads it: the caps come from the plan object,
-which stays at the free defaults unless a signed key verifies. Traced through
-0.5.12 on 2026-08-05, after `docs/` began describing 0.6.0's promised local-origin
-exemption as current. When 0.6.0 ships, this module is what has to change --
-see the `docs/` claims before assuming they already match the code.
+```js
+function isLoopback(h) {
+  return h === "localhost" || h.endsWith(".localhost") || h.startsWith("127.")
+      || h === "[::1]" || h === "::1" || h === "0.0.0.0";
+}
+function isDevContext() {
+  if (typeof location > "u") return true;                 // headless
+  const p = location.protocol;
+  return p !== "http:" && p !== "https:" ? true           // file:, and any
+       : isLoopback(location.hostname ?? "");             // non-web scheme
+}
+const effective = () => plan.plan === "free" && isDevContext() ? DEV : plan;
+```
+
+`DEV` is `{plan: "dev", maxLayers: Infinity, maxRowsPerLayer: Infinity,
+maxFetchBytes: Infinity, hideBadge: false}`. So a map opened by double-clicking
+draws every layer and every feature, and **the attribution badge stays** -- the
+exemption lifts limits, never the credit. Note the substitution is guarded on
+`plan === "free"`, so a verified key still behaves exactly as before.
+
+**That makes almost every export we produce uncapped**, because the default
+output is a Standalone HTML file opened from disk. Violations are still detected
+and still reported, because we cannot know the destination: a Folder or Share ZIP
+published to a web server is capped, and the same project exported by someone
+else may be. What changed is the *certainty* - a cap violation is now a
+conditional consequence of publishing, not a fact about the artifact.
+
+**Lifted caps are not a licence.** The runtime's own `LICENSE.md` gained a
+paragraph in 0.6.0 saying so in terms: technical limits are a convenience, their
+"presence, absence, or failure" grants nothing, and commercial use - explicitly
+including distribution "inside a packaged or installable application" - needs a
+commercial key regardless. Nothing here enforces that and nothing should; it is a
+legal condition, not a technical one. We state it in `docs/supported-features.md`
+and point at NIKA rather than answering licensing questions ourselves.
 
 `FreeTierPolicy` **blocks**, per the project's non-negotiable: never write a
 knowingly broken artifact.
@@ -294,18 +318,20 @@ class LicensedPolicy:
     generated markup is safe by design - the signature is what protects it, not
     secrecy, and it is meant to be served to browsers.
 
-    **The domain restriction is the catch, and it is a big one.** Confirmed
-    against the runtime bundle (0.5.12) on 2026-08-05: the key's payload carries
-    a `domains` list, and the runtime compares it to `location.hostname`. A
-    `file://` page has an **empty** hostname, so a key issued for `example.com`
-    does not license a map someone opens by double-clicking it - the runtime
-    logs "not licensed for" and silently falls back to the free plan and its
-    caps.
+    **The domain restriction is the catch, and 0.6.0 shrank it.** The key's
+    payload carries a `domains` list which the runtime compares to
+    `location.hostname`; a `file://` page has an **empty** hostname, so a key
+    issued for `example.com` does not apply to a map someone opens by
+    double-clicking - the runtime logs "not licensed for" and falls back to the
+    free plan.
 
-    That makes a licensed Standalone HTML export the one combination that looks
-    like it should work and does not. `LicenseKeyInfo.covers_local_files` is how
-    the dialog spots it, so the user hears it from us rather than from whoever
-    they sent the map to.
+    That used to mean the caps came back, which made a licensed Standalone HTML
+    export the one combination that looked like it should work and did not. It
+    no longer does: the free plan is itself uncapped in a dev context, so falling
+    back costs nothing but the badge. `LicenseKeyInfo.covers_local_files` is
+    still how the dialog spots it, and it is still worth saying - someone who
+    paid to remove the corner credit will not see it removed on a file they
+    double-click - but it is a cosmetic disappointment now, not a broken map.
     """
 
     def __init__(self, license_key: str) -> None:
@@ -345,11 +371,17 @@ def report_verdict(verdict: CapVerdict, report: FidelityReportBuilder) -> None:
                 violation.layer_id,
             )
         else:
-            report.unsupported(
+            # Approximated, not unsupported: since runtime 0.6.0 the caps apply
+            # only on a hosted http(s) page, and the usual destination for these
+            # exports is a file someone opens from disk, where nothing is lost.
+            # Reporting a certain failure that will not happen trains people to
+            # ignore the Fidelity tab.
+            report.approximated(
                 violation.subject,
-                f"{violation.detail} The exported map shows an explanation in "
-                "its corner so the recipient is not left guessing. To include "
-                "everything, split the project across several maps or reduce the "
-                "number of features.",
+                f"{violation.detail} This only happens if you publish the map to "
+                "a web server - opened from a file or from localhost it draws "
+                "everything. If you are publishing it, split the project across "
+                "several maps, reduce the number of features, or use a licence "
+                "key. The map shows the recipient an explanation either way.",
                 violation.layer_id,
             )

@@ -20,33 +20,33 @@ Data in any CRS is reprojected to WGS84 on the way out.
 ## Size limits on the free plan
 
 Exported maps are drawn by the [OnlyMap runtime](https://onlymap.nikaplanet.com/),
-and its free plan has two limits:
+and its free plan has three limits:
 
 | | |
 |---|---|
 | Layers per map | 5 |
 | Features per layer | 25,000 |
+| Fetched data per map | 20 MB |
 
-**Neither applies to a map opened locally.** The limits are for hosted `http(s)`
-pages. The runtime lifts both in a development context - `file://`, `localhost`,
-and any non-web scheme - so a Standalone HTML file you send to someone, and
-anything you open from your own disk, draws every layer and every feature with no
-limit. The attribution badge stays.
+**None of them applies to a map opened locally.** The limits are for pages served
+over `http(s)` from a real domain. Everywhere else the runtime lifts all three:
+
+- a file opened from disk, or any address that is not `http`/`https`
+- `localhost`, anything ending `.localhost`, any `127.x` address, `::1`,
+  `0.0.0.0`
+
+So a Standalone HTML file you send to someone, and anything you open from your
+own disk, draws every layer and every feature. **The attribution badge stays** -
+the exemption lifts limits, never the credit.
 
 They apply when the map is served from a real domain: a Folder or Share ZIP
 export published to a web server. A paid licence lifts them there too.
 
-**The lifted caps are not a licence.** OnlyMap is explicit that the local
-exemption is a technical convenience rather than a grant of rights: commercial
-use still requires a key, including a map distributed as a file or inside a
-packaged application. So a Standalone HTML export for commercial or paid work
-needs a licence even though nothing in it will be capped or refuse to draw. The
-runtime cannot tell the difference and will not stop you - see
-[Using a paid OnlyMap licence](#using-a-paid-onlymap-licence) below, and take the
-question to
-[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/) rather than to us.
+**Uncapped is not the same as licensed.** Whether you *may* use an exported map
+commercially is a licensing question, unaffected by which limits happen to
+apply - see [Using a paid OnlyMap licence](#using-a-paid-onlymap-licence).
 
-**On a hosted map the two limits behave differently, and the second is the
+**On a hosted map the two feature limits behave differently, and the second is the
 dangerous one.**
 
 - Past **5 layers**, the extra layers render *nothing*. An obviously missing
@@ -82,9 +82,10 @@ cannot show you for itself.
 ## Using a paid OnlyMap licence
 
 If you have bought an OnlyMap licence, paste the key into **OnlyMap licence** on
-the Map tab. It lifts both limits on a hosted map and removes the on-map badge.
-A map opened locally is already uncapped, so a key is only worth supplying for
-maps you publish to a domain.
+the Map tab. It lifts the limits on a hosted map and removes the on-map badge.
+A map opened locally is already uncapped, so technically a key changes nothing
+there - but see the note on commercial use below, which is a separate question
+from what the runtime enforces.
 
 The key is stored on your computer, not in the `.qgz`, so it follows you between
 projects and is never sent to anyone you share a project file with. It is written
@@ -99,8 +100,17 @@ costs you anything in size: a local map is uncapped either way. It is why the
 badge can still appear on a file you emailed.
 
 So a paid licence earns its keep when you **host the map** (Folder or Share ZIP,
-published to a web server on a domain the key covers). For a map you email as a
-single file, you do not need one.
+published to a web server on a domain the key covers).
+
+**Commercial use is a separate question from the limits.** OnlyMap's licence is
+explicit that technical limits are a convenience, not the grant: their
+"presence, absence, or failure" changes nothing about what you are allowed to
+do, and commercial use - including distributing the map inside a packaged or
+installable application - requires a commercial key regardless. A Standalone
+HTML export for paid or commercial work therefore needs a licence even though
+nothing in it will be capped or refuse to draw. Nothing in this plugin checks
+that and nothing will; take the question to
+[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/) rather than to us.
 
 The Map tab reads your key and says which domains it covers and whether it has
 expired.

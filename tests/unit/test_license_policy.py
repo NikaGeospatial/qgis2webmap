@@ -143,21 +143,39 @@ class TestDefaultPolicy:
 
 
 class TestReportVerdict:
-    def test_unlicensed_verdict_reports_unsupported_not_blocked(self) -> None:
+    def test_unlicensed_verdict_reports_approximated_not_blocked(self) -> None:
+        """Since runtime 0.6.0 a cap breach is conditional, so it is not a loss.
+
+        The caps apply on a hosted `http(s)` page and nowhere else, and the usual
+        destination for these exports is a file opened from disk. Reporting a
+        certain failure that will not happen teaches people to skip the Fidelity
+        tab, which is where the real losses are.
+        """
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
         verdict = FreeTierPolicy().evaluate(make_project(layers))
         report = FidelityReportBuilder()
         report_verdict(verdict, report)
         assert not report.has_blockers
-        assert len(report.by_status(FidelityStatus.UNSUPPORTED)) == 1
+        assert not report.by_status(FidelityStatus.UNSUPPORTED)
+        assert len(report.by_status(FidelityStatus.APPROXIMATED)) == 1
 
     def test_unlicensed_report_states_the_remedy(self) -> None:
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
         verdict = FreeTierPolicy().evaluate(make_project(layers))
         report = FidelityReportBuilder()
         report_verdict(verdict, report)
-        detail = report.by_status(FidelityStatus.UNSUPPORTED)[0].detail
+        detail = report.by_status(FidelityStatus.APPROXIMATED)[0].detail
         assert "split the project" in detail
+
+    def test_unlicensed_report_says_when_the_cap_actually_applies(self) -> None:
+        """The whole point of the 0.6.0 rework, and the easiest thing to lose."""
+        layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
+        verdict = FreeTierPolicy().evaluate(make_project(layers))
+        report = FidelityReportBuilder()
+        report_verdict(verdict, report)
+        detail = report.by_status(FidelityStatus.APPROXIMATED)[0].detail
+        assert "publish" in detail
+        assert "web server" in detail
 
     def test_licensed_verdict_needs_no_diagnostic_panel(self) -> None:
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
