@@ -7,6 +7,34 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Dashed and dotted lines.** Both ways QGIS produces one now export: the
+  line-style dropdown, which sets a Qt pen style, and a hand-built custom dash
+  pattern. Only the second was read before, so the dropdown - which is what most
+  people actually use - exported solid lines. The pattern is converted from
+  pixels to deck.gl's line-width units at the writer, so a dash keeps its rhythm
+  when the line gets thicker; a QGIS dash-dot is drawn as a plain dash of the
+  same length and reported, because deck.gl strokes exactly one on/off pair.
+
+- **A licence key field for OnlyMap subscribers.** Everything below it already
+  existed - `LicensedPolicy`, the verdict's key, the `license-key` attribute on
+  `<om-map>` - but nothing ever supplied a key, so every export ran on the free
+  plan whether or not the user had paid. The key is stored on the machine rather
+  than in the `.qgz`, because a project file gets emailed and committed.
+
+  The field reads the key's own payload and reports the plan, the domains it
+  covers and its expiry. It warns about the case that otherwise fails silently:
+  a key is matched against `location.hostname`, and a Standalone HTML file
+  opened by double-clicking has none, so a domain-locked key does not apply to
+  it.
+
+- **A destination field on the Map tab**, with a Browse button, remembering the
+  folder between exports and correcting the file extension to match the chosen
+  packaging. The location was previously settable only through a file dialog
+  that appeared *after* pressing Export, so nothing on screen suggested it was
+  the user's to choose.
+
+- **A progress bar and a Cancel button** for reading, previewing and exporting.
+
 - **Label text case and line breaking.** QGIS's uppercase / lowercase /
   capitalise / title case, its wrap character, and its automatic wrap length
   now reach the exported labels. All three are applied to the label *text*
@@ -97,6 +125,31 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `get-icon-pixel-offset`.
 
 ### Changed
+- **Reading, previewing and exporting run on a worker thread.** All three ran on
+  the GUI thread, so a large project froze the whole window for as long as the
+  work took - which is indistinguishable from a crash, and was reported as one.
+  The pipeline was already safe to run off the main thread: the Processing
+  algorithm has no `FlagNoThreading`, so QGIS has been running it in the
+  background all along.
+
+- **A chrome-only setting no longer re-reads the project.** With live preview on
+  - the default - every settings change ran a full read of every feature of
+  every layer, including changes that cannot affect one. Unticking "Legend" now
+  reuses the last read. `DialogState` splits into the fields that can change the
+  exported data and the fields that only restyle the map.
+
+- **The dialog can be made shorter.** Its minimum height was whatever its
+  tallest tab wanted, so on a laptop screen the window could be grown and never
+  shrunk, and its foot - with the Export button on it - sat behind the Windows
+  taskbar. The tabs scroll, and the opening size is clamped to the screen's
+  available area.
+
+- **An oversized Standalone HTML export warns instead of switching itself.** It
+  used to move the selection to Share ZIP on the user's behalf while the radio
+  buttons stayed on Standalone HTML, so the dialog said one thing and wrote
+  another. The size rule is now stated on the Map tab beside the choice it
+  constrains, and the export proceeds if that is what the user wants.
+
 - **The marker-shape fidelity note moved to the symbol atlas.** It used to fire
   once per class from the symbol translator, saying a shape *may* be
   approximated. On a point layer that is now false - QGIS draws the shape
@@ -116,6 +169,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **The free-tier row cap was documented as dropping a layer; it truncates it.**
+  Verified against the runtime bundle: past 25,000 features the layer renders
+  its first 25,000 in source order rather than nothing. The map shows the
+  recipient a dismissible notice, but its legend, filters and statistics
+  describe only the drawn subset. The fidelity report now says how many features
+  are missing rather than claiming the layer will not appear.
+
+- **Qt enums were read in a way that works on PyQt6 and silently fails on
+  PyQt5**, which is every QGIS LTR install. `penStyle()` returns a bare `int`
+  there, with no `.name`, so the first dashed-line implementation found nothing
+  and exported solid lines. Enum reads now handle `.name`, `int()` and `.value`.
+
 - **The runtime download size was stated in four hand-written places** and went
   stale on the 0.3.3 → 0.5.11 bump, so the licence dialog promised "about 3 MB"
   for a 4.5 MB download - at the exact moment a user decides whether to accept.
