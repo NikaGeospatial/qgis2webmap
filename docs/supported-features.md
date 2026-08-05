@@ -27,13 +27,24 @@ and its free plan has two limits:
 | Layers per map | 5 |
 | Features per layer | 25,000 |
 
-**Neither applies to a map opened locally.** The runtime lifts both when the page
-is served from `file://`, `localhost` or `127.0.0.1` - so a Standalone HTML file
-you email to someone, and anything you open from your own disk, draws every layer
-and every feature with no licence key and no limit.
+**Neither applies to a map opened locally.** The limits are for hosted `http(s)`
+pages. The runtime lifts both in a development context - `file://`, `localhost`,
+and any non-web scheme - so a Standalone HTML file you send to someone, and
+anything you open from your own disk, draws every layer and every feature with no
+limit. The attribution badge stays.
 
 They apply when the map is served from a real domain: a Folder or Share ZIP
 export published to a web server. A paid licence lifts them there too.
+
+**The lifted caps are not a licence.** OnlyMap is explicit that the local
+exemption is a technical convenience rather than a grant of rights: commercial
+use still requires a key, including a map distributed as a file or inside a
+packaged application. So a Standalone HTML export for commercial or paid work
+needs a licence even though nothing in it will be capped or refuse to draw. The
+runtime cannot tell the difference and will not stop you - see
+[Using a paid OnlyMap licence](#using-a-paid-onlymap-licence) below, and take the
+question to
+[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/) rather than to us.
 
 **On a hosted map the two limits behave differently, and the second is the
 dangerous one.**
