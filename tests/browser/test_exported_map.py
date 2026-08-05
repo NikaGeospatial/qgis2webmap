@@ -399,6 +399,54 @@ class TestExtrusion:
         )
 
 
+class TestHighlightColour:
+    """The setting that looked configurable and was inert.
+
+    Every layer of this is invisible on disk. The attribute was in the file, the
+    unit tier asserted it was in the file, and it still did nothing: quoted as an
+    expression-language literal, the runtime handed deck.gl the raw string
+    `'#1de9c880'`, deck's `Array.isArray(highlightColor)` guard rejected it, and
+    the highlight rendered in deck's default navy `[0, 0, 128, 128]`. Only the
+    resolved layer prop tells the two apart, so only a browser can.
+    """
+
+    @staticmethod
+    def _prop(page):
+        return page.evaluate(
+            """() => {
+              const core = document.querySelector('om-map').core;
+              const deck = core.deck || core._deck;
+              const layer = deck.props.layers.find((l) => l.id === 'stations');
+              return layer ? layer.props.highlightColor : null;
+            }"""
+        )
+
+    def test_the_colour_reaches_deck_as_rgba(self, page, highlighted_map) -> None:
+        open_map(page, highlighted_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+
+        assert self._prop(page) == [29, 233, 200, 128]
+
+    def test_it_is_not_left_as_an_unresolved_string(
+        self, page, highlighted_map
+    ) -> None:
+        """The regression guard, stated as the failure rather than the fix.
+
+        A future change that reintroduces quoting passes the previous test's
+        `==` never - but says nothing about *why*. This one names the shape.
+        """
+        open_map(page, highlighted_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+
+        value = self._prop(page)
+        assert not isinstance(value, str), f"deck.gl will ignore {value!r}"
+        assert value != [0, 0, 128, 128], "this is deck's default, not ours"
+
+
 class TestIconMarkers:
     """Markers QGIS rasterised, drawn by a real deck.gl.
 

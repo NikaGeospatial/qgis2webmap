@@ -162,7 +162,24 @@ class TestHighlightColour:
     def test_the_default_is_translucent_not_opaque(self) -> None:
         """The exact failure mode of the incumbent: a solid fill over the map."""
         line = self._highlight()
-        assert line == "highlight-color=\"'#ffffff55'\""
+        assert line == 'highlight-color="#ffffff55"'
+
+    def test_the_colour_is_bare_hex_not_a_quoted_literal(self) -> None:
+        """Quoting it made the whole setting inert, silently.
+
+        `highlight-color` is a plain attribute, so the runtime passes its raw
+        string to deck.gl, which accepts only an array or a bare hex. With the
+        quotes the value arrived as a 12-character string, failed deck's
+        `Array.isArray` guard, and every highlight rendered in deck's default
+        navy - the setting appeared to work and did nothing. The browser tier
+        checks the other end of this; here we pin the shape.
+        """
+        for line in (
+            self._highlight(),
+            self._highlight(highlight_color=Color(r=29, g=233, b=200, a=0.5)),
+        ):
+            assert "'" not in line
+            assert '="#' in line
 
     def test_a_chosen_colour_reaches_the_layer(self) -> None:
         line = self._highlight(highlight_color=Color(r=29, g=233, b=200, a=0.5))
@@ -170,7 +187,7 @@ class TestHighlightColour:
 
     def test_a_chosen_colour_keeps_its_transparency(self) -> None:
         line = self._highlight(highlight_color=Color(r=0, g=0, b=0, a=0.25))
-        assert line.endswith("40'\"")
+        assert line.endswith('40"')
 
 
 class TestPerLayerOverrides:

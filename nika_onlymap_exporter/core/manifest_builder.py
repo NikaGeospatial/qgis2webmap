@@ -220,6 +220,25 @@ def color_literal(color: Color | None) -> str:
     return f"'#{color.r:02x}{color.g:02x}{color.b:02x}{alpha:02x}'"
 
 
+def color_hex(color: Color | None) -> str:
+    """A colour as a bare `#rrggbb[aa]`, for a plain-valued attribute.
+
+    `color_literal` quotes, because it produces a term for the expression
+    language that `get-*` accessors are written in. A scalar attribute is not
+    expression-valued, and the runtime hands its raw string to deck.gl untouched:
+    quoted, `highlight-color` arrives as the literal 12-character string
+    `'#ffffff55'`, deck's `Array.isArray` guard rejects it, and every highlight
+    silently renders in deck's default navy. Verified in a browser against
+    0.5.12 - bare hex and an RGBA array both resolve, the quoted form does not.
+    """
+    if color is None:
+        return "#888888"
+    if color.a >= 1.0:
+        return f"#{color.r:02x}{color.g:02x}{color.b:02x}"
+    alpha = max(0, min(255, round(color.a * 255)))
+    return f"#{color.r:02x}{color.g:02x}{color.b:02x}{alpha:02x}"
+
+
 def value_literal(value: object) -> str:
     """A category value as an expression-language literal."""
     if value is None:
@@ -443,7 +462,9 @@ def _attrs_to_string(attributes: list[tuple[str, str | None]], indent: str) -> s
 # colour, opaque yellow by default - as a web hover cue, which fills the map and
 # hides everything under it (evaluation 5.7). Overridable on the Appearance tab,
 # which qgis2web has never offered: its only workaround is Project Properties.
-DEFAULT_HIGHLIGHT = "'#ffffff55'"
+# Bare, not quoted: `highlight-color` is a plain attribute, not an expression.
+# See `color_hex` for what quoting it cost.
+DEFAULT_HIGHLIGHT = "#ffffff55"
 
 
 def dash_attribute(symbol: SymbolSpec) -> str | None:
@@ -638,7 +659,7 @@ def build_layer_element(
                 "highlight-color",
                 DEFAULT_HIGHLIGHT
                 if highlight_color is None
-                else (color_literal(highlight_color)),
+                else color_hex(highlight_color),
             )
         )
 

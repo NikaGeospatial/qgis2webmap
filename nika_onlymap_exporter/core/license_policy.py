@@ -5,7 +5,7 @@ artifact, on the recipient's machine**: 5 layers and 25,000 rows per layer. The
 explanation lands on a validation stream no recipient will ever look at.
 
 **The two caps behave differently.** Verified against the runtime bundle
-(0.5.11) on 2026-08-05, because this file previously claimed both were hard
+(0.5.12) on 2026-08-05, because this file previously claimed both were hard
 drops and that is wrong for rows:
 
 * **Layer cap**: a hard drop. Layers past the fifth render *nothing*.
@@ -40,6 +40,16 @@ Worth stating because it is easy to assume otherwise: **opening the file from th
 filesystem does not lift the caps.** The runtime's own licence module says "NO
 localhost exemption (gates apply identically everywhere)". A `file://` artifact is
 gated exactly like a hosted one.
+
+**Do not be misled by the dev-origin set in the bundle.** 0.5.12 does contain
+`["localhost", "127.0.0.1", "::1", "[::1]", ""]` plus a `.local` suffix test --
+note the empty string, which is a `file://` hostname -- behind a helper returning
+`{origin, dev}`. It belongs to the **telemetry** module (`om-api.nika.eco/v1/t`)
+and nothing in cap enforcement reads it: the caps come from the plan object,
+which stays at the free defaults unless a signed key verifies. Traced through
+0.5.12 on 2026-08-05, after `docs/` began describing 0.6.0's promised local-origin
+exemption as current. When 0.6.0 ships, this module is what has to change --
+see the `docs/` claims before assuming they already match the code.
 
 `FreeTierPolicy` **blocks**, per the project's non-negotiable: never write a
 knowingly broken artifact.
@@ -285,7 +295,7 @@ class LicensedPolicy:
     secrecy, and it is meant to be served to browsers.
 
     **The domain restriction is the catch, and it is a big one.** Confirmed
-    against the runtime bundle (0.5.11) on 2026-08-05: the key's payload carries
+    against the runtime bundle (0.5.12) on 2026-08-05: the key's payload carries
     a `domains` list, and the runtime compares it to `location.hostname`. A
     `file://` page has an **empty** hostname, so a key issued for `example.com`
     does not license a map someone opens by double-clicking it - the runtime

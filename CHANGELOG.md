@@ -141,7 +141,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   rotation drawn into the sprite sheet by QGIS, offset emitted as
   `get-icon-pixel-offset`.
 
+### Fixed
+- **The hover highlight colour was inert.** `highlight-color` is a plain
+  attribute, not one of the `get-*` accessors written in the expression
+  language, so the runtime hands its raw string to deck.gl unchanged. We quoted
+  it. deck.gl accepts an array or a bare hex and rejects everything else without
+  a word, so every export highlighted in deck's default navy while the file, the
+  dialog and the unit tests all agreed the chosen colour was there. Now emitted
+  bare. The browser tier reads the resolved layer prop, which is the only place
+  the difference is visible.
+
 ### Changed
+- **The pinned OnlyMap runtime moved from 0.5.11 to 0.5.12.** One upstream fix,
+  for `highlight-color` being compiled to a function accessor on the library's
+  own selection path. The licence logic is byte-identical between the two
+  builds, checked rather than assumed, so nothing in `license_policy.py`
+  changes.
+
 - **The OnlyMap credit in every exported map points at the documentation site.**
   `onlymap.nikaplanet.com` rather than the product page, so someone who clicks
   the corner credit lands on the reference for the library drawing what they are

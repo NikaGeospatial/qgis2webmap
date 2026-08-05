@@ -125,6 +125,42 @@ def exported_map(runtime, tmp_path_factory):
     return result.entry_path
 
 
+HIGHLIGHT = Color(r=29, g=233, b=200, a=0.5)
+
+
+@pytest.fixture(scope="session")
+def highlighted_map(runtime, tmp_path_factory):
+    """A layer carrying an explicit highlight colour.
+
+    Separate from `exported_map` so the assertion can name the exact RGBA it
+    expects rather than the default, which is what distinguishes "our colour
+    arrived" from "deck.gl fell back to something".
+    """
+    layer = ExportLayer(
+        layer_id="stations",
+        name="Stations",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=2,
+        geojson=GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=31, g=119, b=180), radius=6.0),
+        ),
+        popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("name"),)),
+        highlight_color=HIGHLIGHT,
+    )
+    project = ExportProject(
+        title="Highlighted map",
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=50.9, east=1.1, north=51.9),
+    )
+
+    destination = tmp_path_factory.mktemp("highlighted")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
+
+
 EXTRUDED_GEOJSON = {
     "type": "FeatureCollection",
     "features": [
