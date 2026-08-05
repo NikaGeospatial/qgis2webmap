@@ -8,7 +8,9 @@ that opens locally. No account, no web server, no coding. The default export is 
 installed.
 
 Built by [NIKA](https://nikaplanet.com), powered by
-[OnlyMap](https://www.nikaplanet.com/onlymap).
+[OnlyMap](https://www.nikaplanet.com/onlymap) - the upstream map library this
+plugin exports to, documented at
+[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 
 > **Status: pre-release.** `0.1.0` is under active development and is not yet
 > published to the QGIS Plugin Repository. The repository layout and task plan

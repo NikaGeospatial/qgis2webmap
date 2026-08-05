@@ -4,6 +4,10 @@ Every exported map carries a **Host with OnlyMap** link in its bottom-right
 credit component. Hosting turns the file you already checked into a shareable
 link, without re-exporting anything.
 
+[OnlyMap](https://onlymap.nikaplanet.com/) is the map library that draws every
+map this plugin exports; its own documentation covers what the runtime can do
+once your map is published.
+
 ## Nothing uploads on its own
 
 An exported map is a file on your disk. Opening it makes no network request and

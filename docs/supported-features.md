@@ -19,18 +19,24 @@ Data in any CRS is reprojected to WGS84 on the way out.
 
 ## Size limits on the free plan
 
-Exported maps are drawn by the OnlyMap runtime, and its free plan has two limits
-that apply **inside the exported file, on the recipient's machine**:
+Exported maps are drawn by the [OnlyMap runtime](https://onlymap.nikaplanet.com/),
+and its free plan has two limits:
 
 | | |
 |---|---|
 | Layers per map | 5 |
 | Features per layer | 25,000 |
 
-They are not lifted by opening the file from your own disk - a `file://` map is
-capped exactly like a hosted one.
+**Neither applies to a map opened locally.** The runtime lifts both when the page
+is served from `file://`, `localhost` or `127.0.0.1` - so a Standalone HTML file
+you email to someone, and anything you open from your own disk, draws every layer
+and every feature with no licence key and no limit.
 
-**The two limits behave differently, and the second is the dangerous one.**
+They apply when the map is served from a real domain: a Folder or Share ZIP
+export published to a web server. A paid licence lifts them there too.
+
+**On a hosted map the two limits behave differently, and the second is the
+dangerous one.**
 
 - Past **5 layers**, the extra layers render *nothing*. An obviously missing
   layer is at least obvious.
@@ -45,16 +51,18 @@ capped exactly like a hosted one.
 The plugin will not let this happen quietly:
 
 - The **Fidelity** tab names every layer that is over a limit, before you export,
-  and says how many features are missing.
+  and says how many features are missing. It flags them for any export, since it
+  cannot know whether you will later host the file.
 - Exporting a project that breaches one shows a warning in the QGIS message bar,
   then exports anyway - the choice stays yours.
 - The exported map carries the runtime's own error panel, so a recipient sees an
   explanation in the corner rather than an unexplained gap.
 
-To stay within the limits without a licence: tick **Export only the features in
-this view** on the Map tab, which leaves out everything outside the current QGIS
-view and is the quickest way to bring a very large layer under the feature cap;
-split the project across several maps; or filter the layer in QGIS.
+To stay within the limits on a hosted map without a licence: tick **Export only
+the features in this view** on the Map tab, which leaves out everything outside
+the current QGIS view and is the quickest way to bring a very large layer under
+the feature cap; split the project across several maps; or filter the layer in
+QGIS.
 
 Clipping reports what it removed, per layer, in the **Fidelity** tab - features
 that are not there leave no gap on the map, so this is the one thing an export
@@ -63,33 +71,28 @@ cannot show you for itself.
 ## Using a paid OnlyMap licence
 
 If you have bought an OnlyMap licence, paste the key into **OnlyMap licence** on
-the Map tab. It lifts both limits and removes the on-map badge.
+the Map tab. It lifts both limits on a hosted map and removes the on-map badge.
+A map opened locally is already uncapped, so a key is only worth supplying for
+maps you publish to a domain.
 
 The key is stored on your computer, not in the `.qgz`, so it follows you between
 projects and is never sent to anyone you share a project file with. It is written
 into each map you export with it - that is how the runtime reads it, and it is
 safe: the key is signed and domain-locked rather than secret.
 
-**A key is tied to the domains it was issued for, and that has one consequence
-worth understanding before you rely on it.** The runtime checks the key against
-the domain the map is served from. A **Standalone HTML file opened by
-double-clicking has no domain at all**, so a key issued for your organisation's
-domain does not apply to it - the map falls back to the free plan and its
-limits.
+**A key is tied to the domains it was issued for.** The runtime checks the key
+against the domain the map is served from, and a **Standalone HTML file opened by
+double-clicking has no domain at all** - so a key issued for your organisation's
+domain does not apply to it, and the map runs on the free plan. That no longer
+costs you anything in size: a local map is uncapped either way. It is why the
+badge can still appear on a file you emailed.
 
-So a paid licence works when you:
+So a paid licence earns its keep when you **host the map** (Folder or Share ZIP,
+published to a web server on a domain the key covers). For a map you email as a
+single file, you do not need one.
 
-- **Host the map** (Folder or Share ZIP, published to a web server on a domain
-  the key covers).
-
-It does not work when you:
-
-- **Email someone a standalone file** and they open it locally - unless NIKA
-  issued you a key that covers local files.
-
-The Map tab reads your key and says which domains it covers, whether it has
-expired, and warns you if you are about to export a standalone file it cannot
-cover. Ask NIKA for a key covering local files if that is how you share maps.
+The Map tab reads your key and says which domains it covers and whether it has
+expired.
 
 **Batch and model exports** use the same key. The Processing algorithm takes an
 optional *OnlyMap licence key* parameter; leave it blank and it falls back to the

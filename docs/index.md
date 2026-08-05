@@ -22,6 +22,8 @@ another person can double-click and use without QGIS installed.
 - [Host with OnlyMap](hosting.md)
 - [What gets exported](supported-features.md)
 - [Privacy](privacy.md)
+- [OnlyMap documentation](https://onlymap.nikaplanet.com/) - the upstream map
+  library exported maps run on
 
 ## In short
 
@@ -32,5 +34,7 @@ another person can double-click and use without QGIS installed.
 ---
 
 Built by [NIKA](https://nikaplanet.com), powered by
-[OnlyMap](https://www.nikaplanet.com/onlymap).
+[OnlyMap](https://www.nikaplanet.com/onlymap) - the upstream map library this
+plugin exports to, documented at
+[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 QGIS2WebMap is not endorsed by QGIS.org.
