@@ -673,3 +673,35 @@ class TestItDrawsAcrossTheAntimeridian:
             "no layer pixels on a map centred on the antimeridian - "
             "the world-copy bug is back"
         )
+
+
+class TestDashedLinesReallyDash:
+    """`dash` reaching the markup is not the same as deck.gl honouring it.
+
+    deck.gl ignores a prop it does not understand without complaint, and the
+    attribute is in line-width units rather than pixels - a conversion that
+    would be silently wrong in either direction. Only a rendered line settles
+    it, so this counts the pixels a solid line draws against a dashed one.
+    """
+
+    def _red_pixels(self, page, artifact) -> int:
+        open_map(page, artifact)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+        return page.evaluate(COUNT_RED_PIXELS)["red"]
+
+    def test_a_dashed_line_draws_less_than_a_solid_one(
+        self, page, solid_line_map, dashed_line_map
+    ) -> None:
+        solid = self._red_pixels(page, solid_line_map)
+        dashed = self._red_pixels(page, dashed_line_map)
+
+        assert solid > 0, "the control line did not draw at all"
+        assert dashed > 0, "the dashed line vanished entirely"
+        # 4-on/2-off leaves roughly two thirds drawn. Asserting a generous
+        # margin rather than a ratio keeps this from failing on antialiasing.
+        assert dashed < solid * 0.9, (
+            f"dashed line drew {dashed} pixels against a solid {solid} - "
+            "the dash pattern is not reaching deck.gl"
+        )

@@ -52,6 +52,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     build_widget_elements,
     collect_attributions,
     color_literal,
+    dash_attribute,
     escape_attr,
     fill_expression,
     icon_expression,
@@ -1634,3 +1635,55 @@ class TestLicenseKeyReachesTheMarkup:
         # The same project without a key does need the panel, so the recipient
         # is told why features are missing.
         assert FreeTierPolicy().evaluate(project).needs_runtime_validation
+
+
+class TestDashedLines:
+    """QGIS dash patterns reaching the map.
+
+    They were read from QGIS into the model and then dropped at the writer, so
+    every dashed line exported solid. The runtime has taken `dash` since 0.5.10.
+    """
+
+    def _symbol(self, **overrides) -> SymbolSpec:
+        base = {"stroke_width": 2.0, "stroke_color": Color(r=0, g=0, b=0)}
+        base.update(overrides)
+        return SymbolSpec(**base)
+
+    def test_a_solid_line_emits_nothing(self) -> None:
+        assert dash_attribute(self._symbol()) is None
+
+    def test_pixels_become_line_width_units(self) -> None:
+        """deck.gl's dashArray is in widths, not pixels - 8px on a 2px line is 4."""
+        assert dash_attribute(self._symbol(stroke_dash=(8.0, 4.0))) == "[4, 2]"
+
+    def test_the_pattern_scales_with_the_line_width(self) -> None:
+        """The same pixels on a thicker line must not dash the same."""
+        thin = dash_attribute(self._symbol(stroke_width=2.0, stroke_dash=(8.0, 4.0)))
+        thick = dash_attribute(self._symbol(stroke_width=4.0, stroke_dash=(8.0, 4.0)))
+        assert thin != thick
+
+    def test_a_dash_dot_pattern_is_cut_to_one_pair(self) -> None:
+        """deck.gl strokes exactly one on/off pair."""
+        symbol = self._symbol(stroke_dash=(8.0, 4.0, 2.0, 4.0))
+        assert dash_attribute(symbol) == "[4, 2]"
+
+    def test_a_zero_dash_length_is_refused(self) -> None:
+        """The runtime rejects it outright; better to export a solid line."""
+        assert dash_attribute(self._symbol(stroke_dash=(0.0, 4.0))) is None
+
+    def test_a_widthless_line_is_refused(self) -> None:
+        """Dividing by a zero width is how a NaN reaches the markup."""
+        assert (
+            dash_attribute(self._symbol(stroke_width=0.0, stroke_dash=(8.0, 4.0)))
+            is None
+        )
+
+    def test_it_reaches_the_layer_element(self) -> None:
+        layer = make_layer(
+            geometry_kind=GeometryKind.LINE,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=self._symbol(stroke_dash=(8.0, 4.0)),
+            ),
+        )
+        assert 'dash="[4, 2]"' in build_layer_element(layer)

@@ -198,10 +198,17 @@ def translate_symbol(
         # QGIS marker size is a diameter; deck.gl wants a radius.
         radius = float(radius) * MM_TO_PIXELS / 2.0
 
-    dash: tuple[float, ...] = ()
-    if _safe(symbol_layer, "useCustomDashPattern"):
-        pattern = _safe(symbol_layer, "customDashVector") or []
-        dash = tuple(float(v) * MM_TO_PIXELS for v in pattern)
+    dash = read_dash_pattern(symbol_layer, stroke_width)
+    if len(dash) > 2:
+        # deck.gl strokes one on/off pair, so a dash-dot loses its dots. Said
+        # here because the line still comes out dashed - it looks right enough
+        # that nobody would check, which is exactly when a note is worth having.
+        report.approximated(
+            subject,
+            "The line uses a dash-dot pattern; the exported map draws a plain "
+            "dashed line with the same dash length. The dots are not drawn.",
+            layer_id,
+        )
 
     icon_path = _safe(symbol_layer, "path")
     marker_shape = read_marker_shape(symbol_layer)
@@ -281,6 +288,82 @@ def _translate_geometry_generator(
     if sub_symbol is None or depth >= MAX_SUB_SYMBOL_DEPTH:
         return SymbolSpec()
     return translate_symbol(sub_symbol, report, subject, layer_id, depth + 1)
+
+
+# Qt's own dash patterns for its named pen styles, in units of the pen width -
+# which is how Qt defines them, and why they scale with a thicker line. Kept as
+# a table rather than derived, because these are the numbers Qt draws with and
+# a line that looks dashed in QGIS should look the same dashed in the browser.
+QT_DASH_PATTERNS = {
+    "DashLine": (4.0, 2.0),
+    "DotLine": (1.0, 2.0),
+    "DashDotLine": (4.0, 2.0, 1.0, 2.0),
+    "DashDotDotLine": (4.0, 2.0, 1.0, 2.0, 1.0, 2.0),
+}
+
+
+# `Qt::PenStyle`, which is stable across Qt 5 and 6 - it is part of the ABI.
+# Solid (1) and NoPen (0) are deliberately absent: neither dashes.
+QT_PEN_STYLE_VALUES = {
+    2: "DashLine",
+    3: "DotLine",
+    4: "DashDotLine",
+    5: "DashDotDotLine",
+}
+
+
+def _pen_style_name(symbol_layer: Any) -> str | None:
+    """The Qt pen style as a plain name, or `None` for solid or unreadable.
+
+    Both bindings have to be handled, and they disagree: **PyQt5 returns a bare
+    `int`** (verified in the QGIS LTR container - `penStyle()` gives `2` for a
+    dashed line, with no `.name` and a `str()` of `"2"`), while PyQt6 returns a
+    Python enum with `.name` and `.value`. An earlier version read only the name
+    and so found nothing on PyQt5, which is every QGIS LTR install - it silently
+    exported every dashed line solid, exactly the bug this was fixing.
+    """
+    style = _safe(symbol_layer, "penStyle")
+    if style is None:
+        return None
+
+    name = getattr(style, "name", None)
+    if isinstance(name, str) and name in QT_DASH_PATTERNS:
+        return name
+
+    for read in (int, lambda s: s.value):
+        try:
+            return QT_PEN_STYLE_VALUES.get(read(style))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def read_dash_pattern(symbol_layer: Any, stroke_width: float) -> tuple[float, ...]:
+    """A line's dash pattern in **pixels**, or `()` when it is solid.
+
+    Two separate things in QGIS produce a dashed line, and reading only one of
+    them - which is what this did - misses the common case entirely:
+
+    * **A custom dash pattern**, `useCustomDashPattern` plus `customDashVector`,
+      already in millimetres and converted here like every other length.
+    * **A named pen style** - the "Dash", "Dot", "Dash Dot" entries in the line
+      style dropdown - which sets `penStyle` and leaves the custom vector empty.
+      This is what most people actually click, and it exported as a solid line.
+
+    Both come out in pixels so the caller has one unit to reason about. The
+    conversion to whatever the target renderer wants belongs to the writer.
+    """
+    if _safe(symbol_layer, "useCustomDashPattern"):
+        pattern = _safe(symbol_layer, "customDashVector") or []
+        return tuple(float(v) * MM_TO_PIXELS for v in pattern)
+
+    style = _pen_style_name(symbol_layer)
+    pattern = QT_DASH_PATTERNS.get(style or "")
+    if not pattern or stroke_width <= 0:
+        return ()
+    # Qt's patterns are multiples of the pen width, so a 2px line dashes at
+    # 8px on, 4px off.
+    return tuple(value * stroke_width for value in pattern)
 
 
 def read_cap_rounded(symbol_layer: Any) -> bool:

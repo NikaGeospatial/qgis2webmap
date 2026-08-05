@@ -467,3 +467,61 @@ class TestGeometryGenerator:
         report = FidelityReportBuilder()
         translate_symbol(symbol, report, "test")
         assert not report.by_status(FidelityStatus.UNSUPPORTED)
+
+
+class TestDashPatterns:
+    """Both ways QGIS makes a dashed line, read from real symbol layers.
+
+    Only the custom-pattern half was read before, so a line dashed with the
+    ordinary style dropdown - which is what most people use - exported solid.
+    The enum handling in `_pen_style_name` is the reason this is a QGIS-tier
+    test rather than a unit one: PyQt5 and PyQt6 disagree about whether a Qt
+    enum has a `.name`, and only a real Qt can settle it.
+    """
+
+    @staticmethod
+    def _line(**properties):
+        base = {"color": "#000000", "line_width": "1.0"}
+        base.update(properties)
+        return qgis_core.QgsLineSymbol.createSimple(base)
+
+    def test_a_solid_line_has_no_dash(self, qgis_app) -> None:
+        spec = translate_symbol(self._line(), FidelityReportBuilder(), "test")
+        assert spec.stroke_dash == ()
+
+    def test_the_style_dropdown_produces_a_dash(self, qgis_app) -> None:
+        """`line_style=dash` is the dropdown; it sets penStyle, not the vector."""
+        spec = translate_symbol(
+            self._line(line_style="dash"), FidelityReportBuilder(), "test"
+        )
+        assert spec.stroke_dash, "a dashed line must not export solid"
+        assert len(spec.stroke_dash) == 2
+
+    def test_a_dotted_line_dashes_differently_from_a_dashed_one(self, qgis_app) -> None:
+        """If both mapped to the same pattern, the table would be a lie."""
+        dashed = translate_symbol(
+            self._line(line_style="dash"), FidelityReportBuilder(), "test"
+        )
+        dotted = translate_symbol(
+            self._line(line_style="dot"), FidelityReportBuilder(), "test"
+        )
+        assert dashed.stroke_dash != dotted.stroke_dash
+
+    def test_a_custom_pattern_is_read_in_pixels(self, qgis_app) -> None:
+        symbol = self._line()
+        symbol_layer = symbol.symbolLayer(0)
+        symbol_layer.setUseCustomDashPattern(True)
+        symbol_layer.setCustomDashVector([4.0, 2.0])
+
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+        assert len(spec.stroke_dash) == 2
+        # Millimetres in, pixels out, like every other length in the model.
+        assert spec.stroke_dash[0] > 4.0
+
+    def test_a_dash_dot_line_is_reported_as_approximated(self, qgis_app) -> None:
+        """It still draws dashed, so silence would be the wrong answer."""
+        report = FidelityReportBuilder()
+        spec = translate_symbol(self._line(line_style="dash dot"), report, "test")
+
+        if len(spec.stroke_dash) > 2:
+            assert any("dash-dot" in item.detail for item in report.items)

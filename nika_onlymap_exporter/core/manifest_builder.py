@@ -446,6 +446,34 @@ def _attrs_to_string(attributes: list[tuple[str, str | None]], indent: str) -> s
 DEFAULT_HIGHLIGHT = "'#ffffff55'"
 
 
+def dash_attribute(symbol: SymbolSpec) -> str | None:
+    """A `dash="[on, off]"` value for a dashed line, or `None` for a solid one.
+
+    Two conversions happen here rather than in the reader, because both are
+    facts about this renderer rather than about QGIS:
+
+    * **Units.** The model carries the pattern in pixels; deck.gl's
+      `dashArray` is in *line-width units*, so a 2px line dashed 8px-on becomes
+      `4`. Emitting pixels would make every dash scale wrongly with width - and
+      silently, since both are plain numbers.
+    * **Length.** deck.gl takes exactly one on/off pair. QGIS dash-dot patterns
+      have four or six entries, so anything longer is cut to its first pair,
+      which keeps the line dashed at the right rhythm and loses the dots.
+
+    Returns `None` rather than a solid-looking pattern when the numbers cannot
+    produce a visible dash: the runtime rejects a zero dash length outright.
+    """
+    if not symbol.stroke_dash or symbol.stroke_width <= 0:
+        return None
+
+    units = [value / symbol.stroke_width for value in symbol.stroke_dash[:2]]
+    if len(units) < 2 or units[0] <= 0:
+        return None
+
+    on, off = round(units[0], 3), round(max(units[1], 0.0), 3)
+    return f"[{_number(on)}, {_number(off)}]"
+
+
 def build_layer_element(
     layer: ExportLayer,
     indent: str = "    ",
@@ -515,6 +543,10 @@ def build_layer_element(
                 attributes.append(("line-cap-rounded", "true"))
             if symbol.join_rounded:
                 attributes.append(("line-joint-rounded", "true"))
+
+        dash = dash_attribute(symbol)
+        if dash is not None:
+            attributes.append(("dash", dash))
 
     # Markers QGIS had to draw itself. **Still a `GeoJsonLayer`** - deck.gl's
     # `pointType="icon"` swaps the internal circle sublayer for an icon one,

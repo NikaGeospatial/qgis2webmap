@@ -479,3 +479,57 @@ def antimeridian_map(runtime, tmp_path_factory):
     destination = tmp_path_factory.mktemp("antimeridian")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
+
+
+LINE_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[-0.9, 51.4], [1.0, 51.4]],
+            },
+            "properties": {"name": "Route"},
+        }
+    ],
+}
+
+
+def _line_map(runtime, tmp_path_factory, name, dash):
+    layer = ExportLayer(
+        layer_id="route",
+        name="Route",
+        geometry_kind=GeometryKind.LINE,
+        source_kind=SourceKind.FILE,
+        feature_count=1,
+        geojson=LINE_GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(
+                stroke_color=Color(r=255, g=0, b=0), stroke_width=6.0, stroke_dash=dash
+            ),
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title=name,
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=51.3, east=1.1, north=51.5),
+    )
+    destination = tmp_path_factory.mktemp(name)
+    return (
+        OnlyMapWriter(runtime_provider=runtime).write(project, destination).entry_path
+    )
+
+
+@pytest.fixture(scope="session")
+def solid_line_map(runtime, tmp_path_factory):
+    """The control for the dashed map: identical but for the dash pattern."""
+    return _line_map(runtime, tmp_path_factory, "solid", ())
+
+
+@pytest.fixture(scope="session")
+def dashed_line_map(runtime, tmp_path_factory):
+    """24px on, 12px off at 6px wide - `dash="[4, 2]"`, Qt's own DashLine."""
+    return _line_map(runtime, tmp_path_factory, "dashed", (24.0, 12.0))

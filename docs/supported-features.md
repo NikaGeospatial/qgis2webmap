@@ -99,7 +99,7 @@ cover. Ask NIKA for a key covering local files if that is how you share maps.
 | Stacked symbol layers on a **point** | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
 | Rule-based, embedded-symbol renderers | Not in 0.1.0, reported by name |
-| Dashed and dotted lines | Not in 0.1.0, reported |
+| Dashed and dotted lines | Yes - the line style dropdown and custom dash patterns alike |
 | Markers along a line, or filling a polygon | Not in 0.1.0, reported |
 | 2.5D renderer | Yes - becomes a real extrusion, keeping the roof and wall colours |
 
