@@ -275,3 +275,50 @@ class TestRowCapIsATruncationNotADrop:
         assert "first 25,000" in violation.detail
         assert "15,000" in violation.detail, "it should say how many are lost"
         assert "render nothing" not in violation.detail
+
+
+class TestLicenseKeyPrecedence:
+    """Three sources, one order, decided once.
+
+    Without a defined precedence, "which key did that export actually use?"
+    becomes unanswerable - and a batch run producing free-plan maps for a paying
+    customer looks identical to one that worked.
+    """
+
+    def test_an_explicit_key_wins(self, monkeypatch) -> None:
+        from nika_onlymap_exporter.core import settings as module
+
+        monkeypatch.setenv(module.LICENSE_KEY_ENV, "om_live_env.sig")
+        monkeypatch.setattr(module, "load_license_key", lambda: "om_live_stored.sig")
+        assert module.resolve_license_key("om_live_param.sig") == "om_live_param.sig"
+
+    def test_the_environment_beats_the_stored_key(self, monkeypatch) -> None:
+        """The headless route: no QGIS profile to read a stored key from."""
+        from nika_onlymap_exporter.core import settings as module
+
+        monkeypatch.setenv(module.LICENSE_KEY_ENV, "om_live_env.sig")
+        monkeypatch.setattr(module, "load_license_key", lambda: "om_live_stored.sig")
+        assert module.resolve_license_key(None) == "om_live_env.sig"
+
+    def test_the_stored_key_is_the_fallback(self, monkeypatch) -> None:
+        from nika_onlymap_exporter.core import settings as module
+
+        monkeypatch.delenv(module.LICENSE_KEY_ENV, raising=False)
+        monkeypatch.setattr(module, "load_license_key", lambda: "om_live_stored.sig")
+        assert module.resolve_license_key(None) == "om_live_stored.sig"
+
+    def test_nothing_anywhere_means_the_free_plan(self, monkeypatch) -> None:
+        """`None`, not "", so it can go straight to `default_policy`."""
+        from nika_onlymap_exporter.core import settings as module
+
+        monkeypatch.delenv(module.LICENSE_KEY_ENV, raising=False)
+        monkeypatch.setattr(module, "load_license_key", lambda: "")
+        assert module.resolve_license_key(None) is None
+
+    def test_blank_and_whitespace_sources_are_skipped(self, monkeypatch) -> None:
+        """An empty parameter must fall through, not shadow a real key."""
+        from nika_onlymap_exporter.core import settings as module
+
+        monkeypatch.setenv(module.LICENSE_KEY_ENV, "om_live_env.sig")
+        monkeypatch.setattr(module, "load_license_key", lambda: "")
+        assert module.resolve_license_key("   ") == "om_live_env.sig"

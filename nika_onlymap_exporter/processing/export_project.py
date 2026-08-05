@@ -28,14 +28,16 @@ from qgis.core import (
 
 from ..core.export_ir import ExportSettings, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
+from ..core.license_policy import default_policy, report_verdict
 from ..core.project_reader import read_project
+from ..core.settings import resolve_license_key
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.runtime_manager import (
     RUNTIME_DOWNLOAD_SIZE,
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
-from ..writers.onlymap_writer import ExportBlockedError
+from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 
 # Order is the user-facing enum order, so it is part of the algorithm's saved
 # parameters. Append, never reorder: a stored model would silently change mode.
@@ -52,6 +54,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = "OUTPUT"
     MODE = "MODE"
     TITLE = "TITLE"
+    LICENSE_KEY = "LICENSE_KEY"
     LEGEND = "LEGEND"
     LAYER_SWITCHER = "LAYER_SWITCHER"
     ZOOM_CONTROLS = "ZOOM_CONTROLS"
@@ -103,6 +106,18 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString(
                 self.TITLE, "Map title (blank uses the project title)", optional=True
+            )
+        )
+        # Without this a batch export ran on the free plan even for a user who
+        # had pasted a key into the dialog, because nothing here read it. Blank
+        # is the normal case: it falls back to the environment, then to the key
+        # the dialog stored.
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.LICENSE_KEY,
+                "OnlyMap licence key (blank uses ONLYMAP_LICENSE_KEY, then the "
+                "key saved in the dialog)",
+                optional=True,
             )
         )
         for key, label in (
@@ -170,10 +185,18 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             show_scale_bar=self.parameterAsBool(parameters, self.SCALE_BAR, context),
         )
 
+        license_key = resolve_license_key(
+            self.parameterAsString(parameters, self.LICENSE_KEY, context)
+        )
+        writer = OnlyMapWriter(license_policy=default_policy(license_key))
+
         report = FidelityReportBuilder()
         export = read_project(
             context.project(), report, settings=settings, title_override=title
         )
+        # The caps are the recipient's experience, so a batch run has to record
+        # them where an audit can find them. Processing has no Fidelity tab.
+        report_verdict(writer.license_policy.evaluate(export), report)
 
         # Same rule as the dialog: informed breakage is the user's decision,
         # undiscovered breakage is a defect. Processing has no Fidelity tab, so
@@ -201,7 +224,9 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         # README. Reimplementing those here is exactly the dialog/algorithm drift
         # this module exists to avoid.
         try:
-            result, outcome = build_artifact(export, destination, mode=mode)
+            result, outcome = build_artifact(
+                export, destination, mode=mode, writer=writer
+            )
         except ExportBlockedError as exc:
             raise QgsProcessingException(
                 "The export was blocked so it could not write a broken map:\n"

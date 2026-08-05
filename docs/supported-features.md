@@ -85,6 +85,12 @@ The Map tab reads your key and says which domains it covers, whether it has
 expired, and warns you if you are about to export a standalone file it cannot
 cover. Ask NIKA for a key covering local files if that is how you share maps.
 
+**Batch and model exports** use the same key. The Processing algorithm takes an
+optional *OnlyMap licence key* parameter; leave it blank and it falls back to the
+`ONLYMAP_LICENSE_KEY` environment variable, then to the key saved in the dialog.
+The environment variable is the route that works on a machine with no QGIS
+profile - a server, a container, or CI.
+
 ## Symbology
 
 | | |

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -64,6 +65,35 @@ def load_license_key() -> str:
     with contextlib.suppress(Exception):
         return str(QSettings().value(LICENSE_KEY_SETTING, "", type=str) or "").strip()
     return ""
+
+
+# Where a key can come from besides the dialog. Set on a machine that has no
+# QGIS profile to read - CI, a container, `qgis_process` on a server - which is
+# exactly where the dialog's stored key is unavailable and a batch export would
+# otherwise silently produce free-plan maps.
+LICENSE_KEY_ENV = "ONLYMAP_LICENSE_KEY"
+
+
+def resolve_license_key(explicit: str | None = None) -> str | None:
+    """The key to export with, from the most specific source that has one.
+
+    Precedence, decided once and documented so three sources cannot become
+    three bug reports:
+
+    1. **`explicit`** - a Processing parameter. Named in the algorithm, so it
+       travels with a saved model and can differ per run.
+    2. **`ONLYMAP_LICENSE_KEY`** - the environment. The only route that works
+       headless.
+    3. **The stored key** - what the dialog saved for this user.
+
+    Returns `None` for the free plan rather than an empty string, so callers can
+    pass the result straight to `default_policy`.
+    """
+    for candidate in (explicit, os.environ.get(LICENSE_KEY_ENV), load_license_key()):
+        text = (candidate or "").strip()
+        if text:
+            return text
+    return None
 
 
 def save_license_key(value: str) -> None:
