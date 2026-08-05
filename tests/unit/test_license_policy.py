@@ -171,3 +171,107 @@ class TestReportVerdict:
         report_verdict(verdict, report)
         assert not report.has_blockers
         assert len(report.by_status(FidelityStatus.APPROXIMATED)) == 1
+
+
+class TestLicenseKeyShape:
+    """The runtime's own regex: om_live_<payload>.<signature>."""
+
+    def test_a_well_formed_key_is_accepted(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import looks_like_license_key
+
+        assert looks_like_license_key("om_live_eyJhIjoxfQ.c2ln")
+
+    def test_surrounding_whitespace_is_tolerated(self) -> None:
+        """People paste out of an email, and it comes with a newline."""
+        from nika_onlymap_exporter.core.license_policy import looks_like_license_key
+
+        assert looks_like_license_key("  om_live_eyJhIjoxfQ.c2ln\n")
+
+    def test_rubbish_is_rejected(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import looks_like_license_key
+
+        for bad in ("", "hunter2", "om_live_nodot", "om_test_abc.def", "abc.def"):
+            assert not looks_like_license_key(bad), bad
+
+
+def _make_key(payload: dict) -> str:
+    """Build a key with a real payload and a placeholder signature.
+
+    The signature is never checked here - we have no private key, and verifying
+    is the runtime's job. Only the payload half is ours to read.
+    """
+    import base64
+    import json
+
+    raw = json.dumps(payload).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    return f"om_live_{encoded}.c2lnbmF0dXJl"
+
+
+class TestDescribeLicenseKey:
+    """Reading what a key claims, so a bad one is caught in the dialog."""
+
+    def test_it_reads_the_plan_and_domains(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        info = describe_license_key(
+            _make_key({"plan": "pro", "domains": ["example.com"]})
+        )
+        assert info.plan == "pro"
+        assert info.domains == ("example.com",)
+        assert not info.malformed
+
+    def test_an_expired_key_is_flagged(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        info = describe_license_key(
+            _make_key({"plan": "pro", "domains": ["example.com"], "exp": 1})
+        )
+        assert info.is_expired
+
+    def test_a_key_with_no_expiry_never_expires(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        info = describe_license_key(_make_key({"plan": "pro", "domains": ["a.com"]}))
+        assert not info.is_expired
+
+    def test_rubbish_is_reported_as_malformed_not_raised(self) -> None:
+        """A half-pasted key must never take the dialog down."""
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        for bad in ("", "hunter2", "om_live_!!!.???", "om_live_bm90anNvbg.c2ln"):
+            assert describe_license_key(bad).malformed, bad
+
+    def test_a_domain_key_does_not_cover_local_files(self) -> None:
+        """The surprise this exists to catch: file:// has no hostname."""
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        info = describe_license_key(
+            _make_key({"plan": "pro", "domains": ["example.com", "*.example.com"]})
+        )
+        assert not info.covers_local_files
+
+    def test_a_key_issued_for_the_empty_host_does_cover_them(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import describe_license_key
+
+        info = describe_license_key(_make_key({"plan": "pro", "domains": [""]}))
+        assert info.covers_local_files
+
+
+class TestRowCapIsATruncationNotADrop:
+    """Corrected 2026-08-05 against the runtime bundle.
+
+    This file used to claim an over-size layer renders nothing. The runtime
+    slices it to the first 25,000 rows instead, which is worse: the map looks
+    complete. The wording users read has to say so.
+    """
+
+    def test_the_detail_says_features_are_missing_not_that_the_layer_is(
+        self,
+    ) -> None:
+        project = make_project([make_layer("big", features=40_000)])
+        (violation,) = detect_violations(project)
+
+        assert "first 25,000" in violation.detail
+        assert "15,000" in violation.detail, "it should say how many are lost"
+        assert "render nothing" not in violation.detail

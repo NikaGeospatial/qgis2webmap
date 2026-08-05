@@ -33,7 +33,12 @@ from typing import TYPE_CHECKING
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
 from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QPalette, QTextDocument
+from qgis.PyQt.QtGui import (
+    QDesktopServices,
+    QGuiApplication,
+    QPalette,
+    QTextDocument,
+)
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -67,7 +72,13 @@ from ..core.export_ir import (
     PopupFieldMode,
 )
 from ..core.fidelity_report import FidelityReportBuilder
-from ..core.license_policy import default_policy, detect_violations, report_verdict
+from ..core.license_policy import (
+    default_policy,
+    describe_license_key,
+    detect_violations,
+    looks_like_license_key,
+    report_verdict,
+)
 from ..core.manifest_builder import basemap_note, terrain_note
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
@@ -77,7 +88,9 @@ from ..core.settings import (
     PRECISION_FULL,
     DialogState,
     LayerSettings,
+    load_license_key,
     load_state,
+    save_license_key,
     save_state,
 )
 from ..packaging.artifact_builder import build_artifact
@@ -86,7 +99,7 @@ from ..packaging.dependency_scanner import (
     measure_data_bytes,
     standalone_ineligible_reason,
 )
-from ..writers.onlymap_writer import ExportBlockedError
+from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
 from .live_server import PreviewServer
@@ -150,6 +163,10 @@ LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
 # never shrunk. The tabs scroll, so a short window loses nothing.
 MINIMUM_DIALOG_HEIGHT = 320
 MINIMUM_DIALOG_WIDTH = 720
+
+# What the dialog opens at when the screen has room for it.
+DEFAULT_DIALOG_WIDTH = 960
+DEFAULT_DIALOG_HEIGHT = 640
 
 # How much of the progress bar the reading stage owns. Reading every feature of
 # every layer dominates the wall clock; writing and packaging share the rest, so
@@ -386,8 +403,8 @@ class MainDialog(QDialog):
 
         self.setWindowTitle("QGIS2WebMap by NIKA")
         self.setObjectName("qgis2webmapMainDialog")
-        self.resize(960, 640)
         self.setMinimumSize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+        self._resize_to_fit_screen()
 
         # ---- Background work ---------------------------------------------
         # Set up before the tabs, because building a tab can already ask for a
@@ -400,6 +417,7 @@ class MainDialog(QDialog):
         self._cached_signature: str | None = None
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
+        self._pending_license_key: str | None = None
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -447,6 +465,31 @@ class MainDialog(QDialog):
         self._rebuild_timer.timeout.connect(self._rebuild_live_preview)
 
         self.refresh_layers()
+
+    def _resize_to_fit_screen(self) -> None:
+        """Open at a comfortable size, but never taller than the screen allows.
+
+        A fixed 960x640 put the foot of the dialog - the Export button - behind
+        the Windows taskbar on a laptop screen, and because the window could not
+        be shortened either, there was no way to reach it. `availableGeometry`
+        excludes the taskbar and any other reserved strip, so this asks for what
+        actually fits.
+        """
+        width, height = DEFAULT_DIALOG_WIDTH, DEFAULT_DIALOG_HEIGHT
+
+        available = None
+        with contextlib.suppress(Exception):
+            screen = self.screen() or QGuiApplication.primaryScreen()
+            if screen is not None:
+                available = screen.availableGeometry()
+
+        if available is not None:
+            # A margin so the window is visibly inside the work area rather than
+            # flush against its edges, which reads as clipped.
+            width = min(width, max(MINIMUM_DIALOG_WIDTH, available.width() - 80))
+            height = min(height, max(MINIMUM_DIALOG_HEIGHT, available.height() - 80))
+
+        self.resize(width, height)
 
     # ---- Map tab --------------------------------------------------------
 
@@ -546,6 +589,7 @@ class MainDialog(QDialog):
             )
         )
         layout.addWidget(destination_box)
+        layout.addWidget(self._build_license_group(page))
 
         # Its own group rather than a row inside "Data": a basemap is not the
         # project's data, it is the backdrop behind it - and it is the only
@@ -651,6 +695,136 @@ class MainDialog(QDialog):
         self._suggest_destination()
         self._update_size_note()
         return page
+
+    # ---- Licence ---------------------------------------------------------
+
+    def _build_license_group(self, page: QWidget) -> QWidget:
+        """Somewhere to put a key the user has already paid for.
+
+        Without this the plugin could only ever produce free-plan maps, which
+        for a paying customer means their five-layer, 25,000-row limits stay in
+        force in a product they bought their way out of. The plumbing already
+        existed all the way to the `license-key` attribute on `<om-map>` - the
+        only missing piece was a field.
+        """
+        box = QGroupBox("OnlyMap licence", page)
+        layout = QVBoxLayout(box)
+
+        row = QHBoxLayout()
+        self.license_edit = QLineEdit(load_license_key(), box)
+        self.license_edit.setPlaceholderText(
+            "om_live_...  (leave blank for the free plan)"
+        )
+        # Not a password field. The key is signed and domain-locked, is meant to
+        # be served to browsers, and is written into every map exported with it -
+        # so masking it would imply a secrecy it does not have, while making it
+        # impossible to check a paste against the invoice it came from.
+        self.license_edit.textChanged.connect(self._on_license_changed)
+        row.addWidget(self.license_edit, 1)
+        layout.addLayout(row)
+
+        self.license_note = QLabel("", box)
+        self.license_note.setWordWrap(True)
+        layout.addWidget(self.license_note)
+
+        layout.addWidget(
+            _help_label(
+                "Lifts the 5-layer and 25,000-feature limits and removes the "
+                "on-map badge. Stored on this computer, not in the project file, "
+                "so it follows you between projects and is never sent with one.",
+                box,
+            )
+        )
+        self._update_license_note()
+        return box
+
+    def _on_license_changed(self, text: str) -> None:
+        save_license_key(text)
+        self._update_license_note()
+        # The key changes what the runtime will render, so a cached read's
+        # verdict - and the fidelity report built from it - is no longer right.
+        self._invalidate_export_cache()
+        self._fidelity_is_stale = True
+
+    def _license_key(self) -> str | None:
+        """The key to export with, or None for the free plan."""
+        text = self.license_edit.text().strip() if hasattr(self, "license_edit") else ""
+        return text or None
+
+    def _writer(self) -> OnlyMapWriter:
+        """A writer carrying the user's licence policy.
+
+        Built per use rather than held: the key can change between one export
+        and the next, and a writer holding a stale policy would keep writing
+        free-plan maps for someone who had just pasted a key.
+        """
+        return OnlyMapWriter(license_policy=default_policy(self._license_key()))
+
+    def _update_license_note(self) -> None:
+        """Say what the pasted key claims, and where it will not work.
+
+        Read from the payload, never verified - we have no private key and the
+        runtime does the real check. Saying "valid" would be a promise we cannot
+        keep; saying what the key says about itself is one we can.
+        """
+        text = self.license_edit.text().strip()
+        if not text:
+            self.license_note.setText(
+                "No key - exports run on the free plan: 5 layers, 25,000 "
+                "features per layer."
+            )
+            self.license_note.setStyleSheet("")
+            return
+
+        if not looks_like_license_key(text):
+            self.license_note.setText(
+                "That does not look like an OnlyMap key. They start with "
+                "om_live_ and contain a full stop. The map would fall back to "
+                "the free plan."
+            )
+            self.license_note.setStyleSheet("color: #c0392b;")
+            return
+
+        info = describe_license_key(text)
+        if info.malformed:
+            self.license_note.setText(
+                "The key is the right shape but its contents could not be read. "
+                "Check it was pasted in full."
+            )
+            self.license_note.setStyleSheet("color: #c0392b;")
+            return
+
+        if info.is_expired:
+            self.license_note.setText(
+                "This key has expired, so exports will run on the free plan. "
+                "Renew it at nikaplanet.com/onlymap."
+            )
+            self.license_note.setStyleSheet("color: #c0392b;")
+            return
+
+        parts = []
+        if info.plan:
+            parts.append(f"{info.plan} plan")
+        if info.domains:
+            parts.append("valid on " + ", ".join(info.domains))
+        summary = "Key accepted - " + ("; ".join(parts) if parts else "limits lifted")
+
+        # The one thing that surprises everybody: a key issued for a domain does
+        # nothing for a file someone double-clicks, because a file:// page has
+        # no hostname to match against.
+        if not info.covers_local_files:
+            self.license_note.setText(
+                f"{summary}.\nThis key only applies where the map is served from "
+                "one of those domains. A Standalone HTML file opened by "
+                "double-clicking has no domain, so it falls back to the free "
+                "plan - host the map, or ask NIKA for a key that covers local "
+                "files."
+            )
+            self.license_note.setStyleSheet("color: #c0392b;")
+            return
+
+        self.license_note.setText(f"{summary}, including local files.")
+        self.license_note.setStyleSheet("")
 
     def _update_export_summary(self, selected_count: int) -> None:
         """Name the artifact in the same words the buttons use.
@@ -1828,9 +2002,14 @@ class MainDialog(QDialog):
             return
 
         def then(export, _report) -> None:
+            # Built here, on the GUI thread, because it reads the licence field.
+            writer = self._writer()
+
             def work(progress: Progress):
                 progress.step(READ_SHARE, "Updating the preview...")
-                write_preview(export, self._project_identity(), live=True)
+                write_preview(
+                    export, self._project_identity(), writer=writer, live=True
+                )
                 return None
 
             def on_written(_result) -> None:
@@ -1935,7 +2114,9 @@ class MainDialog(QDialog):
         # writer's verdict arrives after the file is on disk. A layer past the
         # free-tier cap renders nothing for the recipient, so the Fidelity tab
         # has to name it while the user can still do something about it.
-        report_verdict(default_policy().evaluate(export), report)
+        report_verdict(
+            default_policy(self._pending_license_key).evaluate(export), report
+        )
         return export, report
 
     def _ensure_export(self, then, label: str, quiet: bool = False) -> bool:
@@ -1959,6 +2140,7 @@ class MainDialog(QDialog):
         # value to the worker. Calling `iface.mapCanvas()` from the thread would
         # be touching a widget from the wrong side.
         self._pending_canvas_extent = self._canvas_extent()
+        self._pending_license_key = self._license_key()
 
         def work(progress: Progress):
             progress.step(0, "Reading the project...")
@@ -2018,10 +2200,11 @@ class MainDialog(QDialog):
 
         identity = self._project_identity()
         live = self.live_check.isChecked()
+        writer = self._writer()
 
         def work(progress: Progress):
             progress.step(READ_SHARE, "Building the preview...")
-            return write_preview(export, identity, live=live)
+            return write_preview(export, identity, writer=writer, live=live)
 
         def on_written(result) -> None:
             if not live:
@@ -2136,10 +2319,14 @@ class MainDialog(QDialog):
         if destination is None:
             return
 
+        writer = self._writer()
+
         def work(progress: Progress):
             progress.step(READ_SHARE, "Writing the map...")
             try:
-                result, outcome = build_artifact(export, destination, mode=mode)
+                result, outcome = build_artifact(
+                    export, destination, mode=mode, writer=writer
+                )
             except ExportBlockedError as exc:
                 # Returned rather than raised: a blocked export is the user's to
                 # fix, and raising would route it to the crash reporter with a
@@ -2235,11 +2422,29 @@ class MainDialog(QDialog):
             return
 
         subjects = "; ".join(v.subject for v in violations)
-        message = (
-            f"{len(violations)} free-tier limit(s) exceeded ({subjects}). Those "
-            "layers will not render for whoever opens the map. Exporting anyway - "
-            "the Fidelity tab has the detail."
-        )
+        key = self._license_key()
+
+        if key is None:
+            message = (
+                f"{len(violations)} free-tier limit(s) exceeded ({subjects}). "
+                "Layers past the fifth will not render, and an over-size layer "
+                "shows only its first 25,000 features while looking complete. "
+                "Exporting anyway - the Fidelity tab has the detail."
+            )
+        elif self.state.output_mode is OutputMode.STANDALONE_HTML and not (
+            describe_license_key(key).covers_local_files
+        ):
+            # The combination that silently fails: a real key, an export that
+            # will be opened as a file, and a domain check that cannot match.
+            message = (
+                f"Your licence key is domain-locked, and a Standalone HTML file "
+                f"opened by double-clicking has no domain - so the free-tier "
+                f"limits still apply to it ({subjects}). Host the map, or ask "
+                "NIKA for a key covering local files."
+            )
+        else:
+            # Licensed and plausibly hosted: no cap applies, so nothing to say.
+            return
         bar = getattr(self.iface, "messageBar", None)
         if bar is not None:
             with contextlib.suppress(Exception):

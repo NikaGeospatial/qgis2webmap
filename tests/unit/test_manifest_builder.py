@@ -1591,3 +1591,46 @@ class TestPopupsDoNotStack:
         markup = build_manifest(self._project())
         for overlay in re.findall(r"<om-overlay\b[^>]*>", markup):
             assert "layer=" not in overlay, overlay
+
+
+class TestLicenseKeyReachesTheMarkup:
+    """The last link in the chain a paying customer depends on.
+
+    The dialog collects a key, the policy carries it, the verdict holds it - and
+    none of that matters unless it lands on `<om-map>`, which is the only thing
+    the runtime reads.
+    """
+
+    def test_a_licensed_verdict_emits_the_attribute(self) -> None:
+        from nika_onlymap_exporter.core.license_policy import LicensedPolicy
+
+        project = make_project()
+        verdict = LicensedPolicy("om_live_eyJhIjoxfQ.c2ln").evaluate(project)
+
+        assert 'license-key="om_live_eyJhIjoxfQ.c2ln"' in build_manifest(
+            project, verdict
+        )
+
+    def test_the_free_tier_emits_no_attribute(self) -> None:
+        """An unlicensed map must not carry an empty or placeholder key."""
+        project = make_project()
+        verdict = FreeTierPolicy().evaluate(project)
+        assert "license-key" not in build_manifest(project, verdict)
+
+    def test_a_licensed_map_does_not_wear_the_error_panel(self) -> None:
+        """`validate` mounts a diagnostic badge. A licensed map has nothing to
+        report, so it must not arrive wearing one."""
+        from nika_onlymap_exporter.core.license_policy import (
+            FREE_TIER_MAX_ROWS_PER_LAYER,
+            LicensedPolicy,
+        )
+
+        over_cap = make_layer(feature_count=FREE_TIER_MAX_ROWS_PER_LAYER + 1)
+        project = make_project([over_cap])
+
+        licensed = LicensedPolicy("om_live_eyJhIjoxfQ.c2ln").evaluate(project)
+        assert not licensed.needs_runtime_validation
+
+        # The same project without a key does need the panel, so the recipient
+        # is told why features are missing.
+        assert FreeTierPolicy().evaluate(project).needs_runtime_validation

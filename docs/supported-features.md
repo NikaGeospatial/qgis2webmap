@@ -17,34 +17,71 @@ dropped silently.
 
 Data in any CRS is reprojected to WGS84 on the way out.
 
-## Size limits
+## Size limits on the free plan
 
-Exported maps are drawn by the OnlyMap runtime, and its free tier has two hard
-limits that apply **inside the exported file, on the recipient's machine**:
+Exported maps are drawn by the OnlyMap runtime, and its free plan has two limits
+that apply **inside the exported file, on the recipient's machine**:
 
 | | |
 |---|---|
 | Layers per map | 5 |
 | Features per layer | 25,000 |
 
-These are not the plugin's limits and it cannot raise them. They are also not
-lifted by opening the file from your own disk - a `file://` map is subject to
-exactly the same caps as a hosted one.
+They are not lifted by opening the file from your own disk - a `file://` map is
+capped exactly like a hosted one.
 
-**A layer past the feature cap renders nothing.** The limit drops the whole
-layer rather than showing the first 25,000 features of it, so the result is a
-missing layer, not a partial one.
+**The two limits behave differently, and the second is the dangerous one.**
+
+- Past **5 layers**, the extra layers render *nothing*. An obviously missing
+  layer is at least obvious.
+- Past **25,000 features**, the layer is **truncated, not dropped**. The runtime
+  draws the first 25,000 features in source order and discards the rest - and
+  the legend and any filter widgets describe only the part that was drawn. The
+  map therefore looks complete while being wrong, which is the failure a
+  recipient has no way to notice.
 
 The plugin will not let this happen quietly:
 
-- The **Fidelity** tab names every layer that is over a cap, before you export.
+- The **Fidelity** tab names every layer that is over a limit, before you export,
+  and says how many features are missing.
 - Exporting a project that breaches one shows a warning in the QGIS message bar,
   then exports anyway - the choice stays yours.
 - The exported map carries the runtime's own error panel, so a recipient sees an
   explanation in the corner rather than an unexplained gap.
 
-To fit within the caps, split the project across several maps, or filter the
-layer in QGIS so fewer features are exported.
+To stay within the limits without a licence, split the project across several
+maps, or filter the layer in QGIS so fewer features are exported.
+
+## Using a paid OnlyMap licence
+
+If you have bought an OnlyMap licence, paste the key into **OnlyMap licence** on
+the Map tab. It lifts both limits and removes the on-map badge.
+
+The key is stored on your computer, not in the `.qgz`, so it follows you between
+projects and is never sent to anyone you share a project file with. It is written
+into each map you export with it - that is how the runtime reads it, and it is
+safe: the key is signed and domain-locked rather than secret.
+
+**A key is tied to the domains it was issued for, and that has one consequence
+worth understanding before you rely on it.** The runtime checks the key against
+the domain the map is served from. A **Standalone HTML file opened by
+double-clicking has no domain at all**, so a key issued for your organisation's
+domain does not apply to it - the map falls back to the free plan and its
+limits.
+
+So a paid licence works when you:
+
+- **Host the map** (Folder or Share ZIP, published to a web server on a domain
+  the key covers).
+
+It does not work when you:
+
+- **Email someone a standalone file** and they open it locally - unless NIKA
+  issued you a key that covers local files.
+
+The Map tab reads your key and says which domains it covers, whether it has
+expired, and warns you if you are about to export a standalone file it cannot
+cover. Ask NIKA for a key covering local files if that is how you share maps.
 
 ## Symbology
 

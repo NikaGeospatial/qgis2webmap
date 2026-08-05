@@ -41,6 +41,47 @@ KEY_OUTPUT_MODE = "outputMode"
 KEY_WIDGETS = "widgets"
 KEY_LAYERS = "layers"
 
+# The OnlyMap licence key, in QSettings rather than the project.
+#
+# **Deliberately not stored with the `.qgz`.** Everything else in this module
+# describes the map and belongs with it; a licence key describes the *person*.
+# They bought it, they carry it between projects, and a project file gets
+# emailed, committed to a repository and handed to a contractor. Writing a
+# purchased key into a file that travels is how someone gives it away without
+# noticing.
+#
+# It is not a secret in the cryptographic sense - the key is signed,
+# domain-locked and meant to be served to browsers, which is why writing it into
+# an exported map is safe. That is not a reason to scatter copies of it through
+# project files.
+LICENSE_KEY_SETTING = "qgis2webmap/licenseKey"
+
+
+def load_license_key() -> str:
+    """The user's OnlyMap licence key, or an empty string."""
+    from qgis.PyQt.QtCore import QSettings
+
+    with contextlib.suppress(Exception):
+        return str(QSettings().value(LICENSE_KEY_SETTING, "", type=str) or "").strip()
+    return ""
+
+
+def save_license_key(value: str) -> None:
+    """Store the key, or clear it when handed nothing.
+
+    Blank removes the entry rather than storing an empty string, so "no key" is
+    one state in the settings file rather than two.
+    """
+    from qgis.PyQt.QtCore import QSettings
+
+    settings = QSettings()
+    text = (value or "").strip()
+    with contextlib.suppress(Exception):
+        if text:
+            settings.setValue(LICENSE_KEY_SETTING, text)
+        else:
+            settings.remove(LICENSE_KEY_SETTING)
+
 
 @dataclass
 class LayerSettings:
