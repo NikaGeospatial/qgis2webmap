@@ -23,9 +23,27 @@ exported map. Leave it blank to use the project title.
 
 ## 4. Choose the layers
 
-On the **Layers** tab, tick the layers to include and whether each has popups and
-labels. Settings are remembered per layer, and they survive changes to the
-project.
+The plugin exports **the layers already open in this QGIS project**. There is no
+file to browse for and no source to pick - build the map you want in QGIS, and
+the plugin exports what you built.
+
+On the **Layers** tab, each layer has three tick boxes:
+
+| Box | Ticked | Unticked |
+|---|---|---|
+| **Include** | The layer is in the map | The layer is left out entirely, and its data is not written to the file |
+| **Popups** | Clicking a feature shows its attributes | Clicking does nothing, and the attribute values are **not written to the file** |
+| **Labels** | Text you set in QGIS is drawn beside features | No text; the features themselves are unaffected |
+
+Two of these are worth knowing about beyond the tidiness:
+
+- Unticking **Popups** is how you keep attribute data out of a map you are
+  sending someone. The values are not merely hidden - they never reach the file.
+- Unticking **Include** or **Popups** makes the exported file smaller, which
+  matters most for [Standalone HTML](sharing.md).
+
+Unticking any of them affects that layer only. The map still works, with less on
+it. Settings are remembered per layer, and they survive changes to the project.
 
 ## 5. Preview
 

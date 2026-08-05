@@ -17,6 +17,35 @@ dropped silently.
 
 Data in any CRS is reprojected to WGS84 on the way out.
 
+## Size limits
+
+Exported maps are drawn by the OnlyMap runtime, and its free tier has two hard
+limits that apply **inside the exported file, on the recipient's machine**:
+
+| | |
+|---|---|
+| Layers per map | 5 |
+| Features per layer | 25,000 |
+
+These are not the plugin's limits and it cannot raise them. They are also not
+lifted by opening the file from your own disk - a `file://` map is subject to
+exactly the same caps as a hosted one.
+
+**A layer past the feature cap renders nothing.** The limit drops the whole
+layer rather than showing the first 25,000 features of it, so the result is a
+missing layer, not a partial one.
+
+The plugin will not let this happen quietly:
+
+- The **Fidelity** tab names every layer that is over a cap, before you export.
+- Exporting a project that breaches one shows a warning in the QGIS message bar,
+  then exports anyway - the choice stays yours.
+- The exported map carries the runtime's own error panel, so a recipient sees an
+  explanation in the corner rather than an unexplained gap.
+
+To fit within the caps, split the project across several maps, or filter the
+layer in QGIS so fewer features are exported.
+
 ## Symbology
 
 | | |

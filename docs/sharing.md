@@ -10,6 +10,18 @@ Send it, copy it to a USB stick, put it on a shared drive. The recipient
 double-clicks it. They need a web browser and nothing else - no QGIS, no account,
 no internet connection.
 
+**It is the largest of the three, and that is inherent to the format.** Every
+feature is written into the HTML itself, because there is no sibling folder for
+it to live in - that is exactly what makes the file self-contained. A map whose
+data runs to 20 MB produces a file of at least that size.
+
+Nothing in a browser objects to a large HTML file. What objects is email: most
+providers reject attachments over about 20-25 MB, and corporate filters are often
+stricter. The Map tab shows your map's data size next to this option, and warns
+before exporting if it is over the limit - you can still export the single file
+if you want it. To make it smaller, untick **Popups** on layers that do not need
+them, or reduce **Coordinate precision** on the Map tab.
+
 ## Share ZIP
 
 The same map, zipped, with a short README explaining how to open it.
