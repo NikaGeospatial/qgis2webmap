@@ -186,6 +186,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   pinned build is the one every tier is green against.
 
 ### Fixed
+- **Hidden attributes were written into the exported map anyway.** Unticking
+  **Popups**, and setting a field to *Do not show this field*, both suppressed
+  only the popup: every attribute value still reached the GeoJSON, in plain
+  text, for anyone who opened the artifact in an editor. The dialog and the
+  guide meanwhile told users this was how to keep data out of a map they were
+  sending someone - a data-protection promise the export did not keep. The
+  values are now stripped from the data itself. Fields the map *draws* with -
+  a categorised or graduated renderer's field, a label's source, an extrusion
+  height - survive being hidden, because removing them would break the drawing
+  without concealing anything on screen.
+
 - **The free-tier row cap was documented as dropping a layer; it truncates it.**
   Verified against the runtime bundle: past 25,000 features the layer renders
   its first 25,000 in source order rather than nothing. The map shows the

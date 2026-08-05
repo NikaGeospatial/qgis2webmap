@@ -27,6 +27,7 @@ from .export_ir import (
     AssetDependency,
     AssetDisposition,
     Color,
+    ElevationSpec,
     ExportLayer,
     GeometryKind,
     LabelingSpec,
@@ -282,6 +283,55 @@ def drop_hidden_features(
     return {**collection, "features": kept}
 
 
+def drawing_fields(
+    renderer: RendererSpec,
+    labeling: LabelingSpec,
+    elevation: ElevationSpec,
+) -> set[str]:
+    """Attribute names the map still needs after the popup has had its say.
+
+    Everything the manifest reads as `$field` and everything the label points
+    are built from. A field in here survives even when the user hid it from
+    popups, because dropping it would not hide data - it would break the map.
+    """
+    fields = set()
+    if renderer.field_name:
+        fields.add(renderer.field_name)
+    if labeling.enabled and labeling.field_name:
+        fields.add(labeling.field_name)
+    if elevation.height_field:
+        fields.add(elevation.height_field)
+    return fields
+
+
+def keep_only_fields(
+    collection: dict[str, Any],
+    keep: set[str],
+) -> dict[str, Any]:
+    """Strip every attribute except `keep` from each feature.
+
+    Unticking **Popups**, or setting a field to *Do not show this field*, is
+    documented as keeping that data out of the exported file - and users act on
+    that when sending a map to someone. Hiding it in the UI while writing it
+    into the GeoJSON would make the promise false: the values sit in plain text
+    for anyone who opens the artifact in an editor. So the strip happens on the
+    data itself, once, here.
+    """
+    features = collection.get("features") or ()
+    stripped = [
+        {
+            **feature,
+            "properties": {
+                name: value
+                for name, value in (feature.get("properties") or {}).items()
+                if name in keep
+            },
+        }
+        for feature in features
+    ]
+    return {**collection, "features": stripped}
+
+
 def read_layer(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
@@ -357,6 +407,23 @@ def read_layer(
         layer.renderer(), renderer, kind, report, name, layer_id
     )
 
+    labeling = translate_labeling(layer, report) if with_labels else LabelingSpec()
+    elevation = translate_elevation(layer, report, kind, project)
+    # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
+    popup = (
+        translate_popup(layer, report, field_modes=field_modes, on_hover=popup_on_hover)
+        if with_popup
+        else PopupSpec(enabled=False)
+    )
+
+    # Only the attributes something still reads survive: what the popup shows,
+    # plus what the map draws with. A value the user hid must leave the file,
+    # not merely the popup - see `keep_only_fields`.
+    keep = drawing_fields(renderer, labeling, elevation)
+    if popup.enabled:
+        keep |= {field.name for field in popup.visible_fields}
+    geojson = keep_only_fields(geojson, keep)
+
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:
         report.unsupported(
@@ -376,14 +443,9 @@ def read_layer(
         scale_range=scale_range(layer),
         renderer=renderer,
         icon_atlas=icon_atlas,
-        labeling=(translate_labeling(layer, report) if with_labels else LabelingSpec()),
-        elevation=translate_elevation(layer, report, kind, project),
-        # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
-        popup=translate_popup(
-            layer, report, field_modes=field_modes, on_hover=popup_on_hover
-        )
-        if with_popup
-        else PopupSpec(enabled=False),
+        labeling=labeling,
+        elevation=elevation,
+        popup=popup,
         highlight_color=highlight_color,
         attribution=read_attribution(layer),
         feature_count=feature_count,

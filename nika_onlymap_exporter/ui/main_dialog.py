@@ -1118,12 +1118,15 @@ class MainDialog(QDialog):
                 "<b>Include</b> - untick to leave the layer out of the map "
                 "entirely. Its data is not written, so the file gets smaller.<br>"
                 "<b>Popups</b> - untick and clicking a feature does nothing. "
-                "The attribute values are left out of the file, so this is also "
-                "how you keep data out of a map you are sending someone.<br>"
+                "The attribute values are left out of the file entirely, so "
+                "this is also how you keep data out of a map you are sending "
+                "someone.<br>"
                 "<b>Labels</b> - untick to drop the text QGIS draws beside "
                 "features. The features themselves still appear.<br>"
                 "Unticking Popups or Labels only affects that layer; the map "
-                "still works, with less on it.",
+                "still works, with less on it. Expand a layer to hide single "
+                "fields instead - those values leave the file too, unless the "
+                "map draws with them.",
                 page,
             )
         )

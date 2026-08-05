@@ -38,12 +38,25 @@ On the **Layers** tab, each layer has three tick boxes:
 Two of these are worth knowing about beyond the tidiness:
 
 - Unticking **Popups** is how you keep attribute data out of a map you are
-  sending someone. The values are not merely hidden - they never reach the file.
+  sending someone. The values are not merely hidden - they never reach the file,
+  so there is nothing to find by opening it in a text editor.
 - Unticking **Include** or **Popups** makes the exported file smaller, which
   matters most for [Standalone HTML](sharing.md).
 
 Unticking any of them affects that layer only. The map still works, with less on
 it. Settings are remembered per layer, and they survive changes to the project.
+
+**Hiding one field rather than all of them.** Expand a layer to list its fields,
+each with its own setting. **Do not show this field** removes that field's values
+from the file, exactly as unticking Popups does for the whole layer; the other
+settings choose how the value is laid out in the popup. Use *Set every field to*
+with **Apply to all layers** to set them in bulk.
+
+One exception, and it is deliberate: a field the map *draws* with - the one a
+categorised or graduated style is based on, the one labels read their text from,
+or an extrusion height - stays in the file even when you hide it. Removing it
+would not conceal anything, since it is on the map either way; it would only
+break the drawing.
 
 ## 5. Preview
 
