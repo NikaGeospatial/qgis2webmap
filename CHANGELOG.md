@@ -7,6 +7,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Export only the features in the current QGIS view.** A separate option from
+  the one that decides where the map opens, because they are separate decisions:
+  choosing to open on the current view used to export every feature anyway, and
+  folding the two together would mean anyone framing their working view silently
+  shipped a map missing everything outside it. Features outside the view are
+  never read, so the provider's spatial index does the work. This is also the
+  practical way to bring a very large layer under the free plan's
+  25,000-feature limit. Every layer reports what it lost in the Fidelity tab -
+  clipped-away features leave no gap on the map, so nothing else could tell you.
+
+- **Batch and model exports use the licence key.** The Processing algorithm
+  takes an optional key parameter and otherwise falls back to
+  `ONLYMAP_LICENSE_KEY`, then to the key saved in the dialog. It read none of
+  them before, so a paying customer's batch export silently produced free-plan
+  maps. The environment variable is the only route that works on a machine with
+  no QGIS profile - a server, a container, CI.
+
 - **Dashed and dotted lines.** Both ways QGIS produces one now export: the
   line-style dropdown, which sets a Qt pen style, and a hand-built custom dash
   pattern. Only the second was read before, so the dropdown - which is what most
