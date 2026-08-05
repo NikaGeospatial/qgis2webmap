@@ -605,3 +605,71 @@ class TestPopupsDoNotStack:
         page.mouse.move(box["x"] + 5, box["y"] + box["height"] - 5)
         page.wait_for_timeout(600)
         assert self._visible(page) == []
+
+
+# Counts pixels of the layer's colour in the map's own snapshot. `snapshot()`
+# is used rather than a page screenshot because a deck.gl canvas is not
+# guaranteed to preserve its drawing buffer, so reading it directly can return
+# an empty image on a perfectly working map. Decoding happens in the browser -
+# it already has a PNG decoder, and it saves this tier a Python imaging
+# dependency it does not otherwise need.
+COUNT_RED_PIXELS = """
+async () => {
+  const el = document.querySelector('om-map');
+  const url = await el.snapshot();
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let red = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    // Generous on the exact value: deck.gl antialiases the marker edge and the
+    // canvas may be composited, so an exact 255/0/0 match would count only the
+    // very centre of each point.
+    if (data[i] > 180 && data[i + 1] < 80 && data[i + 2] < 80 && data[i + 3] > 200) {
+      red++;
+    }
+  }
+  return { red, width: canvas.width, height: canvas.height };
+}
+"""
+
+
+class TestItDrawsAcrossTheAntimeridian:
+    """The P0 blank-map bug, verified fixed against the pinned runtime.
+
+    Data spanning ±180 used to vanish: deck.gl rendered one world copy while
+    MapLibre repeated the world, so panning toward the seam produced a white
+    map. Filed with NIKA 2026-08-03 and fixed upstream in 0.5.9. These tests
+    exist so a future runtime bump cannot silently reintroduce it.
+    """
+
+    def test_the_map_mounts_on_the_seam(self, page, antimeridian_map) -> None:
+        open_map(page, antimeridian_map)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        # Centred on the seam itself, which is where the bug lived.
+        assert page.locator("om-map[center='[180.000000, 51.000000]']").count() == 1
+
+    def test_features_on_both_sides_of_the_seam_are_drawn(
+        self, page, antimeridian_map
+    ) -> None:
+        """The actual regression: are the points on screen, or is it white?"""
+        open_map(page, antimeridian_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)  # let the first render settle
+
+        result = page.evaluate(COUNT_RED_PIXELS)
+        assert result["width"] > 0 and result["height"] > 0
+        assert result["red"] > 0, (
+            "no layer pixels on a map centred on the antimeridian - "
+            "the world-copy bug is back"
+        )

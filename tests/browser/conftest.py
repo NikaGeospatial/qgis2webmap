@@ -423,3 +423,59 @@ def stacked_popups_map(runtime, tmp_path_factory):
     destination = tmp_path_factory.mktemp("stacked")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
+
+
+# Straddles the antimeridian the way the QGIS Alaska sample does (-179.13 to
+# +179.78), but tightly, so the map opens centred on the seam itself. Pure red,
+# because the pixel check counts it and nothing else on the map is red.
+ANTIMERIDIAN_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [179.6, 51.0]},
+            "properties": {"name": "West of the seam"},
+        },
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [-179.6, 51.0]},
+            "properties": {"name": "East of the seam"},
+        },
+    ],
+}
+
+
+@pytest.fixture(scope="session")
+def antimeridian_map(runtime, tmp_path_factory):
+    """A map centred on ±180, where the P0 blank-map bug used to appear.
+
+    deck.gl drew exactly one world copy, -180..+180, while MapLibre repeated
+    the world sideways - so data past the seam was simply not rendered and a
+    `basemap="none"` export went white. Fixed upstream in OnlyMap 0.5.9 by
+    setting `MapView({ repeat: true })` for standalone maps; this is what
+    proves it, against the runtime we actually pin.
+    """
+    layer = ExportLayer(
+        layer_id="seam",
+        name="Seam",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=2,
+        geojson=ANTIMERIDIAN_GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=255, g=0, b=0), radius=14.0),
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title="Antimeridian map",
+        layers=(layer,),
+        extent=Extent(
+            west=179.0, south=50.0, east=-179.0, north=52.0, crosses_antimeridian=True
+        ),
+    )
+
+    destination = tmp_path_factory.mktemp("antimeridian")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
