@@ -263,9 +263,25 @@
         type="button"
         aria-label="Show map credits"
       >&#9673;</button>
+      <!--
+        New tab, not this one. The map is the page: following a credit link in
+        place unloads it, and the only way back is the browser's Back button -
+        which reloads and re-parses the whole inlined dataset, and drops the
+        viewport the reader had navigated to. `rel` is the standard pairing:
+        `noopener` denies the opened page a handle on `window.opener`,
+        `noreferrer` keeps a local file path out of the Referer header.
+      -->
       <span class="om-credit-row">Built with
-        <a href="https://www.nikaplanet.com/onlymap">OnlyMap</a>
-        by <a href="https://nikaplanet.com">NIKA</a></span>
+        <a
+          href="https://onlymap.nikaplanet.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >OnlyMap</a>
+        by <a
+          href="https://nikaplanet.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >NIKA</a></span>
     </footer>
 
 @PREVIEW_HOOK@

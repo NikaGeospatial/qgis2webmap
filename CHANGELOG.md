@@ -142,6 +142,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `get-icon-pixel-offset`.
 
 ### Changed
+- **The OnlyMap credit in every exported map points at the documentation site.**
+  `onlymap.nikaplanet.com` rather than the product page, so someone who clicks
+  the corner credit lands on the reference for the library drawing what they are
+  looking at. The NIKA link is unchanged.
+
 - **The size warning no longer talks about email.** Standalone HTML is still
   reported as the largest of the three and still warns past 20 MB, but the
   reason given is that a file that big is slow to open and awkward to move

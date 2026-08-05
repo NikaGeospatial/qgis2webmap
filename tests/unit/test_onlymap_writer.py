@@ -210,6 +210,24 @@ class TestCreditComponent:
         assert "enhance-with-ai" not in markup
         assert "onlymap/hosting" not in markup
 
+    def test_every_credit_link_opens_in_a_new_tab(self) -> None:
+        """Following one in place unloads the map and loses the reader's view.
+
+        Coming back means a full reload of an inlined dataset, at whatever
+        default viewport the map was authored with. `noopener noreferrer` rides
+        along: the first denies the opened page `window.opener`, the second
+        keeps a local file path out of the Referer header.
+        """
+        credit = (
+            self.html().split('<footer class="om-credit">')[1].split("</footer>")[0]
+        )
+        anchors = credit.split("<a")[1:]
+        assert anchors, "the credit is supposed to carry links"
+        for anchor in anchors:
+            opening = anchor.split(">")[0]
+            assert 'target="_blank"' in opening
+            assert 'rel="noopener noreferrer"' in opening
+
     def test_the_component_sits_in_the_bottom_right(self) -> None:
         markup = self.html()
         credit_css = markup.split(".om-credit {")[1].split("}")[0]
