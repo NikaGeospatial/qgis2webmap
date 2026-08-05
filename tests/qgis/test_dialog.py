@@ -8,6 +8,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import OutputMode, PopupFieldMode
@@ -864,3 +866,200 @@ class TestPreviewInjectionSafety:
         html = self._preview(project, make_memory_layer).entry_path.read_text()
         runtime_start = html.index("The runtime. Inlined so this file works")
         assert "qgis2webmap.camera" not in html[runtime_start:]
+
+
+class TestDestinationField:
+    """The export location, visible before pressing Export.
+
+    Previously the only way to choose one was a file dialog that appeared after
+    the button, so until then nothing on screen suggested the location was the
+    user's to pick - which is what the team reported as "can I save it
+    anywhere?".
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_it_is_prefilled(self, qgis_app, project, make_memory_layer) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.path_edit.text().strip(), "the field must suggest somewhere"
+        dialog.close()
+
+    def test_the_suffix_follows_the_chosen_packaging(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """A zip export must not offer to write a `.html`."""
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._on_mode_selected(OutputMode.STANDALONE_HTML)
+        assert dialog.path_edit.text().endswith(".html")
+
+        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
+        assert dialog.path_edit.text().endswith(".zip")
+
+        # A folder is a directory name, so it carries no extension at all.
+        dialog._on_mode_selected(OutputMode.FOLDER)
+        assert not Path(dialog.path_edit.text()).suffix
+        dialog.close()
+
+    def test_changing_mode_keeps_the_folder_the_user_chose(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """Only the extension is corrected. The location is theirs."""
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.path_edit.setText(str(tmp_path / "somewhere" / "mine.html"))
+        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
+
+        chosen = Path(dialog.path_edit.text())
+        assert chosen.parent == tmp_path / "somewhere"
+        assert chosen.stem == "mine"
+        dialog.close()
+
+    def test_the_summary_names_the_destination(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.path_edit.setText(str(tmp_path / "mine.html"))
+        assert "mine.html" in dialog.export_summary.text()
+        dialog.close()
+
+    def test_a_missing_folder_is_refused_rather_than_written_to(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.path_edit.setText(str(tmp_path / "no" / "such" / "map.html"))
+        monkeypatch.setattr(module.QMessageBox, "warning", lambda *a, **k: None)
+
+        assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
+        dialog.close()
+
+    def test_an_existing_file_is_never_replaced_without_asking(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        existing = tmp_path / "map.html"
+        existing.write_text("yesterday's map")
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog.path_edit.setText(str(existing))
+
+        asked = []
+        monkeypatch.setattr(
+            module.QMessageBox,
+            "question",
+            lambda *a, **k: (
+                asked.append(True) or module.QMessageBox.StandardButton.Cancel
+            ),
+        )
+        assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
+        assert asked, "overwriting must be confirmed, not assumed"
+        dialog.close()
+
+
+class TestChromeChangesSkipTheRead:
+    """Unticking a map control must not re-read half a million features.
+
+    This is the reported freeze: with live preview on - the default - every
+    settings change ran a full project read on the GUI thread, including
+    changes that cannot affect a single feature.
+    """
+
+    def test_chrome_settings_are_absent_from_the_data_snapshot(self) -> None:
+        from nika_onlymap_exporter.core.settings import CHROME_FIELDS, DialogState
+
+        state = DialogState()
+        before = state.data_snapshot()
+
+        for name in CHROME_FIELDS:
+            current = getattr(state, name)
+            if isinstance(current, bool):
+                setattr(state, name, not current)
+
+        assert state.data_snapshot() == before, (
+            "a chrome-only change must leave the cached read valid"
+        )
+
+    def test_chrome_settings_still_change_the_full_snapshot(self) -> None:
+        """The live preview must still rebuild - it just must not re-read."""
+        from nika_onlymap_exporter.core.settings import DialogState
+
+        state = DialogState()
+        before = state.snapshot()
+        state.show_legend = not state.show_legend
+        assert state.snapshot() != before
+
+    def test_data_settings_do_invalidate_the_cache(self) -> None:
+        from nika_onlymap_exporter.core.settings import DialogState
+
+        state = DialogState()
+        before = state.data_snapshot()
+        state.quantize_precision = 4
+        assert state.data_snapshot() != before
+
+    def test_a_layer_checkbox_invalidates_the_cache(self) -> None:
+        from nika_onlymap_exporter.core.settings import DialogState
+
+        state = DialogState()
+        before = state.data_snapshot()
+        state.for_layer("roads").popup = False
+        assert state.data_snapshot() != before
+
+
+class TestOversizedSingleFileIsAWarningNotASwitch:
+    """The dialog must never say one thing and write another.
+
+    Reported: exporting a large layer announced a switch to Share ZIP while the
+    radio buttons still showed Standalone HTML selected.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_selecting_a_mode_moves_the_radio_button(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
+
+        assert dialog.mode_checks[OutputMode.SHARE_ZIP].isChecked()
+        assert not dialog.mode_checks[OutputMode.STANDALONE_HTML].isChecked()
+        dialog.close()
+
+    def test_the_size_rule_is_stated_on_the_map_tab(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """The limit has to inform the choice, not arrive after it."""
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._on_mode_selected(OutputMode.STANDALONE_HTML)
+        assert "20 MB" in dialog.size_note.text()
+
+        # Nothing to warn about when the data is not inlined.
+        dialog._on_mode_selected(OutputMode.FOLDER)
+        assert dialog.size_note.text() == ""
+        dialog.close()

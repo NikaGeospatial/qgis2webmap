@@ -35,7 +35,6 @@ from qgis.gui import QgsColorButton
 from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPalette, QTextDocument
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -48,8 +47,10 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QTabWidget,
     QTextBrowser,
     QTreeWidget,
@@ -66,7 +67,7 @@ from ..core.export_ir import (
     PopupFieldMode,
 )
 from ..core.fidelity_report import FidelityReportBuilder
-from ..core.license_policy import default_policy, report_verdict
+from ..core.license_policy import default_policy, detect_violations, report_verdict
 from ..core.manifest_builder import basemap_note, terrain_note
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
@@ -80,8 +81,13 @@ from ..core.settings import (
     save_state,
 )
 from ..packaging.artifact_builder import build_artifact
-from ..packaging.dependency_scanner import standalone_ineligible_reason
+from ..packaging.dependency_scanner import (
+    SINGLE_FILE_WARN_BYTES,
+    measure_data_bytes,
+    standalone_ineligible_reason,
+)
 from ..writers.onlymap_writer import ExportBlockedError
+from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
 from .live_server import PreviewServer
 from .preview import preview_directory, write_preview
@@ -132,6 +138,28 @@ LIVE_DEBOUNCE_MS = 400
 # describes how someone likes to work, not what the map is, so it should follow
 # the person between projects rather than travel inside one.
 LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
+
+# The folder the last export was written to. QSettings for the same reason as
+# the live-preview flag: "where I keep my maps" is a property of the person, not
+# of the project, so it should follow them into the next one.
+LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
+
+# Small enough that the dialog fits a laptop screen in landscape. Without an
+# explicit floor Qt takes the tallest tab's size hint as the minimum, and on
+# Windows that made the window impossible to shorten - it could be grown and
+# never shrunk. The tabs scroll, so a short window loses nothing.
+MINIMUM_DIALOG_HEIGHT = 320
+MINIMUM_DIALOG_WIDTH = 720
+
+# How much of the progress bar the reading stage owns. Reading every feature of
+# every layer dominates the wall clock; writing and packaging share the rest, so
+# the bar keeps moving rather than sitting at 100% through the slow part.
+READ_SHARE = 70
+
+# How long closing the dialog waits for a running job to notice it was
+# cancelled. Long enough for a layer of ordinary size to finish, short enough
+# that a wedged data source cannot make Close appear to do nothing.
+SHUTDOWN_WAIT_MS = 5000
 
 # Marks the per-layer options row, so it is never mistaken for a field row.
 LAYER_OPTIONS_ROLE = "__layer_options__"
@@ -219,6 +247,24 @@ def _help_label(text: str, parent: QWidget) -> QLabel:
     label.setWordWrap(True)
     label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
     return label
+
+
+def _scrollable(page: QWidget) -> QScrollArea:
+    """Wrap a tab so the window can be shorter than its contents.
+
+    The Map and Appearance tabs stack several group boxes, and Qt makes a
+    dialog's minimum height the largest of its pages' size hints - so those two
+    set a floor the user could not get below, and the window would grow but
+    never shrink. Scrolling the page instead means the window is free to be any
+    height and nothing is unreachable at the small end.
+    """
+    area = QScrollArea()
+    area.setWidget(page)
+    area.setWidgetResizable(True)
+    # No frame: a sunken border around a whole tab reads as a nested panel, and
+    # the scroll area is meant to be invisible until it is needed.
+    area.setFrameShape(QScrollArea.Shape.NoFrame)
+    return area
 
 
 def _summarise(detail: str) -> str:
@@ -341,18 +387,32 @@ class MainDialog(QDialog):
         self.setWindowTitle("QGIS2WebMap by NIKA")
         self.setObjectName("qgis2webmapMainDialog")
         self.resize(960, 640)
+        self.setMinimumSize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+
+        # ---- Background work ---------------------------------------------
+        # Set up before the tabs, because building a tab can already ask for a
+        # read. One job at a time: the pipeline reads the live QGIS project, and
+        # two reads racing over the same layers is exactly the crash this
+        # dialog's fourth rule exists to prevent.
+        self._job: BackgroundJob | None = None
+        self._cached_export = None
+        self._cached_report = None
+        self._cached_signature: str | None = None
+        # Captured on this thread before each job starts; see `_ensure_export`.
+        self._pending_canvas_extent = None
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
-        self.tabs.addTab(self._build_map_tab(), "Map")
+        self.tabs.addTab(_scrollable(self._build_map_tab()), "Map")
         self.tabs.addTab(self._build_layers_tab(), "Layers")
-        self.tabs.addTab(self._build_appearance_tab(), "Appearance")
+        self.tabs.addTab(_scrollable(self._build_appearance_tab()), "Appearance")
         self.tabs.addTab(self._build_fidelity_tab(), "Fidelity")
         self.tabs.addTab(self._build_help_tab(), "Help")
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
         layout.addWidget(self._build_fidelity_strip())
+        layout.addWidget(self._build_progress_row())
         layout.addLayout(self._build_button_row())
 
         # The list tracks QGIS live; there is no refresh button because there is
@@ -372,7 +432,6 @@ class MainDialog(QDialog):
         # switched off must never have a socket opened on their behalf.
         self._server: PreviewServer | None = None
         self._last_snapshot = self.state.snapshot()
-        self._rebuilding = False
 
         # Polls the settings snapshot rather than the widgets. See
         # `DialogState.snapshot` for why signals were the wrong hook.
@@ -394,6 +453,21 @@ class MainDialog(QDialog):
     def _build_map_tab(self) -> QWidget:
         page = QWidget(self)
         layout = QVBoxLayout(page)
+
+        # Where the data comes from, said out loud. There is no source picker
+        # because there is no source to pick - the export is always of the
+        # project already open - but "no control" and "the control is missing"
+        # look identical to someone opening the dialog for the first time, and
+        # testing had people hunting the tabs for a file chooser.
+        source_note = QLabel(
+            "<b>Source:</b> the layers already open in this QGIS project. There "
+            "is nothing to browse for - choose which of them to include on the "
+            "Layers tab.",
+            page,
+        )
+        source_note.setWordWrap(True)
+        layout.addWidget(source_note)
+
         form = QFormLayout()
 
         # First field in the dialog, and the *only* place the exported title is
@@ -433,7 +507,45 @@ class MainDialog(QDialog):
             self.mode_group.addButton(button)
             mode_layout.addWidget(button)
             self.mode_checks[mode] = button
+
+        # The size rule, next to the choice it constrains. It used to appear
+        # only as a modal at the end of an export, which is both too late to
+        # inform the decision and - because the modal switched the selection
+        # without the radio buttons following - left the dialog claiming
+        # Standalone HTML while it built a zip.
+        self.size_note = QLabel("", self.mode_box)
+        self.size_note.setWordWrap(True)
+        self.size_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        mode_layout.addWidget(self.size_note)
         layout.addWidget(self.mode_box)
+
+        # ---- Destination -------------------------------------------------
+        # Previously the only way to choose a location was a file dialog that
+        # appeared after pressing Export, so until then the dialog showed no
+        # sign that the location was the user's to pick at all. Visible field,
+        # remembered between exports, Browse for the picker.
+        destination_box = QGroupBox("Where to save it", page)
+        destination_layout = QVBoxLayout(destination_box)
+
+        path_row = QHBoxLayout()
+        self.path_edit = QLineEdit(destination_box)
+        self.path_edit.setPlaceholderText("Choose where the exported map is written")
+        self.path_edit.textChanged.connect(self._on_path_edited)
+        path_row.addWidget(self.path_edit, 1)
+
+        browse = QPushButton("Browse...", destination_box)
+        browse.clicked.connect(self._on_browse_destination)
+        path_row.addWidget(browse)
+        destination_layout.addLayout(path_row)
+
+        destination_layout.addWidget(
+            _help_label(
+                "Remembered for next time. Leave it blank and Export asks where "
+                "to put the file, as before.",
+                destination_box,
+            )
+        )
+        layout.addWidget(destination_box)
 
         # Its own group rather than a row inside "Data": a basemap is not the
         # project's data, it is the backdrop behind it - and it is the only
@@ -531,10 +643,23 @@ class MainDialog(QDialog):
         self.export_summary.setWordWrap(True)
         self.export_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(self.export_summary)
+
+        # Last, because filling the path field emits `textChanged`, whose slot
+        # updates the summary label created just above. An exception raised in a
+        # Qt slot does not propagate - PyQt aborts the process - so a handler
+        # that runs before the widget it touches exists takes QGIS down.
+        self._suggest_destination()
+        self._update_size_note()
         return page
 
     def _update_export_summary(self, selected_count: int) -> None:
-        """Name the artifact in the same words the buttons use."""
+        """Name the artifact in the same words the buttons use.
+
+        Guarded because it is reachable from a `textChanged` slot, which can
+        fire while the Map tab is still being built. See `_build_map_tab`.
+        """
+        if not hasattr(self, "export_summary"):
+            return
         if not selected_count:
             self.export_summary.setText("")
             return
@@ -545,7 +670,15 @@ class MainDialog(QDialog):
             OutputMode.FOLDER: "a folder to publish to a web server",
         }[self.state.output_mode]
         layers = f"{selected_count} layer{'s' if selected_count != 1 else ''}"
-        self.export_summary.setText(f"Export writes {produced}, carrying {layers}.")
+        sentence = f"Export writes {produced}, carrying {layers}."
+
+        # Naming the destination here is what makes the path field's effect
+        # visible without pressing anything.
+        destination = getattr(self, "path_edit", None)
+        chosen = destination.text().strip() if destination is not None else ""
+        if chosen:
+            sentence += f"\nTo: {chosen}"
+        self.export_summary.setText(sentence)
 
     def _on_extent_changed(self) -> None:
         value = self.extent_combo.currentData()
@@ -613,7 +746,149 @@ class MainDialog(QDialog):
         # The button group handles deselecting the others; this only records the
         # choice and refreshes what the summary says will be produced.
         self.state.output_mode = mode
+        # Keep the radio buttons honest even when the mode was changed in code
+        # rather than by a click - the mismatch between "Standalone HTML is
+        # selected" and "a zip was written" came from exactly this gap.
+        button = self.mode_checks.get(mode)
+        if button is not None and not button.isChecked():
+            button.setChecked(True)
+        self._suggest_destination()
+        self._update_size_note()
         self._update_export_readiness()
+
+    # ---- Destination ----------------------------------------------------
+
+    def _mode_suffix(self, mode: OutputMode) -> str:
+        """The extension the chosen packaging produces. A folder has none."""
+        return {
+            OutputMode.STANDALONE_HTML: ".html",
+            OutputMode.SHARE_ZIP: ".zip",
+            OutputMode.FOLDER: "",
+        }[mode]
+
+    def _default_basename(self) -> str:
+        """Name the file after the map, falling back to the project."""
+        name = (self.state.map_name or "").strip() or Path(
+            self._project_identity()
+        ).stem
+        # Anything a file system will argue about becomes an underscore. A map
+        # called "Site A / B" must not silently write into a subdirectory.
+        cleaned = "".join(c if c.isalnum() or c in " -_" else "_" for c in name).strip()
+        return cleaned or "map"
+
+    def _on_path_edited(self, _text: str) -> None:
+        """Nothing to store on the state - the folder is saved after an export.
+
+        Kept as a slot so the summary at the foot of the tab follows what is
+        typed rather than only what was browsed to.
+        """
+        self._update_export_summary(
+            len(self.state.selected_layer_ids(self._available_layer_ids()))
+        )
+
+    def _suggest_destination(self) -> None:
+        """Fill the path field with the last folder used and a matching name.
+
+        Only ever *suggests*: a path the user typed or browsed to during this
+        session keeps its directory, and only the extension is corrected to
+        match the packaging they chose. Rewriting their choice because they
+        clicked a different radio button would be the dialog arguing with them.
+        """
+        if not hasattr(self, "path_edit"):
+            return
+
+        suffix = self._mode_suffix(self.state.output_mode)
+        current = self.path_edit.text().strip()
+
+        if current:
+            path = Path(current)
+            # A folder export names a directory, so any extension is dropped.
+            updated = path.with_suffix(suffix) if suffix else path.with_suffix("")
+            if str(updated) != current:
+                self.path_edit.setText(str(updated))
+            return
+
+        directory = QSettings().value(LAST_EXPORT_DIR_KEY, "", type=str)
+        if not directory or not Path(directory).is_dir():
+            directory = str(Path.home())
+        self.path_edit.setText(
+            str(Path(directory) / f"{self._default_basename()}{suffix}")
+        )
+
+    def _on_browse_destination(self) -> None:
+        """The file picker, now reachable before pressing Export."""
+        mode = self.state.output_mode
+        current = self.path_edit.text().strip()
+        start = current or str(Path.home())
+
+        if mode is OutputMode.FOLDER:
+            chosen = QFileDialog.getExistingDirectory(self, "Export to folder", start)
+        else:
+            filter_text = {
+                OutputMode.STANDALONE_HTML: "Web page (*.html)",
+                OutputMode.SHARE_ZIP: "Zip archive (*.zip)",
+            }[mode]
+            chosen, _ = QFileDialog.getSaveFileName(
+                self, "Export map", start, filter_text
+            )
+        if chosen:
+            self.path_edit.setText(chosen)
+
+    def _remember_destination(self, path: Path) -> None:
+        """Store the folder, never the file name.
+
+        The next export is usually a different map into the same place, so
+        carrying the whole path forward would mean the default is always the
+        name of the map before it.
+        """
+        directory = path if path.is_dir() else path.parent
+        with contextlib.suppress(Exception):
+            QSettings().setValue(LAST_EXPORT_DIR_KEY, str(directory))
+
+    # ---- Size ------------------------------------------------------------
+
+    def _update_size_note(self) -> None:
+        """Say what the chosen packaging costs, using a real figure when we have one.
+
+        A standalone file inlines every feature as base64 in the HTML, so its
+        size is the data's size plus the runtime - there is no sibling folder to
+        offload to, which is the whole point of the format and also why it grows
+        so fast. Without a completed read there is no number to show, so the
+        rule is stated on its own rather than guessed at.
+        """
+        if not hasattr(self, "size_note"):
+            return
+
+        limit_mb = SINGLE_FILE_WARN_BYTES // 1024 // 1024
+        if self.state.output_mode is not OutputMode.STANDALONE_HTML:
+            self.size_note.setText("")
+            self.size_note.setStyleSheet("")
+            return
+
+        base = (
+            f"Standalone HTML inlines every feature into the one file, so it is "
+            f"the largest of the three. Over about {limit_mb} MB most mail "
+            f"services reject it as an attachment."
+        )
+
+        export = self._cached_export
+        if export is None:
+            self.size_note.setText(base)
+            self.size_note.setStyleSheet("")
+            return
+
+        data_bytes = measure_data_bytes(export)
+        megabytes = data_bytes / 1024 / 1024
+        if data_bytes > SINGLE_FILE_WARN_BYTES:
+            self.size_note.setText(
+                f"This map's data is {megabytes:.0f} MB, over the {limit_mb} MB "
+                "an attachment usually survives. Export still writes the single "
+                "file if you want it - Share ZIP is the practical choice."
+            )
+            self.size_note.setStyleSheet("color: #c0392b;")
+        else:
+            self.size_note.setText(f"{base}\nThis map's data is {megabytes:.1f} MB.")
+            self.size_note.setStyleSheet("")
 
     # ---- Layers tab -----------------------------------------------------
 
@@ -635,6 +910,26 @@ class MainDialog(QDialog):
         self.layer_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         layout.addWidget(self.layer_tree)
+
+        # What the three columns do, in terms of what the *recipient* loses.
+        # The headers name them but not their consequence, and testing found
+        # nobody could say what unticking one would produce - so the boxes went
+        # untouched rather than used. Stated on screen rather than in tooltips:
+        # a tooltip is only read by someone who already suspects it is there.
+        layout.addWidget(
+            _help_label(
+                "<b>Include</b> - untick to leave the layer out of the map "
+                "entirely. Its data is not written, so the file gets smaller.<br>"
+                "<b>Popups</b> - untick and clicking a feature does nothing. "
+                "The attribute values are left out of the file, so this is also "
+                "how you keep data out of a map you are sending someone.<br>"
+                "<b>Labels</b> - untick to drop the text QGIS draws beside "
+                "features. The features themselves still appear.<br>"
+                "Unticking Popups or Labels only affects that layer; the map "
+                "still works, with less on it.",
+                page,
+            )
+        )
 
         # Bulk action. Setting a mode field-by-field across a dozen layers is
         # exactly the tedium qgis2web users report, so the escape hatch is here
@@ -672,6 +967,11 @@ class MainDialog(QDialog):
         # project that no longer exists. Marked rather than recomputed: it is
         # only worth building when the user actually looks at it.
         self._fidelity_is_stale = True
+
+        # The cache is keyed on this dialog's settings, which a change in QGIS
+        # does not touch - so a layer added, removed or restyled over there
+        # would otherwise be served from a read taken before it happened.
+        self._invalidate_export_cache()
 
         # Adding or removing a layer in QGIS changes the map, but it changes
         # nothing in `DialogState` unless that layer already had settings - so
@@ -1178,6 +1478,14 @@ class MainDialog(QDialog):
                 detail.setText(0, entry.detail)
                 detail.setFlags(Qt.ItemFlag.ItemIsEnabled)
 
+    def _show_fidelity_error(self, message: str) -> None:
+        """Leave the tab saying why it is empty, never just empty."""
+        self.fidelity_tree.clear()
+        item = QTreeWidgetItem(self.fidelity_tree)
+        item.setText(0, "Report unavailable")
+        item.setText(1, STATUS_LABELS[FidelityStatus.BLOCKED])
+        item.setText(2, f"The project could not be read: {message}")
+
     def _on_tab_changed(self, index: int) -> None:
         """Fill the Fidelity tab when the user opens it.
 
@@ -1189,27 +1497,23 @@ class MainDialog(QDialog):
         Computed on open rather than on every layer change because building it
         reads every feature of every layer, which is far too expensive to run
         on each tick of a checkbox.
+
+        On a worker thread since the tab was reported taking 10-15 seconds with
+        the whole window frozen behind it - long enough that the plugin looked
+        hung. The tab now fills when the read lands, with the bar showing which
+        layer it is on.
         """
         if self.tabs.tabText(index) != "Fidelity" or not self._fidelity_is_stale:
             return
 
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            _, report = self._read_current_project()
-            self._show_fidelity(report)
-        except Exception as exc:  # a broken project must not break the tab
-            self.fidelity_tree.clear()
-            item = QTreeWidgetItem(self.fidelity_tree)
-            item.setText(0, "Report unavailable")
-            item.setText(1, STATUS_LABELS[FidelityStatus.BLOCKED])
-            item.setText(2, f"The project could not be read: {exc}")
-            QgsMessageLog.logMessage(
-                f"Fidelity preview failed:\n{traceback.format_exc()}",
-                LOG_TAG,
-                level=Qgis.Warning,
-            )
-        finally:
-            QApplication.restoreOverrideCursor()
+        # A placeholder rather than an empty table: the whole reason this tab
+        # computes on open is that "empty" reads as "nothing to report".
+        self.fidelity_tree.clear()
+        pending = QTreeWidgetItem(self.fidelity_tree)
+        pending.setText(0, "Checking...")
+        pending.setText(2, "Reading the project to see what the export changes.")
+
+        self._ensure_export(lambda _export, _report: None, "Checking the project...")
 
     # ---- Help tab -------------------------------------------------------
 
@@ -1270,6 +1574,146 @@ class MainDialog(QDialog):
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row
+
+    # ---- Progress -------------------------------------------------------
+
+    def _build_progress_row(self) -> QWidget:
+        """A bar and a way out, for work that takes longer than a blink.
+
+        Hidden until something is running. An always-present bar sitting at zero
+        is noise, and the point of this row is that its appearance means "this
+        is working, it has not crashed" - which is precisely what the dialog
+        could not say while it froze.
+        """
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.progress_bar = QProgressBar(row)
+        self.progress_bar.setTextVisible(True)
+        layout.addWidget(self.progress_bar, 1)
+
+        self.cancel_button = QPushButton("Cancel", row)
+        self.cancel_button.clicked.connect(self._on_cancel_job)
+        layout.addWidget(self.cancel_button)
+
+        row.setVisible(False)
+        self.progress_row = row
+        return row
+
+    def _start_job(
+        self,
+        work,
+        on_success,
+        label: str,
+        quiet: bool = False,
+    ) -> bool:
+        """Run `work` on a worker thread, `on_success` back on this one.
+
+        Returns False if something is already running. One job at a time is a
+        hard rule: the work reads the live QGIS project, and two threads walking
+        the same layers is the kind of fault that takes QGIS down rather than
+        just failing.
+
+        `quiet` reports a failure on the status line instead of in a modal. The
+        live preview rebuilds on every edit, so a modal there would mean a
+        dialog per keystroke for a user who is mid-edit and whose next change
+        may well fix it.
+        """
+        if self._job is not None:
+            self.status_label.setText("Still working on the last request.")
+            return False
+
+        job = BackgroundJob(work, self)
+        self._job = job
+        job.progressed.connect(self._on_job_progress)
+        job.failed.connect(
+            self._on_job_failed_quietly if quiet else self._on_job_failed
+        )
+        job.cancelled.connect(self._on_job_cancelled)
+        job.succeeded.connect(lambda result: self._on_job_succeeded(result, on_success))
+        # Qt frees the thread object once it has actually stopped; doing it any
+        # earlier destroys a QThread that is still running.
+        job.finished.connect(job.deleteLater)
+
+        self._set_busy(True, label)
+        job.start()
+        return True
+
+    def _set_busy(self, busy: bool, label: str = "") -> None:
+        """Show the work, and stop the user starting more of it.
+
+        Export and Preview go dark rather than queueing: pressing Export twice
+        should not mean exporting twice, and a disabled button says why the
+        second press did nothing.
+        """
+        self.progress_row.setVisible(busy)
+        if busy:
+            self.progress_bar.setRange(0, 0)  # indeterminate until told otherwise
+            self.progress_bar.setFormat(label)
+            self.status_label.setText(label)
+            self.export_button.setEnabled(False)
+            self.preview_button.setEnabled(False)
+        else:
+            self.progress_bar.reset()
+            self._update_export_readiness()
+
+    def _on_job_progress(self, percent: int, message: str) -> None:
+        if percent < 0:
+            self.progress_bar.setRange(0, 0)
+        else:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(percent)
+        self.progress_bar.setFormat(message)
+        self.status_label.setText(message)
+
+    def _on_cancel_job(self) -> None:
+        if self._job is None:
+            return
+        self._job.cancel()
+        self.cancel_button.setEnabled(False)
+        self.progress_bar.setFormat("Stopping...")
+
+    def _on_job_succeeded(self, result, on_success) -> None:
+        # Cleared *before* the callback, so a callback that starts the next
+        # stage - reading then writing - is not refused by the one-job rule.
+        self._job = None
+        self._set_busy(False)
+        self.cancel_button.setEnabled(True)
+        try:
+            on_success(result)
+        except Exception as exc:
+            self._report_failure("Export failed", exc)
+
+    def _on_job_cancelled(self) -> None:
+        self._job = None
+        self._set_busy(False)
+        self.cancel_button.setEnabled(True)
+        self.status_label.setText("Stopped. Nothing was written.")
+
+    def _on_job_failed_quietly(self, message: str, details: str) -> None:
+        """A background failure the user did not ask about. Log and say so once."""
+        self._job = None
+        self._set_busy(False)
+        self.cancel_button.setEnabled(True)
+        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.Warning)
+        self.status_label.setText(
+            f"Live preview could not be updated ({message}) - see the QGIS log."
+        )
+
+    def _on_job_failed(self, message: str, details: str) -> None:
+        self._job = None
+        self._set_busy(False)
+        self.cancel_button.setEnabled(True)
+        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.Critical)
+        if self._fidelity_is_stale:
+            self._show_fidelity_error(message)
+        QMessageBox.critical(
+            self,
+            "Something went wrong",
+            f"{message}\n\nDetails are in the QGIS message log under "
+            f'"{LOG_TAG}". Please report this at {REPO_URL}/issues',
+        )
 
     # ---- Fidelity strip -------------------------------------------------
 
@@ -1364,38 +1808,40 @@ class MainDialog(QDialog):
     def _rebuild_live_preview(self) -> None:
         """Rewrite the artifact and tell the open tab to reload.
 
-        Reentrancy matters here: a rebuild runs the full production writer, and
-        on a large project that is slower than the debounce. Without the guard a
-        burst of edits would stack rebuilds on top of each other.
+        This is what made unticking a map control freeze the window: with live
+        preview on - and it is on by default - every settings change ran a full
+        read of every layer plus the production writer, on the GUI thread.
+        Neither half was needed for a chrome checkbox. Now the read is skipped
+        whenever the data cannot have changed, and what is left runs on a
+        worker.
+
+        Reentrancy still matters: a rebuild is slower than the debounce on a
+        large project, so an in-flight one defers the next rather than stacking.
         """
-        if self._shut_down or self._server is None or self._rebuilding:
-            # Try again once the in-flight rebuild finishes, so the last edit is
-            # never the one that gets dropped.
-            if self._rebuilding and not self._shut_down:
-                self._rebuild_timer.start()
+        if self._shut_down or self._server is None:
             return
 
-        self._rebuilding = True
-        try:
-            export, report = self._read_current_project()
-            self._show_fidelity(report)
-            write_preview(export, self._project_identity(), live=True)
-            self._server.notify_reload()
-            self.status_label.setText("Live preview updated.")
-        except Exception:
-            # A failed rebuild must not switch live preview off or spawn a modal
-            # on every keystroke: the user is mid-edit and the next change may
-            # well fix it. Report quietly and keep going.
-            self.status_label.setText(
-                "Live preview could not be updated - see the QGIS log."
-            )
-            QgsMessageLog.logMessage(
-                f"Live preview rebuild failed:\n{traceback.format_exc()}",
-                LOG_TAG,
-                level=Qgis.Warning,
-            )
-        finally:
-            self._rebuilding = False
+        if self._job is not None:
+            # Something is already running - either this rebuild or an export.
+            # Come back after it, so the last edit is never the dropped one.
+            self._rebuild_timer.start()
+            return
+
+        def then(export, _report) -> None:
+            def work(progress: Progress):
+                progress.step(READ_SHARE, "Updating the preview...")
+                write_preview(export, self._project_identity(), live=True)
+                return None
+
+            def on_written(_result) -> None:
+                if self._shut_down or self._server is None:
+                    return
+                self._server.notify_reload()
+                self.status_label.setText("Live preview updated.")
+
+            self._start_job(work, on_written, "Updating the preview...", quiet=True)
+
+        self._ensure_export(then, "Updating the preview...", quiet=True)
 
     def _stop_live_preview(self) -> None:
         self._watch_timer.stop()
@@ -1456,8 +1902,23 @@ class MainDialog(QDialog):
         except Exception:  # never let a canvas quirk block an export
             return None
 
-    def _read_current_project(self):
+    def _read_current_project(self, progress: Progress | None = None):
+        """Read the project into the export model. **Runs on a worker thread.**
+
+        Everything it touches is either a plain value captured before the job
+        started, or the PyQGIS pipeline that the Processing algorithm already
+        runs off the main thread. Nothing here may touch a widget.
+        """
         report = FidelityReportBuilder()
+
+        def on_layer(done: int, total: int, name: str) -> None:
+            if progress is None:
+                return
+            # Reading is most of the wait, so it owns most of the bar and the
+            # writing stages continue from where it stops.
+            percent = int(READ_SHARE * done / total) if total else 0
+            progress.step(percent, f"Reading '{name}' ({done + 1} of {total})")
+
         export = read_project(
             self.project,
             report,
@@ -1467,7 +1928,8 @@ class MainDialog(QDialog):
                 self._available_layer_ids()
             ),
             layer_settings=self.state.layers,
-            canvas_extent=self._canvas_extent(),
+            canvas_extent=self._pending_canvas_extent,
+            progress=on_layer,
         )
         # Licence caps are evaluated here, not left to the writer, because the
         # writer's verdict arrives after the file is on disk. A layer past the
@@ -1475,6 +1937,49 @@ class MainDialog(QDialog):
         # has to name it while the user can still do something about it.
         report_verdict(default_policy().evaluate(export), report)
         return export, report
+
+    def _ensure_export(self, then, label: str, quiet: bool = False) -> bool:
+        """Get a current read to `then`, from cache or from a worker thread.
+
+        The cache is the other half of the responsiveness fix. Reading is
+        expensive and most settings cannot change its result: unticking "Legend"
+        restyles the map's chrome and touches not one feature, yet it used to
+        trigger a full re-read of every layer through the live preview. Now a
+        chrome change reuses the last read and goes straight to writing.
+
+        `then(export, report)` runs on the GUI thread either way, so callers do
+        not have to care which happened.
+        """
+        signature = self.state.data_snapshot()
+        if self._cached_export is not None and self._cached_signature == signature:
+            then(self._cached_export, self._cached_report)
+            return True
+
+        # Read on the GUI thread, where the canvas lives, and hand the plain
+        # value to the worker. Calling `iface.mapCanvas()` from the thread would
+        # be touching a widget from the wrong side.
+        self._pending_canvas_extent = self._canvas_extent()
+
+        def work(progress: Progress):
+            progress.step(0, "Reading the project...")
+            return self._read_current_project(progress)
+
+        def on_success(result) -> None:
+            export, report = result
+            self._cached_export = export
+            self._cached_report = report
+            self._cached_signature = signature
+            self._show_fidelity(report)
+            self._update_size_note()
+            then(export, report)
+
+        return self._start_job(work, on_success, label, quiet=quiet)
+
+    def _invalidate_export_cache(self) -> None:
+        """Forget the last read. Called whenever the data could have changed."""
+        self._cached_export = None
+        self._cached_report = None
+        self._cached_signature = None
 
     def _runtime_ready(self) -> bool:
         """Make sure the OnlyMap runtime is installed before building anything.
@@ -1493,23 +1998,32 @@ class MainDialog(QDialog):
         return False
 
     def on_preview(self) -> None:
-        """Open the preview: served from this machine, or as a file."""
-        try:
-            # Read and report *before* asking for the runtime. Reading the
-            # project is what fills the Fidelity tab, and it needs no runtime -
-            # so gating it behind the download left the tab blank whenever the
-            # runtime was missing or the user declined, hiding the one thing
-            # that would have told them what their map was going to lose.
-            export, report = self._read_current_project()
-            self._show_fidelity(report)
+        """Open the preview: served from this machine, or as a file.
 
-            if not self._runtime_ready():
-                return
+        Three stages, and only the middle one is slow. Reading happens first and
+        on a worker; the runtime check has to sit between them because it can
+        put a licence prompt on screen, which is a GUI-thread thing to do.
+        """
+        # Read and report *before* asking for the runtime. Reading the project
+        # is what fills the Fidelity tab, and it needs no runtime - so gating it
+        # behind the download left the tab blank whenever the runtime was
+        # missing or the user declined, hiding the one thing that would have
+        # told them what their map was going to lose.
+        self._ensure_export(self._preview_with, "Reading the project...")
 
-            identity = self._project_identity()
-            live = self.live_check.isChecked()
-            result = write_preview(export, identity, live=live)
+    def _preview_with(self, export, _report) -> None:
+        """Write and open the preview. Called once a read is in hand."""
+        if not self._runtime_ready():
+            return
 
+        identity = self._project_identity()
+        live = self.live_check.isChecked()
+
+        def work(progress: Progress):
+            progress.step(READ_SHARE, "Building the preview...")
+            return write_preview(export, identity, live=live)
+
+        def on_written(result) -> None:
             if not live:
                 self._stop_live_preview()
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
@@ -1534,8 +2048,8 @@ class MainDialog(QDialog):
             self.status_label.setText(
                 "Live preview open. Changes here update the tab automatically."
             )
-        except Exception as exc:
-            self._report_failure("Preview failed", exc)
+
+        self._start_job(work, on_written, "Building the preview...")
 
     def _fall_back_to_file_preview(self, entry_path: Path) -> None:
         """Open the preview as a file, and say why it is not live.
@@ -1581,70 +2095,83 @@ class MainDialog(QDialog):
 
     def on_export(self) -> None:
         """Write the artifact wherever the user asks for it."""
-        try:
-            # Reading fills the Fidelity tab and needs no runtime; see on_preview.
-            export, report = self._read_current_project()
-            self._show_fidelity(report)
+        # Reading fills the Fidelity tab and needs no runtime; see on_preview.
+        self._ensure_export(self._export_with, "Reading the project...")
 
-            # A blocked item means a layer could not be read at all. Exporting
-            # anyway writes a map that is quietly missing data while the dialog
-            # reports success, and the Processing algorithm already refuses on
-            # the same input - the two entry points must not disagree.
-            if not export.is_exportable:
-                self._warn_not_exportable(export)
+    def _export_with(self, export, _report) -> None:
+        """Everything after the read: the checks, the location, the write."""
+        # A blocked item means a layer could not be read at all. Exporting
+        # anyway writes a map that is quietly missing data while the dialog
+        # reports success, and the Processing algorithm already refuses on
+        # the same input - the two entry points must not disagree.
+        if not export.is_exportable:
+            self._warn_not_exportable(export)
+            return
+
+        mode = self.state.output_mode
+
+        # Issue #29: never quietly hand over a single file that will not travel.
+        # This used to switch the selection to Share ZIP itself, which was worse
+        # than the problem: the radio buttons did not follow, so the dialog said
+        # Standalone HTML while it wrote a zip. The rule now lives on the Map
+        # tab where it can inform the choice, and this is the last reminder
+        # before it costs anything. The user's choice stands either way.
+        if mode is OutputMode.STANDALONE_HTML:
+            reason = standalone_ineligible_reason(export)
+            if reason is not None and not self._confirm_oversized_single_file(reason):
                 return
 
-            # After the blocking checks: no point downloading the runtime for a project
-            # that was never going to export.
-            if not self._runtime_ready():
-                return
+        # Advisory, not a gate. A layer past the runtime's free-tier cap renders
+        # nothing for the recipient, and that is worth interrupting for once -
+        # but the export goes ahead, because the alternative is refusing to
+        # write a map the user knowingly asked for.
+        self._notify_license_caps(export)
 
-            mode = self.state.output_mode
-            # Issue #29: never quietly hand over a single file that will not
-            # travel. If Standalone HTML is not eligible, say exactly why and
-            # move the selection to the next viable tier - the user can still
-            # override it, but not by accident.
-            if mode is OutputMode.STANDALONE_HTML:
-                reason = standalone_ineligible_reason(export)
-                if reason is not None:
-                    self._on_mode_selected(OutputMode.SHARE_ZIP)
-                    QMessageBox.information(
-                        self,
-                        "Switched to Share ZIP",
-                        reason
-                        + "\n\nShare ZIP is now selected. Choose Standalone HTML "
-                        "again if you want the single file anyway.",
-                    )
-                    return
+        # After the blocking checks: no point downloading the runtime for a
+        # project that was never going to export.
+        if not self._runtime_ready():
+            return
 
-            suggested, filter_text = {
-                OutputMode.STANDALONE_HTML: ("map.html", "Web page (*.html)"),
-                OutputMode.SHARE_ZIP: ("map.zip", "Zip archive (*.zip)"),
-                OutputMode.FOLDER: ("map", ""),
-            }[mode]
+        destination = self._resolve_destination(mode)
+        if destination is None:
+            return
 
-            if mode is OutputMode.FOLDER:
-                chosen = QFileDialog.getExistingDirectory(self, "Export to folder")
-            else:
-                chosen, _ = QFileDialog.getSaveFileName(
-                    self, "Export map", suggested, filter_text
+        def work(progress: Progress):
+            progress.step(READ_SHARE, "Writing the map...")
+            try:
+                result, outcome = build_artifact(export, destination, mode=mode)
+            except ExportBlockedError as exc:
+                # Returned rather than raised: a blocked export is the user's to
+                # fix, and raising would route it to the crash reporter with a
+                # "please report this" that has nothing to report.
+                return exc
+            progress.step(100, "Finishing...")
+            return result, outcome
+
+        def on_written(built) -> None:
+            if isinstance(built, ExportBlockedError):
+                QMessageBox.warning(
+                    self,
+                    "Cannot export",
+                    "This map cannot be exported yet:\n\n"
+                    + "\n".join(f"- {reason}" for reason in built.reasons),
                 )
-            if not chosen:
                 return
 
-            result, outcome = build_artifact(export, Path(chosen), mode=mode)
+            result, outcome = built
             save_state(self.project, self.state)
+            self._remember_destination(destination)
 
             # The file:// check happens here, against the bytes that ship.
             self._last_export_path = Path(outcome.path)
             self.open_export_button.setEnabled(True)
 
-            self.status_label.setText(outcome.summary())
+            summary = outcome.summary()
+            self.status_label.setText(summary)
             # The writer's warnings (licence caps, a runtime that does not match
             # the lock, an oversized single file) are things the recipient will
             # experience. Dropping them here is how a user ends up handing over
             # a map with layers missing and no idea it happened.
-            summary = outcome.summary()
             if result.warnings:
                 QMessageBox.warning(
                     self,
@@ -1657,17 +2184,116 @@ class MainDialog(QDialog):
             else:
                 QMessageBox.information(self, "Export complete", summary)
 
-        except ExportBlockedError as exc:
-            # Recoverable and the user's to fix, so a warning with the reasons,
-            # not a crash report.
+        self._start_job(work, on_written, "Writing the map...")
+
+    def _confirm_oversized_single_file(self, reason: str) -> bool:
+        """Warn about a single file too big to email, and let them have it anyway.
+
+        A standalone export inlines every feature, so there is no sibling folder
+        to carry the weight - the size is inherent to the format rather than a
+        fault. That makes this the user's call, not ours.
+        """
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("This will be a large single file")
+        box.setText(reason)
+        box.setInformativeText(
+            "A standalone export inlines all the data into the one HTML file, "
+            "which is why it is this big. Share ZIP packages the same map to "
+            "send more easily."
+        )
+        export_anyway = box.addButton(
+            "Export anyway", QMessageBox.ButtonRole.AcceptRole
+        )
+        switch = box.addButton("Use Share ZIP", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(switch)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is export_anyway:
+            return True
+        if clicked is switch:
+            # Change the selection *and* the radio buttons, then stop so the
+            # user sees the new state and presses Export themselves.
+            self._on_mode_selected(OutputMode.SHARE_ZIP)
+            self.status_label.setText(
+                "Switched to Share ZIP. Press Export again to write it."
+            )
+        return False
+
+    def _notify_license_caps(self, export) -> None:
+        """Say what the runtime's free tier will drop, then carry on exporting.
+
+        The caps are enforced inside the exported file on the recipient's
+        machine, so a breach is invisible to the person doing the exporting
+        until someone tells them the map is empty. The message bar is the right
+        weight: impossible to miss, impossible to be blocked by.
+        """
+        violations = detect_violations(export)
+        if not violations:
+            return
+
+        subjects = "; ".join(v.subject for v in violations)
+        message = (
+            f"{len(violations)} free-tier limit(s) exceeded ({subjects}). Those "
+            "layers will not render for whoever opens the map. Exporting anyway - "
+            "the Fidelity tab has the detail."
+        )
+        bar = getattr(self.iface, "messageBar", None)
+        if bar is not None:
+            with contextlib.suppress(Exception):
+                bar().pushMessage(
+                    "QGIS2WebMap", message, level=Qgis.Warning, duration=0
+                )
+                return
+        # No message bar (a test harness, or a stripped iface): the status line
+        # is worse but it is not silence.
+        self.status_label.setText(message)
+
+    def _resolve_destination(self, mode: OutputMode) -> Path | None:
+        """Where to write, from the path field or from a picker.
+
+        The field is the normal route now, so pressing Export does not
+        interrupt with a file dialog the user already answered. An empty field
+        falls back to the picker, which is what the dialog always did.
+        """
+        typed = self.path_edit.text().strip()
+        if not typed:
+            self._on_browse_destination()
+            typed = self.path_edit.text().strip()
+            if not typed:
+                return None
+            # Chosen through the picker, which already asked about overwriting.
+            return Path(typed)
+
+        destination = Path(typed)
+        parent = destination if mode is OutputMode.FOLDER else destination.parent
+        if not parent.exists():
             QMessageBox.warning(
                 self,
-                "Cannot export",
-                "This map cannot be exported yet:\n\n"
-                + "\n".join(f"- {reason}" for reason in exc.reasons),
+                "Folder not found",
+                f"There is no folder at {parent}.\n\nPick somewhere that exists, "
+                "or create it first.",
             )
-        except Exception as exc:
-            self._report_failure("Export failed", exc)
+            return None
+
+        # Typed paths skip the file dialog, and with it the overwrite prompt it
+        # would have shown. Asking here is what keeps Export from silently
+        # replacing yesterday's map.
+        if mode is not OutputMode.FOLDER and destination.exists():
+            answer = QMessageBox.question(
+                self,
+                "Replace the existing file?",
+                f"{destination.name} already exists in {destination.parent}.\n\n"
+                "Exporting replaces it.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return None
+
+        return destination
 
     def _warn_not_exportable(self, export) -> None:
         """Explain a refusal in terms of what the user has to fix in QGIS."""
@@ -1709,6 +2335,17 @@ class MainDialog(QDialog):
         if self._shut_down:
             return
         self._shut_down = True
+
+        # A running job holds a reference to this dialog and will emit into its
+        # slots. Ask it to stop, then wait: a thread still running when Python
+        # frees the widgets underneath it is a crash, and the user experiences
+        # that as QGIS vanishing. The wait is bounded by the current layer, and
+        # capped so a wedged provider cannot hang the close.
+        job, self._job = self._job, None
+        if job is not None:
+            job.cancel()
+            with contextlib.suppress(Exception):
+                job.wait(SHUTDOWN_WAIT_MS)
 
         try:
             save_state(self.project, self.state)
