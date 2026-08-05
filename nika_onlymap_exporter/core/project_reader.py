@@ -21,7 +21,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
 from qgis.core import QgsLayerTreeLayer
@@ -209,6 +209,7 @@ def read_project(
     selected_layer_ids: frozenset[str] | None = None,
     layer_settings: Mapping[str, LayerSettings] | None = None,
     canvas_extent: Extent | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> ExportProject:
     """Read a whole project into the normalized model.
 
@@ -218,6 +219,12 @@ def read_project(
     `layer_settings` carries the dialog's per-layer popup and label checkboxes,
     keyed by layer id. A layer absent from the mapping keeps the defaults, so a
     caller with no dialog (the Processing algorithm, a test) can omit it.
+
+    `progress` is called as `(done, total, layer_name)` before each layer is
+    read. Reading is the slow half of an export - every feature of every layer -
+    and it is the half a user has no other way to watch, so the dialog drives its
+    progress bar from here. A caller that wants none passes `None` and pays
+    nothing.
     """
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
@@ -227,6 +234,20 @@ def read_project(
 
     layers = []
     skipped_invalid = 0
+
+    # Counted up front so the progress bar can show "3 of 12" rather than a bar
+    # that only ever fills at the end.
+    total = sum(
+        1
+        for tree_layer in tree_layers
+        if isinstance(tree_layer, QgsLayerTreeLayer)
+        and tree_layer.layer() is not None
+        and tree_layer.layer().isValid()
+        and (
+            selected_layer_ids is None or tree_layer.layer().id() in selected_layer_ids
+        )
+    )
+    done = 0
 
     for tree_layer in tree_layers:
         if not isinstance(tree_layer, QgsLayerTreeLayer):
@@ -239,6 +260,10 @@ def read_project(
 
         if selected_layer_ids is not None and map_layer.id() not in selected_layer_ids:
             continue
+
+        if progress is not None:
+            progress(done, total, map_layer.name())
+        done += 1
 
         per_layer = (layer_settings or {}).get(map_layer.id()) or LayerSettings()
         export_layer = read_layer(

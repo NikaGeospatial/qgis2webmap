@@ -218,6 +218,38 @@ def _read_field_modes(raw: Any) -> dict[str, str]:
     return modes
 
 
+# Settings that change what `read_project` produces - the exported data itself,
+# or a note in the fidelity report about it. Changing one of these invalidates a
+# cached read.
+DATA_FIELDS = (
+    "map_name",
+    "popup_on_hover",
+    "basemap",
+    "terrain",
+    "highlight_color",
+    "quantize_precision",
+    "extent_source",
+)
+
+# Settings that only restyle the map's chrome or decide how the artifact is
+# packaged. None of them can change a single feature, so toggling one must never
+# cost a re-read of every layer - which is what made unticking "Legend" freeze
+# the dialog for as long as reading the project takes.
+CHROME_FIELDS = (
+    "output_mode",
+    "show_legend",
+    "show_layer_switcher",
+    "show_zoom_controls",
+    "show_scale_bar",
+    "show_title",
+    "show_abstract",
+    "title_corner",
+    "chrome_scale",
+    "widget_background",
+    "widget_foreground",
+)
+
+
 @dataclass
 class DialogState:
     """Everything the dialog needs to remember between sessions."""
@@ -266,33 +298,29 @@ class DialogState:
         rename. Catching style edits would mean subscribing to every layer's
         repaint, which is a much larger change than it looks.
         """
+        return self._snapshot_of(DATA_FIELDS + CHROME_FIELDS)
+
+    def data_snapshot(self) -> str:
+        """The part of `snapshot` that can change the exported data.
+
+        Equal snapshots mean a previous `read_project` result is still exactly
+        what a fresh read would produce, so it can be reused. That is what keeps
+        a chrome checkbox from re-reading half a million features.
+        """
+        return self._snapshot_of(DATA_FIELDS)
+
+    def _snapshot_of(self, names: tuple[str, ...]) -> str:
         return json.dumps(
             {
                 **{
                     name: getattr(self, name).value
                     if isinstance(getattr(self, name), Enum)
                     else getattr(self, name)
-                    for name in (
-                        "map_name",
-                        "output_mode",
-                        "show_legend",
-                        "show_layer_switcher",
-                        "show_zoom_controls",
-                        "show_scale_bar",
-                        "popup_on_hover",
-                        "show_title",
-                        "show_abstract",
-                        "title_corner",
-                        "basemap",
-                        "terrain",
-                        "chrome_scale",
-                        "widget_background",
-                        "widget_foreground",
-                        "highlight_color",
-                        "quantize_precision",
-                        "extent_source",
-                    )
+                    for name in names
                 },
+                # Per-layer settings are always included: every one of them
+                # (include, popups, labels, field modes, precision) changes the
+                # data, so there is no chrome-only half to leave out.
                 "layers": {k: v.to_dict() for k, v in sorted(self.layers.items())},
             },
             sort_keys=True,
