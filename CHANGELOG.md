@@ -142,6 +142,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `get-icon-pixel-offset`.
 
 ### Changed
+- **The size warning no longer talks about email.** Standalone HTML is still
+  reported as the largest of the three and still warns past 20 MB, but the
+  reason given is that a file that big is slow to open and awkward to move
+  around - which is true wherever it goes. Attachment limits are one
+  destination among several, and `docs/sharing.md` is where they belong.
+
+- **The destination group is called "Filepath".** Its explanatory line is gone:
+  a path field next to a Browse button does not need one.
+
 - **Reading, previewing and exporting run on a worker thread.** All three ran on
   the GUI thread, so a large project froze the whole window for as long as the
   work took - which is indistinguishable from a crash, and was reported as one.

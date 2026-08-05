@@ -567,7 +567,7 @@ class MainDialog(QDialog):
         # appeared after pressing Export, so until then the dialog showed no
         # sign that the location was the user's to pick at all. Visible field,
         # remembered between exports, Browse for the picker.
-        destination_box = QGroupBox("Where to save it", page)
+        destination_box = QGroupBox("Filepath", page)
         destination_layout = QVBoxLayout(destination_box)
 
         path_row = QHBoxLayout()
@@ -581,13 +581,6 @@ class MainDialog(QDialog):
         path_row.addWidget(browse)
         destination_layout.addLayout(path_row)
 
-        destination_layout.addWidget(
-            _help_label(
-                "Remembered for next time. Leave it blank and Export asks where "
-                "to put the file, as before.",
-                destination_box,
-            )
-        )
         layout.addWidget(destination_box)
         layout.addWidget(self._build_license_group(page))
 
@@ -1064,8 +1057,8 @@ class MainDialog(QDialog):
 
         base = (
             f"Standalone HTML inlines every feature into the one file, so it is "
-            f"the largest of the three. Over about {limit_mb} MB most mail "
-            f"services reject it as an attachment."
+            f"the largest of the three. Past about {limit_mb} MB it gets slow "
+            f"to open and awkward to move around."
         )
 
         export = self._cached_export
@@ -1078,9 +1071,9 @@ class MainDialog(QDialog):
         megabytes = data_bytes / 1024 / 1024
         if data_bytes > SINGLE_FILE_WARN_BYTES:
             self.size_note.setText(
-                f"This map's data is {megabytes:.0f} MB, over the {limit_mb} MB "
-                "an attachment usually survives. Export still writes the single "
-                "file if you want it - Share ZIP is the practical choice."
+                f"This map's data is {megabytes:.0f} MB, past the {limit_mb} MB "
+                "where a single file starts to be unwieldy. Export still writes "
+                "it if you want it - Share ZIP is the practical choice."
             )
             self.size_note.setStyleSheet("color: #c0392b;")
         else:
@@ -2406,7 +2399,7 @@ class MainDialog(QDialog):
         self._start_job(work, on_written, "Writing the map...")
 
     def _confirm_oversized_single_file(self, reason: str) -> bool:
-        """Warn about a single file too big to email, and let them have it anyway.
+        """Warn about an unwieldy single file, and let them have it anyway.
 
         A standalone export inlines every feature, so there is no sibling folder
         to carry the weight - the size is inherent to the format rather than a

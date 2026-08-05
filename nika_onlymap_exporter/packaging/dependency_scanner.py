@@ -75,8 +75,9 @@ def standalone_ineligible_reason(project: ExportProject) -> str | None:
     if data_bytes > SINGLE_FILE_WARN_BYTES:
         return (
             f"The layer data is {data_bytes / 1024 / 1024:.0f} MB. A single HTML "
-            f"file over {SINGLE_FILE_WARN_BYTES // 1024 // 1024} MB is rejected "
-            "by most mail services, so Share ZIP is the practical choice."
+            f"file over {SINGLE_FILE_WARN_BYTES // 1024 // 1024} MB is slow to "
+            "open and awkward to move around, so Share ZIP is the practical "
+            "choice."
         )
     return None
 
@@ -132,8 +133,8 @@ def scan(
         report.approximated(
             "Artifact size",
             f"The layer data alone is {megabytes:.0f} MB, so a single HTML file "
-            "will be awkward to email - most services reject attachments over "
-            "25 MB. Share ZIP is a better fit for a map this size.",
+            "will be slow to open and awkward to move around. Share ZIP is a "
+            "better fit for a map this size.",
         )
 
     return ScanResult(
