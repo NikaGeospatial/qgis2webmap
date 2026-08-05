@@ -10,12 +10,13 @@ drops and that is wrong for rows:
 
 * **Layer cap**: a hard drop. Layers past the fifth render *nothing*.
 * **Row cap**: a **truncation**. The runtime slices the layer to the first
-  25,000 rows *in source order* (`data.slice(0, 25000)`) and renders those. The
-  rest are silently absent, and - the part that makes this worse than it sounds
-  - "the legend, filter widgets and ctx.stats describe only the shown subset",
-  in the runtime's own words. So a truncated layer does not look broken. It
-  looks complete and is wrong, which is exactly the failure a recipient cannot
-  detect.
+  25,000 rows *in source order* (`data.slice(0, 25000)`) and renders those. It
+  does tell the recipient - a dismissible on-map quota notice reads "Showing
+  25,000 of 500,000 rows in 'x' -- the free plan's row cap", and it is mounted
+  unconditionally rather than only under `validate`. What it does not do is
+  correct the rest of the map: "the legend, filter widgets and ctx.stats
+  describe only the shown subset", in the runtime's own words. So once the
+  notice is dismissed the map reads as complete while being a subset.
 
 Users report this as "it picked a random 25,000". It is not random - it is
 source order - but from the map it is indistinguishable from random, and the
@@ -240,10 +241,11 @@ def detect_violations(project: ExportProject) -> tuple[CapViolation, ...]:
                         f"'{layer.name}' has {layer.feature_count:,} features; the "
                         f"free tier renders {FREE_TIER_MAX_ROWS_PER_LAYER:,} per "
                         f"layer. Only the first {FREE_TIER_MAX_ROWS_PER_LAYER:,} "
-                        "are drawn, in source order, and the legend and filters "
-                        "describe only those -- so the map looks complete while "
+                        "are drawn, in source order; the map shows a dismissible "
+                        "notice saying so, but its legend and filters describe "
+                        "only those -- leaving "
                         f"{layer.feature_count - FREE_TIER_MAX_ROWS_PER_LAYER:,} "
-                        "features are missing from it."
+                        "features missing from the map."
                     ),
                     layer_id=layer.layer_id,
                 )

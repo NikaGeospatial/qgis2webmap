@@ -35,10 +35,12 @@ capped exactly like a hosted one.
 - Past **5 layers**, the extra layers render *nothing*. An obviously missing
   layer is at least obvious.
 - Past **25,000 features**, the layer is **truncated, not dropped**. The runtime
-  draws the first 25,000 features in source order and discards the rest - and
-  the legend and any filter widgets describe only the part that was drawn. The
-  map therefore looks complete while being wrong, which is the failure a
-  recipient has no way to notice.
+  draws the first 25,000 features in source order and discards the rest. It
+  shows the recipient a dismissible on-map notice naming the layer and the
+  counts ("Showing 25,000 of 500,000 rows..."), so the shortfall is not hidden.
+  But the legend, any filter widgets and the map's own statistics describe only
+  the part that was drawn - so once the notice is dismissed, the map reads as
+  complete while being a subset.
 
 The plugin will not let this happen quietly:
 
