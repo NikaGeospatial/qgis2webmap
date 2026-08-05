@@ -229,6 +229,26 @@ def read_project(
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
 
+    # Clipping needs a rectangle, and an antimeridian-crossing view is not one -
+    # so it is refused rather than silently applied to the wrong half of the
+    # world. The map still opens where the user asked; only the data is whole.
+    clip_extent = None
+    if settings.clip_to_extent:
+        if canvas_extent is None:
+            report.unsupported(
+                "Clip to the current view",
+                "The QGIS view could not be read, so every feature was exported "
+                "rather than only those on screen.",
+            )
+        elif canvas_extent.crosses_antimeridian:
+            report.unsupported(
+                "Clip to the current view",
+                "The current view crosses the 180th meridian, which a single "
+                "rectangle cannot describe. Every feature was exported instead.",
+            )
+        else:
+            clip_extent = canvas_extent
+
     # findLayers() is top-first; the map draws bottom-first.
     tree_layers = list(reversed(root.findLayers()))
 
@@ -280,6 +300,7 @@ def read_project(
                 _highlight_text(settings.highlight_color)
             ),
             project=project,
+            clip_extent=clip_extent,
         )
         if export_layer is not None:
             layers.append(export_layer)

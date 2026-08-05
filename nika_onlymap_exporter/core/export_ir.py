@@ -802,6 +802,9 @@ class ExportSettings:
     # only from Project Properties, outside the plugin entirely.
     highlight_color: Color | None = None
     extent_source: ExtentSource = ExtentSource.DATA
+    # Off by default: exporting fewer features than the project contains must
+    # always be something the user asked for.
+    clip_to_extent: bool = False
 
     @property
     def has_lossy_transform(self) -> bool:
@@ -839,6 +842,7 @@ class ExportSettings:
                 self.highlight_color.snapshot() if self.highlight_color else None
             ),
             "extentSource": self.extent_source.value,
+            "clipToExtent": self.clip_to_extent,
         }
 
 

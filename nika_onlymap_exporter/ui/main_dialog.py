@@ -649,6 +649,25 @@ class MainDialog(QDialog):
             ),
         )
 
+        # A separate control from the one above, because they are separate
+        # decisions: that one frames the map, this one decides what is in it.
+        # Folding them together would mean a user who wanted to open on their
+        # working view silently shipped a map missing everything outside it.
+        self.clip_check = QCheckBox("Export only the features in this view", data_box)
+        self.clip_check.setChecked(self.state.clip_to_extent)
+        self.clip_check.toggled.connect(self._on_clip_toggled)
+        data_form.addRow("", self.clip_check)
+        data_form.addRow(
+            "",
+            _help_label(
+                "Leaves out everything outside the current QGIS view. This is "
+                "the practical way to bring a very large layer under the free "
+                "plan's 25,000-feature limit. The Fidelity tab reports how many "
+                "features each layer loses.",
+                data_box,
+            ),
+        )
+
         # "Maintain" first and selected: rounding coordinates is the only
         # setting in this dialog that throws data away, so it is opt-in and
         # says so in the fidelity report when chosen.
@@ -907,6 +926,10 @@ class MainDialog(QDialog):
 
         self.terrain_warning.setText(note)
         self.terrain_warning.setStyleSheet("color: #c0392b;")
+
+    def _on_clip_toggled(self, value: bool) -> None:
+        self.state.clip_to_extent = value
+        self._fidelity_is_stale = True
 
     def _on_precision_changed(self) -> None:
         value = self.precision_combo.currentData()
@@ -2071,7 +2094,13 @@ class MainDialog(QDialog):
         opening the dialog and pressing Export, and the extent they meant is the
         one on screen when they pressed it.
         """
-        if self.state.extent_source is not ExtentSource.CANVAS:
+        # Two settings need it now, and for different reasons: framing the map
+        # on the current view, and clipping the data to it. Reading it only for
+        # the first meant ticking only the second silently clipped to nothing.
+        if (
+            self.state.extent_source is not ExtentSource.CANVAS
+            and not self.state.clip_to_extent
+        ):
             return None
         canvas = getattr(self.iface, "mapCanvas", None)
         if canvas is None:

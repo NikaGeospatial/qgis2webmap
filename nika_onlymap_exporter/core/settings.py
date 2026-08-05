@@ -300,6 +300,7 @@ DATA_FIELDS = (
     "highlight_color",
     "quantize_precision",
     "extent_source",
+    "clip_to_extent",
 )
 
 # Settings that only restyle the map's chrome or decide how the artifact is
@@ -352,6 +353,7 @@ class DialogState:
     highlight_color: str = ""
     quantize_precision: int | None = None
     extent_source: ExtentSource = ExtentSource.DATA
+    clip_to_extent: bool = False
     layers: dict[str, LayerSettings] = field(default_factory=dict)
 
     def snapshot(self) -> str:
@@ -430,6 +432,7 @@ class DialogState:
             highlight_color=parse_hex_color(self.highlight_color),
             quantize_precision=self.quantize_precision,
             extent_source=self.extent_source,
+            clip_to_extent=self.clip_to_extent,
         )
 
 
@@ -475,6 +478,7 @@ def load_state(project: QgsProject) -> DialogState:
                 state.title_corner = OverlayCorner(widgets.get("titleCorner"))
             with contextlib.suppress(ValueError):
                 state.extent_source = ExtentSource(widgets.get("extentSource"))
+            state.clip_to_extent = bool(widgets.get("clipToExtent", False))
         except (ValueError, AttributeError):
             pass
 
@@ -514,6 +518,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "highlightColor": state.highlight_color,
                 "quantizePrecision": state.quantize_precision,
                 "extentSource": state.extent_source.value,
+                "clipToExtent": state.clip_to_extent,
             }
         ),
     )

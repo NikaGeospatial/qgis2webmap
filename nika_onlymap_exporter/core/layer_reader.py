@@ -146,15 +146,78 @@ def describe_source(layer: QgsVectorLayer) -> AssetDependency:
     )
 
 
+def _report_clip(
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+    kept: int,
+    total: int,
+) -> None:
+    """Say what the clip removed. Always - including when it removed nothing.
+
+    Dropping features is the one thing in an export that the map itself cannot
+    show, because what is missing leaves no gap. A user who clipped to the wrong
+    view would otherwise get a confidently incomplete map.
+    """
+    if total < 0 or kept >= total:
+        report.preserved(
+            subject,
+            "Every feature is inside the current QGIS view, so clipping removed "
+            "nothing.",
+            layer_id,
+        )
+        return
+
+    report.approximated(
+        subject,
+        f"Clipped to the current QGIS view: {kept:,} of {total:,} features are "
+        f"exported and {total - kept:,} are left out. The map cannot show what "
+        "is missing, so check the view is the one you meant.",
+        layer_id,
+    )
+
+
+def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
+    """A feature request limited to `extent`, in the layer's own CRS.
+
+    The extent arrives in WGS84 because that is what the rest of the model
+    speaks, but a filter rect is compared against the layer's *source*
+    coordinates - so it has to be transformed back, not forward. Getting this
+    the wrong way round silently returns nothing, which looks exactly like an
+    empty layer.
+    """
+    from qgis.core import (
+        QgsCoordinateTransform,
+        QgsFeatureRequest,
+        QgsProject,
+        QgsRectangle,
+    )
+
+    rect = QgsRectangle(extent.west, extent.south, extent.east, extent.north)
+    target = layer.crs()
+    if target.isValid() and target.authid() != WGS84:
+        transform = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(WGS84), target, QgsProject.instance()
+        )
+        rect = transform.transformBoundingBox(rect)
+
+    return QgsFeatureRequest().setFilterRect(rect)
+
+
 def export_geojson(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
     precision: int = GEOJSON_PRECISION,
+    clip_extent: Any | None = None,
 ) -> dict[str, Any] | None:
-    """Read every feature as WGS84 GeoJSON.
+    """Read every feature as WGS84 GeoJSON, or only those within `clip_extent`.
 
     `QgsJsonExporter` handles reprojection through `setDestinationCrs`, so this
     is the single place a CRS transform happens in the whole plugin.
+
+    `clip_extent` is how a half-million-point layer becomes an exportable one:
+    the features outside it are never read, so the cost is paid by the provider's
+    spatial index rather than by us filtering afterwards.
     """
     layer_id = layer.id()
     subject = f"Data of '{layer.name()}'"
@@ -167,7 +230,12 @@ def export_geojson(
     exporter.setPrecision(precision)
 
     try:
-        features = list(layer.getFeatures())
+        if clip_extent is None:
+            features = list(layer.getFeatures())
+        else:
+            total = layer.featureCount()
+            features = list(layer.getFeatures(clip_request(layer, clip_extent)))
+            _report_clip(report, subject, layer_id, len(features), total)
         text = exporter.exportFeatures(features)
         collection = json.loads(text)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -226,6 +294,7 @@ def read_layer(
     popup_on_hover: bool = False,
     highlight_color: Color | None = None,
     project: QgsProject | None = None,
+    clip_extent: Any | None = None,
 ) -> ExportLayer | None:
     """Read one vector layer into the normalized model.
 
@@ -269,6 +338,7 @@ def read_layer(
         layer,
         report,
         precision=GEOJSON_PRECISION if precision is None else precision,
+        clip_extent=clip_extent,
     )
     if geojson is None:
         return None
