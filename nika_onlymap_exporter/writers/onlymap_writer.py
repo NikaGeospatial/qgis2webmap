@@ -254,7 +254,15 @@ class OnlyMapWriter:
         )
         written.insert(0, ArtifactFile(entry, entry.stat().st_size))
 
-        warnings = [v.detail for v in verdict.violations]
+        # Cap violations are deliberately NOT warned about here. Since runtime
+        # 0.6.0 the free-tier caps apply only on a hosted `http(s)` page, and
+        # every artifact this writer produces is opened from a file or from
+        # localhost - so a breach predicts nothing that will actually happen,
+        # and warning about it on every export trained people to dismiss the
+        # dialog. `verdict.violations` still reaches the Fidelity report through
+        # `report_verdict`, and the caps are documented in the README and in
+        # `docs/supported-features.md` for anyone who does publish to a server.
+        warnings = []
         # An unexpected runtime build is worth saying out loud: the artifact is
         # still written, but "it worked on my machine" usually starts here.
         warnings.extend(runtime.lock_warnings)

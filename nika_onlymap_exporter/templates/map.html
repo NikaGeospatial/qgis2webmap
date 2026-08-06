@@ -80,7 +80,21 @@
       .om-credit {
         position: absolute;
         right: 12px;
-        bottom: 12px;
+        /* Clear of the runtime's own attribution control, not level with it.
+
+           `ensureMandatedChromeHost` mounts that control into the `bottom-end`
+           slot, whose container is anchored at `bottom: 12px;
+           inset-inline-end: 12px` - the exact coordinates this chip used to
+           claim, so the two drew on top of each other. Measured against 0.6.0
+           the control is 24px tall, and 12 + 24 + 8 of gap puts us just above
+           it, matching the runtime's own `--om-widget-gap-y`.
+
+           A slot would be better than an offset, and was tried: an `om-widget`
+           is only adopted if it is a child of `<om-map>`, and this component is
+           a sibling of it in the body. Moving it inside means moving it out of
+           this template and into `build_manifest`, which is the real fix and a
+           larger one. */
+        bottom: calc(12px + 24px + 8px);
         z-index: 2;
         max-width: min(22rem, calc(100% - 24px));
         padding: 0.4rem 0.6rem;
@@ -228,14 +242,21 @@
       /* The runtime prints its licence notice in the bottom-left corner, where
          the manifest also puts the zoom controls and the scale bar - they
          overlapped. Document rules style a custom element's host, and beat the
-         `:host` rule the widget writes for itself, so the stack is lifted clear
-         of the notice here. */
-      om-widget[type="zoom-controls"] {
-        bottom: 58px !important;
-      }
-      om-widget[type="scale-bar"] {
-        bottom: 30px !important;
-      }
+         `:host` rule the widget writes for itself, so the stack was lifted clear
+         of the notice with hand-tuned offsets here.
+
+         Those offsets are gone, because the collision they answered is gone.
+         Runtime 0.6.0 puts the licence badge into the `bottom-start` *widget
+         slot* rather than drawing it loose in the corner, and that slot is a
+         flex column with `align-items: flex-end` and a `--om-widget-gap-y` gap.
+         It spaces the badge, the zoom controls and the scale bar itself.
+
+         Keeping the offsets on top of that layout was the bug: an `om-widget`
+         host is `position: relative` in the managed tier, so `bottom: 58px`
+         shifted the zoom controls 58px up *out of* the flex flow while the flex
+         container still reserved their original slot - which is the ragged gap
+         between the zoom stack and the scale bar. Let the runtime lay them
+         out. */
 
 @WIDGET_COLORS@
     </style>

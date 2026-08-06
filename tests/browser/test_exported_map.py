@@ -160,7 +160,12 @@ class TestTheCreditComponent:
         for index in range(handles.count()):
             link = handles.nth(index)
             link.focus()
-            assert link.evaluate("el => el === document.activeElement")
+            # `getRootNode()`, not `document`. The component moved into an
+            # `om-widget`, so it lives in a shadow root, and
+            # `document.activeElement` reports the *host* element for anything
+            # focused inside one - the link would look unreachable while being
+            # perfectly focused. Each root tracks its own `activeElement`.
+            assert link.evaluate("el => el.getRootNode().activeElement === el")
 
     def test_it_does_not_cover_the_map_controls(self, page, exported_map) -> None:
         """The gate the below-the-map layout used to satisfy by construction.
@@ -192,6 +197,47 @@ class TestTheCreditComponent:
                 and box["y"] < credit["y"] + credit["height"]
             )
             assert not overlaps, f"the credit component covers {selector}"
+
+    def test_it_does_not_cover_the_runtime_attribution(
+        self, page, exported_map
+    ) -> None:
+        """The regression that put our chip under the runtime's own control.
+
+        Runtime 0.6.0 mounts mandated chrome of its own - the provider
+        attribution into the `bottom-end` slot, the licence badge into
+        `bottom-start` - and that slot container is anchored at exactly the
+        `bottom: 12px; inset-inline-end: 12px` our chip used to claim by
+        absolute positioning. They drew on top of each other. The chip is an
+        `om-widget` in the same slot now, so the runtime lays both out.
+
+        Asserted on the mandated host rather than on a pixel offset: the fix is
+        "the runtime owns this corner", and a coordinate assertion would pass
+        again the moment someone reintroduced a hand-tuned inset.
+        """
+        open_map(page, exported_map)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+
+        chrome = page.locator('[data-om-mandated-chrome="attribution"]')
+        assert chrome.count() > 0, "0.6.0 always mounts the attribution host"
+
+        # The host is only *filled* when there is a provider to credit, and this
+        # fixture has no basemap - so an overlap check against its live box
+        # silently passes by measuring nothing. Assert against the band the slot
+        # occupies instead: the container is anchored `bottom: 12px` and the
+        # control measured 24px tall in 0.6.0, so anything below 36px from the
+        # map's bottom edge is inside the runtime's territory.
+        reserved = 36
+        map_box = page.locator("om-map").bounding_box()
+        credit = page.locator(".om-credit").bounding_box()
+        assert map_box is not None and credit is not None
+
+        credit_bottom_gap = (map_box["y"] + map_box["height"]) - (
+            credit["y"] + credit["height"]
+        )
+        assert credit_bottom_gap >= reserved, (
+            "the credit chip reaches into the bottom-end slot the runtime mounts "
+            f"its attribution into ({credit_bottom_gap:.0f}px clear, needs {reserved})"
+        )
 
     def test_it_contains_no_script_or_form(self, page, exported_map) -> None:
         """No exfiltration: the component is links and text, nothing else."""

@@ -453,14 +453,21 @@ class TestManifest:
         # Near the dateline, not at longitude zero.
         assert abs(float(centre.group(1))) > 170.0
 
-    def test_validate_only_appears_when_layers_will_be_dropped(self) -> None:
+    def test_no_export_carries_the_runtime_error_panel(self) -> None:
+        """Neither a clean project nor one over the caps mounts `validate`.
+
+        The over-cap half used to assert the opposite. See
+        `CapVerdict.needs_runtime_validation` for why it flipped: the panel's
+        success badge sat on the legend of maps that had nothing wrong with them.
+        """
         clean = make_project()
         verdict = FreeTierPolicy().evaluate(clean)
         assert "validate" not in build_manifest(clean, verdict)
 
         over_cap = make_project([make_layer(layer_id=f"l{i}") for i in range(6)])
         verdict = FreeTierPolicy().evaluate(over_cap)
-        assert "validate" in build_manifest(over_cap, verdict)
+        assert verdict.has_violations, "the breach is still detected"
+        assert "validate" not in build_manifest(over_cap, verdict)
 
 
 def find_onlymap_schema() -> Path | None:
@@ -1632,9 +1639,9 @@ class TestLicenseKeyReachesTheMarkup:
         licensed = LicensedPolicy("om_live_eyJhIjoxfQ.c2ln").evaluate(project)
         assert not licensed.needs_runtime_validation
 
-        # The same project without a key does need the panel, so the recipient
-        # is told why features are missing.
-        assert FreeTierPolicy().evaluate(project).needs_runtime_validation
+        # Nor does the same project without a key, since runtime 0.6.0 - the
+        # caps it breaches do not apply where these artifacts are opened.
+        assert not FreeTierPolicy().evaluate(project).needs_runtime_validation
 
 
 class TestDashedLines:

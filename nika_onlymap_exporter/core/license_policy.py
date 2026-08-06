@@ -220,8 +220,22 @@ class CapVerdict:
         runtime's error panel, which is exactly right when layers are missing and
         pure noise on a clean deliverable - a client should not receive a map
         wearing a diagnostic badge for no reason.
+
+        **Now always False, since runtime 0.6.0.** A cap breach no longer
+        predicts a missing layer: the caps apply only on a hosted `http(s)` page
+        and every artifact we produce is opened from a file or from localhost.
+        Mounting the panel anyway produced the opposite of the intent above - the
+        runtime validated the map, found nothing wrong because nothing *was*
+        wrong, and rendered its green "✓" success badge at `top: 12px; right:
+        12px` with `z-index: 9999`, directly on top of the legend. A clean
+        deliverable wore a diagnostic badge for no reason, which is exactly what
+        this property exists to prevent.
+
+        Kept as a property rather than deleting the `validate` branch in the
+        writer: if the plugin ever learns the map's destination, hosted exports
+        are where the panel earns its place again.
         """
-        return self.has_violations and self.license_key is None
+        return False
 
     def snapshot(self) -> dict[str, Any]:
         return {

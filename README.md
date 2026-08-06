@@ -100,6 +100,27 @@ Anything that will not survive the trip is listed in the **Fidelity** tab
 unsupported or blocked. Nothing is dropped silently. Full list:
 [what gets exported](docs/supported-features.md).
 
+### Size limits if you host the map
+
+The OnlyMap runtime that draws your map has a free plan with three limits:
+**5 layers per map**, **25,000 features per layer** and **20 MB of fetched data**.
+
+**None of them applies to a map opened locally** — a file you double-click, a map
+you email someone, `localhost` or `127.0.0.1` all draw everything, with no
+licence key. The limits apply only to a page served over `http(s)` from a real
+domain.
+
+So they matter when you **publish the map to a web server**. There, layers past
+the fifth render nothing, and a layer past 25,000 features is truncated to its
+first 25,000 while still looking complete. Nothing warns you at export time,
+because for almost every export there would be nothing to warn about: check the
+**Fidelity** tab, which names every layer over a limit, before you host.
+An OnlyMap licence key lifts the limits and removes the on-map badge — supply it
+through the `ONLYMAP_LICENSE_KEY` environment variable or the Processing
+algorithm's licence parameter. Note that lifted limits are a technical
+convenience and not a licence grant: commercial use needs a key either way. See
+[size limits on the free plan](docs/supported-features.md#size-limits-on-the-free-plan).
+
 ## Enhance with AI
 
 An exported map is a readable HTML document, not a compiled bundle — so an AI

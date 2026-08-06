@@ -64,10 +64,13 @@ The plugin will not let this happen quietly:
 - The **Fidelity** tab names every layer that is over a limit, before you export,
   and says how many features are missing. It flags them for any export, since it
   cannot know whether you will later host the file.
-- Exporting a project that breaches one shows a warning in the QGIS message bar,
-  then exports anyway - the choice stays yours.
-- The exported map carries the runtime's own error panel, so a recipient sees an
-  explanation in the corner rather than an unexplained gap.
+
+The Fidelity tab is now the only place this is reported. Exporting used to push a
+warning into the QGIS message bar and mount the runtime's error panel in the
+exported map as well; both were removed, because on a local map there is nothing
+to warn about - the runtime validated those exports, found nothing wrong, and
+showed a success badge over the legend for its trouble. **If you publish to a web
+server, check the Fidelity tab first.**
 
 To stay within the limits on a hosted map without a licence: tick **Export only
 the features in this view** on the Map tab, which leaves out everything outside

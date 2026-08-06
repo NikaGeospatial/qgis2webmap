@@ -74,7 +74,6 @@ from ..core.export_ir import (
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import (
     default_policy,
-    detect_violations,
     report_verdict,
 )
 from ..core.manifest_builder import basemap_note, terrain_note
@@ -2222,12 +2221,6 @@ class MainDialog(QDialog):
             if reason is not None and not self._confirm_oversized_single_file(reason):
                 return
 
-        # Advisory, not a gate. A layer past the runtime's free-tier cap renders
-        # nothing for the recipient, and that is worth interrupting for once -
-        # but the export goes ahead, because the alternative is refusing to
-        # write a map the user knowingly asked for.
-        self._notify_license_caps(export)
-
         # After the blocking checks: no point downloading the runtime for a
         # project that was never going to export.
         if not self._runtime_ready():
@@ -2326,51 +2319,6 @@ class MainDialog(QDialog):
                 "Switched to Share ZIP. Press Export again to write it."
             )
         return False
-
-    def _notify_license_caps(self, export) -> None:
-        """Say what the runtime's free tier will drop, then carry on exporting.
-
-        The caps are enforced inside the exported file on the recipient's
-        machine, so a breach is invisible to the person doing the exporting
-        until someone tells them the map is empty. The message bar is the right
-        weight: impossible to miss, impossible to be blocked by.
-        """
-        violations = detect_violations(export)
-        if not violations:
-            return
-
-        subjects = "; ".join(v.subject for v in violations)
-        key = self._license_key()
-
-        if key is None:
-            # Conditional since runtime 0.6.0: the caps apply on a hosted
-            # http(s) page and nowhere else. Stating it as a certain loss was
-            # true until 0.5.12 and is now wrong for the common case, which is a
-            # file the recipient double-clicks.
-            message = (
-                f"{len(violations)} free-tier limit(s) exceeded ({subjects}). "
-                "This only matters if you publish the map to a web server: "
-                "there, layers past the fifth do not render and an over-size "
-                "layer shows only its first 25,000 features while looking "
-                "complete. Opened from a file it draws everything. The Fidelity "
-                "tab has the detail."
-            )
-        else:
-            # Licensed: caps lifted where they applied at all. The domain-lock
-            # gap no longer brings them back on a local file - the free plan is
-            # itself uncapped there - so it costs only the badge, which is not
-            # worth a blocking-weight warning.
-            return
-        bar = getattr(self.iface, "messageBar", None)
-        if bar is not None:
-            with contextlib.suppress(Exception):
-                bar().pushMessage(
-                    "QGIS2WebMap", message, level=Qgis.Warning, duration=0
-                )
-                return
-        # No message bar (a test harness, or a stripped iface): the status line
-        # is worse but it is not silence.
-        self.status_label.setText(message)
 
     def _resolve_destination(self, mode: OutputMode) -> Path | None:
         """Where to write, from the path field or from a picker.

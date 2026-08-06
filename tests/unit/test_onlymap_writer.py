@@ -228,12 +228,42 @@ class TestCreditComponent:
             assert 'target="_blank"' in opening
             assert 'rel="noopener noreferrer"' in opening
 
-    def test_the_component_sits_in_the_bottom_right(self) -> None:
+    def test_the_component_sits_clear_of_the_runtime_attribution(self) -> None:
+        """Bottom-right, but not flush with the corner any more.
+
+        Runtime 0.6.0 mounts its own provider-attribution control into the
+        `bottom-end` widget slot, and that slot container is anchored at exactly
+        `bottom: 12px; inset-inline-end: 12px` - the coordinates this chip used
+        to claim. They drew on top of each other. The control measures 24px, so
+        the chip clears it by 12 + 24 + 8, the last being the runtime's own
+        `--om-widget-gap-y`.
+
+        An `om-widget` in that slot would be better than an offset and was
+        tried: the runtime only adopts an `om-widget` that is a child of
+        `<om-map>`, and this component is a sibling of it in the template body,
+        so it was never slotted - it just lost its positioning and landed on the
+        zoom controls. Moving it inside means moving it into `build_manifest`.
+        """
         markup = self.html()
         credit_css = markup.split(".om-credit {")[1].split("}")[0]
         assert "position: absolute" in credit_css
         assert "right: 12px" in credit_css
-        assert "bottom: 12px" in credit_css
+        # Not flush: the bottom inset has to reserve the attribution's band.
+        assert "bottom: calc(12px + 24px + 8px)" in credit_css
+
+    def test_the_widget_stack_is_not_hand_offset(self) -> None:
+        """The bottom-left corner is the runtime's flex slot to lay out.
+
+        The template used to force `bottom: 58px !important` on the zoom
+        controls and `30px` on the scale bar, to clear a licence notice the
+        runtime drew loose in that corner. 0.6.0 puts the badge in the
+        `bottom-start` slot with them, and the slot spaces all three - so the
+        offsets only shifted widgets out of a flow that still reserved their
+        space, which is the ragged gap in the corner.
+        """
+        markup = self.html()
+        assert "58px !important" not in markup
+        assert 'om-widget[type="scale-bar"] {' not in markup
 
     def test_it_is_reachable_by_keyboard(self) -> None:
         """`:focus-within` is what expands it for a tabbing user, no script."""

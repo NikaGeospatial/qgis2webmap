@@ -102,12 +102,19 @@ class TestFreeTierPolicy:
         assert verdict.allowed is True
         assert verdict.has_violations
 
-    def test_over_cap_export_asks_for_runtime_validation(self) -> None:
-        """`validate` mounts the runtime's error panel, so the recipient sees
-        why a layer is missing instead of an unexplained gap."""
+    def test_over_cap_export_no_longer_asks_for_runtime_validation(self) -> None:
+        """It used to, and the badge it mounted landed on top of the legend.
+
+        `validate` mounts the runtime's panel so a recipient sees why a layer is
+        missing. Since runtime 0.6.0 no layer *is* missing - the caps apply only
+        on a hosted `http(s)` page - so the runtime validated the map, found
+        nothing wrong and rendered its green success badge at `top: 12px; right:
+        12px`, over the legend. The violations still reach the Fidelity report.
+        """
         layers = [make_layer(f"L{i}") for i in range(FREE_TIER_MAX_LAYERS + 1)]
         verdict = FreeTierPolicy().evaluate(make_project(layers))
-        assert verdict.needs_runtime_validation is True
+        assert verdict.has_violations, "the breach is still detected"
+        assert verdict.needs_runtime_validation is False
 
     def test_clean_export_carries_no_diagnostic_panel(self) -> None:
         verdict = FreeTierPolicy().evaluate(make_project([make_layer("a")]))
