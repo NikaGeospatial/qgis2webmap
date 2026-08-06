@@ -955,23 +955,36 @@ def build_popup_elements(
 
     overlay_id = f"{layer.layer_id}-popup"
     rows = [_popup_row(field, indent) for field in layer.popup.visible_fields]
+    on_hover = layer.popup.on_hover if hover is None else hover
+    # Scope the overlay to the pick type that opens it. Runtime 0.6.1 added
+    # this, for exactly the bug we reported: `handleSelectionChange` writes hover
+    # picks and click picks into one `ctx.selection`, and `updatePosition` used to
+    # re-anchor *and re-interpolate the template* on any of them. So a popup
+    # opened by clicking a river, then left alone while the pointer crossed an
+    # airport, kept the river's title and redrew the airport's values into it -
+    # blank wherever the two layers' fields differed.
+    #
+    # With `selection-type`, a pick whose type does not match is inert:
+    # `z = !Y || (t ? t.type : i) === Y` in the bundle. A *click* on empty space
+    # still dismisses a click popup, because the runtime keeps `lastPickType`
+    # alongside the null selection precisely so it can tell that from a hover.
+    # The trade is that hovering empty space no longer dismisses one - which is
+    # right for a click popup, and for a hover popup the type still matches, so
+    # unhover-to-close survives.
+    selection_type = "hover" if on_hover else "click"
 
     return "\n".join(
         [
             f'{indent}<om-overlay id="{escape_attr(overlay_id)}" '
-            f'anchor-from="selection" visible="false">',
+            f'anchor-from="selection" selection-type="{selection_type}" '
+            f'visible="false">',
             *_popup_style_element(indent),
             f'{indent}  <div class="om-popup">',
             f'{indent}    <div class="om-popup-title">{escape_attr(layer.name)}</div>',
             *rows,
             f"{indent}  </div>",
             f"{indent}</om-overlay>",
-            _popup_behavior(
-                layer,
-                overlay_id,
-                layer.popup.on_hover if hover is None else hover,
-                indent,
-            ),
+            _popup_behavior(layer, overlay_id, on_hover, indent),
         ]
     )
 

@@ -792,3 +792,124 @@ class TestDashedLinesReallyDash:
             f"dashed line drew {dashed} pixels against a solid {solid} - "
             "the dash pattern is not reaching deck.gl"
         )
+
+
+class TestGhostPopups:
+    """The popup that followed the pointer, reported from a real Alaska project.
+
+    Click a river, then move the pointer over an airport without clicking: the
+    river's popup stayed open, kept its title, and redrew the airport's object
+    into its rows - so every field it named came out blank.
+
+    The cause was upstream and had no author-side workaround: `handleSelectionChange`
+    writes hover and click picks into one `ctx.selection`, and `updatePosition`
+    filtered only on the `layer` attribute, so any pick re-anchored *and
+    re-interpolated* every selection-anchored overlay. Runtime 0.6.1 added
+    `selection-type`; these pin that the export asks for it and that it works.
+    """
+
+    def _pick(self, page, layer_id: str, pick_type: str) -> None:
+        page.evaluate(
+            """({layerId, pickType}) => {
+                const map = document.querySelector('om-map');
+                const layer = map.getLayers().find((l) => l.id === layerId);
+                map.injectPickInternal({
+                    layerId: layer.id,
+                    object: layer.data[0],
+                    index: 0,
+                    coordinate: [0.0, 51.0],
+                    pixel: [100, 100],
+                    type: pickType,
+                });
+            }""",
+            {"layerId": layer_id, "pickType": pick_type},
+        )
+
+    def _popup_text(self, page, overlay_id: str) -> str:
+        return page.evaluate(
+            """(id) => {
+                const overlay = document.getElementById(id);
+                return overlay?.shadowRoot?.textContent ?? '';
+            }""",
+            overlay_id,
+        )
+
+    def test_the_export_scopes_popups_to_their_pick_type(
+        self, page, ghost_popup_map
+    ) -> None:
+        open_map(page, ghost_popup_map)
+        for overlay_id in ("rivers-popup", "airports-popup"):
+            scope = page.evaluate(
+                "(id) => document.getElementById(id).getAttribute('selection-type')",
+                overlay_id,
+            )
+            assert scope == "click", f"{overlay_id} must ignore hover picks"
+
+    def test_hovering_another_layer_does_not_rewrite_an_open_popup(
+        self, page, ghost_popup_map
+    ) -> None:
+        """The report itself: click a river, hover an airport, read the popup."""
+        open_map(page, ghost_popup_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+
+        self._pick(page, "rivers", "click")
+        page.wait_for_function(
+            """() => {
+                const root = document.getElementById('rivers-popup')?.shadowRoot;
+                return !!root && root.textContent.includes('Test River');
+            }""",
+            timeout=10_000,
+        )
+
+        # No click. This is the pointer merely crossing the other layer, which
+        # deck reports for every pointer movement.
+        self._pick(page, "airports", "hover")
+        page.wait_for_timeout(600)
+
+        text = self._popup_text(page, "rivers-popup")
+        assert "Test River" in text, (
+            "the river popup lost its own value to a hover over another layer"
+        )
+        assert "TST" not in text, (
+            "the airport's object was interpolated into the river's popup"
+        )
+
+    def test_a_click_on_empty_space_still_closes_it(
+        self, page, ghost_popup_map
+    ) -> None:
+        """The dismissal that has to survive scoping.
+
+        `selection-type` makes non-matching picks inert, and an empty pick has a
+        null selection - so the runtime keeps the pointer-event type beside it
+        precisely so a *click* on empty space can still dismiss a click popup.
+        Without that this scoping would strand every popup on screen.
+        """
+        open_map(page, ghost_popup_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+
+        self._pick(page, "rivers", "click")
+        page.wait_for_function(
+            """() => {
+                const el = document.getElementById('rivers-popup');
+                return el?.getAttribute('visible') === 'true';
+            }""",
+            timeout=10_000,
+        )
+
+        # `clearSelection` belongs to the runtime's own `mountForTest` harness,
+        # which an exported file does not carry; it is a thin wrapper over this.
+        # A null selection with an explicit "click" is what a click on empty
+        # space produces, and `lastPickType` is how the runtime remembers that.
+        page.evaluate(
+            """() => document.querySelector('om-map')
+                     .injectPickInternal(null, 'click')"""
+        )
+        page.wait_for_function(
+            """() => {
+                const el = document.getElementById('rivers-popup');
+                return !el.getVisibleRect || el.getVisibleRect() === null;
+            }""",
+            timeout=10_000,
+        )

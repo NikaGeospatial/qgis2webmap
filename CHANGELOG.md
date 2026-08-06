@@ -17,10 +17,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   for the ghost-popup bug we reported: a click-opened popup re-anchored and
   re-interpolated its template on every *hover* pick, so it followed the pointer
   onto other features and rendered them into the wrong template. The exported
-  maps do not use the attribute yet - adopting it changes how popups dismiss
-  (with `selection-type="click"`, hovering empty space no longer closes one,
-  which is what `build_popup_reset_behaviors` currently relies on), so it is a
-  change of its own rather than a side effect of a version bump.
+  Exported popups now carry it, scoped to whichever pick type opens them.
 
 - **The free-tier cap warning is gone from the export flow.** It pushed a QGIS
   message-bar warning before every over-cap export and listed the breach again
@@ -39,6 +36,21 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   clean deliverable wore a diagnostic badge for no reason.
 
 ### Fixed
+- **A popup no longer follows the pointer onto other features.** Clicking a
+  river and then merely moving the pointer across an airport left the river's
+  popup open, still titled "Rivers", with the airport's object interpolated into
+  its rows - so every field it named came out blank. Click and hover picks share
+  one selection internally, and a selection-anchored overlay re-anchored *and*
+  re-rendered its template on any pick, whatever had opened it. There was no
+  author-side workaround, so it was reported upstream; runtime 0.6.1 answered it
+  with `selection-type`, and exported popups now declare the pick type that
+  opens them. A click on empty space still dismisses a click popup.
+
+  What this does *not* change: clicking the same feature a second time still
+  does not close its popup. That needs an action the runtime does not have -
+  there is no `toggle-overlay`, and nothing can read whether a popup is already
+  open for the feature under the cursor.
+
 - **The credit chip no longer sits under the runtime's own attribution.** Runtime
   0.6.0 mounts mandated chrome into its widget slots - the licence badge into
   `bottom-start`, the provider attribution into `bottom-end` - and the

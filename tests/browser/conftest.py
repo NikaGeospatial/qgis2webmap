@@ -569,3 +569,88 @@ def solid_line_map(runtime, tmp_path_factory):
 def dashed_line_map(runtime, tmp_path_factory):
     """24px on, 12px off at 6px wide - `dash="[4, 2]"`, Qt's own DashLine."""
     return _line_map(runtime, tmp_path_factory, "dashed", (24.0, 12.0))
+
+
+# Ghost popups
+# --------------------------------------------------------------------------
+
+# Two layers whose popups name *different* fields, at different coordinates.
+# That is what made the reported bug legible: the popup kept the layer it was
+# opened on in its title while redrawing the other layer's object into its rows,
+# so every field it named came out blank.
+GHOST_RIVER_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [0.0, 51.0]},
+            "properties": {"river_name": "Test River"},
+        }
+    ],
+}
+
+GHOST_AIRPORT_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [0.4, 51.0]},
+            "properties": {"airport_code": "TST"},
+        }
+    ],
+}
+
+
+@pytest.fixture(scope="session")
+def ghost_popup_map(runtime, tmp_path_factory):
+    """Two click-popup layers, for the popup-follows-the-pointer report.
+
+    A click popup used to re-anchor and re-interpolate on every *hover* pick,
+    because click and hover picks share one `ctx.selection` and `updatePosition`
+    only filtered on the `layer` attribute. Runtime 0.6.1's `selection-type`
+    is the fix, and this fixture is what proves we are asking for it.
+    """
+    layers = (
+        ExportLayer(
+            layer_id="rivers",
+            name="Rivers",
+            geometry_kind=GeometryKind.POINT,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson=GHOST_RIVER_GEOJSON,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(fill_color=Color(r=40, g=90, b=200), radius=14.0),
+            ),
+            popup=PopupSpec(
+                enabled=True,
+                fields=(PopupFieldSpec("river_name"),),
+                on_hover=False,
+            ),
+        ),
+        ExportLayer(
+            layer_id="airports",
+            name="Airports",
+            geometry_kind=GeometryKind.POINT,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson=GHOST_AIRPORT_GEOJSON,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(fill_color=Color(r=200, g=90, b=40), radius=14.0),
+            ),
+            popup=PopupSpec(
+                enabled=True,
+                fields=(PopupFieldSpec("airport_code"),),
+                on_hover=False,
+            ),
+        ),
+    )
+    project = ExportProject(
+        title="Ghost popups",
+        layers=layers,
+        extent=Extent(west=-0.5, south=50.7, east=0.9, north=51.3),
+    )
+    destination = tmp_path_factory.mktemp("ghost")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path

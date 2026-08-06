@@ -487,7 +487,19 @@ def find_onlymap_schema() -> Path | None:
         path = Path(override)
         return path if path.exists() else None
 
+    # Order matters, and the pinned build wins. A local mirror checkout is
+    # whatever someone last pulled: `~/Nika/onlymap-js` was three releases behind
+    # when `selection-type` was adopted, so it reported a real 0.6.1 attribute as
+    # absent from the schema. Checking the *pinned* runtime first is the same
+    # rule that applies to reading the bundle - verify against what the export
+    # will actually run, never against the dev tree.
+    runtime_dir = os.environ.get("ONLYMAP_RUNTIME_DIR")
     candidates = [
+        *(
+            [Path(runtime_dir) / "onlymapjs.html-data.json"]
+            if runtime_dir
+            else []
+        ),
         Path.home() / "Nika/onlymap-js/onlymapjs.html-data.json",
         Path.home()
         / "Nika/nika-agent/node_modules/@nika-js/onlymap/onlymapjs.html-data.json",
