@@ -4,7 +4,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-08-06
+
+First public release. `0.1.0` was built and submitted but never published, so
+everything below is what ships on day one.
 
 ### Changed
 - **`qgisMinimumVersion` is now 3.44, corrected from 3.22.** The old figure was

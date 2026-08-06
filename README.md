@@ -12,7 +12,7 @@ Built by [NIKA](https://nikaplanet.com), powered by
 plugin exports to, documented at
 [onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 
-> **Status: pre-release.** `0.1.0` is under active development and is not yet
+> **Status: pre-release.** `0.1.1` is under active development and is not yet
 > published to the QGIS Plugin Repository. The repository layout and task plan
 > follow [onlymap-js issue #29](https://github.com/NikaGeospatial/onlymap-js/issues/29).
 

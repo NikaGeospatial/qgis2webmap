@@ -4,7 +4,7 @@ qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Export QGIS projects to interactive, portable HTML maps. Open locally, share as a zip, or enhance and host later with OnlyMap.
 about=QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. Built by NIKA, powered by OnlyMap. This is an independent third-party plugin and is not endorsed by QGIS.org.
-version=0.1.0
+version=0.1.1
 author=NIKA
 email=support@nikaplanet.com
 
@@ -27,5 +27,11 @@ deprecated=False
 license=GPL-2.0-or-later
 hasProcessingProvider=yes
 
-changelog=0.1.0
-    Initial release scaffold.
+changelog=0.1.1
+    First public release.
+    Export a QGIS project to a single portable HTML file, a share ZIP or a folder.
+    Vector points, lines and polygons with single-symbol, categorized and graduated
+    styling; layer order, groups, visibility, scale ranges, aliases and hidden
+    fields; labels, popups, attribution, legend, layer switcher, zoom controls and
+    a scale bar. The Fidelity tab lists anything that will not survive the trip
+    before you export. Requires QGIS 3.44 or newer.
