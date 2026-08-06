@@ -4,10 +4,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-08-06
+## [0.1.2] - 2026-08-06
 
-First public release. `0.1.0` was built and submitted but never published, so
-everything below is what ships on day one.
+First public release. `0.1.0` and `0.1.1` were built and submitted but never
+published, so everything below is what ships on day one.
+
+### Fixed
+- **The runtime lock file no longer trips a secret scanner.** The QGIS plugin
+  repository runs detect-secrets over every upload, and a 64-character hex
+  string is exactly what an API key looks like to one - so both SHA-256 digests
+  in `runtime-lock.json` were reported as "Potential Hex High Entropy String"
+  and the upload was held. They are integrity checks over published, public npm
+  artifacts, and publishing them is the entire point, so the digests are
+  unchanged; each line now carries detect-secrets' own `pragma: allowlist
+  secret`, which is the mechanism the tool provides for saying so. The pragma
+  only works on the same line as the digest, so `scripts/lock_runtime.py`
+  appends it after serialising rather than adding a sibling key. Re-encoding the
+  digests as base64 Subresource Integrity was measured first and rejected: it
+  merely swaps the hex finding for a Base64 High Entropy String one.
 
 ### Changed
 - **`qgisMinimumVersion` is now 3.44, corrected from 3.22.** The old figure was

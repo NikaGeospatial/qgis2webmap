@@ -5,18 +5,23 @@
     "here or fetched on first export is an open licensing question (see",
     "docs/architecture.md). This file pins what the answer must produce, so a",
     "runtime that is not the expected build is caught rather than shipped.",
-    "Regenerate with scripts/lock_runtime.py after changing the pinned build."
+    "Regenerate with scripts/lock_runtime.py after changing the pinned build.",
+    "Each sha256 below is the digest of a published, public npm artifact. It is",
+    "an integrity check, not a credential, and it is meant to be read: that is",
+    "the whole point of publishing it. Secret scanners cannot tell a checksum",
+    "from a key by looking, so each digest line carries detect-secrets' own",
+    "allowlist pragma to say so."
   ],
   "package": "@nika-js/onlymap",
   "version": "0.6.1",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "98631f2806a24abf92f5a36a2c3ee6fe806067a5c32f0ebb80c9130f1702d28e",
+      "sha256": "98631f2806a24abf92f5a36a2c3ee6fe806067a5c32f0ebb80c9130f1702d28e", "_": "checksum of a public artifact # pragma: allowlist secret",
       "bytes": 8039065
     },
     "onlymapjs.css": {
-      "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c",
+      "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c", "_": "checksum of a public artifact # pragma: allowlist secret",
       "bytes": 70893
     }
   }

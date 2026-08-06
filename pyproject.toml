@@ -2,7 +2,7 @@
 # `nika_onlymap_exporter/` directly from its plugin directory.
 [project]
 name = "nika-onlymap-exporter"
-version = "0.1.1"
+version = "0.1.2"
 description = "Export QGIS projects to portable OnlyMap web maps"
 requires-python = ">=3.9"
 license = { text = "GPL-2.0-or-later" }

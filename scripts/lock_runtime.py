@@ -40,7 +40,19 @@ COMMENT = [
     "docs/architecture.md). This file pins what the answer must produce, so a",
     "runtime that is not the expected build is caught rather than shipped.",
     "Regenerate with scripts/lock_runtime.py after changing the pinned build.",
+    "Each sha256 below is the digest of a published, public npm artifact. It is",
+    "an integrity check, not a credential, and it is meant to be read: that is",
+    "the whole point of publishing it. Secret scanners cannot tell a checksum",
+    "from a key by looking, so each digest line carries detect-secrets' own",
+    "allowlist pragma to say so.",
 ]
+
+# A 64-character hex string is what an API key looks like to a secret scanner,
+# and the QGIS plugin repository runs one over every upload. detect-secrets
+# suppresses a line carrying this pragma, but only when it is on the *same*
+# line as the digest -- so the note is appended after serialising rather than
+# added as a sibling key, which json.dumps would put on its own line.
+ALLOWLIST_NOTE = '"_": "checksum of a public artifact # pragma: allowlist secret"'
 
 
 def main(argv: list[str]) -> int:
@@ -74,20 +86,23 @@ def main(argv: list[str]) -> int:
         return 1
     LICENCE_FILE.write_text(licence.read_text(encoding="utf-8"), encoding="utf-8")
 
-    LOCK_FILE.write_text(
-        json.dumps(
-            {
-                "_comment": COMMENT,
-                "package": package.get("name", "@nika-js/onlymap"),
-                "version": package.get("version", "unknown"),
-                "license": package.get("license", "unknown"),
-                "files": files,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    serialised = json.dumps(
+        {
+            "_comment": COMMENT,
+            "package": package.get("name", "@nika-js/onlymap"),
+            "version": package.get("version", "unknown"),
+            "license": package.get("license", "unknown"),
+            "files": files,
+        },
+        indent=2,
     )
+    lines = [
+        f"{line.rstrip()[:-1]}, {ALLOWLIST_NOTE},"
+        if line.lstrip().startswith('"sha256":')
+        else line
+        for line in serialised.splitlines()
+    ]
+    LOCK_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"locked {package.get('name')}@{package.get('version')} -> {LOCK_FILE}")
     return 0
 
