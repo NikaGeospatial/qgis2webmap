@@ -1,6 +1,6 @@
 # Installation
 
-Requires **QGIS 3.22 or newer**. QGIS 4 is supported.
+Requires **QGIS 3.44 or newer**. QGIS 4 is supported.
 
 ## From the QGIS Plugin Repository
 

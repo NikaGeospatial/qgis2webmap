@@ -63,7 +63,7 @@ python scripts/package_plugin.py
 Then in QGIS: **Plugins → Manage and Install Plugins → Install from ZIP**, and
 choose `dist/nika_onlymap_exporter-<version>.zip`.
 
-Requires QGIS 3.22 or newer (QGIS 4 supported).
+Requires QGIS 3.44 or newer (QGIS 4 supported).
 
 **The first export downloads the map runtime** — about 3 MB, once per computer,
 after showing you its licence. Everything works offline after that. The runtime

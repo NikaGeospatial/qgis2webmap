@@ -7,6 +7,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Changed
+- **`qgisMinimumVersion` is now 3.44, corrected from 3.22.** The old figure was
+  never true. Running the QGIS tier in older containers rather than only against
+  LTR: 3.22.16 gives 69 failures, 3.34.5 gives 64, and 3.36.1 fails too - three
+  APIs the reader depends on do not exist there. `QgsJsonExporter`
+  `setDestinationCrs` arrives in 3.34, and `QgsMapLayerServerProperties`
+  `attribution` later still. 3.44 LTR is the version measured green, so it is the
+  one declared. Widening the range again means adding fallbacks for both and
+  re-measuring - the exporter one looks free, since older `QgsJsonExporter`
+  already emitted WGS84 unconditionally.
+
 - **The pinned OnlyMap runtime moved from 0.6.0 to 0.6.1.** The licence gate is
   byte-identical between the two - the dev-context test and all three caps -
   so `license_policy.py` is untouched. The bundle grew 7.85 MB -> 8.04 MB, and
