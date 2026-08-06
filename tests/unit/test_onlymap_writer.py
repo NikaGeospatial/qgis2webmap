@@ -228,7 +228,7 @@ class TestCreditComponent:
             assert 'target="_blank"' in opening
             assert 'rel="noopener noreferrer"' in opening
 
-    def test_the_component_sits_clear_of_the_runtime_attribution(self) -> None:
+    def test_the_runtime_attribution_sits_above_the_credit_chip(self) -> None:
         """Bottom-right, but not flush with the corner any more.
 
         Runtime 0.6.0 mounts its own provider-attribution control into the
@@ -248,8 +248,15 @@ class TestCreditComponent:
         credit_css = markup.split(".om-credit {")[1].split("}")[0]
         assert "position: absolute" in credit_css
         assert "right: 12px" in credit_css
-        # Not flush: the bottom inset has to reserve the attribution's band.
-        assert "bottom: calc(12px + 24px + 8px)" in credit_css
+        assert "bottom: 12px" in credit_css
+
+        # The attribution is the thing that moves, lifted clear of the chip.
+        # Two reservations: the chip is one line, or two once it carries a data
+        # credit, and it grows upward from its anchor.
+        assert '[data-om-widget-slot="bottom-end"]' in markup
+        assert "calc(12px + 36px + 8px)" in markup
+        assert "body:has(.om-credit-data)" in markup
+        assert "calc(12px + 54px + 8px)" in markup
 
     def test_the_widget_stack_is_not_hand_offset(self) -> None:
         """The bottom-left corner is the runtime's flex slot to lay out.

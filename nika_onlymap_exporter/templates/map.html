@@ -80,21 +80,24 @@
       .om-credit {
         position: absolute;
         right: 12px;
-        /* Clear of the runtime's own attribution control, not level with it.
+        /* The corner itself. The runtime's provider-attribution control goes
+           *above* this chip - see the `bottom-end` rule further down.
 
-           `ensureMandatedChromeHost` mounts that control into the `bottom-end`
-           slot, whose container is anchored at `bottom: 12px;
-           inset-inline-end: 12px` - the exact coordinates this chip used to
-           claim, so the two drew on top of each other. Measured against 0.6.0
-           the control is 24px tall, and 12 + 24 + 8 of gap puts us just above
-           it, matching the runtime's own `--om-widget-gap-y`.
+           Both used to be anchored here at `bottom: 12px`, which is why they
+           drew on top of each other: `ensureMandatedChromeHost` mounts that
+           control into the `bottom-end` slot and the slot container carries the
+           same 12px inset.
 
-           A slot would be better than an offset, and was tried: an `om-widget`
-           is only adopted if it is a child of `<om-map>`, and this component is
-           a sibling of it in the body. Moving it inside means moving it out of
-           this template and into `build_manifest`, which is the real fix and a
-           larger one. */
-        bottom: calc(12px + 24px + 8px);
+           A slot would be better than hand-placing either of them, and was
+           tried: an `om-widget` is only adopted if it is a child of `<om-map>`,
+           and this component is a sibling of it in the body, so it was never
+           slotted - it just lost its positioning and landed on the zoom
+           controls. Slotting also cannot produce this order: the mandated
+           chrome carries `order: 2147483647`, so inside the slot it is always
+           last, which in a column means always bottom-most. Moving the chip
+           into `build_manifest` would put the attribution *under* it, not over.
+           Hence document rules on both. */
+        bottom: 12px;
         z-index: 2;
         max-width: min(22rem, calc(100% - 24px));
         padding: 0.4rem 0.6rem;
@@ -237,6 +240,33 @@
       .om-caption-bottom-right {
         bottom: 12px;
         right: 12px;
+      }
+
+      /* Lift the runtime's provider attribution above our credit chip.
+
+         The chip sits in the corner at `bottom: 12px` and the `bottom-end` slot
+         container is anchored there too, so one of them has to move. The
+         attribution is the one that moves, because the chip cannot be put
+         underneath it any other way: the mandated chrome carries
+         `order: 2147483647` inside the slot, so anything we slot alongside it
+         renders above it, never below.
+
+         The reservation has to clear the chip's *height*, and the chip grows
+         upward from its anchor - so the value depends on how many lines it has.
+         `:has()` reads that off the markup rather than guessing: a data credit
+         is a second line. Measured in chromium at 12px/1.5: one line is a 36px
+         chip, two is 54px, and 8px of gap matches the runtime's own
+         `--om-widget-gap-y`.
+
+         A very long attribution that wraps to a third line would reach into the
+         gap. Accepted rather than clipped: the data credit carries a licence
+         obligation and must stay readable, and truncating it to protect a layout
+         is the wrong trade. */
+      [data-om-widget-slot="bottom-end"] {
+        bottom: calc(12px + 36px + 8px) !important;
+      }
+      body:has(.om-credit-data) [data-om-widget-slot="bottom-end"] {
+        bottom: calc(12px + 54px + 8px) !important;
       }
 
       /* The runtime prints its licence notice in the bottom-left corner, where

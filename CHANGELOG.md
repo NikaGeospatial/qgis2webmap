@@ -43,8 +43,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   0.6.0 mounts mandated chrome into its widget slots - the licence badge into
   `bottom-start`, the provider attribution into `bottom-end` - and the
   `bottom-end` container is anchored at exactly the `bottom: 12px; right: 12px`
-  our chip claimed. They drew on top of each other. The chip now clears the
-  24px control by the runtime's own gap.
+  our chip claimed. They drew on top of each other. The chip keeps the corner
+  and the attribution is lifted above it, reserving one line or two depending on
+  whether the map carries a data credit.
 
 - **The bottom-left widget stack is evenly spaced again.** The template forced
   `bottom: 58px !important` on the zoom controls and `30px` on the scale bar, to
@@ -75,9 +76,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 - **Batch and model exports use the licence key.** The Processing algorithm
   takes an optional key parameter and otherwise falls back to
-  `ONLYMAP_LICENSE_KEY`, then to the key saved in the dialog. It read none of
-  them before, so a paying customer's batch export silently produced free-plan
-  maps. The environment variable is the only route that works on a machine with
+  `ONLYMAP_LICENSE_KEY`, then to any key already saved on this computer. It read
+  none of them before, so a paying customer's batch export silently produced
+  free-plan maps. The environment variable is the only route that works on a machine with
   no QGIS profile - a server, a container, CI.
 
 - **Dashed and dotted lines.** Both ways QGIS produces one now export: the
@@ -88,7 +89,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   when the line gets thicker; a QGIS dash-dot is drawn as a plain dash of the
   same length and reported, because deck.gl strokes exactly one on/off pair.
 
-- **A licence key field for OnlyMap subscribers.** Everything below it already
+- **A licence key field for OnlyMap subscribers.** *Superseded later in this
+  same unreleased batch - the field was removed once the runtime lifted the caps
+  on every origin this plugin exports to. See Removed, above. The plumbing it
+  describes is still there and still reachable.* Everything below it already
   existed - `LicensedPolicy`, the verdict's key, the `license-key` attribute on
   `<om-map>` - but nothing ever supplied a key, so every export ran on the free
   plan whether or not the user had paid. The key is stored on the machine rather
