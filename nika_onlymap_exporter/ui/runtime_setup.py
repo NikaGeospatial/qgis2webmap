@@ -139,7 +139,7 @@ def make_qgis_downloader(feedback=None):
         if feedback is not None and feedback.isCanceled():
             raise RuntimeDownloadError("The download was cancelled.")
 
-        if code != QgsBlockingNetworkRequest.NoError:
+        if code != QgsBlockingNetworkRequest.ErrorCode.NoError:
             raise RuntimeDownloadError(
                 f"Could not download the OnlyMap runtime.\n\n"
                 f"{fetcher.errorMessage()}\n\n"

@@ -59,11 +59,11 @@ _CLASSIFICATION_BY_ID = {
 
 # Fallback for QGIS 3.22-3.24, where `classificationMethod()` does not exist.
 _CLASSIFICATION_BY_MODE = {
-    QgsGraduatedSymbolRenderer.EqualInterval: ClassificationMethod.EQUAL_INTERVAL,
-    QgsGraduatedSymbolRenderer.Quantile: ClassificationMethod.QUANTILE,
-    QgsGraduatedSymbolRenderer.Jenks: ClassificationMethod.NATURAL_BREAKS,
-    QgsGraduatedSymbolRenderer.StdDev: ClassificationMethod.STANDARD_DEVIATION,
-    QgsGraduatedSymbolRenderer.Pretty: ClassificationMethod.PRETTY_BREAKS,
+    QgsGraduatedSymbolRenderer.Mode.EqualInterval: ClassificationMethod.EQUAL_INTERVAL,
+    QgsGraduatedSymbolRenderer.Mode.Quantile: ClassificationMethod.QUANTILE,
+    QgsGraduatedSymbolRenderer.Mode.Jenks: ClassificationMethod.NATURAL_BREAKS,
+    QgsGraduatedSymbolRenderer.Mode.StdDev: ClassificationMethod.STANDARD_DEVIATION,
+    QgsGraduatedSymbolRenderer.Mode.Pretty: ClassificationMethod.PRETTY_BREAKS,
 }
 
 

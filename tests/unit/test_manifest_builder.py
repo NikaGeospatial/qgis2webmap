@@ -495,11 +495,7 @@ def find_onlymap_schema() -> Path | None:
     # will actually run, never against the dev tree.
     runtime_dir = os.environ.get("ONLYMAP_RUNTIME_DIR")
     candidates = [
-        *(
-            [Path(runtime_dir) / "onlymapjs.html-data.json"]
-            if runtime_dir
-            else []
-        ),
+        *([Path(runtime_dir) / "onlymapjs.html-data.json"] if runtime_dir else []),
         Path.home() / "Nika/onlymap-js/onlymapjs.html-data.json",
         Path.home()
         / "Nika/nika-agent/node_modules/@nika-js/onlymap/onlymapjs.html-data.json",

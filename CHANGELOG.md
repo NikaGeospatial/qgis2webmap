@@ -36,6 +36,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   clean deliverable wore a diagnostic badge for no reason.
 
 ### Fixed
+- **Qt6-compatible enum spellings throughout.** Sixteen call sites used the
+  unscoped forms Qt5 allows - `Qgis.Warning`, `QgsWkbTypes.PointGeometry`,
+  `QgsGraduatedSymbolRenderer.EqualInterval`,
+  `QgsBlockingNetworkRequest.NoError` - which PyQt6 does not, so they would each
+  raise `AttributeError` on a QGIS built against Qt6. All now use the scoped
+  spelling, verified to resolve identically on QGIS 3.22 and on 3.44 LTR.
+
+- **A narrower `except` when probing a layer's provider.** `providerType` is a
+  C++ binding and can raise once the underlying object is gone, but catching
+  bare `Exception` and continuing also swallowed real bugs in this plugin -
+  bandit's B112. Now names the three errors that can actually occur.
+
 - **A popup no longer follows the pointer onto other features.** Clicking a
   river and then merely moving the pointer across an airport left the river's
   popup open, still titled "Rivers", with the airport's object interpolated into

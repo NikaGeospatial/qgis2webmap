@@ -65,7 +65,7 @@ class Qgis2WebMapPlugin:
                 f"Failed to register the Processing provider:\n"
                 f"{traceback.format_exc()}",
                 LOG_TAG,
-                level=Qgis.Warning,
+                level=Qgis.MessageLevel.Warning,
             )
 
     def initGui(self) -> None:  # noqa: N802 -- QGIS plugin API
@@ -125,7 +125,7 @@ class Qgis2WebMapPlugin:
             QgsMessageLog.logMessage(
                 f"Failed to open the export dialog:\n{traceback.format_exc()}",
                 LOG_TAG,
-                level=Qgis.Critical,
+                level=Qgis.MessageLevel.Critical,
             )
             QMessageBox.critical(
                 self.iface.mainWindow(),

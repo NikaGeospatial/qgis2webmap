@@ -71,7 +71,14 @@ def _has_tile_layer(project: QgsProject) -> bool:
         try:
             if str(provider()).lower() in tile_providers:
                 return True
-        except Exception:  # pragma: no cover - defensive against provider quirks
+        # Named rather than bare `Exception` - defensive against provider quirks,
+        # but only the ones that can actually happen here. `providerType` is a
+        # C++ binding: it raises `RuntimeError` once the underlying object has
+        # been deleted, and `AttributeError`/`TypeError` if a layer type carries
+        # something other than the callable we probed for. Anything else is a bug
+        # in this plugin and should surface rather than be swallowed - which is
+        # also what bandit's B112 is warning about.
+        except (AttributeError, RuntimeError, TypeError):  # pragma: no cover
             continue
     return False
 

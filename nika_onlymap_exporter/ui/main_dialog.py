@@ -1781,7 +1781,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
-        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.Warning)
+        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Warning)
         self.status_label.setText(
             f"Live preview could not be updated ({message}) - see the QGIS log."
         )
@@ -1790,7 +1790,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
-        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.Critical)
+        QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
         if self._fidelity_is_stale:
             self._show_fidelity_error(message)
         QMessageBox.critical(
@@ -2162,7 +2162,7 @@ class MainDialog(QDialog):
         QgsMessageLog.logMessage(
             f"Could not start the live preview server:\n{traceback.format_exc()}",
             LOG_TAG,
-            level=Qgis.Warning,
+            level=Qgis.MessageLevel.Warning,
         )
         self._stop_live_preview()
         with contextlib.suppress(Exception):
@@ -2381,7 +2381,9 @@ class MainDialog(QDialog):
     def _report_failure(self, title: str, exc: Exception) -> None:
         """Surface a failure without ever taking QGIS down with it."""
         QgsMessageLog.logMessage(
-            f"{title}:\n{traceback.format_exc()}", LOG_TAG, level=Qgis.Critical
+            f"{title}:\n{traceback.format_exc()}",
+            LOG_TAG,
+            level=Qgis.MessageLevel.Critical,
         )
         QMessageBox.critical(
             self,
@@ -2422,7 +2424,7 @@ class MainDialog(QDialog):
             QgsMessageLog.logMessage(
                 f"Could not save export settings:\n{traceback.format_exc()}",
                 LOG_TAG,
-                level=Qgis.Warning,
+                level=Qgis.MessageLevel.Warning,
             )
         # Before the watcher, because a rebuild triggered mid-teardown would run
         # against a half-disconnected dialog.

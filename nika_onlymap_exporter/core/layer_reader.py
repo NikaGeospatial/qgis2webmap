@@ -55,9 +55,9 @@ WGS84 = "EPSG:4326"
 GEOJSON_PRECISION = 9
 
 _GEOMETRY_BY_WKB = {
-    QgsWkbTypes.PointGeometry: GeometryKind.POINT,
-    QgsWkbTypes.LineGeometry: GeometryKind.LINE,
-    QgsWkbTypes.PolygonGeometry: GeometryKind.POLYGON,
+    QgsWkbTypes.GeometryType.PointGeometry: GeometryKind.POINT,
+    QgsWkbTypes.GeometryType.LineGeometry: GeometryKind.LINE,
+    QgsWkbTypes.GeometryType.PolygonGeometry: GeometryKind.POLYGON,
 }
 
 # Provider keys that mean "the data lives in a file next to the project".
