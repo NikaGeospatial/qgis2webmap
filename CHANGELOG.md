@@ -6,6 +6,62 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **The pinned OnlyMap runtime moved from 0.6.0 to 0.6.1.** The licence gate is
+  byte-identical between the two - the dev-context test and all three caps -
+  so `license_policy.py` is untouched. The bundle grew 7.85 MB -> 8.04 MB, and
+  the runtime's own `LICENSE.md` is unchanged. All four tiers re-run green
+  against it.
+
+  0.6.1 adds **`selection-type` on `<om-overlay>`**, which is the upstream fix
+  for the ghost-popup bug we reported: a click-opened popup re-anchored and
+  re-interpolated its template on every *hover* pick, so it followed the pointer
+  onto other features and rendered them into the wrong template. The exported
+  maps do not use the attribute yet - adopting it changes how popups dismiss
+  (with `selection-type="click"`, hovering empty space no longer closes one,
+  which is what `build_popup_reset_behaviors` currently relies on), so it is a
+  change of its own rather than a side effect of a version bump.
+
+- **The free-tier cap warning is gone from the export flow.** It pushed a QGIS
+  message-bar warning before every over-cap export and listed the breach again
+  in the post-export dialog. Since the runtime's 0.6.0 licensing rework the caps
+  apply only on a hosted `http(s)` page, so for the Standalone HTML and Share ZIP
+  this plugin produces there was nothing to warn about, and a warning that is
+  almost always irrelevant trains people to dismiss the one that is not. The
+  **Fidelity** tab still names every layer over a limit, and the limits are now
+  documented in the README as well as in `docs/supported-features.md`.
+
+- **Exports no longer mount the runtime's validation panel.** `validate` was set
+  on `<om-map>` whenever a cap was breached, so the recipient would be told why a
+  layer was missing. No layer *is* missing on a local map, so the runtime
+  validated a clean map and rendered its green success badge at
+  `top: 12px; right: 12px` with `z-index: 9999` - directly over the legend. A
+  clean deliverable wore a diagnostic badge for no reason.
+
+### Fixed
+- **The credit chip no longer sits under the runtime's own attribution.** Runtime
+  0.6.0 mounts mandated chrome into its widget slots - the licence badge into
+  `bottom-start`, the provider attribution into `bottom-end` - and the
+  `bottom-end` container is anchored at exactly the `bottom: 12px; right: 12px`
+  our chip claimed. They drew on top of each other. The chip now clears the
+  24px control by the runtime's own gap.
+
+- **The bottom-left widget stack is evenly spaced again.** The template forced
+  `bottom: 58px !important` on the zoom controls and `30px` on the scale bar, to
+  clear a licence notice the runtime once drew loose in that corner. It now puts
+  the badge in the `bottom-start` slot alongside them, and that slot spaces all
+  three itself - so the offsets only shifted widgets up out of a flex flow that
+  still reserved their original space, leaving a ragged gap. Removed.
+
+### Removed
+- **The OnlyMap licence field on the Map tab.** With the caps lifted on every
+  origin this plugin's artifacts are opened from - a file, `localhost`,
+  `127.0.0.1` - a key changed nothing for almost everyone who saw it, while
+  reading like a prerequisite. A key still reaches the writer from the
+  `ONLYMAP_LICENSE_KEY` environment variable or the Processing algorithm's
+  licence parameter, which is also the only route that works on a machine with
+  no QGIS profile.
+
 ### Added
 - **Export only the features in the current QGIS view.** A separate option from
   the one that decides where the map opens, because they are separate decisions:
