@@ -74,9 +74,7 @@ from ..core.export_ir import (
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import (
     default_policy,
-    describe_license_key,
     detect_violations,
-    looks_like_license_key,
     report_verdict,
 )
 from ..core.manifest_builder import basemap_note, terrain_note
@@ -88,9 +86,8 @@ from ..core.settings import (
     PRECISION_FULL,
     DialogState,
     LayerSettings,
-    load_license_key,
     load_state,
-    save_license_key,
+    resolve_license_key,
     save_state,
 )
 from ..packaging.artifact_builder import build_artifact
@@ -582,7 +579,6 @@ class MainDialog(QDialog):
         destination_layout.addLayout(path_row)
 
         layout.addWidget(destination_box)
-        layout.addWidget(self._build_license_group(page))
 
         # Its own group rather than a row inside "Data": a basemap is not the
         # project's data, it is the backdrop behind it - and it is the only
@@ -710,58 +706,21 @@ class MainDialog(QDialog):
 
     # ---- Licence ---------------------------------------------------------
 
-    def _build_license_group(self, page: QWidget) -> QWidget:
-        """Somewhere to put a key the user has already paid for.
-
-        Without this the plugin could only ever produce free-plan maps, which
-        for a paying customer means their five-layer, 25,000-row limits stay in
-        force in a product they bought their way out of. The plumbing already
-        existed all the way to the `license-key` attribute on `<om-map>` - the
-        only missing piece was a field.
-        """
-        box = QGroupBox("OnlyMap licence", page)
-        layout = QVBoxLayout(box)
-
-        row = QHBoxLayout()
-        self.license_edit = QLineEdit(load_license_key(), box)
-        self.license_edit.setPlaceholderText(
-            "om_live_...  (leave blank for the free plan)"
-        )
-        # Not a password field. The key is signed and domain-locked, is meant to
-        # be served to browsers, and is written into every map exported with it -
-        # so masking it would imply a secrecy it does not have, while making it
-        # impossible to check a paste against the invoice it came from.
-        self.license_edit.textChanged.connect(self._on_license_changed)
-        row.addWidget(self.license_edit, 1)
-        layout.addLayout(row)
-
-        self.license_note = QLabel("", box)
-        self.license_note.setWordWrap(True)
-        layout.addWidget(self.license_note)
-
-        layout.addWidget(
-            _help_label(
-                "Lifts the 5-layer and 25,000-feature limits and removes the "
-                "on-map badge. Stored on this computer, not in the project file, "
-                "so it follows you between projects and is never sent with one.",
-                box,
-            )
-        )
-        self._update_license_note()
-        return box
-
-    def _on_license_changed(self, text: str) -> None:
-        save_license_key(text)
-        self._update_license_note()
-        # The key changes what the runtime will render, so a cached read's
-        # verdict - and the fidelity report built from it - is no longer right.
-        self._invalidate_export_cache()
-        self._fidelity_is_stale = True
-
     def _license_key(self) -> str | None:
-        """The key to export with, or None for the free plan."""
-        text = self.license_edit.text().strip() if hasattr(self, "license_edit") else ""
-        return text or None
+        """The key to export with, or None for the free plan.
+
+        There is no field for this on the Map tab. Since runtime 0.6.0 the caps
+        apply only on a hosted `http(s)` page, and every artifact this dialog
+        produces is opened from a file or from localhost, so a key would have
+        changed nothing for almost everyone who saw it.
+
+        Still resolved rather than hardcoded to None: `resolve_license_key`
+        reads `ONLYMAP_LICENSE_KEY` and then the stored setting, which is how
+        the Processing algorithm supplies one. A user who needs a key for a
+        hosted map goes through Processing or the environment variable, and the
+        dialog honours it silently instead of ignoring it.
+        """
+        return resolve_license_key()
 
     def _writer(self) -> OnlyMapWriter:
         """A writer carrying the user's licence policy.
@@ -771,74 +730,6 @@ class MainDialog(QDialog):
         free-plan maps for someone who had just pasted a key.
         """
         return OnlyMapWriter(license_policy=default_policy(self._license_key()))
-
-    def _update_license_note(self) -> None:
-        """Say what the pasted key claims, and where it will not work.
-
-        Read from the payload, never verified - we have no private key and the
-        runtime does the real check. Saying "valid" would be a promise we cannot
-        keep; saying what the key says about itself is one we can.
-        """
-        text = self.license_edit.text().strip()
-        if not text:
-            self.license_note.setText(
-                "No key - exports run on the free plan: 5 layers, 25,000 "
-                "features per layer."
-            )
-            self.license_note.setStyleSheet("")
-            return
-
-        if not looks_like_license_key(text):
-            self.license_note.setText(
-                "That does not look like an OnlyMap key. They start with "
-                "om_live_ and contain a full stop. The map would fall back to "
-                "the free plan."
-            )
-            self.license_note.setStyleSheet("color: #c0392b;")
-            return
-
-        info = describe_license_key(text)
-        if info.malformed:
-            self.license_note.setText(
-                "The key is the right shape but its contents could not be read. "
-                "Check it was pasted in full."
-            )
-            self.license_note.setStyleSheet("color: #c0392b;")
-            return
-
-        if info.is_expired:
-            self.license_note.setText(
-                "This key has expired, so exports will run on the free plan. "
-                "Renew it at nikaplanet.com/onlymap."
-            )
-            self.license_note.setStyleSheet("color: #c0392b;")
-            return
-
-        parts = []
-        if info.plan:
-            parts.append(f"{info.plan} plan")
-        if info.domains:
-            parts.append("valid on " + ", ".join(info.domains))
-        summary = "Key accepted - " + ("; ".join(parts) if parts else "limits lifted")
-
-        # A key issued for a domain does nothing for a file someone
-        # double-clicks, because a file:// page has no hostname to match
-        # against. Since runtime 0.6.0 that costs only the corner badge - the
-        # free plan is uncapped on a local file anyway - so this is a note in
-        # passing rather than the red warning it used to be.
-        if not info.covers_local_files:
-            self.license_note.setText(
-                f"{summary}.\nA Standalone HTML file opened by double-clicking "
-                "has no domain to match, so the key does not apply there. The "
-                "map still draws in full - local files have no size limits - "
-                "but it keeps the OnlyMap badge. Ask NIKA for a key covering "
-                "local files if you need the badge gone."
-            )
-            self.license_note.setStyleSheet("")
-            return
-
-        self.license_note.setText(f"{summary}, including local files.")
-        self.license_note.setStyleSheet("")
 
     def _update_export_summary(self, selected_count: int) -> None:
         """Name the artifact in the same words the buttons use.

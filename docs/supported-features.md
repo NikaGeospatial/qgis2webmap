@@ -81,11 +81,20 @@ cannot show you for itself.
 
 ## Using a paid OnlyMap licence
 
-If you have bought an OnlyMap licence, paste the key into **OnlyMap licence** on
-the Map tab. It lifts the limits on a hosted map and removes the on-map badge.
-A map opened locally is already uncapped, so technically a key changes nothing
-there - but see the note on commercial use below, which is a separate question
-from what the runtime enforces.
+A key lifts the limits on a hosted map and removes the on-map badge. A map opened
+locally is already uncapped, so a key changes nothing there - but see the note on
+commercial use below, which is a separate question from what the runtime
+enforces.
+
+Because that leaves a key mattering only for hosted maps, the export dialog has
+no field for one. Supply it either way round instead:
+
+- set the `ONLYMAP_LICENSE_KEY` environment variable, which is also the only
+  route that works on a machine with no QGIS profile - a server, a container, CI;
+- or pass the **OnlyMap licence key** parameter to the *Export project to
+  OnlyMap* Processing algorithm.
+
+Both are picked up by the dialog too, so a key set once applies to every export.
 
 The key is stored on your computer, not in the `.qgz`, so it follows you between
 projects and is never sent to anyone you share a project file with. It is written

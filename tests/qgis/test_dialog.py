@@ -1065,12 +1065,14 @@ class TestOversizedSingleFileIsAWarningNotASwitch:
         dialog.close()
 
 
-class TestLicenseKeyField:
-    """A paying customer must be able to use what they bought.
+class TestLicenseKeyResolution:
+    """A key still reaches the writer, but no longer through a dialog field.
 
-    Everything below the field already existed - `LicensedPolicy`, the verdict's
-    `license_key`, the `license-key` attribute on `<om-map>`. Nothing ever
-    supplied a key, so every export was a free-plan export.
+    The field was removed once runtime 0.6.0 lifted the caps everywhere this
+    dialog's artifacts are opened - a file, localhost, 127.0.0.1. A key now
+    arrives from `ONLYMAP_LICENSE_KEY` or the stored setting, the same chain the
+    Processing algorithm resolves, so these pin the plumbing rather than a
+    widget.
     """
 
     def _dialog(self, project, make_memory_layer):
@@ -1083,37 +1085,63 @@ class TestLicenseKeyField:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
+    def test_the_map_tab_has_no_licence_field(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Pins the removal, so the field cannot return unnoticed."""
+        dialog = self._dialog(project, make_memory_layer)
+        assert not hasattr(dialog, "license_edit")
+        assert not hasattr(dialog, "license_note")
+        dialog.close()
+
+    def test_a_stored_key_reaches_the_writer(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_license_key
+
+        save_license_key("om_live_eyJhIjoxfQ.c2ln")
+        try:
+            dialog = self._dialog(project, make_memory_layer)
+            policy = dialog._writer().license_policy
+            assert getattr(policy, "license_key", None) == "om_live_eyJhIjoxfQ.c2ln"
+            dialog.close()
+        finally:
+            save_license_key("")
+
+    def test_the_environment_variable_reaches_the_writer(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """The only route that works on a machine with no QGIS profile."""
+        from nika_onlymap_exporter.core.settings import (
+            LICENSE_KEY_ENV,
+            save_license_key,
+        )
+
+        save_license_key("")
+        monkeypatch.setenv(LICENSE_KEY_ENV, "om_live_ZW52.c2ln")
+        dialog = self._dialog(project, make_memory_layer)
+        policy = dialog._writer().license_policy
+        assert getattr(policy, "license_key", None) == "om_live_ZW52.c2ln"
+        dialog.close()
+
     def test_the_key_is_not_written_into_the_project_file(
         self, qgis_app, project, make_memory_layer
     ) -> None:
         """A `.qgz` gets emailed and committed. A purchased key must not ride along."""
         from nika_onlymap_exporter.core.settings import save_license_key
 
-        dialog = self._dialog(project, make_memory_layer)
-        dialog.license_edit.setText("om_live_eyJhIjoxfQ.c2ln")
-        dialog._shutdown()
+        save_license_key("om_live_eyJhIjoxfQ.c2ln")
+        try:
+            dialog = self._dialog(project, make_memory_layer)
+            dialog._shutdown()
 
-        entry, _ = project.readEntry("qgis2webmap", "layers")
-        assert "om_live_" not in (entry or "")
-        for key in ("mapName", "widgets", "outputMode"):
-            stored, _ = project.readEntry("qgis2webmap", key)
-            assert "om_live_" not in (stored or "")
-
-        save_license_key("")  # never leave a key behind for the next test
-
-    def test_the_key_reaches_the_writer(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        from nika_onlymap_exporter.core.settings import save_license_key
-
-        dialog = self._dialog(project, make_memory_layer)
-        dialog.license_edit.setText("om_live_eyJhIjoxfQ.c2ln")
-
-        policy = dialog._writer().license_policy
-        assert getattr(policy, "license_key", None) == "om_live_eyJhIjoxfQ.c2ln"
-
-        dialog.close()
-        save_license_key("")
+            entry, _ = project.readEntry("qgis2webmap", "layers")
+            assert "om_live_" not in (entry or "")
+            for key in ("mapName", "widgets", "outputMode"):
+                stored, _ = project.readEntry("qgis2webmap", key)
+                assert "om_live_" not in (stored or "")
+        finally:
+            save_license_key("")
 
     def test_no_key_means_the_free_tier_policy(
         self, qgis_app, project, make_memory_layer
@@ -1125,29 +1153,3 @@ class TestLicenseKeyField:
         dialog = self._dialog(project, make_memory_layer)
         assert isinstance(dialog._writer().license_policy, FreeTierPolicy)
         dialog.close()
-
-    def test_a_domain_locked_key_warns_about_standalone_exports(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        """The silent failure: a real key that cannot cover a file:// map."""
-        import base64
-        import json
-
-        from nika_onlymap_exporter.core.settings import save_license_key
-
-        payload = (
-            base64.urlsafe_b64encode(
-                json.dumps({"plan": "pro", "domains": ["maps.nikaplanet.com"]}).encode()
-            )
-            .decode()
-            .rstrip("=")
-        )
-        dialog = self._dialog(project, make_memory_layer)
-        dialog.license_edit.setText(f"om_live_{payload}.c2ln")
-
-        note = dialog.license_note.text()
-        assert "maps.nikaplanet.com" in note
-        assert "double-clicking" in note, "the file:// gap has to be stated"
-
-        dialog.close()
-        save_license_key("")

@@ -115,8 +115,9 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString(
                 self.LICENSE_KEY,
-                "OnlyMap licence key (blank uses ONLYMAP_LICENSE_KEY, then the "
-                "key saved in the dialog)",
+                "OnlyMap licence key (blank uses ONLYMAP_LICENSE_KEY, then any "
+                "key already saved on this computer; only needed for a map you "
+                "publish to a web server)",
                 optional=True,
             )
         )
