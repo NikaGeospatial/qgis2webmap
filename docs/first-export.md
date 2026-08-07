@@ -3,8 +3,8 @@ title: Your first export
 description: >-
   A walkthrough from a styled QGIS project to a web map you can email, including live preview and the fidelity check.
 lead_image:
-  src: /images/dialog-map-tab.png
-  alt: The export dialog on its Map tab, with a map name, output mode and filepath set.
+  src: /images/export-05-live-preview.png
+  alt: The export dialog's button row - Live preview ticked, with Preview and Export beside it.
 ---
 
 # Your first export
@@ -75,8 +75,6 @@ break the drawing.
 
 **Preview** builds the map and opens it in your default browser. Nothing opens a
 browser on its own - only this button does.
-
-![The button row with the Live preview checkbox highlighted and a message saying the preview is open.](images/export-05-live-preview.png)
 
 With **Live preview** ticked, the map is served from your own machine and the tab
 updates by itself as you change settings, keeping your position on the map. Change
