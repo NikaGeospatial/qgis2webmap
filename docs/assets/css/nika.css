@@ -170,7 +170,7 @@ body {
   /* Only ever separates the brand from the QGIS credit: the nav is pushed right
      by its own `margin-left: auto`, so widening this would not move it. Kept
      tight so the credit reads as attached to our mark rather than floating. */
-  gap: 0.8rem;
+  gap: 0.45rem;
   padding: 0.7rem clamp(1rem, 4vw, 2rem);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
@@ -186,20 +186,19 @@ body {
   flex: 0 0 auto;
 }
 
-/* Held at exactly 1.5x `__powered-mark` (30/20). Two logos at the same size
-   read as a partnership; ours has to stay the dominant one. Change one of the
-   pair and change the other, or the ratio drifts. */
+/* The brand lockup is scaled 1.5x off its original 30px/16px/9px. Ours is meant
+   to dominate the QGIS credit outright, not sit in a fixed ratio with it. */
 .masthead__mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
+  width: 45px;
+  height: 45px;
+  border-radius: 10px;
   display: block;
 }
 
 .masthead__name {
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 24px;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
@@ -209,7 +208,7 @@ body {
 .masthead__by {
   display: block;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 13.5px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -222,18 +221,18 @@ body {
 .masthead__powered {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   flex: 0 0 auto;
-  padding-left: 0.8rem;
+  padding-left: 0.5rem;
   border-left: 1px solid var(--rule);
 }
 
-/* `--ink-2`, not `--ink-3`: at 11px in mono caps the dimmer token was legible
-   in light mode and mud in dark, where the background is near-black and `-3`
-   barely lifts off it. */
+/* `--ink-2`, not `--ink-3`: in mono caps at this size the dimmer token was
+   legible in light mode and mud in dark, where the background is near-black and
+   `-3` barely lifts off it. */
 .masthead__powered-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -241,10 +240,12 @@ body {
   white-space: nowrap;
 }
 
-/* Paired with `__mark` at 30px to hold the 1.5x ratio - see the note there. */
+/* `height: auto` because the source viewBox is cropped to the artwork and is no
+   longer square - forcing a square box here would letterbox it and put back the
+   padding the crop removed. */
 .masthead__powered-mark {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: auto;
   display: block;
 }
 
