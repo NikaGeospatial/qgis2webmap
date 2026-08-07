@@ -2,6 +2,9 @@
 title: Sharing a map
 description: >-
   Standalone HTML, Share ZIP or Folder - which output mode to pick, and why an email filter is usually what decides it.
+lead_image:
+  src: /images/export-02-formats.png
+  alt: The three output modes - Standalone HTML, Share ZIP and Folder - numbered one to three.
 ---
 
 # Sharing a map

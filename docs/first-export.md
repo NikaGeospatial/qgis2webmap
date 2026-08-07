@@ -2,6 +2,9 @@
 title: Your first export
 description: >-
   A walkthrough from a styled QGIS project to a web map you can email, including live preview and the fidelity check.
+lead_image:
+  src: /images/dialog-map-tab.png
+  alt: The export dialog on its Map tab, with a map name, output mode and filepath set.
 ---
 
 # Your first export

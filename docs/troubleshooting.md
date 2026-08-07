@@ -3,6 +3,9 @@ title: Troubleshooting
 description: >-
   Fixes for the things that actually go wrong - the plugin not appearing, Export
   greyed out, a blank map, a file blocked in transit, layers missing once hosted.
+lead_image:
+  src: /images/install-05-installed-tab.png
+  alt: The plugin manager's Installed tab, with the QGIS2WebMap checkbox ticked.
 ---
 
 # Troubleshooting
