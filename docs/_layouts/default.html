@@ -165,7 +165,31 @@
           {% endfor %}
         </aside>
 
-        <main id="content" class="prose">{{ content }}</main>
+        <main id="content" class="prose">
+          <!--
+            A guide's lead image comes from its front matter, not from an
+            `![...]()` in the Markdown body. Qt renders these same files in the
+            plugin's Help tab with no base URL set, so a relative image path
+            there resolves to nothing and the reader gets a broken-image box
+            offline. Front matter is stripped before Qt sees the file, so this
+            is the one place a picture can live without costing the Help tab
+            anything. Mid-page images need `setBaseUrl` and the images shipped
+            in the zip first - see `docs/images/NEEDED.md`.
+          -->
+          {% if page.lead_image %}
+            <figure class="lead-figure">
+              <img
+                src="{{ page.lead_image.src | relative_url }}"
+                alt="{{ page.lead_image.alt }}"
+                loading="lazy"
+              />
+              {% if page.lead_image.caption %}
+                <figcaption>{{ page.lead_image.caption }}</figcaption>
+              {% endif %}
+            </figure>
+          {% endif %}
+          {{ content }}
+        </main>
       </div>
     {% endif %}
 

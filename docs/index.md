@@ -20,6 +20,16 @@ hero:
       style: primary
     - label: Walk through a first export
       url: /first-export.html
+  image:
+    src: /images/exported-map.png
+    alt: >-
+      An exported map open in a browser, showing Alaska with airports, rivers,
+      railroads and trails, a layer switcher, a legend, zoom controls, a scale
+      bar and an open popup listing one airport's attributes.
+    caption: >-
+      An exported map, open in a browser. Layer switcher, legend, zoom, scale
+      bar and popups are all there without configuring anything. The basemap
+      behind it is the one optional extra.
 
 verdicts:
   caption: Before you export, every property of your project is given one of these five verdicts

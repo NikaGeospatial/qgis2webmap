@@ -3,6 +3,9 @@ title: The dialog, tab by tab
 description: >-
   Every control in the QGIS2WebMap export dialog - Map, Layers, Appearance,
   Fidelity and Help - and what each one changes for whoever opens your map.
+lead_image:
+  src: /images/dialog-tabs.png
+  alt: The export dialog's tab bar - Map, Layers, Appearance, Fidelity, Help.
 ---
 
 # The dialog, tab by tab

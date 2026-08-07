@@ -645,6 +645,45 @@ body {
   border-color: var(--accent);
 }
 
+/* The one image on the landing page, and the only thing on it that is wider
+   than the reading column - it earns that by being the only place the site
+   shows what the plugin actually produces. */
+.hero__figure {
+  margin: clamp(2.5rem, 6vw, 3.5rem) 0 0;
+}
+
+.hero__figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.hero__figure figcaption,
+.lead-figure figcaption {
+  margin-top: 0.7rem;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  max-width: 58ch;
+}
+
+/* A guide's lead image. Sized to its own pixels rather than stretched: the one
+   in use is a 443px tab bar, and blown up to the column width it would be a
+   blurry band. */
+.lead-figure {
+  margin: 0 0 2rem;
+}
+
+.lead-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
 /* The signature. The plugin's promise is that nothing is dropped silently: it
    classifies every property of your project before you export and shows you the
    verdict. That vocabulary is the product, so it opens the site - a real legend

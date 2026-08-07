@@ -35,6 +35,17 @@ layout: default
       {% endfor %}
     </div>
 
+    {% if page.hero.image %}
+      <figure class="hero__figure">
+        <img
+          src="{{ page.hero.image.src | relative_url }}"
+          alt="{{ page.hero.image.alt }}"
+          width="1600"
+        />
+        <figcaption>{{ page.hero.image.caption }}</figcaption>
+      </figure>
+    {% endif %}
+
     {% if page.verdicts %}
       <!--
         Laid out as a report rather than a row of tiles: a fixed mono key column
