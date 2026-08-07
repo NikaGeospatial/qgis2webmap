@@ -46,10 +46,9 @@ jobs:
       - name: Build plugin zip
         run: python scripts/package_plugin.py
       - name: Verify zip shape against QGIS repository requirements
-        # Globbed on the extension rather than the product name: the zip was
-        # called `nika_onlymap_exporter-*.zip` until 0.1.2 and this step went on
-        # matching a name the packager had stopped producing. `dist/` is built
-        # fresh in this job, so there is only ever one zip in it.
+        # Globbed on the extension, not the product name, so a rename in the
+        # packager cannot silently stop matching. `dist/` is built fresh in this
+        # job, so there is only ever one zip in it.
         run: |
           zip=$(ls dist/*.zip)
           python scripts/verify_package.py "$zip"

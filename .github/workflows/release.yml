@@ -27,7 +27,7 @@ jobs:
 
       - run: python scripts/package_plugin.py
       - name: Verify zip
-        run: python scripts/verify_package.py dist/nika_onlymap_exporter-*.zip
+        run: python scripts/verify_package.py dist/*.zip
 
       - uses: softprops/action-gh-release@v2
         with:
