@@ -71,66 +71,37 @@ against it before capturing thirty shots.
 
 ## Delivered
 
-- `exported-map.png` — the Alaska demo open in a browser. Landing page hero.
+Annotations were drawn with `scripts/annotate_screenshot.py`, which implements
+the house style below. Re-run it against the raw capture rather than editing a
+PNG by hand — the raw shots are the source, the annotated files are output.
+
+- `exported-map.png` — the Alaska demo in a browser. Landing page hero.
 - `dialog-tabs.png` — the tab bar. Lead image on `the-dialog.md`.
+- `install-01-plugins-menu.png` — **Plugins** menu, boxed.
+- `install-02-search-result.png` — search field and result row, numbered.
+- `install-03-install-button.png` — **Install Plugin**, boxed.
+- `install-05-installed-tab.png` — **Installed** tab and the ticked checkbox.
+- `dialog-map-tab.png`, `dialog-layers-tab.png`, `dialog-appearance-tab.png`,
+  `dialog-fidelity-tab.png` — one per tab.
+- `fidelity-strip.png` — the "2 things change on export" strip.
+- `export-01-map-name.png`, `export-02-formats.png`,
+  `export-03-summary-line.png`, `export-05-live-preview.png`,
+  `export-06-fidelity-report.png` — annotated.
+- `live-preview.png` — QGIS and the browser side by side.
 
-## Priority 1 — one per tab, for `the-dialog.md`
-
-The tab *bar* is already in hand; what is missing is what each tab **contains**.
-Each of these is the whole dialog window with that tab selected:
-
-| File | Shot |
-|---|---|
-| `dialog-map-tab.png` | **Map** tab, a project loaded, map name filled in, Standalone HTML selected, the size line and the summary line both visible |
-| `dialog-layers-tab.png` | **Layers** tab with 4–6 layers, one expanded to show its per-field popup settings |
-| `dialog-appearance-tab.png` | **Appearance** tab, scrolled so Map controls, Caption and Control colours are all in frame |
-| `dialog-fidelity-tab.png` | **Fidelity** tab on a project that produces a genuine mix — at least one *Changed* and one *Not exported*, sorted with problems on top |
-| `fidelity-strip.png` | Tight crop of the strip above the buttons reading e.g. `3 things change on export.` with **What changes?** beside it |
+**Two of these carried personal data and were redacted, not re-shot.** The
+Filepath field read `/home/abhijay/…` and the QGIS Browser panel listed saved
+database connections by name. `annotate_screenshot.py --redact` paints a flat
+block rather than blurring: a blur of a short string is often reversible, and on
+a public site reversible means published. **Check every new capture for this** -
+the Filepath field and the Browser panel are the two that bite.
 
 ## Priority 2 — `first-export.md`
 
 | File | Shot |
 |---|---|
-| `export-blocked.png` | The **Export** button greyed out with its reason printed beside it |
-| `live-preview.png` | QGIS and a browser side by side showing the same map, **Live preview** ticked |
-
-## Priority 3 — `installation.md`
-
-| File | Shot |
-|---|---|
-| `install-from-zip.png` | **Plugins → Manage and Install Plugins → Install from ZIP** with the plugin zip selected |
-| `runtime-licence-prompt.png` | The one-off OnlyMap runtime download prompt, showing the licence |
-
-## Step by step — `installation.md`, annotated
-
-Blocked on the mid-page plumbing above. Every shot here is **annotated**.
-
-| File | Shot | Annotation |
-|---|---|---|
-| `install-01-plugins-menu.png` | QGIS main window, **Plugins** menu open | Box **Manage and Install Plugins…** |
-| `install-02-search-result.png` | The plugin manager with `QGIS2WebMap` typed in the search box | Box the search box and the **QGIS2WebMap by NIKA** row, numbered 1 and 2 |
-| `install-03-install-button.png` | Same dialog, our plugin selected, button row in frame | Box **Install Plugin** |
-| `install-04-web-menu.png` | QGIS main window, **Web** menu open after install | Box the **QGIS2WebMap by NIKA** submenu entry |
-| `install-05-installed-tab.png` | Plugin manager, **Installed** tab, our row with its checkbox ticked | Box the checkbox — this is the fix for "installed but no Web menu" |
-| `install-06-log-messages.png` | **View → Panels → Log Messages**, panel open on the QGIS2WebMap tab | Box the panel's QGIS2WebMap tab. Troubleshooting only |
-
-## Step by step — `first-export.md`, annotated
-
-Blocked on the mid-page plumbing above. Every shot here is **annotated**.
-
-| File | Shot | Annotation |
-|---|---|---|
-| `export-01-map-name.png` | **Map** tab, top section, a name typed in | Box the **Map name** field |
-| `export-02-formats.png` | **Map** tab, the "How to share it" block, all three options visible | Numbered 1–3 on Standalone HTML / Share ZIP / Folder |
-| `export-03-summary-line.png` | **Map** tab, the size and summary lines above the buttons | Box the summary sentence — this is what tells you what you are about to get |
-| `export-04-layers-expanded.png` | **Layers** tab, one layer expanded to its per-field popup settings | Numbered 1–3 on the Include / Popups / Labels columns |
-| `export-05-live-preview.png` | Button row, **Live preview** ticked | Box the checkbox |
-| `export-06-fidelity-report.png` | **Fidelity** tab with a real mix of verdicts, one row expanded | Box one *Changed* row and one *Not exported* row, numbered 1 and 2 |
-
-Unannotated shots for the same two pages — `qgis-project-styled.png` (a demo
-project with 3–4 styled layers, Layers panel in frame) and `plugin-dialog-open.png`
-(the dialog open with QGIS still usable behind it) — are worth having but are
-scene-setting, not instruction.
+| `export-blocked.png` | The **Export** button greyed out with its reason printed beside it. Needs a project that actually blocks — the demo project exports cleanly, so this one cannot be derived from the shots already taken |
+| `export-04-layers-expanded.png` | **Layers** tab with **one layer expanded** to its per-field popup settings, numbered 1–3 on Include / Popups / Labels. The delivered `dialog-layers-tab.png` has every layer collapsed, so the per-field settings the guide describes are not visible anywhere yet |
 
 ## "Going further" — `index.md` and `hosting.md`
 
