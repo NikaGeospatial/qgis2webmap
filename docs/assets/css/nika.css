@@ -167,7 +167,10 @@ body {
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  /* Only ever separates the brand from the QGIS credit: the nav is pushed right
+     by its own `margin-left: auto`, so widening this would not move it. Kept
+     tight so the credit reads as attached to our mark rather than floating. */
+  gap: 0.8rem;
   padding: 0.7rem clamp(1rem, 4vw, 2rem);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
@@ -183,44 +186,52 @@ body {
   flex: 0 0 auto;
 }
 
+/* Deliberately larger than `__powered-mark`. Two logos at the same size read as
+   a partnership; ours has to stay the dominant one. */
 .masthead__mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: block;
 }
 
 .masthead__name {
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 17px;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
 
-.masthead__by {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+/* A credit, not a second brand. The rule on the left keeps it from reading as
+   part of our own name, and the small mono caps file it as a caption rather
+   than a nav item. */
+.masthead__powered {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  padding-left: 0.8rem;
+  border-left: 1px solid var(--rule);
 }
 
-/* A credit, not a second brand. The rule on the left keeps it from reading as
-   part of our own name, and it reuses `__by`'s small mono caps so the eye files
-   it as a caption rather than a nav item. */
-.masthead__powered {
-  flex: 0 0 auto;
-  padding-left: 0.9rem;
-  border-left: 1px solid var(--rule);
+/* `--ink-2`, not `--ink-3`: at 11px in mono caps the dimmer token was legible
+   in light mode and mud in dark, where the background is near-black and `-3`
+   barely lifts off it. */
+.masthead__powered-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.masthead__powered-mark {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .masthead__nav {

@@ -70,8 +70,8 @@
         <svg
           class="masthead__mark"
           viewBox="0 0 64 64"
-          width="30"
-          height="30"
+          width="34"
+          height="34"
           aria-hidden="true"
           focusable="false"
         >
@@ -105,21 +105,34 @@
             fill="none"
           />
         </svg>
-        <span class="masthead__name">
-          QGIS2WebMap
-          <span class="masthead__by">by NIKA</span>
-        </span>
+        <!--
+          "by NIKA" used to sit under the name. It put a second line of small
+          mono caps directly below the credit's, at a different baseline, and
+          the two read as one confused block. NIKA is still credited in the
+          footer of every page.
+        -->
+        <span class="masthead__name">QGIS2WebMap</span>
       </a>
 
       <!--
-        Wording only, deliberately: QGIS's brand guidelines approve the
-        "... powered by QGIS" phrasing outright, while their mark is a separate
-        permission we have not been granted. Outside the brand link so it reads
-        as a credit rather than part of our own name. The footer's "not endorsed
-        by QGIS.org; QGIS® is a trademark" line is what keeps it a credit and
-        not a claim of endorsement - it must stay on every page.
+        Outside the brand link on purpose: inside it, clicking QGIS's mark would
+        navigate to our home page. The mark ships as a file at its own colours
+        rather than being inlined and recoloured from `--accent` the way ours
+        is, and is deliberately smaller than ours - this is a credit, not a
+        co-brand. The footer's "not endorsed by QGIS.org; QGIS® is a trademark"
+        line is what keeps it a credit and not a claim of endorsement, so it
+        must stay on every page.
       -->
-      <span class="masthead__powered">Powered by QGIS</span>
+      <span class="masthead__powered">
+        <span class="masthead__powered-label">Powered by</span>
+        <img
+          class="masthead__powered-mark"
+          src="{{ '/assets/qgis-logo.svg' | relative_url }}"
+          alt="QGIS"
+          width="20"
+          height="20"
+        />
+      </span>
 
       <nav class="masthead__nav" aria-label="Main">
         {% for item in site.data.nav.main %}
