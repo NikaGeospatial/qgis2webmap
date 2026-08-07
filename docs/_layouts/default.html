@@ -112,24 +112,14 @@
       </a>
 
       <!--
-        Outside the brand link on purpose: inside it, clicking QGIS's mark would
-        navigate to our home page. QGIS's guidelines approve the "... powered by
-        QGIS" wording, so the label carries the claim and the mark stays a file
-        at its own colours rather than being inlined and recoloured from
-        `--accent` the way our own mark is. The footer's "not endorsed by
-        QGIS.org" line is what keeps this a credit and not a claim of
-        endorsement.
+        Wording only, deliberately: QGIS's brand guidelines approve the
+        "... powered by QGIS" phrasing outright, while their mark is a separate
+        permission we have not been granted. Outside the brand link so it reads
+        as a credit rather than part of our own name. The footer's "not endorsed
+        by QGIS.org; QGIS® is a trademark" line is what keeps it a credit and
+        not a claim of endorsement - it must stay on every page.
       -->
-      <span class="masthead__powered">
-        <span class="masthead__powered-label">Powered by</span>
-        <img
-          class="masthead__powered-mark"
-          src="{{ '/assets/qgis-logo.svg' | relative_url }}"
-          alt="QGIS"
-          width="24"
-          height="24"
-        />
-      </span>
+      <span class="masthead__powered">Powered by QGIS</span>
 
       <nav class="masthead__nav" aria-label="Main">
         {% for item in site.data.nav.main %}
