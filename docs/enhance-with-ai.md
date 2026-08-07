@@ -11,10 +11,10 @@ described by plain markup you can edit — which means an AI assistant can edit 
 for you, and you do not have to write any code yourself.
 
 That is a consequence of what your map is built on. It runs on
-**[OnlyMapJS](https://github.com/NikaGeospatial/onlymap-js)**, an open, published
-library whose whole vocabulary is written down — so a coding assistant can read
-how it works and change your map for you: new colours, a filter, a chart, your
-own branding. You describe what you want in plain language; it edits the file.
+**[OnlyMapJS](https://github.com/NikaGeospatial/onlymap-js)**, a library anyone
+can use and whose whole vocabulary is documented — so a coding assistant can
+look up how it works and change your map for you: new colours, a filter, a
+chart, your own branding. You describe what you want in plain language; it edits the file.
 Any assistant will do, and the rest of this page is about getting a good result
 from whichever one you already use.
 

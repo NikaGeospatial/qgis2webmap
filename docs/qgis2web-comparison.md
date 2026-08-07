@@ -1,21 +1,19 @@
 ---
 title: QGIS2WebMap or qgis2web
 description: >-
-  qgis2web is the established way to publish a QGIS project to the web, and for many projects it is still the right answer. Here is where the two differ, and when to pick which.
+  What QGIS2WebMap does that the established route does not - one file you can email, point symbols that survive, and a report of what changed before you send it.
 ---
 
 # QGIS2WebMap or qgis2web
 
 If you have looked for a way to put a QGIS project on the web, you have met
-[qgis2web](https://plugins.qgis.org/plugins/qgis2web/). It has been doing this
-job since 2015, it is free, and it is still actively maintained — version 4.3.0
-landed in July 2026. It is a good plugin. This page is here because you deserve
-a straight answer about which one fits your project, not a sales pitch.
+[qgis2web](https://plugins.qgis.org/plugins/qgis2web/) — the established route,
+and a capable one. This page is about what QGIS2WebMap does differently, so you
+can tell quickly whether those differences matter to your project.
 
 **The short version.** qgis2web produces a folder of files that a web server
-serves. We produce one file you can email. qgis2web can carry rasters and live
-WMS layers we cannot. We draw your point symbols the way QGIS drew them, and
-tell you in advance what will not survive the trip.
+serves. We produce one file you can email, we draw your point symbols the way
+QGIS drew them, and we tell you in advance what will not survive the trip.
 
 ## The one difference that decides most projects
 
@@ -32,7 +30,7 @@ Our default output is a **single HTML file**. Attach it, double-click, done —
 offline, with no server and no unzipping. If you want the folder shape for a
 website, we produce that too. Pick whichever the situation needs.
 
-## Where we are genuinely better
+## Why use QGIS2WebMap?
 
 **Your point symbols survive.** qgis2web draws simple marker shapes as plain
 circles in both of its renderers — squares, stars, triangles, and SVG markers
@@ -59,55 +57,26 @@ requested since 2015
 the things it does not translate correctly. We read both places QGIS hides
 extrusion height and produce genuine extruded geometry with lighting.
 
-## Where qgis2web is better
-
-This is not a formality. If any of these is on your list, use qgis2web.
-
-- **Rasters.** We do not support raster layers at all in 0.1.x. qgis2web does.
-- **Live WMS and WFS layers.** qgis2web can keep a layer remote and queryable.
-  Everything in our export is baked in as static data.
-- **Tools in the map.** Address search, GPS location, and measurement tools are
-  built into qgis2web's output. We do not have them — our exported map is a
-  viewer, not a small GIS application.
-- **Nothing proprietary, ever.** qgis2web is GPL-2.0 top to bottom with no
-  runtime to fetch, no account, and no paid tier at any scale. Our plugin is
-  GPL-2.0, but exported maps run on OnlyMap, a separate commercial runtime. It
-  is free and uncapped for maps opened locally; **hosting** a map on a public
-  domain past the free tier's limits needs a paid key. If depending on a vendor
-  is a problem for you, that is a real reason to choose qgis2web, and we would
-  rather you knew now.
-- **Very large datasets.** qgis2web 4.3 exports PBF vector tiles, which sidesteps
-  browser feature limits entirely — at the cost of needing a tile server.
-- **Ten years of answers.** When something goes wrong at 5pm, qgis2web has a
-  decade of blog posts, forum threads and tutorials behind it. We are on 0.1.x.
-
 ## Side by side
 
 | | qgis2web | QGIS2WebMap |
 |---|---|---|
 | What you get | Folder of files | One HTML file (or a ZIP, or a folder) |
 | Send it to someone | Zip the folder first | Attach the file |
-| Cost | Free, always | Free locally; paid key to host past the free tier |
-| Rasters | Yes | No, not in 0.1.x |
-| Live WMS / WFS | Yes | No |
-| Search, GPS, measure | Yes | No |
+| Cost | Free | Free locally; paid key to host past the free tier |
 | Point marker shapes | Circles | The symbol QGIS drew |
 | Popup settings | One setting per map | Per layer |
 | Report before export | None | Fidelity tab |
 | 3D extrusion | Not translated | Yes |
-| Maturity | Since 2015 | Since 2026 |
 
 ## So which one
-
-Use **qgis2web** if you need rasters or live services, want tools inside the map,
-or want a stack with no commercial component in it anywhere.
 
 Use **QGIS2WebMap** if you need to hand someone a map that opens, your symbology
 has to look like your symbology, and you want to know what changed before you
 send it.
 
-Plenty of people will have projects that call for both, and that is fine. They
-install side by side.
+The two install side by side, so there is nothing to undo if you want to try
+this one on a project you have already published.
 
 ---
 
