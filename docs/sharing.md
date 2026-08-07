@@ -1,3 +1,9 @@
+---
+title: Sharing a map
+description: >-
+  Standalone HTML, Share ZIP or Folder - which output mode to pick, and why an email filter is usually what decides it.
+---
+
 # Sharing a map
 
 Three ways to share, chosen on the **Map** tab.

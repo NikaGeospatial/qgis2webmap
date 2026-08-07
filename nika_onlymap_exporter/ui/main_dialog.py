@@ -322,10 +322,12 @@ def help_directory() -> Path | None:
 HELP_PAGES = (
     ("Overview", "index.md"),
     ("Your first export", "first-export.md"),
+    ("The dialog, tab by tab", "the-dialog.md"),
     ("Sharing a map", "sharing.md"),
     ("Enhance with AI", "enhance-with-ai.md"),
     ("Host with OnlyMap", "hosting.md"),
     ("What gets exported", "supported-features.md"),
+    ("Troubleshooting", "troubleshooting.md"),
     ("Privacy", "privacy.md"),
 )
 

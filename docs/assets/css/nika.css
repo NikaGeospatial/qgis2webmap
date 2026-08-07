@@ -1,0 +1,920 @@
+/*
+  QGIS2WebMap documentation - NIKA house style.
+
+  The tokens below are NIKA's own, lifted from nikaplanet.com so the docs site
+  and the company site are the same brand rather than two that resemble each
+  other: plum-black ink, a near-white lilac page, amber in light and lime in
+  dark. Space Grotesk sets headings, Inter sets text, JetBrains Mono sets the
+  small structural labels.
+
+  Two constraints shaped this file, and both are easy to break by accident:
+
+  1. **The guides are rendered twice.** GitHub Pages renders them here, and the
+     plugin's Help tab renders the very same Markdown with Qt (`QTextDocument`,
+     HTML off - see `nika_onlymap_exporter/ui/main_dialog.py`). So every piece
+     of chrome lives in a layout or in this stylesheet, never in a `.md` file.
+     No Liquid, no HTML and no CSS classes in the Markdown itself.
+  2. **Links between guides are written as `.md`.** GitHub Pages runs
+     `jekyll-relative-links` by default, which rewrites them to `.html` at build
+     time, so the same link works on the site, in the repository and in the
+     Help tab. Layouts cannot rely on that - it only rewrites Markdown content -
+     so nav links in layouts are real URLs.
+
+  This replaces the earlier `_includes/head-custom.html`, which recoloured
+  `jekyll-theme-minimal` from the outside. That was the right call while the aim
+  was legibility; it is the wrong one now that the aim is NIKA's identity, since
+  the parts that carry a brand - masthead, type scale, structure - are exactly
+  the parts a theme override cannot reach.
+*/
+
+/* ---- Tokens ------------------------------------------------------------ */
+
+:root {
+  color-scheme: light;
+
+  --bg: #fbf9fc;
+  --bg-2: #f4f0f5;
+  --ink: #170d19;
+  --ink-2: #544956;
+  --ink-3: #807683;
+  --rule: #d3cad5;
+  --accent: #eba941;
+  --accent-soft: #f5e1c8;
+
+  /* Amber on a near-white page is a 1.9:1 contrast ratio, so it is never used
+     for text. It underlines, marks and points; the ink does the reading. */
+  --accent-ink: #8a5a00;
+  --danger: #a3241b;
+  --danger-soft: #f7e2e0;
+
+  /* Its own token because the two themes need different strengths: the light
+     `--accent-soft` is a pale amber that reads as an underline, while the dark
+     one is a near-black olive that would vanish on the page. */
+  --link-rule: var(--accent-soft);
+
+  /* The mark is inline SVG so it can take `--accent` from here. These two are
+     what stays constant in it. */
+  --mark-ground: #170d19;
+  --mark-arrow: #f5f2e7;
+
+  --font-title: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --measure: 68ch;
+  --shell: 1180px;
+  --radius: 10px;
+}
+
+/* The OS preference is the default and the toggle overrides it. Both write the
+   same custom properties, so there is one set of rules rather than a light copy
+   and a dark copy that drift apart. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #0e0511;
+    --bg-2: #1e1021;
+    --ink: #f5f2e7;
+    --ink-2: #bcb7ab;
+    --ink-3: #817683;
+    --rule: #302333;
+    --accent: #abf051;
+    --accent-soft: #203501;
+    --accent-ink: #abf051;
+    --danger: #ff9a8f;
+    --danger-soft: #3a1512;
+    --link-rule: color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0e0511;
+  --bg-2: #1e1021;
+  --ink: #f5f2e7;
+  --ink-2: #bcb7ab;
+  --ink-3: #817683;
+  --rule: #302333;
+  --accent: #abf051;
+  --accent-soft: #203501;
+  --accent-ink: #abf051;
+  --danger: #ff9a8f;
+  --danger-soft: #3a1512;
+  --link-rule: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+/* ---- Base -------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Every in-page anchor lands under the sticky masthead without this. */
+  scroll-padding-top: 5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--bg);
+  font: 600 14px/1 var(--font-sans);
+  border-radius: 0 0 var(--radius) 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* ---- Masthead ---------------------------------------------------------- */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.7rem clamp(1rem, 4vw, 2rem);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
+.masthead__mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: block;
+}
+
+.masthead__name {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.masthead__by {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.masthead__nav {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.masthead__nav a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.masthead__nav a:hover,
+.masthead__nav a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* One button, two glyphs: the layout ships both and CSS reveals the one that
+   describes the action rather than the state. */
+.theme-toggle .icon-dark {
+  display: block;
+}
+
+.theme-toggle .icon-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .icon-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .icon-light {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon-dark {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .theme-toggle .icon-light {
+    display: block;
+  }
+}
+
+/* ---- Shell ------------------------------------------------------------- */
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2rem) 5rem;
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+
+.shell--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar {
+  position: sticky;
+  top: 4.5rem;
+  padding-top: 3rem;
+  font-size: 14.5px;
+}
+
+.sidebar__heading {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.75rem;
+}
+
+.sidebar__heading + .sidebar__heading,
+.sidebar ul + .sidebar__heading {
+  margin-top: 2rem;
+}
+
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.sidebar li a {
+  display: block;
+  padding: 0.3rem 0 0.3rem 0.9rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.sidebar li a:hover {
+  color: var(--ink);
+}
+
+.sidebar li a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-left-color: var(--accent);
+}
+
+/* ---- Prose ------------------------------------------------------------- */
+
+.prose {
+  padding-top: 3rem;
+  max-width: var(--measure);
+}
+
+.prose > *:first-child {
+  margin-top: 0;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-title);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.prose h1 {
+  font-size: clamp(2.1rem, 4.4vw, 2.9rem);
+  font-weight: 700;
+  margin: 0 0 1.5rem;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 3.25rem 0 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* Several guides put a `---` between sections as well, which is right in a
+   plain-text reading of the file and one rule too many here. The heading keeps
+   its own. */
+.prose hr + h2 {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.prose h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 2.25rem 0 0.75rem;
+}
+
+.prose h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.5rem;
+}
+
+.prose p,
+.prose li {
+  color: var(--ink-2);
+}
+
+.prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 2px solid var(--link-rule);
+  transition: border-color 0.15s ease;
+}
+
+.prose a:hover {
+  border-bottom-color: var(--accent);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.2rem;
+}
+
+.prose li {
+  margin: 0.35rem 0;
+}
+
+.prose li::marker {
+  color: var(--ink-3);
+}
+
+.prose hr {
+  height: 1px;
+  border: 0;
+  background: var(--rule);
+  margin: 3rem 0;
+}
+
+.prose blockquote {
+  margin: 1.75rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--bg-2);
+}
+
+.prose blockquote > *:first-child {
+  margin-top: 0;
+}
+
+.prose blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+}
+
+.prose pre {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13.5px;
+}
+
+/* Tables carry a lot of this documentation - every guide has at least one - so
+   they get the same care as the prose rather than browser defaults. */
+.table-scroll {
+  overflow-x: auto;
+  margin: 1.75rem 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 15px;
+}
+
+.prose th,
+.prose td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.prose thead th {
+  background: var(--bg-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.prose td {
+  color: var(--ink-2);
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  margin: 1.75rem 0;
+  background: var(--bg-2);
+}
+
+/* ---- Landing page ------------------------------------------------------ */
+
+.hero {
+  padding: clamp(3.5rem, 9vw, 6rem) 0 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 1.25rem;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 1.75rem;
+  height: 2px;
+  background: var(--accent);
+}
+
+.hero h1 {
+  font-family: var(--font-title);
+  font-size: clamp(2.4rem, 6.5vw, 4.1rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  /* Loose enough that the marker below has somewhere to sit. At 1.02 it landed
+     across the descenders of the line it was marking. */
+  line-height: 1.14;
+  margin: 0 0 1.5rem;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+
+.hero h1 em {
+  font-style: normal;
+  /* The one place the accent reads as itself: a marker under the phrase that
+     names what the plugin actually does, not a wash over the whole line. It is
+     drawn at the foot of each line box and cloned across the wrap, so a phrase
+     spanning two lines gets two clean rules rather than one through the middle
+     of the second. */
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 0.11em;
+  /* An inline background box is font-size tall, not line-height tall, so its
+     100% mark sits on the baseline and the rule ran through every descender.
+     The padding pushes the box past them. */
+  padding-bottom: 0.06em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.hero__lede {
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 52ch;
+  margin: 0 0 2rem;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.button--primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.button--primary:hover {
+  background: var(--ink-2);
+}
+
+.button--ghost {
+  /* Stronger than the hairline `--rule` used everywhere else: at button size on
+     the dark theme that border disappears and the control reads as a flat
+     rectangle rather than something to press. */
+  border-color: color-mix(in srgb, var(--ink-3) 70%, transparent);
+  color: var(--ink);
+  background: transparent;
+}
+
+.button--ghost:hover {
+  border-color: var(--accent);
+}
+
+/* The signature. The plugin's promise is that nothing is dropped silently: it
+   classifies every property of your project before you export and shows you the
+   verdict. That vocabulary is the product, so it opens the site - a real legend
+   with the plugin's own five words, not an invented graphic. */
+.verdicts {
+  margin: clamp(3rem, 7vw, 4.5rem) 0 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.5rem;
+}
+
+.verdicts__caption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 1.1rem;
+}
+
+.verdicts__list {
+  margin: 0;
+  max-width: 58ch;
+}
+
+.verdict {
+  display: grid;
+  grid-template-columns: 1.1rem 8.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0 0.9rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.verdict:last-child {
+  border-bottom: 0;
+}
+
+/* The key square, in the column of its own, so the five words line up down the
+   page the way they line up down the Fidelity tab's Result column. */
+.verdict::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--dot, var(--ink-3));
+  /* `baseline` alignment on an empty box puts it on the line's bottom edge; a
+     nudge sits it with the x-height of the word beside it. */
+  transform: translateY(-0.1em);
+}
+
+.verdict[data-tone="kept"] {
+  --dot: var(--accent);
+}
+
+.verdict[data-tone="changed"] {
+  --dot: var(--ink-2);
+}
+
+.verdict[data-tone="blocked"] {
+  --dot: var(--danger);
+}
+
+.verdict dt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.verdict dd {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+@media (max-width: 560px) {
+  .verdict {
+    grid-template-columns: 1.1rem minmax(0, 1fr);
+    row-gap: 0.15rem;
+  }
+
+  .verdict dd {
+    grid-column: 2;
+  }
+}
+
+.section {
+  margin-top: clamp(3rem, 6vw, 4.5rem);
+}
+
+/* The landing page's own prose sits in a `.section`, which already spaces it.
+   Without this it inherits the guide pages' top padding as well and opens with
+   a hole. */
+.section.prose {
+  padding-top: 0;
+}
+
+/* Same rule-above-the-heading as `.prose h2`, so the landing page and the
+   guides are structured by one device rather than two. */
+.section__title {
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.section.prose > h2:first-child {
+  margin-top: 0;
+}
+
+.section__lede {
+  color: var(--ink-2);
+  max-width: 60ch;
+  margin: 0 0 1.75rem;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  gap: 0 2rem;
+}
+
+/* Unfilled and open on three sides. The page already spends its contrast on the
+   verdict legend above; a grid of filled, lifting, rounded boxes underneath it
+   would compete with that and is the shape every documentation index has. What
+   is left is the top rule, which turns accent on hover - the same signal the
+   masthead and sidebar use for "you are here". */
+.card {
+  display: block;
+  padding: 1.1rem 0 0.4rem;
+  border-top: 2px solid var(--rule);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.card:hover {
+  border-top-color: var(--accent);
+}
+
+.card:hover h3 {
+  color: var(--accent-ink);
+}
+
+.card__step {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+.card h3 {
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0.35rem 0 0.4rem;
+  color: var(--ink);
+  transition: color 0.15s ease;
+}
+
+.card p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+  background: var(--bg-2);
+  padding: 2.5rem clamp(1rem, 4vw, 2rem);
+}
+
+.site-footer__inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.5rem;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.site-footer a {
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.site-footer a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.site-footer__legal {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* ---- Narrow screens ---------------------------------------------------- */
+
+@media (max-width: 820px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .sidebar {
+    position: static;
+    padding-top: 2rem;
+  }
+
+  .prose {
+    padding-top: 2rem;
+  }
+
+  .masthead {
+    gap: 0.75rem;
+  }
+
+  .masthead__nav {
+    gap: 0.9rem;
+  }
+
+  .masthead__nav a {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 560px) {
+  body {
+    font-size: 16px;
+  }
+
+  /* The guide links are all in the sidebar below; repeating them in a wrapping
+     masthead costs a third of the first screen. */
+  .masthead__nav a:not(.masthead__nav-primary) {
+    display: none;
+  }
+}
+
+@media print {
+  .masthead,
+  .sidebar,
+  .theme-toggle,
+  .skip-link {
+    display: none;
+  }
+
+  .shell {
+    display: block;
+  }
+}

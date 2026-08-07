@@ -1,3 +1,9 @@
+---
+title: Install the plugin
+description: >-
+  Install QGIS2WebMap from a zip, and what the one-off OnlyMap runtime download is - including the offline and proxy paths.
+---
+
 # Installation
 
 Requires **QGIS 3.44 or newer**. QGIS 4 is supported.

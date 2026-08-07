@@ -1,3 +1,9 @@
+---
+title: What gets exported
+description: >-
+  Layers, symbology, labels, popups, height, terrain and attribution - what is preserved, what is approximated, and what is not exported.
+---
+
 # What gets exported
 
 0.1.0 supports a deliberately narrow set, well, rather than everything, badly.

@@ -1,3 +1,9 @@
+---
+title: Enhance a map with AI
+description: >-
+  An exported map is readable HTML, so an AI assistant can add filters, charts or branding without breaking portability.
+---
+
 # Enhance a map with AI
 
 An exported map is a readable HTML document, not a compiled bundle. The map is

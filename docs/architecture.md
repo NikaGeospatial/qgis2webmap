@@ -1,3 +1,9 @@
+---
+title: Architecture
+description: >-
+  How the plugin is put together: project reader, export model, writers and exporters, and the non-negotiables they answer to.
+---
+
 # Architecture
 
 The one rule that shapes everything: **QGIS interpretation, manifest generation,

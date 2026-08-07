@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"
+     role="img" aria-label="QGIS2WebMap by NIKA">
+  <title>QGIS2WebMap by NIKA</title>
+  <!--
+    The favicon, and the reference the masthead is drawn from. The masthead
+    itself inlines this shape in `_layouts/default.html` so its accent can come
+    from `--accent` and follow the theme; a favicon cannot, so this file commits
+    to the dark palette, which is what a browser tab is closer to either way.
+    Keep the two in step.
+
+    The plugin's own copy in `nika_onlymap_exporter/icons/` keeps its original
+    colours because it is drawn against whatever Qt theme the user runs, not
+    against this page.
+
+    Both are placeholders. Deliberately does NOT use or resemble the QGIS logo -
+    the QGIS trademark guidelines require separate permission for that. Replace
+    with the approved NIKA/OnlyMap mark before repository submission; see
+    `docs/images/NEEDED.md`.
+  -->
+  <defs>
+    <linearGradient id="om-plane" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c6f77e"/>
+      <stop offset="1" stop-color="#8fd12f"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="12" fill="#170d19"/>
+
+  <!-- folded map plane -->
+  <path d="M10 40 L32 28 L54 40 L32 52 Z" fill="url(#om-plane)"/>
+  <path d="M10 40 L32 28 L32 52 Z" fill="#170d19" opacity="0.16"/>
+
+  <!-- graticule hint -->
+  <path d="M21 34 L43 34 M18 43 L46 43" stroke="#170d19" stroke-opacity="0.3"
+        stroke-width="1.6" stroke-linecap="round" fill="none"/>
+
+  <!-- export arrow, leaving the plane -->
+  <path d="M32 24 L32 8" stroke="#f5f2e7" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 14 L32 6 L40 14" stroke="#f5f2e7" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

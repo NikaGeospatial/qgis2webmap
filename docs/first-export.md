@@ -1,3 +1,9 @@
+---
+title: Your first export
+description: >-
+  A walkthrough from a styled QGIS project to a web map you can email, including live preview and the fidelity check.
+---
+
 # Your first export
 
 ## 1. Build the map in QGIS

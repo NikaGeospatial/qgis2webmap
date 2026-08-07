@@ -38,10 +38,12 @@ HELP_DOCS = (
     "index.md",
     "installation.md",
     "first-export.md",
+    "the-dialog.md",
     "sharing.md",
     "enhance-with-ai.md",
     "hosting.md",
     "supported-features.md",
+    "troubleshooting.md",
     "privacy.md",
 )
 

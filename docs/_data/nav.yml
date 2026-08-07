@@ -1,0 +1,46 @@
+# Navigation for the layouts.
+#
+# URLs are written as `.html` and not `.md` on purpose. GitHub Pages runs
+# `jekyll-relative-links`, which rewrites `.md` links found in Markdown content
+# to their published URLs - but it does not touch layouts, so a `.md` link here
+# would ship as a 404. Inside the guides themselves, keep writing `.md`: that is
+# what makes one link work on the site, in the repository and in the plugin's
+# Help tab at the same time.
+
+main:
+  - title: Install
+    url: /installation.html
+  - title: First export
+    url: /first-export.html
+  - title: The dialog
+    url: /the-dialog.html
+
+guides:
+  - title: Getting started
+    items:
+      - title: Overview
+        url: /
+      - title: Install the plugin
+        url: /installation.html
+      - title: Your first export
+        url: /first-export.html
+      - title: Troubleshooting
+        url: /troubleshooting.html
+
+  - title: Using the plugin
+    items:
+      - title: The dialog, tab by tab
+        url: /the-dialog.html
+      - title: What gets exported
+        url: /supported-features.html
+
+  - title: After the export
+    items:
+      - title: Sharing a map
+        url: /sharing.html
+      - title: Host with OnlyMap
+        url: /hosting.html
+      - title: Enhance a map with AI
+        url: /enhance-with-ai.html
+      - title: Privacy
+        url: /privacy.html

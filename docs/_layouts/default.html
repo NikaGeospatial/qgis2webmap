@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>
+      {%- if page.url == "/" -%}
+        {{ site.title }}
+      {%- else -%}
+        {{ page.title }} · {{ site.title }}
+      {%- endif -%}
+    </title>
+    <meta
+      name="description"
+      content="{{ page.description | default: site.description }}"
+    />
+
+    <link rel="canonical" href="{{ page.url | absolute_url }}" />
+    <link rel="icon" href="{{ '/assets/mark.svg' | relative_url }}" type="image/svg+xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="{{ site.title }}" />
+    <meta property="og:title" content="{{ page.title | default: site.title }}" />
+    <meta
+      property="og:description"
+      content="{{ page.description | default: site.description }}"
+    />
+    <meta property="og:url" content="{{ page.url | absolute_url }}" />
+    <meta name="twitter:card" content="summary" />
+
+    <!--
+      The theme is written to the root element before the stylesheet paints, so
+      someone reading in dark mode never gets a white flash. Kept inline and
+      first for that reason; everything else on this page can wait.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("qgis2webmap-theme");
+          if (stored === "dark" || stored === "light") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {
+          /* private browsing: fall through to the OS preference */
+        }
+      })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ '/assets/css/nika.css' | relative_url }}" />
+  </head>
+
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <header class="masthead">
+      <a class="masthead__brand" href="{{ '/' | relative_url }}">
+        <!--
+          Inline rather than an `<img>` so the mark takes the accent from the
+          same custom property as everything else - amber in light, lime in
+          dark. Sourced from `assets/mark.svg`, which stays a file because the
+          favicon has to be one; keep the two in step.
+        -->
+        <svg
+          class="masthead__mark"
+          viewBox="0 0 64 64"
+          width="30"
+          height="30"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect width="64" height="64" rx="12" fill="var(--mark-ground)" />
+          <path d="M10 40 L32 28 L54 40 L32 52 Z" fill="var(--accent)" />
+          <path
+            d="M10 40 L32 28 L32 52 Z"
+            fill="var(--mark-ground)"
+            opacity="0.16"
+          />
+          <path
+            d="M21 34 L43 34 M18 43 L46 43"
+            stroke="var(--mark-ground)"
+            stroke-opacity="0.3"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            fill="none"
+          />
+          <path
+            d="M32 24 L32 8"
+            stroke="var(--mark-arrow)"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <path
+            d="M24 14 L32 6 L40 14"
+            stroke="var(--mark-arrow)"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            fill="none"
+          />
+        </svg>
+        <span class="masthead__name">
+          QGIS2WebMap
+          <span class="masthead__by">by NIKA</span>
+        </span>
+      </a>
+
+      <nav class="masthead__nav" aria-label="Main">
+        {% for item in site.data.nav.main %}
+          <a
+            href="{{ item.url | relative_url }}"
+            {% if page.url == item.url %}aria-current="page"{% endif %}
+          >{{ item.title }}</a>
+        {% endfor %}
+        <a
+          class="masthead__nav-primary"
+          href="{{ site.repository_url }}"
+        >GitHub</a>
+
+        <button
+          class="theme-toggle"
+          type="button"
+          id="theme-toggle"
+          aria-label="Switch to dark mode"
+          title="Switch theme"
+        >
+          <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+          </svg>
+          <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+          </svg>
+        </button>
+      </nav>
+    </header>
+
+    {% if page.layout == "home" %}
+      <!-- The home layout brings its own shell; it needs the full width and no
+           sidebar, and the guide list it would hold is on the page already. -->
+      <main id="content">{{ content }}</main>
+    {% else %}
+      <div class="shell">
+        <aside class="sidebar">
+          {% for group in site.data.nav.guides %}
+            <p class="sidebar__heading">{{ group.title }}</p>
+            <ul>
+              {% for item in group.items %}
+                <li>
+                  <a
+                    href="{{ item.url | relative_url }}"
+                    {% if page.url == item.url %}aria-current="page"{% endif %}
+                  >{{ item.title }}</a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endfor %}
+        </aside>
+
+        <main id="content" class="prose">{{ content }}</main>
+      </div>
+    {% endif %}
+
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <span>QGIS2WebMap {{ site.plugin_version }} — built by
+          <a href="https://nikaplanet.com">NIKA</a></span>
+
+        <nav aria-label="Footer">
+          <a href="{{ site.repository_url }}">Source</a>
+          <a href="{{ site.repository_url }}/issues">Report a bug</a>
+          <a href="https://onlymap.nikaplanet.com/">OnlyMap docs</a>
+          <a href="https://docs.nikaplanet.com">NIKA docs</a>
+          <a href="mailto:support@nikaplanet.com">support@nikaplanet.com</a>
+        </nav>
+
+        <p class="site-footer__legal">
+          The plugin is GPL-2.0-or-later. The OnlyMap runtime embedded in
+          exported maps is separately licensed. QGIS2WebMap is an independent
+          third-party plugin and is not endorsed by QGIS.org; QGIS® is a
+          trademark of the QGIS project.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        var KEY = "qgis2webmap-theme";
+        var root = document.documentElement;
+
+        function current() {
+          var explicit = root.getAttribute("data-theme");
+          if (explicit) return explicit;
+          return window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        }
+
+        var button = document.getElementById("theme-toggle");
+
+        function describe() {
+          // The label is the action, not the state, which is how every other
+          // control on this site and in the plugin reads.
+          button.setAttribute(
+            "aria-label",
+            current() === "dark" ? "Switch to light mode" : "Switch to dark mode"
+          );
+        }
+
+        button.addEventListener("click", function () {
+          var next = current() === "dark" ? "light" : "dark";
+          root.setAttribute("data-theme", next);
+          try {
+            localStorage.setItem(KEY, next);
+          } catch (e) {
+            /* not persisting is survivable; the toggle still works this visit */
+          }
+          describe();
+        });
+
+        describe();
+
+        // Wrap tables so a wide one scrolls inside its own box instead of
+        // pushing the whole page sideways. Done here rather than in the
+        // Markdown: these files are also rendered by the plugin's Help tab,
+        // which understands no HTML.
+        document.querySelectorAll(".prose table").forEach(function (table) {
+          var box = document.createElement("div");
+          box.className = "table-scroll";
+          table.parentNode.insertBefore(box, table);
+          box.appendChild(table);
+        });
+      })();
+    </script>
+  </body>
+</html>

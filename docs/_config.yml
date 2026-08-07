@@ -1,6 +1,38 @@
-# GitHub Pages serves this folder. The theme renders the Markdown guides; the
-# plugin's Help tab renders the same files with Qt, so keep them plain Markdown -
-# no Jekyll-specific includes or Liquid tags.
+# GitHub Pages serves this folder.
+#
+# The guides here have two consumers, and only one of them is a browser: the
+# plugin's Help tab renders the same Markdown files with Qt (`QTextDocument`,
+# HTML disabled). So keep the `.md` files plain Markdown - no Liquid, no HTML,
+# no CSS classes. Everything that makes this look like a NIKA site lives in
+# `_layouts/`, `_data/nav.yml` and `assets/css/nika.css`.
+#
+# There is no `theme:` key. The site uses its own layouts rather than recolouring
+# `jekyll-theme-minimal` from the outside, because the parts that carry a brand -
+# masthead, type scale, structure - are the parts a theme override cannot reach.
+
 title: QGIS2WebMap by NIKA
-description: Turn a QGIS project into a portable OnlyMap web map
-theme: jekyll-theme-minimal
+description: >-
+  Turn a QGIS project into an interactive web map that opens locally. No
+  account, no web server, no coding.
+
+url: https://nikageospatial.github.io
+baseurl: /qgis2webmap
+
+# Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
+plugin_version: 0.1.2
+repository_url: https://github.com/NikaGeospatial/qgis2webmap
+
+# Every guide gets the sidebar layout; `index.md` opts into `home` itself.
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+# Working notes and specs are for whoever is reading the repository, not for the
+# published site. `architecture.md` and `ui-design.md` stay published - they are
+# linked from the README and are worth reading - but they are kept out of the
+# sidebar, which is for people using the plugin rather than building it.
+exclude:
+  - superpowers/
+  - images/NEEDED.md

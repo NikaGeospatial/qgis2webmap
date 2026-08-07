@@ -1,3 +1,9 @@
+---
+title: Host with OnlyMap
+description: >-
+  Publishing an exported map. What you are asked before anything is uploaded, visibility options, and the Content Security Policy trap.
+---
+
 # Host with OnlyMap
 
 Every exported map carries a **Host with OnlyMap** link in its bottom-right

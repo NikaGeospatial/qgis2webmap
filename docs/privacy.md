@@ -1,3 +1,9 @@
+---
+title: Privacy
+description: >-
+  Exported maps contain no tracking and make no network requests. What is in the file, what leaves your machine, and how to verify it.
+---
+
 # Privacy
 
 **Exported maps contain no tracking and make no network requests.**
@@ -45,7 +51,7 @@ The claims above are about **exported maps**, and they hold absolutely.
 
 The plugin itself makes exactly one network request in its entire life: the
 first time you build a map, it downloads the OnlyMap runtime from npm — about
-3 MB, once per computer, after showing you the licence and asking. See
+4.5 MB, once per computer, after showing you the licence and asking. See
 [installation](installation.md).
 
 That request sends nothing about you or your data. It is an anonymous download

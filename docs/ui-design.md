@@ -1,3 +1,9 @@
+---
+title: Dialog design
+description: >-
+  Why the export dialog is shaped the way it is, recorded against the specific incumbent failures it exists to avoid.
+---
+
 # Dialog design
 
 The incumbent's dialog is functional but hostile in specific, documented ways.

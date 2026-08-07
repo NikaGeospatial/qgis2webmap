@@ -1,0 +1,79 @@
+---
+layout: default
+---
+
+<!--
+  The landing page's chrome. Everything visible here is driven by front matter
+  in `index.md`, and the Markdown body of that file is passed through untouched.
+
+  That split is not stylistic. `index.md` is also the Overview section of the
+  plugin's Help tab, rendered by Qt with HTML disabled, so a hero built out of
+  `<div>`s in the Markdown would reach QGIS users as a wall of stray angle
+  brackets. Front matter is stripped before Qt ever sees the file, which makes
+  it the one place a web-only structure can live.
+-->
+
+<div class="shell shell--wide">
+  <section class="hero">
+    {% if page.hero.eyebrow %}
+      <p class="eyebrow">{{ page.hero.eyebrow }}</p>
+    {% endif %}
+
+    <h1>
+      {{ page.hero.headline_before }}<em>{{ page.hero.headline_em }}</em
+      >{{ page.hero.headline_after }}
+    </h1>
+
+    <p class="hero__lede">{{ page.hero.lede }}</p>
+
+    <div class="hero__actions">
+      {% for action in page.hero.actions %}
+        <a
+          class="button button--{{ action.style | default: 'ghost' }}"
+          href="{{ action.url | relative_url }}"
+        >{{ action.label }}</a>
+      {% endfor %}
+    </div>
+
+    {% if page.verdicts %}
+      <!--
+        Laid out as a report rather than a row of tiles: a fixed mono key column
+        against a description, hairline-ruled. That is the shape of the Fidelity
+        tab itself, which is the thing this page is claiming as the product.
+      -->
+      <div class="verdicts">
+        <p class="verdicts__caption">{{ page.verdicts.caption }}</p>
+        <dl class="verdicts__list">
+          {% for item in page.verdicts.items %}
+            <div class="verdict" data-tone="{{ item.tone }}">
+              <dt>{{ item.key }}</dt>
+              <dd>{{ item.text }}</dd>
+            </div>
+          {% endfor %}
+        </dl>
+      </div>
+    {% endif %}
+  </section>
+
+  {% for section in page.sections %}
+    <section class="section">
+      <h2 class="section__title">{{ section.title }}</h2>
+      {% if section.lede %}
+        <p class="section__lede">{{ section.lede }}</p>
+      {% endif %}
+      <div class="cards">
+        {% for card in section.cards %}
+          <a class="card" href="{{ card.url | relative_url }}">
+            {% if card.step %}
+              <span class="card__step">{{ card.step }}</span>
+            {% endif %}
+            <h3>{{ card.title }}</h3>
+            <p>{{ card.text }}</p>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <section class="section prose">{{ content }}</section>
+</div>
