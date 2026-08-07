@@ -3,9 +3,6 @@ title: Troubleshooting
 description: >-
   Fixes for the things that actually go wrong - the plugin not appearing, Export
   greyed out, a blank map, a file blocked in transit, layers missing once hosted.
-lead_image:
-  src: /images/install-05-installed-tab.png
-  alt: The plugin manager's Installed tab, with the QGIS2WebMap checkbox ticked.
 ---
 
 # Troubleshooting
@@ -20,6 +17,9 @@ If yours is not listed, the QGIS **Log Messages** panel usually says why: open
 
 1. Make sure **All** is selected on the left of the Manage and Install Plugins
    window, not **Installed**.
+
+   ![The plugin manager with All selected and QGIS2WebMap found in the search results.](images/install-02-search-result.png)
+
 2. Check the spelling. It is one word: `QGIS2WebMap`. Searching `OnlyMap` also
    finds it.
 3. If the whole list is empty, QGIS cannot reach the plugin repository — often a
@@ -32,6 +32,9 @@ If yours is not listed, the QGIS **Log Messages** panel usually says why: open
    **QGIS2WebMap by NIKA** is there and its box is ticked.
 2. If it is there but unticked, tick it. The menu entry and toolbar button
    appear straight away.
+
+   ![The plugin manager's Installed tab, with the QGIS2WebMap row and its ticked checkbox highlighted.](images/install-05-installed-tab.png)
+
 3. If it is ticked and still missing, open **View → Panels → Log Messages** and
    read the `QGIS2WebMap` tab for an error.
 
