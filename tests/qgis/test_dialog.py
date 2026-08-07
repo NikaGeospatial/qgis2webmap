@@ -819,8 +819,13 @@ class TestHelpTab:
         browser = dialog.tabs.widget(4).findChild(QTextBrowser)
 
         text = browser.toPlainText()
-        assert "no tracking" in text
+        assert "one anonymous usage report" in text
         assert "Sharing a map" in text
+        # The website carries the screenshots; this document must not. Checked
+        # on the rendered text rather than the source, because this is the only
+        # tier where Qt has actually parsed the Markdown - an image Qt could not
+        # resolve would surface here and nowhere else.
+        assert "![" not in text
         dialog.close()
 
 
