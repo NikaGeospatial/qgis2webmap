@@ -62,8 +62,8 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --measure: 68ch;
-  --shell: 1180px;
+  --measure: 72ch;
+  --shell: 1320px;
   --radius: 10px;
 }
 
@@ -291,7 +291,7 @@ body {
   margin: 0 auto;
   padding: 0 clamp(1rem, 4vw, 2rem) 5rem;
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr) 13rem;
+  grid-template-columns: 14rem minmax(0, 1fr) 15rem;
   gap: clamp(1.75rem, 4vw, 3rem);
   align-items: start;
 }
@@ -361,6 +361,13 @@ body {
      column taller than the viewport, or the foot of it becomes unreachable. */
   max-height: calc(100vh - 6rem);
   overflow-y: auto;
+  /* Scrollable, but the scrollbar chrome is hidden rather than the overflow
+     removed, so long pages still scroll without a visible bar down the side. */
+  scrollbar-width: none;
+}
+
+.toc::-webkit-scrollbar {
+  display: none;
 }
 
 .toc__heading {
@@ -962,7 +969,7 @@ body {
 
 /* The contents list is the first thing to go: it is an aid, and the guide it
    indexes needs the width more. */
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .shell {
     grid-template-columns: 14rem minmax(0, 1fr);
   }
