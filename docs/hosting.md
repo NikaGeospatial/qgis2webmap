@@ -16,9 +16,11 @@ once your map is published.
 
 ## Nothing uploads on its own
 
-An exported map is a file on your disk. Opening it makes no network request and
-sends nothing anywhere — the **Host** link is a link, not an upload. It opens
-the OnlyMap hosting page and asks you to choose the exported file yourself.
+An exported map is a file on your disk. Opening it sends one anonymous usage
+report and nothing else — your map is not uploaded, and the **Host** link is a
+link, not an upload. It opens the OnlyMap hosting page and asks you to choose
+the exported file yourself. See [privacy](privacy.md) for what the report
+contains.
 
 This is deliberate. A page opened from disk cannot honestly ask for consent on
 your behalf, so it does not try.

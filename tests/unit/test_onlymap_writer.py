@@ -99,7 +99,7 @@ class TestGeneratorLine:
         assert "QGIS2WebMap by NIKA" in line
         assert "0.0.0-test" in line
         assert "2026-07-30" in line
-        assert "no tracking" in line
+        assert "Sends one anonymous usage report to NIKA on load" in line
 
 
 class TestWriter:

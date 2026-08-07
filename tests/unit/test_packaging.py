@@ -277,7 +277,7 @@ class TestExporters:
         with zipfile.ZipFile(outcome.path) as archive:
             readme = archive.read("map/README.txt").decode()
         assert "HOW TO OPEN IT" in readme
-        assert "no tracking" in readme
+        assert "sends one anonymous usage report to NIKA" in readme
 
     def test_a_title_that_looks_like_a_token_is_not_substituted_twice(
         self, tmp_path

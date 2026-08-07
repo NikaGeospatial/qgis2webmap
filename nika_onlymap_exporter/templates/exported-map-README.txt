@@ -25,8 +25,12 @@ which is why it works offline and why you can copy it anywhere.
 PRIVACY
 -------
 
-This map contains no tracking and makes no network requests. Opening it sends
-nothing anywhere.
+Opening this map sends one anonymous usage report to NIKA, who make the software
+that draws it. That report can say which version drew the map, how many layers
+and features it had, and the address of the page it ran on. It never contains
+the map's data, and never anything about who opened it.
+
+Nothing else leaves your machine.
 
 
 IF THE MAP DOES NOT APPEAR

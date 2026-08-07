@@ -389,10 +389,13 @@ class TestLayerElement:
 
 
 class TestManifest:
-    def test_emits_no_basemap_and_no_telemetry(self) -> None:
+    def test_emits_no_basemap_and_leaves_telemetry_to_the_runtime_default(self) -> None:
         markup = build_manifest(make_project())
         assert 'basemap="none"' in markup
-        assert 'telemetry="off"' in markup
+        # No `telemetry` attribute at all, so the runtime's default (on) applies -
+        # exported maps send the anonymous usage report described in
+        # `docs/privacy.md` unless the person exporting opts out.
+        assert "telemetry" not in markup
         assert "map-id" not in markup
 
     def test_includes_a_fallback_for_previewers(self) -> None:

@@ -26,12 +26,16 @@ plugin exports to, documented at
 
 ## Privacy
 
-**Exported maps contain no tracking and make no network requests.** An exported
-file works with no internet connection, on a machine that has never had QGIS
+**Exported maps send one anonymous usage report when they load, and nothing
+else.** That report can include the runtime version, feature and widget usage
+counts, and the hostname of the page the map is running from — never the
+map's data or who opened it. Aside from that one report, an exported file
+works with no internet connection, on a machine that has never had QGIS
 installed. Publishing to NIKA hosting and AI-assisted enhancement are separate,
 explicit actions you start yourself — nothing is uploaded automatically.
 
-This is a deliberate default, stated here rather than buried in a privacy page.
+See the [privacy page](https://nikageospatial.github.io/qgis2webmap/privacy.html)
+for exactly what is and isn't sent.
 
 ---
 

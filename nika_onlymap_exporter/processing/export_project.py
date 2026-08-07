@@ -79,8 +79,9 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         return (
             "Exports the current QGIS project to a portable OnlyMap web map.\n\n"
             "The default output is a single HTML file another person can "
-            "double-click and use without QGIS. Exported maps contain no "
-            "tracking and make no network requests.\n\n"
+            "double-click and use without QGIS. Exported maps send one "
+            "anonymous usage report to NIKA when they load, and nothing "
+            "else — see docs/privacy.md.\n\n"
             "Anything that cannot be translated exactly is reported in the log "
             "rather than dropped silently. For the full fidelity report, and "
             "for per-layer popup and label choices, use "

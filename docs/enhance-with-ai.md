@@ -26,7 +26,7 @@ for what you want.
 ## What the file looks like inside
 
 ```html
-<om-map center="[-160.65, 57.4]" zoom="4" basemap="none" telemetry="off">
+<om-map center="[-160.65, 57.4]" zoom="4" basemap="none">
   <om-layer id="airports" type="GeoJsonLayer"
             label="Airports"
             get-fill-color="$kind == 'civil' ? '#2e8b57' : '#b22222'">

@@ -81,8 +81,9 @@ Matter, Voyager, Liberty or Bright.
 Every other option means the recipient's browser fetches tiles from that provider
 every time they open the map — so the provider sees those requests, including
 roughly where the reader is looking. The dialog warns in red when a basemap is
-set, and the Fidelity tab names the provider. Nothing else changes: no analytics
-are added, no identifier travels with the file, and the file is no larger.
+set, and the Fidelity tab names the provider. Nothing else changes: no
+identifier travels with the file, the anonymous usage report is the same either
+way, and the file is no larger.
 
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation

@@ -85,8 +85,8 @@ class TestPrivacyClaim:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         privacy = (DOCS / "privacy.md").read_text(encoding="utf-8")
         for text in (readme, privacy):
-            assert "no tracking" in text
-            assert "no network requests" in text
+            assert "one anonymous usage report" in text
+            assert "and nothing" in text
 
     def test_the_claim_is_verifiable_by_the_reader(self) -> None:
         """A promise a user cannot check is just marketing."""

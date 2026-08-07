@@ -1338,9 +1338,12 @@ def build_manifest(
             if project.settings.basemap in BASEMAP_PRESETS
             else BASEMAP,
         ),
-        # No tracking. With `basemap="none"` there are no network requests at
-        # all; a chosen basemap adds tile requests and nothing else.
-        ("telemetry", "off"),
+        # Telemetry is deliberately left to the runtime's default, which is on.
+        # Emitting `telemetry="off"` here - which this did until 0.1.3 - opted
+        # every exported map out of the anonymous usage reporting NIKA's licence
+        # for the runtime provides for. See section 11 of
+        # `runtime/ONLYMAP-LICENSE.md` for what a report contains, and
+        # `docs/privacy.md` for how we describe it to the person exporting.
     ]
 
     # Same guard as the basemap: an unknown preset would make the runtime

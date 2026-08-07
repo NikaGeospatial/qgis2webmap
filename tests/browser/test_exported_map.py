@@ -3,7 +3,8 @@
 From issue #29:
 
 - The exported map opens successfully on a clean machine with no QGIS installed.
-- Standalone HTML makes no unwanted network request.
+- Standalone HTML makes no unwanted network request. Since 0.1.3 the runtime's
+  anonymous telemetry call is expected; anything beyond it is not.
 - The two acquisition calls to action are keyboard accessible, do not cover map
   controls, and do not exfiltrate map data.
 
@@ -21,6 +22,11 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
+
+# The runtime's telemetry endpoint, observed rather than documented - the
+# licence names the reports but not the host. Matched as a prefix so a path
+# change does not fail the suite, and kept narrow so a *different* host does.
+TELEMETRY_ENDPOINT = "https://om-api.nika.eco/"
 
 WEBGL2_PROBE = """
 () => {
@@ -93,11 +99,22 @@ class TestItOpens:
         assert page.title() == "Browser tier map"
 
 
-class TestItStaysOffline:
-    def test_it_makes_no_external_request(
+class TestWhatLeavesTheMachine:
+    def test_the_only_external_call_is_telemetry(
         self, page_with_network_log, exported_map
     ) -> None:
-        """The privacy promise, measured rather than asserted by design."""
+        """The privacy promise, measured rather than asserted by design.
+
+        An exported map reports anonymous usage to the runtime's telemetry
+        endpoint - see section 11 of `runtime/ONLYMAP-LICENSE.md`, and
+        `docs/privacy.md` for how that is described to the person exporting.
+        Nothing else is allowed out, so this asserts the exact permitted set
+        rather than a count: a second endpoint appearing is the thing that must
+        fail here, and it would otherwise be invisible.
+
+        This was `test_it_makes_no_external_request` until 0.1.3, when the
+        exporter stopped emitting `telemetry="off"`.
+        """
         page = open_map(page_with_network_log, exported_map)
         page.wait_for_selector("om-map canvas", timeout=30_000)
 
@@ -106,7 +123,8 @@ class TestItStaysOffline:
             for url in page.requests_made
             if not url.startswith(("file://", "data:", "blob:"))
         ]
-        assert not external, f"the exported map called out to: {external}"
+        unexpected = [url for url in external if not url.startswith(TELEMETRY_ENDPOINT)]
+        assert not unexpected, f"the exported map called out to: {unexpected}"
 
     def test_it_works_with_javascript_disabled(
         self, browser, exported_map, browser_name
