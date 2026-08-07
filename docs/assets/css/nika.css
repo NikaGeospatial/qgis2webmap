@@ -186,21 +186,34 @@ body {
   flex: 0 0 auto;
 }
 
-/* Deliberately larger than `__powered-mark`. Two logos at the same size read as
-   a partnership; ours has to stay the dominant one. */
+/* Held at exactly 1.5x `__powered-mark` (30/20). Two logos at the same size
+   read as a partnership; ours has to stay the dominant one. Change one of the
+   pair and change the other, or the ratio drifts. */
 .masthead__mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
   display: block;
 }
 
 .masthead__name {
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 16px;
   letter-spacing: -0.02em;
   line-height: 1.1;
+}
+
+/* Smaller than the credit's label so the two mono-caps lines sit in a clear
+   order - ours is a sub-line of the name, theirs is a standalone caption. */
+.masthead__by {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 /* A credit, not a second brand. The rule on the left keeps it from reading as
@@ -228,6 +241,7 @@ body {
   white-space: nowrap;
 }
 
+/* Paired with `__mark` at 30px to hold the 1.5x ratio - see the note there. */
 .masthead__powered-mark {
   width: 20px;
   height: 20px;
