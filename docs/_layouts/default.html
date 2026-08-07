@@ -111,6 +111,26 @@
         </span>
       </a>
 
+      <!--
+        Outside the brand link on purpose: inside it, clicking QGIS's mark would
+        navigate to our home page. QGIS's guidelines approve the "... powered by
+        QGIS" wording, so the label carries the claim and the mark stays a file
+        at its own colours rather than being inlined and recoloured from
+        `--accent` the way our own mark is. The footer's "not endorsed by
+        QGIS.org" line is what keeps this a credit and not a claim of
+        endorsement.
+      -->
+      <span class="masthead__powered">
+        <span class="masthead__powered-label">Powered by</span>
+        <img
+          class="masthead__powered-mark"
+          src="{{ '/assets/qgis-logo.svg' | relative_url }}"
+          alt="QGIS"
+          width="24"
+          height="24"
+        />
+      </span>
+
       <nav class="masthead__nav" aria-label="Main">
         {% for item in site.data.nav.main %}
           <a

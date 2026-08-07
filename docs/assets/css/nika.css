@@ -208,6 +208,33 @@ body {
   color: var(--ink-3);
 }
 
+/* A credit, not a second brand. The rule on the left stops our mark and QGIS's
+   from reading as one lockup, and the label reuses `__by`'s small mono caps so
+   the eye files it as a caption rather than a nav item. */
+.masthead__powered {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--rule);
+}
+
+.masthead__powered-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.masthead__powered-mark {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
 .masthead__nav {
   display: flex;
   align-items: center;
@@ -1051,6 +1078,13 @@ body {
   /* The guide links are all in the sidebar below; repeating them in a wrapping
      masthead costs a third of the first screen. */
   .masthead__nav a:not(.masthead__nav-primary) {
+    display: none;
+  }
+
+  /* Same reasoning: at this width the credit pushes the brand and GitHub onto
+     separate lines. Nothing legal is lost - the footer's trademark and
+     no-endorsement note is on every page and is not hidden here. */
+  .masthead__powered {
     display: none;
   }
 }
