@@ -85,8 +85,8 @@ PNG by hand — the raw shots are the source, the annotated files are output.
   `dialog-fidelity-tab.png` — one per tab.
 - `fidelity-strip.png` — the "2 things change on export" strip.
 - `export-01-map-name.png`, `export-02-formats.png`,
-  `export-03-summary-line.png`, `export-05-live-preview.png`,
-  `export-06-fidelity-report.png` — annotated.
+  `export-03-summary-line.png`, `export-04-layers-expanded.png`,
+  `export-05-live-preview.png`, `export-06-fidelity-report.png` — annotated.
 - `live-preview.png` — QGIS and the browser side by side.
 
 **Two of these carried personal data and were redacted, not re-shot.** The
@@ -101,7 +101,6 @@ the Filepath field and the Browser panel are the two that bite.
 | File | Shot |
 |---|---|
 | `export-blocked.png` | The **Export** button greyed out with its reason printed beside it. Needs a project that actually blocks — the demo project exports cleanly, so this one cannot be derived from the shots already taken |
-| `export-04-layers-expanded.png` | **Layers** tab with **one layer expanded** to its per-field popup settings, numbered 1–3 on Include / Popups / Labels. The delivered `dialog-layers-tab.png` has every layer collapsed, so the per-field settings the guide describes are not visible anywhere yet |
 
 ## "Going further" — `index.md` and `hosting.md`
 
@@ -113,7 +112,7 @@ would fix that. None is annotated — they are showing an outcome, not a button.
 |---|---|---|
 | `hosted-map-in-browser.png` | `hosting.md` | The same demo map open at a **real https:// address**, full browser window with the URL bar left in. This is the whole point of the page — the URL bar is the message, so unlike every other browser shot here, do not crop it |
 | `hosting-free-plan-limits.png` | `hosting.md` | The dialog or the OnlyMap account view where the free plan's layer and feature limits are stated, so "where the limits start" has a face |
-| `map-before-after-ai.png` | `enhance-with-ai.md` | Two crops side by side of the same map — plain on the left, and on the right the same map after an assistant added a filter control and recoloured a layer. The single most useful image on the site and the one nobody can imagine from text |
+| `map-before-after-ai.png` | `enhance-with-ai.md` | Two crops side by side of the same map. **Both files exist**: `~/Downloads/map.html` is the plain "before"; `~/Downloads/map-after-ai.html` is the "after", with airports recoloured by `USE` and an elevation filter added. Open each, screenshot, hand both back to be composited. Note the filter widget is a **numeric range control only** - `format` accepts number or date, so a text field renders as a meaningless slider |
 | `onlymap-docs-site.png` | `index.md` | `onlymap.nikaplanet.com` open in a browser, cropped to the top of a page that shows the attribute reference. Gives the third card something to be |
 
 ## Lower value, capture last
