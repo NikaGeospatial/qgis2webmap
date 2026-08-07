@@ -190,6 +190,17 @@
           {% endif %}
           {{ content }}
         </main>
+
+        <!--
+          Filled in by the script at the foot of this page, from the headings in
+          the page it is next to. Empty and hidden when a page has fewer than
+          three, because a contents list shorter than the thing it indexes is
+          just noise.
+        -->
+        <aside class="toc" id="toc" hidden>
+          <p class="toc__heading">On this page</p>
+          <ul></ul>
+        </aside>
       </div>
     {% endif %}
 
@@ -262,7 +273,120 @@
           table.parentNode.insertBefore(box, table);
           box.appendChild(table);
         });
+
+        // Drop the lead image below the page title. It has to be emitted above
+        // the rendered Markdown, because the h1 lives inside that Markdown and
+        // Liquid cannot reach into it - but a picture above the title reads as
+        // a banner attached to nothing. With JavaScript off it simply stays
+        // where it was, which is the old behaviour rather than a broken one.
+        //
+        // Do not write Liquid's output braces in these comments, even inside a
+        // comment: this is a layout, so Liquid renders the script tag too, and
+        // an interpolated page body lands mid-comment as a syntax error that
+        // silently kills everything below it.
+        var lead = document.querySelector(".lead-figure");
+        var title = document.querySelector(".prose h1");
+        if (lead && title) {
+          title.parentNode.insertBefore(lead, title.nextSibling);
+          lead.classList.add("lead-figure--placed");
+        }
+
+        buildTableOfContents();
       })();
+
+      // ---- On this page ----------------------------------------------------
+      //
+      // A contents list for the page you are reading, with the section you are
+      // in marked. The left-hand nav says which guide you are in; on a long one
+      // like "The dialog, tab by tab" that leaves you with no idea where you
+      // are *within* it, or that there is more below.
+      //
+      // Built here rather than in Liquid because the headings come out of
+      // Markdown, and because the same file has to stay readable in the
+      // plugin's Help tab, which would render any of this as literal text.
+      function buildTableOfContents() {
+        var toc = document.getElementById("toc");
+        if (!toc) return;
+
+        var list = toc.querySelector("ul");
+        var headings = [].slice.call(
+          document.querySelectorAll(".prose h2[id], .prose h3[id]")
+        );
+
+        // Under three sections there is nothing worth tracking.
+        if (headings.length < 3) return;
+
+        var links = {};
+        headings.forEach(function (heading) {
+          var item = document.createElement("li");
+          item.className = "toc__item toc__item--" + heading.tagName.toLowerCase();
+
+          var link = document.createElement("a");
+          link.href = "#" + heading.id;
+          link.textContent = heading.textContent;
+          item.appendChild(link);
+          list.appendChild(item);
+          links[heading.id] = link;
+        });
+
+        toc.hidden = false;
+
+        function markCurrent(id) {
+          Object.keys(links).forEach(function (key) {
+            if (key === id) {
+              links[key].setAttribute("aria-current", "true");
+            } else {
+              links[key].removeAttribute("aria-current");
+            }
+          });
+        }
+
+        // The section you are in is the last heading that has crossed the line
+        // just under the sticky masthead. Computed from geometry every time
+        // rather than accumulated from IntersectionObserver callbacks: the
+        // observer version kept a map of what was on screen, and a jump down
+        // the page - an anchor click, a Find, restoring a scroll position -
+        // left stale entries in it, so the tracker would sit on a sub-heading
+        // from a section three screens above.
+        //
+        // The last heading above the line, rather than the first one below it,
+        // because the reader is inside that section: scrolling into the body of
+        // "Layers" should say Layers, not the heading that happens to be coming
+        // up next.
+        var LINE = 96;
+
+        function currentHeading() {
+          var current = headings[0];
+          for (var i = 0; i < headings.length; i++) {
+            if (headings[i].getBoundingClientRect().top > LINE) break;
+            current = headings[i];
+          }
+
+          // At the very bottom the last section may never reach the line, so
+          // nothing would ever mark it. Hand it over once the page cannot
+          // scroll any further.
+          var atEnd =
+            window.innerHeight + window.scrollY >=
+            document.documentElement.scrollHeight - 2;
+          return atEnd ? headings[headings.length - 1] : current;
+        }
+
+        var queued = false;
+        function update() {
+          queued = false;
+          markCurrent(currentHeading().id);
+        }
+
+        function schedule() {
+          if (queued) return;
+          queued = true;
+          window.requestAnimationFrame(update);
+        }
+
+        update();
+        window.addEventListener("scroll", schedule, { passive: true });
+        window.addEventListener("resize", schedule);
+      }
     </script>
   </body>
 </html>

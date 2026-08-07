@@ -32,23 +32,34 @@ hero:
       behind it is the one optional extra.
 
 verdicts:
-  caption: Before you export, every property of your project is given one of these five verdicts
+  title: You always know what changed
+  lede: >-
+    Not everything QGIS can draw has an equivalent on the web. Before you export,
+    the plugin checks your whole project and tells you exactly what will be
+    different — on the Fidelity tab, while you can still do something about it.
+    Every item gets one of five plain answers.
   items:
     - key: Kept
       tone: kept
-      text: Survives the trip exactly as you set it in QGIS.
+      text: It comes out exactly as you set it in QGIS.
     - key: Changed
       tone: changed
-      text: Exported, but approximated — and the report says how.
+      text: It comes out close, but not identical. You are told what changed.
     - key: Rasterised
       tone: changed
-      text: Drawn as an image because the style has no live equivalent.
+      text: >-
+        It comes out as a picture instead of a live layer, because the web has
+        no equivalent for that style.
     - key: Not exported
       tone: blocked
-      text: Left out. Named, so you find out here rather than later.
+      text: >-
+        It is left out. The map still works — you just find out here rather than
+        from whoever you sent it to.
     - key: Blocked
       tone: blocked
-      text: Would produce a broken map, so Export stays disabled.
+      text: >-
+        Exporting would produce a broken map, so the Export button stays off
+        until it is fixed.
 
 sections:
   - title: Start here
@@ -59,8 +70,8 @@ sections:
       - step: STEP 1
         title: Install the plugin
         text: >-
-          Install from a zip, and understand the one download the plugin ever
-          makes. Offline and proxy paths included.
+          Six clicks inside QGIS — nothing to download by hand. Also covers the
+          one permission the plugin asks for later.
         url: /installation.html
       - step: STEP 2
         title: Your first export
@@ -110,8 +121,8 @@ sections:
         url: /hosting.html
       - title: Enhance a map with AI
         text: >-
-          An exported map is readable HTML, so an assistant can add filters,
-          charts or branding without breaking portability.
+          Ask NIKA Desktop for filters, charts or your own branding in plain
+          language. The map stays portable.
         url: /enhance-with-ai.html
       - title: OnlyMap documentation
         text: >-

@@ -13,16 +13,24 @@ If yours is not listed, the QGIS **Log Messages** panel usually says why: open
 
 ## Installing
 
-### The plugin does not appear in the Web menu
+### Searching the plugin list finds nothing
 
-1. **Plugins → Manage and Install Plugins → Installed** — confirm the entry is
-   there and ticked.
-2. If it is not there at all, the zip did not install. Watch for an error at the
-   bottom of the Install from ZIP dialog.
-3. If it is there but ticked off, tick it. The menu entry and toolbar button
-   appear immediately.
-4. If it is ticked and still missing, check the `QGIS2WebMap` tab of the Log
-   Messages panel for an import error.
+1. Make sure **All** is selected on the left of the Manage and Install Plugins
+   window, not **Installed**.
+2. Check the spelling. It is one word: `QGIS2WebMap`. Searching `OnlyMap` also
+   finds it.
+3. If the whole list is empty, QGIS cannot reach the plugin repository — often a
+   workplace firewall. Check **Settings → Options → Network** for a proxy, then
+   see [installing from a file](installation.md#if-your-organisation-blocks-the-plugin-repository).
+
+### It installed, but there is no Web menu entry
+
+1. **Plugins → Manage and Install Plugins → Installed** — confirm
+   **QGIS2WebMap by NIKA** is there and its box is ticked.
+2. If it is there but unticked, tick it. The menu entry and toolbar button
+   appear straight away.
+3. If it is ticked and still missing, open **View → Panels → Log Messages** and
+   read the `QGIS2WebMap` tab for an error.
 
 ### It installs but errors on an older QGIS
 

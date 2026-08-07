@@ -12,9 +12,10 @@ Built by [NIKA](https://nikaplanet.com), powered by
 plugin exports to, documented at
 [onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 
-> **Status: pre-release.** `0.1.2` is under active development and is not yet
-> published to the QGIS Plugin Repository. The repository layout and task plan
-> follow [onlymap-js issue #29](https://github.com/NikaGeospatial/onlymap-js/issues/29).
+> **Status: early release.** `0.1.2` is published on the
+> [QGIS Plugin Repository](https://plugins.qgis.org/plugins/nika_onlymap_exporter/)
+> and under active development. The repository layout and task plan follow
+> [onlymap-js issue #29](https://github.com/NikaGeospatial/onlymap-js/issues/29).
 
 ---
 
@@ -52,7 +53,11 @@ policy.
 
 ## Installation
 
-Not yet on the QGIS Plugin Repository. To try the current build:
+**Plugins → Manage and Install Plugins… → All**, search `QGIS2WebMap`, and press
+**Install Plugin**. The listing is
+[plugins.qgis.org/plugins/nika_onlymap_exporter](https://plugins.qgis.org/plugins/nika_onlymap_exporter/).
+
+To run an unreleased build instead:
 
 ```bash
 git clone https://github.com/NikaGeospatial/qgis2webmap.git
@@ -61,7 +66,7 @@ python scripts/package_plugin.py
 ```
 
 Then in QGIS: **Plugins → Manage and Install Plugins → Install from ZIP**, and
-choose `dist/nika_onlymap_exporter-<version>.zip`.
+choose `dist/qgis2webmap-<version>.zip`.
 
 Requires QGIS 3.44 or newer (QGIS 4 supported).
 
@@ -170,7 +175,7 @@ Dialog design: [`docs/ui-design.md`](docs/ui-design.md).
 
 ```bash
 python scripts/package_plugin.py                                   # build the zip
-python scripts/verify_package.py dist/nika_onlymap_exporter-*.zip  # check its shape
+python scripts/verify_package.py dist/qgis2webmap-*.zip  # check its shape
 python -m pytest tests/unit                                        # unit tests
 ```
 

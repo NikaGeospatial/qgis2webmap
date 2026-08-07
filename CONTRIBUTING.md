@@ -154,7 +154,7 @@ ruff check . && ruff format --check .
 python -m pytest tests/unit
 python -m pytest tests/qgis          # if you have QGIS - see above
 python scripts/package_plugin.py
-python scripts/verify_package.py dist/nika_onlymap_exporter-*.zip
+python scripts/verify_package.py dist/qgis2webmap-*.zip
 ```
 
 Commit messages: concise, imperative one-liners.

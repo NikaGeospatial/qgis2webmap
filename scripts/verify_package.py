@@ -15,7 +15,7 @@ Checks:
   7. The licence text ships with the plugin.
 
 Usage:
-    python scripts/verify_package.py dist/nika_onlymap_exporter-0.1.0.zip
+    python scripts/verify_package.py dist/qgis2webmap-0.1.2.zip
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later

@@ -46,24 +46,6 @@ layout: default
       </figure>
     {% endif %}
 
-    {% if page.verdicts %}
-      <!--
-        Laid out as a report rather than a row of tiles: a fixed mono key column
-        against a description, hairline-ruled. That is the shape of the Fidelity
-        tab itself, which is the thing this page is claiming as the product.
-      -->
-      <div class="verdicts">
-        <p class="verdicts__caption">{{ page.verdicts.caption }}</p>
-        <dl class="verdicts__list">
-          {% for item in page.verdicts.items %}
-            <div class="verdict" data-tone="{{ item.tone }}">
-              <dt>{{ item.key }}</dt>
-              <dd>{{ item.text }}</dd>
-            </div>
-          {% endfor %}
-        </dl>
-      </div>
-    {% endif %}
   </section>
 
   {% for section in page.sections %}
@@ -84,6 +66,33 @@ layout: default
         {% endfor %}
       </div>
     </section>
+
+    <!--
+      The verdicts land after the first section, not in the hero. Someone
+      arriving here wants to know how to begin; a five-term taxonomy read before
+      "Start here" is a vocabulary lesson from a tool they have not installed.
+      After the three steps it answers the question they now have - "what will I
+      lose?" - which is the one thing this plugin does that the alternatives do
+      not.
+
+      Laid out as a report rather than a row of tiles: a fixed key column
+      against a description, hairline-ruled, which is the shape of the Fidelity
+      tab itself.
+    -->
+    {% if forloop.first and page.verdicts %}
+      <section class="section verdicts">
+        <h2 class="section__title">{{ page.verdicts.title }}</h2>
+        <p class="section__lede">{{ page.verdicts.lede }}</p>
+        <dl class="verdicts__list">
+          {% for item in page.verdicts.items %}
+            <div class="verdict" data-tone="{{ item.tone }}">
+              <dt>{{ item.key }}</dt>
+              <dd>{{ item.text }}</dd>
+            </div>
+          {% endfor %}
+        </dl>
+      </section>
+    {% endif %}
   {% endfor %}
 
   <section class="section prose">{{ content }}</section>

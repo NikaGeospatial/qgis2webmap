@@ -26,6 +26,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_NAME = "nika_onlymap_exporter"
 PACKAGE_DIR = REPO_ROOT / PACKAGE_NAME
 
+# The zip is *named* after the product and *contains* a directory named after the
+# Python package. They are different strings on purpose, and only one of them is
+# ours to choose: QGIS requires the single top-level directory inside the zip to
+# be the importable package name, and `plugins.qgis.org` derives the plugin's URL
+# slug from it. The filename is free, and "nika_onlymap_exporter-0.1.2.zip" told
+# a user downloading it nothing about what they had just downloaded.
+ZIP_BASENAME = "qgis2webmap"
+
 # Anything matching these is development detritus, not plugin payload.
 EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".orig", ".rej"}
@@ -66,7 +74,7 @@ def should_include(path: Path) -> bool:
 def build(outdir: Path) -> Path:
     version = read_version()
     outdir.mkdir(parents=True, exist_ok=True)
-    target = outdir / f"{PACKAGE_NAME}-{version}.zip"
+    target = outdir / f"{ZIP_BASENAME}-{version}.zip"
 
     files = sorted(
         p for p in PACKAGE_DIR.rglob("*") if p.is_file() and should_include(p)

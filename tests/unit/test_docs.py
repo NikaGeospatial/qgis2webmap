@@ -97,7 +97,7 @@ class TestPrivacyClaim:
 class TestPackagedHelp:
     """The Help tab reads these files; a build that drops them shows nothing."""
 
-    ZIP_GLOB = "nika_onlymap_exporter-*.zip"
+    ZIP_GLOB = "qgis2webmap-*.zip"
 
     def _zip(self) -> Path | None:
         candidates = sorted((REPO_ROOT / "dist").glob(self.ZIP_GLOB))
