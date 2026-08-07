@@ -10,6 +10,14 @@ An exported map is a readable HTML document, not a compiled bundle. The map is
 described by plain markup you can edit — which means an AI assistant can edit it
 for you, and you do not have to write any code yourself.
 
+That is a consequence of what your map is built on. It runs on
+**[OnlyMapJS](https://github.com/NikaGeospatial/onlymap-js)**, an open, published
+library whose whole vocabulary is written down — so a coding assistant can read
+how it works and change your map for you: new colours, a filter, a chart, your
+own branding. You describe what you want in plain language; it edits the file.
+Any assistant will do, and the rest of this page is about getting a good result
+from whichever one you already use.
+
 **You do not need to understand the markup below to do this.** It is here so you
 can see there is nothing hidden; skip to
 [Start with NIKA Agent](#start-with-nika-agent) if you would rather just ask
@@ -33,7 +41,12 @@ Layers, colours and controls are attributes. Change one and reload the file.
 ## Start with NIKA Agent
 
 If you are not already at home in a terminal, this is the one to reach for.
-**[NIKA Agent](https://docs.nikaplanet.com/nika-desktop/overview)** is NIKA's own
+<!--
+  Deliberately not a link. The only public page for it documents a different
+  product, which is worse than no link at all. Restore one when NIKA Agent has
+  a page of its own - see the beta note below, the name is still settling.
+-->
+**NIKA Agent** is NIKA's own
 agent application — built by the same people as this plugin and as OnlyMap, the
 library your exported map runs on. It is an ordinary desktop application, not a
 command line: point it at a folder, describe what you want in plain language, and
@@ -106,5 +119,4 @@ Useful things to ask for:
   library, written up as documentation rather than as a code repository. Start
   here if GitHub is unfamiliar territory.
 - The full attribute vocabulary is at
-  [docs.nikaplanet.com](https://docs.nikaplanet.com), and NIKA Agent at
-  [docs.nikaplanet.com/nika-desktop](https://docs.nikaplanet.com/nika-desktop/overview).
+  [docs.nikaplanet.com](https://docs.nikaplanet.com).
