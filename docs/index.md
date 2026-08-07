@@ -116,13 +116,13 @@ sections:
     cards:
       - title: Host with OnlyMap
         text: >-
-          Put the map on the web. What you are asked before anything is
-          published, and what the free plan's limits mean once you do.
+          Give your map a web address instead of sending a file. What hosting
+          asks of you, and where the free plan's limits start.
         url: /hosting.html
       - title: Enhance a map with AI
         text: >-
-          Ask NIKA Agent for filters, charts or your own branding in plain
-          language. The map stays portable.
+          Add filters, charts or your own branding by describing them to a
+          coding assistant. The map stays a single portable file.
         url: /enhance-with-ai.html
       - title: OnlyMap documentation
         text: >-
@@ -151,16 +151,6 @@ nothing to configure twice. What you see on the QGIS canvas is what leaves.
 Compression is lossless. No coordinate precision is discarded to shrink a file
 unless you ask for it, and where a project genuinely will not fit in one file the
 plugin recommends the next mode rather than quietly degrading the data.
-
-## Exported maps make no network requests
-
-Opening an exported map sends nothing anywhere. No analytics, no beacons, no
-fonts or scripts from a CDN, no identifier of any kind. It works with the network
-cable unplugged, on a machine that has never had QGIS installed.
-
-There is one exception and it is yours to make: choosing a basemap means the
-recipient's browser fetches tiles from that provider. The dialog warns when you
-do, and the Fidelity tab names the provider. See [privacy](privacy.md).
 
 ## Requirements
 

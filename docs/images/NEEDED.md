@@ -132,6 +132,19 @@ project with 3–4 styled layers, Layers panel in frame) and `plugin-dialog-open
 (the dialog open with QGIS still usable behind it) — are worth having but are
 scene-setting, not instruction.
 
+## "Going further" — `index.md` and `hosting.md`
+
+The landing page's *Going further* block is three cards of pure text, and
+`hosting.md` behind it is unillustrated end to end. These are the shots that
+would fix that. None is annotated — they are showing an outcome, not a button.
+
+| File | Page | Shot |
+|---|---|---|
+| `hosted-map-in-browser.png` | `hosting.md` | The same demo map open at a **real https:// address**, full browser window with the URL bar left in. This is the whole point of the page — the URL bar is the message, so unlike every other browser shot here, do not crop it |
+| `hosting-free-plan-limits.png` | `hosting.md` | The dialog or the OnlyMap account view where the free plan's layer and feature limits are stated, so "where the limits start" has a face |
+| `map-before-after-ai.png` | `enhance-with-ai.md` | Two crops side by side of the same map — plain on the left, and on the right the same map after an assistant added a filter control and recoloured a layer. The single most useful image on the site and the one nobody can imagine from text |
+| `onlymap-docs-site.png` | `index.md` | `onlymap.nikaplanet.com` open in a browser, cropped to the top of a page that shows the attribute reference. Gives the third card something to be |
+
 ## Lower value, capture last
 
 | File | Page | Shot |
