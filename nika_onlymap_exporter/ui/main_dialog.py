@@ -26,6 +26,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import re
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -338,6 +339,37 @@ HELP_UNAVAILABLE = (
 )
 
 
+_IMAGE_LINE = re.compile(r"^[ \t]*!\[[^\]]*\]\([^)]*\)[ \t]*$\n?", re.MULTILINE)
+_IMAGE_INLINE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# An image on its own line sits between two blank lines, so removing the line
+# leaves three newlines behind. Markdown treats any run of blank lines as one
+# break, so collapsing is safe and keeps the Help text free of ragged gaps.
+_BLANK_RUN = re.compile(r"\n{3,}")
+
+
+def strip_images(text: str) -> str:
+    """Drop Markdown images, which are for the website only.
+
+    The guides are one source of text serving two readers, and only one of them
+    can show a picture. The website wants the screenshots - it is the page a
+    stranger lands on, and a wall of prose about which button to press is worse
+    there than anywhere. The Help tab cannot show them without `setBaseUrl` on
+    the document *and* every PNG shipped inside the zip, which would take it
+    from 223 KB to about 2.1 MB for a reader who is already looking at the
+    dialog the screenshots depict.
+
+    So the pictures are added on the site and removed here. Stripping at read
+    time rather than at packaging time keeps `docs/*.md` and `help/*.md`
+    byte-identical, which is the property that stops the two drifting apart.
+
+    A whole-line image is removed with its line, so no blank gap is left behind;
+    an image used mid-sentence is removed in place. Alt text goes with it: Qt
+    would otherwise render it as bare prose that reads as a caption for a
+    picture that is not there.
+    """
+    return _BLANK_RUN.sub("\n\n", _IMAGE_INLINE.sub("", _IMAGE_LINE.sub("", text)))
+
+
 def load_help_markdown() -> str:
     """Concatenate the bundled guides into one scrollable document.
 
@@ -357,6 +389,7 @@ def load_help_markdown() -> str:
         # Strip any YAML front matter, which is for the website only.
         if text.startswith("---"):
             _, _, text = text.partition("---\n")[2].partition("---\n")
+        text = strip_images(text)
         sections.append(f"# {title}\n\n{text.strip()}")
 
     if not sections:

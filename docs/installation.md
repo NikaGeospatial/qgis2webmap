@@ -2,9 +2,6 @@
 title: Install the plugin
 description: >-
   Install QGIS2WebMap from inside QGIS in six clicks, and what the one-off OnlyMap runtime download is - including the offline and proxy paths.
-lead_image:
-  src: /images/install-02-search-result.png
-  alt: The QGIS plugin manager with QGIS2WebMap searched for and its entry highlighted.
 ---
 
 # Install the plugin
@@ -23,10 +20,18 @@ is out, which it cannot do for a plugin you installed from a file.
 
 1. Open QGIS.
 2. Go to **Plugins → Manage and Install Plugins…** in the menu bar.
+
+   ![The Plugins menu open, with Manage and Install Plugins highlighted.](images/install-01-plugins-menu.png)
+
 3. Select **All** in the list on the left of the window that opens.
 4. Type `QGIS2WebMap` into the search box at the top.
 5. Click **QGIS2WebMap by NIKA** in the results.
+
+   ![The plugin manager with QGIS2WebMap typed into the search box and the QGIS2WebMap by NIKA result highlighted.](images/install-02-search-result.png)
+
 6. Click **Install Plugin**, at the bottom right, and wait for it to finish.
+
+   ![The plugin's page in the manager, with the Install Plugin button at the bottom right highlighted.](images/install-03-install-button.png)
 
 Close the window. You should now have a **Web → QGIS2WebMap by NIKA → Create web
 map** entry in the menu bar, and a new button on the toolbar.

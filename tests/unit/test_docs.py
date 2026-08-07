@@ -40,6 +40,21 @@ HELP_DOCS = _load_packager().HELP_DOCS
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
+# `strip_images` lives in `ui/main_dialog.py`, which imports PyQGIS - unavailable
+# on this tier. Its source is executed in isolation rather than reimplemented
+# here: a second copy of the regexes would pass while the real one was broken,
+# which is precisely the drift the tests above exist to catch.
+def _load_strip_images():
+    source = (REPO_ROOT / "nika_onlymap_exporter" / "ui" / "main_dialog.py").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("_IMAGE_LINE = re.compile")
+    end = source.index("def load_help_markdown")
+    namespace: dict = {"re": re}
+    exec(compile(source[start:end], "main_dialog:strip_images", "exec"), namespace)
+    return namespace["strip_images"]
+
+
 def markdown_files() -> list[Path]:
     return sorted(DOCS.glob("*.md"))
 
@@ -76,6 +91,35 @@ class TestLinks:
             if placeholder in path.read_text(encoding="utf-8")
         ]
         assert not offenders, offenders
+
+
+class TestHelpTabImages:
+    """The guides carry screenshots for the website only.
+
+    Two readers, one source. The site shows the pictures; the Help tab strips
+    them, because showing them there would need `setBaseUrl` on the document
+    *and* every PNG inside the zip - about 2.1 MB instead of 223 KB, for a
+    reader already looking at the dialog the screenshots depict.
+    """
+
+    def test_the_guides_do_carry_images(self) -> None:
+        """Guard the other side: a strip that strips nothing proves nothing."""
+        installation = (DOCS / "installation.md").read_text(encoding="utf-8")
+        assert "![" in installation
+
+    def test_no_image_survives_into_the_help_text(self) -> None:
+        strip_images = _load_strip_images()
+        for guide in sorted(DOCS.glob("*.md")):
+            stripped = strip_images(guide.read_text(encoding="utf-8"))
+            assert "![" not in stripped, f"{guide.name} leaks an image into Help"
+
+    def test_a_whole_line_image_leaves_no_blank_gap(self) -> None:
+        strip_images = _load_strip_images()
+        assert strip_images("before\n\n![alt](a.png)\n\nafter") == ("before\n\nafter")
+
+    def test_an_inline_image_is_removed_in_place(self) -> None:
+        strip_images = _load_strip_images()
+        assert strip_images("see ![alt](a.png) here") == "see  here"
 
 
 class TestPrivacyClaim:

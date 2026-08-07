@@ -30,11 +30,15 @@ refresh.
 The **Map name** field at the top of the Map tab is the title shown on the
 exported map. Leave it blank to use the project title.
 
+![The Map tab with the Map name field highlighted.](images/export-01-map-name.png)
+
 ## 4. Choose the layers
 
 The plugin exports **the layers already open in this QGIS project**. There is no
 file to browse for and no source to pick - build the map you want in QGIS, and
 the plugin exports what you built.
+
+![The Layers tab with one layer expanded, and the Include, Popups and Labels columns numbered one to three.](images/export-04-layers-expanded.png)
 
 On the **Layers** tab, each layer has three tick boxes:
 
@@ -72,6 +76,8 @@ break the drawing.
 **Preview** builds the map and opens it in your default browser. Nothing opens a
 browser on its own - only this button does.
 
+![The button row with the Live preview checkbox highlighted and a message saying the preview is open.](images/export-05-live-preview.png)
+
 With **Live preview** ticked, the map is served from your own machine and the tab
 updates by itself as you change settings, keeping your position on the map. Change
 a colour or switch a layer off and watch it happen; there is no need to press
@@ -88,6 +94,8 @@ as a file automatically and tells you so. Nothing is lost.
 
 Pick how you want to share it on the Map tab, then press **Export**.
 
+![The three output modes - Standalone HTML, Share ZIP and Folder - numbered one to three.](images/export-02-formats.png)
+
 The line under those choices says what you are about to produce, and the strip
 above the buttons says what will change on the way out. If Export is greyed out,
 the reason is shown beside it.
@@ -101,3 +109,5 @@ Before sending the map on, look at **Fidelity**. It lists everything that
 changed on the way out of QGIS - symbology that could not be translated exactly,
 settings that will not appear, layers that were left out. Nothing is dropped
 silently.
+
+![The Fidelity tab with the Not exported and Changed verdicts highlighted.](images/export-06-fidelity-report.png)

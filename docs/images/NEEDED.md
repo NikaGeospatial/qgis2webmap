@@ -5,42 +5,31 @@ for the guides; drop the files in this folder under exactly these names.
 
 ## Read this before adding an image to a guide
 
-**A guide's images can only be declared in its front matter, not written as
-`![...]()` in the body.** The `.md` files in `docs/` are rendered twice: by
-GitHub Pages here, and by the plugin's Help tab, which uses Qt's `QTextDocument`
-with no base URL set. A relative image path resolves to nothing there, so a
-reader offline in QGIS gets a broken-image box.
+**Inline `![...](images/foo.png)` is the way to add an image.** Paths are
+relative to the guide, and the site serves them from `/images/`.
 
-So each guide gets **one lead image**, declared like this and rendered by
-`_layouts/default.html` above the title:
+The plugin's Help tab renders these same `.md` files through Qt's
+`QTextDocument`, which has no base URL and no PNGs in the zip - so
+`strip_images()` in `nika_onlymap_exporter/ui/main_dialog.py` removes every
+image at read time. **The website gets the pictures; the Help tab gets the
+text.** That split is deliberate: shipping the images would take the zip from
+223 KB to about 2.1 MB for a reader already sitting in front of the dialog the
+screenshots depict.
 
-```yaml
-lead_image:
-  src: /images/dialog-tabs.png
-  alt: The export dialog's tab bar - Map, Layers, Appearance, Fidelity, Help.
-  caption: Optional.
-```
+Two rules follow, and both have already bitten:
 
-The landing page's hero image works the same way, under `hero.image` in
-`index.md`.
+- **Indent an image inside a numbered list by three spaces.** An image flush to
+  the margin ends the list, and the numbering restarts at 1 after it.
+- **Write real alt text.** It is the only thing a screen reader gets, and it is
+  dropped along with the image in the Help tab, so it must not be carrying
+  information the prose does not already state.
 
-**Mid-page images are a separate decision, and they are now the blocker.** They
-need `setBaseUrl` on the Help tab's document and the PNGs shipped inside the
-plugin zip, which would take it from 220 KB to a few MB.
+`lead_image:` front matter still works and still renders above the title - use
+it for a guide whose single best image is scene-setting rather than
+step-by-step. Do not set one that duplicates an inline image on the same page.
 
-Everything in the "step by step" tables below is a **mid-page** image by
-definition — a shot of the button you are being told to click has to sit next to
-that step, not float at the top of the page as the single lead image. So
-capturing these shots is wasted effort until that work lands. Do the plumbing
-first:
-
-1. Call `setBaseUrl` on the Help tab's `QTextDocument` so relative paths resolve.
-2. Ship `docs/images/*.png` inside the plugin zip (`HELP_DOCS` in
-   `scripts/package_plugin.py` copies the `.md` files already; images need the
-   same treatment).
-3. Re-check the zip against the plugin repository's size expectations, and
-   re-run `scripts/verify_package.py`.
-4. Only then switch the guides from one `lead_image` to inline `![...]()`.
+`tests/unit/test_docs.py::TestHelpTabImages` fails if any image survives into
+the Help text, and also if the guides stop carrying images at all.
 
 ## Constraints on every shot
 
