@@ -121,7 +121,7 @@ sections:
         url: /hosting.html
       - title: Enhance a map with AI
         text: >-
-          Ask NIKA Desktop for filters, charts or your own branding in plain
+          Ask NIKA Agent for filters, charts or your own branding in plain
           language. The map stays portable.
         url: /enhance-with-ai.html
       - title: OnlyMap documentation

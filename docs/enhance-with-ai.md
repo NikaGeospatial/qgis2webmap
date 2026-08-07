@@ -1,7 +1,7 @@
 ---
 title: Enhance a map with AI
 description: >-
-  An exported map is readable HTML, so an AI assistant can add filters, charts or branding without breaking portability. Start with NIKA Desktop.
+  An exported map is readable HTML, so an AI assistant can add filters, charts or branding without breaking portability. Start with NIKA Agent.
 ---
 
 # Enhance a map with AI
@@ -12,7 +12,7 @@ for you, and you do not have to write any code yourself.
 
 **You do not need to understand the markup below to do this.** It is here so you
 can see there is nothing hidden; skip to
-[Start with NIKA Desktop](#start-with-nika-desktop) if you would rather just ask
+[Start with NIKA Agent](#start-with-nika-agent) if you would rather just ask
 for what you want.
 
 ## What the file looks like inside
@@ -30,22 +30,29 @@ for what you want.
 
 Layers, colours and controls are attributes. Change one and reload the file.
 
-## Start with NIKA Desktop
+## Start with NIKA Agent
 
-If you are not already living in a terminal, this is the one to use.
-**[NIKA Desktop](https://docs.nikaplanet.com/nika-desktop/overview)** is NIKA's
-own agent — the same people who make this plugin and the map library your export
-runs on. It is an ordinary desktop application: point it at a folder, type what
-you want in plain language, and it works through the job itself.
+If you are not already at home in a terminal, this is the one to reach for.
+**[NIKA Agent](https://docs.nikaplanet.com/nika-desktop/overview)** is NIKA's own
+agent application — built by the same people as this plugin and as OnlyMap, the
+library your exported map runs on. It is an ordinary desktop application, not a
+command line: point it at a folder, describe what you want in plain language, and
+it works through the job itself.
 
-That matters here for one reason. It already knows OnlyMap, so it does not have
-to be taught the vocabulary your exported map is written in before it can touch
-it safely — which is the failure mode described below.
+That last part is why it is first on this page. Every other assistant has to be
+taught OnlyMap's vocabulary before it can safely touch your map, and the section
+below exists entirely to work around that. NIKA Agent already knows it.
 
-Ask it in the same plain language you would use with a colleague:
+Ask in the same words you would use with a colleague:
 
 > Open the map I exported to this folder. Add a filter for the `kind` field, and
 > make the civil airports blue. Do not change the data or the attribution.
+
+> **In beta.** NIKA Agent is currently listed as **NIKA Desktop** while the
+> naming settles, and it is still being finished — so if something it does to a
+> map is not what you asked for, keep the original export and
+> [tell us](mailto:support@nikaplanet.com). The route below is the older, more
+> settled one.
 
 ## Or any assistant that can read files
 
@@ -90,6 +97,5 @@ Useful things to ask for:
 ## Reference
 
 The full attribute vocabulary is documented at
-[docs.nikaplanet.com](https://docs.nikaplanet.com), and NIKA Desktop is
-documented at
+[docs.nikaplanet.com](https://docs.nikaplanet.com), and NIKA Agent at
 [docs.nikaplanet.com/nika-desktop](https://docs.nikaplanet.com/nika-desktop/overview).
