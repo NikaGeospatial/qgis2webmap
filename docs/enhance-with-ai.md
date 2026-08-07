@@ -96,6 +96,15 @@ Useful things to ask for:
 
 ## Reference
 
-The full attribute vocabulary is documented at
-[docs.nikaplanet.com](https://docs.nikaplanet.com), and NIKA Agent at
-[docs.nikaplanet.com/nika-desktop](https://docs.nikaplanet.com/nika-desktop/overview).
+- **[OnlyMapJS on GitHub](https://github.com/NikaGeospatial/onlymap-js)** — the
+  source of the library your exported map runs on. The README walks through the
+  same `<om-map>` and `<om-layer>` attributes you saw above, with live examples
+  of each, and the `skills/` folder holds the skill file this page asks you to
+  hand your assistant. Read it if you want to know what is possible before you
+  ask for it.
+- **[onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/)** — the same
+  library, written up as documentation rather than as a code repository. Start
+  here if GitHub is unfamiliar territory.
+- The full attribute vocabulary is at
+  [docs.nikaplanet.com](https://docs.nikaplanet.com), and NIKA Agent at
+  [docs.nikaplanet.com/nika-desktop](https://docs.nikaplanet.com/nika-desktop/overview).

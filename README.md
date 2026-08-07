@@ -2,6 +2,11 @@
 
 **Turn a QGIS project into a portable OnlyMap web map.**
 
+### [Read the documentation →](https://nikageospatial.github.io/qgis2webmap/)
+
+Installation, your first export, every dialog option, hosting and
+troubleshooting — the full guides, rendered and searchable.
+
 A QGIS plugin that converts a finished QGIS project into an interactive web map
 that opens locally. No account, no web server, no coding. The default export is a
 **single HTML file** another person can double-click and use without QGIS
@@ -81,6 +86,11 @@ it is fetched rather than bundled into this GPL plugin. See
 
 ## Documentation
 
+Everything below is published as a website at
+**[nikageospatial.github.io/qgis2webmap](https://nikageospatial.github.io/qgis2webmap/)**
+— read it there rather than as raw Markdown. The same guides ship inside the
+plugin's Help tab, so they work offline too.
+
 - [Installation](docs/installation.md)
 - [Your first export](docs/first-export.md)
 - [The dialog, tab by tab](docs/the-dialog.md)
@@ -88,12 +98,11 @@ it is fetched rather than bundled into this GPL plugin. See
 - [Host with OnlyMap](docs/hosting.md)
 - [Enhance a map with AI](docs/enhance-with-ai.md)
 - [What gets exported](docs/supported-features.md)
+- [QGIS2WebMap or qgis2web](docs/qgis2web-comparison.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy](docs/privacy.md)
 
-The same guides are in the plugin's Help tab, and on
-[GitHub Pages](https://nikageospatial.github.io/qgis2webmap/). Deeper articles
-live at [NIKA Documentation](https://docs.nikaplanet.com).
+Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 
 ## What gets exported
 
