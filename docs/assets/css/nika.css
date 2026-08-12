@@ -52,11 +52,6 @@
      one is a near-black olive that would vanish on the page. */
   --link-rule: var(--accent-soft);
 
-  /* The mark is inline SVG so it can take `--accent` from here. These two are
-     what stays constant in it. */
-  --mark-ground: #170d19;
-  --mark-arrow: #f5f2e7;
-
   --font-title: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
