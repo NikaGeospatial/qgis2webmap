@@ -153,6 +153,40 @@ class TestFillExpression:
         # The trailing fallback becomes the legend's "other" row.
         assert expression.rstrip().endswith("'#888888cc'")
 
+    def test_categorized_line_reads_the_stroke_color(self) -> None:
+        """A line symbol's colour is its stroke; its fill is `None`.
+
+        Reading only the fill exported every categorized line layer - an MRT
+        network in official line colours, say - as the '#888888' placeholder.
+        """
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="line",
+            categories=(
+                CategorySpec("NS", "North-South", SymbolSpec(stroke_color=RED)),
+                CategorySpec("EW", "East-West", SymbolSpec(stroke_color=BLUE)),
+            ),
+        )
+        expression = fill_expression(renderer, GeometryKind.LINE)
+        assert "$line == 'NS' ? '#ff0000'" in expression
+        assert "$line == 'EW' ? '#0000ff'" in expression
+        assert "'#888888' :" not in expression
+
+    def test_graduated_line_reads_the_stroke_color(self) -> None:
+        """Same split as categorized: class colours must survive on lines."""
+        renderer = RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="flow",
+            classes=(
+                GraduatedClassSpec(0.0, 50.0, "0-50", SymbolSpec(stroke_color=RED)),
+                GraduatedClassSpec(50.0, 100.0, "50+", SymbolSpec(stroke_color=BLUE)),
+            ),
+        )
+        expression = fill_expression(renderer, GeometryKind.LINE)
+        assert (
+            expression == "scale($flow, threshold, ['#ff0000', '#0000ff'], domain=[50])"
+        )
+
     def test_graduated_is_a_threshold_scale(self) -> None:
         """Threshold, not sequential - QGIS classes are discrete, not a ramp."""
         renderer = RendererSpec(

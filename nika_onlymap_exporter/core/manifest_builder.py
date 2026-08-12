@@ -272,9 +272,9 @@ def scale_to_zoom(scale_denominator: float) -> float:
 def fill_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     """Build `get-fill-color` in whichever canonical shape the legend understands."""
     if renderer.kind is RendererKind.CATEGORIZED and renderer.categories:
-        return _categorized_expression(renderer)
+        return _categorized_expression(renderer, geometry)
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
-        return _graduated_expression(renderer)
+        return _graduated_expression(renderer, geometry)
 
     symbol = renderer.representative_symbol or SymbolSpec()
     fill = symbol.fill_color or (
@@ -283,7 +283,20 @@ def fill_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     return color_literal(fill)
 
 
-def _categorized_expression(renderer: RendererSpec) -> str:
+def _class_color(symbol: SymbolSpec, geometry: GeometryKind) -> Color | None:
+    """The colour a class symbol actually draws with.
+
+    A line symbol's colour lives in `stroke_color` and its `fill_color` is
+    `None` - the same split the single-symbol path already handles. Reading
+    only the fill here exported every categorized or graduated line layer as
+    the '#888888' placeholder.
+    """
+    if geometry is GeometryKind.LINE:
+        return symbol.fill_color or symbol.stroke_color
+    return symbol.fill_color
+
+
+def _categorized_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     """`$field == 'a' ? '#c1' : $field == 'b' ? '#c2' : '#fallback'`
 
     The trailing fallback is not optional: it is what the legend renders as the
@@ -293,13 +306,13 @@ def _categorized_expression(renderer: RendererSpec) -> str:
     field = renderer.field_name or ""
     parts = [
         f"${field} == {value_literal(category.value)} "
-        f"? {color_literal(category.symbol.fill_color)}"
+        f"? {color_literal(_class_color(category.symbol, geometry))}"
         for category in renderer.categories
     ]
     return " : ".join(parts) + f" : {color_literal(DEFAULT_FILL)}"
 
 
-def _graduated_expression(renderer: RendererSpec) -> str:
+def _graduated_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     """`scale($field, threshold, [colours], domain=[breaks])`
 
     A threshold scale keeps QGIS's exact class breaks. A `sequential` scale would
@@ -311,7 +324,7 @@ def _graduated_expression(renderer: RendererSpec) -> str:
     are the upper bound of every class except the last.
     """
     field = renderer.field_name or ""
-    colors = [color_literal(c.symbol.fill_color) for c in renderer.classes]
+    colors = [color_literal(_class_color(c.symbol, geometry)) for c in renderer.classes]
     breaks = [c.upper for c in renderer.classes[:-1]]
 
     colors_literal = "[" + ", ".join(colors) + "]"
