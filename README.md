@@ -183,7 +183,7 @@ nika_onlymap_exporter/     the plugin package (what ships)
 └── ui/                    the export dialog
 
 docs/                      user documentation, served via GitHub Pages
-scripts/                   package_plugin.py, verify_package.py, build_mark.py
+scripts/                   package_plugin.py, verify_package.py
 tests/                     unit / qgis / browser / fixtures
 ```
 
