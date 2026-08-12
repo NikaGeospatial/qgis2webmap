@@ -33,3 +33,7 @@ nika_onlymap_exporter/resources_rc.py
 # against it. The vendored copy that ships is added deliberately, not by glob.
 nika_onlymap_exporter/runtime/*.js
 nika_onlymap_exporter/runtime/*.css
+
+# Local design and launch working files (logo explorations, distribution
+# planning). Scratch only - nothing in here ships.
+/scratch/
