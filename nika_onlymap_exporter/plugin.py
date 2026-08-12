@@ -69,6 +69,20 @@ class Qgis2WebMapPlugin:
             )
 
     def initGui(self) -> None:  # noqa: N802 -- QGIS plugin API
+        # QGIS registers 3D renderers lazily - normally when a 3D view is
+        # first opened. A project loaded before that parses its 3D renderer
+        # XML to nothing, so an export made in a session that never opened a
+        # 3D view silently lost every extrusion: the flagship 2.5D feature
+        # produced flat maps. Initialising here, at plugin load, means any
+        # project opened afterwards keeps its 3D renderers. Guarded because
+        # a QGIS built without 3D support has no `qgis._3d` at all.
+        try:
+            from qgis._3d import Qgs3D
+
+            Qgs3D.initialize()
+        except Exception:  # pragma: no cover - build without 3D support
+            pass
+
         self.initProcessing()
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "qgis2webmap.svg"))
         self.action = QAction(icon, ACTION_TEXT, self.iface.mainWindow())

@@ -103,6 +103,15 @@ The reason is printed beside the button. The three you will meet:
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
 | Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
 
+### Extruded polygons export flat
+
+The Fidelity tab's **Height** row says the layer exports flat even though
+Layer Properties → 3D View sets an extrusion. This happens when the project
+was opened *before* the plugin was installed or enabled in that session:
+QGIS only registers 3D renderers once something asks for them, and a project
+loaded earlier has already discarded its 3D settings. Re-open the project
+(the plugin registers 3D support when it loads) and export again.
+
 ### The Fidelity tab takes a long time to fill
 
 It reads every feature of every layer, so a large project takes a while. The
