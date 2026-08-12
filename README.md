@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="QGIS2WebMap by NIKA - turn a QGIS project into a portable web map" width="820">
+</p>
+
 # QGIS2WebMap by NIKA
 
 **Turn a QGIS project into a portable OnlyMap web map.**
