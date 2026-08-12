@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -158,3 +159,63 @@ def translate_popup(
         )
 
     return PopupSpec(enabled=enabled, fields=chosen, on_hover=on_hover)
+
+
+def rename_untemplatable_fields(
+    collection: dict,
+    popup: PopupSpec,
+    protected: set[str],
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> tuple[dict, PopupSpec]:
+    """Rename popup fields the web template cannot reference.
+
+    The runtime's popup interpolator substitutes `{{name}}` only for `\\w+`
+    names, so a field called "Last Known Eruption" leaves a literal
+    `{{Last Known Eruption}}` in every popup. The field is renamed in the
+    exported data and the popup references the new name; the label the reader
+    sees keeps the original spelling. `protected` names - anything the map
+    draws with - are never touched.
+    """
+    existing = {f.name for f in popup.fields}
+    renames: dict[str, str] = {}
+    for field in popup.fields:
+        if re.fullmatch(r"\w+", field.name) or field.name in protected:
+            continue
+        candidate = re.sub(r"\W+", "_", field.name).strip("_") or "field"
+        while candidate in existing or candidate in renames.values():
+            candidate += "_"
+        renames[field.name] = candidate
+
+    if not renames:
+        return collection, popup
+
+    fields = tuple(
+        replace(f, name=renames[f.name], alias=f.alias or f.name)
+        if f.name in renames
+        else f
+        for f in popup.fields
+    )
+    features = [
+        {
+            **feature,
+            "properties": {
+                renames.get(name, name): value
+                for name, value in (feature.get("properties") or {}).items()
+            },
+        }
+        for feature in collection.get("features") or ()
+    ]
+    count = len(renames)
+    report.approximated(
+        subject,
+        f"{count} field name{'s' if count != 1 else ''} contain characters the "
+        "web popup template cannot reference (only letters, digits and "
+        "underscores work). The attribute is renamed in the exported data - "
+        f"for example '{next(iter(renames))}' becomes "
+        f"'{renames[next(iter(renames))]}' - and popups keep the original "
+        "spelling as the label.",
+        layer_id,
+    )
+    return {**collection, "features": features}, replace(popup, fields=fields)

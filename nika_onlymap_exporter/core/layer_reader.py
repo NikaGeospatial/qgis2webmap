@@ -38,7 +38,7 @@ from .export_ir import (
 )
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
-from .popup_translator import translate_popup
+from .popup_translator import rename_untemplatable_fields, translate_popup
 from .renderer_translator import translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
@@ -423,6 +423,17 @@ def read_layer(
     if popup.enabled:
         keep |= {field.name for field in popup.visible_fields}
     geojson = keep_only_fields(geojson, keep)
+
+    # After the strip so only surviving fields are considered; drawing fields
+    # are protected because accessors reference them by their real name.
+    geojson, popup = rename_untemplatable_fields(
+        geojson,
+        popup,
+        drawing_fields(renderer, labeling, elevation),
+        report,
+        f"Popup fields of '{name}'",
+        layer_id,
+    )
 
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:
