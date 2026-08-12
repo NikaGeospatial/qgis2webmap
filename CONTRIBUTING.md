@@ -79,6 +79,32 @@ docker run --rm -v "$PWD":/work -w /work \
 | Windows | `set PYTHONPATH=%CD%` then `"C:\Program Files\QGIS 3.44\bin\python-qgis-ltr.bat" -m pytest tests/qgis` |
 | Linux (distro package) | `PYTHONPATH=$PWD QT_QPA_PLATFORM=offscreen python3 -m pytest tests/qgis` |
 
+### Qt6 / QGIS 4
+
+`qgis/qgis:ltr` is a **Qt5** build, so the container tier alone never exercises
+Qt6. QGIS 4.0 moved the application to Qt6 and plugins.qgis.org runs an
+automatic Qt6 check on upload, so a Qt6 run is worth doing before a release:
+
+```bash
+docker run --rm -v "$PWD":/work -w /work \
+  -e QT_QPA_PLATFORM=offscreen -e PYTHONPATH=/work \
+  qgis/qgis:latest python3 -m pytest tests/qgis
+```
+
+**Verified green on QGIS 4.0.3 "Norrköping" / Qt 6.11.1 / Python 3.14 on
+2026-08-12**: 486 unit, 266 qgis+fixtures, all passing, including the
+end-to-end Processing export that writes a real HTML artifact. The plugin's
+39 modules all import and the export dialog constructs under PyQt6.
+
+Two things that look like failures on a bare PyQGIS environment but are not:
+
+- **A null `QIcon` from an SVG.** If Qt's SVG image-format plugin is not on the
+  plugin path, `QImageReader.supportedImageFormats()` has no `svg` entry and
+  every SVG icon loads null. Real QGIS ships it; check the format list before
+  believing an icon bug.
+- **Phantom schema failures on the unit tier** if `ONLYMAP_RUNTIME_DIR` is
+  unset - see the runtime section below.
+
 The tier skips cleanly wherever PyQGIS is absent, so a contributor without QGIS
 still gets a green local run rather than a wall of import errors.
 
