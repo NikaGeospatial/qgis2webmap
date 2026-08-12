@@ -51,6 +51,10 @@ LOCK_FILE = RUNTIME_DIR / "runtime-lock.json"
 RUNTIME_JS = "onlymap.standalone.js"
 RUNTIME_CSS = "onlymapjs.css"
 RUNTIME_LICENCE = "LICENSE.md"
+# The runtime's attribute contract. Optional: the map works without it, but
+# the test suite's attribute-contract checks and AI-assisted editing both read
+# it, so it is cached beside the runtime when the package ships it.
+RUNTIME_SCHEMA = "onlymapjs.html-data.json"
 
 # npm is the canonical channel: the same one the library's own users install
 # from, so the plugin never becomes a second, staler distribution path. The
@@ -380,6 +384,10 @@ def extract_runtime(tarball: bytes, destination: Path) -> None:
         f"{TARBALL_PREFIX}/dist/{RUNTIME_JS}": RUNTIME_JS,
         f"{TARBALL_PREFIX}/dist/{RUNTIME_CSS}": RUNTIME_CSS,
         f"{TARBALL_PREFIX}/{RUNTIME_LICENCE}": RUNTIME_LICENCE,
+        # the schema moved from dist/ to the package root in 0.6.2; accept
+        # either, and treat it as optional below - a map draws without it
+        f"{TARBALL_PREFIX}/dist/{RUNTIME_SCHEMA}": RUNTIME_SCHEMA,
+        f"{TARBALL_PREFIX}/{RUNTIME_SCHEMA}": RUNTIME_SCHEMA,
     }
 
     written: set[str] = set()
