@@ -108,7 +108,11 @@ BASEMAP_PRESETS = (
 # whether to accept a network dependency should be told who they are depending on.
 BASEMAP_HOSTS = {
     "osm": "openstreetmap.org",
-    "positron": "carto.com",
+    # positron moved with the vector styles: the pinned runtime resolves it
+    # from tiles.openfreemap.org, not carto.com. Verified against 0.6.1 -
+    # naming the wrong third party here makes the fidelity report's privacy
+    # statement false.
+    "positron": "openfreemap.org",
     "dark-matter": "carto.com",
     "voyager": "carto.com",
     "liberty": "openfreemap.org",
