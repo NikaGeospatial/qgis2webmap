@@ -58,7 +58,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --measure: 72ch;
-  --shell: 1460px;
+  --shell: 1320px;
   --radius: 10px;
 }
 
@@ -327,7 +327,7 @@ body {
   margin: 0 auto;
   padding: 0 clamp(1rem, 4vw, 2rem) 5rem;
   display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr) 11rem;
+  grid-template-columns: 14rem minmax(0, 1fr) 15rem;
   gap: clamp(1.75rem, 4vw, 3rem);
   align-items: start;
 }
@@ -1008,7 +1008,7 @@ body {
    indexes needs the width more. */
 @media (max-width: 1180px) {
   .shell {
-    grid-template-columns: 11rem minmax(0, 1fr);
+    grid-template-columns: 14rem minmax(0, 1fr);
   }
 
   .toc {
@@ -1118,6 +1118,19 @@ body {
    with its story and export recipe beneath, and the action rail where a
    guide keeps its contents list. The heading IS the map's title, and the
    map loads with the page. */
+
+/* The demo pages alone take the wide treatment: the map is the page, so
+   it gets the width the guides give to reading comfort. */
+.shell.demo-page {
+  max-width: 1460px;
+  grid-template-columns: 11rem minmax(0, 1fr) 11rem;
+}
+
+@media (max-width: 1180px) {
+  .shell.demo-page {
+    grid-template-columns: 11rem minmax(0, 1fr);
+  }
+}
 
 .demo-main {
   min-width: 0;
