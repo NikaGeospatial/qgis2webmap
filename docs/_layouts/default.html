@@ -143,28 +143,14 @@
       </nav>
     </header>
 
-    {% if page.layout == "home" or page.layout == "demos" %}
+    {% if page.layout == "home" or page.layout == "demo" %}
       <!-- The home and demos layouts bring their own shell; they need the full
            width and no sidebar, and the guide list it would hold is on the
            home page already. -->
       <main id="content">{{ content }}</main>
     {% else %}
       <div class="shell">
-        <aside class="sidebar">
-          {% for group in site.data.nav.guides %}
-            <p class="sidebar__heading">{{ group.title }}</p>
-            <ul>
-              {% for item in group.items %}
-                <li>
-                  <a
-                    href="{{ item.url | relative_url }}"
-                    {% if page.url == item.url %}aria-current="page"{% endif %}
-                  >{{ item.title }}</a>
-                </li>
-              {% endfor %}
-            </ul>
-          {% endfor %}
-        </aside>
+        {% include sidebar.html %}
 
         <main id="content" class="prose">
           <!--

@@ -1111,41 +1111,28 @@ body {
   }
 }
 
-/* ---- Demo gallery ------------------------------------------------------ */
+/* ---- Demo pages -------------------------------------------------------- */
 
-/* A single-viewport console. The main column is the map and its story -
-   stage, lede, provenance, credits, nothing to press. The rail is the
-   control panel: which map is on stage, what you can do with it, and the
-   one install CTA. It sits where the docs sidebar's section list lives on a
-   guide page - the same place a reader already looks to move around. */
+/* Each demo is a guide-shaped page: sidebar left, the map in the middle
+   with its story and export recipe beneath, and the action rail where a
+   guide keeps its contents list. The heading IS the map's title, and the
+   map loads with the page. */
 
-.demo-console {
-  /* A map earns the full shell width the guides give up for a reading
-     measure. */
-  max-width: var(--shell);
-  /* .shell brings a 48px grid gap along; between a one-line header and the
-     stage that is dead air the map could be using. */
-  gap: 0.4rem;
-  /* The viewport minus the masthead: the page holds still and the stage
-     takes whatever the header and provenance rows leave. */
-  height: calc(100dvh - 4.5rem);
-  min-height: 34rem;
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 0.9rem;
+.demo-main {
+  min-width: 0;
 }
 
-.demo-console__head {
-  padding: 0.7rem 0 0.55rem;
+.demo-main__head {
+  padding: 0.9rem 0 0.7rem;
 }
 
-.demo-console__head .eyebrow {
+.demo-main__head .eyebrow {
   margin-bottom: 0.3rem;
 }
 
-.demo-console__title {
+.demo-main__title {
   font-family: var(--font-title);
-  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.12;
@@ -1153,95 +1140,16 @@ body {
   text-wrap: balance;
 }
 
-.demo-console__title em {
-  font-style: normal;
-  background-image: linear-gradient(var(--accent), var(--accent));
-  background-repeat: no-repeat;
-  background-position: 0 100%;
-  background-size: 100% 0.11em;
-  padding-bottom: 0.06em;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-.demo-console__body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 16rem;
-  gap: clamp(1.5rem, 3vw, 2.25rem);
-  align-items: stretch;
-}
-
-.demo-console__panels {
-  min-height: 0;
-}
-
-.demo-panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* `display: flex` above would silently defeat the `hidden` attribute the
-   tab switcher relies on - the UA's `display: none` loses the specificity
-   fight without this. */
-.demo-panel[hidden] {
-  display: none;
-}
-
-/* The map's frame. The poster inside it is a real screenshot of the file the
-   button loads, so what appears on press is the same picture waking up. */
+/* The map's frame. As tall as the viewport allows while the heading and a
+   line of the strip below stay reachable - the map is the page. */
 .demo__stage {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  height: calc(100dvh - 16.5rem);
+  min-height: 420px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-2);
-}
-
-.demo__poster {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.demo__load {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.8rem 1.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--rule);
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.demo__load::before {
-  content: "";
-  width: 0;
-  height: 0;
-  border-left: 9px solid var(--accent);
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-}
-
-.demo__load:hover {
-  border-color: var(--accent);
 }
 
 .demo__frame {
@@ -1255,8 +1163,6 @@ body {
    It overlays the live iframe too, so it must not eat the mouse. */
 .demo__tip {
   position: absolute;
-  /* Bottom-centre: the corners belong to the map's own chrome (zoom and
-     scale bottom-left, the licence chip bottom-right). */
   left: 50%;
   transform: translateX(-50%);
   bottom: 0.75rem;
@@ -1272,15 +1178,12 @@ body {
   letter-spacing: 0.06em;
   color: var(--ink-2);
   pointer-events: none;
-  /* Above the comparison pane, which would otherwise bury it. */
   z-index: 3;
 }
 
-/* The strip under the stage: what this map shows, the chain that made it,
-   and who the data belongs to. Reading matter only - everything pressable
-   lives in the rail. */
+/* The strip under the stage: what this map shows and whose data it is. */
 .demo__provenance {
-  padding-top: 0.6rem;
+  padding-top: 0.75rem;
 }
 
 .demo__lede {
@@ -1291,6 +1194,13 @@ body {
   margin: 0 0 0.5rem;
 }
 
+.demo__compare-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 0 0 0.5rem;
+}
+
 .demo__credits {
   font-size: 12.5px;
   line-height: 1.5;
@@ -1298,18 +1208,10 @@ body {
   margin: 0;
 }
 
-/* The export recipe: the dialog settings the .qgz cannot carry. Below the
-   fold by design - the console fills the viewport, and this is what the
-   scroll that exists anyway is for. */
-.demo-recipes {
-  max-width: var(--shell);
-  /* .shell's 48px grid gap again - between the recipe table and the note it
-     reads as a hole in the page. */
-  gap: 0;
-}
-
+/* The export recipe: the dialog settings the .qgz cannot carry. */
 .demo__recipe {
-  padding-top: 1.25rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--rule);
   max-width: var(--measure);
 }
@@ -1364,106 +1266,7 @@ body {
   color: var(--ink);
 }
 
-@media (max-width: 560px) {
-  .demo__recipe-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.15rem;
-  }
-}
-
-/* ---- The rail ---------------------------------------------------------- */
-
-.demo-console__rail {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.4rem;
-  overflow-y: auto;
-  /* Scrollable as a safety net on short windows, but without the scrollbar
-     itself - a visible bar on a three-item menu reads as clutter. */
-  scrollbar-width: none;
-}
-
-.demo-console__rail::-webkit-scrollbar {
-  display: none;
-}
-
-.demo-console__rail-heading {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  margin: 0 0 0.6rem;
-}
-
-.demo-console__tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.demo-console__tab {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  text-align: left;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-  font-family: var(--font-sans);
-}
-
-.demo-console__tab:hover {
-  border-color: var(--accent);
-}
-
-.demo-console__tab[aria-selected="true"] {
-  background: var(--bg-2);
-  border-color: color-mix(in srgb, var(--ink-3) 70%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.demo-console__tab-region {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.demo-console__tab-title {
-  font-family: var(--font-title);
-  font-size: 15.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-/* The active map's actions: one column, one width, no competition. */
-.demo-console__map-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.demo-console__map-actions .button {
-  justify-content: center;
-  padding: 0.55rem 1rem;
-  font-size: 14px;
-}
-
-.demo-console__install {
-  justify-content: center;
-  padding: 0.55rem 1rem;
-  font-size: 14px;
-}
-
-/* The markdown body of demos.md, set below the recipes where nothing can
-   clip it mid-sentence. */
+/* The markdown body of the page, after the recipe. */
 .demo-recipes__notes {
   margin-top: 1.5rem;
   padding-top: 1rem;
@@ -1492,50 +1295,28 @@ body {
   color: var(--ink);
 }
 
-/* ---- Small screens: the console unrolls -------------------------------- */
+/* ---- The action rail --------------------------------------------------- */
 
-/* A fixed-height console is a desktop idea. Under it, the page goes back to
-   flowing: tabs become a row above the stage, the actions a row below it,
-   and the stage takes a fixed aspect instead of the leftover height. */
-@media (max-width: 820px) {
-  .demo-console {
-    height: auto;
-    min-height: 0;
-  }
+/* Where a guide keeps its contents list: just the four actions, nothing
+   else. One filled button - the install CTA. */
+.demo-rail {
+  position: sticky;
+  top: 4.5rem;
+  padding-top: 4.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-self: start;
+}
 
-  .demo-console__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.demo-rail .button {
+  justify-content: center;
+  padding: 0.55rem 1rem;
+  font-size: 14px;
+}
 
-  .demo-console__rail {
-    order: -1;
-    overflow: visible;
-  }
-
-  .demo-console__tabs {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
-  }
-
-  .demo-console__tab {
-    flex: 1 0 11rem;
-  }
-
-  .demo-console__map-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .demo-console__rail-heading,
-  .demo-console__install {
-    display: none;
-  }
-
-  .demo__stage {
-    flex: none;
-    aspect-ratio: 4 / 3;
-  }
+.demo-rail__install {
+  margin-top: 0.9rem;
 }
 
 /* ---- Compare with QGIS ------------------------------------------------- */
@@ -1656,15 +1437,26 @@ body {
   pointer-events: none;
 }
 
-.demo__compare-note {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-3);
-  margin: 0 0 0.5rem;
+/* ---- Small screens ------------------------------------------------------ */
+
+@media (max-width: 1180px) {
+  /* The rail follows the toc out of the third column; as a wrapped row it
+     stays reachable right under the recipe. */
+  .demo-rail {
+    position: static;
+    padding-top: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 820px) {
-  /* Two synced WebGL panes and a drag divider are a desktop interaction. */
+  .demo__stage {
+    height: auto;
+    aspect-ratio: 4 / 3;
+    min-height: 0;
+  }
+
   .demo__compare-toggle {
     display: none;
   }

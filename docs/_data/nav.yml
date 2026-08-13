@@ -9,7 +9,7 @@
 
 main:
   - title: Demos
-    url: /demos.html
+    url: /demo-himalayas.html
   - title: Install
     url: /installation.html
   - title: First export
@@ -18,6 +18,15 @@ main:
     url: /the-dialog.html
 
 guides:
+  - title: Demos
+    items:
+      - title: How high do climbers get?
+        url: /demo-himalayas.html
+      - title: The MRT network
+        url: /demo-singapore.html
+      - title: Living next to a volcano
+        url: /demo-volcanoes.html
+
   - title: Getting started
     items:
       - title: Overview

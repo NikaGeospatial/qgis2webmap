@@ -1,0 +1,15 @@
+<aside class="sidebar">
+  {% for group in site.data.nav.guides %}
+    <p class="sidebar__heading">{{ group.title }}</p>
+    <ul>
+      {% for item in group.items %}
+        <li>
+          <a
+            href="{{ item.url | relative_url }}"
+            {% if page.url == item.url %}aria-current="page"{% endif %}
+          >{{ item.title }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+</aside>
