@@ -73,12 +73,6 @@ layout: default
 
           <footer class="demo__provenance">
             <p class="demo__lede">{{ demo.lede }}</p>
-            <p class="demo__chain">
-              open data<span class="demo__chain-arrow" aria-hidden="true">→</span
-              >.qgz<span class="demo__chain-arrow" aria-hidden="true">→</span
-              >export dialog<span class="demo__chain-arrow" aria-hidden="true">→</span
-              >this file
-            </p>
             {% if demo.compare %}
               <p class="demo__compare-note" hidden>{{ demo.compare.note }}</p>
             {% endif %}
@@ -232,11 +226,16 @@ layout: default
     // tab switches, so coming back to a loaded map is instant.
     document.querySelectorAll(".demo__load").forEach(function (button) {
       button.addEventListener("click", function () {
+        var stage = button.closest(".demo__stage");
         loadMap(
-          button.closest(".demo__stage"),
+          stage,
           button.getAttribute("data-src"),
           button.getAttribute("data-title")
         ).focus();
+        // A map with a QGIS comparison opens IN comparison - the split view
+        // is the point of this demo, not an easter egg behind a button.
+        var compare = stage.querySelector(".demo__compare-toggle");
+        if (compare) compare.click();
       });
     });
 
@@ -262,6 +261,23 @@ layout: default
         typeof map.getViewStateInternal === "function" &&
         map.getViewStateInternal()
       );
+    }
+
+    // The QGIS pane exists only where its tiles were pre-rendered. Gliding
+    // the camera back into that window beats letting the left half go blank.
+    var FENCE = { west: 86.0, east: 88.7, south: 27.1, north: 28.5, minZoom: 6.3 };
+
+    function fence(view) {
+      var target = {
+        longitude: Math.min(FENCE.east, Math.max(FENCE.west, view.longitude)),
+        latitude: Math.min(FENCE.north, Math.max(FENCE.south, view.latitude)),
+        zoom: Math.max(FENCE.minZoom, view.zoom),
+      };
+      var moved =
+        Math.abs(target.longitude - view.longitude) > 1e-9 ||
+        Math.abs(target.latitude - view.latitude) > 1e-9 ||
+        Math.abs(target.zoom - view.zoom) > 1e-9;
+      return moved ? target : null;
     }
 
     function sameView(a, b) {
@@ -380,18 +396,31 @@ layout: default
                 bearing: 0,
               });
             } else if (!sameView(r, state.lastR)) {
+              var target = fence(r);
+              if (target) mapR.setViewInternal(target);
+              var view = target || r;
               mapL.setViewInternal({
-                longitude: r.longitude,
-                latitude: r.latitude,
-                zoom: r.zoom,
+                longitude: view.longitude,
+                latitude: view.latitude,
+                zoom: view.zoom,
                 pitch: 0,
                 bearing: 0,
               });
             } else if (state.lastL && !sameView(l, state.lastL)) {
+              var flat = fence(l) || l;
+              if (fence(l)) {
+                mapL.setViewInternal({
+                  longitude: flat.longitude,
+                  latitude: flat.latitude,
+                  zoom: flat.zoom,
+                  pitch: 0,
+                  bearing: 0,
+                });
+              }
               mapR.setViewInternal({
-                longitude: l.longitude,
-                latitude: l.latitude,
-                zoom: l.zoom,
+                longitude: flat.longitude,
+                latitude: flat.latitude,
+                zoom: flat.zoom,
               });
             }
             state.lastL = mapL.getViewStateInternal();

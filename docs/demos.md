@@ -37,8 +37,9 @@ demos:
       note: >-
         Comparison view — the left pane is QGIS's own rendering of this
         project, pre-drawn to map tiles; the right pane is the live export.
-        The panes share one camera; the left stays flat, exactly as the QGIS
-        canvas would.
+        The panes share one camera, fenced to the pre-rendered area; the left
+        stays flat, exactly as the QGIS canvas would, so with the relief
+        tilted the summits lean toward you only on the right.
     alt: >-
       Mountainous 3D terrain with translucent heat-coloured patches draped
       over the massifs around Everest, a legend of climb-height classes in

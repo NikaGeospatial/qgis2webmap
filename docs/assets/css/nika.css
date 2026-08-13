@@ -1129,11 +1129,11 @@ body {
   min-height: 34rem;
   display: flex;
   flex-direction: column;
-  padding-bottom: 1.25rem;
+  padding-bottom: 0.9rem;
 }
 
 .demo-console__head {
-  padding: 0.9rem 0 0.7rem;
+  padding: 0.7rem 0 0.55rem;
 }
 
 .demo-console__head .eyebrow {
@@ -1277,7 +1277,7 @@ body {
    and who the data belongs to. Reading matter only - everything pressable
    lives in the rail. */
 .demo__provenance {
-  padding-top: 0.75rem;
+  padding-top: 0.6rem;
 }
 
 .demo__lede {
@@ -1286,19 +1286,6 @@ body {
   color: var(--ink-2);
   max-width: 90ch;
   margin: 0 0 0.5rem;
-}
-
-.demo__chain {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-  margin: 0 0 0.5rem;
-}
-
-.demo__chain-arrow {
-  margin: 0 0.6em;
-  color: var(--accent-ink);
 }
 
 .demo__credits {
