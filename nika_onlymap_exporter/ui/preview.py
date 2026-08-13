@@ -46,6 +46,7 @@ import tempfile
 from pathlib import Path
 
 from ..core.export_ir import ExportProject, OutputMode
+from ..packaging.artifact_builder import terrain_zoom_clamp
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
 from .live_server import RELOAD_PATH
 
@@ -137,10 +138,15 @@ def preview_directory(project_identity: str) -> Path:
     overwrite each other's preview, while the same project always reuses one
     path - which is what makes the browser's reload button work.
     """
-    digest = hashlib.sha256(project_identity.encode("utf-8")).hexdigest()[:12]
-    path = Path(tempfile.gettempdir()) / PREVIEW_DIR_NAME / digest
+    path = _preview_path(project_identity)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _preview_path(project_identity: str) -> Path:
+    """Where this project's preview lives, whether or not it exists yet."""
+    digest = hashlib.sha256(project_identity.encode("utf-8")).hexdigest()[:12]
+    return Path(tempfile.gettempdir()) / PREVIEW_DIR_NAME / digest
 
 
 def remove_preview(project_identity: str) -> None:
@@ -154,9 +160,7 @@ def remove_preview(project_identity: str) -> None:
     """
     import shutil
 
-    digest = hashlib.sha256(project_identity.encode("utf-8")).hexdigest()[:12]
-    path = Path(tempfile.gettempdir()) / PREVIEW_DIR_NAME / digest
-    shutil.rmtree(path, ignore_errors=True)
+    shutil.rmtree(_preview_path(project_identity), ignore_errors=True)
 
 
 def prune_stale_previews(max_age_days: float = 7.0) -> None:
@@ -204,6 +208,10 @@ def write_preview(
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
     hook = CAMERA_SCRIPT + RELOAD_SCRIPT if live else CAMERA_SCRIPT
+    # The relief camera clamp ships in the real artifact (artifact_builder);
+    # without it here a relief preview would zoom past where the terrain
+    # blanks, behaving unlike the file `final` claims to match byte-for-byte.
+    hook = terrain_zoom_clamp(project) + hook
 
     # Passed through the template's own hook rather than string-matching the
     # rendered output. The runtime contains a literal "</body>" inside a template
