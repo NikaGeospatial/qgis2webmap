@@ -127,12 +127,14 @@ TERRAIN_PRESETS = ("none", "terrarium")
 
 TERRAIN_HOSTS = {"terrarium": "s3.amazonaws.com"}
 
-# Zoom 13 - roughly a 1:2.5 km scale bar - is the closest view at which the
+# Zoom 12 - roughly a 1:2.5 km scale bar in the mid-latitudes - is the
 # z14-capped elevation tiles, their draped imagery and the draped symbology
 # all still render. There is currently NO schema-valid way to cap the camera
 # there: `max-zoom` exists only per-layer (it would hide our layers, not stop
-# the camera) and <om-map> has no clamp at all. A camera cap is on the
-# runtime's request list; docs carry the caveat meanwhile.
+# the camera) and <om-map> has no clamp at all. Until the runtime grows one
+# (requested), relief artifacts enforce this through the page hook - see
+# `terrain_zoom_clamp` in `packaging/artifact_builder.py`.
+TERRAIN_MAX_ZOOM = 12.0
 
 # The raster twin of each basemap preset, draped over the relief surface as
 # `terrain-texture`. The runtime replaces the basemap while terrain is on, so

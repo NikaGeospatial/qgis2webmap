@@ -19,6 +19,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **Relief maps stop the camera where the relief still renders.** The public
+  elevation tiles end at z14 and the runtime blanks the surface rather than
+  magnifying past it; the runtime also has no camera-cap attribute yet. Relief
+  exports now carry a small page script - built only on the element's public
+  `om-view-changed` event and consumer-testing `setViewInternal` method - that
+  glides the camera back to ~1:2.5 km whenever a gesture passes it. Deleted in
+  favour of the real attribute the day the runtime grows one.
 - **Per-class marker outline colours survive the export.** Categorized and
   graduated markers emitted only the first class's stroke colour, so a layer
   of white station dots ringed in each class's colour exported ringed all in

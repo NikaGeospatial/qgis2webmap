@@ -68,6 +68,42 @@ def generator_line_first_line(result: ArtifactResult) -> str:
     )
 
 
+def terrain_zoom_clamp(project: ExportProject) -> str:
+    """A camera cap for relief exports, applied through the page hook.
+
+    The public elevation tiles end at z14 and the runtime blanks the surface
+    rather than magnifying past them, so a relief map needs its camera stopped
+    around z13 (~1:2.5 km) where the picture still holds. The runtime has no
+    camera-cap attribute yet (requested), so the artifact carries a script
+    built ONLY on the element's public surface: the `om-view-changed` settle
+    event and the documented consumer-testing `setViewInternal` method. When
+    the runtime grows a real attribute this hook is deleted in its favour.
+    """
+    from ..core.manifest_builder import TERRAIN_MAX_ZOOM, TERRAIN_PRESETS
+
+    terrain = project.settings.terrain
+    if terrain == "none" or terrain not in TERRAIN_PRESETS:
+        return ""
+    cap = TERRAIN_MAX_ZOOM
+    return (
+        "<script>\n"
+        "  // Relief detail ends at ~1:2.5 km; past it the terrain blanks, so\n"
+        "  // the camera glides back to the closest zoom that still renders.\n"
+        '  document.addEventListener("DOMContentLoaded", function () {\n'
+        '    var map = document.querySelector("om-map");\n'
+        "    if (!map) return;\n"
+        '    map.addEventListener("om-view-changed", function (event) {\n'
+        "      var zoom = event.detail && event.detail.zoom;\n"
+        f'      if (typeof zoom === "number" && zoom > {cap:g}'
+        " && map.setViewInternal) {\n"
+        f"        map.setViewInternal({{ zoom: {cap:g} }});\n"
+        "      }\n"
+        "    });\n"
+        "  });\n"
+        "</script>"
+    )
+
+
 def build_artifact(
     project: ExportProject,
     destination: Path,
@@ -93,6 +129,7 @@ def build_artifact(
             staging_path,
             mode=mode,
             compress=compress,
+            preview_hook=terrain_zoom_clamp(project),
             unbundle=mode is OutputMode.FOLDER,
         )
 
