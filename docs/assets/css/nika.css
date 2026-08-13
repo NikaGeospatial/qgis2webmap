@@ -1303,6 +1303,9 @@ body {
    scroll that exists anyway is for. */
 .demo-recipes {
   max-width: var(--shell);
+  /* .shell's 48px grid gap again - between the recipe table and the note it
+     reads as a hole in the page. */
+  gap: 0;
 }
 
 .demo__recipe {
@@ -1454,7 +1457,6 @@ body {
 }
 
 .demo-console__install {
-  margin-top: auto;
   justify-content: center;
   padding: 0.55rem 1rem;
   font-size: 14px;
