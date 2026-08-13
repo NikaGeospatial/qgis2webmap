@@ -239,6 +239,11 @@ that third party, and the Fidelity tab names every host involved.
 layers draw, but without their text, and the Fidelity tab names them. Turn
 relief off if the labels matter more.
 
+**Polygon outlines do not draw over relief** either — the fills paint the
+surface but their borders disappear, so overlapping translucent areas are
+hard to tell apart. The Fidelity tab names the affected layers. Turn relief
+off if the outlines matter more.
+
 Relief detail ends at roughly a 1:2.5 km scale: the public elevation tiles
 stop there, and past it the terrain would blank rather than magnify. A relief
 export therefore stops the camera at that scale — zooming further glides back

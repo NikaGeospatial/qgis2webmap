@@ -195,6 +195,51 @@ class TestTerrainNotes:
             i.detail for i in report.items
         )
 
+    def test_polygon_outlines_under_relief_are_reported(
+        self, project, make_memory_layer
+    ) -> None:
+        """Measured on the pinned runtime: the drape keeps polygon fills but
+        drops their outlines, so overlapping translucent areas lose the
+        border that tells them apart."""
+        from qgis.core import QgsFillSymbol
+
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        layer = make_memory_layer(
+            "zones", geometry="Polygon", features=[("a", [0, 0, 0, 1, 1, 1, 1, 0])]
+        )
+        layer.renderer().setSymbol(
+            QgsFillSymbol.createSimple(
+                {"color": "#ff0000", "outline_color": "#ffffff", "outline_width": "0.4"}
+            )
+        )
+        project.addMapLayer(layer)
+
+        report = FidelityReportBuilder()
+        read_project(project, report, settings=ExportSettings(terrain="terrarium"))
+        details = " ".join(i.detail for i in report.items)
+        assert "Polygon outlines do not draw over relief" in details
+        assert "'zones'" in details
+
+    def test_no_outline_note_without_terrain(self, project, make_memory_layer) -> None:
+        from qgis.core import QgsFillSymbol
+
+        layer = make_memory_layer(
+            "zones", geometry="Polygon", features=[("a", [0, 0, 0, 1, 1, 1, 1, 0])]
+        )
+        layer.renderer().setSymbol(
+            QgsFillSymbol.createSimple(
+                {"color": "#ff0000", "outline_color": "#ffffff", "outline_width": "0.4"}
+            )
+        )
+        project.addMapLayer(layer)
+
+        report = FidelityReportBuilder()
+        read_project(project, report)
+        assert "Polygon outlines do not draw over relief" not in " ".join(
+            i.detail for i in report.items
+        )
+
 
 class TestReadProject:
     def test_layers_come_out_in_draw_order_bottom_first(

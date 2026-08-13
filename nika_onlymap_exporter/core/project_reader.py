@@ -32,6 +32,7 @@ from .export_ir import (
     ExportSettings,
     Extent,
     ExtentSource,
+    GeometryKind,
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
@@ -387,6 +388,26 @@ def read_project(
                 "The labelled layers still draw, but without their text: "
                 + ", ".join(f"'{name}'" for name in labelled)
                 + ". Turn relief off if the labels matter more.",
+            )
+
+        # Also measured: the drape keeps polygon fills but drops their
+        # outlines, so overlapping translucent areas lose the border that
+        # tells them apart.
+        outlined = [
+            layer.name
+            for layer in layers
+            if layer.geometry_kind is GeometryKind.POLYGON
+            and (symbol := layer.renderer.representative_symbol) is not None
+            and symbol.stroke_width > 0
+        ]
+        if outlined:
+            report.unsupported(
+                "Terrain",
+                "Polygon outlines do not draw over relief in the current map "
+                "runtime - the fills paint the surface but their borders "
+                "disappear, so overlapping areas are hard to tell apart: "
+                + ", ".join(f"'{name}'" for name in outlined)
+                + ". Turn relief off if the outlines matter more.",
             )
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)

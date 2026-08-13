@@ -23,6 +23,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   neither draped nor offset while terrain is on — a runtime limitation,
   measured — so the Fidelity tab now names every labelled layer that will
   draw without its text, instead of the recipient discovering it.
+- **Relief exports say that polygon outlines will not draw.** The terrain
+  drape keeps polygon fills but drops their borders — a runtime limitation,
+  measured — so overlapping translucent areas lose the edge that tells them
+  apart. The Fidelity tab now names every outlined polygon layer affected.
 - **Relief maps stop the camera where the relief still renders.** The public
   elevation tiles end at z14 and the runtime blanks the surface rather than
   magnifying past it; the runtime also has no camera-cap attribute yet. Relief
