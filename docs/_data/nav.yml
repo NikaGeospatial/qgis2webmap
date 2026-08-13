@@ -49,11 +49,11 @@ guides:
       - title: Privacy
         url: /privacy.html
 
-  - title: Demos
+  - title: Plugin output demos
     items:
-      - title: Himalayas
+      - title: Himalayan Ascent
         url: /demo-himalayas.html
-      - title: Singapore
+      - title: Singapore MRT System
         url: /demo-singapore.html
-      - title: Indonesia
+      - title: Indonesian Volcanoes
         url: /demo-volcanoes.html
