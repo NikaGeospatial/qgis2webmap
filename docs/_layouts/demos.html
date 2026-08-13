@@ -127,8 +127,6 @@ layout: default
         >Download the QGIS project</a>
       </div>
 
-      <div class="demo-console__notes">{{ content }}</div>
-
       <a
         class="button button--primary demo-console__install"
         href="{{ '/installation.html' | relative_url }}"
@@ -164,6 +162,8 @@ layout: default
       </section>
     {% endif %}
   {% endfor %}
+
+  <div class="demo-recipes__notes">{{ content }}</div>
 </div>
 
 <script>
@@ -181,7 +181,10 @@ layout: default
     var mapAction = document.getElementById("demo-action-map");
     var projectAction = document.getElementById("demo-action-project");
 
+    var current = 0;
+
     function select(index, focus) {
+      current = index;
       tabs.forEach(function (tab, i) {
         var active = i === index;
         tab.setAttribute("aria-selected", active ? "true" : "false");
@@ -236,12 +239,16 @@ layout: default
           var doc = frame.contentDocument;
           var caption = doc.querySelector(".om-caption");
           if (caption) caption.remove();
+          // `!important` because the control keeps re-opening itself as
+          // the basemap settles - visuals beat a losing state fight.
           var style = doc.createElement("style");
           style.textContent =
-            ".maplibregl-ctrl-attrib{max-width:1.5em;overflow:hidden;" +
-            "white-space:nowrap;opacity:.75;transition:max-width .25s ease}" +
-            ".maplibregl-ctrl-attrib:hover,.maplibregl-ctrl-attrib:focus-within" +
-            "{max-width:40em;opacity:1}";
+            ".maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner" +
+            "{display:none !important}" +
+            ".maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner" +
+            "{display:block !important}" +
+            ".maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button" +
+            "{display:block !important}";
           doc.head.appendChild(style);
         } catch (error) {
           /* cross-origin embedding of this page: leave the map alone */
@@ -335,6 +342,41 @@ layout: default
         Math.abs(a.bearing - b.bearing) < 1e-3
       );
     }
+
+    openAction.addEventListener("click", function (event) {
+      var frame = panels[current].querySelector(".demo__stage > .demo__frame");
+      var map = frame && mapIn(frame);
+      var view = map && ready(map) ? map.getViewStateInternal() : null;
+      if (!view) return; // map not loaded yet: plain navigation is right
+      event.preventDefault();
+      var win = window.open(openAction.href, "_blank");
+      if (!win) return;
+      var tries = 0;
+      var timer = setInterval(function () {
+        tries += 1;
+        if (tries > 150) clearInterval(timer);
+        try {
+          var target = win.document && win.document.querySelector("om-map");
+          if (
+            target &&
+            typeof target.setViewInternal === "function" &&
+            typeof target.getViewStateInternal === "function" &&
+            target.getViewStateInternal()
+          ) {
+            clearInterval(timer);
+            target.setViewInternal({
+              longitude: view.longitude,
+              latitude: view.latitude,
+              zoom: view.zoom,
+              pitch: view.pitch,
+              bearing: view.bearing,
+            });
+          }
+        } catch (error) {
+          clearInterval(timer);
+        }
+      }, 200);
+    });
 
     document.querySelectorAll(".demo__compare-toggle").forEach(function (toggle) {
       var stage = toggle.closest(".demo__stage");

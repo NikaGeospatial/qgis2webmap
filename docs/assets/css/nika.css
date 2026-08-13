@@ -1460,30 +1460,33 @@ body {
   font-size: 14px;
 }
 
-/* The markdown body of demos.md, set as the rail's endnote. */
-.demo-console__notes {
-  font-size: 12.5px;
+/* The markdown body of demos.md, set below the recipes where nothing can
+   clip it mid-sentence. */
+.demo-recipes__notes {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  max-width: var(--measure);
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--ink-2);
-  border-top: 1px solid var(--rule);
-  padding-top: 0.9rem;
 }
 
-.demo-console__notes h2 {
+.demo-recipes__notes h2 {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-3);
-  margin: 0 0 0.55rem;
-}
-
-.demo-console__notes p {
   margin: 0 0 0.6rem;
 }
 
-.demo-console__notes a {
+.demo-recipes__notes p {
+  margin: 0 0 0.7rem;
+}
+
+.demo-recipes__notes a {
   color: var(--ink);
 }
 
@@ -1523,7 +1526,6 @@ body {
   }
 
   .demo-console__rail-heading,
-  .demo-console__notes,
   .demo-console__install {
     display: none;
   }
