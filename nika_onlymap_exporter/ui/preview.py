@@ -143,6 +143,46 @@ def preview_directory(project_identity: str) -> Path:
     return path
 
 
+def remove_preview(project_identity: str) -> None:
+    """Delete this project's preview directory.
+
+    Called when the dialog closes: the preview only exists to be served by the
+    dialog's own localhost server, so once that stops the files are dead weight.
+    Left behind they accumulate forever on Windows, where nothing ever clears
+    the temp directory - a few megabytes per project, per machine, for years.
+    Errors are swallowed: a locked file is not worth a crash on close.
+    """
+    import shutil
+
+    digest = hashlib.sha256(project_identity.encode("utf-8")).hexdigest()[:12]
+    path = Path(tempfile.gettempdir()) / PREVIEW_DIR_NAME / digest
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def prune_stale_previews(max_age_days: float = 7.0) -> None:
+    """Sweep preview directories older than `max_age_days`.
+
+    The close-time removal above misses previews whose dialog never closed
+    cleanly - a QGIS crash, a killed process - and previews of projects that
+    were renamed (a new identity means a new digest, orphaning the old one).
+    This sweep, run at dialog shutdown, bounds how long any of those survive.
+    Only paths under our own preview directory are ever touched.
+    """
+    import shutil
+    import time
+
+    root = Path(tempfile.gettempdir()) / PREVIEW_DIR_NAME
+    if not root.is_dir():
+        return
+    cutoff = time.time() - max_age_days * 86400.0
+    for entry in root.iterdir():
+        try:
+            if entry.is_dir() and entry.stat().st_mtime < cutoff:
+                shutil.rmtree(entry, ignore_errors=True)
+        except OSError:
+            continue
+
+
 def write_preview(
     project: ExportProject,
     project_identity: str,

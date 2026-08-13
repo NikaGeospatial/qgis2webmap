@@ -19,6 +19,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **Closing the export dialog removes its live-preview files.** Previews are
+  written to the system temp directory to be served by the dialog's own
+  localhost server; they used to stay behind after the dialog closed - a few
+  megabytes per project, forever, on Windows, where nothing else clears the
+  temp directory. The dialog now deletes the project's preview on close and
+  sweeps previews older than a week, which also collects those orphaned by a
+  crash or a renamed project. The preview server itself already shut down
+  cleanly on close.
 - **Categorized and graduated line layers no longer export placeholder grey.**
   The class-colour expressions read only the fill colour; a line symbol keeps
   its colour in the stroke, so an MRT network in official line colours came

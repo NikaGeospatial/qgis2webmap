@@ -100,7 +100,12 @@ from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
 from .live_server import PreviewServer
-from .preview import preview_directory, write_preview
+from .preview import (
+    preview_directory,
+    prune_stale_previews,
+    remove_preview,
+    write_preview,
+)
 from .runtime_setup import ensure_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -2467,6 +2472,13 @@ class MainDialog(QDialog):
         # Before the watcher, because a rebuild triggered mid-teardown would run
         # against a half-disconnected dialog.
         self._stop_live_preview()
+        # The preview files exist only to be served by the dialog's own
+        # server; once it stops they are dead weight, and on Windows nothing
+        # else ever clears the temp directory. The sweep also collects
+        # previews orphaned by crashes or renamed projects.
+        with contextlib.suppress(Exception):
+            remove_preview(self._project_identity())
+            prune_stale_previews()
         self.watcher.disconnect_all()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
