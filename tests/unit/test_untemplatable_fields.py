@@ -113,6 +113,50 @@ class TestRenameUntemplatableFields:
         )
         assert [f.name for f in popup_out.fields] == ["max_vei", "max_vei_"]
 
+    def test_non_ascii_names_are_renamed(self) -> None:
+        """JavaScript's `\\w` is ASCII-only, so 'Höhe' is untemplatable even
+        though Python's Unicode-aware `\\w+` matches it."""
+        popup = PopupSpec(fields=(PopupFieldSpec(name="Höhe"),))
+        data, popup = rename_untemplatable_fields(
+            collection({"Höhe": 3428}),
+            popup,
+            set(),
+            FidelityReportBuilder(),
+            "s",
+            "l",
+        )
+        assert popup.fields[0].name == "H_he"
+        assert data["features"][0]["properties"] == {"H_he": 3428}
+
+    def test_a_rename_never_collides_with_a_protected_drawing_field(self) -> None:
+        """A drawing-only field survives in the properties without appearing
+        among the popup fields; a rename landing on its name would clobber it."""
+        popup = PopupSpec(fields=(PopupFieldSpec(name="max vei"),))
+        data, popup = rename_untemplatable_fields(
+            collection({"max_vei": 1, "max vei": 2}),
+            popup,
+            {"max_vei"},
+            FidelityReportBuilder(),
+            "s",
+            "l",
+        )
+        assert popup.fields[0].name == "max_vei_"
+        assert data["features"][0]["properties"] == {"max_vei": 1, "max_vei_": 2}
+
+    def test_a_protected_untemplatable_field_is_reported_as_leaking(self) -> None:
+        """It cannot be renamed - accessors use the real name - so the popup
+        shows the raw placeholder, and the report must say so."""
+        report = FidelityReportBuilder()
+        rename_untemplatable_fields(
+            collection({"max vei": 4}),
+            PopupSpec(fields=(PopupFieldSpec(name="max vei"),)),
+            {"max vei"},
+            report,
+            "s",
+            "l",
+        )
+        assert any("raw placeholder" in item.detail for item in report.items)
+
     def test_the_rename_is_reported(self) -> None:
         report = FidelityReportBuilder()
         rename_untemplatable_fields(

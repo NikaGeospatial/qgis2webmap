@@ -178,15 +178,43 @@ def rename_untemplatable_fields(
     sees keeps the original spelling. `protected` names - anything the map
     draws with - are never touched.
     """
-    existing = {f.name for f in popup.fields}
+    # The runtime's interpolator is JavaScript, whose `\w` is ASCII-only -
+    # Python's is Unicode-aware, so without re.ASCII a field named 'Höhe'
+    # would be judged templatable here and still leak `{{Höhe}}` in the map.
+    # `existing` includes `protected` because drawing-only fields survive in
+    # the feature properties without appearing among the popup fields; a
+    # candidate colliding with one would silently clobber it.
+    existing = {f.name for f in popup.fields} | protected
     renames: dict[str, str] = {}
+    leaking: list[str] = []
     for field in popup.fields:
-        if re.fullmatch(r"\w+", field.name) or field.name in protected:
+        if re.fullmatch(r"\w+", field.name, flags=re.ASCII):
             continue
-        candidate = re.sub(r"\W+", "_", field.name).strip("_") or "field"
+        if field.name in protected:
+            leaking.append(field.name)
+            continue
+        candidate = (
+            re.sub(r"\W+", "_", field.name, flags=re.ASCII).strip("_") or "field"
+        )
         while candidate in existing or candidate in renames.values():
             candidate += "_"
         renames[field.name] = candidate
+
+    if leaking:
+        # A drawing field cannot be renamed - accessors reference it by its
+        # real name - so its popup entry shows the raw placeholder. Saying so
+        # beats the recipient discovering it.
+        count = len(leaking)
+        report.unsupported(
+            subject,
+            f"{count} field{'s' if count != 1 else ''} the map draws with "
+            f"({', '.join(repr(n) for n in leaking)}) "
+            "cannot be renamed for the popup template, so popups show the "
+            "raw placeholder for "
+            f"{'them' if count != 1 else 'it'}. Rename the column in QGIS "
+            "to letters, digits and underscores to fix it.",
+            layer_id,
+        )
 
     if not renames:
         return collection, popup
