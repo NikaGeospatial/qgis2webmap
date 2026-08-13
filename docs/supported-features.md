@@ -149,7 +149,7 @@ profile - a server, a container, or CI.
 | Single symbol | Yes |
 | Categorized | Yes, with a category legend |
 | Graduated | Yes, keeping your exact class breaks |
-| Per-class symbol size and line width | Yes, each class keeps its own |
+| Per-class symbol size, line width and outline colour | Yes, each class keeps its own |
 | Line cap and join style | Yes, where you chose rounded |
 | Marker shapes (square, star, triangle, …) | Yes - drawn by QGIS itself |
 | SVG markers, including parametrised fill and stroke | Yes - drawn by QGIS itself |

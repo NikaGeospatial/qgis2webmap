@@ -127,6 +127,13 @@ TERRAIN_PRESETS = ("none", "terrarium")
 
 TERRAIN_HOSTS = {"terrarium": "s3.amazonaws.com"}
 
+# Zoom 13 - roughly a 1:2.5 km scale bar - is the closest view at which the
+# z14-capped elevation tiles, their draped imagery and the draped symbology
+# all still render. There is currently NO schema-valid way to cap the camera
+# there: `max-zoom` exists only per-layer (it would hide our layers, not stop
+# the camera) and <om-map> has no clamp at all. A camera cap is on the
+# runtime's request list; docs carry the caveat meanwhile.
+
 # The raster twin of each basemap preset, draped over the relief surface as
 # `terrain-texture`. The runtime replaces the basemap while terrain is on, so
 # without this the mountains render as a plain grey shell. liberty and bright
@@ -495,6 +502,37 @@ def elevation_expression(elevation: ElevationSpec) -> str | None:
 def line_color_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     if geometry is GeometryKind.LINE:
         return fill_expression(renderer, geometry)
+
+    # Markers and fills whose classes differ in STROKE colour need the same
+    # per-class expression the fill gets. Emitting only the representative
+    # symbol's stroke - which this did until 0.1.3 - drew every class's
+    # outline in the first class's colour: a categorized layer of white
+    # station dots ringed in each line's colour came out ringed all-red.
+    if renderer.kind is RendererKind.CATEGORIZED and renderer.categories:
+        strokes = {c.symbol.stroke_color for c in renderer.categories}
+        if len(strokes) > 1:
+            field = renderer.field_name or ""
+            parts = [
+                f"${field} == {value_literal(category.value)} "
+                f"? {color_literal(category.symbol.stroke_color or DEFAULT_STROKE)}"
+                for category in renderer.categories
+            ]
+            return " : ".join(parts) + f" : {color_literal(DEFAULT_STROKE)}"
+    if renderer.kind is RendererKind.GRADUATED and renderer.classes:
+        strokes = {c.symbol.stroke_color for c in renderer.classes}
+        if len(strokes) > 1:
+            field = renderer.field_name or ""
+            colors = [
+                color_literal(c.symbol.stroke_color or DEFAULT_STROKE)
+                for c in renderer.classes
+            ]
+            breaks = [c.upper for c in renderer.classes[:-1]]
+            colors_literal = "[" + ", ".join(colors) + "]"
+            domain_literal = "[" + ", ".join(_number(b) for b in breaks) + "]"
+            return (
+                f"scale(${field}, threshold, {colors_literal}, domain={domain_literal})"
+            )
+
     symbol = renderer.representative_symbol or SymbolSpec()
     return color_literal(symbol.stroke_color or DEFAULT_STROKE)
 

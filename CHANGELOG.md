@@ -19,6 +19,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **Per-class marker outline colours survive the export.** Categorized and
+  graduated markers emitted only the first class's stroke colour, so a layer
+  of white station dots ringed in each class's colour exported ringed all in
+  one colour. Outline colours now get the same per-class expression the fill
+  has always had.
 - **Closing the export dialog removes its live-preview files.** Previews are
   written to the system temp directory to be served by the dialog's own
   localhost server; they used to stay behind after the dialog closed - a few

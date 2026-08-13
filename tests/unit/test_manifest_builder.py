@@ -57,6 +57,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     fill_expression,
     icon_expression,
     json_for_script,
+    line_color_expression,
     needs_image_legend,
     numeric_expression,
     scale_to_zoom,
@@ -65,6 +66,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
 
 RED = Color(r=255, g=0, b=0)
 BLUE = Color(r=0, g=0, b=255)
+WHITE = Color(r=255, g=255, b=255)
 GEOJSON = {
     "type": "FeatureCollection",
     "features": [
@@ -186,6 +188,45 @@ class TestFillExpression:
         assert (
             expression == "scale($flow, threshold, ['#ff0000', '#0000ff'], domain=[50])"
         )
+
+    def test_categorized_marker_strokes_get_their_own_expression(self) -> None:
+        """Per-class outline colours must survive - a categorized layer of
+        white dots ringed in each class's colour exported ringed all in the
+        first class's colour until 0.1.3."""
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="kind",
+            categories=(
+                CategorySpec(
+                    "civil", "Civil", SymbolSpec(fill_color=WHITE, stroke_color=RED)
+                ),
+                CategorySpec(
+                    "military",
+                    "Military",
+                    SymbolSpec(fill_color=WHITE, stroke_color=BLUE),
+                ),
+            ),
+        )
+        expression = line_color_expression(renderer, GeometryKind.POINT)
+        assert "$kind == 'civil' ? '#ff0000'" in expression
+        assert "$kind == 'military' ? '#0000ff'" in expression
+
+    def test_uniform_marker_strokes_stay_a_literal(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="kind",
+            categories=(
+                CategorySpec(
+                    "civil", "Civil", SymbolSpec(fill_color=RED, stroke_color=BLUE)
+                ),
+                CategorySpec(
+                    "military",
+                    "Military",
+                    SymbolSpec(fill_color=BLUE, stroke_color=BLUE),
+                ),
+            ),
+        )
+        assert line_color_expression(renderer, GeometryKind.POINT) == "'#0000ff'"
 
     def test_graduated_is_a_threshold_scale(self) -> None:
         """Threshold, not sequential - QGIS classes are discrete, not a ramp."""
@@ -1290,6 +1331,16 @@ class TestTerrain:
         assert "s3.amazonaws.com" in note
         assert "carto.com" in note
         assert "unpkg.com" in note
+
+    def test_no_camera_zoom_cap_is_emitted(self) -> None:
+        """There is no schema-valid camera clamp: `max-zoom` exists only
+        per-layer, where it would hide our layers rather than stop the
+        camera. When the runtime grows an om-map camera cap, terrain exports
+        should emit it at ~z13 (1:2.5 km), where the relief still renders."""
+        markup = build_manifest(
+            make_project(settings=ExportSettings(terrain="terrarium"))
+        )
+        assert "max-zoom" not in markup
 
     def test_the_note_says_vector_basemaps_leave_relief_untextured(self) -> None:
         note = terrain_note("terrarium", basemap="liberty")
