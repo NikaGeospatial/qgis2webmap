@@ -3,10 +3,11 @@ layout: default
 ---
 
 <!--
-  The demo gallery: a single-viewport console rather than a scrolling page.
-  One map fills the stage; the rail on the right (in the position the docs
-  sidebar's section list occupies elsewhere) swaps which map that is, and the
-  provenance strip under the stage swaps with it.
+  The demo gallery: a single-viewport console. The main column is the map and
+  its story - stage, one-line lede, provenance chain, credits, nothing to
+  press. The rail on the right is the control panel: which map is on stage,
+  what you can do with it (open, download the web map, download the project),
+  and the one install CTA. The rail's actions re-point when the tab changes.
 
   Everything visible is driven by front matter in `demos.md`; the Markdown
   body lands in the rail as the small "run these yourself" note. All three
@@ -18,23 +19,15 @@ layout: default
   panel keeps the map alive; coming back is instant).
 -->
 
+{% assign first_demo = page.demos | first %}
+
 <div class="shell shell--wide demo-console">
   <header class="demo-console__head">
-    <div>
-      <p class="eyebrow">{{ page.hero.eyebrow }}</p>
-      <h1 class="demo-console__title">
-        {{ page.hero.headline_before }}<em>{{ page.hero.headline_em }}</em
-        >{{ page.hero.headline_after }}
-      </h1>
-    </div>
-    <div class="demo-console__actions">
-      {% for action in page.hero.actions %}
-        <a
-          class="button button--{{ action.style | default: 'ghost' }}"
-          href="{{ action.url | relative_url }}"
-        >{{ action.label }}</a>
-      {% endfor %}
-    </div>
+    <p class="eyebrow">{{ page.hero.eyebrow }}</p>
+    <h1 class="demo-console__title">
+      {{ page.hero.headline_before }}<em>{{ page.hero.headline_em }}</em
+      >{{ page.hero.headline_after }}
+    </h1>
   </header>
 
   <div class="demo-console__body">
@@ -68,22 +61,12 @@ layout: default
 
           <footer class="demo__provenance">
             <p class="demo__lede">{{ demo.lede }}</p>
-            <div class="demo__meta">
-              <p class="demo__chain">
-                open data<span class="demo__chain-arrow" aria-hidden="true">→</span
-                >.qgz<span class="demo__chain-arrow" aria-hidden="true">→</span
-                >export dialog<span class="demo__chain-arrow" aria-hidden="true">→</span
-                >this file
-              </p>
-              <div class="demo__links">
-                <a class="button button--primary" href="{{ demo.map | relative_url }}">
-                  Open full screen
-                </a>
-                <a class="button button--ghost" href="{{ demo.project | relative_url }}" download>
-                  Download the QGIS project
-                </a>
-              </div>
-            </div>
+            <p class="demo__chain">
+              open data<span class="demo__chain-arrow" aria-hidden="true">→</span
+              >.qgz<span class="demo__chain-arrow" aria-hidden="true">→</span
+              >export dialog<span class="demo__chain-arrow" aria-hidden="true">→</span
+              >this file
+            </p>
             <p class="demo__credits">{{ demo.credits }}</p>
           </footer>
         </article>
@@ -103,6 +86,9 @@ layout: default
               aria-controls="{{ demo.id }}"
               aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
               {% unless forloop.first %}tabindex="-1"{% endunless %}
+              data-map="{{ demo.map | relative_url }}"
+              data-project="{{ demo.project | relative_url }}"
+              data-file="{{ demo.map | split: '/' | last }}"
             >
               <span class="demo-console__tab-region">{{ demo.eyebrow }}</span>
               <span class="demo-console__tab-title">{{ demo.title }}</span>
@@ -111,7 +97,33 @@ layout: default
         </div>
       </nav>
 
+      <div class="demo-console__map-actions">
+        <p class="demo-console__rail-heading">This map</p>
+        <a
+          class="button button--primary"
+          id="demo-action-open"
+          href="{{ first_demo.map | relative_url }}"
+        >Open full screen</a>
+        <a
+          class="button button--ghost"
+          id="demo-action-map"
+          href="{{ first_demo.map | relative_url }}"
+          download
+        >Download the web map</a>
+        <a
+          class="button button--ghost"
+          id="demo-action-project"
+          href="{{ first_demo.project | relative_url }}"
+          download
+        >Download the QGIS project</a>
+      </div>
+
       <div class="demo-console__notes">{{ content }}</div>
+
+      <a
+        class="button button--primary demo-console__install"
+        href="{{ '/installation.html' | relative_url }}"
+      >Install the plugin</a>
     </aside>
   </div>
 </div>
@@ -124,6 +136,9 @@ layout: default
     var panels = tabs.map(function (tab) {
       return document.getElementById(tab.getAttribute("aria-controls"));
     });
+    var openAction = document.getElementById("demo-action-open");
+    var mapAction = document.getElementById("demo-action-map");
+    var projectAction = document.getElementById("demo-action-project");
 
     function select(index, focus) {
       tabs.forEach(function (tab, i) {
@@ -132,7 +147,12 @@ layout: default
         tab.tabIndex = active ? 0 : -1;
         panels[i].hidden = !active;
       });
-      if (focus) tabs[index].focus();
+      var tab = tabs[index];
+      openAction.href = tab.getAttribute("data-map");
+      mapAction.href = tab.getAttribute("data-map");
+      mapAction.setAttribute("download", tab.getAttribute("data-file"));
+      projectAction.href = tab.getAttribute("data-project");
+      if (focus) tab.focus();
       if (history.replaceState) {
         history.replaceState(null, "", "#" + panels[index].id);
       }

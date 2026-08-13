@@ -83,11 +83,8 @@ demos:
 
 ## Run these yourself
 
-The project download is a small zip with the `.qgz` and its data. Open it in
-QGIS 3.44 or newer, [install the plugin](installation.md), and export it
-through *Web → QGIS2WebMap by NIKA* — the included README lists the two or
-three dialog settings each map uses.
-
-The maps stream basemap tiles (and, for the Himalaya, elevation) at view
-time, so they need an internet connection — the [sharing guide](sharing.md)
-explains what an exported file contains and what it fetches.
+The project download is a small zip with the `.qgz`, its data and a README
+with each map's dialog settings. Open it in QGIS 3.44 or newer and export it
+through *Web → QGIS2WebMap by NIKA* — you get the same file that is on
+stage. The maps fetch basemap tiles at view time; the
+[sharing guide](sharing.md) explains what an export contains.
