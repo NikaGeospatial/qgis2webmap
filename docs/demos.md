@@ -51,6 +51,15 @@ demos:
       Data: The Himalayan Database (himalayandatabase.com); peak coordinates
       © OpenStreetMap contributors, ODbL. Basemap and relief imagery © CARTO,
       © OpenStreetMap contributors.
+    recipe:
+      - setting: Plugin version
+        value: 0.1.3 or newer — earlier versions have no relief option
+      - setting: Map tab · Basemap
+        value: Voyager
+      - setting: Map tab · Ground surface
+        value: Global relief
+      - setting: Map tab · Extent
+        value: Current canvas view (frame Everest–Kangchenjunga first)
 
   - id: singapore
     eyebrow: Singapore · categorized lines + markers
@@ -69,6 +78,13 @@ demos:
       Data: LTA DataMall and data.gov.sg (Singapore Open Data Licence v1.0);
       line geometry © OpenStreetMap contributors, ODbL. Basemap © CARTO,
       © OpenStreetMap contributors.
+    recipe:
+      - setting: Map tab · Basemap
+        value: Positron
+      - setting: Map tab · Extent
+        value: Current canvas view (frame the island first)
+      - setting: Layers tab · "MRT lines"
+        value: Popups off — station clicks then always land on the station
 
   - id: volcanoes
     eyebrow: Indonesia · hazard rings + SVG markers
@@ -87,6 +103,11 @@ demos:
       Volcano attributes from the Smithsonian Global Volcanism Program;
       hazard rings and population estimates by the NIKA team. Basemap ©
       CARTO, © OpenStreetMap contributors.
+    recipe:
+      - setting: Map tab · Basemap
+        value: Dark Matter
+      - setting: Map tab · Extent
+        value: Current canvas view (frame Java, or the whole arc)
 ---
 
 ## Run these yourself

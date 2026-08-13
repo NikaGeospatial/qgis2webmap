@@ -77,6 +77,27 @@ layout: default
               <p class="demo__compare-note" hidden>{{ demo.compare.note }}</p>
             {% endif %}
             <p class="demo__credits">{{ demo.credits }}</p>
+
+            {% if demo.recipe %}
+              <div class="demo__recipe">
+                <p class="demo__recipe-heading">Replicate this export</p>
+                <p class="demo__recipe-lede">
+                  Open the QGIS project download in QGIS 3.44 or newer, choose
+                  <em>Web → QGIS2WebMap by NIKA → Create web map</em>, and set
+                  the options below — the basemap and relief live in the
+                  dialog, not the project file. Everything not listed stays at
+                  its default.
+                </p>
+                <dl class="demo__recipe-list">
+                  {% for row in demo.recipe %}
+                    <div class="demo__recipe-row">
+                      <dt>{{ row.setting }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              </div>
+            {% endif %}
           </footer>
         </article>
       {% endfor %}

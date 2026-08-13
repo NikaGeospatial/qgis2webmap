@@ -1298,6 +1298,73 @@ body {
   margin: 0;
 }
 
+/* The export recipe: the dialog settings the .qgz cannot carry. Below the
+   fold by design - the console fills the viewport, and this is what the
+   scroll that exists anyway is for. */
+.demo__recipe {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+
+.demo__recipe-heading {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.6rem;
+}
+
+.demo__recipe-lede {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0 0 0.9rem;
+}
+
+.demo__recipe-lede em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.demo__recipe-list {
+  margin: 0;
+}
+
+.demo__recipe-row {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.demo__recipe-row dt {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  padding-top: 0.1rem;
+}
+
+.demo__recipe-row dd {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .demo__recipe-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+}
+
 /* ---- The rail ---------------------------------------------------------- */
 
 .demo-console__rail {
