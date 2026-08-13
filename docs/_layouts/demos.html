@@ -224,16 +224,27 @@ layout: default
     });
     if (fromHash > 0) select(fromHash, false);
 
-    // The floating map title inside an export duplicates the tab that is
-    // already naming the map, so the embed removes it. Same-origin, so this
-    // reaches into the iframe; the downloadable file stays untouched.
-    function stripCaption(frame) {
+    // Embed-only tidying, reaching into the same-origin iframe; the
+    // downloadable file stays untouched. The floating title duplicates the
+    // tab that already names the map, so it goes. The basemap attribution
+    // bar collapses to a sliver that expands on hover - at full width it
+    // sat under the legend and could not be dismissed, and the same
+    // credits are printed right below the stage anyway.
+    function tidyEmbed(frame) {
       frame.addEventListener("load", function () {
         try {
-          var caption = frame.contentDocument.querySelector(".om-caption");
+          var doc = frame.contentDocument;
+          var caption = doc.querySelector(".om-caption");
           if (caption) caption.remove();
+          var style = doc.createElement("style");
+          style.textContent =
+            ".maplibregl-ctrl-attrib{max-width:1.5em;overflow:hidden;" +
+            "white-space:nowrap;opacity:.75;transition:max-width .25s ease}" +
+            ".maplibregl-ctrl-attrib:hover,.maplibregl-ctrl-attrib:focus-within" +
+            "{max-width:40em;opacity:1}";
+          doc.head.appendChild(style);
         } catch (error) {
-          /* cross-origin embedding of this page: leave the title alone */
+          /* cross-origin embedding of this page: leave the map alone */
         }
       });
     }
@@ -244,7 +255,7 @@ layout: default
       frame.src = src;
       frame.title = title;
       frame.setAttribute("allow", "fullscreen");
-      stripCaption(frame);
+      tidyEmbed(frame);
       var poster = stage.querySelector(".demo__poster");
       if (poster) poster.remove();
       var load = stage.querySelector(".demo__load");
