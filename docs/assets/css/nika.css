@@ -1301,9 +1301,12 @@ body {
 /* The export recipe: the dialog settings the .qgz cannot carry. Below the
    fold by design - the console fills the viewport, and this is what the
    scroll that exists anyway is for. */
+.demo-recipes {
+  max-width: var(--shell);
+}
+
 .demo__recipe {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
+  padding-top: 1.25rem;
   border-top: 1px solid var(--rule);
   max-width: var(--measure);
 }
