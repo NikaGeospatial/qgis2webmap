@@ -151,6 +151,51 @@ class TestResolveTitle:
         assert resolve_title(project, "   ") == "Project title"
 
 
+class TestTerrainNotes:
+    def test_labels_under_relief_are_reported(self, project, make_memory_layer) -> None:
+        """Measured on the pinned runtime: label text never appears while
+        terrain is on, draped or offset. The person exporting must hear it
+        from the Fidelity tab, not from a recipient."""
+        from qgis.core import (
+            QgsPalLayerSettings,
+            QgsVectorLayerSimpleLabeling,
+        )
+
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        layer = make_memory_layer("peaks", features=[("Everest", [86.9, 27.9])])
+        settings = QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        project.addMapLayer(layer)
+
+        report = FidelityReportBuilder()
+        read_project(project, report, settings=ExportSettings(terrain="terrarium"))
+        details = " ".join(i.detail for i in report.items)
+        assert "Labels do not appear over relief" in details
+        assert "'peaks'" in details
+
+    def test_no_label_note_without_terrain(self, project, make_memory_layer) -> None:
+        from qgis.core import (
+            QgsPalLayerSettings,
+            QgsVectorLayerSimpleLabeling,
+        )
+
+        layer = make_memory_layer("peaks", features=[("Everest", [86.9, 27.9])])
+        settings = QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        project.addMapLayer(layer)
+
+        report = FidelityReportBuilder()
+        read_project(project, report)
+        assert "Labels do not appear over relief" not in " ".join(
+            i.detail for i in report.items
+        )
+
+
 class TestReadProject:
     def test_layers_come_out_in_draw_order_bottom_first(
         self, project, make_memory_layer

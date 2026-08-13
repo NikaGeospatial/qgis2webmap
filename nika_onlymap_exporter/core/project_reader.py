@@ -373,6 +373,22 @@ def read_project(
                 "show: " + ", ".join(f"'{name}'" for name in raised) + ".",
             )
 
+        # Measured, not assumed: label layers render neither draped nor
+        # offset while terrain is on - the text simply never appears.
+        labelled = [
+            layer.name
+            for layer in layers
+            if layer.labeling.enabled and layer.labeling.field_name
+        ]
+        if labelled:
+            report.unsupported(
+                "Terrain",
+                "Labels do not appear over relief in the current map runtime. "
+                "The labelled layers still draw, but without their text: "
+                + ", ".join(f"'{name}'" for name in labelled)
+                + ". Turn relief off if the labels matter more.",
+            )
+
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     title = resolve_title(project, title_override)
 

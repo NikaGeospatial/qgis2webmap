@@ -19,6 +19,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **Relief exports say that labels will not appear.** Label text renders
+  neither draped nor offset while terrain is on — a runtime limitation,
+  measured — so the Fidelity tab now names every labelled layer that will
+  draw without its text, instead of the recipient discovering it.
 - **Relief maps stop the camera where the relief still renders.** The public
   elevation tiles end at z14 and the runtime blanks the surface rather than
   magnifying past it; the runtime also has no camera-cap attribute yet. Relief

@@ -235,6 +235,10 @@ stays grey (the Fidelity tab says so); and Positron's draped imagery comes from
 carto.com even though its flat tiles come from openfreemap.org — relief adds
 that third party, and the Fidelity tab names every host involved.
 
+**Labels do not appear over relief** in the current map runtime — labelled
+layers draw, but without their text, and the Fidelity tab names them. Turn
+relief off if the labels matter more.
+
 Relief detail ends at roughly a 1:2.5 km scale: the public elevation tiles
 stop there, and past it the terrain would blank rather than magnify. A relief
 export therefore stops the camera at that scale — zooming further glides back
