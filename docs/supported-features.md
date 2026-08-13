@@ -277,11 +277,15 @@ Labels can be turned off per layer on the **Layers** tab.
 Field names, aliases, and fields you hid in the QGIS attribute table are all
 respected. Popups are labelled by default, and can be turned off per layer.
 
-A field whose name contains anything besides letters, digits and underscores
-(a space, a parenthesis) cannot be referenced by the web popup template, so it
-is renamed in the exported data — `Last Known Eruption` becomes
-`Last_Known_Eruption` — while the popup label keeps the original spelling. The
-Fidelity tab lists every rename.
+A field whose name contains anything besides unaccented letters, digits and
+underscores (a space, a parenthesis, an accented letter) cannot be referenced
+by the web popup template, so it is renamed in the exported data —
+`Last Known Eruption` becomes `Last_Known_Eruption`, `Höhe` becomes `H_he` —
+while the popup label keeps the original spelling. The Fidelity tab lists
+every rename. The one exception is a field the map draws with (a category
+field, a label field, an extrusion height): renaming it would break the map,
+so its popup entry shows the raw placeholder instead and the Fidelity tab
+says so — rename the column in QGIS if that popup matters.
 
 Expand a layer on the **Layers** tab to set how each of its fields appears:
 
