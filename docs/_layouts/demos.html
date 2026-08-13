@@ -1,0 +1,183 @@
+---
+layout: default
+---
+
+<!--
+  The demo gallery: a single-viewport console rather than a scrolling page.
+  One map fills the stage; the rail on the right (in the position the docs
+  sidebar's section list occupies elsewhere) swaps which map that is, and the
+  provenance strip under the stage swaps with it.
+
+  Everything visible is driven by front matter in `demos.md`; the Markdown
+  body lands in the rail as the small "run these yourself" note. All three
+  panels are in the document - the inactive two are `hidden` - so the page
+  reads whole to crawlers and screen readers.
+
+  The maps are full WebGL pages, so a panel gains its iframe only when its
+  button is pressed, and a loaded iframe survives tab switches (hiding a
+  panel keeps the map alive; coming back is instant).
+-->
+
+<div class="shell shell--wide demo-console">
+  <header class="demo-console__head">
+    <div>
+      <p class="eyebrow">{{ page.hero.eyebrow }}</p>
+      <h1 class="demo-console__title">
+        {{ page.hero.headline_before }}<em>{{ page.hero.headline_em }}</em
+        >{{ page.hero.headline_after }}
+      </h1>
+    </div>
+    <div class="demo-console__actions">
+      {% for action in page.hero.actions %}
+        <a
+          class="button button--{{ action.style | default: 'ghost' }}"
+          href="{{ action.url | relative_url }}"
+        >{{ action.label }}</a>
+      {% endfor %}
+    </div>
+  </header>
+
+  <div class="demo-console__body">
+    <div class="demo-console__panels">
+      {% for demo in page.demos %}
+        <article
+          class="demo-panel"
+          id="{{ demo.id }}"
+          role="tabpanel"
+          aria-labelledby="tab-{{ demo.id }}"
+          {% unless forloop.first %}hidden{% endunless %}
+        >
+          <div class="demo__stage">
+            <img
+              class="demo__poster"
+              src="{{ demo.poster | relative_url }}"
+              alt="{{ demo.alt }}"
+              width="1600"
+              height="1000"
+              {% unless forloop.first %}loading="lazy"{% endunless %}
+            />
+            <button
+              class="demo__load"
+              type="button"
+              data-src="{{ demo.map | relative_url }}"
+              data-title="{{ demo.title }}"
+            >
+              Load the live map
+            </button>
+          </div>
+
+          <footer class="demo__provenance">
+            <p class="demo__lede">{{ demo.lede }}</p>
+            <div class="demo__meta">
+              <p class="demo__chain">
+                open data<span class="demo__chain-arrow" aria-hidden="true">→</span
+                >.qgz<span class="demo__chain-arrow" aria-hidden="true">→</span
+                >export dialog<span class="demo__chain-arrow" aria-hidden="true">→</span
+                >this file
+              </p>
+              <div class="demo__links">
+                <a class="button button--primary" href="{{ demo.map | relative_url }}">
+                  Open full screen
+                </a>
+                <a class="button button--ghost" href="{{ demo.project | relative_url }}" download>
+                  Download the QGIS project
+                </a>
+              </div>
+            </div>
+            <p class="demo__credits">{{ demo.credits }}</p>
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+
+    <aside class="demo-console__rail">
+      <nav aria-label="Maps">
+        <p class="demo-console__rail-heading">Maps</p>
+        <div role="tablist" aria-label="Demo maps" class="demo-console__tabs">
+          {% for demo in page.demos %}
+            <button
+              class="demo-console__tab"
+              type="button"
+              role="tab"
+              id="tab-{{ demo.id }}"
+              aria-controls="{{ demo.id }}"
+              aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+              {% unless forloop.first %}tabindex="-1"{% endunless %}
+            >
+              <span class="demo-console__tab-region">{{ demo.eyebrow }}</span>
+              <span class="demo-console__tab-title">{{ demo.title }}</span>
+            </button>
+          {% endfor %}
+        </div>
+      </nav>
+
+      <div class="demo-console__notes">{{ content }}</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(
+      document.querySelectorAll(".demo-console__tab")
+    );
+    var panels = tabs.map(function (tab) {
+      return document.getElementById(tab.getAttribute("aria-controls"));
+    });
+
+    function select(index, focus) {
+      tabs.forEach(function (tab, i) {
+        var active = i === index;
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+        tab.tabIndex = active ? 0 : -1;
+        panels[i].hidden = !active;
+      });
+      if (focus) tabs[index].focus();
+      if (history.replaceState) {
+        history.replaceState(null, "", "#" + panels[index].id);
+      }
+    }
+
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener("click", function () {
+        select(i, false);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var next = -1;
+        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+          next = (i + 1) % tabs.length;
+        } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+          next = (i - 1 + tabs.length) % tabs.length;
+        }
+        if (next >= 0) {
+          event.preventDefault();
+          select(next, true);
+        }
+      });
+    });
+
+    // A shared link can name a map: /demos.html#volcanoes opens on it.
+    var fromHash = panels.findIndex(function (panel) {
+      return "#" + panel.id === location.hash;
+    });
+    if (fromHash > 0) select(fromHash, false);
+
+    // Swap a poster for the live map on demand. The iframe is created only
+    // here, so a visitor who never presses the button never spends a WebGL
+    // context or a tile request on that map - and once created it survives
+    // tab switches, so coming back to a loaded map is instant.
+    document.querySelectorAll(".demo__load").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var stage = button.closest(".demo__stage");
+        var frame = document.createElement("iframe");
+        frame.className = "demo__frame";
+        frame.src = button.getAttribute("data-src");
+        frame.title = button.getAttribute("data-title");
+        frame.setAttribute("allow", "fullscreen");
+        stage.textContent = "";
+        stage.appendChild(frame);
+        frame.focus();
+      });
+    });
+  })();
+</script>

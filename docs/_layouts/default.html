@@ -27,7 +27,14 @@
       content="{{ page.description | default: site.description }}"
     />
     <meta property="og:url" content="{{ page.url | absolute_url }}" />
-    <meta name="twitter:card" content="summary" />
+    {% if page.image %}
+      <!-- Pages that declare an `image` (the demo gallery) get the large link
+           card on social platforms; every other page keeps the plain summary. -->
+      <meta property="og:image" content="{{ page.image | absolute_url }}" />
+      <meta name="twitter:card" content="summary_large_image" />
+    {% else %}
+      <meta name="twitter:card" content="summary" />
+    {% endif %}
 
     <!--
       The theme is written to the root element before the stylesheet paints, so
@@ -136,9 +143,10 @@
       </nav>
     </header>
 
-    {% if page.layout == "home" %}
-      <!-- The home layout brings its own shell; it needs the full width and no
-           sidebar, and the guide list it would hold is on the page already. -->
+    {% if page.layout == "home" or page.layout == "demos" %}
+      <!-- The home and demos layouts bring their own shell; they need the full
+           width and no sidebar, and the guide list it would hold is on the
+           home page already. -->
       <main id="content">{{ content }}</main>
     {% else %}
       <div class="shell">

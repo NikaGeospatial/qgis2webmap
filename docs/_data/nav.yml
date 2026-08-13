@@ -8,6 +8,8 @@
 # Help tab at the same time.
 
 main:
+  - title: Demos
+    url: /demos.html
   - title: Install
     url: /installation.html
   - title: First export
