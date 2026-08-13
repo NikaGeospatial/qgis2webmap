@@ -1123,6 +1123,9 @@ body {
   /* A map earns the full shell width the guides give up for a reading
      measure. */
   max-width: var(--shell);
+  /* .shell brings a 48px grid gap along; between a one-line header and the
+     stage that is dead air the map could be using. */
+  gap: 0.4rem;
   /* The viewport minus the masthead: the page holds still and the stage
      takes whatever the header and provenance rows leave. */
   height: calc(100dvh - 4.5rem);
