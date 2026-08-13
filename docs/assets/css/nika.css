@@ -342,6 +342,12 @@ body {
   top: 4.5rem;
   padding-top: 3rem;
   font-size: 14.5px;
+  /* With the Demos group the list can outgrow the viewport; sticky without
+     overflow made the bottom entries unreachable - the wheel fell through
+     to the page. */
+  max-height: calc(100dvh - 4.5rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .sidebar__heading {

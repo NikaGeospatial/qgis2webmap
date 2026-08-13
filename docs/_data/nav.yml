@@ -18,15 +18,6 @@ main:
     url: /the-dialog.html
 
 guides:
-  - title: Demos
-    items:
-      - title: How high do climbers get?
-        url: /demo-himalayas.html
-      - title: The MRT network
-        url: /demo-singapore.html
-      - title: Living next to a volcano
-        url: /demo-volcanoes.html
-
   - title: Getting started
     items:
       - title: Overview
@@ -57,3 +48,12 @@ guides:
         url: /enhance-with-ai.html
       - title: Privacy
         url: /privacy.html
+
+  - title: Demos
+    items:
+      - title: How high do climbers get?
+        url: /demo-himalayas.html
+      - title: The MRT network
+        url: /demo-singapore.html
+      - title: Living next to a volcano
+        url: /demo-volcanoes.html
