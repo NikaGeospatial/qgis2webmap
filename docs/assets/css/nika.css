@@ -1266,6 +1266,8 @@ body {
   letter-spacing: 0.06em;
   color: var(--ink-2);
   pointer-events: none;
+  /* Above the comparison pane, which would otherwise bury it. */
+  z-index: 3;
 }
 
 /* The strip under the stage: what this map shows, the chain that made it,
@@ -1466,5 +1468,116 @@ body {
   .demo__stage {
     flex: none;
     aspect-ratio: 4 / 3;
+  }
+}
+
+/* ---- Compare with QGIS ------------------------------------------------- */
+
+/* The stage splits: the left pane (QGIS's own rendering, pre-drawn tiles)
+   clips against a draggable divider over the live export. */
+
+.demo__compare-toggle {
+  position: absolute;
+  right: 0.75rem;
+  /* Clear of the runtime's own "Built with OnlyMap" badge in that corner. */
+  bottom: 3.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.demo__compare-toggle:hover {
+  border-color: var(--accent);
+}
+
+.demo__compare-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.demo__compare-pane .demo__frame {
+  position: absolute;
+  inset: 0;
+}
+
+.demo__divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  z-index: 2;
+  cursor: ew-resize;
+}
+
+/* A generous grab area around the visible hairline. */
+.demo__divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 24px;
+}
+
+.demo__divider-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--accent);
+}
+
+.demo__divider-label {
+  position: absolute;
+  top: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.demo__divider-label--left {
+  right: 0.6rem;
+}
+
+.demo__divider-label--right {
+  left: 0.6rem;
+}
+
+/* While the divider is being dragged the iframes must not eat the pointer. */
+.demo__stage--dragging .demo__frame {
+  pointer-events: none;
+}
+
+.demo__compare-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 0 0 0.5rem;
+}
+
+@media (max-width: 820px) {
+  /* Two synced WebGL panes and a drag divider are a desktop interaction. */
+  .demo__compare-toggle {
+    display: none;
   }
 }

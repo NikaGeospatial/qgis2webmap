@@ -32,6 +32,13 @@ demos:
       each summit is how far up its climbers typically get, painted straight
       onto real terrain.
     tip: Ctrl + drag to tilt into 3D
+    compare:
+      viewer: /assets/demos/qgis-side.html
+      note: >-
+        Comparison view — the left pane is QGIS's own rendering of this
+        project, pre-drawn to map tiles; the right pane is the live export.
+        The panes share one camera; the left stays flat, exactly as the QGIS
+        canvas would.
     alt: >-
       Mountainous 3D terrain with translucent heat-coloured patches draped
       over the massifs around Everest, a legend of climb-height classes in

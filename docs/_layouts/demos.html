@@ -60,6 +60,15 @@ layout: default
             {% if demo.tip %}
               <p class="demo__tip">{{ demo.tip }}</p>
             {% endif %}
+            {% if demo.compare %}
+              <button
+                class="demo__compare-toggle"
+                type="button"
+                data-viewer="{{ demo.compare.viewer | relative_url }}"
+              >
+                Compare with QGIS
+              </button>
+            {% endif %}
           </div>
 
           <footer class="demo__provenance">
@@ -70,6 +79,9 @@ layout: default
               >export dialog<span class="demo__chain-arrow" aria-hidden="true">→</span
               >this file
             </p>
+            {% if demo.compare %}
+              <p class="demo__compare-note" hidden>{{ demo.compare.note }}</p>
+            {% endif %}
             <p class="demo__credits">{{ demo.credits }}</p>
           </footer>
         </article>
@@ -185,22 +197,209 @@ layout: default
     });
     if (fromHash > 0) select(fromHash, false);
 
+    // The floating map title inside an export duplicates the tab that is
+    // already naming the map, so the embed removes it. Same-origin, so this
+    // reaches into the iframe; the downloadable file stays untouched.
+    function stripCaption(frame) {
+      frame.addEventListener("load", function () {
+        try {
+          var caption = frame.contentDocument.querySelector(".om-caption");
+          if (caption) caption.remove();
+        } catch (error) {
+          /* cross-origin embedding of this page: leave the title alone */
+        }
+      });
+    }
+
+    function loadMap(stage, src, title) {
+      var frame = document.createElement("iframe");
+      frame.className = "demo__frame";
+      frame.src = src;
+      frame.title = title;
+      frame.setAttribute("allow", "fullscreen");
+      stripCaption(frame);
+      var poster = stage.querySelector(".demo__poster");
+      if (poster) poster.remove();
+      var load = stage.querySelector(".demo__load");
+      if (load) load.remove();
+      stage.prepend(frame);
+      return frame;
+    }
+
     // Swap a poster for the live map on demand. The iframe is created only
     // here, so a visitor who never presses the button never spends a WebGL
     // context or a tile request on that map - and once created it survives
     // tab switches, so coming back to a loaded map is instant.
     document.querySelectorAll(".demo__load").forEach(function (button) {
       button.addEventListener("click", function () {
-        var stage = button.closest(".demo__stage");
-        var frame = document.createElement("iframe");
-        frame.className = "demo__frame";
-        frame.src = button.getAttribute("data-src");
-        frame.title = button.getAttribute("data-title");
-        frame.setAttribute("allow", "fullscreen");
-        stage.querySelector(".demo__poster").remove();
-        button.remove();
-        stage.prepend(frame);
-        frame.focus();
+        loadMap(
+          button.closest(".demo__stage"),
+          button.getAttribute("data-src"),
+          button.getAttribute("data-title")
+        ).focus();
+      });
+    });
+
+    // ---- Compare with QGIS ------------------------------------------------
+    // Splits the stage: the left pane is QGIS's own rendering (pre-drawn
+    // tiles), the right pane is the live export, one camera between them.
+    // The left pane is held flat - pitch and bearing stay 0, exactly as the
+    // QGIS canvas would - while the right pane keeps its own tilt.
+
+    function mapIn(frame) {
+      try {
+        return frame.contentDocument
+          ? frame.contentDocument.querySelector("om-map")
+          : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function ready(map) {
+      return (
+        map &&
+        typeof map.getViewStateInternal === "function" &&
+        map.getViewStateInternal()
+      );
+    }
+
+    function sameView(a, b) {
+      return (
+        a &&
+        b &&
+        Math.abs(a.longitude - b.longitude) < 1e-7 &&
+        Math.abs(a.latitude - b.latitude) < 1e-7 &&
+        Math.abs(a.zoom - b.zoom) < 1e-4 &&
+        Math.abs(a.pitch - b.pitch) < 1e-3 &&
+        Math.abs(a.bearing - b.bearing) < 1e-3
+      );
+    }
+
+    document.querySelectorAll(".demo__compare-toggle").forEach(function (toggle) {
+      var stage = toggle.closest(".demo__stage");
+      var panel = toggle.closest(".demo-panel");
+      var note = panel.querySelector(".demo__compare-note");
+      var state = null;
+
+      function stopCompare() {
+        if (!state) return;
+        cancelAnimationFrame(state.tick);
+        state.pane.remove();
+        state.divider.remove();
+        state = null;
+        stage.classList.remove("demo__stage--compare");
+        toggle.textContent = "Compare with QGIS";
+        if (note) note.hidden = true;
+      }
+
+      toggle.addEventListener("click", function () {
+        if (state) {
+          stopCompare();
+          return;
+        }
+
+        var right = stage.querySelector(".demo__frame");
+        if (!right) {
+          var loader = stage.querySelector(".demo__load");
+          right = loadMap(
+            stage,
+            loader.getAttribute("data-src"),
+            loader.getAttribute("data-title")
+          );
+        }
+
+        var pane = document.createElement("div");
+        pane.className = "demo__compare-pane";
+        var left = document.createElement("iframe");
+        left.className = "demo__frame";
+        left.src = toggle.getAttribute("data-viewer");
+        left.title = "QGIS rendering of the same project";
+        pane.appendChild(left);
+
+        var divider = document.createElement("div");
+        divider.className = "demo__divider";
+        divider.innerHTML =
+          '<span class="demo__divider-label demo__divider-label--left">QGIS</span>' +
+          '<span class="demo__divider-label demo__divider-label--right">Web export</span>' +
+          '<span class="demo__divider-handle" aria-hidden="true"></span>';
+
+        stage.prepend(divider);
+        stage.prepend(pane);
+        stage.classList.add("demo__stage--compare");
+        toggle.textContent = "Exit comparison";
+        if (note) note.hidden = false;
+
+        state = { pane: pane, divider: divider, lastL: null, lastR: null };
+        setSplit(0.5);
+
+        function setSplit(fraction) {
+          var pct = Math.min(0.92, Math.max(0.08, fraction)) * 100;
+          pane.style.clipPath = "inset(0 " + (100 - pct) + "% 0 0)";
+          divider.style.left = pct + "%";
+        }
+
+        divider.addEventListener("pointerdown", function (event) {
+          event.preventDefault();
+          divider.setPointerCapture(event.pointerId);
+          stage.classList.add("demo__stage--dragging");
+          function move(moveEvent) {
+            var rect = stage.getBoundingClientRect();
+            setSplit((moveEvent.clientX - rect.left) / rect.width);
+          }
+          function up() {
+            stage.classList.remove("demo__stage--dragging");
+            divider.removeEventListener("pointermove", move);
+            divider.removeEventListener("pointerup", up);
+          }
+          divider.addEventListener("pointermove", move);
+          divider.addEventListener("pointerup", up);
+        });
+
+        function sync() {
+          if (!state) return;
+          var mapL = mapIn(left);
+          var mapR = mapIn(right);
+          if (ready(mapL) && ready(mapR)) {
+            var l = mapL.getViewStateInternal();
+            var r = mapR.getViewStateInternal();
+            if (!state.lastR) {
+              // First moment both maps are alive: jump both panes into the
+              // pre-rendered QGIS tile box - the export opens on a much wider
+              // view, where the left pane would have nothing to show.
+              mapR.setViewInternal({
+                longitude: 86.92,
+                latitude: 27.96,
+                zoom: 9.5,
+              });
+              mapL.setViewInternal({
+                longitude: 86.92,
+                latitude: 27.96,
+                zoom: 9.5,
+                pitch: 0,
+                bearing: 0,
+              });
+            } else if (!sameView(r, state.lastR)) {
+              mapL.setViewInternal({
+                longitude: r.longitude,
+                latitude: r.latitude,
+                zoom: r.zoom,
+                pitch: 0,
+                bearing: 0,
+              });
+            } else if (state.lastL && !sameView(l, state.lastL)) {
+              mapR.setViewInternal({
+                longitude: l.longitude,
+                latitude: l.latitude,
+                zoom: l.zoom,
+              });
+            }
+            state.lastL = mapL.getViewStateInternal();
+            state.lastR = mapR.getViewStateInternal();
+          }
+          state.tick = requestAnimationFrame(sync);
+        }
+        state.tick = requestAnimationFrame(sync);
       });
     });
   })();
