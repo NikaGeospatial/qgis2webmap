@@ -57,6 +57,9 @@ layout: default
             >
               Load the live map
             </button>
+            {% if demo.tip %}
+              <p class="demo__tip">{{ demo.tip }}</p>
+            {% endif %}
           </div>
 
           <footer class="demo__provenance">
@@ -194,8 +197,9 @@ layout: default
         frame.src = button.getAttribute("data-src");
         frame.title = button.getAttribute("data-title");
         frame.setAttribute("allow", "fullscreen");
-        stage.textContent = "";
-        stage.appendChild(frame);
+        stage.querySelector(".demo__poster").remove();
+        button.remove();
+        stage.prepend(frame);
         frame.focus();
       });
     });

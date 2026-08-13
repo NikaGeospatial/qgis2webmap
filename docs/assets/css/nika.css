@@ -1248,6 +1248,26 @@ body {
   border: 0;
 }
 
+/* A control hint pinned over the stage (only maps that need one declare it).
+   It overlays the live iframe too, so it must not eat the mouse. */
+.demo__tip {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
 /* The strip under the stage: what this map shows, the chain that made it,
    and who the data belongs to. Reading matter only - everything pressable
    lives in the rail. */

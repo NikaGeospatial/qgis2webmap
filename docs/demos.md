@@ -30,8 +30,8 @@ demos:
     lede: >-
       Expedition records for 74 peaks, averaged per peak: the colour around
       each summit is how far up its climbers typically get, painted straight
-      onto real terrain. Drag with the right mouse button (or two fingers) to
-      tilt.
+      onto real terrain.
+    tip: Ctrl + drag to tilt into 3D
     alt: >-
       Mountainous 3D terrain with translucent heat-coloured patches draped
       over the massifs around Everest, a legend of climb-height classes in
