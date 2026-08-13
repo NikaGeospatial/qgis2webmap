@@ -235,6 +235,11 @@ stays grey (the Fidelity tab says so); and Positron's draped imagery comes from
 carto.com even though its flat tiles come from openfreemap.org — relief adds
 that third party, and the Fidelity tab names every host involved.
 
+Relief detail ends at roughly a 1:2 km scale: the public elevation tiles stop
+there, and zooming in closer currently blanks the terrain surface rather than
+magnifying it — a limitation of the map runtime that is being addressed
+upstream. Maps whose story needs street-level zoom should leave relief off.
+
 If your project has its own terrain and you leave this off, the Fidelity tab
 says so rather than exporting a flat map silently.
 
