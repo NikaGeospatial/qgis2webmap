@@ -9,8 +9,8 @@ image: /assets/demos/himalayas-poster.png
 eyebrow: Demo · Nepal Himalaya · graduated colour + 3D relief
 lede: >-
   Expedition records for 74 peaks, averaged per peak: the colour around
-  each summit is how far up its climbers typically get, painted straight
-  onto real terrain.
+  each summit is *how far up its climbers typically get*, painted straight
+  onto *real 3D terrain*.
 tip: Ctrl + drag to tilt into 3D
 map: /assets/demos/himalayas.html
 project: /assets/demos/himalayas-qgis-project.zip
@@ -38,13 +38,13 @@ compare:
     min_zoom: 6.3
 recipe:
   - setting: Plugin version
-    value: 0.1.3 or newer — earlier versions have no relief option
+    value: "**0.1.3 or newer** — earlier versions have no relief option"
   - setting: Map tab · Basemap
-    value: Voyager
+    value: "**Voyager**"
   - setting: Map tab · Ground surface
-    value: Global relief
+    value: "**Global relief**"
   - setting: Map tab · Extent
-    value: Current canvas view (frame Everest–Kangchenjunga first)
+    value: "**Current canvas view** (frame Everest–Kangchenjunga first)"
 ---
 
 ## Run these yourself

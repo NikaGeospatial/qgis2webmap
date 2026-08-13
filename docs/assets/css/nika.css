@@ -1213,6 +1213,14 @@ body {
   margin: 0 0 0.5rem;
 }
 
+/* What the map is about, in the brand's text-safe accent (amber-ink in
+   light, lime in dark - raw amber fails contrast on the light page). */
+.demo__lede em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
 .demo__compare-note {
   font-size: 12.5px;
   line-height: 1.5;
@@ -1283,6 +1291,12 @@ body {
   font-size: 13.5px;
   line-height: 1.5;
   color: var(--ink);
+}
+
+/* The setting the row exists for - the dialog value to actually pick. */
+.demo__recipe-row dd strong {
+  font-weight: 600;
+  color: var(--accent-ink);
 }
 
 /* The markdown body of the page, after the recipe. */

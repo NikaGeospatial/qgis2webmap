@@ -42,7 +42,7 @@ layout: default
     </div>
 
     <footer class="demo__provenance">
-      <p class="demo__lede">{{ page.lede }}</p>
+      <p class="demo__lede">{{ page.lede | markdownify | remove: '<p>' | remove: '</p>' }}</p>
       {% if page.compare %}
         <p class="demo__compare-note">{{ page.compare.note }}</p>
       {% endif %}
@@ -63,7 +63,7 @@ layout: default
           {% for row in page.recipe %}
             <div class="demo__recipe-row">
               <dt>{{ row.setting }}</dt>
-              <dd>{{ row.value }}</dd>
+              <dd>{{ row.value | markdownify | remove: '<p>' | remove: '</p>' }}</dd>
             </div>
           {% endfor %}
         </dl>

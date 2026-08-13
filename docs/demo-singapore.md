@@ -7,8 +7,8 @@ description: >-
 image: /assets/demos/singapore-poster.png
 eyebrow: Demo · Singapore · categorized lines + markers
 lede: >-
-  The whole network on real track geometry, every line in its official
-  colour, every station clickable — interchanges included, right up to
+  The whole network on *real track geometry*, every line in its official
+  colour, *every station clickable* — interchanges included, right up to
   the closed Circle Line loop.
 map: /assets/demos/singapore.html
 project: /assets/demos/singapore-qgis-project.zip
@@ -18,11 +18,11 @@ credits: >-
   © OpenStreetMap contributors.
 recipe:
   - setting: Map tab · Basemap
-    value: Positron
+    value: "**Positron**"
   - setting: Map tab · Extent
-    value: Current canvas view (frame the island first)
+    value: "**Current canvas view** (frame the island first)"
   - setting: Layers tab · "MRT lines"
-    value: Popups off — station clicks then always land on the station
+    value: "**Popups off** — station clicks then always land on the station"
 ---
 
 ## Run these yourself
