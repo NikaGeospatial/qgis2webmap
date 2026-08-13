@@ -20,8 +20,6 @@ main:
 guides:
   - title: Getting started
     items:
-      - title: Overview
-        url: /
       - title: Install the plugin
         url: /installation.html
       - title: Your first export
