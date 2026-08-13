@@ -80,14 +80,14 @@ layout: default
       href="{{ page.map | relative_url }}"
     >Open full screen</a>
     <a
-      class="button button--ghost"
+      class="button button--ghost demo-rail__download"
       href="{{ page.map | relative_url }}"
       download="{{ page.map | split: '/' | last }}"
     >Download web map</a>
     <a
-      class="button button--ghost"
+      class="button button--ghost demo-rail__download"
       href="{{ page.project | relative_url }}"
-      download
+      download="{{ page.project | split: '/' | last }}"
     >Download QGIS project</a>
     <a
       class="button button--primary demo-rail__install"
@@ -163,6 +163,41 @@ layout: default
         map.getViewStateInternal()
       );
     }
+
+    // Downloads are fetched and handed over as finished blobs. A plain
+    // `download` attribute leaves the decision to the browser, and at least
+    // one of them chose to neither ask nor download; a blob URL has no
+    // navigation reading, so the file simply saves.
+    document.querySelectorAll(".demo-rail__download").forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        link.setAttribute("aria-busy", "true");
+        fetch(link.href)
+          .then(function (response) {
+            if (!response.ok) throw new Error(String(response.status));
+            return response.blob();
+          })
+          .then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            var saver = document.createElement("a");
+            saver.href = url;
+            saver.download = link.getAttribute("download");
+            document.body.appendChild(saver);
+            saver.click();
+            saver.remove();
+            setTimeout(function () {
+              URL.revokeObjectURL(url);
+            }, 10000);
+          })
+          .catch(function () {
+            // Fall back to the browser's own handling.
+            window.location.href = link.href;
+          })
+          .finally(function () {
+            link.removeAttribute("aria-busy");
+          });
+      });
+    });
 
     // Full screen carries the camera along: the export cannot read a view
     // from its URL, but the new tab is same-origin, so the embed's camera
