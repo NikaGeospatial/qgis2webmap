@@ -4,7 +4,7 @@ qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Export QGIS projects to interactive, portable HTML maps. Open locally, share as a zip, or enhance and host later with OnlyMap.
 about=Documentation: https://nikageospatial.github.io/qgis2webmap/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. Built by NIKA, powered by OnlyMap. This is an independent third-party plugin and is not endorsed by QGIS.org.
-version=0.1.2
+version=0.1.3
 author=NIKA
 email=support@nikaplanet.com
 
@@ -28,7 +28,13 @@ license=GPL-2.0-or-later
 hasProcessingProvider=yes
 
 changelog=0.1.3
-    Exported maps now send NIKA an anonymous usage report when they load, as
+    Textured 3D relief: with a basemap and relief both on, the basemap's
+    imagery drapes over the terrain and extruded layers stand on the surface.
+    Fixes: categorized/graduated line layers exported grey; extrusions lost in
+    sessions that never opened a 3D view; popup fields with spaces leaking
+    {{raw}} placeholders; the Positron basemap's host named wrongly in the
+    fidelity report.
+    Exported maps send NIKA an anonymous usage report when they load, as
     covered by the OnlyMap runtime licence. See docs/privacy.md for exactly
     what is and isn't included.
     0.1.2

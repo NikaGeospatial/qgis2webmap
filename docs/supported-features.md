@@ -224,6 +224,17 @@ elevation tileset. The trade is the same as a basemap's: the file does not get
 any bigger, but the map needs a connection to show relief. Switching it on also
 tilts the map, for the same reason extrusion does.
 
+**The relief carries your basemap.** With both a basemap and relief chosen, the
+basemap's imagery drapes over the terrain surface, so the mountains look like
+the map rather than a plain grey model — and your own symbology drapes over
+them, painted onto the slopes. Extruded layers drape flat too - their colour
+paints the mountains, but column height does not show while relief is on, and
+the Fidelity tab says so. Two caveats: Liberty and Bright are
+vector-only styles with no raster imagery to drape, so with those the relief
+stays grey (the Fidelity tab says so); and Positron's draped imagery comes from
+carto.com even though its flat tiles come from openfreemap.org — relief adds
+that third party, and the Fidelity tab names every host involved.
+
 If your project has its own terrain and you leave this off, the Fidelity tab
 says so rather than exporting a flat map silently.
 

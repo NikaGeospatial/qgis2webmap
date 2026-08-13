@@ -1230,6 +1230,72 @@ class TestTerrain:
     def test_no_note_when_flat(self) -> None:
         assert terrain_note("none") is None
 
+    def test_texture_is_derived_from_the_basemap(self) -> None:
+        """The runtime replaces the basemap while terrain is on, so the
+        texture is the restoration of a choice the user already made."""
+        markup = build_manifest(
+            make_project(
+                settings=ExportSettings(terrain="terrarium", basemap="voyager")
+            )
+        )
+        assert (
+            'terrain-texture="https://basemaps.cartocdn.com/rastertiles/'
+            'voyager/{z}/{x}/{y}.png"' in markup
+        )
+
+    def test_no_texture_without_terrain(self) -> None:
+        markup = build_manifest(
+            make_project(settings=ExportSettings(basemap="voyager"))
+        )
+        assert "terrain-texture" not in markup
+
+    def test_no_texture_when_the_basemap_is_none(self) -> None:
+        """The user chose no imagery; relief must not inject a basemap."""
+        markup = build_manifest(
+            make_project(settings=ExportSettings(terrain="terrarium"))
+        )
+        assert "terrain-texture" not in markup
+
+    def test_no_texture_for_vector_only_basemaps(self) -> None:
+        """liberty and bright have no raster twin to drape."""
+        for basemap in ("liberty", "bright"):
+            markup = build_manifest(
+                make_project(
+                    settings=ExportSettings(terrain="terrarium", basemap=basemap)
+                )
+            )
+            assert "terrain-texture" not in markup, basemap
+
+    def test_layers_are_left_to_drape_over_the_relief(self) -> None:
+        """The painted look is the point: no per-layer terrain mode is
+        emitted, so everything drapes onto the surface - including extruded
+        layers, whose colour paints the mountains while the column height
+        deliberately does not show."""
+        project = make_project(
+            layers=[
+                make_layer(
+                    layer_id="raised",
+                    geometry_kind=GeometryKind.POLYGON,
+                    elevation=ElevationSpec(extruded=True, height_field="h"),
+                )
+            ],
+            settings=ExportSettings(terrain="terrarium", basemap="positron"),
+        )
+        markup = build_manifest(project)
+        assert 'terrain="offset"' not in markup
+
+    def test_the_note_names_every_host_the_texture_adds(self) -> None:
+        note = terrain_note("terrarium", basemap="voyager")
+        assert note is not None
+        assert "s3.amazonaws.com" in note
+        assert "carto.com" in note
+        assert "unpkg.com" in note
+
+    def test_the_note_says_vector_basemaps_leave_relief_untextured(self) -> None:
+        note = terrain_note("terrarium", basemap="liberty")
+        assert note is not None
+        assert "plain" in note or "untextured" in note
+
 
 # --------------------------------------------------------------------------
 # Symbol atlas: markers QGIS had to draw itself

@@ -6,6 +6,38 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Textured 3D relief.** The runtime replaces the basemap while relief is on,
+  which used to leave a plain grey terrain shell. The exporter now drapes the
+  chosen basemap's raster imagery over the relief (`terrain-texture`), and
+  vector symbology paints onto the slopes - including extruded layers, whose
+  colour drapes over the mountains (column height deliberately does not show
+  while relief is on; the Fidelity tab says so). Verified in a browser against
+  the pinned 0.6.1 runtime. Liberty and Bright have no
+  raster twin and still show plain relief; the Fidelity tab and the dialog
+  warning name every host relief streams from, including unpkg.com, which the
+  runtime's terrain-mesh decoder loads worker scripts from.
+
+### Fixed
+- **Categorized and graduated line layers no longer export placeholder grey.**
+  The class-colour expressions read only the fill colour; a line symbol keeps
+  its colour in the stroke, so an MRT network in official line colours came
+  out uniformly `#888888`.
+- **Extrusions survive sessions that never opened a 3D view.** QGIS registers
+  3D renderers lazily, so a project loaded before that parsed its 3D renderer
+  XML to nothing and the export silently lost every extrusion. The plugin now
+  registers 3D support when it loads.
+- **Popup fields the web template cannot reference are renamed instead of
+  leaking.** A field named `Last Known Eruption` left the literal
+  `{{Last Known Eruption}}` in every popup; such fields are now renamed in the
+  exported data, the label keeps the original spelling, and the Fidelity tab
+  lists every rename.
+- **The fidelity report names the right host for the Positron basemap.** The
+  pinned runtime serves positron from openfreemap.org, not carto.com.
+- **The runtime's attribute schema is cached beside the fetched runtime**, so
+  the test suite's attribute contract checks run against the pinned build
+  rather than a stale local mirror.
+
 ### Changed
 - **New mark.** The folded-plane placeholder is replaced by the QGIS2WebMap
   mark: OnlyMap's stacked map slabs projected from a holographic emitter, with

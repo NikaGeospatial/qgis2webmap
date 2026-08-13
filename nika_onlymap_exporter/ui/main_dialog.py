@@ -808,6 +808,9 @@ class MainDialog(QDialog):
         value = self.basemap_combo.currentData()
         self.state.basemap = value if isinstance(value, str) else "none"
         self._update_basemap_warning()
+        # The terrain warning names the imagery draped over the relief, which
+        # follows the basemap - so it changes when the basemap does.
+        self._update_terrain_warning()
         self._fidelity_is_stale = True
 
     def _update_basemap_warning(self) -> None:
@@ -838,7 +841,7 @@ class MainDialog(QDialog):
 
     def _update_terrain_warning(self) -> None:
         """The same warning shape as the basemap, for the same reason."""
-        note = terrain_note(self.state.terrain)
+        note = terrain_note(self.state.terrain, basemap=self.state.basemap)
         if note is None:
             self.terrain_warning.setText("")
             self.terrain_warning.setStyleSheet("")

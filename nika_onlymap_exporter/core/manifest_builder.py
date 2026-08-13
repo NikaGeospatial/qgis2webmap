@@ -127,6 +127,28 @@ TERRAIN_PRESETS = ("none", "terrarium")
 
 TERRAIN_HOSTS = {"terrarium": "s3.amazonaws.com"}
 
+# The raster twin of each basemap preset, draped over the relief surface as
+# `terrain-texture`. The runtime replaces the basemap while terrain is on, so
+# without this the mountains render as a plain grey shell. liberty and bright
+# are deliberately absent: openfreemap serves vector styles only, and there is
+# no raster edition to drape.
+RASTER_TEXTURE_TEMPLATES = {
+    "osm": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "positron": "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    "dark-matter": "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    "voyager": "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+}
+
+# Who serves those textures - for the fidelity note. Positron's raster twin
+# comes from carto.com even though its flat vector style is openfreemap.org,
+# so relief genuinely adds a third party the flat map never contacted.
+TEXTURE_HOSTS = {
+    "osm": "openstreetmap.org",
+    "positron": "carto.com",
+    "dark-matter": "carto.com",
+    "voyager": "carto.com",
+}
+
 # Looking straight down, an extruded map and a flat one are the same picture. So
 # when anything stands up - the user's own buildings, or a relief surface - the
 # map has to open at an angle or the feature is invisible and reads as broken.
@@ -135,21 +157,38 @@ TERRAIN_HOSTS = {"terrarium": "s3.amazonaws.com"}
 EXTRUDED_PITCH = 45.0
 
 
-def terrain_note(terrain: str) -> str | None:
+def terrain_note(terrain: str, basemap: str = "none") -> str | None:
     """What switching relief on costs the recipient.
 
     Deliberately parallel to `basemap_note`: the cost is the same shape - the
     file does not grow, but every recipient's browser fetches tiles from a third
-    party - and a user should not have to learn it twice.
+    party - and a user should not have to learn it twice. Relief names more
+    hosts than a flat basemap: the DEM tiles, the imagery draped over them,
+    and unpkg.com, which the runtime's terrain-mesh decoder loads its worker
+    scripts from (measured, not assumed).
     """
     host = TERRAIN_HOSTS.get(terrain)
     if host is None:
         return None
-    return (
-        f"Terrain streams elevation tiles from {host} as the map is used. The "
-        "file does not get any bigger, but the map needs a connection to show "
+    texture_host = (
+        TEXTURE_HOSTS.get(basemap) if basemap in RASTER_TEXTURE_TEMPLATES else None
+    )
+    if texture_host is not None:
+        sources = f"{host} (elevation), {texture_host} (imagery) and unpkg.com"
+    else:
+        sources = f"{host} (elevation) and unpkg.com"
+    note = (
+        f"Terrain streams tiles from {sources} as the map is used. The file "
+        "does not get any bigger, but the map needs a connection to show "
         "relief, and it opens tilted so the relief is visible."
     )
+    if texture_host is None and basemap != "none":
+        note += (
+            " This basemap has no raster imagery to drape, so the relief "
+            "surface renders plain grey - choose OpenStreetMap, Positron, "
+            "Dark Matter or Voyager to see the map on the mountains."
+        )
+    return note
 
 
 def basemap_note(basemap: str) -> str | None:
@@ -1369,6 +1408,17 @@ def build_manifest(
     has_terrain = terrain != "none" and terrain in TERRAIN_PRESETS
     if has_terrain:
         attributes.append(("terrain", terrain))
+        # The runtime replaces the basemap while terrain is on, so the chosen
+        # imagery is restored by draping its raster twin over the surface.
+        # basemap "none" stays untextured: the user chose no imagery, and
+        # relief must not quietly add a network dependency they declined.
+        texture = RASTER_TEXTURE_TEMPLATES.get(
+            project.settings.basemap
+            if project.settings.basemap in BASEMAP_PRESETS
+            else BASEMAP
+        )
+        if texture is not None:
+            attributes.append(("terrain-texture", texture))
 
     # Height is invisible from directly overhead. Tilting is therefore not a
     # style preference but the difference between the extrusion showing and the

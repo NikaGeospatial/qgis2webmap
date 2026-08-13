@@ -87,7 +87,10 @@ way, and the file is no larger.
 
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation
-shows, and fetches terrain tiles to do it.
+shows, and fetches terrain tiles to do it. With a basemap chosen too, the
+basemap's imagery drapes over the relief — mountains that look like the map,
+with your symbology painted onto the slopes. The warning under the control
+names every host the relief streams from.
 
 Basemaps needing an API key are deliberately absent. An exported file would have
 to carry the key in plain text where every recipient could read it.

@@ -23,6 +23,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ElevationSpec,
     ExportLayer,
     ExportProject,
+    ExportSettings,
     Extent,
     GeometryKind,
     IconAtlasSpec,
@@ -209,6 +210,44 @@ def extruded_map(runtime, tmp_path_factory):
     )
 
     destination = tmp_path_factory.mktemp("extruded")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
+
+
+@pytest.fixture(scope="session")
+def textured_terrain_map(runtime, tmp_path_factory):
+    """Relief plus a basemap, so the terrain-texture path is exercised.
+
+    Separate from `exported_map` on purpose: that fixture underwrites
+    `test_the_only_external_call_is_telemetry`, and terrain would add
+    s3.amazonaws.com and cartocdn.com traffic to it. The terrain test aborts
+    those requests instead - the claim is that the attributes reach the
+    element, which is the whole contract with the runtime.
+    """
+    layer = ExportLayer(
+        layer_id="blocks",
+        name="Blocks",
+        geometry_kind=GeometryKind.POLYGON,
+        source_kind=SourceKind.FILE,
+        feature_count=1,
+        geojson=EXTRUDED_GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=200, g=80, b=40)),
+        ),
+        elevation=ElevationSpec(
+            extruded=True, height_field="height", source="3d-renderer"
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title="Textured terrain map",
+        layers=(layer,),
+        extent=Extent(west=-0.1, south=50.9, east=0.2, north=51.2),
+        settings=ExportSettings(terrain="terrarium", basemap="voyager"),
+    )
+
+    destination = tmp_path_factory.mktemp("terrain")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
 

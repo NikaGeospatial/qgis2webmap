@@ -36,7 +36,7 @@ from .export_ir import (
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
-from .manifest_builder import basemap_note, terrain_note
+from .manifest_builder import TERRAIN_PRESETS, basemap_note, terrain_note
 from .settings import LayerSettings
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -184,7 +184,7 @@ def _report_terrain(
     and hosting the DEM, so the honest options are global relief from a public
     tileset or none at all. Both are stated rather than assumed.
     """
-    note = terrain_note(settings.terrain)
+    note = terrain_note(settings.terrain, basemap=settings.basemap)
     if note is not None:
         report.approximated("Terrain", note)
         kind = _project_terrain_kind(project)
@@ -355,6 +355,23 @@ def read_project(
         )
 
     _report_terrain(project, settings, report)
+
+    # Extrusion and relief cannot coexist: columns would rise from sea level
+    # and vanish inside the mountains. Under relief the runtime drapes every
+    # layer onto the surface instead, so an extruded layer flattens into
+    # colour painted over the terrain - a different picture from the flat
+    # export, and worth saying before the user discovers it.
+    if settings.terrain != "none" and settings.terrain in TERRAIN_PRESETS:
+        raised = [
+            layer.name for layer in layers if layer.elevation and layer.elevation.is_set
+        ]
+        if raised:
+            report.approximated(
+                "Terrain",
+                "Extruded layers drape flat onto the relief surface - their "
+                "colour paints the mountains, but the column height does not "
+                "show: " + ", ".join(f"'{name}'" for name in raised) + ".",
+            )
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     title = resolve_title(project, title_override)

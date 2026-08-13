@@ -456,6 +456,46 @@ class TestExtrusion:
         )
 
 
+class TestTexturedTerrain:
+    """Relief carries the basemap's imagery instead of a grey shell.
+
+    The requests to the DEM and imagery hosts are aborted, so the tier stays
+    offline-deterministic: the claim is that the attributes reach the element,
+    which is the exported file's whole contract with the runtime.
+    """
+
+    def test_the_texture_and_offset_reach_the_elements(
+        self, page, textured_terrain_map
+    ) -> None:
+        page.route(
+            "**/*",
+            lambda route: (
+                route.abort()
+                if any(
+                    host in route.request.url
+                    for host in ("s3.amazonaws.com", "cartocdn.com", "unpkg.com")
+                )
+                else route.continue_()
+            ),
+        )
+        open_map(page, textured_terrain_map)
+        require_webgl(page)
+        get = "() => document.querySelector('om-map').getAttribute('%s')"
+        assert page.evaluate(get % "terrain") == "terrarium"
+        texture = page.evaluate(get % "terrain-texture")
+        assert texture == (
+            "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+        )
+        # No per-layer terrain mode: everything drapes, which is the
+        # painted-mountains look the feature exists for.
+        assert (
+            page.evaluate(
+                "() => document.querySelector('om-layer').getAttribute('terrain')"
+            )
+            is None
+        )
+
+
 class TestHighlightColour:
     """The setting that looked configurable and was inert.
 
