@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .export_ir import (
     Color,
@@ -324,9 +324,13 @@ def scale_to_zoom(scale_denominator: float) -> float:
 def fill_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
     """Build `get-fill-color` in whichever canonical shape the legend understands."""
     if renderer.kind is RendererKind.CATEGORIZED and renderer.categories:
-        return _categorized_expression(renderer, geometry)
+        return _categorized_expression(
+            renderer, lambda symbol: _class_color(symbol, geometry), DEFAULT_FILL
+        )
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
-        return _graduated_expression(renderer, geometry)
+        return _graduated_expression(
+            renderer, lambda symbol: _class_color(symbol, geometry)
+        )
 
     symbol = renderer.representative_symbol or SymbolSpec()
     fill = symbol.fill_color or (
@@ -348,7 +352,11 @@ def _class_color(symbol: SymbolSpec, geometry: GeometryKind) -> Color | None:
     return symbol.fill_color
 
 
-def _categorized_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
+def _categorized_expression(
+    renderer: RendererSpec,
+    class_color: Callable[[SymbolSpec], Color | None],
+    fallback: Color,
+) -> str:
     """`$field == 'a' ? '#c1' : $field == 'b' ? '#c2' : '#fallback'`
 
     The trailing fallback is not optional: it is what the legend renders as the
@@ -358,13 +366,16 @@ def _categorized_expression(renderer: RendererSpec, geometry: GeometryKind) -> s
     field = renderer.field_name or ""
     parts = [
         f"${field} == {value_literal(category.value)} "
-        f"? {color_literal(_class_color(category.symbol, geometry))}"
+        f"? {color_literal(class_color(category.symbol))}"
         for category in renderer.categories
     ]
-    return " : ".join(parts) + f" : {color_literal(DEFAULT_FILL)}"
+    return " : ".join(parts) + f" : {color_literal(fallback)}"
 
 
-def _graduated_expression(renderer: RendererSpec, geometry: GeometryKind) -> str:
+def _graduated_expression(
+    renderer: RendererSpec,
+    class_color: Callable[[SymbolSpec], Color | None],
+) -> str:
     """`scale($field, threshold, [colours], domain=[breaks])`
 
     A threshold scale keeps QGIS's exact class breaks. A `sequential` scale would
@@ -376,7 +387,7 @@ def _graduated_expression(renderer: RendererSpec, geometry: GeometryKind) -> str
     are the upper bound of every class except the last.
     """
     field = renderer.field_name or ""
-    colors = [color_literal(_class_color(c.symbol, geometry)) for c in renderer.classes]
+    colors = [color_literal(class_color(c.symbol)) for c in renderer.classes]
     breaks = [c.upper for c in renderer.classes[:-1]]
 
     colors_literal = "[" + ", ".join(colors) + "]"
@@ -513,26 +524,16 @@ def line_color_expression(renderer: RendererSpec, geometry: GeometryKind) -> str
     if renderer.kind is RendererKind.CATEGORIZED and renderer.categories:
         strokes = {c.symbol.stroke_color for c in renderer.categories}
         if len(strokes) > 1:
-            field = renderer.field_name or ""
-            parts = [
-                f"${field} == {value_literal(category.value)} "
-                f"? {color_literal(category.symbol.stroke_color or DEFAULT_STROKE)}"
-                for category in renderer.categories
-            ]
-            return " : ".join(parts) + f" : {color_literal(DEFAULT_STROKE)}"
+            return _categorized_expression(
+                renderer,
+                lambda symbol: symbol.stroke_color or DEFAULT_STROKE,
+                DEFAULT_STROKE,
+            )
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
         strokes = {c.symbol.stroke_color for c in renderer.classes}
         if len(strokes) > 1:
-            field = renderer.field_name or ""
-            colors = [
-                color_literal(c.symbol.stroke_color or DEFAULT_STROKE)
-                for c in renderer.classes
-            ]
-            breaks = [c.upper for c in renderer.classes[:-1]]
-            colors_literal = "[" + ", ".join(colors) + "]"
-            domain_literal = "[" + ", ".join(_number(b) for b in breaks) + "]"
-            return (
-                f"scale(${field}, threshold, {colors_literal}, domain={domain_literal})"
+            return _graduated_expression(
+                renderer, lambda symbol: symbol.stroke_color or DEFAULT_STROKE
             )
 
     symbol = renderer.representative_symbol or SymbolSpec()
