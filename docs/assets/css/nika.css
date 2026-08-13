@@ -1120,15 +1120,20 @@ body {
    map loads with the page. */
 
 /* The demo pages alone take the wide treatment: the map is the page, so
-   it gets the width the guides give to reading comfort. */
+   it gets the width the guides give to reading comfort. The LEFT edge and
+   sidebar column match the guide pages exactly - the sidebar must not
+   move when crossing between a guide and a demo; only the right side
+   reaches further out. */
 .shell.demo-page {
   max-width: 1460px;
-  grid-template-columns: 11rem minmax(0, 1fr) 11rem;
+  margin-left: max(calc((100% - 1320px) / 2), 0px);
+  margin-right: auto;
+  grid-template-columns: 14rem minmax(0, 1fr) 11rem;
 }
 
 @media (max-width: 1180px) {
   .shell.demo-page {
-    grid-template-columns: 11rem minmax(0, 1fr);
+    grid-template-columns: 14rem minmax(0, 1fr);
   }
 }
 
