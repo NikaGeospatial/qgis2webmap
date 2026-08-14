@@ -776,7 +776,7 @@ body {
    which is the shape of a different argument. */
 .hero-flow__row {
   display: grid;
-  grid-template-columns: 0.85fr auto 1.15fr;
+  grid-template-columns: 1.02fr auto 1.15fr;
   align-items: center;
   gap: clamp(0.5rem, 1.6vw, 1.25rem);
   /* Room for the corners the tilt throws outside the row's own box. */
@@ -858,6 +858,11 @@ body {
   align-items: center;
   gap: 0.5rem;
   color: var(--accent-ink);
+  /* Above the panes, which the arrow's tail runs over. Both panes are
+     transformed, so they each open a stacking context of their own and would
+     otherwise paint on top of it. */
+  position: relative;
+  z-index: 2;
   /* Narrower than it was: the label sets happily on three short lines, and
      every pixel the gutter gives up goes to the two panes. */
   width: clamp(5.5rem, 9.5vw, 8.5rem);
@@ -886,9 +891,14 @@ body {
   text-wrap: balance;
 }
 
+/* The tail starts inside the dialog rather than in the gap beside it, so the
+   arrow reads as leaving that pane rather than as a symbol parked between two
+   pictures. Widened and pulled left by the same amount, which keeps the tip
+   where the gutter puts it. */
 .hero-flow__arrow {
   display: block;
-  width: 100%;
+  width: calc(100% + 3.2rem);
+  margin-left: -3.2rem;
   height: auto;
 }
 
@@ -1179,6 +1189,8 @@ body {
 
   .hero-flow__arrow {
     width: clamp(4.5rem, 22vw, 7rem);
+    /* Nothing to overlap once the panes are stacked. */
+    margin-left: 0;
     transform: rotate(58deg);
   }
 
