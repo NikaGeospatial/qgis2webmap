@@ -82,28 +82,28 @@
         </clipPath>
       </defs>
 
-      <g
+      <!--
+        One unbroken zig-zag, swinging between the silhouette's own top
+        and bottom edge as it travels - a pen filling a shape, not a
+        brush stroking along it. Riding the shape rather than a fixed
+        band keeps the stroke count sane: a band tall enough for the
+        head would spend most of its travel above and below the shaft.
+        Both the turn positions and the distance between them wander,
+        because evenly spaced turns read as a truss.
+      -->
+      <path
         clip-path="url(#scribble-clip-{{ variant }})"
-        stroke-width="1.45"
-        stroke-opacity="0.88"
-      >
-        <path d="M-10 20.1 C26 0, 68 -6.5, 142 4" />
-        <path d="M142 9.092 C61.38 -7.074, 32.62 10.02, -10 23.34" />
-        <path d="M-10 24.02 C21.72 2.517, 72.28 2.87, 142 7.74" />
-        <path d="M142 18.04 C71.85 6.013, 22.15 6.345, -10 23.91" />
-        <path d="M-10 25.28 C32.78 20.38, 61.22 3.035, 142 13.72" />
-        <path d="M142 24.18 C68.53 10.82, 25.47 16.47, -10 29.46" />
-        <path d="M-10 35.95 C19.56 13.96, 74.44 17.76, 142 22.53" />
-        <path d="M142 28 C63.31 14.49, 30.69 28.49, -10 42.72" />
-        <path d="M-10 47.6 C29.4 30.6, 64.6 18.66, 142 32.71" />
-        <path d="M142 31.67 C74.89 28.23, 19.11 23.71, -10 49.61" />
-        <path d="M-10 49.67 C27.05 35.05, 66.95 26.87, 142 41.79" />
-        <path d="M142 37.48 C61.79 27.17, 32.21 43.61, -10 49.94" />
-        <path d="M-10 52.46 C20.94 35.74, 73.06 37.34, 142 48.1" />
-        <path d="M142 46.16 C70.94 39.46, 23.06 41.26, -10 57.8" />
-        <path d="M-10 64.7 C32.96 54.56, 61.04 36.92, 142 52" />
-        <path d="M142 56.32 C69.57 45.44, 24.43 49.43, -10 70.89" />
-      </g>
+        stroke-width="1.9"
+        stroke-opacity="0.9"
+        d="
+          M7 32.98 L11.4 49.47 L16.92 28.93 L21.66 48.22 L25.63
+          28.42 L28.73 49.26 L33.77 23.78 L38.79 46.25 L43.96 19.71
+          L47.08 46.23 L51.04 22.05 L55.59 45.65 L61.23 20.89 L65.64
+          41.88 L69.06 18.83 L72.93 43.66 L77.76 19.99 L83.43 54.16
+          L87.36 6.213 L91.13 54.42 L94.65 9.482 L100.3 49.14 L105.2
+          19.17 L109.6 44.67 L112.6 22.5 L117 38.54 L122.2 25.17
+          L126 32"
+      />
 
       <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" stroke-width="2.2" />
       <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" stroke-width="1.2" stroke-opacity="0.5"
