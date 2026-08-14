@@ -332,7 +332,11 @@ body {
   align-items: start;
 }
 
-.shell--wide {
+/* `.shell.shell--wide` rather than `.shell--wide`: the narrow-screen rules
+   below re-declare `.shell`'s columns, and at equal specificity the later rule
+   wins. The landing page was picking up the guide layout's `14rem | 1fr`
+   between 820px and 1180px, which put the whole page in the 14rem column. */
+.shell.shell--wide {
   grid-template-columns: minmax(0, 1fr);
   max-width: 1080px;
 }
@@ -774,6 +778,16 @@ body {
    end, so the map gets the bigger frame - the row reads left to right as
    something growing into its result rather than as a symmetrical comparison,
    which is the shape of a different argument. */
+/* The landing column is capped at 1080px for reading, which is narrower than
+   this row wants to be. It leans out into the margin on both sides by however
+   much room the viewport actually has, and by nothing at all once the window
+   is no wider than the column - so it grows on a desktop without ever pushing
+   a scrollbar onto a laptop. */
+.hero-flow {
+  --hero-bleed: clamp(0px, calc((100vw - 1080px) / 2 - 1.5rem), 6.5rem);
+  margin-inline: calc(var(--hero-bleed) * -1);
+}
+
 .hero-flow__row {
   display: grid;
   grid-template-columns: 1.02fr auto 1.15fr;
@@ -865,7 +879,7 @@ body {
   z-index: 2;
   /* Narrower than it was: the label sets happily on three short lines, and
      every pixel the gutter gives up goes to the two panes. */
-  width: clamp(5.5rem, 9.5vw, 8.5rem);
+  width: clamp(5rem, 8.5vw, 7.5rem);
 }
 
 .hero-flow__label {
@@ -895,6 +909,10 @@ body {
    arrow reads as leaving that pane rather than as a symbol parked between two
    pictures. Widened and pulled left by the same amount, which keeps the tip
    where the gutter puts it. */
+.hero-flow figcaption {
+  margin-inline: var(--hero-bleed);
+}
+
 .hero-flow__arrow {
   display: block;
   width: calc(100% + 3.2rem);
