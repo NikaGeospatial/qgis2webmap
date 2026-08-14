@@ -1,5 +1,5 @@
 {% comment %}
-  The hero's arrow, in five drawn variants. Pass `variant` - `crayon`,
+  The hero's arrow, in six drawn variants. Pass `variant` - `crayon`, `wax`,
   `sketch`, `double`, `clean` or `curved`; anything unrecognised falls back to
   `sketch`.
 
@@ -25,7 +25,7 @@
   stroke-linejoin="round"
   focusable="false"
 >
-  {% if variant == 'crayon' %}
+  {% if variant == 'crayon' or variant == 'wax' %}
     <defs>
       <!--
         Wax on paper: fine-grained noise displacing the stroke so its edges
@@ -48,10 +48,15 @@
           seed="11"
           result="grain"
         />
+        <!--
+          Gentle. At 2.6 the displacement ate the hatching: the strokes are
+          thin and close together, so roughing their edges hard just turned the
+          fill into fuzz.
+        -->
         <feDisplacementMap
           in="SourceGraphic"
           in2="grain"
-          scale="2.6"
+          scale="{% if variant == 'wax' %}2.6{% else %}1.3{% endif %}"
           xChannelSelector="R"
           yChannelSelector="G"
         />
@@ -62,6 +67,31 @@
   {% case variant %}
 
     {% when 'crayon' %}
+      <!--
+        Coloured in rather than drawn: one unbroken zig-zag scribbles the shaft
+        and the head the way a crayon fills a shape, so the arrow's weight
+        comes from how densely it is hatched rather than from stroke width. The
+        shaft's zig-zag widens toward the head, which is what happens when a
+        hand speeds up into a stroke. The head keeps a thin outline - scribble
+        alone left its point ambiguous.
+      -->
+      <g filter="url(#crayon-{{ variant }})" stroke-width="3.4">
+        <path
+          d="M8 27.8 L12.2 36.36 L16.4 27.48 L20.6 36.68 L24.8 27.16
+             L29 37.01 L33.2 26.83 L37.4 37.33 L41.6 26.51 L45.8 37.65
+             L50 26.19 L54.2 37.97 L58.4 25.87 L62.6 38.3 L66.8 25.54
+             L71 38.62 L75.2 25.22 L79.4 38.94 L83.6 24.9 L87.8 39.26
+             L92 24.58 L95 39"
+        />
+        <path
+          d="M93 15 L96.1 47.35 L99.2 18.29 L102.3 44.06 L105.4 21.58
+             L108.5 40.77 L111.6 24.88 L114.7 37.48 L117.8 28.17
+             L120.9 34.19 L124 31.46 L124.5 32"
+        />
+        <path d="M93 14 L125.5 32 L93 50" stroke-width="2.8" />
+      </g>
+
+    {% when 'wax' %}
       <!--
         Thick, and gone over more than once - the second and third passes are
         offset by a pixel at low opacity, which is what a crayon does when you
