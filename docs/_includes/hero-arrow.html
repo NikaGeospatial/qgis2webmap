@@ -1,0 +1,56 @@
+{% comment %}
+  The hero's arrow, in four drawn variants. Pass `variant` - `sketch`,
+  `double`, `clean` or `curved`; anything unrecognised falls back to `sketch`.
+
+  Hand-authored rather than lifted from an icon set: this ships on a public
+  site, and the drawn-arrow packs floating around have licence terms ranging
+  from unclear to absent. These are a handful of Bezier curves, which is a
+  cheaper thing to own outright than to attribute.
+
+  Every variant draws inside the same 132x64 box with the tip at x=124, so the
+  gutter width does not change when the variant does. `currentColor` lets the
+  arrow inherit the accent from CSS and follow the light/dark theme.
+{% endcomment %}
+
+{% assign variant = include.variant | default: 'sketch' %}
+
+<svg
+  class="hero-flow__arrow hero-flow__arrow--{{ variant }}"
+  viewBox="0 0 132 64"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2.4"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  focusable="false"
+>
+  {% case variant %}
+
+    {% when 'clean' %}
+      <!-- Geometric: one straight shaft, one solid head. The control. -->
+      <path d="M8 32 H108" />
+      <path d="M104 32 L88 23.5 L88 40.5 Z" fill="currentColor" stroke="none" />
+
+    {% when 'double' %}
+      <!-- Excalidraw's look: every stroke drawn twice, slightly out of register. -->
+      <path d="M8 34.5 C34 27 68 39 122 31" />
+      <path d="M10 31.5 C36 24.5 70 36 121 28.5" />
+      <path d="M103 17 C110 22 117 26.5 122 30" />
+      <path d="M104.5 15.5 C111 20.5 118 25 122.5 28.5" />
+      <path d="M122 30.5 C116.5 34.5 110 39 103.5 43" />
+      <path d="M122.5 29 C117 33 110.5 37.5 104 41.5" />
+
+    {% when 'curved' %}
+      <!-- Rises and settles: reads as "becomes" rather than "points at". -->
+      <path d="M8 48 C34 18 78 12 121 27" />
+      <path d="M104 15 C111 19 117 23 121.5 26.5" />
+      <path d="M121.5 26.5 C115.5 31 109 35 102 38.5" />
+
+    {% else %}
+      <!-- Sketch: one confident stroke with a slight lift, open head. -->
+      <path d="M8 34 C33 26.5 66 38.5 121 30" />
+      <path d="M103 18 C110 22.5 116.5 26.5 121.5 29.5" />
+      <path d="M121.5 29.5 C116 34 109.5 38 103 42" />
+
+  {% endcase %}
+</svg>

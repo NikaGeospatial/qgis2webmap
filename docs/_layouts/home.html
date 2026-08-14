@@ -35,7 +35,98 @@ layout: default
       {% endfor %}
     </div>
 
-    {% if page.hero.image %}
+    {% if page.hero.compose %}
+      {% assign compose = page.hero.compose %}
+      <figure class="hero__figure hero-flow">
+        <div class="hero-flow__row">
+          <div class="hero-flow__pane">
+            <img
+              src="{{ compose.left.src | relative_url }}"
+              alt="{{ compose.left.alt }}"
+              width="1897"
+              height="1015"
+            />
+            <span class="hero-flow__tag">{{ compose.left.caption }}</span>
+          </div>
+
+          <!--
+            The arrow is labelled because at hero size the dialog's own text is
+            about five pixels tall and nobody reads it. Without the label the
+            picture implies QGIS produced the 3D, which it did not - the ground
+            surface is one dropdown in the dialog on the left.
+          -->
+          <div class="hero-flow__link" aria-hidden="true">
+            <p class="hero-flow__label">
+              {{ compose.label }}
+              {% if compose.sublabel %}
+                <span>{{ compose.sublabel }}</span>
+              {% endif %}
+            </p>
+            {% include hero-arrow.html variant=compose.arrow %}
+          </div>
+
+          <div class="hero-flow__pane hero-flow__pane--live">
+            {% if compose.right.video_mp4 %}
+              <video
+                class="hero-flow__video"
+                poster="{{ compose.right.poster | relative_url }}"
+                muted
+                loop
+                playsinline
+                preload="metadata"
+                aria-label="{{ compose.right.alt }}"
+              >
+                {% if compose.right.video_webm %}
+                  <source src="{{ compose.right.video_webm | relative_url }}" type="video/webm" />
+                {% endif %}
+                <source src="{{ compose.right.video_mp4 | relative_url }}" type="video/mp4" />
+              </video>
+            {% else %}
+              <img
+                src="{{ compose.right.poster | relative_url }}"
+                alt="{{ compose.right.alt }}"
+                width="1600"
+                height="1000"
+              />
+            {% endif %}
+            <span class="hero-flow__tag">{{ compose.right.caption }}</span>
+            {% if compose.right.placeholder %}
+              <span class="hero-flow__placeholder">Placeholder - live recording pending</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <figcaption>{{ compose.caption }}</figcaption>
+      </figure>
+
+      {% if compose.right.video_mp4 %}
+        <script>
+          // `autoplay` is set here rather than in the markup, so the one case
+          // it must not fire - someone who has asked for less motion - is
+          // handled by never starting rather than by starting and stopping.
+          //
+          // The other case cannot be detected at all: iOS Low Power Mode
+          // refuses autoplay and exposes no flag for it, deliberately. So the
+          // play() promise is caught and the poster is simply left up. The
+          // poster is the loop's own first frame, which makes that failure
+          // indistinguishable from a still hero rather than a broken one.
+          (function () {
+            var video = document.querySelector(".hero-flow__video");
+            if (!video) return;
+            if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+              video.setAttribute("controls", "");
+              return;
+            }
+            var started = video.play();
+            if (started && typeof started.catch === "function") {
+              started.catch(function () {
+                video.setAttribute("controls", "");
+              });
+            }
+          })();
+        </script>
+      {% endif %}
+    {% elsif page.hero.image %}
       <figure class="hero__figure">
         <img
           src="{{ page.hero.image.src | relative_url }}"

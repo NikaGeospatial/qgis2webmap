@@ -20,16 +20,34 @@ hero:
       style: primary
     - label: Walk through a first export
       url: /first-export.html
-  image:
-    src: /images/exported-map.png
-    alt: >-
-      An exported map open in a browser, showing Alaska with airports, rivers,
-      railroads and trails, a layer switcher, a legend, zoom controls, a scale
-      bar and an open popup listing one airport's attributes.
+  # The hero is a transformation, not a picture: the dialog that does the work
+  # on the left, its output on the right, and an arrow that names the settings
+  # responsible. Composited in HTML rather than baked into one image so the
+  # label uses the site's own type and accent, the halves stack on a phone, and
+  # the moving half can be a video without carrying the static half's pixels.
+  compose:
+    arrow: sketch
+    label: Export
+    sublabel: Voyager + Global relief
+    left:
+      src: /images/hero-qgis-dialog.png
+      caption: In QGIS
+      alt: >-
+        The QGIS2WebMap export dialog open over a QGIS project of the Nepal
+        Himalaya, with the basemap set to Voyager and the ground surface set to
+        global relief.
+    right:
+      poster: /images/hero-webmap-placeholder.png
+      caption: In a browser
+      placeholder: true
+      alt: >-
+        The same project as a web map in a browser, tilted so the peaks stand
+        up in 3D, each summit coloured by how far up its climbers typically get.
     caption: >-
-      An exported map, open in a browser. Layer switcher, legend, zoom, scale
-      bar and popups are all there without configuring anything. The basemap
-      behind it is the one optional extra.
+      The 3D ground is an option in the export dialog - global elevation data
+      fetched as the map is used, not terrain from the QGIS project. Everything
+      else on the right is the project itself: the same layers, the same
+      graduated colours, now panning, zooming and answering clicks.
 
 verdicts:
   title: You always know what changed
