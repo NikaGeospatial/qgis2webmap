@@ -770,11 +770,17 @@ body {
    stack on a phone instead of becoming an unreadable band; and the moving half
    can be a video without having to carry the static half's pixels in every
    frame. */
+/* The panes are not the same size. The dialog is the means and the map is the
+   end, so the map gets the bigger frame - the row reads left to right as
+   something growing into its result rather than as a symmetrical comparison,
+   which is the shape of a different argument. */
 .hero-flow__row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 0.85fr auto 1.15fr;
   align-items: center;
   gap: clamp(0.5rem, 1.6vw, 1.25rem);
+  /* Room for the corners the tilt throws outside the row's own box. */
+  padding: 0.75rem 0;
 }
 
 /* Both panes are held to one aspect so the row has a flat top and bottom, and
@@ -789,6 +795,19 @@ body {
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: var(--bg-2);
+  /* Tilted the same way a pair of prints would end up on a desk. Opposite
+     directions rather than matching, so they read as two things put down
+     rather than one graphic rotated. Kept under two degrees: past that the
+     dialog's horizontals start to look like a mistake instead of a choice. */
+  box-shadow: 0 12px 30px -18px rgb(0 0 0 / 45%);
+}
+
+.hero-flow__row > .hero-flow__pane:first-child {
+  transform: rotate(-1.4deg);
+}
+
+.hero-flow__pane--live {
+  transform: rotate(1deg);
 }
 
 .hero-flow__pane img,
@@ -839,9 +858,9 @@ body {
   align-items: center;
   gap: 0.5rem;
   color: var(--accent-ink);
-  /* Wide enough that "Voyager + Global relief" sets on two lines rather than
-     breaking after "Global". */
-  width: clamp(7rem, 13vw, 11rem);
+  /* Narrower than it was: the label sets happily on three short lines, and
+     every pixel the gutter gives up goes to the two panes. */
+  width: clamp(5.5rem, 9.5vw, 8.5rem);
 }
 
 .hero-flow__label {
@@ -1139,6 +1158,13 @@ body {
   .hero-flow__row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
+  }
+
+  /* Stacked in a single narrow column, the tilt costs width the panes cannot
+     spare and the two rotations fight each other. */
+  .hero-flow__row > .hero-flow__pane:first-child,
+  .hero-flow__pane--live {
+    transform: none;
   }
 
   .hero-flow__link {

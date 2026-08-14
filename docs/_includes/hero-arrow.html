@@ -1,6 +1,7 @@
 {% comment %}
-  The hero's arrow, in four drawn variants. Pass `variant` - `sketch`,
-  `double`, `clean` or `curved`; anything unrecognised falls back to `sketch`.
+  The hero's arrow, in five drawn variants. Pass `variant` - `crayon`,
+  `sketch`, `double`, `clean` or `curved`; anything unrecognised falls back to
+  `sketch`.
 
   Hand-authored rather than lifted from an icon set: this ships on a public
   site, and the drawn-arrow packs floating around have licence terms ranging
@@ -12,7 +13,7 @@
   arrow inherit the accent from CSS and follow the light/dark theme.
 {% endcomment %}
 
-{% assign variant = include.variant | default: 'sketch' %}
+{% assign variant = include.variant | default: 'crayon' %}
 
 <svg
   class="hero-flow__arrow hero-flow__arrow--{{ variant }}"
@@ -24,7 +25,62 @@
   stroke-linejoin="round"
   focusable="false"
 >
+  {% if variant == 'crayon' %}
+    <defs>
+      <!--
+        Wax on paper: fine-grained noise displacing the stroke so its edges
+        crumble instead of staying true. The id carries the variant because the
+        arrow lab renders every variant on one page, and a duplicate filter id
+        would have them all reach for whichever came first.
+      -->
+      <filter
+        id="crayon-{{ variant }}"
+        x="-25%"
+        y="-45%"
+        width="150%"
+        height="190%"
+        color-interpolation-filters="sRGB"
+      >
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.82"
+          numOctaves="3"
+          seed="11"
+          result="grain"
+        />
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="grain"
+          scale="2.6"
+          xChannelSelector="R"
+          yChannelSelector="G"
+        />
+      </filter>
+    </defs>
+  {% endif %}
+
   {% case variant %}
+
+    {% when 'crayon' %}
+      <!--
+        Thick, and gone over more than once - the second and third passes are
+        offset by a pixel at low opacity, which is what a crayon does when you
+        do not lift it between strokes.
+      -->
+      <g filter="url(#crayon-{{ variant }})" stroke-width="6.4">
+        <path d="M8 35 C34 26 68 39.5 120 30" />
+        <path d="M104 17 C111 21.5 117.5 25.5 122 29" />
+        <path d="M122 29.5 C116 34.5 109 39 102 43" />
+      </g>
+      <g
+        filter="url(#crayon-{{ variant }})"
+        stroke-width="4.6"
+        stroke-opacity="0.45"
+      >
+        <path d="M9 33 C35 24.5 69 37.5 120.5 28.5" />
+        <path d="M105 15.5 C112 20 118 24 122.5 27.5" />
+        <path d="M122.5 30.5 C116.5 36 109.5 40.5 102.5 44.5" />
+      </g>
 
     {% when 'clean' %}
       <!-- Geometric: one straight shaft, one solid head. The control. -->
