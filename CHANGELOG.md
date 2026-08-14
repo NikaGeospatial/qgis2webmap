@@ -19,6 +19,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **A layer's labels are named as its labels.** The companion text layer was
+  listed as "Peaks labels", which reads as a layer with that name rather than
+  as the labels belonging to "Peaks"; it is now "Peaks (labels)". The two sit
+  next to each other in the layer switcher, so the relationship has to be
+  legible at a glance.
 - **A labelled single-layer map keeps its layer switcher.** The switcher is
   left out when there is nothing to switch, but the test counted layers in the
   QGIS project rather than layers on the map. A labelled layer travels with a

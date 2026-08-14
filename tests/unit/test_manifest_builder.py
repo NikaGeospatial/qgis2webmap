@@ -501,6 +501,19 @@ class TestManifest:
         )
         assert 'type="layer-switcher"' in two
 
+    def test_the_label_layer_is_named_after_its_own_layer(self) -> None:
+        markup = build_manifest(
+            make_project(
+                [
+                    make_layer(
+                        name="Peaks",
+                        labeling=LabelingSpec(enabled=True, field_name="name"),
+                    )
+                ]
+            )
+        )
+        assert 'label="Peaks (labels)"' in markup
+
     def test_labels_count_towards_the_switcher(self) -> None:
         """A labelled layer emits a TextLayer the runtime lists and toggles.
 

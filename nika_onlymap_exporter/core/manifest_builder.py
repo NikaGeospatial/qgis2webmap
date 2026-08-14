@@ -812,7 +812,11 @@ def build_label_element(
     attributes: list[tuple[str, str | None]] = [
         ("id", f"{layer.layer_id}-labels"),
         ("type", TEXT_LAYER_CLASS),
-        ("label", f"{layer.name} labels"),
+        # Parenthesised rather than "Peaks labels", which reads as a layer
+        # called that rather than as the labels belonging to "Peaks". The two
+        # sit next to each other in the switcher, so the relationship between
+        # them has to be legible at a glance.
+        ("label", f"{layer.name} (labels)"),
         ("get-text", f"${LABEL_PROPERTY}"),
         ("get-text-color", color_literal(color)),
         ("get-text-size", _number(size)),
