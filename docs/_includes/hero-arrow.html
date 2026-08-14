@@ -1,5 +1,6 @@
 {% comment %}
-  The hero's arrow, in seven drawn variants. Pass `variant` - `scribble`,
+  The hero's arrow, in nine drawn variants. Pass `variant` - `solid`,
+  `hatch`, `scribble`,
   `crayon`, `wax`,
   `sketch`, `double`, `clean` or `curved`; anything unrecognised falls back to
   `sketch`.
@@ -66,6 +67,114 @@
   {% endif %}
 
   {% case variant %}
+
+    {% when 'solid' %}
+      <!--
+        Solid, with a few light streaks skipping through it the way a marker
+        does when it is dragged. Three rounds of hatching taught the lesson
+        this is built on: at 136px in a gutter the SILHOUETTE is what reads,
+        and interior texture is nearly invisible. Any density that showed up
+        at page size looked mechanical up close, and any density that looked
+        hand-made up close vanished at page size. So the fill is solid and
+        the character lives in the edge and the skips, which both survive
+        being scaled down.
+      -->
+      <defs>
+        <!-- Low-frequency noise: the edge should wander like a hand, not
+             fray like a bad scan. -->
+        <filter id="rough-{{ variant }}" x="-15%" y="-25%" width="130%"
+                height="150%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.035"
+                        numOctaves="2" seed="5" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"
+                             xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <clipPath id="fill-clip-{{ variant }}"><path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" /></clipPath>
+      </defs>
+
+      <g filter="url(#rough-{{ variant }})">
+        <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" fill="currentColor" stroke="none" />
+        <g clip-path="url(#fill-clip-{{ variant }})" stroke="var(--bg)">
+          <path d="M2 37.5 C28 19.5, 66 14.5, 124 23.5"
+            stroke-width="1.4" stroke-opacity="0.5" />
+          <path d="M2 42.5 C30.97 24.5, 63.03 19.5, 124 28.5"
+            stroke-width="2.2" stroke-opacity="0.4" />
+          <path d="M2 47.5 C27.23 29.5, 66.77 24.5, 124 33.5"
+            stroke-width="1.1" stroke-opacity="0.55" />
+          <path d="M2 52 C25.22 34, 68.78 29, 124 38"
+            stroke-width="1.8" stroke-opacity="0.35" />
+        </g>
+        <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" stroke-width="2.4" />
+      </g>
+
+    {% when 'hatch' %}
+      <!--
+        Dense strokes along the shape, but no two the same weight or opacity.
+        The even version of this read as wood grain; the theory here is that
+        irregularity, not spacing, is what separates a scribble from a
+        texture.
+      -->
+      <defs>
+        <clipPath id="fill-clip-{{ variant }}"><path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" /></clipPath>
+      </defs>
+
+      <g clip-path="url(#fill-clip-{{ variant }})">
+          <path d="M-10 19.54 C26 0, 68 -6.5, 142 4"
+            stroke-width="0.9" stroke-opacity="0.645" />
+          <path d="M-10 21.56 C32.06 8.206, 61.94 -7.984, 142 7.603"
+            stroke-width="3.15" stroke-opacity="0.896" />
+          <path d="M-10 21.36 C22.08 0.3841, 71.92 0.1495, 142 5.673"
+            stroke-width="2.49" stroke-opacity="0.937" />
+          <path d="M-10 20.47 C22.48 2.926, 71.52 2.065, 142 13.75"
+            stroke-width="2.03" stroke-opacity="0.749" />
+          <path d="M-10 20.87 C32.19 14.79, 61.81 -1.617, 142 9.265"
+            stroke-width="3.28" stroke-opacity="0.479" />
+          <path d="M-10 23.7 C25.52 10.27, 68.48 4.539, 142 17.48"
+            stroke-width="1.45" stroke-opacity="0.794" />
+          <path d="M-10 28.51 C20.12 7.016, 73.88 9.93, 142 15.29"
+            stroke-width="2.89" stroke-opacity="0.947" />
+          <path d="M-10 33.58 C30.29 19.34, 63.71 5.979, 142 19.22"
+            stroke-width="2.86" stroke-opacity="0.866" />
+          <path d="M-10 37 C29.11 20.31, 64.89 8.832, 142 22.5"
+            stroke-width="1.51" stroke-opacity="0.59" />
+          <path d="M-10 37.95 C19.7 13.05, 74.3 16.63, 142 20.83"
+            stroke-width="3.29" stroke-opacity="0.652" />
+          <path d="M-10 37.21 C26.96 22.46, 67.04 14.42, 142 28.75"
+            stroke-width="1.98" stroke-opacity="0.899" />
+          <path d="M-10 36.66 C31.68 29.33, 62.32 13.74, 142 24.29"
+            stroke-width="2.52" stroke-opacity="0.935" />
+          <path d="M-10 38.05 C21.37 21.17, 72.63 22.08, 142 32.63"
+            stroke-width="3.13" stroke-opacity="0.742" />
+          <path d="M-10 41.88 C23.32 25.27, 70.68 23.06, 142 30.19"
+            stroke-width="0.953" stroke-opacity="0.488" />
+          <path d="M-10 47.05 C32.37 36.47, 61.63 19.78, 142 34.44"
+            stroke-width="3.16" stroke-opacity="0.8" />
+          <path d="M-10 51.61 C24.57 30.82, 69.43 26.61, 142 37.39"
+            stroke-width="2.45" stroke-opacity="0.948" />
+          <path d="M-10 53.98 C20.56 28.96, 73.44 31.16, 142 36"
+            stroke-width="2.07" stroke-opacity="0.861" />
+          <path d="M-10 54.02 C30.95 41.5, 63.05 27.08, 142 43.75"
+            stroke-width="3.27" stroke-opacity="0.582" />
+          <path d="M-10 53.11 C28.24 40.94, 65.76 30.86, 142 39.32"
+            stroke-width="1.4" stroke-opacity="0.66" />
+          <path d="M-10 53.23 C19.6 34.45, 74.4 38.19, 142 47.77"
+            stroke-width="2.92" stroke-opacity="0.903" />
+          <path d="M-10 55.7 C27.9 44.9, 66.1 35.36, 142 45.1"
+            stroke-width="2.83" stroke-opacity="0.933" />
+          <path d="M-10 60.32 C31.17 50.32, 62.83 35.55, 142 49.66"
+            stroke-width="1.56" stroke-opacity="0.736" />
+          <path d="M-10 65.48 C20.76 42.06, 73.24 43.94, 142 52.27"
+            stroke-width="3.29" stroke-opacity="0.496" />
+          <path d="M-10 69.22 C24.22 47.67, 69.78 44.02, 142 51.18"
+            stroke-width="1.93" stroke-opacity="0.806" />
+          <path d="M-10 70.51 C32.39 57.99, 61.61 41.26, 142 58.74"
+            stroke-width="2.56" stroke-opacity="0.948" />
+          <path d="M-10 69.91 C23.65 51.4, 70.35 48.66, 142 54.35"
+            stroke-width="3.11" stroke-opacity="0.857" />
+      </g>
+      <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" stroke-width="2.2" />
+      <path d="M6 36 C32 25, 60 20.5, 89 22 L86 9 L127 32 L86 55 L89 42 C60 40, 32 44, 6 50 Z" stroke-width="1.2" stroke-opacity="0.5"
+        transform="translate(0.6 -0.7)" />
 
     {% when 'scribble' %}
       <!--
@@ -140,14 +249,14 @@
         offset by a pixel at low opacity, which is what a crayon does when you
         do not lift it between strokes.
       -->
-      <g filter="url(#crayon-{{ variant }})" stroke-width="6.4">
+      <g filter="url(#crayon-{{ variant }})" stroke-width="9.5">
         <path d="M8 35 C34 26 68 39.5 120 30" />
         <path d="M104 17 C111 21.5 117.5 25.5 122 29" />
         <path d="M122 29.5 C116 34.5 109 39 102 43" />
       </g>
       <g
         filter="url(#crayon-{{ variant }})"
-        stroke-width="4.6"
+        stroke-width="6.8"
         stroke-opacity="0.45"
       >
         <path d="M9 33 C35 24.5 69 37.5 120.5 28.5" />
