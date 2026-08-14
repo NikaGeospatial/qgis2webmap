@@ -1,5 +1,6 @@
 {% comment %}
-  The hero's arrow, in six drawn variants. Pass `variant` - `crayon`, `wax`,
+  The hero's arrow, in seven drawn variants. Pass `variant` - `scribble`,
+  `crayon`, `wax`,
   `sketch`, `double`, `clean` or `curved`; anything unrecognised falls back to
   `sketch`.
 
@@ -65,6 +66,75 @@
   {% endif %}
 
   {% case variant %}
+
+    {% when 'scribble' %}
+      <!--
+        The silhouette is filled the way the reference fills it: long strokes
+        running ALONG the arrow rather than across it, each one the shaft's own
+        curve pushed up or down, all of them clipped to the shape. A perpen-
+        dicular zig-zag reads as hatching; this reads as something coloured in
+        at speed. The outline goes on top, twice and slightly out of register,
+        so the edge looks gone-over rather than vector-true.
+      -->
+      <defs>
+        <clipPath id="scribble-clip-{{ variant }}">
+          <path d="M6 44 C28 24, 58 16.5, 86 20 L80 5 L126 32 L88 57 L92 42 C62 39.5, 32 44, 6 52 Z" />
+        </clipPath>
+      </defs>
+
+      <g
+        clip-path="url(#scribble-clip-{{ variant }})"
+        stroke-width="1.55"
+        stroke-opacity="0.88"
+      >
+        <path d="M-10 18.17 C26 -6, 68 -12.5, 142 -4" />
+        <path d="M142 -1.168 C63.08 -13.9, 30.92 0.4708, -10 19.6" />
+        <path d="M-10 19.04 C22.82 -6.082, 71.18 -7.491, 142 -3.218" />
+        <path d="M142 3.56 C70.86 -6.132, 23.14 -4.214, -10 17.88" />
+        <path d="M-10 17.86 C31.03 5.233, 62.97 -9.32, 142 -0.7428" />
+        <path d="M142 6.161 C68.39 -4.516, 25.61 1.359, -10 20.02" />
+        <path d="M-10 23.95 C21.22 -1.481, 72.78 -0.3317, 142 3.883" />
+        <path d="M142 7.001 C64.52 -3.739, 29.48 8.332, -10 28.11" />
+        <path d="M-10 30.8 C28.53 8.929, 65.47 -1.618, 142 9.544" />
+        <path d="M142 7.731 C73.12 4.52, 20.88 2.833, -10 31.28" />
+        <path d="M-10 30.24 C26.78 10.28, 67.22 2.532, 142 14.37" />
+        <path d="M142 10.08 C63.39 1.782, 30.61 15.66, -10 29.38" />
+        <path d="M-10 30.25 C22.24 8.838, 71.76 8.357, 142 17.1" />
+        <path d="M142 14.6 C70.18 8.958, 23.82 11.97, -10 33.3" />
+        <path d="M-10 37.55 C31.17 20.87, 62.83 6.097, 142 18" />
+        <path d="M142 20.25 C69.16 11.45, 24.84 16.09, -10 41.25" />
+        <path d="M-10 43 C21.58 14.38, 72.42 14.95, 142 18.69" />
+        <path d="M142 25.17 C63.98 11.44, 30.02 24.37, -10 42.67" />
+        <path d="M-10 41.48 C27.82 23.72, 66.18 14.31, 142 20.91" />
+        <path d="M142 28.03 C73.2 20.07, 20.8 18.25, -10 41.21" />
+        <path d="M-10 43.05 C27.54 26.54, 66.46 17.58, 142 25.32" />
+        <path d="M142 29 C63.8 17.53, 30.2 30.75, -10 46.81" />
+        <path d="M-10 51.05 C21.74 23.84, 72.26 24.15, 142 30.96" />
+        <path d="M142 29.65 C69.45 24.02, 24.55 28.2, -10 54.02" />
+        <path d="M-10 54.8 C31.19 36.39, 62.81 21.58, 142 35.97" />
+        <path d="M142 31.75 C69.91 27.4, 24.09 30.84, -10 53.89" />
+        <path d="M-10 52.89 C22.04 30.34, 71.96 30.18, 142 38.95" />
+        <path d="M142 36.05 C63.53 26.67, 30.47 40.32, -10 53.45" />
+        <path d="M-10 56.23 C27.07 38.47, 66.93 30.26, 142 40" />
+        <path d="M142 41.66 C73.16 35.55, 20.84 33.79, -10 60.42" />
+        <path d="M-10 64.3 C28.27 42.77, 65.73 32.64, 142 40.61" />
+        <path d="M142 46.75 C64.31 33.33, 29.69 45.74, -10 66.36" />
+        <path d="M-10 66.27 C21.34 38.94, 72.66 39.89, 142 42.6" />
+        <path d="M142 49.87 C68.68 39.06, 25.32 44.47, -10 65.09" />
+        <path d="M-10 64.6 C31.1 51.8, 62.9 37.14, 142 46.78" />
+        <path d="M142 51 C70.61 43.32, 23.39 45.64, -10 66.12" />
+        <path d="M-10 69.68 C22.59 46.39, 71.41 45.35, 142 52.36" />
+        <path d="M142 51.58 C63.18 41.96, 30.82 56.17, -10 73.96" />
+        <path d="M-10 77.2 C26.29 53.19, 67.71 46.22, 142 57.54" />
+        <path d="M142 53.45 C73.01 50.95, 20.99 49.44, -10 78.29" />
+        <path d="M-10 77.53 C28.94 58.94, 65.06 47.73, 142 60.78" />
+        <path d="M142 57.52 C64.9 49.19, 29.1 60.65, -10 76.43" />
+        <path d="M-10 76.71 C21.05 54.15, 72.95 55.57, 142 61.99" />
+      </g>
+
+      <path d="M6 44 C28 24, 58 16.5, 86 20 L80 5 L126 32 L88 57 L92 42 C62 39.5, 32 44, 6 52 Z" stroke-width="2.2" />
+      <path d="M6 44 C28 24, 58 16.5, 86 20 L80 5 L126 32 L88 57 L92 42 C62 39.5, 32 44, 6 52 Z" stroke-width="1.2" stroke-opacity="0.5"
+        transform="translate(0.6 -0.7)" />
 
     {% when 'crayon' %}
       <!--

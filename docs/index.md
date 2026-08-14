@@ -26,7 +26,7 @@ hero:
   # label uses the site's own type and accent, the halves stack on a phone, and
   # the moving half can be a video without carrying the static half's pixels.
   compose:
-    arrow: crayon
+    arrow: scribble
     label: Export
     sublabel: Voyager + Global relief
     left:
