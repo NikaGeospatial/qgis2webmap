@@ -343,7 +343,10 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 
 ## The map itself
 
-Legend, layer switcher, zoom controls and a scale bar are **on by default**.
+Legend, layer switcher, zoom controls and a scale bar are **on by default**. The
+layer switcher is left out of maps that have only one layer to switch, since it
+would hold a single ticked box; labels count as an entry of their own, so a
+labelled layer is enough to bring it back.
 
 On the **Appearance** tab you can also:
 

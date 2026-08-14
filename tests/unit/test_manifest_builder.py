@@ -501,6 +501,27 @@ class TestManifest:
         )
         assert 'type="layer-switcher"' in two
 
+    def test_labels_count_towards_the_switcher(self) -> None:
+        """A labelled layer emits a TextLayer the runtime lists and toggles.
+
+        The count has to follow what reaches the map rather than what is in the
+        project, or a one-layer labelled map gets no switcher while its legend
+        lists both entries on the same screen.
+        """
+        labelled = build_manifest(
+            make_project(
+                [make_layer(labeling=LabelingSpec(enabled=True, field_name="name"))]
+            )
+        )
+        assert 'type="TextLayer"' in labelled
+        assert 'type="layer-switcher"' in labelled
+
+    def test_an_unlabelled_lone_layer_still_has_no_switcher(self) -> None:
+        markup = build_manifest(
+            make_project([make_layer(labeling=LabelingSpec(enabled=False))])
+        )
+        assert 'type="layer-switcher"' not in markup
+
     def test_layers_keep_model_order(self) -> None:
         project = make_project(
             [make_layer(layer_id="bottom"), make_layer(layer_id="top")]

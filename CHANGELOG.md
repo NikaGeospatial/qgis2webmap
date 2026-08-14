@@ -19,6 +19,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime's terrain-mesh decoder loads worker scripts from.
 
 ### Fixed
+- **A labelled single-layer map keeps its layer switcher.** The switcher is
+  left out when there is nothing to switch, but the test counted layers in the
+  QGIS project rather than layers on the map. A labelled layer travels with a
+  second, independently toggleable text layer — the legend listed both entries
+  while the switcher that would have let a reader hide the labels was suppressed
+  on the same screen. Unlabelled single-layer maps still get no switcher.
 - **Relief exports say that labels will not appear.** Label text renders
   neither draped nor offset while terrain is on — a runtime limitation,
   measured — so the Fidelity tab now names every labelled layer that will

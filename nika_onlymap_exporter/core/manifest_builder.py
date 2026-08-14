@@ -1338,6 +1338,30 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     return "\n".join(lines)
 
 
+def _switchable_layer_count(project: ExportProject) -> int:
+    """How many rows the layer switcher would actually offer.
+
+    Counts what reaches the map, not what is in the QGIS project, because those
+    two numbers differ whenever labelling is on: a labelled layer emits a second
+    `<om-layer type="TextLayer">` the runtime lists and toggles independently.
+    Counting project layers hid the switcher on a one-layer labelled map whose
+    reader could still usefully turn the labels off - and the legend, drawn from
+    the same layers, listed both entries on the very same screen.
+
+    An over-count is possible in one case: `build_label_element` also returns
+    nothing when no feature yields a usable label point, which this cannot know
+    without building the collection. The cost of being wrong there is a switcher
+    with a single row, which is what every one-layer map had until now.
+    """
+    count = 0
+    for layer in project.exportable_layers:
+        count += 1
+        labeling = layer.labeling
+        if labeling.enabled and labeling.field_name:
+            count += 1
+    return count
+
+
 def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     """Widgets, on by default.
 
@@ -1364,7 +1388,7 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
                 f'{indent}<om-widget type="legend" {title_attribute}'
                 f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
             )
-    if settings.show_layer_switcher and len(project.layers) > 1:
+    if settings.show_layer_switcher and _switchable_layer_count(project) > 1:
         widgets.append(
             f'{indent}<om-widget type="layer-switcher" '
             f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'

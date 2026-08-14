@@ -187,6 +187,12 @@ exported map should be useful without configuring anything.
 Four switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar**.
 Untick one to leave that control off the exported map.
 
+The layer switcher is the one exception to that. It only appears when the map
+has more than one thing to switch between, so a map with a single unlabelled
+layer does not get one however this is set — there would be nothing in it but a
+single ticked box. Turning labels on counts: a labelled layer travels with its
+labels as a second entry, which you can then show and hide on their own.
+
 ### Caption
 
 Both off by default, because an unwanted caption drawn over someone's map is
