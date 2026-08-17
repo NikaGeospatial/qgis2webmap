@@ -6,6 +6,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Exported maps stamp the version that made them.** The generator line
+  carried a hardcoded `0.1.0` from the first release onwards, so every map
+  exported by 0.1.2 and 0.1.3 claimed to come from 0.1.0. The version is now
+  read from `metadata.txt` — the file a release always bumps — so a second copy
+  cannot drift from it, and a test ties the two together. The line exists for
+  whoever opens an exported file later and asks what produced it, which is the
+  one reader who has no other way to find out.
+
 ## [0.1.3] - 2026-08-17
 
 ### Added

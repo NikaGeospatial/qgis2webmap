@@ -45,6 +45,22 @@ def test_version_matches_pyproject(general: configparser.SectionProxy) -> None:
     assert match.group(1) == general["version"].strip()
 
 
+def test_exported_maps_stamp_the_real_version(
+    general: configparser.SectionProxy,
+) -> None:
+    """The generator line in every exported map must name the shipped version.
+
+    This was a hardcoded `0.1.0` in `onlymap_writer.py` from the first release
+    through 0.1.3, so maps exported by 0.1.2 and 0.1.3 all claimed to come from
+    0.1.0. Nothing asserted it, so nothing caught it across two releases. The
+    line exists for whoever opens an exported file later and needs to know what
+    produced it - the one reader who cannot check any other way.
+    """
+    from nika_onlymap_exporter.writers.onlymap_writer import PLUGIN_VERSION
+
+    assert general["version"].strip() == PLUGIN_VERSION
+
+
 def test_ships_as_stable_not_experimental(general: configparser.SectionProxy) -> None:
     """Issue #29: ship 0.1.0 stable. Experimental plugins are hidden by default."""
     assert general["experimental"].strip().lower() == "false"

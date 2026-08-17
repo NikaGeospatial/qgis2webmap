@@ -43,7 +43,36 @@ from ..packaging.runtime_manager import (
 )
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
-PLUGIN_VERSION = "0.1.0"
+METADATA_PATH = Path(__file__).resolve().parent.parent / "metadata.txt"
+
+
+def _plugin_version() -> str:
+    """The plugin's version, read from `metadata.txt` rather than repeated.
+
+    This was a literal through 0.1.3, and it was never bumped: every map exported
+    by 0.1.0, 0.1.2 and 0.1.3 alike stamped itself `0.1.0` in its generator
+    line. Nothing caught it because nothing asserted it, and the line is not
+    something a person reads on the way past - it is there for whoever opens
+    the file months later asking what produced it, which is exactly when a
+    wrong answer costs the most.
+
+    `metadata.txt` is the file the QGIS plugin repository reads, so it is the
+    one that always gets bumped for a release. Reading it is the only way a
+    second copy cannot drift from it.
+
+    Falls back rather than raising: a version string is not worth failing an
+    export over, and "unknown" is at least not a lie.
+    """
+    try:
+        for line in METADATA_PATH.read_text(encoding="utf-8").splitlines():
+            if line.startswith("version="):
+                return line.partition("=")[2].strip()
+    except OSError:
+        pass
+    return "unknown"
+
+
+PLUGIN_VERSION = _plugin_version()
 
 # The unbundled runtime's file name. Stable on purpose: a server can cache it,
 # and re-exporting a map does not invalidate every other map on the site.
