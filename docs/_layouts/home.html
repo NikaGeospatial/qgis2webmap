@@ -73,7 +73,7 @@ layout: default
                 muted
                 loop
                 playsinline
-                preload="metadata"
+                preload="auto"
                 aria-label="{{ compose.right.alt }}"
               >
                 {% if compose.right.video_webm %}
@@ -101,40 +101,82 @@ layout: default
 
       {% if compose.right.video_mp4 %}
         <script>
-          // `autoplay` is set here rather than in the markup, so the one case
-          // it must not fire - someone who has asked for less motion - is
-          // handled by never starting rather than by starting and stopping.
+          // This plays for everyone, on instruction: the hero IS the claim, and
+          // a poster with a play button on it is a hero nobody sees. It used to
+          // refuse for `prefers-reduced-motion: reduce`, and that branch is gone
+          // deliberately - reinstating it is a decision, not a fix.
           //
-          // The other case cannot be detected at all: iOS Low Power Mode
-          // refuses autoplay and exposes no flag for it, deliberately. So the
-          // play() promise is caught and the poster is simply left up. The
-          // poster is the loop's own first frame, which makes that failure
-          // indistinguishable from a still hero rather than a broken one.
+          // What cannot be detected at all is iOS Low Power Mode: it refuses
+          // autoplay and exposes no flag for it, deliberately. It is answered
+          // below by retrying rather than by asking.
           (function () {
             var video = document.querySelector(".hero-flow__video");
             if (!video) return;
-            if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-              video.setAttribute("controls", "");
-              return;
-            }
             // iOS Safari checks the muted PROPERTY, and there are parser and
             // bfcache paths where it does not pick the attribute up. Asserting
             // both costs nothing and is the difference between muted autoplay
             // being permitted and being refused.
             video.muted = true;
             video.playsInline = true;
-            // Set now, not in the markup, so it still never fires for reduced
-            // motion (that branch has already returned). It matters because a
-            // bare play() is one-shot: Safari retries an element that carries
+            // A bare play() is one-shot: Safari retries an element that carries
             // the attribute when the conditions change - Low Power Mode turned
             // off, the tab foregrounded - and a rejected promise never will.
             video.setAttribute("autoplay", "");
-            var started = video.play();
-            if (started && typeof started.catch === "function") {
-              started.catch(function () {
-                video.setAttribute("controls", "");
+
+            // A single play() at parse time is one attempt at one moment, and
+            // on a phone that moment is the worst one available: nothing is
+            // buffered and Low Power Mode is refusing. So keep asking, on every
+            // signal that the answer might have changed. The one that actually
+            // rescues Low Power Mode is a user gesture - iOS unblocks playback
+            // for any of them, and the listener is on the document, so the
+            // first scroll or tap anywhere starts the loop. That is the whole
+            // difference between this and having to hit the play button.
+            var running = false;
+
+            function stopAsking() {
+              running = true;
+              GESTURES.forEach(function (name) {
+                document.removeEventListener(name, attempt, LISTEN);
               });
+              document.removeEventListener("visibilitychange", onShow);
+              video.removeEventListener("canplay", attempt);
             }
+
+            function attempt() {
+              if (running) return;
+              var started = video.play();
+              if (started && typeof started.then === "function") {
+                started.then(stopAsking, function () {});
+              } else if (!video.paused) {
+                // Older Safari returns undefined rather than a promise.
+                stopAsking();
+              }
+            }
+
+            // Capturing and passive: this must never be the reason a tap or a
+            // scroll feels slow, and it must see the gesture even if something
+            // else stops it propagating.
+            var LISTEN = { capture: true, passive: true };
+            var GESTURES = ["touchstart", "pointerdown", "click", "keydown", "scroll"];
+
+            function onShow() {
+              if (!document.hidden) attempt();
+            }
+
+            GESTURES.forEach(function (name) {
+              document.addEventListener(name, attempt, LISTEN);
+            });
+            document.addEventListener("visibilitychange", onShow);
+            video.addEventListener("canplay", attempt);
+
+            attempt();
+
+            // Only after the retries have had a few seconds to work. Showing
+            // controls immediately, as this used to, puts a play button over
+            // the poster of a video that was about to start on its own.
+            window.setTimeout(function () {
+              if (video.paused) video.setAttribute("controls", "");
+            }, 4000);
           })();
         </script>
       {% endif %}
