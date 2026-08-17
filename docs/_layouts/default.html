@@ -60,7 +60,15 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="{{ '/assets/css/nika.css' | relative_url }}" />
+    <!-- `?v=` is the build timestamp, so a stylesheet change is never served
+         from a stale cache. Without it an edit to nika.css can sit invisible
+         behind a browser's cached copy through a whole round of review - which
+         is exactly what happened while the hero was being tuned, and it is
+         indistinguishable from the change not having been made. -->
+    <link
+      rel="stylesheet"
+      href="{{ '/assets/css/nika.css' | relative_url }}?v={{ site.time | date: '%s' }}"
+    />
   </head>
 
   <body>
