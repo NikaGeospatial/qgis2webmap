@@ -117,6 +117,18 @@ layout: default
               video.setAttribute("controls", "");
               return;
             }
+            // iOS Safari checks the muted PROPERTY, and there are parser and
+            // bfcache paths where it does not pick the attribute up. Asserting
+            // both costs nothing and is the difference between muted autoplay
+            // being permitted and being refused.
+            video.muted = true;
+            video.playsInline = true;
+            // Set now, not in the markup, so it still never fires for reduced
+            // motion (that branch has already returned). It matters because a
+            // bare play() is one-shot: Safari retries an element that carries
+            // the attribute when the conditions change - Low Power Mode turned
+            // off, the tab foregrounded - and a rejected promise never will.
+            video.setAttribute("autoplay", "");
             var started = video.play();
             if (started && typeof started.catch === "function") {
               started.catch(function () {
