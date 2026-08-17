@@ -37,9 +37,9 @@ hero:
         Himalaya, with the basemap set to Voyager and the ground surface set to
         global relief.
     right:
-      poster: /images/hero-webmap-placeholder.png
+      poster: /images/hero-webmap-poster.jpg
+      video_mp4: /images/hero-webmap.mp4
       caption: In a browser
-      placeholder: true
       alt: >-
         The same project as a web map in a browser, tilted so the peaks stand
         up in 3D, each summit coloured by how far up its climbers typically get.
