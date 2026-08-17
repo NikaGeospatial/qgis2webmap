@@ -59,6 +59,18 @@
 
   --measure: 72ch;
   --shell: 1320px;
+
+  /* The landing page's own column. Its own token because TWO things must agree
+     on it: `.shell--wide`, and the hero's bleed calculation - the hero leans
+     out of this column by however much room is left, and its figcaption leans
+     back in by the same amount. When these two disagreed the caption sat at a
+     different width from the text above it.
+
+     Widened from 1080px so the hero stops looking pasted on. At 1920 the hero
+     is ~1808px and the sections under it were 1016px - a 1.8x jump. Prose is
+     unaffected: paragraphs carry their own `--measure` cap, so this widens the
+     card grids and section blocks only. */
+  --landing-col: 1400px;
   --radius: 10px;
 }
 
@@ -338,7 +350,7 @@ body {
    between 820px and 1180px, which put the whole page in the 14rem column. */
 .shell.shell--wide {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 1080px;
+  max-width: var(--landing-col);
 }
 
 .sidebar {
@@ -784,7 +796,18 @@ body {
    is no wider than the column - so it grows on a desktop without ever pushing
    a scrollbar onto a laptop. */
 .hero-flow {
-  --hero-bleed: clamp(0px, calc((100vw - 1080px) / 2 - 1.5rem), 6.5rem);
+  /* NO upper cap, on instruction: this row is allowed to be wider than every
+     other thing on the page. It was capped at 6.5rem, which held it to ~1288px
+     on any monitor - and the one thing the composite has to do is let someone
+     read the dialog it is showing them, which that width made impossible.
+     It now takes the whole viewport less a 1.5rem gutter each side.
+
+     `max(0px, ...)` rather than `clamp(...)` because the term goes NEGATIVE
+     below 1080px + 3rem, and a negative bleed would push the row inward and
+     then a positive figcaption margin would fight it. At or below the reading
+     column the bleed is simply zero, which is the narrow-screen behaviour the
+     stacked layout already assumes. */
+  --hero-bleed: max(0px, calc((100vw - var(--landing-col)) / 2 - 1.5rem));
   margin-inline: calc(var(--hero-bleed) * -1);
 }
 
@@ -891,6 +914,18 @@ body {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   line-height: 1.35;
+  /* Ordinary ink, NOT the accent this element inherits from `.hero-flow__link`
+     - the arrow still wants that colour, the sentence does not. A line that is
+     entirely accented has nothing standing out in it. */
+  color: var(--ink-2);
+}
+
+/* The two phrases carrying the claim. Colour and weight together, because at
+   this size and letter-spacing colour alone is too quiet to separate them. */
+.hero-flow__label em {
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-style: normal;
 }
 
 /* The settings named on their own line: the arrow says "export", this says
