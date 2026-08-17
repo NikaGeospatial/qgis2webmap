@@ -32,11 +32,14 @@
    genuinely unrecoverable export fails outright.
 4. **Lossless by default.** Compression may shrink bytes; it must not discard
    data. Lossy transforms are opt-in and reported.
-5. **Exports make no network requests.** `telemetry="off"`, no `map-id`, no
-   remote basemap unless the user explicitly chooses one. This is about the
-   *exported map*, and it is absolute: an artifact must work with the cable
-   unplugged. Exporting is also local — the plugin's only network request in
-   its whole life is the one-time runtime download in rule 2.
+5. **Exports make no network requests beyond the runtime's own telemetry.** One
+   anonymous usage report on load, no `map-id`, no remote basemap unless the
+   user explicitly chooses one. The exporter stopped emitting `telemetry="off"`
+   in 0.1.3; `tests/browser/test_exported_map.py` pins the permitted endpoint so
+   a second one cannot appear unnoticed, and `docs/privacy.md` says what a
+   report contains. Everything else about the *exported map* still holds with
+   the cable unplugged. Exporting is also local — the plugin's only other
+   network request in its whole life is the one-time runtime download in rule 2.
 
 ## Architecture
 
@@ -142,6 +145,19 @@ tested your change.
 The attribute-contract test in `tests/unit/test_manifest_builder.py` checks every
 attribute we emit against the runtime's own `onlymapjs.html-data.json`. Point it
 at a copy with `ONLYMAP_HTML_DATA` if it is not beside your runtime.
+
+### The pin is held at 0.6.1 by a regression, not by neglect
+
+`scripts/check_runtime_updates.py` will report newer builds; do not move the pin
+to one without re-running every tier. **0.6.2 and 0.6.4 silently stop honouring
+`dash`** — a dashed line renders pixel-for-pixel identical to a solid one
+(`TestDashedLinesReallyDash`, chromium and webkit, measured 2026-08-17). The
+attribute is still documented unchanged in those builds'
+`onlymapjs.html-data.json`, so nothing static catches this: only the rendered
+line does, which is exactly why that test counts pixels. 0.6.3 was never
+published to npm. The rest of 0.6.2–0.6.4 is additive — no attribute was
+removed, the licence is byte-identical, and the CSS bundle is unchanged — so the
+pin moves the day `dash` works again.
 
 ## Running the browser tier
 
