@@ -21,7 +21,7 @@ Built by [NIKA](https://nikaplanet.com), powered by
 plugin exports to, documented at
 [onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 
-> **Status: early release.** `0.1.2` is published on the
+> **Status: early release.** `0.1.3` is published on the
 > [QGIS Plugin Repository](https://plugins.qgis.org/plugins/nika_onlymap_exporter/)
 > and under active development. The repository layout and task plan follow
 > [onlymap-js issue #29](https://github.com/NikaGeospatial/onlymap-js/issues/29).

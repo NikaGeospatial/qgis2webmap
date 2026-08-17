@@ -6,6 +6,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-17
+
 ### Added
 - **Textured 3D relief.** The runtime replaces the basemap while relief is on,
   which used to leave a plain grey terrain shell. The exporter now drapes the

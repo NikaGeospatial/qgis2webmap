@@ -19,7 +19,7 @@ url: https://nikageospatial.github.io
 baseurl: /qgis2webmap
 
 # Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
-plugin_version: 0.1.2
+plugin_version: 0.1.3
 repository_url: https://github.com/NikaGeospatial/qgis2webmap
 
 # Every guide gets the sidebar layout; `index.md` opts into `home` itself.
