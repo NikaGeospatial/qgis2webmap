@@ -32,12 +32,12 @@ hero:
     # it stand out.
     label: <em>Export</em> a webmap with just <em>one click</em>
     left:
-      src: /images/hero-qgis-dialog.png
+      src: /images/hero-qgis-canvas.png
       caption: In QGIS
       alt: >-
-        The QGIS2WebMap export dialog open over a QGIS project of the Nepal
-        Himalaya, with the basemap set to Voyager and the ground surface set to
-        global relief.
+        A QGIS project of the Nepal Himalaya on the map canvas, each summit
+        drawn as a graduated circle coloured by how far up its climbers
+        typically get, over a Voyager basemap.
     right:
       poster: /images/hero-webmap-poster.jpg
       video_mp4: /images/hero-webmap.mp4

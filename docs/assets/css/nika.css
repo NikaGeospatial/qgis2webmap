@@ -827,7 +827,7 @@ body {
    rendering fault rather than a crop. Trimming the map only loses map. */
 .hero-flow__pane {
   position: relative;
-  aspect-ratio: 1897 / 1015;
+  aspect-ratio: 1901 / 987;
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
