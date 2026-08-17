@@ -26,9 +26,11 @@ hero:
   # label uses the site's own type and accent, the halves stack on a phone, and
   # the moving half can be a video without carrying the static half's pixels.
   compose:
-    arrow: solid
-    label: Export
-    sublabel: Voyager + Global relief
+    arrow: wax
+    # `em` is the accent: the two phrases that carry the claim are picked out,
+    # and the rest sits in ordinary ink. Accenting the whole line made none of
+    # it stand out.
+    label: <em>Export</em> a webmap with just <em>one click</em>
     left:
       src: /images/hero-qgis-dialog.png
       caption: In QGIS
