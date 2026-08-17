@@ -81,7 +81,17 @@ class Qgis2WebMapPlugin:
 
             Qgs3D.initialize()
         except Exception:  # pragma: no cover - build without 3D support
-            pass
+            # Swallowed deliberately: a QGIS without 3D support is a supported
+            # configuration, not an error, and the plugin must still load. It
+            # is logged rather than passed over because this is the only clue
+            # to why an export came out flat, and at Info because for those
+            # builds it is expected rather than a warning about a fault.
+            QgsMessageLog.logMessage(
+                f"3D support is unavailable, so extrusions will not be "
+                f"exported:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
 
         self.initProcessing()
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "qgis2webmap.svg"))
