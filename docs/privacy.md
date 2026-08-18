@@ -104,6 +104,18 @@ it leaves your computer.
 Publishing to NIKA hosting, and asking an AI assistant to modify a map, are
 separate actions that you start yourself. Nothing is uploaded automatically.
 
+## This website
+
+Everything above is about the plugin and the maps it exports. This
+documentation site is a separate thing, and it does count its visitors.
+
+It uses PostHog to record which page was read, which site or link you arrived
+from, and roughly how long the page was open, along with your country and
+browser. Nothing is stored on your device - no cookies, no local storage - so
+there is no consent banner to dismiss, and no way for the site to recognise you
+on a later visit. You are never identified, and none of this touches the plugin,
+your QGIS projects, or any map you export.
+
 ## Source
 
 The plugin is GPL-2.0-or-later. You can read exactly what it does at

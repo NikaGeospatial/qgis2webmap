@@ -1,0 +1,136 @@
+{%- comment -%}
+  Website analytics for the documentation site only.
+
+  This measures visitors to nikageospatial.github.io/qgis2webmap - which pages
+  they read, where they arrived from, how long they stay. It has nothing to do
+  with the usage report an *exported map* sends: that comes from the OnlyMap
+  runtime baked into the exported HTML, reports to a different service and a
+  different PostHog project, and is described in `privacy.md`. Do not merge the
+  two, and do not instrument anything inside the demo pages' map iframes - those
+  maps already report for themselves, and counting them here would double up.
+
+  Dormant until configured: with `posthog_key` empty in `_config.yml` this
+  renders nothing at all, so `jekyll serve` on a laptop is silent and no local
+  page view reaches the project.
+
+  Cookieless by choice. `cookieless_mode: "always"` makes PostHog derive a
+  visitor hash server side instead of storing anything on the reader's device -
+  no cookies, no localStorage - so the site needs no consent banner while still
+  counting unique visitors and following a reader from page to page. It requires
+  "Cookieless server hash mode" to be switched on in the PostHog project's
+  settings; without it, events are accepted but no one is counted. `identify()`
+  does not work in this mode, and we never call it.
+
+  The guides are plain Markdown on purpose (see `_config.yml`: the plugin's Help
+  tab renders the same files through Qt). So nothing here may ask a `.md` file to
+  carry a data attribute or a class. Every named event below is matched from the
+  link's href instead, which is why the whole event list lives in this one file.
+{%- endcomment -%}
+
+{%- if site.posthog_key and site.posthog_key != "" -%}
+<script>
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}p||((p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",p.onerror=function(){p=null},(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r));var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+
+  posthog.init({{ site.posthog_key | jsonify }}, {
+    api_host: {{ site.posthog_host | default: "https://us.i.posthog.com" | jsonify }},
+    defaults: "2026-05-30",
+    cookieless_mode: "always",
+    // Page-level analytics, not a log of every interaction. Turning this on
+    // would capture every click on the site; if heatmaps are ever wanted, that
+    // is a deliberate decision to revisit alongside `privacy.md`.
+    autocapture: false,
+    capture_pageview: true,
+    // $pageleave is what makes "time on this page" computable. Without it a
+    // reader who arrives and stays twenty minutes is indistinguishable from one
+    // who bounces immediately.
+    capture_pageleave: true,
+    person_profiles: "never",
+  });
+</script>
+
+<script>
+  (function () {
+    // Which of the three demo guides this is, or "" on every other page. Taken
+    // from the URL rather than the title, because the titles are questions
+    // ("How high do climbers get?") and would make an unreadable breakdown.
+    var demoMap = "";
+    {%- if page.layout == "demo" %}
+    demoMap = {{ page.url | split: "/" | last | remove: "demo-" | remove: ".html" | jsonify }};
+    posthog.capture("demo_map_viewed", { map: demoMap });
+    {%- endif %}
+
+    // Named events are matched on the destination, since the Markdown guides
+    // cannot carry markers of their own. Order matters: the first rule that
+    // matches wins and the generic outbound event is skipped, so a click on the
+    // plugin repository is never also counted as a plain outbound click.
+    var RULES = [
+      {
+        event: "plugin_install_clicked",
+        test: function (url) {
+          return url.host === "plugins.qgis.org";
+        },
+      },
+      {
+        event: "github_release_clicked",
+        test: function (url) {
+          return (
+            url.host === "github.com" &&
+            url.pathname.indexOf("/NikaGeospatial/qgis2webmap/releases") === 0
+          );
+        },
+      },
+    ];
+
+    document.addEventListener(
+      "click",
+      function (event) {
+        var link = event.target.closest ? event.target.closest("a[href]") : null;
+        if (!link) return;
+
+        // The two buttons in the demo rail. They are same-origin asset links, so
+        // they would never reach the outbound rule below; and `demo.html`
+        // rewrites the click into a blob download, which is why this listens on
+        // the document rather than on the button itself.
+        if (link.classList.contains("demo-rail__download")) {
+          posthog.capture("demo_download", {
+            map: demoMap,
+            kind: link.getAttribute("href").indexOf(".zip") === -1
+              ? "webmap"
+              : "project",
+          });
+          return;
+        }
+
+        var url;
+        try {
+          url = new URL(link.href, window.location.href);
+        } catch (e) {
+          return; // mailto:, or something the browser will not resolve
+        }
+        if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
+        for (var i = 0; i < RULES.length; i++) {
+          if (RULES[i].test(url)) {
+            posthog.capture(RULES[i].event, { from: window.location.pathname });
+            return;
+          }
+        }
+
+        // Everything else that leaves the site. Same-origin navigation is
+        // already a $pageview, so counting it again here would inflate it.
+        if (url.host !== window.location.host) {
+          posthog.capture("outbound_link_clicked", {
+            href: url.href,
+            host: url.host,
+            from: window.location.pathname,
+          });
+        }
+      },
+      // Capture phase: `demo.html` calls preventDefault() on the download
+      // buttons and swaps in a blob URL, and a bubbling listener would be racing
+      // that. Capturing runs before any of it.
+      true
+    );
+  })();
+</script>
+{%- endif -%}

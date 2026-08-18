@@ -69,6 +69,12 @@
       rel="stylesheet"
       href="{{ '/assets/css/nika.css' | relative_url }}?v={{ site.time | date: '%s' }}"
     />
+
+    <!-- Every page on the site inherits this layout - `home.html` and
+         `demo.html` both declare `layout: default` - so this one line is what
+         instruments the whole documentation site. Renders nothing unless
+         `posthog_key` is set in `_config.yml`. -->
+    {% include analytics.html %}
   </head>
 
   <body>
