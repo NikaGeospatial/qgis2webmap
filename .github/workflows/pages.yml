@@ -22,6 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Writes `docs/_data/posthog.yml` from the repository secret. The key is
+      # deliberately not in the repository - see `scripts/configure_site.py`.
+      # With the secret unset this is a no-op and the site simply measures
+      # nothing, so a fork's deploy does not fail and does not report to us.
+      - name: Configure site analytics
+        env:
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+        run: python3 scripts/configure_site.py
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs

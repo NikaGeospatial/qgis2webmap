@@ -37,3 +37,12 @@ nika_onlymap_exporter/runtime/*.css
 # Local design and launch working files (logo explorations, distribution
 # planning). Scratch only - nothing in here ships.
 /scratch/
+
+# Local configuration, and the Jekyll data file generated from it by
+# `scripts/configure_site.py`. Holds the documentation site's PostHog project
+# key. That key is write-only and is published in the page source anyway, so
+# this is not protecting a secret - it keeps the key out of the repository so
+# secret scanners stay quiet during plugin-repository review and so it can be
+# rotated without a commit. See `.env.local.example`.
+/.env.local
+/docs/_data/posthog.yml

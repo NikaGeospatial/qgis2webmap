@@ -9,9 +9,11 @@
   two, and do not instrument anything inside the demo pages' map iframes - those
   maps already report for themselves, and counting them here would double up.
 
-  Dormant until configured: with `posthog_key` empty in `_config.yml` this
-  renders nothing at all, so `jekyll serve` on a laptop is silent and no local
-  page view reaches the project.
+  Dormant until configured: the key lives in `_data/posthog.yml`, which is
+  gitignored and written by `scripts/configure_site.py` from `POSTHOG_KEY` - a
+  repository secret in the Pages workflow, or `.env.local` on a laptop. A clean
+  checkout has no such file, so this renders nothing at all and no local page
+  view reaches the project.
 
   Cookieless by choice. `cookieless_mode: "always"` makes PostHog derive a
   visitor hash server side instead of storing anything on the reader's device -
@@ -27,12 +29,13 @@
   link's href instead, which is why the whole event list lives in this one file.
 {%- endcomment -%}
 
-{%- if site.posthog_key and site.posthog_key != "" -%}
+{%- assign posthog = site.data.posthog -%}
+{%- if posthog and posthog.key and posthog.key != "" -%}
 <script>
   !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}p||((p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",p.onerror=function(){p=null},(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r));var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
 
-  posthog.init({{ site.posthog_key | jsonify }}, {
-    api_host: {{ site.posthog_host | default: "https://us.i.posthog.com" | jsonify }},
+  posthog.init({{ posthog.key | jsonify }}, {
+    api_host: {{ posthog.host | default: "https://us.i.posthog.com" | jsonify }},
     defaults: "2026-05-30",
     cookieless_mode: "always",
     // Page-level analytics, not a log of every interaction. Turning this on
