@@ -3,7 +3,11 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/pages.yml"]
+    # `configure_site.py` is listed because it runs during this build: a change
+    # to how the analytics key is written must redeploy, or the site keeps
+    # serving pages built by the previous version of it.
+    paths:
+      ["docs/**", ".github/workflows/pages.yml", "scripts/configure_site.py"]
   workflow_dispatch:
 
 permissions:
