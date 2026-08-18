@@ -38,11 +38,16 @@ nika_onlymap_exporter/runtime/*.css
 # planning). Scratch only - nothing in here ships.
 /scratch/
 
-# Local configuration, and the Jekyll data file generated from it by
-# `scripts/configure_site.py`. Holds the documentation site's PostHog project
-# key. That key is write-only and is published in the page source anyway, so
-# this is not protecting a secret - it keeps the key out of the repository so
-# secret scanners stay quiet during plugin-repository review and so it can be
-# rotated without a commit. See `.env.local.example`.
-/.env.local
+# The Jekyll data file written by `scripts/configure_site.py` during the Pages
+# build. Holds the documentation site's PostHog project key, which comes from the
+# POSTHOG_KEY repository secret and is configured nowhere else. That key is
+# write-only and is published in the page source anyway, so this is not
+# protecting a secret - it keeps the key out of the repository so secret scanners
+# stay quiet during plugin-repository review and so it can be rotated without a
+# commit.
 /docs/_data/posthog.yml
+
+# Nothing reads a dotenv file here - the environment variable is the only input.
+# Ignored anyway, so that a stray one someone creates out of habit cannot be
+# committed with a key in it.
+/.env.local

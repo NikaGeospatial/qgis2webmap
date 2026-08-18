@@ -3,11 +3,18 @@
 
     python scripts/configure_site.py
 
-Reads `POSTHOG_KEY` (and optionally `POSTHOG_HOST`) from the environment,
-falling back to a `.env.local` file in the repository root, and writes
-`docs/_data/posthog.yml`. With neither set it removes that file and says so:
-a site built from a clean checkout measures nothing, which is what a local
+Reads `POSTHOG_KEY` (and optionally `POSTHOG_HOST`) from the environment and
+writes `docs/_data/posthog.yml`. Unset, it removes that file and says so: a site
+built from a clean checkout measures nothing, which is what a local
 `jekyll serve` should do.
+
+The Pages workflow supplies the key from a repository secret, which is the only
+place it is configured. There is deliberately no dotenv file to fall back to -
+the site is not meant to report from a laptop, and the one time that is wanted
+(reproducing a production analytics problem) the environment does it in one
+line:
+
+    POSTHOG_KEY=phc_... python scripts/configure_site.py
 
 **`_data/` rather than `_config.yml` on purpose.** Jekyll loads everything in
 `_data/` automatically, with no extra flag, so this works under
@@ -32,47 +39,25 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ENV_FILE = REPO_ROOT / ".env.local"
 DATA_FILE = REPO_ROOT / "docs" / "_data" / "posthog.yml"
 
 DEFAULT_HOST = "https://us.i.posthog.com"
 
 
-def read_env_file(path: Path) -> dict[str, str]:
-    """Parse the `KEY=value` lines of a dotenv file, ignoring comments.
+def resolve(name: str, default: str = "") -> str:
+    """The environment variable, or the default if it is unset or blank.
 
-    Deliberately minimal - no quoting rules, no interpolation, no export
-    keyword. The file holds two flat values and adding a dependency to read
-    them would cost more than it explains.
+    An unset repository secret arrives as the empty string rather than as an
+    absent variable, so blank has to mean the same as missing - otherwise a fork
+    building without the secret would write an empty key into the data file and
+    the site would try to initialise analytics with it.
     """
-    if not path.is_file():
-        return {}
-
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        name, _, value = stripped.partition("=")
-        values[name.strip()] = value.strip().strip("\"'")
-    return values
-
-
-def resolve(name: str, from_file: dict[str, str], default: str = "") -> str:
-    """Environment first, then `.env.local`, then the default.
-
-    Environment wins so CI - which has no `.env.local` - can pass the key in
-    from a repository secret, and so a one-off local build can override the
-    file without editing it.
-    """
-    from_env = os.environ.get(name, "").strip()
-    return from_env or from_file.get(name, "").strip() or default
+    return os.environ.get(name, "").strip() or default
 
 
 def main() -> int:
-    from_file = read_env_file(ENV_FILE)
-    key = resolve("POSTHOG_KEY", from_file)
-    host = resolve("POSTHOG_HOST", from_file, DEFAULT_HOST)
+    key = resolve("POSTHOG_KEY")
+    host = resolve("POSTHOG_HOST", DEFAULT_HOST)
 
     if not key:
         if DATA_FILE.exists():

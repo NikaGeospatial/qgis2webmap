@@ -10,10 +10,9 @@
   maps already report for themselves, and counting them here would double up.
 
   Dormant until configured: the key lives in `_data/posthog.yml`, which is
-  gitignored and written by `scripts/configure_site.py` from `POSTHOG_KEY` - a
-  repository secret in the Pages workflow, or `.env.local` on a laptop. A clean
-  checkout has no such file, so this renders nothing at all and no local page
-  view reaches the project.
+  gitignored and written by `scripts/configure_site.py` from the `POSTHOG_KEY`
+  repository secret during the Pages build. A clean checkout has no such file,
+  so this renders nothing at all and a laptop never reports a page view.
 
   Cookieless by choice. `cookieless_mode: "always"` makes PostHog derive a
   visitor hash server side instead of storing anything on the reader's device -
