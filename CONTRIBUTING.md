@@ -189,6 +189,31 @@ reporting a failure the export did not cause.
 > The nixpkgs `playwright-driver` version must match the `playwright` Python
 > package, or it will not find the browser it expects.
 
+## Releasing, and how the announcement works
+
+Tagging `v<version>` builds the zip and cuts a GitHub release. Uploading that
+zip to plugins.qgis.org is still a manual step, and the repository holds new
+uploads in a review queue.
+
+The Discord announcement is **not** tied to the tag, for that reason: a tag can
+land days before approval, or on a version that is then withdrawn. Instead
+`.github/workflows/announce.yml` polls plugins.qgis.org every six hours, and
+when the version it is actually serving differs from `.github/last-announced-version`
+it posts that version's CHANGELOG.md section to Discord. Minor and major
+releases ping the announcements role; patch releases post quietly.
+
+To see what a release would say without posting anything:
+
+```bash
+python scripts/announce_release.py --dry-run --force
+```
+
+The webhook is the `DISCORD_WEBHOOK_URL` repository secret (Settings → Secrets
+and variables → Actions) and is configured nowhere else. If the job fails with
+`DISCORD_WEBHOOK_URL is not set`, that secret is missing or the Discord webhook
+was rotated: create a new webhook in the channel's settings and replace the
+secret. Nothing needs to change in this repository to do that.
+
 ## Before opening a PR
 
 ```bash
