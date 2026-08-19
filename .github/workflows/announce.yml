@@ -1,0 +1,84 @@
+# Announces a release to Discord once plugins.qgis.org is actually serving it.
+#
+# This is not triggered by the release tag on purpose. A tag can land before the
+# plugin repository has approved the upload - review takes days - and it can land
+# on a version that is then found broken and never submitted. Announcing on the
+# tag tells people a release is out while the download still serves the old zip.
+# So this polls the repository instead and announces what it is really serving.
+#
+# State lives in `.github/last-announced-version`, which this workflow commits
+# after a successful post. See scripts/announce_release.py for why that is a
+# committed file and not the Actions cache.
+#
+# Two things a future maintainer will want to know:
+#
+#  1. The webhook is the `DISCORD_WEBHOOK_URL` repository secret (Settings ->
+#     Secrets and variables -> Actions). It is configured nowhere else. If this
+#     job starts failing with "DISCORD_WEBHOOK_URL is not set", that secret was
+#     deleted or the Discord webhook was rotated - make a new webhook in the
+#     Discord channel settings and replace the secret.
+#  2. GitHub disables scheduled workflows in a repository that has seen no
+#     commits for 60 days, and emails the repository admins when it does. If
+#     announcements go quiet on a dormant repository, re-enable this from the
+#     Actions tab; nothing is broken.
+
+name: announce
+
+on:
+  schedule:
+    # Every six hours. Approval is not something we get notified about, so the
+    # only cost of a miss is a few hours' delay in the announcement.
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the message without posting it"
+        type: boolean
+        default: false
+      force:
+        description: "Post even if this version was already announced"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Two overlapping runs would both see the old state file and both announce.
+concurrency:
+  group: announce
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Announce if a new version is live
+        env:
+          # Absent on a dry run, and the script does not read it there.
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          args=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then args="$args --force"; fi
+          python scripts/announce_release.py $args
+
+      - name: Record what was announced
+        # Only the script writes this file, and only after Discord accepted the
+        # message. No change here means nothing was announced, which is the
+        # ordinary case on all but a handful of runs a year.
+        run: |
+          if git diff --quiet -- .github/last-announced-version; then
+            echo "no new announcement; nothing to record"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/last-announced-version
+          git commit -m "Record $(cat .github/last-announced-version) as announced [skip ci]"
+          git push
