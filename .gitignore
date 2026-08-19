@@ -38,6 +38,10 @@ nika_onlymap_exporter/runtime/*.css
 # planning). Scratch only - nothing in here ships.
 /scratch/
 
+# Tool and agent working files. Same rule as /scratch/ above: nothing in here
+# ships, and it is ignored so a `git add .` cannot sweep it into a commit.
+/scratchpad/
+
 # The Jekyll data file written by `scripts/configure_site.py` during the Pages
 # build. Holds the documentation site's PostHog project key, which comes from the
 # POSTHOG_KEY repository secret and is configured nowhere else. That key is
