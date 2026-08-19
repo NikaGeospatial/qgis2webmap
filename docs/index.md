@@ -181,6 +181,16 @@ after showing you its licence. Everything works offline after that, and exportin
 itself never touches the network. See [installation](installation.md) for the
 offline and proxy paths.
 
+## Getting help
+
+Discuss any problem or suggestion on [our Discord](https://discord.gg/RujwMpednf),
+in the QGIS2WebMap help channel, and report bugs there too. You can ask before
+you are sure it is a bug, and you do not need a GitHub account.
+
+You can also [open a GitHub issue](https://github.com/NikaGeospatial/qgis2webmap/issues)
+or email [support@nikaplanet.com](mailto:support@nikaplanet.com). Known failures
+and their fixes are in [troubleshooting](troubleshooting.md).
+
 ---
 
 Built by [NIKA](https://nikaplanet.com), powered by

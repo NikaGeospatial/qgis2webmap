@@ -11,6 +11,10 @@ Every entry here is a real reported failure, with what causes it and what to do.
 If yours is not listed, the QGIS **Log Messages** panel usually says why: open
 **View → Panels → Log Messages** and read the `QGIS2WebMap` tab.
 
+**Not listed here?** Ask in the QGIS2WebMap help channel on
+[our Discord](https://discord.gg/RujwMpednf). Problems, suggestions and bug
+reports all go there, and you do not need a GitHub account to post.
+
 ## Installing
 
 ### Searching the plugin list finds nothing
@@ -209,6 +213,13 @@ works with no connection at all, set **Basemap** to **None** — the default.
 
 ## Still stuck
 
-- [Open an issue](https://github.com/NikaGeospatial/qgis2webmap/issues), with the
-  `QGIS2WebMap` tab of the Log Messages panel and your QGIS version
+Come to [our Discord](https://discord.gg/RujwMpednf) and use the QGIS2WebMap help
+channel. Discuss any problem or suggestion there, and report bugs there too. It
+is the quickest way to reach us.
+
+Whichever route you take, the two things that make a report answerable are the
+`QGIS2WebMap` tab of the **Log Messages** panel and your QGIS version.
+
+- Discord: [discord.gg/RujwMpednf](https://discord.gg/RujwMpednf)
+- [Open a GitHub issue](https://github.com/NikaGeospatial/qgis2webmap/issues)
 - Email [support@nikaplanet.com](mailto:support@nikaplanet.com)

@@ -202,7 +202,9 @@ Contributions: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Support
 
-- Questions and bug reports: [GitHub issues](https://github.com/NikaGeospatial/qgis2webmap/issues)
+- Problems, suggestions and bug reports: [our Discord](https://discord.gg/RujwMpednf),
+  in the QGIS2WebMap help channel
+- Also fine: [GitHub issues](https://github.com/NikaGeospatial/qgis2webmap/issues)
 - Documentation: [NIKA Documentation](https://docs.nikaplanet.com)
 - Email: support@nikaplanet.com
 

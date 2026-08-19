@@ -51,3 +51,8 @@ nika_onlymap_exporter/runtime/*.css
 # Ignored anyway, so that a stray one someone creates out of habit cannot be
 # committed with a key in it.
 /.env.local
+
+# Jekyll's build output, written whenever the docs site is served locally. The
+# published site is built by the Pages workflow from the sources, never from a
+# committed copy of this directory.
+/docs/_site/
