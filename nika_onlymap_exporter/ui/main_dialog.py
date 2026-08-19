@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import re
 import traceback
+from html import escape as escape_html
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -116,6 +117,10 @@ LOG_TAG = "QGIS2WebMap"
 COMPANY_URL = "https://nikaplanet.com"
 DOCS_URL = "https://docs.nikaplanet.com"
 REPO_URL = "https://github.com/NikaGeospatial/qgis2webmap"
+# The public server invite, never a `discord.com/channels/...` deep link: that
+# form only resolves for someone already in the server, and everyone this is
+# aimed at is by definition not. Name the channel in prose, link the invite.
+DISCORD_URL = "https://discord.gg/RujwMpednf"
 
 MODE_LABELS = {
     OutputMode.STANDALONE_HTML: "Standalone HTML - one file, opens by double-click",
@@ -252,6 +257,37 @@ def _apply_saved_color(button: QgsColorButton, value: str) -> None:
         button.setColor(color)
     else:
         button.setToNull()
+
+
+def show_failure(parent: QWidget, title: str, message: str) -> None:
+    """Report a failure, with the two ways out actually clickable.
+
+    These boxes used to be plain text, so the URL in them rendered as
+    characters the reader had to retype into a browser - at the exact moment
+    they were already annoyed, which is how a reportable bug turns into an
+    abandoned one. `QMessageBox` opens links in a rich-text body by itself, so
+    this only has to escape the message and hand over the markup.
+
+    Discord leads. Most people using this plugin are not carrying a GitHub
+    account, and asking in a channel is a far lower bar than filing an issue
+    with a title and a reproduction.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Critical)
+    box.setWindowTitle(title)
+    box.setTextFormat(Qt.TextFormat.RichText)
+    # `message` carries exception text, which routinely contains angle brackets
+    # and ampersands. Unescaped, Qt would silently swallow them as tags.
+    box.setText(
+        f"<p>{escape_html(message).replace(chr(10), '<br>')}</p>"
+        f"<p>Details are in the QGIS message log, under "
+        f"<b>{escape_html(LOG_TAG)}</b>.</p>"
+        f"<p>Tell us about it in the QGIS2WebMap channel on "
+        f'<a href="{DISCORD_URL}">our Discord</a>, or '
+        f'<a href="{REPO_URL}/issues">open a GitHub issue</a>. '
+        f"Please include the log.</p>"
+    )
+    box.exec()
 
 
 def _help_label(text: str, parent: QWidget) -> QLabel:
@@ -462,6 +498,7 @@ class MainDialog(QDialog):
         self.tabs.addTab(_scrollable(self._build_appearance_tab()), "Appearance")
         self.tabs.addTab(self._build_fidelity_tab(), "Fidelity")
         self.tabs.addTab(self._build_help_tab(), "Help")
+        self.tabs.setCornerWidget(self._build_help_corner(), Qt.Corner.TopRightCorner)
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
@@ -1645,6 +1682,33 @@ class MainDialog(QDialog):
 
     # ---- Help tab -------------------------------------------------------
 
+    def _build_help_corner(self) -> QWidget:
+        """A way to reach a person, from every tab, for no vertical space.
+
+        The Help tab holds the guides, and someone who is stuck on the Layers
+        tab does not go looking through documentation - they want to ask. But
+        this dialog cannot afford another row to say so: `_resize_to_fit_screen`
+        exists because a fixed height once put the Export button behind the
+        Windows taskbar with no way to reach it, and three rows already sit
+        below the tabs.
+
+        The tab bar's own corner is the space that was already there. It costs
+        nothing in height, it is on screen whichever tab is open, and being
+        chrome rather than a form control it never competes with Export.
+        """
+        button = QPushButton("Get help ↗", self)
+        button.setFlat(True)
+        # The arrow is doing real work here: everything else in this dialog acts
+        # on the project in front of you, and this one thing leaves for a
+        # browser. Saying so in the label is cheaper than an apology afterwards.
+        button.setToolTip(
+            "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
+            "Ask a question, suggest something, or report a bug - no GitHub "
+            "account needed."
+        )
+        button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
+        return button
+
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)
         layout = QVBoxLayout(page)
@@ -1655,9 +1719,24 @@ class MainDialog(QDialog):
         browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
         layout.addWidget(browser)
 
+        # Read something, or ask someone. The pair is the point - the guides
+        # above answer what is already known to go wrong, and the second button
+        # is for everything else.
+        buttons = QHBoxLayout()
         docs_button = QPushButton("Open the full documentation", page)
         docs_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
-        layout.addWidget(docs_button)
+        buttons.addWidget(docs_button)
+
+        discord_button = QPushButton("Ask on Discord", page)
+        discord_button.setToolTip(
+            "Problems, suggestions and bug reports all go to the QGIS2WebMap "
+            "channel on the NIKA Discord."
+        )
+        discord_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL))
+        )
+        buttons.addWidget(discord_button)
+        layout.addLayout(buttons)
         return page
 
     # ---- Buttons --------------------------------------------------------
@@ -1836,12 +1915,7 @@ class MainDialog(QDialog):
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
         if self._fidelity_is_stale:
             self._show_fidelity_error(message)
-        QMessageBox.critical(
-            self,
-            "Something went wrong",
-            f"{message}\n\nDetails are in the QGIS message log under "
-            f'"{LOG_TAG}". Please report this at {REPO_URL}/issues',
-        )
+        show_failure(self, "Something went wrong", message)
 
     # ---- Fidelity strip -------------------------------------------------
 
@@ -2428,12 +2502,7 @@ class MainDialog(QDialog):
             LOG_TAG,
             level=Qgis.MessageLevel.Critical,
         )
-        QMessageBox.critical(
-            self,
-            title,
-            f"{exc}\n\nDetails are in the QGIS message log under "
-            f'"{LOG_TAG}". Please report this at {REPO_URL}/issues',
-        )
+        show_failure(self, title, str(exc))
 
     # ---- Lifecycle ------------------------------------------------------
 
