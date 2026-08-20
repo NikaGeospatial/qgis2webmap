@@ -77,8 +77,10 @@
       installs from.
 
       Nothing inside the script tag below may carry an HTML comment. It is JSON,
-      and a `<!-- -->` in there is a parse error that silently voids every
-      entity in the graph.
+      and a comment in there is a parse error that silently voids every entity
+      in the graph. Do not write comment-close punctuation anywhere in this
+      block either, even as an example: a comment ends at the FIRST occurrence
+      of it, and everything after that lands on the page as visible text.
     -->
     <script type="application/ld+json">
       {
