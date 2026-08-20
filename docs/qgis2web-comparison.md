@@ -77,7 +77,11 @@ has to look like your symbology, and you want to know what changed before you
 send it.
 
 The two install side by side, so there is nothing to undo if you want to try
-this one on a project you have already published.
+this one on a project you have already published. Both are on the official
+plugin repository —
+[QGIS2WebMap](https://plugins.qgis.org/plugins/nika_onlymap_exporter/) and
+[qgis2web](https://plugins.qgis.org/plugins/qgis2web/) — or install either from
+inside QGIS.
 
 ---
 

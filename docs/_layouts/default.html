@@ -68,6 +68,17 @@
       `SoftwareApplication` and not `SoftwareSourceCode`: what a reader installs
       here is an application inside QGIS. The repository is named as a property
       of it rather than being the subject.
+
+      `sameAs`/`installUrl` on the application both point at the official QGIS
+      Plugin Repository listing - the same application described on another
+      site, which is what `sameAs` is for: it says the two pages are one entity
+      rather than two similarly-named plugins. Deliberately the listing and not
+      a release zip, because the listing is what the QGIS plugin manager
+      installs from.
+
+      Nothing inside the script tag below may carry an HTML comment. It is JSON,
+      and a `<!-- -->` in there is a parse error that silently voids every
+      entity in the graph.
     -->
     <script type="application/ld+json">
       {
@@ -105,6 +116,10 @@
             "softwareRequirements": "QGIS 3.44 LTR or later",
             "license": "https://spdx.org/licenses/GPL-2.0-or-later.html",
             "isAccessibleForFree": true,
+            "sameAs": [
+              "https://plugins.qgis.org/plugins/nika_onlymap_exporter/"
+            ],
+            "installUrl": "https://plugins.qgis.org/plugins/nika_onlymap_exporter/",
             "author": { "@id": "https://nikaplanet.com/#organization" },
             "publisher": { "@id": "https://nikaplanet.com/#organization" },
             "codeRepository": {{ site.repository_url | jsonify }},

@@ -77,7 +77,10 @@ Rasters are not exported in the current release.
 ## Trying it
 
 QGIS2WebMap and qgis2web install side by side and do not interfere with each
-other, so there is nothing to undo. Install from inside QGIS, open a project you
+other, so there is nothing to undo. QGIS2WebMap is on the official plugin
+repository as
+[nika_onlymap_exporter](https://plugins.qgis.org/plugins/nika_onlymap_exporter/).
+Install from inside QGIS, open a project you
 have already published, and export it — the Fidelity tab will tell you what would
 be different before you commit to anything.
 
