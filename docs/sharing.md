@@ -1,5 +1,6 @@
 ---
 title: Sharing a map
+seo_title: Share a QGIS map as one HTML file
 description: >-
   Standalone HTML, Share ZIP or Folder - which output mode to pick, and why an email filter is usually what decides it.
 lead_image:

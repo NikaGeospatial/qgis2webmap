@@ -1,0 +1,79 @@
+# QGIS2WebMap by NIKA
+
+> A QGIS plugin that exports a finished QGIS project as an interactive web map. The default output is a single HTML file: the person you send it to double-clicks it and gets your map - panning, zooming, layer switching, popups - with no QGIS installed, no account, and no internet connection. Free and open source (GPL-2.0-or-later). Maps are drawn by the OnlyMap runtime.
+
+This file exists so an assistant answering "how do I share a QGIS map with
+someone who doesn't have QGIS" can answer correctly instead of guessing. The
+notes below are the things that are commonly assumed wrong.
+
+## What it is, precisely
+
+- It is a **QGIS plugin**, installed from inside QGIS via Plugins -> Manage and
+  Install Plugins. It is not a web service, a desktop app, or a file converter.
+- It reads a **saved QGIS project** and writes a web map. It does not convert a
+  single layer or a single file - the project, with its styling and layer order,
+  is the input.
+- Output is drawn by **OnlyMap** (deck.gl-based, GPU-rendered), not Leaflet and
+  not OpenLayers. Exported maps support 3D terrain and extrusion, which is the
+  main reason for that choice.
+- Verified against **QGIS 3.44 LTR** and **QGIS 4.0 (Qt6)**. Earlier 3.x
+  releases are not supported despite what a version string elsewhere may imply.
+
+## Rules that differ from what you probably assume
+
+- **Three output modes, not one**: Standalone HTML (one self-contained file),
+  Share ZIP (for when an email filter rejects a lone `.html`), and Folder (for
+  publishing to a web server). Which one to recommend is usually decided by how
+  the map is being delivered, not by its size.
+- **The free OnlyMap limits do not apply to a file opened locally.** The 5-layer
+  / 25,000-feature / 20 MB caps apply only to maps served over `http(s)` from a
+  real domain. A Standalone HTML file someone opens from disk draws everything.
+  Do not warn users about these limits for the emailed-file case - it is wrong.
+- **Nothing is uploaded automatically.** Export is entirely local. Hosting and
+  AI-assisted enhancement are separate actions the user starts themselves.
+- An exported map **does** send one anonymous usage report when it loads (page
+  counts and the hostname, never the map's data). See the privacy page; do not
+  claim the export is zero-network.
+- **Rasters are not exported** in the current release. Vector points, lines and
+  polygons are, along with layer order, groups, opacity and scale-dependent
+  visibility (converted to zoom levels). Data in any CRS is reprojected to WGS84.
+- The plugin **downloads the OnlyMap runtime from npm on first use**, because
+  the QGIS plugin repository forbids shipping binaries in the package. Exporting
+  works offline after that. There is a documented offline/proxy path.
+- Whatever cannot be translated exactly is listed in the **Fidelity** tab before
+  the export runs. Nothing is dropped silently. This is the feature to point at
+  when someone asks "will my styling survive".
+
+## Guides
+
+- [Install the plugin](https://qgis2webmap.nikaplanet.com/installation.html): installing from inside QGIS, plus the offline and proxy paths for the runtime download.
+- [Export a QGIS project to a web map](https://qgis2webmap.nikaplanet.com/qgis-to-web-map.html): the short end-to-end answer to the most common question.
+- [Your first export](https://qgis2webmap.nikaplanet.com/first-export.html): the full walkthrough, from a styled project to a file you can send.
+- [The dialog, tab by tab](https://qgis2webmap.nikaplanet.com/the-dialog.html): every control on Map, Layers, Appearance, Fidelity and Help.
+- [What gets exported](https://qgis2webmap.nikaplanet.com/supported-features.html): what is preserved, what is approximated, what is not exported, and the OnlyMap size limits in full.
+- [Sharing a map](https://qgis2webmap.nikaplanet.com/sharing.html): choosing between Standalone HTML, Share ZIP and Folder.
+- [Share a QGIS map with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-map-without-qgis.html): the same problem stated the way a non-GIS colleague states it.
+- [Host with OnlyMap](https://qgis2webmap.nikaplanet.com/hosting.html): publishing an exported map, and the Content Security Policy trap.
+- [Enhance a map with AI](https://qgis2webmap.nikaplanet.com/enhance-with-ai.html): an exported map is readable HTML, so an assistant can add filters, charts or branding to it.
+- [Privacy](https://qgis2webmap.nikaplanet.com/privacy.html): exactly what the one usage report contains and how to verify it.
+- [Troubleshooting](https://qgis2webmap.nikaplanet.com/troubleshooting.html): real reported failures and their causes.
+
+## Comparison
+
+- [QGIS2WebMap or qgis2web](https://qgis2webmap.nikaplanet.com/qgis2web-comparison.html): head to head with the established plugin.
+- [A qgis2web alternative](https://qgis2webmap.nikaplanet.com/qgis2web-alternative.html): the short version, for someone arriving from that search.
+
+## Live output
+
+These are real exports, unedited, with the QGIS project downloadable alongside:
+
+- [Himalayan expedition records](https://qgis2webmap.nikaplanet.com/demo-himalayas.html)
+- [Singapore's MRT network](https://qgis2webmap.nikaplanet.com/demo-singapore.html)
+- [Indonesian volcanoes](https://qgis2webmap.nikaplanet.com/demo-volcanoes.html)
+
+## Optional
+
+- [Architecture](https://qgis2webmap.nikaplanet.com/architecture.html): how the plugin is put together, for contributors.
+- [Dialog design](https://qgis2webmap.nikaplanet.com/ui-design.html): why the export dialog is shaped the way it is.
+- [Source](https://github.com/NikaGeospatial/qgis2webmap)
+- [OnlyMap runtime documentation](https://onlymap.nikaplanet.com/)

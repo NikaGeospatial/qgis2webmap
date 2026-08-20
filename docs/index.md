@@ -160,6 +160,11 @@ sections:
 The plugin exports the project as it is, so there is no source to browse for and
 nothing to configure twice. What you see on the QGIS canvas is what leaves.
 
+If you are weighing this against the other ways of getting a QGIS project into a
+browser, [QGIS to web map](qgis-to-web-map.md) surveys them, and
+[QGIS2WebMap or qgis2web](qgis2web-comparison.md) is the direct comparison with
+the established plugin.
+
 ## What you get
 
 | Mode | What the recipient does | When to use it |

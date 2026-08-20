@@ -1,5 +1,6 @@
 ---
 title: Architecture
+seo_title: How the QGIS2WebMap plugin works
 description: >-
   How the plugin is put together: project reader, export model, writers and exporters, and the non-negotiables they answer to.
 ---

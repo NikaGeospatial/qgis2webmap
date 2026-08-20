@@ -1,6 +1,7 @@
 ---
 layout: demo
 title: The MRT network
+seo_title: Singapore MRT network as a web map
 description: >-
   Singapore's MRT network on real track geometry as an interactive web map,
   exported straight from QGIS with QGIS2WebMap.

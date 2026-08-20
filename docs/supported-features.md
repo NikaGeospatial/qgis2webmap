@@ -1,5 +1,6 @@
 ---
 title: What gets exported
+seo_title: What QGIS styling survives the export
 description: >-
   Layers, symbology, labels, popups, height, terrain and attribution - what is preserved, what is approximated, and what is not exported.
 lead_image:
@@ -9,9 +10,12 @@ lead_image:
 
 # What gets exported
 
-0.1.0 supports a deliberately narrow set, well, rather than everything, badly.
-Whatever is not translated exactly appears in the **Fidelity** tab - it is never
-dropped silently.
+The plugin supports a deliberately narrow set, well, rather than everything,
+badly. Whatever is not translated exactly appears in the **Fidelity** tab - it is
+never dropped silently.
+
+Where that line falls differently from the established plugin's is set out in
+[QGIS2WebMap or qgis2web](qgis2web-comparison.md).
 
 ## Layers
 

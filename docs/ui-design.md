@@ -1,5 +1,6 @@
 ---
 title: Dialog design
+seo_title: Designing the QGIS2WebMap export dialog
 description: >-
   Why the export dialog is shaped the way it is, recorded against the specific incumbent failures it exists to avoid.
 ---

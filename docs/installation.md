@@ -1,5 +1,6 @@
 ---
 title: Install the plugin
+seo_title: Install QGIS2WebMap for QGIS
 description: >-
   Install QGIS2WebMap from inside QGIS in six clicks, and what the one-off OnlyMap runtime download is - including the offline and proxy paths.
 ---

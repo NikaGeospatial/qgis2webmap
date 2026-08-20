@@ -3,7 +3,7 @@ name=QGIS2WebMap by NIKA
 qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Export QGIS projects to interactive, portable HTML maps. Open locally, share as a zip, or enhance and host later with OnlyMap.
-about=Documentation: https://nikageospatial.github.io/qgis2webmap/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
+about=Documentation: https://qgis2webmap.nikaplanet.com/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
 version=0.1.3
 author=NIKA
 email=support@nikaplanet.com
@@ -15,7 +15,7 @@ repository=https://github.com/NikaGeospatial/qgis2webmap
 # functionality ... Any other links will result in the plugin being rejected."
 # NIKA is credited through `author`, the About text, the Pages footer and the
 # exported map's own credit component, so nothing is lost by obeying it.
-homepage=https://nikageospatial.github.io/qgis2webmap/
+homepage=https://qgis2webmap.nikaplanet.com/
 
 # Exported maps send one anonymous usage report to NIKA when they load; see docs/privacy.md.
 tags=html,webmap,web,export,offline,map,javascript,onlymap

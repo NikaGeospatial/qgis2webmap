@@ -1,0 +1,18 @@
+# No front matter on purpose. A file with front matter is a page, and the
+# `defaults` block in `_config.yml` would wrap this in the site layout - a
+# robots.txt served as an HTML document is ignored by every crawler that reads
+# it. With no front matter Jekyll treats this as a static file and copies it
+# through byte for byte.
+#
+# This only works because the site has its own domain. Crawlers read robots.txt
+# at the domain root and nowhere else, so on the old github.io subpath this file
+# would have been unreachable no matter where it was placed.
+
+User-agent: *
+Allow: /
+
+# The site is small and entirely public - there is nothing here to keep out of
+# an index. The demo maps under /assets/demos/ are the plugin's own output and
+# are meant to be found.
+
+Sitemap: https://qgis2webmap.nikaplanet.com/sitemap.xml

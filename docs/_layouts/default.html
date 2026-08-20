@@ -4,11 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+    <!--
+      `seo_title` is a second, optional title that only search engines and link
+      cards ever see. The `title` next to it in front matter stays as written,
+      because it is also the heading a QGIS user reads in the plugin's Help tab -
+      and a heading tuned for a search engine ("Install QGIS2WebMap - export QGIS
+      to a web map") reads as spam to someone who is already inside the product.
+      Pages that set neither are unaffected.
+    -->
     <title>
       {%- if page.url == "/" -%}
-        {{ site.title }}
+        {{ site.seo_title | default: site.title }}
       {%- else -%}
-        {{ page.title }} · {{ site.title }}
+        {{ page.seo_title | default: page.title }} · {{ site.title }}
       {%- endif -%}
     </title>
     <meta
@@ -21,19 +29,190 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="{{ site.title }}" />
-    <meta property="og:title" content="{{ page.title | default: site.title }}" />
+    <meta property="og:title" content="{{ page.seo_title | default: page.title | default: site.title }}" />
     <meta
       property="og:description"
       content="{{ page.description | default: site.description }}"
     />
     <meta property="og:url" content="{{ page.url | absolute_url }}" />
-    {% if page.image %}
-      <!-- Pages that declare an `image` (the demo gallery) get the large link
-           card on social platforms; every other page keeps the plain summary. -->
-      <meta property="og:image" content="{{ page.image | absolute_url }}" />
+    <!--
+      A page's own `image` wins - the demo pages set a poster frame of the actual
+      map, which is a far better card than the brand banner. Everything else now
+      falls back to `site.default_image` rather than to nothing: without it,
+      thirteen of sixteen pages posted into Discord or Slack as a bare text row.
+    -->
+    {% assign card_image = page.image | default: site.default_image %}
+    {% if card_image %}
+      <meta property="og:image" content="{{ card_image | absolute_url }}" />
+      <meta name="twitter:image" content="{{ card_image | absolute_url }}" />
       <meta name="twitter:card" content="summary_large_image" />
     {% else %}
       <meta name="twitter:card" content="summary" />
+    {% endif %}
+    <meta name="twitter:title" content="{{ page.seo_title | default: page.title | default: site.title }}" />
+    <meta
+      name="twitter:description"
+      content="{{ page.description | default: site.description }}"
+    />
+
+    <!--
+      Structured data, as one `@graph` rather than several separate blocks, so
+      the entities can reference each other by `@id` and a validator sees one
+      object instead of three unrelated ones.
+
+      The Organization `@id` is deliberately `nikaplanet.com/#organization` - the
+      same identifier NIKA's other sites use. That is what tells a search engine
+      this site and onlymap.nikaplanet.com are published by one organisation
+      rather than by two companies with similar names.
+
+      `SoftwareApplication` and not `SoftwareSourceCode`: what a reader installs
+      here is an application inside QGIS. The repository is named as a property
+      of it rather than being the subject.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://nikaplanet.com/#organization",
+            "name": "NIKA",
+            "url": "https://nikaplanet.com",
+            "sameAs": ["https://github.com/NikaGeospatial"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "{{ '/' | absolute_url }}#website",
+            "name": {{ site.title | jsonify }},
+            "alternateName": ["QGIS2WebMap", "qgis2webmap"],
+            "url": {{ '/' | absolute_url | jsonify }},
+            "description": {{ site.description | strip_newlines | strip | jsonify }},
+            "inLanguage": "en",
+            "publisher": { "@id": "https://nikaplanet.com/#organization" },
+            "about": { "@id": "{{ '/' | absolute_url }}#software" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "{{ '/' | absolute_url }}#software",
+            "name": "QGIS2WebMap",
+            "alternateName": ["QGIS2WebMap by NIKA", "qgis2webmap"],
+            "url": {{ '/' | absolute_url | jsonify }},
+            "description": {{ site.description | strip_newlines | strip | jsonify }},
+            "applicationCategory": "DesignApplication",
+            "applicationSubCategory": "GIS",
+            "operatingSystem": "Windows, macOS, Linux",
+            "softwareVersion": {{ site.plugin_version | jsonify }},
+            "softwareRequirements": "QGIS 3.44 LTR or later",
+            "license": "https://spdx.org/licenses/GPL-2.0-or-later.html",
+            "isAccessibleForFree": true,
+            "author": { "@id": "https://nikaplanet.com/#organization" },
+            "publisher": { "@id": "https://nikaplanet.com/#organization" },
+            "codeRepository": {{ site.repository_url | jsonify }},
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          }
+          {%- unless page.url == "/" -%}
+          ,
+          {
+            "@type": "WebPage",
+            "@id": "{{ page.url | absolute_url }}#webpage",
+            "url": {{ page.url | absolute_url | jsonify }},
+            "name": {{ page.seo_title | default: page.title | jsonify }},
+            "description": {{ page.description | strip_newlines | strip | jsonify }},
+            "inLanguage": "en",
+            "isPartOf": { "@id": "{{ '/' | absolute_url }}#website" },
+            "about": { "@id": "{{ '/' | absolute_url }}#software" },
+            "breadcrumb": { "@id": "{{ page.url | absolute_url }}#breadcrumb" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "{{ page.url | absolute_url }}#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": {{ site.title | jsonify }},
+                "item": {{ '/' | absolute_url | jsonify }}
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": {{ page.title | jsonify }}
+              }
+            ]
+          }
+          {%- endunless -%}
+        ]
+      }
+    </script>
+
+    <!--
+      Two page-level schema types that only some pages can honestly claim, so
+      both are opt-in: a page declares `howto:` or `faq:` in its front matter or
+      gets neither. Nothing is inferred from the Markdown body - a guess here is
+      structured data that contradicts the page, which search engines treat as a
+      defect rather than as a missing feature.
+
+      These live in front matter, not in the body, for the usual reason: the same
+      files are rendered by the plugin's Help tab with HTML disabled. Front
+      matter is stripped before Qt sees the file; a `<script>` block in the body
+      would reach a QGIS user as literal text.
+
+      The cost is that front matter and body can drift apart. Keep the step and
+      question wording matching what the page actually says - the markup is only
+      allowed to describe content the reader can see.
+    -->
+    {% if page.howto %}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "HowTo",
+          "name": {{ page.howto.name | default: page.title | jsonify }},
+          "description": {{ page.description | strip_newlines | strip | jsonify }},
+          "totalTime": {{ page.howto.total_time | default: "PT10M" | jsonify }},
+          "tool": [
+            { "@type": "HowToTool", "name": "QGIS" },
+            { "@type": "HowToTool", "name": "QGIS2WebMap plugin" }
+          ],
+          "step": [
+            {%- for step in page.howto.steps -%}
+              {%- unless forloop.first %},{% endunless -%}
+              {
+                "@type": "HowToStep",
+                "position": {{ forloop.index }},
+                "name": {{ step.name | jsonify }},
+                "text": {{ step.text | strip_newlines | strip | jsonify }},
+                "url": "{{ page.url | absolute_url }}{% if step.anchor %}#{{ step.anchor }}{% endif %}"
+              }
+            {%- endfor -%}
+          ]
+        }
+      </script>
+    {% endif %}
+
+    {% if page.faq %}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {%- for item in page.faq -%}
+              {%- unless forloop.first %},{% endunless -%}
+              {
+                "@type": "Question",
+                "name": {{ item.q | jsonify }},
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": {{ item.a | strip_newlines | strip | jsonify }}
+                }
+              }
+            {%- endfor -%}
+          ]
+        }
+      </script>
     {% endif %}
 
     <!--

@@ -1,8 +1,58 @@
 ---
 title: Troubleshooting
+seo_title: QGIS web map export problems
 description: >-
   Fixes for the things that actually go wrong - the plugin not appearing, Export
   greyed out, a blank map, a file blocked in transit, layers missing once hosted.
+
+# Opt-in FAQPage markup, read by `_layouts/default.html`, and in front matter
+# rather than the body because the Help tab renders this file with HTML
+# disabled. Only a handful of the sections below are here: each entry has to be
+# a self-contained question and answer, and most of this page is procedural
+# rather than a question. Keep the answers matching the sections they summarise.
+faq:
+  - q: Why does searching the QGIS plugin list not find QGIS2WebMap?
+    a: >-
+      Make sure All is selected on the left of the Manage and Install Plugins
+      window rather than Installed, and check the spelling - it is one word,
+      QGIS2WebMap. Searching for OnlyMap also finds it. If the whole list is
+      empty, QGIS cannot reach the plugin repository, which is usually a
+      workplace firewall; you can install from a file instead.
+  - q: The plugin installed but there is no Web menu entry. What now?
+    a: >-
+      Open Plugins, then Manage and Install Plugins, then Installed, and confirm
+      QGIS2WebMap by NIKA is listed with its box ticked. If it is unticked, tick
+      it - the menu entry and toolbar button appear straight away. If it is
+      ticked and still missing, open View, Panels, Log Messages and read the
+      QGIS2WebMap tab for an error.
+  - q: Which QGIS versions does QGIS2WebMap support?
+    a: >-
+      QGIS 3.44 or newer. Earlier versions are not supported - not as a policy
+      but as a measured fact, they fail. QGIS 4 is supported. Check your version
+      under Help, About.
+  - q: Why is the Export button greyed out?
+    a: >-
+      The reason is printed beside the button. Either the project has no vector
+      layer to export, or every layer is unticked in the Include column on the
+      Layers tab, or the Fidelity tab has a Blocked item naming the layer and
+      the reason.
+  - q: Why is my exported map blank, or showing a message about JavaScript?
+    a: >-
+      You are opening it somewhere that does not run JavaScript - an email
+      client's preview pane, a file manager's preview, a chat app's inline
+      viewer. Save the file and open it in a browser.
+  - q: Why was my exported map stripped from the email I sent?
+    a: >-
+      Many mail providers and corporate filters quarantine or remove .html
+      attachments, because HTML is a common phishing vector. This is the single
+      most common delivery failure. Export as Share ZIP instead - a zip usually
+      passes filters a bare .html does not, and it carries a short README
+      telling the recipient how to open it.
+  - q: Why does double-clicking the Folder export not work?
+    a: >-
+      It cannot. Browsers refuse to load the runtime from a separate file on a
+      file:// page. Folder mode exists for uploading to a web server. Use
+      Standalone HTML for anything that has to open off a disk.
 ---
 
 # Troubleshooting

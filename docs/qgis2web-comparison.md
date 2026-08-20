@@ -1,5 +1,6 @@
 ---
 title: QGIS2WebMap or qgis2web
+seo_title: QGIS2WebMap vs qgis2web
 description: >-
   What QGIS2WebMap does that the established route does not - one file you can email, point symbols that survive, and a report of what changed before you send it.
 ---

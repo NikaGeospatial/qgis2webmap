@@ -1,5 +1,6 @@
 ---
 title: Enhance a map with AI
+seo_title: Edit an exported QGIS web map with AI
 description: >-
   An exported map is readable HTML, so an AI assistant can add filters, charts or branding without breaking portability. Start with NIKA Agent.
 ---

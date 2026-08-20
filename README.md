@@ -6,7 +6,7 @@
 
 **Turn a QGIS project into a portable OnlyMap web map.**
 
-### [Read the documentation →](https://nikageospatial.github.io/qgis2webmap/)
+### [Read the documentation →](https://qgis2webmap.nikaplanet.com/)
 
 Installation, your first export, every dialog option, hosting and
 troubleshooting — the full guides, rendered and searchable.
@@ -38,7 +38,7 @@ works with no internet connection, on a machine that has never had QGIS
 installed. Publishing to NIKA hosting and AI-assisted enhancement are separate,
 explicit actions you start yourself — nothing is uploaded automatically.
 
-See the [privacy page](https://nikageospatial.github.io/qgis2webmap/privacy.html)
+See the [privacy page](https://qgis2webmap.nikaplanet.com/privacy.html)
 for exactly what is and isn't sent.
 
 ---
@@ -95,7 +95,7 @@ it is fetched rather than bundled into this GPL plugin. See
 ## Documentation
 
 Everything below is published as a website at
-**[nikageospatial.github.io/qgis2webmap](https://nikageospatial.github.io/qgis2webmap/)**
+**[qgis2webmap.nikaplanet.com](https://qgis2webmap.nikaplanet.com/)**
 — read it there rather than as raw Markdown. The same guides ship inside the
 plugin's Help tab, so they work offline too.
 
@@ -109,6 +109,13 @@ plugin's Help tab, so they work offline too.
 - [QGIS2WebMap or qgis2web](docs/qgis2web-comparison.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy](docs/privacy.md)
+
+Three shorter pages exist on the website only, for people arriving from a search
+rather than from inside the plugin, so they are not in the Help tab:
+
+- [QGIS to web map](docs/qgis-to-web-map.md) — the routes that exist, and the short version
+- [Sharing with someone who has no QGIS](docs/share-qgis-map-without-qgis.md)
+- [Alternatives for QGIS web export](docs/qgis2web-alternative.md)
 
 Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 

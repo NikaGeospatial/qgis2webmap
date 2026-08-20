@@ -1,5 +1,6 @@
 ---
 title: The dialog, tab by tab
+seo_title: The QGIS2WebMap export dialog
 description: >-
   Every control in the QGIS2WebMap export dialog - Map, Layers, Appearance,
   Fidelity and Help - and what each one changes for whoever opens your map.

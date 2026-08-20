@@ -1,5 +1,6 @@
 ---
 title: Host with OnlyMap
+seo_title: Host a QGIS web map online
 description: >-
   Publishing an exported map. What you are asked before anything is uploaded, visibility options, and the Content Security Policy trap.
 ---

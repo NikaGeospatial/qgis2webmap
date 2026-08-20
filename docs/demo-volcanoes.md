@@ -1,6 +1,7 @@
 ---
 layout: demo
 title: Living next to a volcano
+seo_title: Indonesian volcanoes as a 3D web map
 description: >-
   Fifty-one active Indonesian volcanoes with VEI-scaled hazard rings as an
   interactive web map, exported straight from QGIS with QGIS2WebMap.

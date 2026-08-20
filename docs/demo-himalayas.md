@@ -1,10 +1,10 @@
 ---
 layout: demo
 title: How high do climbers get?
+seo_title: Himalaya expedition data as a 3D web map
 description: >-
   Expedition records for 74 Nepal Himalaya peaks as an interactive web map,
-  exported straight from QGIS with QGIS2WebMap — compared side by side with
-  QGIS's own rendering.
+  exported from QGIS with QGIS2WebMap and shown beside QGIS's own rendering.
 image: /assets/demos/himalayas-poster.png
 eyebrow: Demo · Nepal Himalaya · graduated colour + 3D relief
 lede: >-

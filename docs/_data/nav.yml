@@ -20,6 +20,8 @@ main:
 guides:
   - title: Getting started
     items:
+      - title: QGIS to web map
+        url: /qgis-to-web-map.html
       - title: Install the plugin
         url: /installation.html
       - title: Your first export
@@ -35,11 +37,15 @@ guides:
         url: /supported-features.html
       - title: QGIS2WebMap or qgis2web
         url: /qgis2web-comparison.html
+      - title: Alternatives for QGIS web export
+        url: /qgis2web-alternative.html
 
   - title: After the export
     items:
       - title: Sharing a map
         url: /sharing.html
+      - title: Sharing with someone who has no QGIS
+        url: /share-qgis-map-without-qgis.html
       - title: Host with OnlyMap
         url: /hosting.html
       - title: Enhance a map with AI

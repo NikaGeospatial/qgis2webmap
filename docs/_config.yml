@@ -11,15 +11,65 @@
 # masthead, type scale, structure - are the parts a theme override cannot reach.
 
 title: QGIS2WebMap by NIKA
+
+# `title` is the brand and is used everywhere the site names itself - masthead,
+# footer, the suffix on every page title. `seo_title` is the home page's `<title>`
+# only, and says what the thing does, because "QGIS2WebMap by NIKA" tells a
+# searcher who has never heard of either word nothing at all. Pages set their own
+# `seo_title` in front matter; see the note in `_layouts/default.html`.
+seo_title: QGIS2WebMap — export QGIS projects to web maps
+
 description: >-
   Turn a QGIS project into an interactive web map that opens locally. No
   account, no web server, no coding.
 
-url: https://nikageospatial.github.io
-baseurl: /qgis2webmap
+# The site is served from its own subdomain rather than the github.io subpath it
+# started on. It is still GitHub Pages - `CNAME` in this folder plus a DNS record
+# is the whole mechanism - but a subpath on a shared domain cannot serve a
+# `robots.txt` or `llms.txt`, because crawlers only read those at a domain root.
+# GitHub keeps a permanent redirect from the old `nikageospatial.github.io/
+# qgis2webmap/*` URLs, so nothing that was linked or indexed breaks.
+#
+# `baseurl` is empty now. Everything in `_layouts/` goes through `relative_url`
+# or `absolute_url`, so links follow this on their own; the only paths that would
+# break are hardcoded `/qgis2webmap/...` strings, and there are none.
+url: https://qgis2webmap.nikaplanet.com
+baseurl: ""
+
+# `jekyll-sitemap` is on the GitHub Pages plugin whitelist, so it runs under
+# `actions/jekyll-build-pages` without a Gemfile. It generates `sitemap.xml` from
+# the pages this config actually builds, which is the point: a hand-written
+# sitemap goes stale the first time someone adds a guide and forgets it.
+#
+# `jekyll-seo-tag` is deliberately NOT here. The `<head>` in `_layouts/default.html`
+# is hand-written and already emits titles, descriptions, canonicals and cards;
+# adding the plugin would emit a second, competing set of the same tags.
+#
+# Note that `jekyll-relative-links` and `jekyll-optional-front-matter` are enabled
+# by the `github-pages` gem regardless of what is listed here. `_data/nav.yml`
+# depends on the first one - it is why guides link `.md` and the nav links `.html`.
+plugins:
+  - jekyll-sitemap
 
 # Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
 plugin_version: 0.1.3
+
+# The link-card image for pages that do not set their own `image`. Before this,
+# thirteen of sixteen pages shared to Discord, Slack or X as a bare text row: the
+# card fell back to `twitter:card=summary` with nothing to show. The demo pages
+# still override it with their own map poster, which is the better card when a
+# page has one.
+#
+# A PNG and not `banner.svg`, even though the artwork is the same: no major
+# platform renders an SVG as a link card, so pointing at the vector file would
+# have produced exactly the blank row it is meant to fix. `social-card.png` is
+# `banner.svg` rendered at 1200x300 and centred on a 1200x630 plate in the
+# brand's own background colour, which is the ratio the platforms crop to.
+# Regenerate it with librsvg + ImageMagick if the banner ever changes:
+#   rsvg-convert assets/banner.svg -w 1200 -h 300 -o /tmp/banner.png
+#   magick -size 1200x630 xc:'#170d19' /tmp/banner.png \
+#          -gravity center -composite assets/social-card.png
+default_image: /assets/social-card.png
 repository_url: https://github.com/NikaGeospatial/qgis2webmap
 
 # The public server invite, not a channel deep link. A `discord.com/channels/...`
@@ -38,6 +88,18 @@ defaults:
       path: ""
     values:
       layout: default
+
+  # The exported maps under `assets/demos/` are the plugin's raw output, meant
+  # to be viewed inside the demo pages that frame them. `jekyll-sitemap` picks up
+  # any `.html` it finds, so without this it submits each map as a page of its
+  # own - four thin, chrome-less duplicates of content that already has a proper
+  # page, plus `qgis-side.html`, which is a bare comparison viewer that makes no
+  # sense on its own. They stay reachable and embeddable; they are just not
+  # offered to a crawler as pages.
+  - scope:
+      path: "assets/demos"
+    values:
+      sitemap: false
 
 # Working notes and specs are for whoever is reading the repository, not for the
 # published site. `architecture.md` and `ui-design.md` stay published - they are

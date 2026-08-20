@@ -1,5 +1,6 @@
 ---
 title: Privacy
+seo_title: What an exported QGIS web map sends
 description: >-
   Exported maps send one anonymous usage report when they load, and nothing else. What is sent, what is in the file, and how to verify it.
 ---

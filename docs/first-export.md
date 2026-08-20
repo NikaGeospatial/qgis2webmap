@@ -1,7 +1,55 @@
 ---
 title: Your first export
+seo_title: Export a QGIS project to a web map
 description: >-
   A walkthrough from a styled QGIS project to a web map you can email, including live preview and the fidelity check.
+
+# Opt-in HowTo markup, read by `_layouts/default.html`. It has to live here
+# rather than in the body because the same file is rendered by the plugin's Help
+# tab with HTML disabled - see the note in that layout. Keep the wording matching
+# the sections below; markup that describes something the reader cannot see is a
+# defect, not a bonus.
+howto:
+  name: Export a QGIS project to an interactive web map
+  total_time: PT10M
+  steps:
+    - name: Build the map in QGIS
+      anchor: 1-build-the-map-in-qgis
+      text: >-
+        Compose the project first - load your layers, style them, and set the
+        canvas to the view you want as the map's starting point. Layer order is
+        taken from the QGIS Layers panel.
+    - name: Open the plugin
+      anchor: 2-open-the-plugin
+      text: >-
+        Choose Web, then QGIS2WebMap by NIKA, then Create web map - or use the
+        toolbar button. The dialog is non-modal, so QGIS stays usable behind it.
+    - name: Name the map
+      anchor: 3-name-the-map
+      text: >-
+        The Map name field at the top of the Map tab is the title shown on the
+        exported map. Leave it blank to use the project title.
+    - name: Choose the layers
+      anchor: 4-choose-the-layers
+      text: >-
+        On the Layers tab, tick the layers to include and set how each one
+        behaves in the exported map.
+    - name: Preview
+      anchor: 5-preview
+      text: >-
+        Press Preview to build the map and open it in your browser. With Live
+        preview ticked the tab updates by itself as you change settings.
+    - name: Export
+      anchor: 6-export
+      text: >-
+        Pick an output mode on the Map tab - Standalone HTML, Share ZIP or
+        Folder - then press Export. Open exported map opens the real file.
+    - name: Check the Fidelity tab
+      anchor: 7-check-the-fidelity-tab
+      text: >-
+        Before sending the map on, read the Fidelity tab. It lists everything
+        that changed on the way out of QGIS. Nothing is dropped silently.
+
 lead_image:
   src: /images/export-05-live-preview.png
   alt: The export dialog's button row - Live preview ticked, with Preview and Export beside it.
@@ -109,3 +157,7 @@ settings that will not appear, layers that were left out. Nothing is dropped
 silently.
 
 ![The Fidelity tab with the Not exported and Changed verdicts highlighted.](images/export-06-fidelity-report.png)
+
+That report before the export, rather than a surprise after it, is the main
+difference from [qgis2web](qgis2web-comparison.md) if you are choosing between
+the two.
