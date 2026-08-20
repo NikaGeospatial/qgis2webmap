@@ -7,6 +7,12 @@ description: >-
 
 # QGIS to web map
 
+**To export a QGIS project as an interactive web map, install a plugin that
+reads the saved project and writes HTML.** With QGIS2WebMap the output is a
+single HTML file that opens in any browser with no QGIS, no account, no web
+server and no internet connection. It is free and open source, needs QGIS 3.44
+or newer, and takes about ten minutes the first time.
+
 You have a project in QGIS. Someone who does not have QGIS needs to look at it,
 click things and zoom in. This page is the short answer to how that is done, and
 what each of the usual routes actually costs you.
@@ -17,6 +23,10 @@ Install [QGIS2WebMap](installation.md), open **Web → QGIS2WebMap by NIKA →
 Create web map**, and press **Export**. You get one HTML file. Whoever you send
 it to double-clicks it and gets your map — panning, zooming, layer switching,
 popups — with no QGIS, no account and no internet connection.
+
+Installing takes about a minute from inside QGIS. The first export downloads the
+map runtime once — about 4.5 MB, once per computer, ever — and everything works
+offline after that.
 
 The [first export walkthrough](first-export.md) does this properly, with
 screenshots, in about ten minutes.

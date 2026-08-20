@@ -7,6 +7,14 @@ description: >-
 
 # Sharing with someone who has no QGIS
 
+**To share a QGIS map with someone who does not have QGIS, export it as a single
+HTML file and send them the file.** They double-click it and get your map in
+their browser — layers, zoom, popups — with nothing to install and no account.
+They never receive your project file or your data.
+
+The one thing that catches people out: many mail filters strip `.html`
+attachments, so export as **Share ZIP** if you are emailing it.
+
 The request always arrives the same way. Someone who does not do GIS has seen
 your map over your shoulder and wants "a copy". What they mean is that they want
 to look at it themselves, later, without you in the room — and everything you can

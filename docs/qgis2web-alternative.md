@@ -7,6 +7,15 @@ description: >-
 
 # Alternatives for QGIS web export
 
+**The main alternative to qgis2web is QGIS2WebMap**, which exports a QGIS
+project to a single portable HTML file rather than a folder of files, renders
+your actual point symbols instead of plain circles, and reports what changed
+before you export. Both are free, open source, and install side by side from the
+QGIS plugin repository.
+
+Beyond the two export plugins, the other routes are a hosted web GIS, writing a
+web map by hand, or running a map server — each covered below.
+
 Most people arrive at this question the same way: qgis2web is the answer
 everybody gives, you have tried it, and something about the result did not fit —
 usually the folder of files, or a symbol that came out as a plain circle. This
@@ -59,11 +68,13 @@ hand a map to a person, and the map has to look like your map.**
 - **Real 3D.** Genuine extruded geometry with lighting, plus an optional global
   relief ground surface.
 
-It is free to install and free to use locally. A paid OnlyMap key is only
-involved if you publish a map to a real domain and exceed the free hosting tier —
-see [what gets exported](supported-features.md#size-limits-on-the-free-plan) for
-exactly where those limits apply, because they do **not** apply to a file
-somebody opens from their own disk.
+It is free to install and free to use locally, under GPL-2.0-or-later. A paid
+OnlyMap key is only involved if you publish a map to a real domain and exceed the
+free hosting tier — 5 layers, 25,000 features per layer, and 20 MB of fetched
+data. Those three limits do **not** apply to a file somebody opens from their own
+disk, or to `localhost`; see
+[what gets exported](supported-features.md#size-limits-on-the-free-plan) for
+exactly where they bite.
 
 ## What it is not
 
