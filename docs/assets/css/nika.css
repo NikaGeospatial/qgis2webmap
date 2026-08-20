@@ -459,39 +459,6 @@ body {
   font-size: 14.5px;
 }
 
-.sidebar__help {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  margin-bottom: 2rem;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  color: var(--ink-2);
-  text-decoration: none;
-  line-height: 1.35;
-}
-
-.sidebar__help:hover {
-  border-color: #5865f2;
-  color: var(--ink);
-}
-
-.sidebar__help svg {
-  flex: none;
-  margin-top: 0.1rem;
-  color: #5865f2;
-}
-
-.sidebar__help strong {
-  display: block;
-  color: var(--ink);
-  font-size: 14.5px;
-}
-
-.sidebar__help span {
-  font-size: 12.5px;
-}
 
 .sidebar__heading {
   font-family: var(--font-mono);
@@ -1395,24 +1362,6 @@ body {
     display: none;
   }
 
-  /* The masthead pill is a few pixels above at this width, so the card drops
-     its second line and sits inline with the chips rather than eating a band
-     of the first screen to say the same thing twice. */
-  .sidebar__help {
-    display: inline-flex;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 999px;
-  }
-
-  .sidebar__help span {
-    font-size: 0;
-  }
-
-  .sidebar__help strong {
-    font-size: 13.5px;
-  }
 
   .sidebar ul {
     display: flex;
