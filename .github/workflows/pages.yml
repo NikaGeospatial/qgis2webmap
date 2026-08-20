@@ -50,3 +50,20 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # Push notification to the IndexNow search indexes, telling them the site
+      # changed instead of waiting to be crawled. Google does not participate;
+      # Bing does, and Bing's index is what feeds ChatGPT Search and Copilot.
+      #
+      # After the deploy, not before: it reads the *live* sitemap, so running it
+      # first would submit the previous build's URL list. `continue-on-error`
+      # because the deploy has already succeeded by this point and a search
+      # engine declining a submission is not a reason to redden the run - the
+      # script exits 0 on its own failures too, this is belt and braces.
+      # This job has no checkout of its own - `deploy-pages` needs none - so the
+      # script it runs has to be fetched first.
+      - uses: actions/checkout@v4
+
+      - name: Notify IndexNow
+        continue-on-error: true
+        run: python3 scripts/ping_indexnow.py
