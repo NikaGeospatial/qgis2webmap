@@ -18,7 +18,18 @@ repository=https://github.com/NikaGeospatial/qgis2webmap
 homepage=https://qgis2webmap.nikaplanet.com/
 
 # Exported maps send one anonymous usage report to NIKA when they load; see docs/privacy.md.
-tags=html,webmap,web,export,offline,map,javascript,onlymap
+#
+# Tags are what the in-app Plugin Manager searches and what builds the browse
+# pages on plugins.qgis.org (`/plugins/tags/<tag>/`), each of which is indexed
+# separately. `webmaps` is the plural of a tag we already carry and is its own
+# browse page, so both are worth holding; `portable`, `standalone` and `3d` are
+# the differentiators someone would actually search for.
+#
+# Deliberately NOT tagged `leaflet`, `openlayers` or `mapbox gl js`, which the
+# incumbent carries. Exported maps are drawn by OnlyMap and use none of them -
+# tagging for a renderer we do not ship would be a false claim to reviewers and
+# to anyone browsing that tag.
+tags=html,webmap,webmaps,web,export,offline,portable,standalone,3d,map,javascript,onlymap
 
 category=Web
 icon=icons/qgis2webmap.svg
