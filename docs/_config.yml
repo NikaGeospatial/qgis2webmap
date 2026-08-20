@@ -24,9 +24,15 @@ description: >-
   account, no web server, no coding.
 
 # The site is served from its own subdomain rather than the github.io subpath it
-# started on. It is still GitHub Pages - `CNAME` in this folder plus a DNS record
-# is the whole mechanism - but a subpath on a shared domain cannot serve a
-# `robots.txt` or `llms.txt`, because crawlers only read those at a domain root.
+# started on, because a subpath on a shared domain cannot serve a `robots.txt`
+# or `llms.txt` - crawlers only read those at a domain root.
+#
+# The domain is set in the repository's Settings -> Pages, NOT by the `CNAME`
+# file next to this one. `pages.yml` deploys through `actions/deploy-pages`, and
+# GitHub ignores a CNAME file entirely on that path ("no CNAME file is created,
+# and any existing CNAME file is ignored and is not required"). The file is kept
+# only as an in-repo record of which domain this site expects; deleting it would
+# change nothing, and editing it configures nothing.
 # GitHub keeps a permanent redirect from the old `nikageospatial.github.io/
 # qgis2webmap/*` URLs, so nothing that was linked or indexed breaks.
 #
