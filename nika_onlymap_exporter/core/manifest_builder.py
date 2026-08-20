@@ -817,61 +817,97 @@ def build_label_element(
         # sit next to each other in the switcher, so the relationship between
         # them has to be legible at a glance.
         ("label", f"{layer.name} (labels)"),
+        # ---------------------------------------------------------------
+        # These are deck.gl's OWN TextLayer prop names, unprefixed.
+        #
+        # They used to be written `get-text-color`, `text-font-family`,
+        # `text-outline-width` and so on, which look right and are not: that
+        # spelling belongs to a *composite* layer. A GeoJsonLayer draws its
+        # labels through an internal TextLayer, so it prefixes them to keep
+        # them apart from its own fill and line props, and the runtime carries
+        # a map (`getTextColor -> getColor`, `textFontFamily -> fontFamily`)
+        # to unwrap them again. A standalone TextLayer - which is what this
+        # function emits - never goes through that map and takes the plain
+        # names directly.
+        #
+        # Nothing failed loudly, which is why it survived. Unknown attributes
+        # are dropped with a console warning nobody sees, so every label came
+        # out in deck.gl's defaults: black, 32px, no halo, and sized in METRES
+        # rather than pixels, which is the "labels balloon as you zoom in"
+        # behaviour the size-units line below exists to prevent.
+        #
+        # `get-text` and `get-text-anchor` are spelled the same either way -
+        # deck.gl really does call them `getText` and `getTextAnchor` - so
+        # they are not mistakes despite matching the old pattern.
+        # ---------------------------------------------------------------
         ("get-text", f"${LABEL_PROPERTY}"),
-        ("get-text-color", color_literal(color)),
-        ("get-text-size", _number(size)),
+        ("get-color", color_literal(color)),
+        ("get-size", _number(size)),
         # Without this deck.gl scales text in metres, so labels balloon as the
         # user zooms in and vanish as they zoom out.
-        ("text-size-units", "pixels"),
+        ("size-units", "pixels"),
     ]
 
     if labeling.font_family:
-        attributes.append(("text-font-family", labeling.font_family))
+        attributes.append(("font-family", labeling.font_family))
 
     if labeling.bold:
-        attributes.append(("text-font-weight", "bold"))
+        attributes.append(("font-weight", "bold"))
 
     # A QGIS label buffer is a halo; deck.gl calls the same thing an outline.
+    #
+    # `color_hex`, not `color_literal`: `outline-color` is a plain scalar
+    # attribute, and a scalar takes bare hex. The quoted form belongs to the
+    # expression language, so `'#ffffff'` here is not a colour at all - the
+    # runtime warns that it "is not a recognizable CSS color" and falls back.
+    # `get-color` above is an accessor and does want the quotes.
+    #
+    # `font-settings` is not optional decoration: deck.gl renders an outline
+    # only from a signed-distance-field atlas, and warns "fontSettings.sdf is
+    # required to render outline" while drawing the text with no halo at all.
+    # Emitted with the outline rather than always, because an SDF atlas is
+    # slower to build and there is nothing to gain when no halo was asked for.
     if labeling.halo_width and labeling.halo_color:
-        attributes.append(("text-outline-color", color_literal(labeling.halo_color)))
-        attributes.append(("text-outline-width", _number(labeling.halo_width)))
+        attributes.append(("font-settings", '{"sdf": true}'))
+        attributes.append(("outline-color", color_hex(labeling.halo_color)))
+        attributes.append(("outline-width", _number(labeling.halo_width)))
 
     # QGIS's placement quadrant. Emitted only when it differs from the neutral
     # centre, so an ordinary over-point label stays free of noise.
     if labeling.anchor != "middle":
         attributes.append(("get-text-anchor", f"'{labeling.anchor}'"))
     if labeling.baseline != "center":
-        attributes.append(("get-text-alignment-baseline", f"'{labeling.baseline}'"))
+        attributes.append(("get-alignment-baseline", f"'{labeling.baseline}'"))
 
     if labeling.offset_x or labeling.offset_y:
         attributes.append(
             (
-                "get-text-pixel-offset",
+                "get-pixel-offset",
                 f"[{_number(labeling.offset_x)}, {_number(labeling.offset_y)}]",
             )
         )
 
     if labeling.rotation:
-        attributes.append(("get-text-angle", _number(labeling.rotation)))
+        attributes.append(("get-angle", _number(labeling.rotation)))
 
     # A QGIS label background is deck.gl's text background: a filled box behind
     # the glyphs. Without the flag the colour and padding are ignored silently.
     if labeling.background_color is not None:
-        attributes.append(("text-background", "true"))
+        attributes.append(("background", "true"))
         attributes.append(
-            ("get-text-background-color", color_literal(labeling.background_color))
+            ("get-background-color", color_literal(labeling.background_color))
         )
         pad_x, pad_y = labeling.background_padding
         if pad_x or pad_y:
             attributes.append(
-                ("text-background-padding", f"[{_number(pad_x)}, {_number(pad_y)}]")
+                ("background-padding", f"[{_number(pad_x)}, {_number(pad_y)}]")
             )
 
     # The reader's set is authoritative -- it saw the QGIS field values. The
     # fallback covers label collections built outside a project read.
     character_set = labeling.character_set or collect_character_set(collection)
     if character_set:
-        attributes.append(("text-character-set", character_set))
+        attributes.append(("character-set", character_set))
 
     if not layer.visible:
         attributes.append(("visible", "false"))

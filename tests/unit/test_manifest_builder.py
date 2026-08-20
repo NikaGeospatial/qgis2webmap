@@ -1017,32 +1017,113 @@ class TestLabelLayer:
             self.labelled_layer(anchor="end", baseline="bottom")
         )
         assert "get-text-anchor=\"'end'\"" in markup
-        assert "get-text-alignment-baseline=\"'bottom'\"" in markup
+        assert "get-alignment-baseline=\"'bottom'\"" in markup
 
     def test_a_centred_label_emits_no_placement_noise(self) -> None:
         markup = build_label_element(self.labelled_layer())
         assert "get-text-anchor" not in markup
-        assert "get-text-alignment-baseline" not in markup
+        assert "get-alignment-baseline" not in markup
 
     def test_offset_rotation_and_weight_are_carried(self) -> None:
         markup = build_label_element(
             self.labelled_layer(offset_x=4.0, offset_y=-2.0, rotation=45.0, bold=True)
         )
-        assert 'get-text-pixel-offset="[4, -2]"' in markup
-        assert 'get-text-angle="45"' in markup
-        assert 'text-font-weight="bold"' in markup
+        assert 'get-pixel-offset="[4, -2]"' in markup
+        assert 'get-angle="45"' in markup
+        assert 'font-weight="bold"' in markup
 
     def test_label_background_needs_its_flag(self) -> None:
-        """Colour and padding are ignored silently without text-background."""
+        """Colour and padding are ignored silently without background."""
         markup = build_label_element(
             self.labelled_layer(
                 background_color=Color(r=255, g=255, b=255),
                 background_padding=(3.0, 2.0),
             )
         )
-        assert 'text-background="true"' in markup
-        assert "get-text-background-color=\"'#ffffff'\"" in markup
-        assert 'text-background-padding="[3, 2]"' in markup
+        assert 'background="true"' in markup
+        assert "get-background-color=\"'#ffffff'\"" in markup
+        assert 'background-padding="[3, 2]"' in markup
+
+    # The composite-layer spellings. A GeoJsonLayer draws labels through an
+    # internal TextLayer and prefixes these to keep them apart from its own fill
+    # and line props; a standalone TextLayer takes the plain names. Every one of
+    # these was emitted at some point, and none of them failed loudly - an
+    # unknown attribute is dropped with a console warning, so labels quietly
+    # came out in deck.gl's defaults: black, 32px, no halo, and sized in metres
+    # rather than pixels, which is the "labels balloon as you zoom" bug.
+    COMPOSITE_SPELLINGS: ClassVar[tuple[str, ...]] = (
+        "get-text-color",
+        "get-text-size",
+        "text-size-units",
+        "text-font-family",
+        "text-font-weight",
+        "text-outline-color",
+        "text-outline-width",
+        "get-text-alignment-baseline",
+        "get-text-pixel-offset",
+        "get-text-angle",
+        "text-background",
+        "get-text-background-color",
+        "text-background-padding",
+        "text-character-set",
+    )
+
+    def test_no_label_attribute_uses_the_composite_spelling(self) -> None:
+        """The attribute-contract test cannot catch this on its own.
+
+        `onlymapjs.html-data.json` lists every attribute against `om-layer` as
+        one flat set, because a composite layer legitimately accepts the
+        prefixed names. So each of these IS a real OnlyMap attribute, just not
+        one a standalone TextLayer honours - which is exactly why the contract
+        test passed while every label rendered unstyled.
+        """
+        markup = build_label_element(
+            self.labelled_layer(
+                font_family="Inter",
+                bold=True,
+                halo_width=2.0,
+                halo_color=Color(r=255, g=255, b=255),
+                anchor="end",
+                baseline="bottom",
+                offset_x=4.0,
+                offset_y=-2.0,
+                rotation=45.0,
+                background_color=Color(r=0, g=0, b=0),
+                background_padding=(3.0, 2.0),
+                character_set="Alpha",
+            )
+        )
+
+        for spelling in self.COMPOSITE_SPELLINGS:
+            assert f'{spelling}="' not in markup, (
+                f"{spelling} is a composite-layer prop name; a standalone "
+                "TextLayer drops it silently and renders the default instead"
+            )
+
+    def test_a_fully_styled_label_carries_every_setting(self) -> None:
+        """The positive half: each QGIS setting reaches deck.gl's own prop."""
+        markup = build_label_element(
+            self.labelled_layer(
+                font_family="Inter",
+                bold=True,
+                halo_width=2.0,
+                halo_color=Color(r=255, g=255, b=255),
+                background_color=Color(r=0, g=0, b=0),
+            )
+        )
+
+        for expected in (
+            'get-color="',
+            'get-size="',
+            'size-units="pixels"',
+            'font-family="Inter"',
+            'font-weight="bold"',
+            'outline-color="',
+            'outline-width="',
+            'background="true"',
+            'get-background-color="',
+        ):
+            assert expected in markup, f"{expected} missing from the label layer"
 
     def test_the_text_layer_carries_only_label_points(self) -> None:
         """Not the source geometry: that would embed the data twice."""
@@ -1066,19 +1147,19 @@ class TestLabelLayer:
     def test_font_size_is_in_pixels(self) -> None:
         """In metres, labels balloon on zoom-in and vanish on zoom-out."""
         markup = build_label_element(self.labelled_layer(font_size=18.0))
-        assert 'get-text-size="18"' in markup
-        assert 'text-size-units="pixels"' in markup
+        assert 'get-size="18"' in markup
+        assert 'size-units="pixels"' in markup
 
     def test_a_qgis_buffer_becomes_a_deck_outline(self) -> None:
         markup = build_label_element(
             self.labelled_layer(halo_width=2.0, halo_color=BLUE)
         )
-        assert 'text-outline-width="2"' in markup
-        assert "text-outline-color" in markup
+        assert 'outline-width="2"' in markup
+        assert "outline-color" in markup
 
     def test_the_readers_character_set_wins(self) -> None:
         markup = build_label_element(self.labelled_layer(character_set="Zü"))
-        assert 'text-character-set="Zü"' in markup
+        assert 'character-set="Zü"' in markup
 
     def test_a_label_field_with_no_values_emits_nothing(self) -> None:
         layer = make_layer(
