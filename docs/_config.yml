@@ -58,7 +58,7 @@ plugins:
   - jekyll-sitemap
 
 # Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
-plugin_version: 0.1.3
+plugin_version: 0.1.4
 
 # The link-card image for pages that do not set their own `image`. Before this,
 # thirteen of sixteen pages shared to Discord, Slack or X as a bare text row: the
