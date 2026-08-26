@@ -56,6 +56,11 @@ baseurl: ""
 # depends on the first one - it is why guides link `.md` and the nav links `.html`.
 plugins:
   - jekyll-sitemap
+  # Listed even though the note above says the gem enables it anyway: that is
+  # true on GitHub Pages and NOT true of a local `jekyll serve`, where every
+  # cross-guide `.md` link then 404s in preview only. That difference reads
+  # exactly like a real broken link and cost an investigation.
+  - jekyll-relative-links
 
 # Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
 plugin_version: 0.1.4

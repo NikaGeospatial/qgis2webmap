@@ -213,6 +213,31 @@ reporting a failure the export did not cause.
 > The nixpkgs `playwright-driver` version must match the `playwright` Python
 > package, or it will not find the browser it expects.
 
+## Previewing the docs site
+
+The site is plain Jekyll under `docs/`. **`jekyll serve` on its own does not
+match production**, and the difference is a trap: GitHub Pages enables
+`jekyll-relative-links`, which rewrites every `guide.md` link to `guide.html`.
+Without it the guides still build, but every cross-guide link 404s *in preview
+only* — which looks exactly like a real broken link and is not one.
+
+`_config.yml` lists the plugin, so a local build needs it on the load path:
+
+```bash
+GEM=$(nix build --no-link --print-out-paths nixpkgs#rubyPackages.jekyll-relative-links)
+RUBYLIB=$(ls -d "$GEM"/lib/ruby/gems/*/gems/jekyll-relative-links-*/lib) \
+  nix run nixpkgs#jekyll -- serve --source docs --destination /tmp/site \
+  --host 127.0.0.1 --port 4000
+```
+
+Check a body link resolves the way the live site does before believing a link
+is broken:
+
+```bash
+curl -s http://127.0.0.1:4000/share-qgis-map-without-qgis.html | grep -o 'href="[^"]*hosting[^"]*"'
+# expect /hosting.html, the same as https://qgis2webmap.nikaplanet.com/
+```
+
 ## Releasing, and how the announcement works
 
 Tagging `v<version>` builds the zip and cuts a GitHub release. Uploading that
