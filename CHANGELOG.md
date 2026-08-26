@@ -47,6 +47,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   of pretending, and the documentation no longer claims the feature. Exported
   maps get a browser test asserting the map library complains about *nothing*,
   which is the check that would have caught this and the label bug both.
+- **The hosting page described a product that does not exist.** It opened by
+  telling every reader that "every exported map carries a Host with OnlyMap
+  link" — removed months ago because it 404ed — then walked through an upload
+  confirmation and a visibility table for a service that was never built, and
+  closed by claiming nothing in the artifact phones home to NIKA, which the
+  usage report contradicts. Rewritten as what is actually true: host it
+  yourself anywhere static, NIKA hosting is not built, here is what the map
+  does on the network. The plugin listing no longer promises hosting either.
 - **Every guide in the Help tab printed its title twice.** Most guides open with
   their own heading, because the same files are standalone pages on the website,
   and the tab prepended the title again on top of it.
