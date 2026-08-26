@@ -598,6 +598,68 @@ def _line_map(runtime, tmp_path_factory, name, dash):
     )
 
 
+# --------------------------------------------------------------------------
+# Labels
+# --------------------------------------------------------------------------
+
+
+def _labelled_map(runtime, tmp_path_factory, name, labeling):
+    layer = ExportLayer(
+        layer_id="stations",
+        name="Stations",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=2,
+        geojson=GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            # Black, so the only red on the map can be the label text.
+            symbol=SymbolSpec(fill_color=Color(r=0, g=0, b=0), radius=4.0),
+        ),
+        labeling=labeling,
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title=name,
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=50.9, east=1.1, north=51.9),
+        settings=ExportSettings(show_title=False, show_legend=False),
+    )
+    destination = tmp_path_factory.mktemp(name)
+    return (
+        OnlyMapWriter(runtime_provider=runtime).write(project, destination).entry_path
+    )
+
+
+@pytest.fixture(scope="session")
+def labelled_map(runtime, tmp_path_factory):
+    """Two points carrying red label text.
+
+    Red on purpose: the markers are black, so `COUNT_RED_PIXELS` counts the
+    glyphs and nothing else.
+    """
+    return _labelled_map(
+        runtime,
+        tmp_path_factory,
+        "labelled",
+        LabelingSpec(
+            enabled=True,
+            field_name="name",
+            font_size=20.0,
+            bold=True,
+            color=Color(r=255, g=0, b=0),
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
+def unlabelled_map(runtime, tmp_path_factory):
+    """The control: same map, labels off. Must draw no red at all."""
+    return _labelled_map(
+        runtime, tmp_path_factory, "unlabelled", LabelingSpec(enabled=False)
+    )
+
+
 @pytest.fixture(scope="session")
 def solid_line_map(runtime, tmp_path_factory):
     """The control for the dashed map: identical but for the dash pattern."""

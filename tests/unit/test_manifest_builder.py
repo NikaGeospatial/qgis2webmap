@@ -1011,6 +1011,18 @@ class TestLabelLayer:
         assert 'type="TextLayer"' in markup
         assert 'get-text="$label"' in markup
 
+    def test_the_text_layer_is_told_where_the_text_goes(self) -> None:
+        """Regression: every release up to 0.1.3 drew no labels at all.
+
+        A bare TextLayer reads `getPosition` off each row, and a row here is a
+        GeoJSON Feature. Without this the accessor returns `undefined`, every
+        label is positioned at nowhere, and the layer renders empty - with no
+        console error and the layer still listed in the switcher and legend.
+        `tests/browser` counts the glyph pixels; this catches it for free.
+        """
+        markup = build_label_element(self.labelled_layer())
+        assert 'get-position="$geometry.coordinates"' in markup
+
     def test_placement_quadrant_becomes_anchor_and_baseline(self) -> None:
         """QGIS "above left" pins the text's end and bottom to the point."""
         markup = build_label_element(

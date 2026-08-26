@@ -841,6 +841,19 @@ def build_label_element(
         # they are not mistakes despite matching the old pattern.
         # ---------------------------------------------------------------
         ("get-text", f"${LABEL_PROPERTY}"),
+        # Without this every label renders NOTHING, silently.
+        #
+        # A GeoJsonLayer knows how to find a feature's coordinates; a bare
+        # TextLayer does not. deck.gl's TextLayer reads `getPosition` off each
+        # row, and a row here is a GeoJSON Feature - so unless it is pointed at
+        # the geometry it reads `undefined`, positions every label at nowhere,
+        # and draws an empty layer. No error, no warning: the layer is present
+        # in the switcher and the legend, and the map simply has no text on it.
+        #
+        # That is why this went unnoticed through 0.1.0-0.1.3 while the prop
+        # names below were being fixed. Getting the styling right does nothing
+        # for a label that was never given a place to be.
+        ("get-position", "$geometry.coordinates"),
         ("get-color", color_literal(color)),
         ("get-size", _number(size)),
         # Without this deck.gl scales text in metres, so labels balloon as the

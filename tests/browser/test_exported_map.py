@@ -820,6 +820,40 @@ class TestItDrawsAcrossTheAntimeridian:
         )
 
 
+class TestLabelsActuallyDraw:
+    """Labels reaching the markup is not the same as deck.gl drawing them.
+
+    Every release up to 0.1.3 shipped labels that rendered NOTHING. A bare
+    `TextLayer` reads `getPosition` off each row, and a row here is a GeoJSON
+    Feature -- so with no `get-position` the accessor returned `undefined`,
+    every label was positioned at nowhere, and the layer drew empty. Silently:
+    no console error, the layer present in the switcher and the legend, and a
+    map with no text on it.
+
+    That is precisely the shape of failure the markup tier cannot see, and it
+    survived a round of fixes to the label *styling* attributes -- getting a
+    label's colour right does nothing for a label with no place to be. So this
+    counts glyph pixels, and the control proves the count means something.
+    """
+
+    def _red_pixels(self, page, artifact) -> int:
+        open_map(page, artifact)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(1500)
+        return page.evaluate(COUNT_RED_PIXELS)["red"]
+
+    def test_labels_put_text_on_the_map(self, page, labelled_map) -> None:
+        assert self._red_pixels(page, labelled_map) > 0, (
+            "a layer with labelling enabled drew no label pixels - the text "
+            "layer is probably missing get-position again"
+        )
+
+    def test_labels_off_draws_no_text(self, page, unlabelled_map) -> None:
+        """The control. Without it, red pixels could come from anything."""
+        assert self._red_pixels(page, unlabelled_map) == 0
+
+
 class TestDashedLinesReallyDash:
     """`dash` reaching the markup is not the same as deck.gl honouring it.
 
