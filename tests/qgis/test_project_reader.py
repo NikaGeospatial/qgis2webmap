@@ -173,7 +173,7 @@ class TestTerrainNotes:
         report = FidelityReportBuilder()
         read_project(project, report, settings=ExportSettings(terrain="terrarium"))
         details = " ".join(i.detail for i in report.items)
-        assert "Labels do not appear over relief" in details
+        assert "Labels shrink to a few pixels over relief" in details
         assert "'peaks'" in details
 
     def test_no_label_note_without_terrain(self, project, make_memory_layer) -> None:
@@ -191,7 +191,7 @@ class TestTerrainNotes:
 
         report = FidelityReportBuilder()
         read_project(project, report)
-        assert "Labels do not appear over relief" not in " ".join(
+        assert "Labels shrink to a few pixels over relief" not in " ".join(
             i.detail for i in report.items
         )
 

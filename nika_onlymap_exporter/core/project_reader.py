@@ -374,20 +374,27 @@ def read_project(
                 "show: " + ", ".join(f"'{name}'" for name in raised) + ".",
             )
 
-        # Measured, not assumed: label layers render neither draped nor
-        # offset while terrain is on - the text simply never appears.
+        # Re-measured 2026-08-26, and the previous wording was wrong. It said
+        # labels "simply never appear" over relief - which was true only
+        # because labels never appeared ANYWHERE until `get-position` was
+        # fixed. They do render over relief. What actually happens is that the
+        # runtime stops honouring the text's pixel sizing once terrain is on:
+        # the glyphs shrink to a few pixels and squash horizontally while the
+        # layer's markers keep their size, so the text is present and
+        # unreadable. Reported upstream.
         labelled = [
             layer.name
             for layer in layers
             if layer.labeling.enabled and layer.labeling.field_name
         ]
         if labelled:
-            report.unsupported(
+            report.approximated(
                 "Terrain",
-                "Labels do not appear over relief in the current map runtime. "
-                "The labelled layers still draw, but without their text: "
+                "Labels shrink to a few pixels over relief and are effectively "
+                "unreadable, whatever text size you set: "
                 + ", ".join(f"'{name}'" for name in labelled)
-                + ". Turn relief off if the labels matter more.",
+                + ". The layers and their markers draw normally. Turn relief "
+                "off if the labels matter more than the terrain.",
             )
 
         # Also measured: the drape keeps polygon fills but drops their

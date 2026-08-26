@@ -55,6 +55,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   usage report contradicts. Rewritten as what is actually true: host it
   yourself anywhere static, NIKA hosting is not built, here is what the map
   does on the network. The plugin listing no longer promises hosting either.
+- **The Fidelity tab said labels never appear over relief.** They do — the map
+  library stops honouring their pixel size once terrain is on, so they shrink to
+  a few pixels and squash while the layer's markers keep their size. The old
+  wording was written when labels were invisible everywhere, for the reason
+  above. Reported upstream; the tab now describes what actually happens.
 - **Every guide in the Help tab printed its title twice.** Most guides open with
   their own heading, because the same files are standalone pages on the website,
   and the tab prepended the title again on top of it.
