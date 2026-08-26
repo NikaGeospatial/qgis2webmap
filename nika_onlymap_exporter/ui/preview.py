@@ -48,6 +48,7 @@ from pathlib import Path
 from ..core.export_ir import ExportProject, OutputMode
 from ..packaging.artifact_builder import terrain_zoom_clamp
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
+from .links import FEATURE_REQUEST_URL
 from .live_server import RELOAD_PATH
 
 PREVIEW_DIR_NAME = "qgis2webmap-preview"
@@ -131,6 +132,136 @@ RELOAD_SCRIPT = f"""
 """
 
 
+# Preview only, and the reason it is a constant rather than a template edit: the
+# hook slot is shared. `artifact_builder` passes `terrain_zoom_clamp()` through
+# the same parameter on the real export path, so "it is in the preview hook" is
+# not by itself what keeps this out of a shipped map. What keeps it out is that
+# it is composed here, in the preview module, and nowhere else.
+#
+# Top centre because every corner is claimed - switcher, legend, zoom controls,
+# scale bar, credit chip - and the caption may take a corner or either centre.
+# The one real collision is a top-centre caption, dodged with the same `:has()`
+# technique the template already commits to for the attribution slot.
+_HOST_CTA_TEMPLATE = """
+    <style>
+      /* Deliberately unlike the map's own chrome. This is plugin UI shown while
+         you are looking at your map; it must never read as something the person
+         you send the file to will see. */
+      .om-preview-cta {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        /* Above the caption's 10000 and the runtime widgets' 9999: an
+           affordance you cannot reach to dismiss is worse than no affordance. */
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: min(30rem, calc(100% - 24px));
+        padding: 7px 8px 7px 14px;
+        border: 1px solid #d4d4d8;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+        /* System stack, never a webfont. A remote font URL here would be the
+           one thing in this block that puts a network dependency into a
+           preview, and it would read as an offline-promise regression. */
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #18181b;
+      }
+      .om-preview-cta-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .om-preview-cta a {
+        flex: none;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #18181b;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .om-preview-cta a:hover,
+      .om-preview-cta a:focus-visible {
+        background: #3f3f46;
+      }
+      .om-preview-cta-close {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #71717a;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .om-preview-cta-close:hover,
+      .om-preview-cta-close:focus-visible {
+        background: #f4f4f5;
+        color: #18181b;
+      }
+      /* The only caption position that lands underneath. Approximate on
+         purpose, like the 36/54px reservations in the template: a two-line
+         caption at 15px title plus 12px/1.5 abstract clears inside 96px. */
+      body:has(.om-caption-top-center) .om-preview-cta {
+        top: 96px;
+      }
+      @media (max-width: 420px) {
+        .om-preview-cta-label {
+          display: none;
+        }
+      }
+    </style>
+    <div class="om-preview-cta" role="complementary" aria-label="Preview only">
+      <span class="om-preview-cta-label">Want this map online?</span>
+      <a href="@FORM_URL@" target="_blank" rel="noopener noreferrer">Host</a>
+      <button
+        type="button"
+        class="om-preview-cta-close"
+        aria-label="Dismiss">&times;</button>
+    </div>
+    <script>
+      // Preview only: the "Host" call to action.
+      //
+      // Hosting does not exist yet, so this opens the feature-request form and
+      // says so. It is here rather than in the export because it is a question
+      // for the author, not something to ship to whoever they send the map to.
+      (function () {
+        var cta = document.querySelector(".om-preview-cta");
+        if (!cta) return;
+        var KEY = "qgis2webmap.hostcta";
+        // Storage, not location.hash: CAMERA_SCRIPT owns the fragment and would
+        // overwrite this on the first pan. Wrapped because Chrome treats a
+        // file:// document as an opaque origin for storage, which is the same
+        // reason the camera script carries its own try/catch.
+        try {
+          if (localStorage.getItem(KEY) === "off") {
+            cta.remove();
+            return;
+          }
+        } catch (e) { /* storage unavailable; the chip stays for this view */ }
+        cta.querySelector(".om-preview-cta-close").addEventListener(
+          "click",
+          function () {
+            cta.remove();
+            try {
+              localStorage.setItem(KEY, "off");
+            } catch (e) { /* dismissal lasts this page view only */ }
+          }
+        );
+      })();
+    </script>
+"""
+
+HOST_CTA = _HOST_CTA_TEMPLATE.replace("@FORM_URL@", FEATURE_REQUEST_URL)
+
+
 def preview_directory(project_identity: str) -> Path:
     """A stable directory for this project's preview.
 
@@ -187,6 +318,29 @@ def prune_stale_previews(max_age_days: float = 7.0) -> None:
             continue
 
 
+def compose_preview_hook(
+    project: ExportProject, live: bool = False, final: bool = False
+) -> str:
+    """Everything injected at the template's `@PREVIEW_HOOK@`, for a preview.
+
+    Pulled out of `write_preview` so it can be read without a writer, a runtime
+    bundle or a QGIS application - which is what makes the composition testable
+    at the unit tier rather than only through a rendered artifact.
+    """
+    # The relief camera clamp ships in the real artifact (artifact_builder);
+    # without it here a relief preview would zoom past where the terrain
+    # blanks, behaving unlike the file `final` claims to match byte-for-byte.
+    hook = terrain_zoom_clamp(project) + CAMERA_SCRIPT
+    if live:
+        hook += RELOAD_SCRIPT
+    # `final` promises byte-for-byte what ships, so the call to action stays
+    # out of it. (`CAMERA_SCRIPT` already bends that promise and no caller
+    # passes `final=True` today; not this change's problem to fix.)
+    if not final:
+        hook += HOST_CTA
+    return hook
+
+
 def write_preview(
     project: ExportProject,
     project_identity: str,
@@ -207,11 +361,6 @@ def write_preview(
     """
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
-    hook = CAMERA_SCRIPT + RELOAD_SCRIPT if live else CAMERA_SCRIPT
-    # The relief camera clamp ships in the real artifact (artifact_builder);
-    # without it here a relief preview would zoom past where the terrain
-    # blanks, behaving unlike the file `final` claims to match byte-for-byte.
-    hook = terrain_zoom_clamp(project) + hook
 
     # Passed through the template's own hook rather than string-matching the
     # rendered output. The runtime contains a literal "</body>" inside a template
@@ -222,5 +371,5 @@ def write_preview(
         destination,
         mode=OutputMode.STANDALONE_HTML,
         compress=final,
-        preview_hook=hook,
+        preview_hook=compose_preview_hook(project, live=live, final=final),
     )

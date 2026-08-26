@@ -129,6 +129,14 @@ class TestEveryFixtureExports:
         assert ">Enhance</a>" not in html, name
         assert ">Host</a>" not in html, name
 
+        # The preview's "Host" call to action is plugin UI, shown to the author
+        # while they check their map. It must never reach a recipient. It is
+        # composed in `ui.preview` and the export path passes its own hook
+        # through the same slot, so this is the assertion that fails if the two
+        # are ever confused.
+        assert "om-preview-cta" not in html, name
+        assert "docs.google.com/forms" not in html, name
+
     def test_share_zip_is_openable_and_self_contained(
         self, fixture_project, runtime_available, tmp_path
     ) -> None:

@@ -100,6 +100,14 @@ from ..packaging.dependency_scanner import (
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
+from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
+    COMMUNITY_URL,
+    COMPANY_URL,
+    DISCORD_URL,
+    DOCS_URL,
+    FEATURE_REQUEST_URL,
+    REPO_URL,
+)
 from .live_server import PreviewServer
 from .preview import (
     preview_directory,
@@ -113,15 +121,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
 
 LOG_TAG = "QGIS2WebMap"
-
-COMPANY_URL = "https://nikaplanet.com"
-DOCS_URL = "https://docs.nikaplanet.com"
-REPO_URL = "https://github.com/NikaGeospatial/qgis2webmap"
-# The public server invite, never a `discord.com/channels/...` deep link: that
-# form only resolves for someone already in the server, and everyone this is
-# aimed at is by definition not. Name the channel in prose, link the invite.
-DISCORD_URL = "https://discord.gg/RujwMpednf"
-
 MODE_LABELS = {
     OutputMode.STANDALONE_HTML: "Standalone HTML - one file, opens by double-click",
     OutputMode.SHARE_ZIP: "Share ZIP - a zip to email or upload",
@@ -1732,21 +1731,24 @@ class MainDialog(QDialog):
         # Read something, or ask someone. The pair is the point - the guides
         # above answer what is already known to go wrong, and the second button
         # is for everything else.
-        buttons = QHBoxLayout()
+        #
+        # Stacked rather than side by side: they are not alternatives to choose
+        # between, they are two things to do next, and a full-width target is
+        # the easier one to hit on the small dialog this has to survive at.
         docs_button = QPushButton("Open the full documentation", page)
         docs_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
-        buttons.addWidget(docs_button)
+        layout.addWidget(docs_button)
 
-        discord_button = QPushButton("Ask on Discord", page)
-        discord_button.setToolTip(
-            "Problems, suggestions and bug reports all go to the QGIS2WebMap "
-            "channel on the NIKA Discord."
+        community_button = QPushButton("Join the community", page)
+        community_button.setToolTip(
+            "Open the NIKA Discord in your browser. Problems, suggestions and "
+            "bug reports all go to the QGIS2WebMap channel - no GitHub account "
+            "needed."
         )
-        discord_button.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL))
+        community_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(COMMUNITY_URL))
         )
-        buttons.addWidget(discord_button)
-        layout.addLayout(buttons)
+        layout.addWidget(community_button)
         return page
 
     # ---- Buttons --------------------------------------------------------
@@ -1772,6 +1774,23 @@ class MainDialog(QDialog):
         self.preview_button = QPushButton("Preview", self)
         self.preview_button.clicked.connect(self.on_preview)
         row.addWidget(self.preview_button)
+
+        # A demand probe, not a feature. Hosting does not exist yet; this opens
+        # the feature-request form so the interest can be counted before the
+        # auth flow, blob storage and expiry job get built on a hypothesis.
+        # Labelled with the arrow every other outward link in this dialog uses,
+        # because pressing it leaves for a browser rather than acting on the
+        # project - and never enabled/disabled with the export buttons, since
+        # it has nothing to do with whether the project is exportable.
+        self.host_button = QPushButton("Host ↗", self)
+        self.host_button.setToolTip(
+            "Hosting a map on NIKA's servers is not built yet. This opens a "
+            "short form so we can see how many people want it."
+        )
+        self.host_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(FEATURE_REQUEST_URL))
+        )
+        row.addWidget(self.host_button)
 
         self.export_button = QPushButton("Export", self)
         self.export_button.setDefault(True)
