@@ -29,9 +29,12 @@ name: announce
 
 on:
   schedule:
-    # Every six hours. Approval is not something we get notified about, so the
-    # only cost of a miss is a few hours' delay in the announcement.
-    - cron: "17 */6 * * *"
+    # Hourly, on the hour. Approval is not something we get notified about, so
+    # the only cost of a miss is an hour's delay in the announcement. GitHub
+    # runs scheduled workflows on a best-effort basis and commonly starts them
+    # several minutes late, or skips a run entirely when the queue is busy - an
+    # hourly poll narrows the window, it does not guarantee one run per hour.
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
