@@ -366,7 +366,7 @@ HELP_PAGES = (
     ("Your first export", "first-export.md"),
     ("The dialog, tab by tab", "the-dialog.md"),
     ("Sharing a map", "sharing.md"),
-    ("Enhance with AI", "enhance-with-ai.md"),
+    ("Enhance a map with AI", "enhance-with-ai.md"),
     ("Host with OnlyMap", "hosting.md"),
     ("What gets exported", "supported-features.md"),
     ("Troubleshooting", "troubleshooting.md"),
@@ -386,6 +386,9 @@ _IMAGE_INLINE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 # leaves three newlines behind. Markdown treats any run of blank lines as one
 # break, so collapsing is safe and keeps the Help text free of ragged gaps.
 _BLANK_RUN = re.compile(r"\n{3,}")
+# A leading `# Heading`, allowing the blank lines front-matter stripping leaves
+# behind. Only `# ` counts: a guide starting at `##` has no title of its own.
+_OPENS_WITH_H1 = re.compile(r"\A\s*#[ \t]")
 
 
 def strip_images(text: str) -> str:
@@ -430,8 +433,15 @@ def load_help_markdown() -> str:
         # Strip any YAML front matter, which is for the website only.
         if text.startswith("---"):
             _, _, text = text.partition("---\n")[2].partition("---\n")
-        text = strip_images(text)
-        sections.append(f"# {title}\n\n{text.strip()}")
+        text = strip_images(text).strip()
+        # Most guides open with their own H1, because the website renders them
+        # as standalone pages. Prepending the HELP_PAGES title unconditionally
+        # printed that heading twice in a row - "The dialog, tab by tab" over
+        # "The dialog, tab by tab" - for every guide that has one. The title is
+        # only needed for a guide that does not carry its own.
+        if not _OPENS_WITH_H1.match(text):
+            text = f"# {title}\n\n{text}"
+        sections.append(text)
 
     if not sections:
         return HELP_UNAVAILABLE

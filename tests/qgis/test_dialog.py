@@ -744,6 +744,21 @@ class TestHelpTab:
         for title, _filename in HELP_PAGES:
             assert title in markdown
 
+    def test_a_guide_title_is_not_printed_twice(self, qgis_app) -> None:
+        """Regression: every guide showed its heading two times over.
+
+        Most guides open with their own H1, because the website renders them as
+        standalone pages. Prepending the HELP_PAGES title unconditionally put
+        "The dialog, tab by tab" directly above "The dialog, tab by tab" for
+        each of the eight that have one.
+        """
+        from nika_onlymap_exporter.ui.main_dialog import HELP_PAGES, load_help_markdown
+
+        markdown = load_help_markdown()
+        for title, _filename in HELP_PAGES:
+            assert f"# {title}\n\n# {title}" not in markdown, title
+            assert markdown.count(f"\n# {title}\n") <= 1, title
+
     def test_strips_website_front_matter(self, qgis_app) -> None:
         """YAML front matter is for Jekyll; Qt would render it as text."""
         from nika_onlymap_exporter.ui.main_dialog import load_help_markdown
