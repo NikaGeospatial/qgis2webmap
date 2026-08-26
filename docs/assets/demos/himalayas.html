@@ -390,12 +390,14 @@ om-map:not(:defined){display:block;position:relative;min-height:240px;background
       type="TextLayer"
       label="Peaks (labels)"
       get-text="$label"
-      get-text-color="'#1a1a1a'"
-      get-text-size="10"
-      text-size-units="pixels"
-      text-font-family="Noto Sans"
-      text-outline-color="'#ffffff'"
-      text-outline-width="1.2"
+      get-position="$geometry.coordinates"
+      get-color="'#1a1a1a'"
+      get-size="10"
+      size-units="pixels"
+      font-family="Noto Sans"
+      font-settings="{&quot;sdf&quot;: true}"
+      outline-color="#ffffff"
+      outline-width="1.2"
     >
       <script type="application/json">
 {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[86.92521,27.9880625]},"properties":{"label":"Everest"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[88.1474773,27.703012]},"properties":{"label":"Kangchenjunga"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[86.9325045,27.9619866]},"properties":{"label":"Lhotse"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[88.1377835,27.7051689]},"properties":{"label":"Yalung Kang"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[87.0884403,27.8914396]},"properties":{"label":"Makalu"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[88.154014,27.6922779]},"properties":{"label":"Kangchenjunga South"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[88.150834,27.696338]},"properties":{"label":"Kangchenjunga Central"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[86.943763,27.9587537]},"properties":{"label":"Lhotse Shar"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[86.659634,28.0967476]},"properties":{"label":"Cho Oyu"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[83.489488,28.6976099]},"properties":{"label":"Dhaulagiri I"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[84.5597288,28.549984]},"properties":{"label":"Manaslu"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[83.8199195,28.5958074]},"properties":{"label":"Annapurna I"}}]}

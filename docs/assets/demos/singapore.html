@@ -455,12 +455,14 @@ om-map:not(:defined){display:block;position:relative;min-height:240px;background
       type="TextLayer"
       label="MRT stations labels"
       get-text="$label"
-      get-text-color="'#1a1a1a'"
-      get-text-size="8.5"
-      text-size-units="pixels"
-      text-font-family="Noto Sans"
-      text-outline-color="'#ffffff'"
-      text-outline-width="1"
+      get-position="$geometry.coordinates"
+      get-color="'#1a1a1a'"
+      get-size="8.5"
+      size-units="pixels"
+      font-family="Noto Sans"
+      font-settings="{&quot;sdf&quot;: true}"
+      outline-color="#ffffff"
+      outline-width="1"
     >
       <script type="application/json">
 {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[103.742222,1.332819]},"properties":{"label":"Jurong East"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.78679,1.437027]},"properties":{"label":"Woodlands"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.848898,1.351322]},"properties":{"label":"Bishan"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.845772,1.299061]},"properties":{"label":"Dhoby Ghaut"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.944314,1.354226]},"properties":{"label":"Tampines"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.790129,1.307176]},"properties":{"label":"Buona Vista"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.821296,1.265359]},"properties":{"label":"HarbourFront"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[103.873228,1.350121]},"properties":{"label":"Serangoon"}}]}

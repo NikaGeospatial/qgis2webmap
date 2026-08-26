@@ -622,12 +622,14 @@ om-map:not(:defined){display:block;position:relative;min-height:240px;background
       type="TextLayer"
       label="Active volcanoes labels"
       get-text="$label"
-      get-text-color="'#f5f5f5'"
-      get-text-size="10"
-      text-size-units="pixels"
-      text-font-family="Noto Sans"
-      text-outline-color="'#111111'"
-      text-outline-width="1.2"
+      get-position="$geometry.coordinates"
+      get-color="'#f5f5f5'"
+      get-size="10"
+      size-units="pixels"
+      font-family="Noto Sans"
+      font-settings="{&quot;sdf&quot;: true}"
+      outline-color="#111111"
+      outline-width="1.2"
     >
       <script type="application/json">
 {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[98.392,3.17]},"properties":{"label":"Sinabung"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[100.473,-0.381]},"properties":{"label":"Marapi"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[101.264,-1.697]},"properties":{"label":"Kerinci"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[105.423,-6.102]},"properties":{"label":"Krakatau"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[110.442,-7.542]},"properties":{"label":"Merapi"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[114.056,-8.119]},"properties":{"label":"Raung"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[125.4,2.78]},"properties":{"label":"Karangetang"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[127.33,0.8]},"properties":{"label":"Gamalama"}}]}
