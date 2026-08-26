@@ -393,6 +393,11 @@ def decide(announced: str, live: str | None, changelog_text: str) -> Decision:
 
 
 def post(webhook: str, payload: dict) -> bool:
+    problem = webhook_problem(webhook)
+    if problem is not None:
+        print(f"error: {problem}")
+        return False
+
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         webhook,
@@ -412,6 +417,35 @@ def post(webhook: str, payload: dict) -> bool:
         return False
 
 
+def webhook_problem(webhook: str) -> str | None:
+    """Why this string cannot be a webhook URL, or None if it looks usable.
+
+    Checked before handing it to `urllib`, which raises a bare
+    `ValueError: unknown url type` that Actions then masks to `***` - a
+    traceback naming neither the problem nor the fix, on the one day of the
+    release cycle when nobody wants to debug CI.
+
+    Never prints the value: it is the credential. Length and shape are enough
+    to tell a placeholder from a quoted paste from a truncated copy.
+    """
+    if not webhook:
+        return f"{DISCORD_WEBHOOK_ENV} is empty"
+    if webhook != webhook.strip():
+        return f"{DISCORD_WEBHOOK_ENV} has leading or trailing whitespace"
+    if webhook[0] in "\"'" or webhook[-1] in "\"'":
+        return (
+            f"{DISCORD_WEBHOOK_ENV} is wrapped in quotes - store the bare URL,"
+            " GitHub does not strip them"
+        )
+    if not webhook.startswith("https://"):
+        return (
+            f"{DISCORD_WEBHOOK_ENV} does not start with https:// "
+            f"({len(webhook)} characters). A Discord webhook looks like"
+            " https://discord.com/api/webhooks/<id>/<token>"
+        )
+    return None
+
+
 def check_webhook(webhook: str) -> bool:
     """Ask Discord whether the webhook still exists, without posting anything.
 
@@ -425,6 +459,11 @@ def check_webhook(webhook: str) -> bool:
     stays masked by Actions; the name is what identifies which webhook a
     channel's settings page is showing you.
     """
+    problem = webhook_problem(webhook)
+    if problem is not None:
+        print(f"error: {problem}")
+        return False
+
     request = urllib.request.Request(webhook, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
