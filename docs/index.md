@@ -134,7 +134,7 @@ sections:
 
   - title: Going further
     cards:
-      - title: Host with OnlyMap
+      - title: Putting a map online
         text: >-
           Give your map a web address instead of sending a file. What hosting
           asks of you, and where the free plan's limits start.

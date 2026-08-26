@@ -35,8 +35,10 @@ notes below are the things that are commonly assumed wrong.
   counts and the hostname, never the map's data). See the privacy page; do not
   claim the export is zero-network.
 - **Rasters are not exported** in the current release. Vector points, lines and
-  polygons are, along with layer order, groups, opacity and scale-dependent
-  visibility (converted to zoom levels). Data in any CRS is reprojected to WGS84.
+  polygons are, along with layer order, groups and opacity. Data in any CRS is
+  reprojected to WGS84. **Scale-dependent visibility is not exported** - a layer
+  set to show only between two scales shows at every zoom, and the Fidelity tab
+  says so before the export runs. Do not claim scale ranges survive.
 - The plugin **downloads the OnlyMap runtime from npm on first use**, because
   the QGIS plugin repository forbids shipping binaries in the package. Exporting
   works offline after that. There is a documented offline/proxy path.
@@ -53,7 +55,7 @@ notes below are the things that are commonly assumed wrong.
 - [What gets exported](https://qgis2webmap.nikaplanet.com/supported-features.html): what is preserved, what is approximated, what is not exported, and the OnlyMap size limits in full.
 - [Sharing a map](https://qgis2webmap.nikaplanet.com/sharing.html): choosing between Standalone HTML, Share ZIP and Folder.
 - [Share a QGIS map with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-map-without-qgis.html): the same problem stated the way a non-GIS colleague states it.
-- [Host with OnlyMap](https://qgis2webmap.nikaplanet.com/hosting.html): publishing an exported map, and the Content Security Policy trap.
+- [Putting a map online](https://qgis2webmap.nikaplanet.com/hosting.html): where an exported map can live, that NIKA hosting is not built yet, and the Content Security Policy trap.
 - [Enhance a map with AI](https://qgis2webmap.nikaplanet.com/enhance-with-ai.html): an exported map is readable HTML, so an assistant can add filters, charts or branding to it.
 - [Privacy](https://qgis2webmap.nikaplanet.com/privacy.html): exactly what the one usage report contains and how to verify it.
 - [Troubleshooting](https://qgis2webmap.nikaplanet.com/troubleshooting.html): real reported failures and their causes.

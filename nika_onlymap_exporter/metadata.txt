@@ -52,7 +52,7 @@ changelog=0.1.3
     First public release.
     Export a QGIS project to a single portable HTML file, a share ZIP or a folder.
     Vector points, lines and polygons with single-symbol, categorized and graduated
-    styling; layer order, groups, visibility, scale ranges, aliases and hidden
+    styling; layer order, groups, visibility, aliases and hidden
     fields; labels, popups, attribution, legend, layer switcher, zoom controls and
     a scale bar. The Fidelity tab lists anything that will not survive the trip
     before you export. Requires QGIS 3.44 or newer.

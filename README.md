@@ -103,7 +103,7 @@ plugin's Help tab, so they work offline too.
 - [Your first export](docs/first-export.md)
 - [The dialog, tab by tab](docs/the-dialog.md)
 - [Sharing a map](docs/sharing.md)
-- [Host with OnlyMap](docs/hosting.md)
+- [Putting a map online](docs/hosting.md)
 - [Enhance a map with AI](docs/enhance-with-ai.md)
 - [What gets exported](docs/supported-features.md)
 - [QGIS2WebMap or qgis2web](docs/qgis2web-comparison.md)
@@ -123,7 +123,7 @@ Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 
 Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
 sources, with single-symbol, categorized and graduated styling; layer order,
-groups, visibility, scale ranges, field aliases and hidden fields; labels,
+groups, visibility, field aliases and hidden fields; labels,
 popups, and data attribution. Every map ships a legend, layer switcher, zoom
 controls and a scale bar.
 
@@ -160,12 +160,13 @@ assistant can edit it. Point Claude Code or Codex at the OnlyMap skill and ask
 for filters, charts, stories or custom branding, and the map stays portable.
 See [enhance a map with AI](docs/enhance-with-ai.md).
 
-## Host with OnlyMap
+## Putting a map online
 
-Every exported map carries a **Host with OnlyMap** link. Hosting is always an
-explicit action you start: the artifact never uploads anything on its own, and
-publishing asks you to confirm you are authorised to and to choose Public,
-Unlisted or Private. See [hosting](docs/hosting.md).
+An exported map is a plain HTML file, so any static host works — GitHub Pages,
+S3, Netlify, a folder on a web server. Hosting with NIKA is not built yet; the
+**Host** button in the dialog opens a form so we can find out whether people
+want it before building it. Nothing uploads on its own, ever. See
+[putting a map online](docs/hosting.md).
 
 ## Usage
 

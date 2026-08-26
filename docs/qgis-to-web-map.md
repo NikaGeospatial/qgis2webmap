@@ -95,7 +95,7 @@ rather than by how big it is:
 | **Folder** | You are publishing to a web server |
 
 [Sharing a map](sharing.md) covers the trade-offs. If you are publishing rather
-than sending, [Host with OnlyMap](hosting.md) covers that path, including the
+than sending, [Putting a map online](hosting.md) covers that path, including the
 Content Security Policy trap that catches people putting a map on an existing
 site.
 

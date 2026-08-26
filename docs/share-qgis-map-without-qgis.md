@@ -82,7 +82,7 @@ to open off a disk.
 
 Sending a file is right for one person, or a handful. If the map needs a link —
 an intranet page, a public site, an embed in a report — export as **Folder** and
-publish it, or use [Host with OnlyMap](hosting.md) to put it online from the
+publish it, or use [Putting a map online](hosting.md) to put it online from the
 export itself. Read the Content Security Policy note on that page first if the
 site you are embedding into already sets one; it is what silently blanks an
 otherwise-working map.

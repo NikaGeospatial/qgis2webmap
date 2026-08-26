@@ -1,72 +1,56 @@
 ---
-title: Host with OnlyMap
+title: Putting a map online
 seo_title: Host a QGIS web map online
 description: >-
-  Publishing an exported map. What you are asked before anything is uploaded, visibility options, and the Content Security Policy trap.
+  Where an exported map can live once you have made it, what NIKA hosting will be when it exists, and the Content Security Policy trap that empties the map.
 ---
 
-# Host with OnlyMap
+# Putting a map online
 
-Every exported map carries a **Host with OnlyMap** link in its bottom-right
-credit component. Hosting turns the file you already checked into a shareable
-link, without re-exporting anything.
+An exported map is an ordinary file. Nothing about it needs NIKA, and nothing
+about it uploads on its own — putting it somewhere is a thing you do, not a
+thing it does.
 
-[OnlyMap](https://onlymap.nikaplanet.com/) is the map library that draws every
-map this plugin exports; its own documentation covers what the runtime can do
-once your map is published.
+## Hosting it yourself, today
 
-## Nothing uploads on its own
+The export is plain HTML with no server requirement, so any static host works:
+GitHub Pages, S3, Netlify, or a folder on a web server you already run. Choose
+the **Folder** output mode if you would rather copy a directory than a single
+file.
 
-An exported map is a file on your disk. Opening it sends one anonymous usage
-report and nothing else — your map is not uploaded, and the **Host** link is a
-link, not an upload. It opens the OnlyMap hosting page and asks you to choose
-the exported file yourself. See [privacy](privacy.md) for what the report
-contains.
+That is the whole answer right now, and for most maps it is a good one.
 
-This is deliberate. A page opened from disk cannot honestly ask for consent on
-your behalf, so it does not try.
+## Hosting with NIKA is not built yet
 
-## What you are asked before anything is published
+There is a **Host** button in the export dialog and in the preview. It does not
+upload anything. It opens a short form, because we would rather find out whether
+people want one-click hosting before building an account system, file storage
+and an expiry job for a feature nobody asked for.
 
-> You are about to upload a copy of this map and its included data. Confirm that
-> you are authorised to publish it and choose Public, Unlisted, or Private
-> visibility.
+If you want it, say so there — that is genuinely how the decision gets made.
 
-Two things worth reading carefully:
+When it does exist it will be a separate, explicit step after signing in, with a
+confirmation naming what is about to leave your machine, and never a side effect
+of exporting. Two things will be worth reading carefully on that screen:
 
 **The data goes with the map.** A Standalone HTML has every feature embedded in
 it. Publishing it publishes the attributes too, including any column you left in
 because it was convenient. Check the popup field list on the **Layers** tab
-before you host.
+before you publish anywhere — including a host of your own.
 
 **Authorisation is yours to confirm.** Licence terms on source data usually
-distinguish between analysing it and republishing it. The plugin cannot know
+distinguish between analysing it and republishing it, and the plugin cannot know
 which of your layers are yours to publish.
 
-## Visibility
+## What an exported map does on the network
 
-| Choice | Who can open it |
-|---|---|
-| **Public** | Anyone, and it may be indexed by search engines |
-| **Unlisted** | Anyone holding the link |
-| **Private** | You, and accounts you grant access to |
+Opening one sends a single anonymous usage report to NIKA, as the OnlyMap
+runtime licence covers — page counts and the hostname, never your map's data and
+never anything identifying whoever opened it. That happens wherever the file is
+opened, including from your own disk and your own web server. See
+[privacy](privacy.md) for exactly what the report contains.
 
-## Publishing from inside QGIS
-
-Not in `0.1.0`. A **Publish with OnlyMap** action in the export dialog is
-planned, and it will be a separate, explicit step after account sign-in with the
-same data-inventory confirmation — never a side effect of exporting.
-
-For now: export locally, open the map, check it, then use the **Host** link.
-
-## Hosting somewhere else
-
-The export is a plain HTML file with no server requirement, so any static host
-works — GitHub Pages, S3, Netlify, or a folder on a web server. Choose the
-**Folder** output mode if you would rather copy a directory than a single file.
-
-Nothing in the artifact phones home to NIKA, whether you host with OnlyMap or
-not.
+Nothing else leaves the page.
 
 ## If your site sets a Content Security Policy
 

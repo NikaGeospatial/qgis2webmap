@@ -108,7 +108,7 @@ would fix that. None is annotated — they are showing an outcome, not a button.
 
 | File | Page | Shot |
 |---|---|---|
-| `host-onlymap-credit-link.png` | `hosting.md` | Exported map in a browser, boxed **Host with OnlyMap** link in the credit |
+| `host-button-preview.png` | `hosting.md` | The preview in a browser, boxed **Host** chip at the top |
 | `fidelity-blocked-items.png` | `troubleshooting.md` | Fidelity tab showing a **Blocked** verdict, boxed |
 | `export-progress-bar.png` | `the-dialog.md` | Export in progress, layer counter and Cancel visible |
 | `help-about-qgis-version.png` | `installation.md` | **Help → About** showing the version, for the 3.44 prerequisite |

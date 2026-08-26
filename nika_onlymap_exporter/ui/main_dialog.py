@@ -366,7 +366,7 @@ HELP_PAGES = (
     ("The dialog, tab by tab", "the-dialog.md"),
     ("Sharing a map", "sharing.md"),
     ("Enhance a map with AI", "enhance-with-ai.md"),
-    ("Host with OnlyMap", "hosting.md"),
+    ("Putting a map online", "hosting.md"),
     ("What gets exported", "supported-features.md"),
     ("Troubleshooting", "troubleshooting.md"),
     ("Privacy", "privacy.md"),

@@ -46,7 +46,7 @@ guides:
         url: /sharing.html
       - title: Sharing with someone who has no QGIS
         url: /share-qgis-map-without-qgis.html
-      - title: Host with OnlyMap
+      - title: Putting a map online
         url: /hosting.html
       - title: Enhance a map with AI
         url: /enhance-with-ai.html
