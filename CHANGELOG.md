@@ -6,7 +6,27 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **A "Host" call to action, in the dialog and in the preview.** Hosting a map
+  on NIKA's servers does not exist yet; the button opens a short form so the
+  demand can be counted before an auth flow, blob storage and an expiry job get
+  built on a hypothesis. The preview's version is a dismissible chip that never
+  reaches an exported file — a release gate asserts it stays out.
+
 ### Fixed
+- **Labels are visible.** Every release up to `0.1.3` exported label layers that
+  rendered *nothing*. A bare `TextLayer` reads each row's position through
+  `getPosition`, and a row here is a GeoJSON feature, so without an accessor
+  pointing at the geometry every label was positioned at `undefined` and the
+  layer drew empty — silently, with no console error, the layer still listed in
+  the legend and the layer switcher. It survived an earlier round of fixes to
+  the label *styling* attributes, because getting a label's colour right does
+  nothing for a label with no place to be. Maps already exported are affected
+  and need re-exporting; a browser test now counts glyph pixels, with an
+  unlabelled control so the count means something.
+- **Every guide in the Help tab printed its title twice.** Most guides open with
+  their own heading, because the same files are standalone pages on the website,
+  and the tab prepended the title again on top of it.
 - **Exported maps stamp the version that made them.** The generator line
   carried a hardcoded `0.1.0` from the first release onwards, so every map
   exported by 0.1.2 and 0.1.3 claimed to come from 0.1.0. The version is now
