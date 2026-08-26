@@ -25,7 +25,7 @@ Where that line falls differently from the established plugin's is set out in
 | Layer order and groups, including nested groups | Yes |
 | Layer visibility and opacity | Yes |
 | Scale-dependent visibility | No - the layer shows at every zoom, and the Fidelity tab says so |
-| Rasters | Not in 0.1.0 |
+| Rasters | Not yet |
 | Attribute-only tables | Not exported - nothing to draw |
 
 Data in any CRS is reprojected to WGS84 on the way out.
@@ -159,9 +159,9 @@ profile - a server, a container, or CI.
 | SVG markers, including parametrised fill and stroke | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a **point** | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
-| Rule-based, embedded-symbol renderers | Not in 0.1.0, reported by name |
+| Rule-based, embedded-symbol renderers | Not yet, reported by name |
 | Dashed and dotted lines | Yes - the line style dropdown and custom dash patterns alike |
-| Markers along a line, or filling a polygon | Not in 0.1.0, reported |
+| Markers along a line, or filling a polygon | Not yet, reported |
 | 2.5D renderer | Yes - becomes a real extrusion, keeping the roof and wall colours |
 
 ### Markers
@@ -239,9 +239,11 @@ stays grey (the Fidelity tab says so); and Positron's draped imagery comes from
 carto.com even though its flat tiles come from openfreemap.org — relief adds
 that third party, and the Fidelity tab names every host involved.
 
-**Labels do not appear over relief** in the current map runtime — labelled
-layers draw, but without their text, and the Fidelity tab names them. Turn
-relief off if the labels matter more.
+**Labels are unreadable over relief.** The map library stops honouring their
+text size once relief is on, so the words shrink to a few pixels and squash
+while the layer's own markers keep their size — the text is there, and too
+small to read at any size you set. The Fidelity tab names the affected layers.
+Turn relief off if the labels matter more than the terrain.
 
 **Polygon outlines do not draw over relief** either — the fills paint the
 surface but their borders disappear, so overlapping translucent areas are
@@ -271,8 +273,7 @@ Collision handling, callouts and curved placement are not - the web renderer
 resolves overlapping labels with its own logic. Italic is dropped, because the
 web renderer builds its font from a family and a weight only; that is reported.
 
-Labels using an expression rather than a single field are not translated in
-0.1.0.
+Labels using an expression rather than a single field are not translated yet.
 
 Labels can be turned off per layer on the **Layers** tab.
 

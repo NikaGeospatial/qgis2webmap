@@ -116,7 +116,7 @@ someone open your map with nothing installed. It is a separate commercial produc
 with its own licence, which is why it is fetched rather than bundled into this
 GPL plugin, and why you are shown the licence first.
 
-About 4.5 MB. After that, everything works offline, and exporting itself never
+About 4.8 MB. After that, everything works offline, and exporting itself never
 touches the network. See [privacy](privacy.md) for what that request does and
 does not send.
 

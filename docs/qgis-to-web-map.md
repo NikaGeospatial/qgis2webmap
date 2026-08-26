@@ -25,7 +25,7 @@ it to double-clicks it and gets your map — panning, zooming, layer switching,
 popups — with no QGIS, no account and no internet connection.
 
 Installing takes about a minute from inside QGIS. The first export downloads the
-map runtime once — about 4.5 MB, once per computer, ever — and everything works
+map runtime once — about 4.8 MB, once per computer, ever — and everything works
 offline after that.
 
 The [first export walkthrough](first-export.md) does this properly, with

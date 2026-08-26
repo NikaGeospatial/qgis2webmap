@@ -55,7 +55,7 @@ Compression is **lossless** — no coordinate precision is discarded to shrink a
 file. Where a project genuinely will not fit one file, the plugin recommends the
 next mode rather than degrading the data.
 
-Two further modes are designed but **not in `0.1.0`**: a Large Local Package
+Two further modes are designed but **not built yet**: a Large Local Package
 with a bundled launcher, for tiled or range-request assets, and Publish with
 OnlyMap for one-click hosting. See [issue #29][issue] for the full output
 policy.
@@ -83,7 +83,7 @@ choose `dist/qgis2webmap-<version>.zip`.
 
 Requires QGIS 3.44 or newer (QGIS 4 supported).
 
-**The first export downloads the map runtime** — about 4.5 MB, once per computer,
+**The first export downloads the map runtime** — about 4.8 MB, once per computer,
 after showing you its licence. Everything works offline after that. The runtime
 is the code that draws the map in a browser and is built into every map you
 export; it is a separate commercial product with its own licence, which is why
@@ -123,9 +123,9 @@ Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 
 Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
 sources, with single-symbol, categorized and graduated styling; layer order,
-groups, visibility, field aliases and hidden fields; labels,
-popups, and data attribution. Every map ships a legend, layer switcher, zoom
-controls and a scale bar.
+groups, visibility, field aliases and hidden fields; labels, popups, and data
+attribution. Every map ships a legend, layer switcher, zoom controls and a
+scale bar.
 
 Anything that will not survive the trip is listed in the **Fidelity** tab
 *before* you export, classified as preserved, approximated, raster-fallback,

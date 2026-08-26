@@ -196,12 +196,27 @@ class TestRuntimeDownloadSize:
         )
 
     def test_no_guide_states_a_different_size(self) -> None:
-        """Catches a stale figure left behind in another guide."""
-        pattern = re.compile(r"runtime[^.]{0,80}?about (\d+(?:\.\d+)?) ?MB", re.I)
+        """Catches a stale figure left behind in another guide.
+
+        Every megabyte figure in the guides is checked, not only those close
+        enough to the word "runtime" to match a proximity pattern. The 0.6.1 ->
+        0.6.20 bump moved the download from 4.5 to 4.8 MB and one guide kept the
+        old number purely because a line break had pushed it out of range of the
+        narrower rule this replaced.
+        """
         declared = self._declared_size()
+        expected = re.search(r"(\d+(?:\.\d+)?)", declared).group(1)
+        # `\s+` and not a literal space: the stale figure this rule was widened
+        # to catch had a line break between "about" and the number. "about" is
+        # what scopes it - other megabyte figures in the guides are measured
+        # artifact sizes and export ceilings, never phrased that way.
+        pattern = re.compile(r"about\s+(\d+(?:\.\d+)?)\s?MB", re.I)
         wrong: list[str] = []
         for path in markdown_files():
-            for match in pattern.finditer(path.read_text(encoding="utf-8")):
-                if match.group(0).split("about ")[-1].rstrip() not in declared:
-                    wrong.append(f"{path.name}: {match.group(0)!r}")
-        assert not wrong, f"stale runtime download sizes: {wrong}"
+            text = path.read_text(encoding="utf-8")
+            for match in pattern.finditer(text):
+                if match.group(1) != expected:
+                    wrong.append(f"{path.name}: {' '.join(match.group(0).split())!r}")
+        assert not wrong, (
+            f"stale runtime download sizes (expected {declared!r}): {wrong}"
+        )

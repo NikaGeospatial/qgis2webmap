@@ -73,7 +73,7 @@ version is released, so you have to come back and check.
 The first time you preview or export a map, a window appears asking permission
 to download the **OnlyMap runtime**. **This is expected. Say yes.**
 
-It is about 4.5 MB and it happens once on this computer, ever.
+It is about 4.8 MB and it happens once on this computer, ever.
 
 The runtime is the piece of code that draws the map in a web browser. A copy of
 it goes inside every map you export, and that is precisely what lets the person
