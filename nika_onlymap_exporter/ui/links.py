@@ -28,7 +28,4 @@ COMMUNITY_URL = "https://discord.gg/2CmbKkp5yg"
 # Where "Host" goes until hosting exists. The button is a demand probe, not a
 # feature: the form is the only thing behind it, and every label pointing here
 # has to make that clear rather than promising an upload that cannot happen yet.
-FEATURE_REQUEST_URL = (
-    "https://docs.google.com/forms/d/e/"
-    "1FAIpQLScpIzXHJbtz0KlyWttmwo3xgtqKZa8TCRT_XbPF2KYCWjjUwg/viewform"
-)
+FEATURE_REQUEST_URL = "https://forms.gle/kHhZnHvGfCS3nDnH6"

@@ -33,6 +33,7 @@ from nika_onlymap_exporter.packaging.runtime_manager import (
     LocalRuntime,
     discover_runtime_dir,
 )
+from nika_onlymap_exporter.ui.links import FEATURE_REQUEST_URL
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 
 
@@ -135,7 +136,7 @@ class TestEveryFixtureExports:
         # through the same slot, so this is the assertion that fails if the two
         # are ever confused.
         assert "om-preview-cta" not in html, name
-        assert "docs.google.com/forms" not in html, name
+        assert FEATURE_REQUEST_URL not in html, name
 
     def test_share_zip_is_openable_and_self_contained(
         self, fixture_project, runtime_available, tmp_path
