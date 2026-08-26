@@ -138,10 +138,16 @@ RELOAD_SCRIPT = f"""
 # not by itself what keeps this out of a shipped map. What keeps it out is that
 # it is composed here, in the preview module, and nowhere else.
 #
-# Top centre because every corner is claimed - switcher, legend, zoom controls,
-# scale bar, credit chip - and the caption may take a corner or either centre.
-# The one real collision is a top-centre caption, dodged with the same `:has()`
-# technique the template already commits to for the attribution slot.
+# Bottom right, stacked directly above the credit chip, so the two read as one
+# group of plugin chrome rather than something dropped in the middle of the map.
+#
+# That corner is already occupied twice over: the chip itself at `bottom: 12px`,
+# and the runtime's `bottom-end` widget slot (provider attribution), which the
+# template already lifts above the chip with hard-coded 36px/54px offsets. So
+# this has to join that stack rather than ignore it - the offsets below continue
+# the same arithmetic, and the slot is pushed up again by exactly this chip's
+# height while it exists. `:has()` does that, which also means dismissing the
+# chip drops the attribution back on its own with no script involved.
 _HOST_CTA_TEMPLATE = """
     <style>
       /* Deliberately unlike the map's own chrome. This is plugin UI shown while
@@ -149,17 +155,21 @@ _HOST_CTA_TEMPLATE = """
          you send the file to will see. */
       .om-preview-cta {
         position: fixed;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
+        right: 12px;
+        /* 12px inset + the credit chip's height + the runtime's own widget gap.
+           Same arithmetic as the template's attribution offsets, and the same
+           caveat: measured at 12px/1.5, approximate on purpose. */
+        bottom: calc(12px + 36px + 8px);
         /* Above the caption's 10000 and the runtime widgets' 9999: an
            affordance you cannot reach to dismiss is worse than no affordance. */
         z-index: 2147483000;
         display: flex;
         align-items: center;
         gap: 10px;
+        height: 34px;
+        box-sizing: border-box;
         max-width: min(30rem, calc(100% - 24px));
-        padding: 7px 8px 7px 14px;
+        padding: 0 8px 0 14px;
         border: 1px solid #d4d4d8;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.97);
@@ -206,11 +216,28 @@ _HOST_CTA_TEMPLATE = """
         background: #f4f4f5;
         color: #18181b;
       }
-      /* The only caption position that lands underneath. Approximate on
-         purpose, like the 36/54px reservations in the template: a two-line
-         caption at 15px title plus 12px/1.5 abstract clears inside 96px. */
-      body:has(.om-caption-top-center) .om-preview-cta {
-        top: 96px;
+      /* A data credit gives the chip a second line, which the template already
+         accounts for at 54px. Follow it up. */
+      body:has(.om-credit-data) .om-preview-cta {
+        bottom: calc(12px + 54px + 8px);
+      }
+      /* Now get out of the attribution's way. The template lifts the
+         `bottom-end` slot to clear the chip; while this chip exists it has to
+         clear both, so add this one's height and the same 8px gap. Written as
+         `:has()` rather than set from the dismiss handler so removing the chip
+         puts the attribution back by itself. */
+      body:has(.om-preview-cta) [data-om-widget-slot="bottom-end"] {
+        bottom: calc(12px + 36px + 8px + 34px + 8px) !important;
+      }
+      body:has(.om-preview-cta):has(.om-credit-data)
+        [data-om-widget-slot="bottom-end"] {
+        bottom: calc(12px + 54px + 8px + 34px + 8px) !important;
+      }
+      /* A caption pinned to this corner would land on top of the stack. Push
+         above it rather than fight for the space - the caption is the author's
+         content and this is a temporary affordance. */
+      body:has(.om-caption-bottom-right) .om-preview-cta {
+        bottom: calc(12px + 36px + 8px + 72px);
       }
       @media (max-width: 420px) {
         .om-preview-cta-label {
