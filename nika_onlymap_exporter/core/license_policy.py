@@ -155,7 +155,13 @@ def describe_license_key(value: str) -> LicenseKeyInfo:
     if not looks_like_license_key(text):
         return LicenseKeyInfo(malformed=True)
 
-    payload_text = text[len("om_live_") :].split(".", 1)[0]
+    # The prefix length is named rather than inlined so the slice stays simple.
+    # `text[len("om_live_") :]` is what the formatter produces from the inline
+    # form, and pycodestyle reads that space as E203 - which the plugin
+    # repository's Flake8 gate then reports on every upload. A plain name
+    # formats without the space, so both tools agree and nothing is suppressed.
+    prefix = len("om_live_")
+    payload_text = text[prefix:].split(".", 1)[0]
     try:
         # base64url without padding, which is what the runtime emits.
         padding = "=" * ((4 - len(payload_text) % 4) % 4)
