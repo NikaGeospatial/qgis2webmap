@@ -317,3 +317,44 @@ def test_decide_skips_when_the_changelog_has_no_section() -> None:
     decision = announce.decide("0.1.2", "0.1.3", "# Changelog\n\nNothing here.\n")
     assert decision.should_post is False
     assert "changelog" in decision.reason.lower()
+
+
+# --- the webhook secret ----------------------------------------------------
+#
+# The stored secret turned out to be the right webhook pasted without its
+# `https://`. `urllib` rejected it with a bare `ValueError: unknown url type`
+# that Actions masked to `***`, and because `post()` built its Request outside
+# its own `try`, that would have crashed the first real announcement rather
+# than reporting anything. These pin both halves of the fix.
+
+
+def test_a_scheme_less_webhook_is_repaired() -> None:
+    assert (
+        announce.normalise_webhook("discord.com/api/webhooks/123/abc")
+        == "https://discord.com/api/webhooks/123/abc"
+    )
+
+
+def test_a_correct_webhook_is_left_alone() -> None:
+    url = "https://discord.com/api/webhooks/123/abc"
+    assert announce.normalise_webhook(url) == url
+
+
+def test_repair_does_not_invent_a_webhook_from_nonsense() -> None:
+    """Narrow on purpose: anything but a bare webhook path stays broken."""
+    for value in ("garbage", "***", "example.com/api/webhooks/1/x"):
+        assert not announce.normalise_webhook(value).startswith("https://")
+
+
+def test_a_malformed_webhook_is_reported_not_raised() -> None:
+    for value in ("", "***", "garbage", '"https://discord.com/api/webhooks/1/x"'):
+        assert announce.webhook_problem(value) is not None
+
+
+def test_a_plausible_webhook_passes_the_shape_check() -> None:
+    assert announce.webhook_problem("https://discord.com/api/webhooks/123/abc") is None
+
+
+def test_post_refuses_a_malformed_url_instead_of_crashing() -> None:
+    """It used to raise out of `post()` uncaught; now it returns False."""
+    assert announce.post("***", {"content": "x"}) is False

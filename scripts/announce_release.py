@@ -417,6 +417,36 @@ def post(webhook: str, payload: dict) -> bool:
         return False
 
 
+WEBHOOK_HOSTS = ("discord.com/api/webhooks/", "discordapp.com/api/webhooks/")
+
+
+def normalise_webhook(webhook: str) -> str:
+    """Repair the one malformation worth repairing: a missing scheme.
+
+    The stored secret turned out to be the right webhook pasted without its
+    `https://`, which `urllib` rejects outright. Discord webhooks are only ever
+    https, so a value that is otherwise exactly a webhook path is unambiguous -
+    normalising it is the same class of tidying as the `.strip()` this already
+    does, and it means an announcement is not lost to a paste error nobody sees
+    until release day.
+
+    Deliberately narrow: only a bare `discord.com/api/webhooks/...`, and it
+    still warns, because the secret should be stored correctly rather than
+    quietly compensated for on every run.
+    """
+    value = webhook.strip()
+    if value.startswith(("http://", "https://")):
+        return value
+    if value.startswith(WEBHOOK_HOSTS):
+        print(
+            f"warning: {DISCORD_WEBHOOK_ENV} is missing its https:// prefix."
+            " Using it anyway - but fix the repository secret, because this"
+            " only covers a scheme and nothing else."
+        )
+        return "https://" + value
+    return value
+
+
 def webhook_problem(webhook: str) -> str | None:
     """Why this string cannot be a webhook URL, or None if it looks usable.
 
@@ -517,7 +547,7 @@ def main(argv: list | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.check_webhook:
-        webhook = os.environ.get(DISCORD_WEBHOOK_ENV, "").strip()
+        webhook = normalise_webhook(os.environ.get(DISCORD_WEBHOOK_ENV, ""))
         if not webhook:
             print(f"error: {DISCORD_WEBHOOK_ENV} is not set.")
             return 1
@@ -554,7 +584,7 @@ def main(argv: list | None = None) -> int:
         print(f"\ndry run: would announce {decision.version}, ping={decision.ping}")
         return 0
 
-    webhook = os.environ.get(DISCORD_WEBHOOK_ENV, "").strip()
+    webhook = normalise_webhook(os.environ.get(DISCORD_WEBHOOK_ENV, ""))
     if not webhook:
         print(
             f"error: {DISCORD_WEBHOOK_ENV} is not set. In CI it comes from the"
