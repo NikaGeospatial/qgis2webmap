@@ -4,7 +4,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.4] - 2026-08-26
 
 ### Changed
 - **The pinned OnlyMap runtime moved from 0.6.1 to 0.6.20.** The pin had been
