@@ -37,6 +37,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   nothing for a label with no place to be. Maps already exported are affected
   and need re-exporting; a browser test now counts glyph pixels, with an
   unlabelled control so the count means something.
+- **Scale-dependent visibility is no longer claimed, because it never worked.**
+  A layer set to show only between two scales was exported with
+  `visible-min-zoom`/`visible-max-zoom`, which the map library rejects on a
+  vector layer — every affected map logged `Unknown attribute ... likely a
+  typo` in the recipient's console and showed the layer at every zoom anyway.
+  The two values were also paired the wrong way round, so the minimum came out
+  larger than the maximum. The export now says so on the Fidelity tab instead
+  of pretending, and the documentation no longer claims the feature. Exported
+  maps get a browser test asserting the map library complains about *nothing*,
+  which is the check that would have caught this and the label bug both.
 - **Every guide in the Help tab printed its title twice.** Most guides open with
   their own heading, because the same files are standalone pages on the website,
   and the tab prepended the title again on top of it.

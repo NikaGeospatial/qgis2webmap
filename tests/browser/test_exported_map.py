@@ -820,6 +820,40 @@ class TestItDrawsAcrossTheAntimeridian:
         )
 
 
+class TestTheRuntimeHasNoComplaints:
+    """An exported map must reach its recipient with a silent console.
+
+    Not cosmetic. The runtime's response to an attribute it does not understand
+    is a `console.warn` and then ignoring it, which means every feature we get
+    wrong this way looks exactly like a feature that works. Three shipped bugs
+    came out of that gap, so the warning stream itself is now the assertion.
+
+    GPU driver chatter is excluded: it is the machine talking, not the map.
+    """
+
+    # Emitted by the driver under software rendering, not by the runtime.
+    IGNORED = ("GL Driver Message", "GPU stall")
+
+    def test_a_plain_export_warns_about_nothing(
+        self, page_with_console_log, exported_map
+    ) -> None:
+        page = page_with_console_log
+        open_map(page, exported_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_timeout(2000)
+
+        complaints = [
+            m
+            for m in page.console_messages
+            if not any(noise in m for noise in self.IGNORED)
+        ]
+        assert complaints == [], (
+            "the runtime complained about an exported map:\n  "
+            + "\n  ".join(complaints)
+        )
+
+
 class TestLabelsActuallyDraw:
     """Labels reaching the markup is not the same as deck.gl drawing them.
 

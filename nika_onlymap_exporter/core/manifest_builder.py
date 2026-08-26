@@ -728,23 +728,26 @@ def build_layer_element(
     if not layer.visible:
         attributes.append(("visible", "false"))
 
-    # QGIS scale visibility inverts on the way to zoom levels: the most
-    # zoomed-out scale becomes the minimum zoom.
-    if layer.scale_range.is_set:
-        if layer.scale_range.min_scale:
-            attributes.append(
-                (
-                    "visible-min-zoom",
-                    _number(scale_to_zoom(layer.scale_range.min_scale)),
-                )
-            )
-        if layer.scale_range.max_scale:
-            attributes.append(
-                (
-                    "visible-max-zoom",
-                    _number(scale_to_zoom(layer.scale_range.max_scale)),
-                )
-            )
+    # QGIS scale visibility is NOT emitted, because the runtime has nowhere to
+    # put it.
+    #
+    # `visible-min-zoom`/`visible-max-zoom` are declared in the runtime's
+    # `onlymapjs.html-data.json` and map to deck.gl's `visibleMinZoom` /
+    # `visibleMaxZoom` -- which are TileLayer props. On the GeoJsonLayer we
+    # actually emit, the runtime rejects them outright: every affected export
+    # logged `Unknown attribute "visible-min-zoom" ... likely a typo` in the
+    # recipient's console and the layer stayed visible at every zoom.
+    #
+    # That is why the flat schema could not catch it: an attribute list keyed
+    # only on `om-layer` cannot express "valid on TileLayer, not on this one".
+    #
+    # Emitting nothing is better than emitting a warning that does nothing, and
+    # `layer_reader` records the loss in the Fidelity tab so it is a stated
+    # limitation rather than a silent one. If the runtime grows real per-layer
+    # zoom visibility, restore this and mind the inversion: `scale_to_zoom`
+    # already flips the sense, so QGIS's *minimum scale* (zoomed furthest in)
+    # produces the *largest* zoom and belongs on the MAX attribute. The code
+    # this replaced paired them straight across and emitted min > max.
 
     if layer.popup.enabled and layer.popup.visible_fields:
         attributes.append(("pickable", "true"))
@@ -925,23 +928,10 @@ def build_label_element(
     if not layer.visible:
         attributes.append(("visible", "false"))
 
-    # Labels follow their layer's scale visibility; a label surviving past the
-    # geometry it names reads as a rendering bug.
-    if layer.scale_range.is_set:
-        if layer.scale_range.min_scale:
-            attributes.append(
-                (
-                    "visible-min-zoom",
-                    _number(scale_to_zoom(layer.scale_range.min_scale)),
-                )
-            )
-        if layer.scale_range.max_scale:
-            attributes.append(
-                (
-                    "visible-max-zoom",
-                    _number(scale_to_zoom(layer.scale_range.max_scale)),
-                )
-            )
+    # Labels used to follow their layer's scale visibility, so a label could
+    # not outlive the geometry it names. Nothing to follow any more: the layer
+    # itself no longer carries zoom visibility. See the note on the vector
+    # layer's attributes above.
 
     payload = json_for_script(collection)
 

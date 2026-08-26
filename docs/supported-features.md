@@ -24,7 +24,7 @@ Where that line falls differently from the established plugin's is set out in
 | Vector points, lines, polygons | Yes |
 | Layer order and groups, including nested groups | Yes |
 | Layer visibility and opacity | Yes |
-| Scale-dependent visibility | Yes, converted to zoom levels |
+| Scale-dependent visibility | No - the layer shows at every zoom, and the Fidelity tab says so |
 | Rasters | Not in 0.1.0 |
 | Attribute-only tables | Not exported - nothing to draw |
 

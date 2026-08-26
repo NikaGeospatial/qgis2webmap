@@ -437,11 +437,23 @@ class TestLayerElement:
         assert '<script type="application/json">' in markup
         assert "data=" not in markup
 
-    def test_scale_visibility_becomes_zoom_bounds(self) -> None:
+    def test_scale_visibility_is_not_emitted_at_all(self) -> None:
+        """Regression: it used to emit an attribute the runtime rejects.
+
+        `visible-min-zoom`/`visible-max-zoom` are declared in the runtime's
+        schema and map to deck.gl's TileLayer props. On the GeoJsonLayer we
+        emit, the runtime logged `Unknown attribute ... likely a typo` in the
+        recipient's console and showed the layer at every zoom regardless.
+        The values were also paired straight across, so `scale_to_zoom`'s
+        inversion produced min > max.
+
+        Emitting nothing beats emitting a warning that does nothing; the loss
+        is stated in the Fidelity tab instead.
+        """
         layer = make_layer(scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000))
         markup = build_layer_element(layer)
-        assert "visible-min-zoom=" in markup
-        assert "visible-max-zoom=" in markup
+        assert "visible-min-zoom" not in markup
+        assert "visible-max-zoom" not in markup
 
     def test_popup_layer_is_pickable_and_highlights(self) -> None:
         layer = make_layer(
@@ -1180,16 +1192,21 @@ class TestLabelLayer:
         )
         assert build_label_element(layer) == ""
 
-    def test_labels_follow_their_layers_scale_visibility(self) -> None:
-        """A label outliving the feature it names reads as a rendering bug."""
+    def test_labels_carry_no_scale_visibility_either(self) -> None:
+        """Labels followed their layer's zoom range; there is none to follow.
+
+        Kept as a pair with the layer's own test so the two cannot drift: a
+        label bounded by a zoom range its geometry does not share would be the
+        rendering bug the old behaviour was written to prevent.
+        """
         layer = make_layer(
             geojson=self.LABELLED,
             labeling=LabelingSpec(enabled=True, field_name="name"),
             scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
         )
         markup = build_label_element(layer)
-        assert "visible-min-zoom" in markup
-        assert "visible-max-zoom" in markup
+        assert "visible-min-zoom" not in markup
+        assert "visible-max-zoom" not in markup
 
     def test_label_layers_are_emitted_after_every_geometry_layer(self) -> None:
         """Otherwise the layer stacked above paints over the labels below it."""

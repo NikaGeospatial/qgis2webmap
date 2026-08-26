@@ -342,6 +342,30 @@ def page_with_network_log(page):
     return page
 
 
+@pytest.fixture
+def page_with_console_log(page):
+    """A page that records everything the runtime complains about.
+
+    The runtime warns rather than throws when it is handed an attribute it does
+    not recognise, so the only evidence is a console line the author never sees
+    and the recipient has no reason to open. That is how the whole class of
+    "emitted, warned about, silently ignored" bug survives -- `dash`, the label
+    layer's missing position, and the scale-range attributes were all of it.
+    """
+    messages: list[str] = []
+    page.on(
+        "console",
+        lambda m: (
+            messages.append(f"{m.type}: {m.text}")
+            if m.type in ("warning", "error")
+            else None
+        ),
+    )
+    page.on("pageerror", lambda e: messages.append(f"pageerror: {e}"))
+    page.console_messages = messages
+    return page
+
+
 # --------------------------------------------------------------------------
 # Icon markers
 # --------------------------------------------------------------------------
