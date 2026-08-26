@@ -412,6 +412,39 @@ def post(webhook: str, payload: dict) -> bool:
         return False
 
 
+def check_webhook(webhook: str) -> bool:
+    """Ask Discord whether the webhook still exists, without posting anything.
+
+    A webhook URL answers `GET` with its own metadata, so liveness is checkable
+    without putting a message in the channel. Worth having: the secret is
+    write-only once set, a webhook dies whenever someone deletes it or rotates
+    the channel, and until now the only thing that would have told us is a
+    release announcement failing on the day of a release.
+
+    Prints the webhook's name and nothing else. The URL is the credential and
+    stays masked by Actions; the name is what identifies which webhook a
+    channel's settings page is showing you.
+    """
+    request = urllib.request.Request(webhook, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:300]
+        print(
+            f"error: the webhook is not usable ({error.code}): {detail}\n"
+            "Make a new webhook in the Discord channel's settings and replace"
+            " the DISCORD_WEBHOOK_URL repository secret."
+        )
+        return False
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        print(f"error: could not reach Discord ({error})")
+        return False
+
+    print(f"webhook is live: {body.get('name', '(unnamed)')!r}")
+    return True
+
+
 def read_state() -> str:
     if not STATE_FILE.is_file():
         return ""
@@ -433,11 +466,23 @@ def main(argv: list | None = None) -> int:
         help="print the payload and post nothing (needs no webhook)",
     )
     parser.add_argument(
+        "--check-webhook",
+        action="store_true",
+        help="verify the webhook is alive and exit, posting nothing",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="post even if this version was already announced",
     )
     args = parser.parse_args(argv)
+
+    if args.check_webhook:
+        webhook = os.environ.get(DISCORD_WEBHOOK_ENV, "").strip()
+        if not webhook:
+            print(f"error: {DISCORD_WEBHOOK_ENV} is not set.")
+            return 1
+        return 0 if check_webhook(webhook) else 1
 
     announced = read_state()
     live = published_version()

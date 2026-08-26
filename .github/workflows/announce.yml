@@ -16,7 +16,10 @@
 #     Secrets and variables -> Actions). It is configured nowhere else. If this
 #     job starts failing with "DISCORD_WEBHOOK_URL is not set", that secret was
 #     deleted or the Discord webhook was rotated - make a new webhook in the
-#     Discord channel settings and replace the secret.
+#     Discord channel settings and replace the secret. To find that out BEFORE
+#     a release rather than during one, run this workflow by hand with
+#     `check_webhook` - it asks Discord whether the webhook still exists and
+#     posts nothing.
 #  2. GitHub disables scheduled workflows in a repository that has seen no
 #     commits for 60 days, and emails the repository admins when it does. If
 #     announcements go quiet on a dormant repository, re-enable this from the
@@ -37,6 +40,10 @@ on:
         default: false
       force:
         description: "Post even if this version was already announced"
+        type: boolean
+        default: false
+      check_webhook:
+        description: "Only check the webhook still exists, post nothing"
         type: boolean
         default: false
 
@@ -66,6 +73,7 @@ jobs:
           args=""
           if [ "${{ inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
           if [ "${{ inputs.force }}" = "true" ]; then args="$args --force"; fi
+          if [ "${{ inputs.check_webhook }}" = "true" ]; then args="--check-webhook"; fi
           python scripts/announce_release.py $args
 
       - name: Record what was announced
