@@ -6,6 +6,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **The pinned OnlyMap runtime moved from 0.6.1 to 0.6.20.** The pin had been
+  held since 2026-08-17 by a regression that stopped the runtime honouring
+  `dash` — a dashed line rendered identically to a solid one — which was fixed
+  upstream in 0.6.14. The bump also brings a page-wide spacebar fix (every map
+  was calling `preventDefault` on it, breaking space-to-scroll and
+  space-to-activate on focused buttons, which is an accessibility bug live in
+  every map exported so far), line/polygon completion on iOS WebViews, and a
+  licence key that cannot verify now saying so instead of silently dropping to
+  the free tier. Verified across all four tiers plus a new pixel-diff of every
+  rendering path we emit: 8 of 9 scenes byte-identical to 0.6.1, the ninth
+  differing on one edge of an extruded polygon by 0.038% of the frame.
+
 ### Added
 - **A "Host" call to action, in the dialog and in the preview.** Hosting a map
   on NIKA's servers does not exist yet; the button opens a short form so the

@@ -13,12 +13,12 @@
     "allowlist pragma to say so."
   ],
   "package": "@nika-js/onlymap",
-  "version": "0.6.1",
+  "version": "0.6.20",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "98631f2806a24abf92f5a36a2c3ee6fe806067a5c32f0ebb80c9130f1702d28e", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "bytes": 8039065
+      "sha256": "820fa72ecf8aa015220950317b5b630ea37ca53b7ecef31deb4a8bdb6a938372", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "bytes": 8282853
     },
     "onlymapjs.css": {
       "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c", "_": "checksum of a public artifact # pragma: allowlist secret",

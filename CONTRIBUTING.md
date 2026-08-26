@@ -146,18 +146,42 @@ The attribute-contract test in `tests/unit/test_manifest_builder.py` checks ever
 attribute we emit against the runtime's own `onlymapjs.html-data.json`. Point it
 at a copy with `ONLYMAP_HTML_DATA` if it is not beside your runtime.
 
-### The pin is held at 0.6.1 by a regression, not by neglect
+### Moving the pin, and why that needs more than a green test run
 
-`scripts/check_runtime_updates.py` will report newer builds; do not move the pin
-to one without re-running every tier. **0.6.2 and 0.6.4 silently stop honouring
-`dash`** — a dashed line renders pixel-for-pixel identical to a solid one
-(`TestDashedLinesReallyDash`, chromium and webkit, measured 2026-08-17). The
-attribute is still documented unchanged in those builds'
-`onlymapjs.html-data.json`, so nothing static catches this: only the rendered
-line does, which is exactly why that test counts pixels. 0.6.3 was never
-published to npm. The rest of 0.6.2–0.6.4 is additive — no attribute was
-removed, the licence is byte-identical, and the CSS bundle is unchanged — so the
-pin moves the day `dash` works again.
+`scripts/check_runtime_updates.py` reports newer builds. Do not move the pin to
+one without re-running every tier — and understand that every tier passing is
+not by itself sufficient.
+
+**The precedent.** From 0.6.2 to 0.6.13 — twelve releases — the runtime silently
+stopped honouring `dash`: a dashed line rendered pixel-for-pixel identical to a
+solid one. The attribute stayed documented, byte-identical, in the runtime's own
+`onlymapjs.html-data.json`, so the attribute-contract test passed. The unit tier
+passed. Both QGIS tiers passed. **Only the browser tier failed**, because
+`TestDashedLinesReallyDash` renders a line and counts pixels. It was fixed
+upstream in 0.6.14 (the terrain patch merge had been stripping every layer's
+extensions on flat maps — the runtime's own issue #36), and the pin moved to
+0.6.20 on 2026-08-26.
+
+Two rules follow, and both are load-bearing:
+
+1. **Never approve a bump on the strength of the non-browser tiers.** A schema
+   diff that removes nothing proves nothing: semantics change without the schema
+   changing, which is exactly how `dash` got through.
+2. **The assertions only catch what somebody thought to assert.** So also run
+   `scripts/visual_diff_runtimes.py OLD_RUNTIME_DIR NEW_RUNTIME_DIR`, which
+   renders one scene per rendering path we emit on both builds and diffs the
+   pixels. It is byte-deterministic against itself — zero differing pixels of
+   540,000 per scene — so any non-zero result is real rather than antialiasing.
+   A diff is a prompt to look, not a verdict: an upstream fix and a regression
+   are indistinguishable from there.
+
+For the record, 0.6.1 → 0.6.20 came out at 8 of 9 scenes byte-identical, the
+ninth differing by 206 pixels (0.038%) on one edge of an extruded polygon's side
+wall — visually indistinguishable at full size.
+
+That gate earned itself on its first run by finding an unrelated bug of ours:
+label layers had never rendered at all, in any release, because a bare
+`TextLayer` was emitted with no `get-position`.
 
 ## Running the browser tier
 
