@@ -40,6 +40,17 @@ SCOPE = "qgis2webmap"
 KEY_MAP_NAME = "mapName"
 KEY_OUTPUT_MODE = "outputMode"
 KEY_WIDGETS = "widgets"
+# The identity of the map this project was last published as, so pressing Host
+# again republishes to the same address instead of scattering a new URL per
+# edit. It describes the *map*, not the person, so unlike the licence key and
+# unlike the hosting token it belongs with the `.qgz` and travels with it.
+#
+# **Deliberately not a `DialogState` field.** Every field there is watched by
+# `snapshot`, because a setting the live preview does not notice looks like a
+# broken preview - and this is not a setting. Publishing changes not one byte
+# of what the writer produces, so folding it in would invalidate a cached read
+# and trigger a rebuild for a value the map cannot see.
+KEY_HOSTED_MAP_ID = "hostedMapId"
 KEY_LAYERS = "layers"
 
 # The OnlyMap licence key, in QSettings rather than the project.
@@ -527,3 +538,14 @@ def save_state(project: QgsProject, state: DialogState) -> None:
         KEY_LAYERS,
         json.dumps({k: v.to_dict() for k, v in state.layers.items()}),
     )
+
+
+def load_hosted_map_id(project: QgsProject) -> str:
+    """The map this project was last published as, or an empty string."""
+    value, ok = project.readEntry(SCOPE, KEY_HOSTED_MAP_ID, "")
+    return value.strip() if ok and value else ""
+
+
+def save_hosted_map_id(project: QgsProject, map_id: str) -> None:
+    """Remember what a publish produced, so the next one keeps the link."""
+    project.writeEntry(SCOPE, KEY_HOSTED_MAP_ID, (map_id or "").strip())

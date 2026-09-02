@@ -594,8 +594,10 @@ class TestManifest:
         assert "validate" not in build_manifest(over_cap, verdict)
 
 
-def find_onlymap_schema() -> Path | None:
-    """Locate `onlymapjs.html-data.json`, the runtime's attribute contract.
+def find_onlymap_schema() -> tuple[Path, bool] | None:
+    """Locate `onlymapjs.html-data.json`, and say whether it can be trusted.
+
+    Returns `(path, authoritative)`, or `None` when no copy exists at all.
 
     Not vendored into this repository: it ships inside the separately-licensed
     OnlyMap package, and copying it here would put licensed material in a GPL
@@ -609,7 +611,8 @@ def find_onlymap_schema() -> Path | None:
     override = os.environ.get("ONLYMAP_HTML_DATA")
     if override:
         path = Path(override)
-        return path if path.exists() else None
+        # An explicit override is a deliberate choice, so it is trusted.
+        return (path, True) if path.exists() else None
 
     # Order matters, and the pinned build wins. A local mirror checkout is
     # whatever someone last pulled: `~/Nika/onlymap-js` was three releases behind
@@ -618,23 +621,76 @@ def find_onlymap_schema() -> Path | None:
     # rule that applies to reading the bundle - verify against what the export
     # will actually run, never against the dev tree.
     runtime_dir = os.environ.get("ONLYMAP_RUNTIME_DIR")
+
+    # The PINNED build's own copy, which `extract_runtime` already writes into
+    # the runtime cache beside the JavaScript. This is the only candidate that
+    # is guaranteed to describe the runtime an export will actually load, so it
+    # is tried before any development checkout.
+    #
+    # Without it the order below decides the result, and a stale mirror wins
+    # silently: `~/Nika/onlymap-js` sat three releases behind and reported
+    # `om-overlay[selection-type]` - a real attribute of the pinned build - as
+    # absent from the schema, failing this suite for a defect that did not
+    # exist. No version is named here on purpose: the pin moves, and a comment
+    # naming one goes stale the next time it does. A contract test that can fail because of what someone last
+    # pulled is worse than no contract test, because the failure looks like a
+    # bug in this repository.
+    pinned: list[Path] = []
+    try:
+        from nika_onlymap_exporter.packaging.runtime_manager import (
+            RUNTIME_SCHEMA,
+            cached_runtime_dir,
+        )
+
+        lock = json.loads(
+            (
+                Path(__file__).resolve().parents[2]
+                / "nika_onlymap_exporter/runtime/runtime-lock.json"
+            ).read_text()
+        )
+        pinned.append(cached_runtime_dir(lock["version"]) / RUNTIME_SCHEMA)
+    except (ImportError, OSError, KeyError, ValueError):
+        # Discovery must never be the thing that breaks the suite; the
+        # candidates below still apply.
+        pass
+
     candidates = [
         *([Path(runtime_dir) / "onlymapjs.html-data.json"] if runtime_dir else []),
+        *pinned,
         Path.home() / "Nika/onlymap-js/onlymapjs.html-data.json",
         Path.home()
         / "Nika/nika-agent/node_modules/@nika-js/onlymap/onlymapjs.html-data.json",
         Path("node_modules/@nika-js/onlymap/onlymapjs.html-data.json"),
     ]
-    return next((c for c in candidates if c.exists()), None)
+    found = next((c for c in candidates if c.exists()), None)
+    if found is None:
+        return None
+    # Authoritative only when it came from the pinned build or an explicit
+    # override. A development mirror is whatever someone last pulled, and an
+    # attribute it calls unknown may simply postdate it - so the caller SKIPS on
+    # one rather than failing, because a mismatch there proves nothing about
+    # this repository. Silently trusting a mirror is what made this suite fail
+    # for `om-overlay[selection-type]`, an attribute the pinned runtime has
+    # supported for several releases.
+    authoritative = bool(runtime_dir) or found in pinned
+    return found, authoritative
 
 
 @pytest.fixture(scope="module")
 def known_attributes() -> dict[str, set[str]]:
-    schema = find_onlymap_schema()
-    if schema is None:
+    located = find_onlymap_schema()
+    if located is None:
         pytest.skip(
             "onlymapjs.html-data.json not found - set ONLYMAP_HTML_DATA to run "
             "the attribute-contract tests"
+        )
+    schema, authoritative = located
+    if not authoritative:
+        pytest.skip(
+            f"only a development mirror of the OnlyMap schema was found ({schema}), "
+            "which may predate the pinned runtime. Export once to populate the "
+            "runtime cache, or set ONLYMAP_RUNTIME_DIR / ONLYMAP_HTML_DATA, to run "
+            "the attribute-contract tests against the build that actually ships."
         )
     data = json.loads(schema.read_text())
     return {

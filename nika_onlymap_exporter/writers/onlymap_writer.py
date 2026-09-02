@@ -240,9 +240,16 @@ class OnlyMapWriter:
         `unbundle` writes the runtime beside the page instead of inside it. That
         is the whole point of the folder tier: a served map gets a small HTML
         file and a runtime the browser caches across every map on the site,
-        rather than the same two megabytes re-downloaded each time. It is
+        rather than the same ~8.3 MB re-downloaded each time. It is
         **only** valid over HTTP - the runtime loads as a module, and a module
         cannot be fetched from `file://` - so the other tiers stay inlined.
+
+        NIKA hosting takes this further and does not store the sibling at all:
+        `exporters/hosted.py` sends the runtime VERSION and the server points
+        the page's `import "./onlymap.js"` at one platform-wide copy. Nothing
+        here changes for that - the artifact this writes is the same either
+        way, which is the property that keeps the hosted and folder tiers from
+        drifting apart.
 
         Scanning happens first: an export that cannot work for its recipient
         should fail before anything is written, not after.

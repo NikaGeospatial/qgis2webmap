@@ -25,7 +25,12 @@ DISCORD_URL = "https://discord.gg/RujwMpednf"
 # every source look identical. This one belongs to the plugin's Help tab.
 COMMUNITY_URL = "https://discord.gg/2CmbKkp5yg"
 
-# Where "Host" goes until hosting exists. The button is a demand probe, not a
-# feature: the form is the only thing behind it, and every label pointing here
-# has to make that clear rather than promising an upload that cannot happen yet.
+# The hosting feedback form. It used to be the whole of the "Host" button - a
+# demand probe with nothing behind it - and the dialog's button now runs the
+# real publish flow instead. What still points here is the preview's own chip,
+# which is plugin UI shown to the author and can only ever open a link: a page
+# in a browser cannot reach back into the dialog to start a publish.
+#
+# It must never appear in an exported artifact; `tests/fixtures` asserts that
+# on every fixture project.
 FEATURE_REQUEST_URL = "https://forms.gle/kHhZnHvGfCS3nDnH6"

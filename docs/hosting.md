@@ -2,7 +2,7 @@
 title: Putting a map online
 seo_title: Host a QGIS web map online
 description: >-
-  Where an exported map can live once you have made it, what NIKA hosting will be when it exists, and the Content Security Policy trap that empties the map.
+  Where an exported map can live once you have made it, how one-click NIKA hosting works and what its confirmation screen is telling you, and the Content Security Policy trap that empties the map.
 ---
 
 # Putting a map online
@@ -11,36 +11,77 @@ An exported map is an ordinary file. Nothing about it needs NIKA, and nothing
 about it uploads on its own — putting it somewhere is a thing you do, not a
 thing it does.
 
-## Hosting it yourself, today
+## Hosting it yourself
 
 The export is plain HTML with no server requirement, so any static host works:
 GitHub Pages, S3, Netlify, or a folder on a web server you already run. Choose
 the **Folder** output mode if you would rather copy a directory than a single
 file.
 
-That is the whole answer right now, and for most maps it is a good one.
+For many maps that is a good answer, and nothing about an exported file needs
+NIKA to serve it.
 
-## Hosting with NIKA is not built yet
+## Hosting with NIKA
 
-There is a **Host** button in the export dialog and in the preview. It does not
-upload anything. It opens a short form, because we would rather find out whether
-people want one-click hosting before building an account system, file storage
-and an expiry job for a feature nobody asked for.
+Press **Host** in the export dialog. The map is uploaded to NIKA and you get a
+public link, and pressing Host again on the same project republishes to the
+same address rather than scattering a new link with every edit.
 
-If you want it, say so there — that is genuinely how the decision gets made.
+It is a separate, explicit step and never a side effect of exporting. Nothing
+about pressing **Export** uploads anything, and nothing about pressing **Host**
+changes the file you export.
 
-When it does exist it will be a separate, explicit step after signing in, with a
-confirmation naming what is about to leave your machine, and never a side effect
-of exporting. Two things will be worth reading carefully on that screen:
+### What happens, in order
 
-**The data goes with the map.** A Standalone HTML has every feature embedded in
-it. Publishing it publishes the attributes too, including any column you left in
+1. **You sign in, once.** Your browser opens NIKA's sign-in page and you
+   approve this computer there. The plugin never sees your password, and the
+   token it is given is stored per machine — deliberately *not* in the `.qgz`,
+   because a project file gets emailed, committed and handed to a contractor.
+2. **The map is built on your machine.** Nothing has left it yet.
+3. **You confirm.** The screen names the files, their total size, and the three
+   things below.
+4. **Upload, then publish.**
+
+### What the confirmation says, and why
+
+**Anyone with the link can open it.** A hosted map has no password, and a link
+that has been shared cannot be unshared.
+
+**The data goes with the map.** Every feature is embedded in the page.
+Publishing it publishes the attributes too, including any column you left in
 because it was convenient. Check the popup field list on the **Layers** tab
 before you publish anywhere — including a host of your own.
 
 **Authorisation is yours to confirm.** Licence terms on source data usually
-distinguish between analysing it and republishing it, and the plugin cannot know
-which of your layers are yours to publish.
+distinguish between analysing it and republishing it, and the plugin cannot
+know which of your layers are yours to publish.
+
+### What is actually uploaded
+
+The map page and a thumbnail of your canvas, and nothing else. The confirmation
+screen names both, so the list you approve is the list that is sent.
+
+In particular the OnlyMap runtime — the ~8.3 MB of JavaScript that draws the
+map — **is not uploaded**. It is byte-identical for every map built against the
+same OnlyMap release, so NIKA already stores one copy per release and points
+your map at it; what leaves your machine is the version number, not the bytes.
+Two things follow from that. The upload is ~8.3 MB smaller than the folder on
+your disk, and your plan's per-map size allowance is spent entirely on your own
+map and its data.
+
+### The free plan truncates a hosted map
+
+This is the one that surprises people, because it does not apply to the file
+you export and open yourself. OnlyMap's free-plan caps — 5 layers, and 25,000
+rows per layer — apply on a hosted `http(s)` page and nowhere else. A project
+past them, published on a free account, is **visibly incomplete to whoever
+opens the link**, and the plugin has to tell you that before it uploads rather
+than let your audience discover it.
+
+So it does: if your account is on the free tier and the project is past the
+caps, a second screen names every layer that will be cut before anything is
+uploaded. You can publish anyway — the plugin never decides that for you — but
+not without knowing.
 
 ## What an exported map does on the network
 

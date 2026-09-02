@@ -50,15 +50,23 @@ for exactly what is and isn't sent.
 | **Standalone HTML** | Double-click one file | Default. All resources embed and no remote resource is required |
 | **Share ZIP** | Extract, then open `index.html` | Data too large for one practical HTML file, or a mail filter that quarantines `.html` |
 | **Folder** | Copy to a web server, or open `index.html` | Publishing the result yourself |
+| **Host** | Open a link | One-click publishing to NIKA. A separate, explicit step — never a side effect of exporting |
 
 Compression is **lossless** — no coordinate precision is discarded to shrink a
 file. Where a project genuinely will not fit one file, the plugin recommends the
 next mode rather than degrading the data.
 
-Two further modes are designed but **not built yet**: a Large Local Package
-with a bundled launcher, for tiled or range-request assets, and Publish with
-OnlyMap for one-click hosting. See [issue #29][issue] for the full output
-policy.
+**Host** publishes the unbundled folder artifact. The ~8.3 MB OnlyMap runtime
+is **not uploaded at all**: NIKA stores one copy per runtime version and serves
+it to every map built against that version, so it is cached once across the
+whole platform rather than re-downloaded inside each page — and your per-map
+size allowance is spent entirely on your map. It confirms what is about to
+leave your machine first, and warns before uploading if a free-tier account
+would publish the map truncated — see [hosting](docs/hosting.md).
+
+One further mode is designed but **not built yet**: a Large Local Package with
+a bundled launcher, for tiled or range-request assets. See [issue #29][issue]
+for the full output policy.
 
 [issue]: https://github.com/NikaGeospatial/onlymap-js/issues/29
 
@@ -163,10 +171,11 @@ See [enhance a map with AI](docs/enhance-with-ai.md).
 ## Putting a map online
 
 An exported map is a plain HTML file, so any static host works — GitHub Pages,
-S3, Netlify, a folder on a web server. Hosting with NIKA is not built yet; the
-**Host** button in the dialog opens a form so we can find out whether people
-want it before building it. Nothing uploads on its own, ever. See
-[putting a map online](docs/hosting.md).
+S3, Netlify, a folder on a web server. Or press **Host** in the dialog: the
+plugin signs you in to NIKA through your browser, shows you what is about to
+leave your machine, and publishes the map to a public link. Pressing Host again
+on the same project republishes to the same address. Nothing uploads on its
+own, ever. See [putting a map online](docs/hosting.md).
 
 ## Usage
 

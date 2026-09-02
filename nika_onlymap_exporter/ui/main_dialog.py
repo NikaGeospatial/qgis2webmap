@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import contextlib
 import re
+import shutil
+import tempfile
 import traceback
 from html import escape as escape_html
 from pathlib import Path
@@ -76,6 +78,7 @@ from ..core.export_ir import (
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import (
     default_policy,
+    detect_violations,
     report_verdict,
 )
 from ..core.manifest_builder import basemap_note, terrain_note
@@ -87,11 +90,31 @@ from ..core.settings import (
     PRECISION_FULL,
     DialogState,
     LayerSettings,
+    load_hosted_map_id,
     load_state,
     resolve_license_key,
+    save_hosted_map_id,
     save_state,
 )
-from ..packaging.artifact_builder import build_artifact
+from ..exporters.hosted import HostedExporter, PreparedPublish
+from ..hosting.auth import (
+    AuthClient,
+    DeviceFlow,
+    SignInCancelledError,
+    SignInTimeoutError,
+    authorized_client,
+    clear_token,
+    resolve_token,
+    save_token,
+)
+from ..hosting.client import ALLOWED_FILENAMES, AuthRequiredError, UploadFile
+from ..hosting.consent import (
+    publish_consent_text,
+    should_warn_truncation,
+    truncation_warning_text,
+)
+from ..hosting.thumbnail import THUMBNAIL_FILENAME, capture_canvas
+from ..packaging.artifact_builder import build_artifact, terrain_zoom_clamp
 from ..packaging.dependency_scanner import (
     SINGLE_FILE_WARN_BYTES,
     measure_data_bytes,
@@ -99,6 +122,7 @@ from ..packaging.dependency_scanner import (
 )
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
+from .hosting_transport import make_qgis_transport
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
     COMMUNITY_URL,
@@ -256,6 +280,24 @@ def _apply_saved_color(button: QgsColorButton, value: str) -> None:
         button.setColor(color)
     else:
         button.setToNull()
+
+
+def _publishable_files(result, thumbnail: bytes) -> tuple[UploadFile, ...]:
+    """What the confirmation names, derived the same way the upload will be.
+
+    Built from the artifact and the captured thumbnail rather than from the
+    reservation, because the confirmation has to be honest *before* anything is
+    reserved. `HostedExporter.prepare` applies the same allowlist to the same
+    directory, so the list shown and the list uploaded cannot diverge.
+    """
+    files = [
+        UploadFile(item.path.name, item.size_bytes)
+        for item in result.files
+        if item.path.name in ALLOWED_FILENAMES
+    ]
+    if thumbnail:
+        files.append(UploadFile(THUMBNAIL_FILENAME, len(thumbnail)))
+    return tuple(sorted(files, key=lambda item: item.filename))
 
 
 def show_failure(parent: QWidget, title: str, message: str) -> None:
@@ -499,6 +541,10 @@ class MainDialog(QDialog):
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
         self._pending_license_key: str | None = None
+        # Where the bytes waiting to be uploaded live. Held on the dialog
+        # rather than in a `with` block because a publish spans three jobs with
+        # a question to the user between each pair, so no single scope owns it.
+        self._publish_staging: Path | None = None
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -1775,21 +1821,19 @@ class MainDialog(QDialog):
         self.preview_button.clicked.connect(self.on_preview)
         row.addWidget(self.preview_button)
 
-        # A demand probe, not a feature. Hosting does not exist yet; this opens
-        # the feature-request form so the interest can be counted before the
-        # auth flow, blob storage and expiry job get built on a hypothesis.
-        # Labelled with the arrow every other outward link in this dialog uses,
-        # because pressing it leaves for a browser rather than acting on the
-        # project - and never enabled/disabled with the export buttons, since
-        # it has nothing to do with whether the project is exportable.
+        # Real now, where it used to be a demand probe pointing at a form. The
+        # arrow stays: pressing it still ends with something leaving this
+        # machine for the network, which is the thing the arrow has always
+        # marked in this dialog. It is a separate, explicit action rather than
+        # an option on Export, because `docs/hosting.md` promises publishing is
+        # never a side effect of exporting.
         self.host_button = QPushButton("Host ↗", self)
         self.host_button.setToolTip(
-            "Hosting a map on NIKA's servers is not built yet. This opens a "
-            "short form so we can see how many people want it."
+            "Publish this map to NIKA and get a public link. Asks you to sign "
+            "in the first time, and always confirms what is about to be "
+            "uploaded before anything leaves this machine."
         )
-        self.host_button.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(FEATURE_REQUEST_URL))
-        )
+        self.host_button.clicked.connect(self.on_host)
         row.addWidget(self.host_button)
 
         self.export_button = QPushButton("Export", self)
@@ -1890,8 +1934,13 @@ class MainDialog(QDialog):
             self.status_label.setText(label)
             self.export_button.setEnabled(False)
             self.preview_button.setEnabled(False)
+            # Host is normally independent of export readiness - it is an
+            # action, not an output mode - but it runs the same one-job-at-a-
+            # time pipeline, so it goes dark for the same reason the others do.
+            self.host_button.setEnabled(False)
         else:
             self.progress_bar.reset()
+            self.host_button.setEnabled(True)
             self._update_export_readiness()
 
     def _on_job_progress(self, percent: int, message: str) -> None:
@@ -1925,6 +1974,9 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
+        # A cancelled publish leaves a second copy of the whole map in a temp
+        # directory. No-op for every other job.
+        self._discard_publish_staging()
         self.status_label.setText("Stopped. Nothing was written.")
 
     def _on_job_failed_quietly(self, message: str, details: str) -> None:
@@ -1941,6 +1993,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
+        self._discard_publish_staging()
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
         if self._fidelity_is_stale:
             self._show_fidelity_error(message)
@@ -2533,6 +2586,311 @@ class MainDialog(QDialog):
         )
         show_failure(self, title, str(exc))
 
+    # ---- Hosting --------------------------------------------------------
+
+    def on_host(self) -> None:
+        """Publish the map to NIKA.
+
+        Four stages with a question between each pair, which is the shape
+        `docs/hosting.md` commits to and not an accident of implementation:
+
+        1. Read and build, entirely locally. **Nothing has left the machine.**
+        2. Confirm - naming the files, the size, the public link, the attribute
+           data and the republication question.
+        3. Reserve a version. This sends a title, filenames and sizes and no
+           map data, and is the first moment the account's tier is knowable -
+           which is what lets the free-tier truncation warning arrive before
+           the upload rather than after it.
+        4. Upload and finalize.
+
+        Signing in, when needed, happens before any of it.
+        """
+        self._ensure_export(self._host_with, "Reading the project...")
+
+    def _host_with(self, export, _report) -> None:
+        if not export.is_exportable:
+            self._warn_not_exportable(export)
+            return
+        if not self._runtime_ready():
+            return
+
+        token = resolve_token()
+        if token is None:
+            self._sign_in(lambda fresh: self._build_for_publish(export, fresh))
+            return
+        self._build_for_publish(export, token)
+
+    # -- Signing in --
+
+    def _sign_in(self, then) -> None:
+        """Device flow: the browser signs in, the plugin never sees a password."""
+        answer = QMessageBox.question(
+            self,
+            "Sign in to NIKA",
+            "Publishing needs a NIKA account.\n\nYour browser opens NIKA's "
+            "sign-in page and you approve this computer there - the plugin "
+            "never sees your password. Nothing is uploaded by signing in.",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Ok,
+        )
+        if answer != QMessageBox.StandardButton.Ok:
+            self.status_label.setText("Not signed in. Nothing was published.")
+            return
+
+        auth = AuthClient(transport=make_qgis_transport())
+
+        def work(progress: Progress):
+            progress.step(-1, "Contacting NIKA...")
+            return auth.start()
+
+        def on_started(flow: DeviceFlow) -> None:
+            # Opened here rather than on the worker: `QDesktopServices` is a
+            # GUI-thread call, and the browser must already be on the right
+            # page before the poll loop starts asking about it.
+            QDesktopServices.openUrl(QUrl(flow.verification_url))
+            self._wait_for_sign_in(auth, flow, then)
+
+        self._start_job(work, on_started, "Signing in to NIKA...")
+
+    def _wait_for_sign_in(self, auth: AuthClient, flow: DeviceFlow, then) -> None:
+        code = f" Your code is {flow.user_code}." if flow.user_code else ""
+        label = f"Waiting for you to approve this computer.{code}"
+
+        def work(progress: Progress):
+            progress.step(-1, label)
+
+            def keep_waiting() -> bool:
+                # Raises `JobCancelledError` on Cancel, which unwinds the poll
+                # loop and is reported as a cancellation rather than a failure.
+                progress.check_cancelled()
+                return True
+
+            try:
+                # A completed poll already carries the desktop token; there is
+                # no exchange step for this client.
+                return auth.wait_for_approval(flow, keep_waiting=keep_waiting)
+            except (SignInCancelledError, SignInTimeoutError) as exc:
+                # Returned rather than raised: turning a request down in the
+                # browser, or leaving it, is a decision - routing it to the
+                # crash reporter would ask the user to report their own choice.
+                return exc
+
+        def on_token(token) -> None:
+            if isinstance(token, (SignInCancelledError, SignInTimeoutError)):
+                self.status_label.setText(str(token))
+                return
+            save_token(token)
+            then(token)
+
+        self._start_job(work, on_token, label)
+
+    # -- Building, confirming, publishing --
+
+    def _build_for_publish(self, export, token: str) -> None:
+        """Build the unbundled artifact locally. Still nothing on the network."""
+        self._discard_publish_staging()
+        writer = self._writer()
+        staging = Path(tempfile.mkdtemp(prefix="qgis2webmap-publish-"))
+        self._publish_staging = staging
+
+        def work(progress: Progress):
+            progress.step(READ_SHARE, "Building the map to publish...")
+            try:
+                # Unbundled, which is the whole reason the folder tier exists:
+                # a hosted map is fetched over HTTP, so `onlymap.js` can sit
+                # beside the page and be cached once for every map on the host.
+                return writer.write(
+                    export,
+                    staging / "build",
+                    mode=OutputMode.FOLDER,
+                    compress=True,
+                    preview_hook=terrain_zoom_clamp(export),
+                    unbundle=True,
+                )
+            except ExportBlockedError as exc:
+                return exc
+
+        def on_built(result) -> None:
+            if isinstance(result, ExportBlockedError):
+                self._discard_publish_staging()
+                QMessageBox.warning(
+                    self,
+                    "Cannot publish",
+                    "This map cannot be published yet:\n\n"
+                    + "\n".join(f"- {reason}" for reason in result.reasons),
+                )
+                return
+            self._confirm_and_reserve(export, token, result)
+
+        self._start_job(work, on_built, "Building the map to publish...")
+
+    def _confirm_and_reserve(self, export, token: str, result) -> None:
+        """The confirmation, then the metadata-only reservation."""
+        # Captured on the GUI thread, on every publish including a republish:
+        # a listing showing yesterday's picture beside today's map is a bug
+        # nobody looking at the listing could ever detect.
+        thumbnail = self._publish_thumbnail()
+
+        exporter = HostedExporter(
+            authorized_client(token, transport=make_qgis_transport()),
+            title=export.title,
+            thumbnail_png=thumbnail,
+            map_id=load_hosted_map_id(self.project) or None,
+        )
+        staging = self._publish_staging
+        if staging is None:  # pragma: no cover - defensive
+            return
+
+        files = _publishable_files(result, thumbnail)
+        if not self._confirm_publish(export, files):
+            self._discard_publish_staging()
+            self.status_label.setText("Not published. Nothing left this machine.")
+            return
+
+        violations = detect_violations(export)
+
+        def work(progress: Progress):
+            exporter.on_progress = progress.step
+            progress.step(-1, "Reserving the map address...")
+            try:
+                return exporter.prepare(result, staging / "upload")
+            except AuthRequiredError as exc:
+                # The stored token is dead. Clearing it here is what turns the
+                # next press of Host into a sign-in rather than the same
+                # failure again.
+                clear_token()
+                return exc
+
+        def on_prepared(prepared) -> None:
+            if isinstance(prepared, AuthRequiredError):
+                self._discard_publish_staging()
+                QMessageBox.warning(self, "Sign in again", str(prepared))
+                return
+            if should_warn_truncation(
+                prepared.start.license_key, violations
+            ) and not self._confirm_truncation(violations):
+                self._discard_publish_staging()
+                self.status_label.setText("Not published. Nothing left this machine.")
+                return
+            self._upload(exporter, prepared)
+
+        self._start_job(work, on_prepared, "Reserving the map address...")
+
+    def _upload(self, exporter: HostedExporter, prepared: PreparedPublish) -> None:
+        def work(progress: Progress):
+            exporter.on_progress = progress.step
+            try:
+                return exporter.publish(prepared)
+            except AuthRequiredError as exc:
+                clear_token()
+                return exc
+
+        def on_published(outcome) -> None:
+            self._discard_publish_staging()
+            if isinstance(outcome, AuthRequiredError):
+                QMessageBox.warning(self, "Sign in again", str(outcome))
+                return
+            # Remembered with the project, so pressing Host again republishes
+            # to the same address instead of scattering a new link per edit.
+            save_hosted_map_id(self.project, prepared.start.map_id)
+            url = outcome.public_url or ""
+            self.status_label.setText(outcome.open_instruction)
+            self._show_published(url)
+
+        self._start_job(work, on_published, "Uploading the map...")
+
+    # -- The screens --
+
+    def _publish_thumbnail(self) -> bytes:
+        """A picture of the canvas for the listing, or nothing at all.
+
+        A missing thumbnail is not worth failing a publish over, so this never
+        raises: the file is simply left out of the upload.
+        """
+        canvas = getattr(self.iface, "mapCanvas", None)
+        if canvas is None:
+            return b""
+        try:
+            return capture_canvas(canvas())
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Could not capture a thumbnail:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Warning,
+            )
+            return b""
+
+    def _confirm_publish(self, export, files) -> bool:
+        """The mandatory confirmation. See `hosting.consent` for the wording."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Publish this map?")
+        box.setText(f"Publish '{export.title}' to a public web address?")
+        box.setInformativeText(
+            publish_consent_text(
+                export.title,
+                files,
+                feature_count=sum(
+                    layer.feature_count for layer in export.exportable_layers
+                ),
+                layer_count=len(export.exportable_layers),
+            )
+        )
+        publish = box.addButton("Publish", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        # Cancel is the default: this is the screen where a stray Return key
+        # would put someone's attribute table on the public internet.
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is publish
+
+    def _confirm_truncation(self, violations) -> bool:
+        """The free-tier warning, before a single byte of the map is sent."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("The hosted map will be incomplete")
+        box.setText("This map is past the free plan's limits.")
+        box.setInformativeText(truncation_warning_text(violations))
+        publish = box.addButton("Publish anyway", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is publish
+
+    def _show_published(self, url: str) -> None:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Published")
+        box.setText("Your map is online.")
+        box.setInformativeText(
+            f"{url}\n\nAnyone with this link can open it. Pressing Host again "
+            "republishes to the same address."
+        )
+        copy = box.addButton("Copy link", QMessageBox.ButtonRole.ActionRole)
+        open_it = box.addButton("Open in browser", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is copy:
+            QGuiApplication.clipboard().setText(url)
+            # The link is also left on the status line, because a clipboard the
+            # user cannot see is not somewhere they can check it came through.
+            self.status_label.setText(f"Link copied: {url}")
+        elif clicked is open_it:
+            QDesktopServices.openUrl(QUrl(url))
+
+    def _discard_publish_staging(self) -> None:
+        """Delete the staged copy of what was going to be uploaded.
+
+        Called on every exit from the flow, cancellation included: it holds a
+        second copy of the whole map, and on Windows nothing else ever clears
+        the temp directory.
+        """
+        staging, self._publish_staging = self._publish_staging, None
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
+
     # ---- Lifecycle ------------------------------------------------------
 
     def _shutdown(self) -> None:
@@ -2570,6 +2928,8 @@ class MainDialog(QDialog):
         # Before the watcher, because a rebuild triggered mid-teardown would run
         # against a half-disconnected dialog.
         self._stop_live_preview()
+        with contextlib.suppress(Exception):
+            self._discard_publish_staging()
         # The preview files exist only to be served by the dialog's own
         # server; once it stops they are dead weight, and on Windows nothing
         # else ever clears the temp directory. The sweep also collects

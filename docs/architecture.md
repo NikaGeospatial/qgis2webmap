@@ -160,8 +160,17 @@ Recorded so they are designed around rather than discovered late:
 
 ## Packaging
 
-Measured on a real export: **5.45 MB uncompressed, 1.84 MB packed** - a 3.0x
-reduction, entirely lossless.
+Sizes are dominated by the runtime, not by map data, so they are quoted from the
+pinned build rather than from one project's export. For OnlyMap 0.6.26 the
+runtime contributes **7.92 MiB inlined raw, 2.86 MiB gzipped and base64'd** - a
+2.8x reduction, entirely lossless - on top of which sit the stylesheet (0.07 MiB,
+never compressed; see below) and the page and its data.
+
+Re-derive rather than trust these when the pinned runtime changes: they moved
+substantially between releases, and an earlier figure here (5.45 MB / 1.84 MB)
+outlived the build it was measured on by several versions. `runtime-lock.json`
+records the exact byte count of every pinned file, which is the number to start
+from.
 
 The runtime is embedded as gzipped base64 and inflated in the browser by a small
 bootstrap using `DecompressionStream`. Verified working from `file://` in

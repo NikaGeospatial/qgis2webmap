@@ -4,7 +4,7 @@
 
 QGIS requires that "all code included in any plugin should be made clearly and
 easily available in source form", and refuses plugins that ship binaries. The
-OnlyMap runtime is a 7.9 MB minified build of a closed-source library: nobody
+OnlyMap runtime is a 8.3 MB minified build of a closed-source library: nobody
 can review it, so it must not travel inside a plugin that plugins.qgis.org
 redistributes. Fetching keeps the plugin wholly GPL with public source, and lets
 the user obtain the runtime from NIKA's own channel under NIKA's own licence.

@@ -12,7 +12,7 @@
    **One deliberate exception: the OnlyMap runtime.** It cannot ship with the
    plugin. QGIS requires that "all code included in any plugin should be made
    clearly and easily available in source form" and refuses plugins carrying
-   binaries; the runtime is a 5.7 MB minified build of a closed-source library,
+   binaries; the runtime is an 8.3 MB minified build of a closed-source library,
    so putting it in the zip would ask plugins.qgis.org to redistribute
    unreviewable proprietary code. It is therefore downloaded once per machine,
    under these conditions:

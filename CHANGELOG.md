@@ -4,6 +4,74 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **One-click hosting.** The **Host** button was a demand probe pointing at a
+  feature-request form; it now signs in to NIKA through a browser device flow,
+  builds the unbundled folder artifact, captures a thumbnail from the canvas
+  and publishes the map to a public URL. Republishing keeps the same address:
+  the map's id is remembered with the project, which is what stops a corrected
+  map scattering a new link with every edit.
+
+- **The pinned OnlyMap runtime moved from 0.6.20 to 0.6.26**, which fixes two
+  defects every map exported since 0.6.19 has carried.
+
+  **Basemap labels vanished on the first pan.** Place names and street labels on
+  any interactive basemap painted once and then disappeared permanently the
+  moment the camera moved — a misplaced option sent the basemap engine's
+  label-fade arithmetic to `NaN`. Static exports and recordings were unaffected,
+  which is how it survived several releases. Fixed upstream in 0.6.25.
+
+  **Hovering stalled the map on ordinary hardware.** Hover ran a GPU hit-test on
+  every mouse-move event, measured upstream at over a second of freeze per
+  movement on integrated graphics with real data. Hover now tests once when the
+  pointer comes to rest. That matters more for us than for most consumers: an
+  exported map is opened by whoever was sent the link, on whatever machine they
+  have. Fixed upstream in 0.6.26.
+
+  Also arriving with the bump: scale-dependent visibility on every layer type
+  rather than only tile layers (`visible-zoom-range`), a pointer cursor over
+  interactive features, and a refreshed free-plan attribution badge that now
+  reads "Built with OnlyMap by NIKA. Free for non-commercial use."
+
+  **The sign-in token is scoped to what this plugin does.** It may read your
+  identity and publish maps, and nothing else — it cannot reach billing, cannot
+  create API keys and cannot spend a NIKA AI allowance. The browser names those
+  permissions before you approve the connection. This matters because a QGIS
+  plugin has no keychain, so the token is stored in a `QSettings` file in the
+  clear; scoping it means someone who reads that file can publish maps to your
+  account rather than spend your money.
+
+  The unbundled artifact is deliberate, and the runtime is never uploaded.
+  `onlymap.js` is ~8.3 MB and byte-identical for every map built against the
+  same OnlyMap release, so the publish sends only the version string and NIKA
+  points the map at the single copy it already stores for that version. One
+  cached copy serves every map on the platform, and the per-map size cap is
+  spent entirely on the map.
+
+  Publishing is a separate, explicit step and never a side effect of
+  exporting, which is what `docs/hosting.md` has promised publicly since
+  before hosting existed. Two screens stand in front of it: a confirmation
+  naming the files, their size, that anyone with the link can open the map,
+  that the attribute data goes public, and that republication rights on source
+  data are the author's to confirm; and — only when the account is on the free
+  tier *and* the project is past OnlyMap's caps — a warning that the hosted map
+  will be truncated. The reservation call that reveals the tier sends a title,
+  filenames and sizes and no map data, so that warning arrives while nothing
+  has left the machine.
+
+### Security
+- The sign-in token is stored per machine in `QSettings` and **never** written
+  into the `.qgz`, by the argument `core/settings.py` already makes for the
+  licence key and harder: a project file gets emailed, committed and handed to
+  a contractor, and this is a bearer credential rather than a signed,
+  domain-locked, publishable one. HTTPS is enforced on the API base and on
+  every presigned upload URL, including the ones the server produced — "the
+  server said so" is not a property the client can verify. A 401 clears the
+  stored token so the next press of Host offers a sign-in rather than the same
+  failure again.
+
 ## [0.1.4] - 2026-08-26
 
 ### Changed

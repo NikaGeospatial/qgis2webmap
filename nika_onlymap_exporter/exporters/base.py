@@ -29,6 +29,10 @@ class ExportOutcome:
     mode: OutputMode
     size_bytes: int
     open_instruction: str
+    # Set only by a destination that produces one - hosting. Every other
+    # exporter leaves it None, which is what lets the dialog decide between
+    # "Open exported map" and "Copy link" without knowing which ran.
+    public_url: str | None = None
 
     @property
     def size_mb(self) -> float:
@@ -42,6 +46,10 @@ class ExportOutcome:
             "path": self.path.name,
             "mode": self.mode.value,
             "sizeBytes": self.size_bytes,
+            # The URL itself is deliberately absent: a snapshot ends up in
+            # fixtures and diffs, and a published address is the user's to
+            # share rather than ours to record.
+            "published": self.public_url is not None,
         }
 
 
