@@ -7,6 +7,11 @@ gains one by accident.
 An unscripted request raises rather than falling through, which is what makes
 "no test may touch the network" an enforced property rather than a convention.
 
+A scripted answer may be a callable rather than a response. The publish
+handshake is content-addressed - what the server offers an upload slot for
+depends on the digests it was just sent - so some answers can only be written
+once the request is in hand.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -32,6 +37,8 @@ class FakeTransport:
         answer = self.responses.pop(0)
         if isinstance(answer, Exception):
             raise answer
+        if callable(answer):
+            return answer(request)
         return answer
 
 
