@@ -30,6 +30,7 @@ import re
 import shutil
 import tempfile
 import traceback
+from datetime import datetime
 from html import escape as escape_html
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -91,9 +92,11 @@ from ..core.settings import (
     DialogState,
     LayerSettings,
     load_hosted_map_id,
+    load_hosted_release_n,
     load_state,
     resolve_license_key,
     save_hosted_map_id,
+    save_hosted_release_n,
     save_state,
 )
 from ..exporters.hosted import HostedExporter, PreparedPublish
@@ -107,19 +110,26 @@ from ..hosting.auth import (
     resolve_token,
     save_token,
 )
-from ..hosting.client import ALLOWED_FILENAMES, AuthRequiredError, UploadFile
+from ..hosting.client import (
+    AuthRequiredError,
+    PublishConflictError,
+    PublishRefusedError,
+    UploadFile,
+)
 from ..hosting.consent import (
     publish_consent_text,
     should_warn_truncation,
     truncation_warning_text,
 )
+from ..hosting.manifest import PublishManifest
 from ..hosting.thumbnail import THUMBNAIL_FILENAME, capture_canvas
-from ..packaging.artifact_builder import build_artifact, terrain_zoom_clamp
+from ..packaging.artifact_builder import build_artifact
 from ..packaging.dependency_scanner import (
     SINGLE_FILE_WARN_BYTES,
     measure_data_bytes,
     standalone_ineligible_reason,
 )
+from ..packaging.publish_manifest import PublishManifestError, build_publish_manifest
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
 from .hosting_transport import make_qgis_transport
@@ -282,22 +292,97 @@ def _apply_saved_color(button: QgsColorButton, value: str) -> None:
         button.setToNull()
 
 
-def _publishable_files(result, thumbnail: bytes) -> tuple[UploadFile, ...]:
-    """What the confirmation names, derived the same way the upload will be.
+def _publishable_files(
+    manifest: PublishManifest, thumbnail: bytes
+) -> tuple[UploadFile, ...]:
+    """What the confirmation names, taken from the manifest that will be sent.
 
-    Built from the artifact and the captured thumbnail rather than from the
-    reservation, because the confirmation has to be honest *before* anything is
-    reserved. `HostedExporter.prepare` applies the same allowlist to the same
-    directory, so the list shown and the list uploaded cannot diverge.
+    Read out of the manifest rather than filtered by name here, because the
+    manifest is what decides what is publishable: `HostedExporter.prepare`
+    stages exactly the entries it names, so the list shown and the list
+    uploaded cannot diverge. The thumbnail is appended the same way the
+    exporter appends it - it is captured in memory and was never a file in the
+    built directory for the manifest to have described.
     """
-    files = [
-        UploadFile(item.path.name, item.size_bytes)
-        for item in result.files
-        if item.path.name in ALLOWED_FILENAMES
-    ]
+    files = [UploadFile(entry["path"], entry["size"]) for entry in manifest["files"]]
     if thumbnail:
         files.append(UploadFile(THUMBNAIL_FILENAME, len(thumbnail)))
     return tuple(sorted(files, key=lambda item: item.filename))
+
+
+def sign_in_wait_message(flow: DeviceFlow) -> str:
+    """What the progress line says while the browser holds the sign-in.
+
+    There is no code to read out. This flow approves a computer by opening a
+    URL that already carries the flow id, so the only thing left to do is
+    finish in the tab that just opened - and naming a code the user cannot see
+    anywhere would send them hunting for one. The address is repeated because
+    the browser that was supposed to open may not have.
+    """
+    return (
+        "Waiting for you to approve this computer in your browser. If no page "
+        f"opened, sign in at {flow.authorize_url}"
+    )
+
+
+def _publish_date(iso_instant: str) -> str:
+    """`publishedAt` as a person would say it, or as the server sent it.
+
+    Falls back to the raw string rather than dropping the date: an instant this
+    cannot parse is still evidence of when, and hiding it would make the
+    sentence claim less than it knows.
+    """
+    text = iso_instant.strip()
+    if not text:
+        return ""
+    with contextlib.suppress(ValueError):
+        # `fromisoformat` accepts the offset form but not a trailing Z.
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return f"{parsed.day} {parsed.strftime('%B')}"
+    return text
+
+
+def republish_conflict_text(
+    conflict: PublishConflictError, based_on: int | None
+) -> str:
+    """What the map is at now, what this project is based on, and what wins.
+
+    The rollback case gets its own sentence because it is the one a release
+    number alone gets backwards. A colleague publishing release 8 normally
+    means newer work than the release 7 this project is based on - but a
+    rollback to release 3 means the opposite: the live map is deliberately
+    showing older content, and the person who published release 7 is behind it
+    too. Someone reading "release 8, published by Bob" without being told that
+    would cancel exactly when they should override.
+    """
+    who = conflict.published_by.strip() or "someone else"
+    when = _publish_date(conflict.published_at)
+    live = f"This map is at release {conflict.current_release}, published by {who}"
+    live += f" on {when}." if when else "."
+
+    if conflict.was_rollback:
+        target = (
+            f"release {conflict.rolled_back_to}"
+            if conflict.rolled_back_to is not None
+            else "an earlier release"
+        )
+        live += (
+            f" That release was a rollback to {target}, not new work: the live "
+            "map is deliberately showing older content, so whoever published "
+            "the release before it is behind as well."
+        )
+
+    mine = (
+        f"Your project is based on release {based_on}."
+        if based_on is not None
+        else "Your project is not based on any release NIKA recognises."
+    )
+    replace = f"Publishing will replace release {conflict.current_release} with"
+    if conflict.was_rollback:
+        replace += " your version, undoing the rollback."
+    else:
+        replace += " your version."
+    return f"{live}\n\n{mine} {replace}"
 
 
 def show_failure(parent: QWidget, title: str, message: str) -> None:
@@ -565,6 +650,12 @@ class MainDialog(QDialog):
         # nothing to refresh.
         self.watcher = LayerTreeWatcher(self.project, self)
         self.watcher.changed.connect(self.refresh_layers)
+
+        # The Host button describes the project, not the dialog, and the dialog
+        # outlives the project: `QgsProject.instance()` is the same object after
+        # a different `.qgz` is opened, with different contents inside it.
+        self.project.readProject.connect(self._update_host_button)
+        self.project.cleared.connect(self._update_host_button)
 
         # `finished` covers every way the dialog can close, including the Close
         # button. `closeEvent` alone does not: on Qt5, `QDialog::done()` hides
@@ -1827,7 +1918,7 @@ class MainDialog(QDialog):
         # marked in this dialog. It is a separate, explicit action rather than
         # an option on Export, because `docs/hosting.md` promises publishing is
         # never a side effect of exporting.
-        self.host_button = QPushButton("Host ↗", self)
+        self.host_button = QPushButton(self._host_button_label(), self)
         self.host_button.setToolTip(
             "Publish this map to NIKA and get a public link. Asks you to sign "
             "in the first time, and always confirms what is about to be "
@@ -1854,6 +1945,24 @@ class MainDialog(QDialog):
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row
+
+    def _host_button_label(self) -> str:
+        """`Host` while the map has no address yet, `Republish` once it has.
+
+        Read from the project rather than remembered on the dialog: the map id
+        is what actually decides whether the next press creates an address or
+        replaces what is at one, so the label cannot drift from the behaviour.
+        """
+        return "Republish ↗" if load_hosted_map_id(self.project) else "Host ↗"
+
+    def _update_host_button(self) -> None:
+        """Keep the label honest when what is under the dialog changes.
+
+        The dialog is non-modal and outlives any one project: a user can open
+        another `.qgz` with it still on screen, and after a first publish the
+        button in front of them would otherwise go on saying Host.
+        """
+        self.host_button.setText(self._host_button_label())
 
     # ---- Progress -------------------------------------------------------
 
@@ -2647,14 +2756,13 @@ class MainDialog(QDialog):
             # Opened here rather than on the worker: `QDesktopServices` is a
             # GUI-thread call, and the browser must already be on the right
             # page before the poll loop starts asking about it.
-            QDesktopServices.openUrl(QUrl(flow.verification_url))
+            QDesktopServices.openUrl(QUrl(flow.authorize_url))
             self._wait_for_sign_in(auth, flow, then)
 
         self._start_job(work, on_started, "Signing in to NIKA...")
 
     def _wait_for_sign_in(self, auth: AuthClient, flow: DeviceFlow, then) -> None:
-        code = f" Your code is {flow.user_code}." if flow.user_code else ""
-        label = f"Waiting for you to approve this computer.{code}"
+        label = sign_in_wait_message(flow)
 
         def work(progress: Progress):
             progress.step(-1, label)
@@ -2687,7 +2795,7 @@ class MainDialog(QDialog):
     # -- Building, confirming, publishing --
 
     def _build_for_publish(self, export, token: str) -> None:
-        """Build the unbundled artifact locally. Still nothing on the network."""
+        """Build the hosted artifact locally. Still nothing on the network."""
         self._discard_publish_staging()
         writer = self._writer()
         staging = Path(tempfile.mkdtemp(prefix="qgis2webmap-publish-"))
@@ -2696,35 +2804,75 @@ class MainDialog(QDialog):
         def work(progress: Progress):
             progress.step(READ_SHARE, "Building the map to publish...")
             try:
-                # Unbundled, which is the whole reason the folder tier exists:
-                # a hosted map is fetched over HTTP, so `onlymap.js` can sit
-                # beside the page and be cached once for every map on the host.
-                return writer.write(
+                # The hosted tier, which is not the folder tier with a URL on
+                # the end of it. Three of the four arguments this used to pass
+                # are things a served page cannot have, and each one is now
+                # somebody else's job:
+                #
+                # * `unbundle=True` wrote an 8.3 MB `onlymap.js` beside the
+                #   page. Hosted loads the runtime from the CDN under an
+                #   `integrity` pin instead - one copy for every map on the
+                #   internet, and nothing of ours to upload.
+                # * `compress=True` gzipped what it inlined. A hosted page
+                #   inlines nothing, and the compression that matters is
+                #   `Content-Encoding` on the wire, which the server applies to
+                #   the page and every asset. Saying False here is what keeps
+                #   `ArtifactResult.compressed` an honest record of the artifact
+                #   rather than of an argument nobody used.
+                # * `preview_hook=terrain_zoom_clamp(...)` was inline script.
+                #   The hosted CSP runs no script but the pinned runtime, so the
+                #   writer refuses the combination outright and `scan` refuses a
+                #   relief map with a message naming the remedy, rather than
+                #   dropping a correction the map needs.
+                #
+                # `mode=FOLDER` stays: hosting is a destination, not a tier, and
+                # FOLDER is the shape - a page with its files beside it - that a
+                # served map takes. `HostedExporter.mode` says the same thing.
+                result = writer.write(
                     export,
                     staging / "build",
                     mode=OutputMode.FOLDER,
-                    compress=True,
-                    preview_hook=terrain_zoom_clamp(export),
-                    unbundle=True,
+                    compress=False,
+                    hosted=True,
                 )
             except ExportBlockedError as exc:
                 return exc
 
-        def on_built(result) -> None:
-            if isinstance(result, ExportBlockedError):
+            # Described on the worker, beside the build it describes, because
+            # every file in it is hashed: the digests are what the server
+            # verifies the upload against, and doing that on the GUI thread
+            # would freeze the dialog for the size of the map.
+            try:
+                built = build_publish_manifest(result.entry_path.parent)
+            except PublishManifestError as exc:
+                return exc
+            return result, built
+
+        def on_built(built) -> None:
+            if isinstance(built, ExportBlockedError):
                 self._discard_publish_staging()
                 QMessageBox.warning(
                     self,
                     "Cannot publish",
                     "This map cannot be published yet:\n\n"
-                    + "\n".join(f"- {reason}" for reason in result.reasons),
+                    + "\n".join(f"- {reason}" for reason in built.reasons),
                 )
                 return
-            self._confirm_and_reserve(export, token, result)
+            if isinstance(built, PublishManifestError):
+                # The build finished but is not something a hosted release can
+                # describe. Its own message names the file, which is more use
+                # than a generic refusal would be.
+                self._discard_publish_staging()
+                QMessageBox.warning(self, "Cannot publish", str(built))
+                return
+            result, manifest = built
+            self._confirm_and_reserve(export, token, result, manifest)
 
         self._start_job(work, on_built, "Building the map to publish...")
 
-    def _confirm_and_reserve(self, export, token: str, result) -> None:
+    def _confirm_and_reserve(
+        self, export, token: str, result, manifest: PublishManifest
+    ) -> None:
         """The confirmation, then the metadata-only reservation."""
         # Captured on the GUI thread, on every publish including a republish:
         # a listing showing yesterday's picture beside today's map is a bug
@@ -2734,26 +2882,65 @@ class MainDialog(QDialog):
         exporter = HostedExporter(
             authorized_client(token, transport=make_qgis_transport()),
             title=export.title,
+            # What the server is promised: the exporter stages exactly these
+            # entries, adds the thumbnail and re-measures, and the digests in
+            # it are what the release is verified against.
+            manifest=manifest,
             thumbnail_png=thumbnail,
             map_id=load_hosted_map_id(self.project) or None,
+            release_n=load_hosted_release_n(self.project),
         )
         staging = self._publish_staging
         if staging is None:  # pragma: no cover - defensive
             return
 
-        files = _publishable_files(result, thumbnail)
+        files = _publishable_files(manifest, thumbnail)
         if not self._confirm_publish(export, files):
             self._discard_publish_staging()
             self.status_label.setText("Not published. Nothing left this machine.")
             return
 
         violations = detect_violations(export)
+        self._reserve(exporter, result, staging, violations, force=False)
+
+    def _reserve(
+        self,
+        exporter: HostedExporter,
+        result,
+        staging: Path,
+        violations,
+        force: bool,
+    ) -> None:
+        """The metadata-only reservation, and the override when it is refused.
+
+        Split out of `_confirm_and_reserve` so that pressing Publish anyway can
+        run this step again with the override, rather than putting the
+        confirmation and the free-tier warning back on screen a second time for
+        a question the user has already answered.
+        """
+        based_on = load_hosted_release_n(self.project)
+        # Set here rather than at construction because the only thing that can
+        # ever turn it on is the answer to the question below, and the exporter
+        # documents it as exactly that.
+        exporter.force = force
 
         def work(progress: Progress):
             exporter.on_progress = progress.step
             progress.step(-1, "Reserving the map address...")
             try:
                 return exporter.prepare(result, staging / "upload")
+            except PublishConflictError as exc:
+                # Someone else moved the map on. A decision, not a failure:
+                # returned so it reaches a question rather than the crash
+                # reporter, the same way a cancelled sign-in is.
+                return exc
+            except PublishRefusedError as exc:
+                # The plan is full, the map is over the size cap, or too many
+                # publishes have been started this hour. Also a decision and
+                # also not a failure - the server is telling the user something
+                # they can act on, and "Something went wrong" with a stack
+                # trace in the log is the wrong frame for it.
+                return exc
             except AuthRequiredError as exc:
                 # The stored token is dead. Clearing it here is what turns the
                 # next press of Host into a sign-in rather than the same
@@ -2765,6 +2952,24 @@ class MainDialog(QDialog):
             if isinstance(prepared, AuthRequiredError):
                 self._discard_publish_staging()
                 QMessageBox.warning(self, "Sign in again", str(prepared))
+                return
+            if isinstance(prepared, PublishRefusedError):
+                # The server's own sentence, shown as it was written: it names
+                # the limit, the sizes or the time to retry, which is more than
+                # this dialog knows. `PublishRefusedError` carries each of
+                # those as a field too, for whatever wants to act on one.
+                self._discard_publish_staging()
+                QMessageBox.warning(self, "Cannot publish", str(prepared))
+                self.status_label.setText("Not published. Nothing left this machine.")
+                return
+            if isinstance(prepared, PublishConflictError):
+                if not self._confirm_republish(prepared, based_on):
+                    self._discard_publish_staging()
+                    self.status_label.setText(
+                        "Not published. Nothing left this machine."
+                    )
+                    return
+                self._reserve(exporter, result, staging, violations, force=True)
                 return
             if should_warn_truncation(
                 prepared.start.license_key, violations
@@ -2793,6 +2998,11 @@ class MainDialog(QDialog):
             # Remembered with the project, so pressing Host again republishes
             # to the same address instead of scattering a new link per edit.
             save_hosted_map_id(self.project, prepared.start.map_id)
+            # And which release that made, so the next publish can say what it
+            # is based on and be told when the map has moved on since.
+            save_hosted_release_n(self.project, prepared.start.release_n)
+            # The map now has an address, so the button stops saying Host.
+            self._update_host_button()
             url = outcome.public_url or ""
             self.status_label.setText(outcome.open_instruction)
             self._show_published(url)
@@ -2840,6 +3050,28 @@ class MainDialog(QDialog):
         box.addButton(QMessageBox.StandardButton.Cancel)
         # Cancel is the default: this is the screen where a stray Return key
         # would put someone's attribute table on the public internet.
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is publish
+
+    def _confirm_republish(
+        self, conflict: PublishConflictError, based_on: int | None
+    ) -> bool:
+        """The override screen: the map moved on since this project published.
+
+        Names the situation rather than warning generically, because the two
+        situations that produce this look identical in a release number and
+        mean opposite things - see `republish_conflict_text`.
+        """
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("This map has moved on")
+        box.setText("This map has been published since your project last did.")
+        box.setInformativeText(republish_conflict_text(conflict, based_on))
+        publish = box.addButton("Publish anyway", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        # Cancel is the default, as on every other screen here: the stray
+        # Return key must not be what overwrites a colleague's release.
         box.setDefaultButton(QMessageBox.StandardButton.Cancel)
         box.exec()
         return box.clickedButton() is publish
@@ -2937,6 +3169,9 @@ class MainDialog(QDialog):
         with contextlib.suppress(Exception):
             remove_preview(self._project_identity())
             prune_stale_previews()
+        for signal in (self.project.readProject, self.project.cleared):
+            with contextlib.suppress(Exception):
+                signal.disconnect(self._update_host_button)
         self.watcher.disconnect_all()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API

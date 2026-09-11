@@ -1173,3 +1173,52 @@ class TestLicenseKeyResolution:
         dialog = self._dialog(project, make_memory_layer)
         assert isinstance(dialog._writer().license_policy, FreeTierPolicy)
         dialog.close()
+
+
+class TestHostButtonLabel:
+    """The button says what pressing it will do to the map, not what it is.
+
+    A project that has published once keeps its address, so the second press
+    replaces what is at it rather than creating one - and a button that goes on
+    saying Host is the only warning the user gets that it might not.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_an_unpublished_project_offers_to_host(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.host_button.text().startswith("Host")
+        dialog.close()
+
+    def test_a_published_project_offers_to_republish(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, "map_abc123")
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.host_button.text().startswith("Republish")
+        dialog.close()
+
+    def test_the_label_follows_the_project_rather_than_the_dialog(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """The dialog is non-modal, so the project can change underneath it."""
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        dialog = self._dialog(project, make_memory_layer)
+        assert dialog.host_button.text().startswith("Host")
+        save_hosted_map_id(project, "map_abc123")
+        dialog._update_host_button()
+        assert dialog.host_button.text().startswith("Republish")
+        dialog.close()

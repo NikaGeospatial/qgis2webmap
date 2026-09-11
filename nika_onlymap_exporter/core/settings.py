@@ -51,6 +51,15 @@ KEY_WIDGETS = "widgets"
 # of what the writer produces, so folding it in would invalidate a cached read
 # and trigger a rebuild for a value the map cannot see.
 KEY_HOSTED_MAP_ID = "hostedMapId"
+# Which release of that map this project was last published as, so a republish
+# can say what it is based on and be told when the map has moved on since.
+# Beside the map id because it is the same kind of fact by the same argument:
+# it describes the *map*, and it means nothing in another project.
+#
+# **Deliberately not a `DialogState` field either**, for the reason above: the
+# release a project last published is not something the preview can render, so
+# folding it into `snapshot` would rebuild the map to record a publish.
+KEY_HOSTED_RELEASE_N = "hostedReleaseN"
 KEY_LAYERS = "layers"
 
 # The OnlyMap licence key, in QSettings rather than the project.
@@ -549,3 +558,26 @@ def load_hosted_map_id(project: QgsProject) -> str:
 def save_hosted_map_id(project: QgsProject, map_id: str) -> None:
     """Remember what a publish produced, so the next one keeps the link."""
     project.writeEntry(SCOPE, KEY_HOSTED_MAP_ID, (map_id or "").strip())
+
+
+def load_hosted_release_n(project: QgsProject) -> int | None:
+    """The release this project was last published as, or `None`.
+
+    `None` rather than zero for "never published". A project saved before this
+    key existed carries no entry at all, and reading that as release zero would
+    claim it is based on a release the server may well have.
+    """
+    value, ok = project.readEntry(SCOPE, KEY_HOSTED_RELEASE_N, "")
+    if not ok or not value.strip():
+        return None
+    try:
+        return int(value.strip())
+    except ValueError:
+        # Someone hand-edited the `.qgz`, or an older plugin wrote something
+        # else here. Unreadable is "never published", not a failed load.
+        return None
+
+
+def save_hosted_release_n(project: QgsProject, n: int) -> None:
+    """Remember which release a publish produced, so the next one follows it."""
+    project.writeEntry(SCOPE, KEY_HOSTED_RELEASE_N, str(int(n)))

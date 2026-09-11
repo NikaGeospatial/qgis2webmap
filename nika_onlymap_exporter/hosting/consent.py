@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..core.license_policy import CapViolation
-from .client import UploadFile
+from .client import UploadFile, insecure_loopback_base
 
 
 def should_warn_truncation(
@@ -51,18 +51,54 @@ def should_warn_truncation(
     return license_key is None and bool(violations)
 
 
+def insecure_transport_text(api_base: str | None = None) -> str:
+    """The banner for a publish running under the plain-HTTP loopback exemption.
+
+    Empty string when it is not in play, which is every ordinary publish - so
+    callers can append it unconditionally and nothing changes for anyone who
+    has not switched it on.
+
+    It is here, in the confirmation, rather than in a log line, for the same
+    reason the truncation warning is: the point of an exemption that weakens
+    transport security is that the person accepting it knows they are. An
+    exemption nobody is ever shown is one that gets left on.
+    """
+    base = insecure_loopback_base(api_base)
+    if not base:
+        return ""
+    return (
+        f"Local development: this publish goes to {base} over plain HTTP, "
+        "unencrypted, because NIKA_ALLOW_INSECURE_LOOPBACK is set. That is "
+        "only safe because the address is this machine - nothing leaves it. "
+        "Unset the variable to go back to requiring HTTPS."
+    )
+
+
 def publish_consent_text(
     title: str,
     files: Sequence[UploadFile],
     feature_count: int,
     layer_count: int,
+    api_base: str | None = None,
 ) -> str:
-    """The body of the confirmation, naming exactly what leaves the machine."""
+    """The body of the confirmation, naming exactly what leaves the machine.
+
+    `api_base` is optional and only decides whether the insecure-transport
+    banner appears; left out, the same environment the client itself reads is
+    consulted, so a caller that does not know about the exemption still shows
+    it rather than silently omitting it.
+    """
     total = sum(item.size_bytes for item in files)
     names = ", ".join(item.filename for item in files)
     features = f"{feature_count:,} feature{'s' if feature_count != 1 else ''}"
     layers = f"{layer_count} layer{'s' if layer_count != 1 else ''}"
+    insecure = insecure_transport_text(api_base)
+    # Prepended, not appended: it is a statement about how everything below
+    # travels, and a reader who stops after the first paragraph has still seen
+    # the one thing they could not have guessed.
+    prefix = f"{insecure}\n\n" if insecure else ""
     return (
+        f"{prefix}"
         f"'{title}' is about to be uploaded to NIKA and published at a public "
         "web address.\n\n"
         f"What leaves this machine: {names} - {total / 1024 / 1024:.1f} MB, "

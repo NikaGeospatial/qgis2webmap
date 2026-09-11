@@ -54,7 +54,7 @@ from .client import (
     JsonObject,
     Transport,
     decode_json,
-    require_https,
+    require_secure_url,
     resolve_api_base,
     server_message,
     urllib_transport,
@@ -218,7 +218,11 @@ class AuthClient:
         self._transport: Transport = transport or urllib_transport
 
     def _post(self, path: str, payload: JsonObject, what: str) -> JsonObject:
-        url = require_https(f"{self.api_base}{path}")
+        # Built from the base, so it is gated the same way the base was: https,
+        # or an opted-in loopback address and nothing else. Signing in to the
+        # local dev stack has to be possible or the publish it exists to
+        # rehearse cannot be reached at all.
+        url = require_secure_url(f"{self.api_base}{path}")
         response = self._transport(
             HttpRequest(
                 method="POST",
@@ -257,7 +261,7 @@ class AuthClient:
         return DeviceFlow(
             flow_id=flow_id,
             verifier=verifier,
-            authorize_url=require_https(authorize_url),
+            authorize_url=require_secure_url(authorize_url),
             interval_seconds=(interval_ms / 1000.0)
             if interval_ms
             else DEFAULT_POLL_SECONDS,
@@ -393,10 +397,3 @@ def _number(data: JsonObject, key: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return 0.0
     return float(value)
-
-
-def _int(data: JsonObject, key: str) -> int | None:
-    value = data.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return int(value)
