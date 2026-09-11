@@ -340,9 +340,11 @@
       The runtime. Inlined so this file works from a filesystem with no server
       and no internet: file:// blocks fetch of sibling files, so a src= URL
       would not load.
+
+      A hosted export is the one exception and puts a single SRI-pinned
+      <script src> to the CDN copy here instead: it is served over HTTP, where
+      a src= URL does load, and under a CSP that allows no inline script at all.
     -->
-    <script type="module">
-@RUNTIME_JS@
-    </script>
+@RUNTIME_SCRIPT@
   </body>
 </html>

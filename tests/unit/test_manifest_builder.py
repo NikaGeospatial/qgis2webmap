@@ -33,6 +33,7 @@ from nika_onlymap_exporter.core.export_ir import (
     PopupFieldMode,
     PopupFieldSpec,
     PopupSpec,
+    RasterSpec,
     RendererKind,
     RendererSpec,
     ScaleRange,
@@ -41,6 +42,7 @@ from nika_onlymap_exporter.core.export_ir import (
 )
 from nika_onlymap_exporter.core.license_policy import FreeTierPolicy
 from nika_onlymap_exporter.core.manifest_builder import (
+    LABEL_ELEMENT_SUFFIX,
     SCALE_DENOMINATOR_AT_ZOOM_0,
     WIDGET_POSITIONS,
     build_label_element,
@@ -49,16 +51,20 @@ from nika_onlymap_exporter.core.manifest_builder import (
     build_manifest,
     build_popup_elements,
     build_popup_reset_behaviors,
+    build_raster_layer_element,
     build_widget_elements,
     collect_attributions,
+    collect_data_payloads,
     color_literal,
     dash_attribute,
     escape_attr,
     fill_expression,
     icon_expression,
     json_for_script,
+    label_collection_for,
     line_color_expression,
     needs_image_legend,
+    needs_static_legend,
     numeric_expression,
     scale_to_zoom,
     terrain_note,
@@ -91,6 +97,31 @@ def make_layer(**overrides) -> ExportLayer:
             kind=RendererKind.SINGLE, symbol=SymbolSpec(fill_color=RED)
         ),
         popup=PopupSpec(enabled=False),
+    )
+    defaults.update(overrides)
+    return ExportLayer(**defaults)
+
+
+def make_raster_layer(**overrides) -> ExportLayer:
+    """A raster layer as `layer_reader` builds one: no geojson, a `RasterSpec`.
+
+    Deliberately not `make_layer(raster=...)` - a raster is not a vector layer
+    with extra fields, and a helper that started from the vector defaults would
+    hide exactly the mistake these tests exist to catch.
+    """
+    defaults = dict(
+        layer_id="dem",
+        name="Elevation",
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.FILE,
+        popup=PopupSpec(enabled=False),
+        raster=RasterSpec(
+            path="/data/dem.tif",
+            band_count=1,
+            source_crs="EPSG:32631",
+            pixel_width=2048,
+            pixel_height=1024,
+        ),
     )
     defaults.update(overrides)
     return ExportLayer(**defaults)
@@ -632,8 +663,9 @@ def find_onlymap_schema() -> tuple[Path, bool] | None:
     # `om-overlay[selection-type]` - a real attribute of the pinned build - as
     # absent from the schema, failing this suite for a defect that did not
     # exist. No version is named here on purpose: the pin moves, and a comment
-    # naming one goes stale the next time it does. A contract test that can fail because of what someone last
-    # pulled is worse than no contract test, because the failure looks like a
+    # naming one goes stale the next time it does. A contract test that can
+    # fail because of what someone last pulled is worse than no contract test,
+    # because the failure looks like a
     # bug in this repository.
     pinned: list[Path] = []
     try:
@@ -823,6 +855,143 @@ class TestWidgetPositions:
         assert "title=" in legend.group(0)
 
 
+class TestRasterLayer:
+    """`<om-layer type="COGLayer">` for a georeferenced raster.
+
+    Before this the reader returned `None` for every raster and the layer left
+    the map entirely, with a fidelity note as its only trace. The tests here
+    pin the two things that made that worth changing: the element exists, and
+    it carries nothing the runtime does not understand.
+    """
+
+    def test_a_raster_becomes_a_cog_layer(self) -> None:
+        markup = build_layer_element(make_raster_layer())
+        assert 'type="COGLayer"' in markup
+        assert 'src="/data/dem.tif"' in markup
+        assert 'label="Elevation"' in markup
+
+    def test_it_carries_no_vector_styling(self) -> None:
+        """A raster has no symbology, so none of the accessors may appear -
+        `get-fill-color` on a COGLayer is an attribute the runtime rejects."""
+        markup = build_layer_element(make_raster_layer())
+        for attribute in (
+            "get-fill-color",
+            "get-line-color",
+            "get-line-width",
+            "point-type",
+            "pickable",
+            "color=",
+        ):
+            assert attribute not in markup
+
+    def test_it_has_no_data_payload(self) -> None:
+        """The pixels are referenced, not inlined. A `<script>` child would be
+        an empty JSON body the runtime would try to parse as features."""
+        markup = build_layer_element(make_raster_layer())
+        assert "<script" not in markup
+        assert markup.rstrip().endswith("></om-layer>")
+
+    def test_packaged_src_wins_over_the_source_path(self) -> None:
+        """Packaging rewrites `src` to whatever the artifact actually carries;
+        the on-disk path stays in the model for the converter to read."""
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/data/dem.tif", src="./dem_cog.tif")
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'src="./dem_cog.tif"' in markup
+        assert "/data/dem.tif" not in markup
+
+    def test_the_contrast_stretch_is_emitted_as_a_pair(self) -> None:
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/d.tif", rescale_min=0.0, rescale_max=3200.0)
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'min="0"' in markup
+        assert 'max="3200"' in markup
+
+    def test_half_a_stretch_is_emitted_as_none(self) -> None:
+        """rescaleMin and rescaleMax are a pair: one alone leaves the other at
+        a default unrelated to this raster and restretches the image."""
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/d.tif", rescale_min=0.0, rescale_max=None)
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'min="' not in markup
+        assert 'max="' not in markup
+
+    def test_nodata_is_emitted_when_the_source_masks_a_value(self) -> None:
+        layer = make_raster_layer(raster=RasterSpec(path="/d.tif", nodata=-9999.0))
+        assert 'nodata="-9999"' in build_raster_layer_element(layer, layer.raster)
+
+    def test_opacity_and_visibility_match_the_vector_path(self) -> None:
+        layer = make_raster_layer(opacity=0.25, visible=False)
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'opacity="0.25"' in markup
+        assert 'visible="false"' in markup
+
+    def test_an_opaque_visible_raster_emits_neither(self) -> None:
+        layer = make_raster_layer()
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert "opacity=" not in markup
+        assert "visible=" not in markup
+
+    def test_scale_visibility_is_not_emitted(self) -> None:
+        """Parity with vectors, and required by the pinned runtime: 0.6.20 has
+        no per-layer zoom range at all. `layer_reader` reports the loss."""
+        layer = make_raster_layer(scale_range=ScaleRange(min_scale=1e6, max_scale=1e3))
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert "zoom" not in markup
+
+    def test_a_raster_reaches_the_manifest_in_draw_order(self) -> None:
+        """Document order is draw order, so a raster under a vector layer in
+        QGIS has to come out first - the classic upside-down-map bug."""
+        markup = build_manifest(
+            make_project([make_raster_layer(), make_layer(layer_id="roads")])
+        )
+        assert markup.index('id="dem"') < markup.index('id="roads"')
+
+    def test_a_raster_only_project_is_exportable(self) -> None:
+        """`exportable_layers` used to mean "has geojson", which dropped every
+        raster before the manifest ever saw it."""
+        project = make_project([make_raster_layer()])
+        assert project.is_exportable
+        assert 'type="COGLayer"' in build_manifest(project)
+
+    def test_a_raster_produces_no_label_or_popup_element(self) -> None:
+        markup = build_manifest(make_project([make_raster_layer()]))
+        assert "TextLayer" not in markup
+        assert "om-overlay" not in markup
+
+
+class TestRasterSpec:
+    """The model's own invariants, independent of any markup."""
+
+    def test_a_vector_layer_is_not_a_raster(self) -> None:
+        assert make_layer().is_raster is False
+        assert make_raster_layer().is_raster is True
+
+    def test_the_reference_falls_back_to_the_source_path(self) -> None:
+        """A manifest built before packaging resolves `src` points somewhere
+        visibly wrong rather than nowhere at all."""
+        assert RasterSpec(path="/d.tif").reference == "/d.tif"
+        assert RasterSpec(path="/d.tif", src="./x.tif").reference == "./x.tif"
+
+    def test_cog_detection_starts_unanswered(self) -> None:
+        """`None`, not `False`: the reader has no GDAL and must not claim to
+        know. `packaging/raster_cog.is_cog` fills it in."""
+        assert RasterSpec(path="/d.tif").is_cog is None
+
+    def test_the_snapshot_is_json_ready_and_ordered(self) -> None:
+        snapshot = make_raster_layer().snapshot()
+        assert snapshot["geometryKind"] == "raster"
+        assert snapshot["raster"]["path"] == "/data/dem.tif"
+        assert snapshot["raster"]["isCog"] is None
+        assert json.dumps(snapshot)
+
+    def test_a_vector_snapshot_carries_a_null_raster(self) -> None:
+        assert make_layer().snapshot()["raster"] is None
+
+
 class TestAttributeContract:
     """Every attribute we emit must exist in the runtime's own schema.
 
@@ -872,6 +1041,20 @@ class TestAttributeContract:
                     geometry_kind=GeometryKind.POLYGON,
                     elevation=ElevationSpec(
                         extruded=True, height_field="height", wireframe=True
+                    ),
+                ),
+                # And a raster, so `COGLayer`'s own attributes - `src`, `min`,
+                # `max`, `nodata` - are checked against the schema's "Valid on"
+                # lists rather than assumed from the deck.gl documentation.
+                make_raster_layer(
+                    opacity=0.4,
+                    visible=False,
+                    raster=RasterSpec(
+                        path="/data/dem.tif",
+                        src="data:image/tiff;application/geotiff;base64,AAAA",
+                        nodata=-9999.0,
+                        rescale_min=0.0,
+                        rescale_max=3200.0,
                     ),
                 ),
             ],
@@ -946,11 +1129,60 @@ class TestRepresentativeSymbol:
         assert "get-line-width=" in build_layer_element(layer)
 
 
+class TestCollectDataPayloads:
+    """What hosted mode writes out, and that it agrees with what is inlined."""
+
+    def test_a_layer_is_keyed_by_its_element_id(self) -> None:
+        payloads = collect_data_payloads(make_project())
+        assert [p.key for p in payloads] == ["layer1"]
+
+    def test_labels_follow_their_layer_and_carry_the_suffix(self) -> None:
+        project = make_project(
+            [make_layer(labeling=LabelingSpec(enabled=True, field_name="name"))]
+        )
+        assert [p.key for p in collect_data_payloads(project)] == [
+            "layer1",
+            f"layer1{LABEL_ELEMENT_SUFFIX}",
+        ]
+
+    def test_an_unlabelled_layer_produces_no_label_payload(self) -> None:
+        assert len(collect_data_payloads(make_project())) == 1
+
+    def test_a_raster_produces_none(self) -> None:
+        """A COG is already an external file; packaging staged it long before."""
+        assert collect_data_payloads(make_project([make_raster_layer()])) == ()
+
+    def test_the_payload_is_what_the_inline_path_would_embed(self) -> None:
+        """One serialiser, so a hosted map and an inline map cannot disagree."""
+        payload = collect_data_payloads(make_project())[0]
+        assert payload.text == json_for_script(GEOJSON)
+
+    def test_the_key_is_the_id_the_element_actually_gets(self) -> None:
+        """The lookup is worthless if the two are derived independently."""
+        project = make_project(
+            [make_layer(labeling=LabelingSpec(enabled=True, field_name="name"))]
+        )
+        markup = build_manifest(project)
+        for payload in collect_data_payloads(project):
+            assert f'id="{payload.key}"' in markup
+
+
+class TestLabelCollectionFor:
+    def test_it_matches_what_the_element_would_embed(self) -> None:
+        layer = make_layer(labeling=LabelingSpec(enabled=True, field_name="name"))
+        collection = label_collection_for(layer)
+        assert collection is not None
+        assert json_for_script(collection) in build_label_element(layer)
+
+    def test_an_unlabelled_layer_has_none(self) -> None:
+        assert label_collection_for(make_layer()) is None
+
+
 class TestTemplateTokenSafety:
     """Regression: sequential token replacement could inject the runtime.
 
     Replacing tokens one after another rescans already-inserted content, so a
-    layer named `@RUNTIME_JS@` had five megabytes of library pasted into its
+    layer named `@RUNTIME_SCRIPT@` had five megabytes of library pasted into its
     label. A single-pass substitution can only match the template's own tokens.
     """
 
@@ -968,14 +1200,14 @@ class TestTemplateTokenSafety:
                     javascript=js, css=b"", version="t", sha256=sha256_of(js)
                 )
 
-        hostile = make_project([make_layer(name="@RUNTIME_JS@")])
+        hostile = make_project([make_layer(name="@RUNTIME_SCRIPT@")])
         result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
             hostile, tmp_path, compress=False
         )
         html = result.entry_path.read_text()
 
         # The label keeps the literal text; the runtime appears exactly once.
-        assert 'label="@RUNTIME_JS@"' in html
+        assert 'label="@RUNTIME_SCRIPT@"' in html
         assert html.count("/* RUNTIME BODY */") == 1
 
 
@@ -1836,6 +2068,55 @@ class TestImageLegend:
         markup = build_legend_widget(project)
         assert "<img onerror" not in markup
         assert "&lt;img onerror" in markup
+
+
+class TestRasterLegendSwatch:
+    """A raster has no colour, and the legend must not pretend otherwise.
+
+    The built-in widget derives swatches from the styling accessors, which a
+    `COGLayer` does not carry, so it falls back to a grey chip that is
+    indistinguishable from a layer whose colour we failed to read. These tests
+    pin the replacement: the static legend, with a checkerboard chip.
+    """
+
+    def test_a_raster_project_takes_the_static_legend(self) -> None:
+        assert needs_static_legend(make_project([make_raster_layer()]))
+        assert not needs_static_legend(make_project())
+
+    def test_the_built_in_widget_steps_aside_for_a_raster(self) -> None:
+        widgets = build_widget_elements(make_project([make_raster_layer()]))
+        assert 'type="legend"' not in widgets
+        assert "omni-panel" in widgets
+
+    def test_the_raster_swatch_claims_no_colour(self) -> None:
+        """The failure this replaces: a grey chip beside the layer name."""
+        markup = build_legend_widget(make_project([make_raster_layer()]))
+        assert "omni-swatch-raster" in markup
+        assert "background:#" not in markup
+
+    def test_the_raster_row_still_has_a_swatch(self) -> None:
+        """Omitting it would leave the row out of line with every other entry,
+        which reads as a swatch that failed to render."""
+        markup = build_legend_widget(make_project([make_raster_layer()]))
+        assert markup.count('class="omni-swatch omni-swatch-raster"') == 1
+        assert ".omni-swatch-raster {" in markup
+
+    def test_a_vector_beside_a_raster_keeps_its_colour_swatch(self) -> None:
+        project = make_project(
+            [
+                make_raster_layer(),
+                make_layer(
+                    layer_id="plain",
+                    name="Plain layer",
+                    renderer=RendererSpec(
+                        kind=RendererKind.SINGLE, symbol=SymbolSpec(fill_color=BLUE)
+                    ),
+                ),
+            ]
+        )
+        markup = build_legend_widget(project)
+        assert "omni-swatch-raster" in markup
+        assert "background:#0000ff" in markup
 
 
 class TestPopupsDoNotStack:

@@ -10,19 +10,25 @@
     "an integrity check, not a credential, and it is meant to be read: that is",
     "the whole point of publishing it. Secret scanners cannot tell a checksum",
     "from a key by looking, so each digest line carries detect-secrets' own",
-    "allowlist pragma to say so."
+    "allowlist pragma to say so.",
+    "`sri` is the SAME digest bytes as `sha256`, base64-encoded in the form a",
+    "subresource-integrity attribute takes. Hosted exports load the runtime",
+    "from a CDN and pin it with that attribute, so the value has to ship here",
+    "rather than be computed from bytes the hosted page never sees."
   ],
   "package": "@nika-js/onlymap",
-  "version": "0.6.26",
+  "version": "0.7.4",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "ab3d8d7efed05885a735b9af49c349eea1fcc5cc817b62c78ca19fbc0bb62708", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "bytes": 8304920
+      "sha256": "3da24f141e517943e03c39e3d072557b1a3705bcb8e0343feb7ed4eec4fd63e0", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "sri": "sha256-PaJPFB5ReUPgPDnj0HJVexo3Bby44DQ/637U7sT9Y+A=",
+      "bytes": 8340640
     },
     "onlymapjs.css": {
-      "sha256": "f14560ea47e534607d2bc0c1db57873dc2002e9582c023aa7eb96339a53d178c", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "bytes": 70893
+      "sha256": "dcc8a840d879480a816c2173e5dda6c4cf3693cd2532832fa5c6a199278ba822", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "sri": "sha256-3MioQNh5SAqBbCFz5d2mxM82k80lMoMvpcahmSeLqCI=",
+      "bytes": 71278
     }
   }
 }

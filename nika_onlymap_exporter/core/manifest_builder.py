@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import json
 import math
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable
 
 from .export_ir import (
     Color,
@@ -38,6 +40,7 @@ from .export_ir import (
     GeometryKind,
     PopupFieldMode,
     PopupFieldSpec,
+    RasterSpec,
     RendererKind,
     RendererSpec,
     SymbolSpec,
@@ -61,6 +64,35 @@ MAX_WEB_ZOOM = 24
 # geometry in one file. Using a different class per geometry kind would fragment
 # the styling attributes for no benefit.
 LAYER_CLASS = "GeoJsonLayer"
+
+# Georeferenced rasters. Four runtime classes could plausibly draw pixels and
+# only one of them is right here; the schema settles it (`onlymapjs.html-data.
+# json`, attribute `type`, and each attribute's own "Valid on:" list):
+#
+# * **`COGLayer`** takes `src` - a single URL to a Cloud Optimized GeoTIFF -
+#   and reads the georeferencing out of the file's own header. Nothing about
+#   the placement has to be restated, so there is no way for our idea of the
+#   extent and the file's to disagree. It also exposes `min`/`max`
+#   (`rescaleMin`/`rescaleMax`) and `nodata` (`nodataOverride`), which is
+#   exactly what a QGIS contrast stretch and a source nodata value are.
+# * **`BitmapLayer`** takes `image` plus `bounds`. It is a picture pinned to a
+#   rectangle: no CRS, no overviews, and the whole thing decoded at once, so a
+#   large DEM becomes a browser-sized memory problem. It is also the class that
+#   makes the extent restatable, and therefore wrong.
+# * **`ImageOverlay`** is `BitmapLayer` plus `georeference`, `focal-length-mm`,
+#   `sensor-width-mm` and `metadata` - a photograph projected from a camera
+#   pose. That is drone/oblique imagery, not a map-projected raster.
+# * **`TerrainLayer`** takes `elevation-data` and an `elevation-decoder`: it
+#   turns a raster into a *surface*, not into imagery. QGIS terrain is a
+#   separate concern and `ExportSettings.terrain` already covers it.
+#
+# `TileLayer` is a fifth possibility and needs a pre-cut `{z}/{x}/{y}` pyramid
+# on a server, which is the opposite of a self-contained artifact.
+#
+# Note what COGLayer does NOT offer: no band selection, and no documented set
+# of `colormap` names. Neither is guessed at - see `layer_reader`, which
+# reports both as untranslated.
+RASTER_LAYER_CLASS = "COGLayer"
 
 # Labels are a second layer, not a property of the first: `GeoJsonLayer` cannot
 # draw text, so QGIS labelling becomes a companion `TextLayer` fed by computed
@@ -592,11 +624,104 @@ def dash_attribute(symbol: SymbolSpec) -> str | None:
     return f"[{_number(on)}, {_number(off)}]"
 
 
+def build_raster_layer_element(
+    layer: ExportLayer, raster: RasterSpec, indent: str = "    "
+) -> str:
+    """One `<om-layer type="COGLayer">`.
+
+    See `RASTER_LAYER_CLASS` for why that class and not one of the other four
+    the runtime offers.
+
+    Unlike a vector layer this element has **no child** at all: a COG is
+    referenced by `src`, not fed a JSON payload, so the pixels reach the
+    artifact through packaging (a `data:` URI for a standalone file) and this
+    function only has to name them. That is also why `src` falls back to the
+    layer's own path - a manifest built before packaging has resolved the
+    reference should point somewhere obviously wrong rather than nowhere.
+
+    Only the attributes the schema marks valid on `COGLayer` are emitted:
+    `src`, `min`, `max`, `nodata`, plus the universal `id`, `type`, `label`,
+    `opacity` and `visible`. In particular there is no `color` shorthand - a
+    raster has no single colour to put in a legend swatch - and no `pickable`,
+    because a raster has no attributes to show in a popup.
+
+    `raster` is passed alongside the layer rather than read off it, so this
+    element cannot be built for a layer that has none: the signature states
+    what the dispatcher in `build_layer_element` already guarantees.
+    """
+    inner = indent + "  "
+
+    attributes: list[tuple[str, str | None]] = [
+        ("id", layer.layer_id),
+        ("type", RASTER_LAYER_CLASS),
+        ("label", layer.name),
+        ("src", raster.reference),
+    ]
+
+    # deck.gl's rescaleMin/rescaleMax, carrying whatever contrast stretch the
+    # QGIS renderer was showing. Emitted as a pair or not at all: supplying one
+    # end leaves the other at a default unrelated to this raster's range, which
+    # would restretch the image to something the author never saw.
+    low, high = raster.rescale_min, raster.rescale_max
+    if low is not None and high is not None:
+        attributes.append(("min", _number(low)))
+        attributes.append(("max", _number(high)))
+
+    # nodataOverride. The COG usually declares its own nodata and the runtime
+    # honours it; this restates the value QGIS was masking with, which matters
+    # when the file's header lost it in translation.
+    if raster.nodata is not None:
+        attributes.append(("nodata", _number(raster.nodata)))
+
+    # Same two attributes, in the same order and with the same meaning, as the
+    # vector path below - layer opacity and the QGIS tree's checkbox are
+    # universal in the schema rather than per-class.
+    if layer.opacity < 1.0:
+        attributes.append(("opacity", _number(layer.opacity)))
+
+    if not layer.visible:
+        attributes.append(("visible", "false"))
+
+    # Scale visibility is omitted for exactly the reason it is omitted on
+    # vectors - see the long note in `build_layer_element`. `visible-zoom-range`
+    # does appear in the 0.6.26 schema as a genuinely any-layer attribute, but
+    # the pinned runtime is 0.6.20 and does not have it, so emitting it would
+    # log an unknown-attribute warning in the recipient's console and change
+    # nothing. `layer_reader` records the loss either way.
+
+    return "\n".join(
+        [
+            f"{indent}<om-layer",
+            _attrs_to_string(attributes, inner),
+            f"{indent}></om-layer>",
+        ]
+    )
+
+
+def _element_with_external_data(
+    attributes: list[tuple[str, str | None]], indent: str, inner: str
+) -> str:
+    """An `<om-layer>` whose data lives in a sibling file rather than a child.
+
+    Childless on purpose, and not merely empty: the runtime reads inline data
+    from a direct-child `script[type="application/json"]`, so leaving an empty
+    one behind would race the `data` fetch to decide what the layer draws.
+    """
+    return "\n".join(
+        [
+            f"{indent}<om-layer",
+            _attrs_to_string(attributes, inner),
+            f"{indent}></om-layer>",
+        ]
+    )
+
+
 def build_layer_element(
     layer: ExportLayer,
     indent: str = "    ",
     compress_data: bool = False,
     highlight_color: Color | None = None,
+    data_url: str | None = None,
 ) -> str:
     """One `<om-layer>`, with its data inline as a direct child.
 
@@ -608,7 +733,21 @@ def build_layer_element(
     type, which the artifact's bootstrap converts back to JSON before the runtime
     defines the custom elements. Off by default: readable data is what lets a
     person or an agent edit the map afterwards.
+
+    `data_url` is the hosted alternative: the page is served over HTTP, so the
+    objection above does not apply and the data can live in its own file that the
+    runtime fetches. It is the `data` attribute rather than `src` -- `src` on
+    `om-layer` belongs to COGLayer, ZarrLayer, BIMLayer and ImageOverlay, and a
+    vector layer given one loads nothing. Mutually exclusive with `compress_data`:
+    a hosted page carries no inflate shim to undo the compression.
     """
+    # A raster carries no geometry, no symbology and no popup, so none of what
+    # follows applies to it. Dispatching here rather than at every call site
+    # keeps every caller - the manifest, the tests, the preview - able to hand
+    # over any layer and get the right element back.
+    if layer.raster is not None:
+        return build_raster_layer_element(layer, layer.raster, indent)
+
     renderer = layer.renderer
     # Not `renderer.symbol`: categorized and graduated renderers have none, and
     # reading it directly silently drops stroke width and marker radius.
@@ -619,6 +758,9 @@ def build_layer_element(
         ("id", layer.layer_id),
         ("type", LAYER_CLASS),
         ("label", layer.name),
+        # Alongside `id`/`type`/`label` rather than after the styling, so the
+        # element still reads "which layer, from where" on its first line.
+        ("data", data_url),
         ("get-fill-color", fill_expression(renderer, layer.geometry_kind)),
         ("get-line-color", line_color_expression(renderer, layer.geometry_kind)),
     ]
@@ -763,6 +905,9 @@ def build_layer_element(
             )
         )
 
+    if data_url is not None:
+        return _element_with_external_data(attributes, indent, inner)
+
     payload = json_for_script(layer.geojson)
 
     lines = [f"{indent}<om-layer"]
@@ -781,8 +926,32 @@ def build_layer_element(
     return "\n".join(lines)
 
 
+def label_collection_for(layer: ExportLayer) -> dict[str, Any] | None:
+    """This layer's label points, or `None` when it has none to draw.
+
+    Split out of `build_label_element` because hosted mode has to write the same
+    collection to a file *before* the element that names it exists. Deriving it
+    twice from two copies of these arguments is exactly how the file and the
+    element would come to disagree.
+    """
+    labeling = layer.labeling
+    if not (labeling.enabled and labeling.field_name):
+        return None
+
+    return build_label_collection(
+        layer.geojson,
+        labeling.field_name,
+        capitalization=labeling.capitalization,
+        wrap_char=labeling.wrap_char,
+        auto_wrap_length=labeling.auto_wrap_length,
+    )
+
+
 def build_label_element(
-    layer: ExportLayer, indent: str = "    ", compress_data: bool = False
+    layer: ExportLayer,
+    indent: str = "    ",
+    compress_data: bool = False,
+    data_url: str | None = None,
 ) -> str:
     """The companion `<om-layer type="TextLayer">` carrying a layer's labels.
 
@@ -795,16 +964,7 @@ def build_label_element(
     cared enough about to label.
     """
     labeling = layer.labeling
-    if not (labeling.enabled and labeling.field_name):
-        return ""
-
-    collection = build_label_collection(
-        layer.geojson,
-        labeling.field_name,
-        capitalization=labeling.capitalization,
-        wrap_char=labeling.wrap_char,
-        auto_wrap_length=labeling.auto_wrap_length,
-    )
+    collection = label_collection_for(layer)
     if collection is None:
         return ""
 
@@ -813,13 +973,16 @@ def build_label_element(
     size = labeling.font_size or DEFAULT_LABEL_SIZE
 
     attributes: list[tuple[str, str | None]] = [
-        ("id", f"{layer.layer_id}-labels"),
+        ("id", f"{layer.layer_id}{LABEL_ELEMENT_SUFFIX}"),
         ("type", TEXT_LAYER_CLASS),
         # Parenthesised rather than "Peaks labels", which reads as a layer
         # called that rather than as the labels belonging to "Peaks". The two
         # sit next to each other in the switcher, so the relationship between
         # them has to be legible at a glance.
         ("label", f"{layer.name} (labels)"),
+        # See the note on the geometry layer's own `data`: this is the hosted
+        # form, and it is `data` rather than `src` for the same reason.
+        ("data", data_url),
         # ---------------------------------------------------------------
         # These are deck.gl's OWN TextLayer prop names, unprefixed.
         #
@@ -932,6 +1095,9 @@ def build_label_element(
     # not outlive the geometry it names. Nothing to follow any more: the layer
     # itself no longer carries zoom visibility. See the note on the vector
     # layer's attributes above.
+
+    if data_url is not None:
+        return _element_with_external_data(attributes, indent, inner)
 
     payload = json_for_script(collection)
 
@@ -1258,6 +1424,22 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
   font-size: 11px;
 }
 .omni-legend-entry .omni-swatch { width: 10px; height: 10px; }
+/* A raster's swatch is a checkerboard rather than a colour chip - see
+   `_swatch_markup` for why it must not be either a colour or nothing. Drawn in
+   CSS rather than as an image so it costs no bytes and needs no `data:` grant
+   in the Content Security Policy. */
+.omni-swatch-raster {
+  background-color: var(--om-widget-bg, #fff);
+  background-image:
+    linear-gradient(45deg, var(--om-widget-muted, #6b7280) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--om-widget-muted, #6b7280) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--om-widget-muted, #6b7280) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--om-widget-muted, #6b7280) 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0;
+  border: 1px solid var(--om-widget-muted, #6b7280);
+  box-sizing: border-box;
+}
 /* An image swatch keeps its own shape, so it must not be squared off by the
    colour swatch's border-radius, and it must not be stretched: a star squashed
    into a 10x10 box is a different marker from the one on the map. */
@@ -1290,6 +1472,22 @@ def needs_image_legend(project: ExportProject) -> bool:
     return any(layer.icon_atlas is not None for layer in project.exportable_layers)
 
 
+def needs_static_legend(project: ExportProject) -> bool:
+    """Whether the built-in legend widget has to be replaced by our own.
+
+    Two reasons, and a raster is the second one. The built-in widget derives
+    every swatch from the styling accessors on `<om-layer>`, and a `COGLayer`
+    has none - no `color`, no `get-fill-color`, because a raster genuinely has
+    no single colour. The widget's answer to that is its grey `#999` fallback,
+    which is indistinguishable from the bug it exists to cover: a layer whose
+    colour we failed to read. So a project containing a raster gets the static
+    legend, where the swatch can say "image data" instead of guessing a colour.
+    """
+    return needs_image_legend(project) or any(
+        layer.is_raster for layer in project.exportable_layers
+    )
+
+
 def _swatch_markup(
     symbol: SymbolSpec, layer: ExportLayer, fallback: Color | None
 ) -> str:
@@ -1298,7 +1496,26 @@ def _swatch_markup(
     The picture comes from the same rasterisation the map draws from, so the
     legend and the map cannot disagree about what a class looks like - which is
     the entire reason this widget exists rather than a hand-drawn approximation.
+
+    A raster gets a checkerboard chip, and the alternatives are all worse:
+
+    * **A colour chip.** There is no colour to put in it. Whatever is chosen -
+      grey, the fallback, an average - claims the layer draws in that colour,
+      which is the very reading the built-in widget's grey `#999` produces and
+      the reason this branch exists.
+    * **A gradient chip.** It would imply a colour ramp, and the ramp is the one
+      thing `read_raster` deliberately does *not* translate (see its docstring),
+      so the legend would advertise colours the map may not draw.
+    * **No swatch at all.** The row loses its 12px indent and sits out of line
+      with every other entry, which reads as a swatch that failed to render
+      rather than as a deliberate absence.
+
+    The checkerboard is the established "image data" idiom, carries no colour
+    claim, and keeps the row aligned.
     """
+    if layer.raster is not None:
+        return '<span class="omni-swatch omni-swatch-raster"></span>'
+
     if layer.icon_atlas is not None and symbol.icon_name:
         source = layer.icon_atlas.swatches.get(symbol.icon_name)
         if source:
@@ -1359,7 +1576,8 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
 
     What it gives up against the built-in widget is reactivity: it cannot grey
     a layer out when the layer switcher hides it. That is why it is used only
-    when a layer needs image swatches - see `needs_image_legend`.
+    when a layer needs a swatch the built-in widget cannot produce - an image
+    swatch, or a raster's checkerboard. See `needs_static_legend`.
     """
     title = "" if project.settings.show_title else project.title
     lines = [f'{indent}<om-widget position="{WIDGET_POSITIONS["legend"]}">']
@@ -1416,7 +1634,7 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     widgets: list[str] = []
 
     if settings.show_legend:
-        if needs_image_legend(project):
+        if needs_static_legend(project):
             widgets.append(build_legend_widget(project, indent))
         else:
             # The legend carries the map title only when nothing else is showing
@@ -1470,18 +1688,79 @@ def build_fallback_element(project: ExportProject, indent: str = "    ") -> str:
     )
 
 
+# What separates a layer's label element from the layer itself, in both the
+# element's `id` and the key its data is looked up under. One constant because
+# the two have to agree: a mismatch would hand a layer its neighbour's labels.
+LABEL_ELEMENT_SUFFIX = "-labels"
+
+
+@dataclass(frozen=True)
+class DataPayload:
+    """One externalisable block of layer data.
+
+    `key` is what `build_manifest` looks the finished URL up under, so it is the
+    element's own `id` rather than anything invented here. `name_hint` is the
+    human-facing name a file name can be derived from - packaging owns that
+    derivation, because the rules are about file systems and not about maps.
+    """
+
+    key: str
+    name_hint: str
+    text: str
+
+
+def collect_data_payloads(project: ExportProject) -> tuple[DataPayload, ...]:
+    """Every block of layer data an export would otherwise inline.
+
+    In the same order the elements are emitted in, and serialised by the same
+    `json_for_script` the inline path uses. That last part is not caution: the
+    escaping it applies is valid JSON, so a file written this way parses the
+    same either way, and using one serialiser means a hosted map and an inline
+    map cannot come to disagree about what a feature's attributes say.
+
+    Rasters are absent. A COG is already an external file with its own `src`,
+    staged by `raster_staging` long before this runs.
+    """
+    payloads: list[DataPayload] = []
+    for layer in project.exportable_layers:
+        if layer.raster is not None:
+            continue
+        payloads.append(
+            DataPayload(layer.layer_id, layer.name, json_for_script(layer.geojson))
+        )
+    for layer in project.exportable_layers:
+        collection = label_collection_for(layer)
+        if collection is None:
+            continue
+        payloads.append(
+            DataPayload(
+                f"{layer.layer_id}{LABEL_ELEMENT_SUFFIX}",
+                f"{layer.name} labels",
+                json_for_script(collection),
+            )
+        )
+    return tuple(payloads)
+
+
 def build_manifest(
     project: ExportProject,
     cap_verdict: CapVerdict | None = None,
     indent: str = "  ",
     compress_data: bool = False,
+    data_urls: Mapping[str, str] | None = None,
 ) -> str:
     """The complete `<om-map>` element for a project.
 
     Layers are emitted in the model's order, which is bottom-first - OnlyMap
     stacks `<om-layer>` children in document order, so the first child draws
     first. The model already reversed QGIS's top-first tree.
+
+    `data_urls` maps a `DataPayload.key` to the URL its data was written to. Any
+    element that finds itself in it references the file instead of carrying a
+    child; anything absent stays inline, so a partial mapping degrades to the
+    default rather than to a layer with no data at all.
     """
+    urls: Mapping[str, str] = data_urls or {}
     inner = indent + "  "
     center_lon, center_lat = (0.0, 0.0)
     zoom = 2.0
@@ -1566,6 +1845,7 @@ def build_manifest(
                 inner,
                 compress_data=compress_data,
                 highlight_color=layer.highlight_color,
+                data_url=urls.get(layer.layer_id),
             )
         )
         popup = build_popup_elements(layer, inner)
@@ -1576,7 +1856,12 @@ def build_manifest(
     # stacks children in document order, so labels emitted next to their own
     # layer would be painted over by whatever draws above it.
     for layer in project.exportable_layers:
-        labels = build_label_element(layer, inner, compress_data=compress_data)
+        labels = build_label_element(
+            layer,
+            inner,
+            compress_data=compress_data,
+            data_url=urls.get(f"{layer.layer_id}{LABEL_ELEMENT_SUFFIX}"),
+        )
         if labels:
             sections.append(labels)
 
