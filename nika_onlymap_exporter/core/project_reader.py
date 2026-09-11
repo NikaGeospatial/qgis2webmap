@@ -473,17 +473,32 @@ def _resolve_extent(
 
 
 def _data_extent(layers: list, report: FidelityReportBuilder) -> Extent | None:
-    """Union of the layers' data extents, antimeridian-aware."""
-    per_layer = [
-        extent_from_geojson(layer.geojson) for layer in layers if layer.geojson
-    ]
+    """Union of the layers' data extents, antimeridian-aware.
+
+    A raster contributes exactly as a vector does, from a different field. It
+    has no geometry to measure, but `RasterSpec.extent` is already the layer's
+    footprint in WGS84 - `layer_reader` transforms it there precisely so it can
+    join this union without a second reprojection. Filtering on `geojson` alone
+    meant a raster-only project computed no extent at all and the map opened at
+    world view with the raster somewhere off screen, and a mixed project framed
+    only its vectors.
+    """
+    per_layer: list[Extent | None] = []
+    for layer in layers:
+        if layer.raster is not None:
+            # `None` when the source CRS could not be transformed; passed
+            # through rather than skipped because `union_extents` already
+            # ignores it, and dropping it here would only hide the case.
+            per_layer.append(layer.raster.extent)
+        elif layer.geojson:
+            per_layer.append(extent_from_geojson(layer.geojson))
     extent = union_extents(per_layer)
 
     if extent is None:
         report.unsupported(
             "Map extent",
-            "No extent could be computed because no layer has features. The map "
-            "will open at world view.",
+            "No extent could be computed because no layer has features or a "
+            "readable extent. The map will open at world view.",
         )
         return None
 

@@ -13,6 +13,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 qgis_core = pytest.importorskip(
@@ -112,6 +114,64 @@ def runtime_required() -> None:
 
     if discover_runtime_dir() is None:
         pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+
+
+@pytest.fixture
+def make_raster_layer(qgis_app, tmp_path):
+    """Factory fixture for a small file-backed raster layer.
+
+    A raster cannot be an in-memory layer the way a vector can: the `gdal`
+    provider reads a file, and whether that file exists is one of the things
+    `read_raster` has to decide on. So this writes a tiny GeoTIFF into the
+    test's own `tmp_path` instead. No fixture file enters the repository - the
+    pixels are made here and go away with the temporary directory - which keeps
+    the tier's "in-memory data, no fixtures" property in spirit if not in
+    letter.
+
+    `crs=None` writes the file with no projection, which is how a raster with
+    no CRS reaches the reader.
+
+    GDAL's Python bindings ship with QGIS, but they are packaged separately on
+    some platforms, so their absence skips rather than errors - the same
+    contract this tier has with PyQGIS itself.
+    """
+    made = itertools.count()
+
+    def _build(
+        name: str = "elevation",
+        crs: str | None = "EPSG:4326",
+        west: float = 4.0,
+        north: float = 52.0,
+        pixel_size: float = 0.25,
+        width: int = 4,
+        height: int = 4,
+        bands: int = 1,
+    ):
+        gdal = pytest.importorskip(
+            "osgeo.gdal",
+            reason="GDAL's Python bindings are unavailable; skipping raster tests",
+        )
+        # Without this GDAL 3.x warns on every call that the default will
+        # change, which turns a passing run into a wall of noise.
+        gdal.UseExceptions()
+
+        path = tmp_path / f"{name}_{next(made)}.tif"
+        dataset = gdal.GetDriverByName("GTiff").Create(
+            str(path), width, height, bands, gdal.GDT_Byte
+        )
+        dataset.SetGeoTransform([west, pixel_size, 0.0, north, 0.0, -pixel_size])
+        if crs is not None:
+            reference = qgis_core.QgsCoordinateReferenceSystem(crs)
+            assert reference.isValid(), f"unknown CRS {crs!r}"
+            dataset.SetProjection(reference.toWkt())
+        # Closing is what flushes the header to disk; GDAL has no `close()`.
+        dataset = None
+
+        layer = qgis_core.QgsRasterLayer(str(path), name, "gdal")
+        assert layer.isValid(), f"failed to construct raster layer {name!r}"
+        return layer
+
+    return _build
 
 
 @pytest.fixture

@@ -20,6 +20,7 @@ from ..exporters.folder import FolderExporter
 from ..exporters.share_zip import ShareZipExporter
 from ..exporters.standalone_html import StandaloneHtmlExporter
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
+from .raster_cog import CancelCheck, ProgressCallback
 
 README_TEMPLATE = (
     Path(__file__).resolve().parent.parent / "templates" / "exported-map-README.txt"
@@ -104,17 +105,52 @@ def terrain_zoom_clamp(project: ExportProject) -> str:
     )
 
 
+def zip_open_instruction(project: ExportProject) -> str:
+    """How the recipient of a zip opens it -- which depends on what is in it.
+
+    A vector-only zip is extract-and-double-click, and has been since the tier
+    existed. A zip with a raster in it is not: the page fetches the COG as a
+    sibling file, and a browser refuses to read a sibling from a `file://`
+    page (measured -- the request fails outright, and with the browser flag
+    that permits it the response is a full file where a byte range was asked
+    for, which the reader mis-slices). So the map has to be served.
+
+    Printing the old instruction anyway would send someone to a map whose
+    imagery is missing, with a README telling them they did it right. Pure and
+    separate from `build_artifact` so the branch is testable without writing an
+    artifact.
+    """
+    if not any(layer.raster is not None for layer in project.layers):
+        return "Extract this zip, then open index.html."
+    return (
+        "Extract this zip, then serve the folder over HTTP -- upload it to a "
+        "web server, or run `python3 -m http.server` inside it and open the "
+        "address it prints. The map's raster imagery is a separate file next "
+        "to index.html, and browsers will not read it from a folder opened by "
+        "double-click."
+    )
+
+
 def build_artifact(
     project: ExportProject,
     destination: Path,
     mode: OutputMode = OutputMode.STANDALONE_HTML,
     writer: OnlyMapWriter | None = None,
     compress: bool = True,
+    on_progress: ProgressCallback | None = None,
+    should_cancel: CancelCheck | None = None,
 ) -> tuple[ArtifactResult, ExportOutcome]:
     """Write an artifact and place it at `destination`.
 
     Staged through a temporary directory so a failure part-way leaves nothing
     half-written where the user asked for their map.
+
+    `on_progress` and `should_cancel` are forwarded to the writer's raster pass
+    and mean nothing to a vector-only export, which finishes too fast to report
+    on. They are plumbed through here rather than left to callers of the writer
+    because this function is the plugin's single export entry point: a dialog
+    that wants a progress bar for a half-gigabyte orthophoto, and a Processing
+    algorithm that wants its `feedback.isCanceled()` honoured, both arrive here.
     """
     writer = writer or OnlyMapWriter()
     exporter = EXPORTERS[mode]()
@@ -131,13 +167,15 @@ def build_artifact(
             compress=compress,
             preview_hook=terrain_zoom_clamp(project),
             unbundle=mode is OutputMode.FOLDER,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
         )
 
         # Folder and zip tiers carry a README; a single file has nowhere to put
         # one, and its filename already says what it is.
         if mode in (OutputMode.SHARE_ZIP, OutputMode.FOLDER):
             instruction = (
-                "Extract this zip, then open index.html."
+                zip_open_instruction(project)
                 if mode is OutputMode.SHARE_ZIP
                 else (
                     "Upload this folder to a web server and open index.html "

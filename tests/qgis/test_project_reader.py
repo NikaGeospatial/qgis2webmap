@@ -273,6 +273,37 @@ class TestReadProject:
         # A naive bounding box would report ~358 degrees.
         assert result.extent.width_degrees < 40.0
 
+    def test_a_raster_only_project_opens_on_the_raster(
+        self, project, make_raster_layer
+    ) -> None:
+        """The failure this fixes: the extent came only from `geojson`, so a
+        project whose single layer is a raster computed nothing and the map
+        opened at world view with the raster somewhere off screen."""
+        project.addMapLayer(make_raster_layer(west=4.0, north=52.0, pixel_size=0.25))
+
+        result = read_project(project, FidelityReportBuilder())
+
+        assert result.extent is not None
+        assert result.extent.west == pytest.approx(4.0)
+        assert result.extent.east == pytest.approx(5.0)
+        assert result.extent.north == pytest.approx(52.0)
+        assert result.extent.south == pytest.approx(51.0)
+
+    def test_a_raster_widens_the_extent_of_a_mixed_project(
+        self, project, make_memory_layer, make_raster_layer
+    ) -> None:
+        """Both kinds of layer are on the map, so both frame it."""
+        project.addMapLayer(make_memory_layer("pts", features=[("a", [10.0, 45.0])]))
+        project.addMapLayer(make_raster_layer(west=4.0, north=52.0, pixel_size=0.25))
+
+        result = read_project(project, FidelityReportBuilder())
+
+        assert result.extent is not None
+        assert result.extent.west == pytest.approx(4.0)
+        assert result.extent.east == pytest.approx(10.0)
+        assert result.extent.south == pytest.approx(45.0)
+        assert result.extent.north == pytest.approx(52.0)
+
     def test_empty_project_is_blocked_not_silently_empty(
         self, project, make_memory_layer
     ) -> None:

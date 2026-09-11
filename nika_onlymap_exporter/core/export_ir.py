@@ -26,7 +26,7 @@ from typing import Any
 
 # Bumped when the shape of a snapshot changes, so stored snapshots stay
 # comparable and a stale fixture fails loudly instead of subtly.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 # --------------------------------------------------------------------------
@@ -42,6 +42,12 @@ class GeometryKind(str, Enum):
     POINT = "point"
     LINE = "line"
     POLYGON = "polygon"
+    # Not a geometry family at all, and that is the point: a raster has no
+    # vector geometry, which is a *known* fact about it rather than the failure
+    # to determine one that `UNKNOWN` records for an attribute-only table. The
+    # two have to stay distinguishable, because `layer_reader` rejects the
+    # second and exports the first.
+    RASTER = "raster"
     UNKNOWN = "unknown"
 
 
@@ -575,6 +581,111 @@ class LabelingSpec:
 
 
 # --------------------------------------------------------------------------
+# Rasters
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RasterSpec:
+    """A raster layer's pixels and the few facts needed to draw them.
+
+    Hung off `ExportLayer` as its own spec rather than folded into the vector
+    fields, for the same reason `IconAtlasSpec` and `ElevationSpec` are: the
+    alternative is a layer whose `renderer`, `labeling`, `popup` and `geojson`
+    all sit at their defaults and whose reader has to remember that those
+    defaults mean "not applicable" rather than "nothing was set". `raster is not
+    None` is the single discriminator - `ExportLayer.is_raster` reads it - so
+    there is exactly one place a consumer has to look, and every existing vector
+    path keeps working untouched because a vector layer leaves it `None`.
+
+    A separate `ExportRasterLayer` class was the other candidate and is worse
+    here: `ExportProject.layers` would become a union, and every consumer that
+    only wants a name, an opacity or a group path - the layer switcher, the
+    licence policy, the dependency scanner - would have to narrow the type
+    before touching fields both kinds genuinely share.
+
+    **`path` versus `src`.** `path` is the file QGIS reads, on this machine.
+    `src` is what the artifact's `<om-layer>` will point at, which is not the
+    same thing: a standalone HTML has to carry the pixels as a `data:` URI, and
+    a folder export a relative name. Only packaging knows which, so the reader
+    leaves `src` as `None` and packaging fills it in with
+    `dataclasses.replace`. The manifest falls back to `path` so that a
+    half-wired pipeline produces a *visibly* wrong reference rather than an
+    `<om-layer>` with no source at all, which would draw nothing and say
+    nothing.
+
+    **`is_cog` is deliberately tri-state.** `None` means "nobody has looked
+    yet": deciding it needs GDAL, which `layer_reader` does not have and must
+    not acquire. `packaging.raster_cog.is_cog(path).is_web_ready` answers it,
+    and packaging records the answer here on its way to `to_cog`. A plain
+    `False` default would have claimed knowledge the reader does not have.
+
+    `rescale_min` / `rescale_max` come from the QGIS renderer's contrast
+    stretch, not from the band statistics, because the stretch is what the
+    author was actually looking at. Both `None` means the layer had no stretch
+    we could read and the runtime picks its own - stated in the fidelity report
+    rather than guessed at.
+    """
+
+    path: str
+    src: str | None = None
+    band_count: int = 1
+    source_crs: str | None = None
+    # WGS84, so it can join the project extent union without a second
+    # reprojection. `None` when the source CRS could not be transformed.
+    extent: Extent | None = None
+    pixel_width: int = 0
+    pixel_height: int = 0
+    # Source-CRS units per pixel - degrees for a geographic raster, metres for a
+    # projected one. Kept unconverted because the unit is only meaningful next
+    # to `source_crs`, and reporting "0.0002 units" is honest where reporting
+    # "0.0002 metres" would not be.
+    resolution_x: float | None = None
+    resolution_y: float | None = None
+    nodata: float | None = None
+    rescale_min: float | None = None
+    rescale_max: float | None = None
+    is_cog: bool | None = None
+
+    @property
+    def reference(self) -> str:
+        """What the manifest should point at. See the class docstring."""
+        return self.src if self.src is not None else self.path
+
+    @property
+    def has_rescale(self) -> bool:
+        """Whether a stretch was read. Both ends or neither: deck.gl's
+        `rescaleMin`/`rescaleMax` are a pair, and supplying one leaves the other
+        at a default that has nothing to do with this raster's range."""
+        return self.rescale_min is not None and self.rescale_max is not None
+
+    @property
+    def pixel_count(self) -> int:
+        return self.pixel_width * self.pixel_height
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "path": self.path,
+            "src": self.src,
+            "bandCount": self.band_count,
+            "sourceCrs": self.source_crs,
+            "extent": self.extent.snapshot() if self.extent else None,
+            "pixelWidth": self.pixel_width,
+            "pixelHeight": self.pixel_height,
+            "resolutionX": (
+                None if self.resolution_x is None else round(self.resolution_x, 12)
+            ),
+            "resolutionY": (
+                None if self.resolution_y is None else round(self.resolution_y, 12)
+            ),
+            "nodata": self.nodata,
+            "rescaleMin": self.rescale_min,
+            "rescaleMax": self.rescale_max,
+            "isCog": self.is_cog,
+        }
+
+
+# --------------------------------------------------------------------------
 # Popups
 # --------------------------------------------------------------------------
 
@@ -713,6 +824,11 @@ class ExportLayer:
     # common case - means the layer draws as circles exactly as it always has.
     icon_atlas: IconAtlasSpec | None = None
     popup: PopupSpec = field(default_factory=PopupSpec)
+    # Present only on raster layers, and the one thing that makes a layer one.
+    # `None` - every vector layer - means every field above is meaningful; set,
+    # it means the vector fields are inapplicable rather than merely empty. See
+    # `RasterSpec` for why this is a field here instead of a second layer class.
+    raster: RasterSpec | None = None
     attribution: str | None = None
     feature_count: int = 0
     geojson: dict[str, Any] | None = None
@@ -721,6 +837,12 @@ class ExportLayer:
     # None keeps the manifest's own default. Per layer for the same reason as
     # `PopupSpec.on_hover` - qgis2web#132, open since 2015.
     highlight_color: Color | None = None
+
+    @property
+    def is_raster(self) -> bool:
+        """The discriminator. Preferred over `geometry_kind is RASTER` at call
+        sites, because it is the field that actually carries the pixels."""
+        return self.raster is not None
 
     def snapshot(self, include_geometry: bool = False) -> dict[str, Any]:
         """Snapshot the layer.
@@ -742,6 +864,7 @@ class ExportLayer:
             "elevation": self.elevation.snapshot(),
             "iconAtlas": self.icon_atlas.snapshot() if self.icon_atlas else None,
             "popup": self.popup.snapshot(),
+            "raster": self.raster.snapshot() if self.raster else None,
             "attribution": self.attribution,
             "featureCount": self.feature_count,
             "groupPath": list(self.group_path),
@@ -870,7 +993,23 @@ class ExportProject:
 
     @property
     def exportable_layers(self) -> tuple[ExportLayer, ...]:
-        return tuple(layer for layer in self.layers if layer.geojson is not None)
+        """Every layer that will produce an `<om-layer>`, in draw order.
+
+        Two ways a layer qualifies, because there are two kinds of payload: a
+        vector layer carries `geojson`, a raster carries a `RasterSpec`. It has
+        to stay one list rather than two, because **document order is draw
+        order** - splitting rasters into their own pass would silently move
+        every one of them above or below the vectors regardless of where the
+        author put it in the QGIS tree.
+
+        Consumers that specifically want coordinates - the data-size estimate,
+        the extent union - still test `geojson is not None` themselves.
+        """
+        return tuple(
+            layer
+            for layer in self.layers
+            if layer.geojson is not None or layer.raster is not None
+        )
 
     @property
     def blocking_items(self) -> tuple[FidelityItem, ...]:
