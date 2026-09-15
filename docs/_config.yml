@@ -112,10 +112,10 @@ defaults:
     values:
       sitemap: false
 
-# Working notes and specs are for whoever is reading the repository, not for the
-# published site. `architecture.md` and `ui-design.md` stay published - they are
-# linked from the README and are worth reading - but they are kept out of the
-# sidebar, which is for people using the plugin rather than building it.
-exclude:
-  - superpowers/
-  - images/NEEDED.md
+# `architecture.md` and `ui-design.md` stay published - they are linked from the
+# README and are worth reading - but they are kept out of the sidebar, which is
+# for people using the plugin rather than building it.
+#
+# There is no `exclude:` key. It listed working notes and an internal shot list
+# that no longer live in the repository; nothing under `docs/` is now for
+# internal eyes only, so everything here is meant to be served.

@@ -411,7 +411,8 @@
             offline. Front matter is stripped before Qt sees the file, so this
             is the one place a picture can live without costing the Help tab
             anything. Mid-page images need `setBaseUrl` and the images shipped
-            in the zip first - see `docs/images/NEEDED.md`.
+            in the zip first - see `strip_images()` in
+            `nika_onlymap_exporter/ui/main_dialog.py`.
           -->
           {% if page.lead_image %}
             <figure class="lead-figure">

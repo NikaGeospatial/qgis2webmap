@@ -1,6 +1,6 @@
 """Draw the docs' house-style annotations onto a screenshot.
 
-House style, from docs/images/NEEDED.md:
+House style:
 - one red #e03131 rectangle, 3 px, square corners, per thing to click
 - numbered circles (red ground, white numeral) only for ordered sequences
 - no arrows, no shadows, no blur
