@@ -117,6 +117,7 @@ from ..hosting.client import (
     UploadFile,
 )
 from ..hosting.consent import (
+    insecure_transport_text,
     publish_consent_text,
     should_warn_truncation,
     truncation_warning_text,
@@ -3067,16 +3068,20 @@ class MainDialog(QDialog):
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle("Publish this map?")
         box.setText(f"Publish '{export.title}' to a public web address?")
-        box.setInformativeText(
-            publish_consent_text(
-                export.title,
-                files,
-                feature_count=sum(
-                    layer.feature_count for layer in export.exportable_layers
-                ),
-                layer_count=len(export.exportable_layers),
-            )
+        consent = publish_consent_text(
+            export.title,
+            files,
+            feature_count=sum(
+                layer.feature_count for layer in export.exportable_layers
+            ),
+            layer_count=len(export.exportable_layers),
         )
+        # Prepended, not appended: it is a statement about how everything below
+        # travels, and a reader who stops after the first paragraph has still
+        # seen the one thing they could not have guessed. Empty on every
+        # ordinary publish, so the common path reads exactly as before.
+        insecure = insecure_transport_text()
+        box.setInformativeText(f"{insecure}\n\n{consent}" if insecure else consent)
         publish = box.addButton("Publish", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         # Cancel is the default: this is the screen where a stray Return key

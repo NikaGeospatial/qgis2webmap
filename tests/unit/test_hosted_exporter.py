@@ -43,6 +43,7 @@ from nika_onlymap_exporter.hosting.client import (
     UploadFile,
 )
 from nika_onlymap_exporter.hosting.consent import (
+    insecure_transport_text,
     publish_consent_text,
     should_warn_truncation,
     truncation_warning_text,
@@ -520,14 +521,30 @@ class TestConsentWording:
         assert "thumbnail.png" in text
         assert "3.8 MB" in text
 
-    def test_it_says_nothing_about_transport_regardless_of_the_environment(
-        self, monkeypatch
-    ) -> None:
-        """The confirmation no longer varies by transport or environment."""
+    def test_the_body_itself_never_varies_by_transport(self, monkeypatch) -> None:
+        """The banner is a separate string, prepended by the caller."""
         monkeypatch.setenv(ALLOW_HTTP_LOOPBACK_ENV, "1")
         monkeypatch.setenv("NIKA_API_BASE", "http://localhost:8787")
         assert "plain HTTP" not in self.text()
         assert "localhost" not in self.text()
+
+    def test_it_says_nothing_about_transport_on_an_ordinary_publish(
+        self, monkeypatch
+    ) -> None:
+        """The banner is for the exemption only; HTTPS needs no announcement."""
+        monkeypatch.delenv(ALLOW_HTTP_LOOPBACK_ENV, raising=False)
+        monkeypatch.delenv("NIKA_API_BASE", raising=False)
+        assert insecure_transport_text() == ""
+        assert insecure_transport_text("https://api.nika.eco") == ""
+
+    def test_a_publish_over_plain_http_says_so_to_the_user(self, monkeypatch) -> None:
+        """Silent insecure transport is how this ends up on in production."""
+        monkeypatch.setenv(ALLOW_HTTP_LOOPBACK_ENV, "1")
+        monkeypatch.setenv("NIKA_API_BASE", "http://localhost:8787")
+        text = insecure_transport_text()
+        assert "plain HTTP" in text
+        assert "http://localhost:8787" in text
+        assert ALLOW_HTTP_LOOPBACK_ENV in text
 
     def test_it_does_not_claim_to_upload_the_runtime(self) -> None:
         """The consent must describe what actually leaves the machine."""

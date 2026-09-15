@@ -8,14 +8,21 @@ read and tested without a QGIS application, which is what keeps the commitment
 from quietly eroding one edit at a time.
 
 The confirmation names the map, the files, and their size - what leaves the
-machine, plainly. It no longer walks through the license/attribute-data/
-transport specifics that used to sit here; those are documented in
-`docs/hosting.md` for whoever wants them, rather than repeated on every publish.
+machine, plainly. It no longer walks through the licence and attribute-data
+specifics that used to sit here; those are documented in `docs/hosting.md` for
+whoever wants them, rather than repeated on every publish.
 
-One warning still fires conditionally: on the free tier the hosted map is
-subject to OnlyMap's own caps, so a project past them is published *truncated*.
-That is the failure `truncation_warning_text` exists to prevent - truncation
-discovered by a map's audience rather than by its author.
+What that trim keeps is the *conditional* warnings, on the reasoning that text
+shown on every publish stops being read while text shown on one publish in a
+hundred still is. Two of them fire:
+
+* On the free tier the hosted map is subject to OnlyMap's own caps, so a project
+  past them is published *truncated*. That is the failure
+  `truncation_warning_text` exists to prevent - truncation discovered by a map's
+  audience rather than by its author.
+* Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
+  `insecure_transport_text` says out loud. It is empty on every ordinary
+  publish, so it costs the common path nothing.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -26,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..core.license_policy import CapViolation
-from .client import UploadFile
+from .client import UploadFile, insecure_loopback_base
 
 
 def should_warn_truncation(
@@ -44,6 +51,29 @@ def should_warn_truncation(
     possible while they can still stop.
     """
     return license_key is None and bool(violations)
+
+
+def insecure_transport_text(api_base: str | None = None) -> str:
+    """The banner for a publish running under the plain-HTTP loopback exemption.
+
+    Empty string when it is not in play, which is every ordinary publish - so
+    callers can prepend it unconditionally and nothing changes for anyone who
+    has not switched it on.
+
+    It is here, in the confirmation, rather than in a log line, for the same
+    reason the truncation warning is: the point of an exemption that weakens
+    transport security is that the person accepting it knows they are. An
+    exemption nobody is ever shown is one that gets left on.
+    """
+    base = insecure_loopback_base(api_base)
+    if not base:
+        return ""
+    return (
+        f"Local development: this publish goes to {base} over plain HTTP, "
+        "unencrypted, because NIKA_ALLOW_INSECURE_LOOPBACK is set. That is "
+        "only safe because the address is this machine - nothing leaves it. "
+        "Unset the variable to go back to requiring HTTPS."
+    )
 
 
 def publish_consent_text(
