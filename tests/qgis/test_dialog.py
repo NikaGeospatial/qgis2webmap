@@ -376,6 +376,133 @@ class TestTabCorner:
             dialog.close()
 
 
+class TestShareBuildsWhatItNeeds:
+    """No Share action should make the user produce a file first.
+
+    Pressing Export before Copy file path was a step that existed only because
+    the dialog could not do it itself. Each action now writes the map file when
+    it is missing or out of date, and skips the write when it is neither.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_a_current_file_is_used_without_rebuilding(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "map.html"
+            destination.write_text("<p>a map</p>", encoding="utf-8")
+            dialog.path_edit.setText(str(destination))
+            # What the file on disk claims to have been written from.
+            dialog._written_signature = dialog.state.snapshot()
+
+            exported: list[bool] = []
+            dialog.on_export = lambda: exported.append(True)
+
+            used: list = []
+            dialog._with_current_map_file(used.append)
+
+            assert used == [destination], "the existing file should be used as is"
+            assert not exported, "nothing changed, so nothing should be rebuilt"
+        finally:
+            dialog.close()
+
+    def test_a_stale_file_is_rebuilt_before_it_is_used(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """A map written before the last edit is the bug this prevents.
+
+        0.1.x would happily hand over yesterday's export, because nothing tied
+        the file on disk to the settings that produced it.
+        """
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "map.html"
+            destination.write_text("<p>yesterday</p>", encoding="utf-8")
+            dialog.path_edit.setText(str(destination))
+            dialog._written_signature = dialog.state.snapshot()
+
+            dialog.name_edit.setText("Renamed since it was written")
+            assert dialog._map_file_is_stale()
+
+            exported: list[bool] = []
+            dialog.on_export = lambda: exported.append(True)
+
+            used: list = []
+            dialog._with_current_map_file(used.append)
+
+            assert exported, "a stale file must be rewritten before it is shared"
+            assert not used, "the follow-on waits for the write to land"
+            assert dialog._export_then is not None
+        finally:
+            dialog.close()
+
+    def test_a_file_this_session_never_wrote_is_not_trusted(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """An unrelated file at that path says nothing about the project."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "map.html"
+            destination.write_text("<p>someone else's</p>", encoding="utf-8")
+            dialog.path_edit.setText(str(destination))
+
+            assert dialog._written_signature is None
+            assert dialog._map_file_is_stale()
+        finally:
+            dialog.close()
+
+    def test_copying_the_path_never_builds(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """Waiting through a rebuild to learn where a file lives is absurd."""
+        from qgis.PyQt.QtGui import QGuiApplication
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "never-written.html"
+            dialog.path_edit.setText(str(destination))
+
+            exported: list[bool] = []
+            dialog.on_export = lambda: exported.append(True)
+
+            dialog.on_copy_map_path()
+
+            assert QGuiApplication.clipboard().text() == str(destination)
+            assert not exported
+            assert not destination.exists()
+        finally:
+            dialog.close()
+
+    def test_no_map_file_is_refused_with_an_explanation(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            told: list[bool] = []
+            monkeypatch.setattr(
+                module.QMessageBox, "information", lambda *a, **k: told.append(True)
+            )
+            used: list = []
+            dialog._with_current_map_file(used.append)
+
+            assert not used
+            assert told, "a refusal has to say what to do about it"
+        finally:
+            dialog.close()
+
+
 class TestPackagingIsNotAskedForUpFront:
     """The map is a document, not a choice of three artifacts.
 
