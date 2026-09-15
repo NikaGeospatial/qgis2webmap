@@ -126,14 +126,31 @@ def pinned_runtime(file_name: str = RUNTIME_JS) -> PinnedRuntime:
 def runtime_script_tag(runtime: PinnedRuntime, indent: str = "    ") -> str:
     """The `<script>` element a hosted page loads the runtime with.
 
-    Not `type="module"`. The standalone build is a classic script that defines
-    the custom elements as a side effect, and it is deferred rather than
-    parser-blocking so the `<om-map>` markup above it is already in the document
-    when the elements upgrade.
+    `type="module"`, because the standalone build is one. It is published from
+    a `"type": "module"` package and its top level evaluates
+    `new URL(..., import.meta.url)` to locate the raster worker it ships inline;
+    `import.meta` is a SYNTAX error in a classic script, so the browser discards
+    the entire bundle before a single statement runs.
+
+    That failure is silent in every way that matters. The response is a 200, the
+    integrity check passes, the CSP is satisfied, the `<om-map>` markup sits in
+    the document untouched - and nothing upgrades it, so the page renders blank
+    with one console line nobody is watching. This docstring previously asserted
+    the opposite, and a unit test asserted it back, which is how every hosted map
+    shipped with a runtime that could not parse.
+
+    `defer` is kept although a module script defers by default: it is redundant,
+    not wrong, and the attribute states the ordering the page depends on - that
+    the `<om-map>` markup above is already in the document when the elements
+    upgrade - for a reader who should not have to know that rule.
+
+    The offline tiers reached the same conclusion independently; see
+    `writers/onlymap_writer._inline_runtime_element`.
     """
     return "\n".join(
         [
             f"{indent}<script",
+            f'{indent}  type="module"',
             f'{indent}  src="{runtime.url}"',
             f'{indent}  integrity="{runtime.integrity}"',
             f'{indent}  crossorigin="{CROSSORIGIN}"',

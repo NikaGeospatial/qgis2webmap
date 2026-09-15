@@ -375,7 +375,13 @@ class TestPinnedRuntime:
         tag = runtime_script_tag(pinned_runtime())
         assert 'integrity="sha256-' in tag
         assert 'crossorigin="anonymous"' in tag
-        assert 'type="module"' not in tag
+        # A module, and this assertion is load-bearing rather than descriptive:
+        # the standalone build evaluates `import.meta.url` at its top level, so
+        # as a classic script it is a syntax error and the whole runtime is
+        # discarded before it runs. The page still returns 200 and still passes
+        # its integrity check; it simply never draws. This line used to assert
+        # the opposite - see `cdn_runtime.runtime_script_tag`.
+        assert 'type="module"' in tag
 
 
 class TestHostedWrite:
