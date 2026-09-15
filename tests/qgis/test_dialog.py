@@ -288,6 +288,94 @@ class TestPreview:
         assert "om-view-changed" not in outcome.path.read_text()
 
 
+class TestTabCorner:
+    """Preview and Share live on the tab bar, reachable from every tab.
+
+    They used to sit in a row at the foot of the dialog, which is also where the
+    Export button once ended up behind the Windows taskbar. The row they left is
+    now chrome only - somewhere to ask, somewhere to leave.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_the_corner_holds_preview_and_share(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            assert corner is not None
+            labels = [b.text() for b in corner.findChildren(QToolButton)]
+            assert labels == ["Preview", "Share"]
+        finally:
+            dialog.close()
+
+    def test_live_preview_is_the_preview_menu(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """The setting sits on the control it qualifies, not beside it."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            actions = dialog.preview_button.menu().actions()
+            assert [a.text() for a in actions] == ["Live preview"]
+            assert actions[0].isCheckable()
+        finally:
+            dialog.close()
+
+    def test_a_disabled_share_menu_keeps_no_live_shortcut(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """A greyed-out button must not leave its shortcuts armed.
+
+        A disabled `QToolButton` still owns an enabled `QMenu`, and an enabled
+        `QAction` keeps its shortcut live on the dialog - so `Ctrl+O` would open
+        a map that has nowhere to be written, from a control the user can see is
+        unavailable.
+        """
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert dialog.share_button.isEnabled() is False
+            assert dialog.share_actions, "the menu should have actions to disable"
+            for action in dialog.share_actions.values():
+                assert action.isEnabled() is False
+                assert "map file" in action.toolTip()
+
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            for action in dialog.share_actions.values():
+                assert action.isEnabled() is True
+            # The real wording comes back rather than staying as the refusal.
+            assert "clipboard" in dialog.share_actions["copy_path"].toolTip()
+        finally:
+            dialog.close()
+
+    def test_the_bottom_row_is_chrome_only(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Nothing that acts on the map is left down there."""
+        from qgis.PyQt.QtWidgets import QPushButton
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            labels = {b.text() for b in dialog.findChildren(QPushButton)}
+            assert "Close" in labels
+            assert "Discord ↗" in labels
+            for gone in ("Export", "Host ↗", "Open exported map", "Preview"):
+                assert gone not in labels
+        finally:
+            dialog.close()
+
+
 class TestPackagingIsNotAskedForUpFront:
     """The map is a document, not a choice of three artifacts.
 
@@ -502,11 +590,11 @@ class TestLivePreviewLifecycle:
         # Establish the starting state rather than inheriting it: `setChecked`
         # emits nothing when the value already matches, so a box that was
         # already unticked would make this pass for the wrong reason.
-        dialog.live_check.setChecked(True)
+        dialog.live_action.setChecked(True)
         dialog._server = PreviewServer(tmp_path)
         dialog._server.start()
 
-        dialog.live_check.setChecked(False)
+        dialog.live_action.setChecked(False)
 
         assert dialog._server is None
         dialog.close()
@@ -521,12 +609,22 @@ class TestLivePreviewLifecycle:
         assert not dialog._rebuild_timer.isActive()
         dialog.close()
 
-    def test_open_exported_map_is_disabled_until_there_is_one(
-        self, qgis_app, project, make_memory_layer
+    def test_share_is_disabled_until_there_is_somewhere_to_write(
+        self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
+        """Share needs a destination, not an existing file.
+
+        Requiring the file to exist would leave the menu dead on first open with
+        nothing to press to wake it, so the rule is the path.
+        """
         dialog = self._dialog(project, make_memory_layer)
-        assert dialog.open_export_button.isEnabled() is False
-        dialog.close()
+        try:
+            assert dialog.share_button.isEnabled() is False
+
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            assert dialog.share_button.isEnabled() is True
+        finally:
+            dialog.close()
 
     def test_a_refused_port_falls_back_to_a_file_preview(
         self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
@@ -549,7 +647,9 @@ class TestLivePreviewLifecycle:
         dialog._fall_back_to_file_preview(entry)
 
         assert opened, "the preview should still open"
-        assert dialog.live_check.isChecked() is False, "the checkbox must match reality"
+        assert dialog.live_action.isChecked() is False, (
+            "the menu item must match reality"
+        )
         assert dialog._server is None
         assert "could not start" in dialog.status_label.text()
         dialog.close()
@@ -602,7 +702,7 @@ class TestDialogConstruction:
     ) -> None:
         dialog = self._dialog(project, make_memory_layer)
         assert dialog.layer_tree.topLevelItemCount() == 2
-        assert dialog.export_button.isEnabled()
+        assert dialog.preview_button.isEnabled()
         dialog.close()
 
     def test_export_disables_with_a_stated_reason(
@@ -616,7 +716,8 @@ class TestDialogConstruction:
             dialog.layer_tree.topLevelItem(index).setCheckState(
                 1, Qt.CheckState.Unchecked
             )
-        assert dialog.export_button.isEnabled() is False
+        assert dialog.preview_button.isEnabled() is False
+        assert dialog.share_button.isEnabled() is False
         assert "at least one layer" in dialog.status_label.text()
         dialog.close()
 

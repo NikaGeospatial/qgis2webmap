@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import sys
 import time
 import traceback
 from html import escape as escape_html
@@ -43,6 +44,7 @@ from qgis.PyQt.QtGui import (
     QTextDocument,
 )
 from qgis.PyQt.QtWidgets import (
+    QAction,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -53,12 +55,14 @@ from qgis.PyQt.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QTabWidget,
     QTextBrowser,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -281,6 +285,20 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
         f"Please include the log.</p>"
     )
     box.exec()
+
+
+def _reveal_label() -> str:
+    """What "show me this file" is called on the platform in front of you.
+
+    Not cosmetic. Someone looking for a file reaches for the name their own
+    system uses, and "Reveal in Finder" on Windows reads as a different feature
+    rather than the same one worded oddly.
+    """
+    if sys.platform == "darwin":
+        return "Reveal in Finder"
+    if sys.platform.startswith("win"):
+        return "Show in Explorer"
+    return "Show in file manager"
 
 
 def _ago(when: float) -> str:
@@ -519,6 +537,17 @@ class MainDialog(QDialog):
         self._pending_canvas_extent = None
         self._pending_license_key: str | None = None
 
+        # Which tier the write in flight is producing, and what to do once it
+        # lands. Both belong to one press rather than to the dialog: packaging
+        # stopped being a remembered setting when the mode radio group went.
+        self._pending_mode: OutputMode = OutputMode.STANDALONE_HTML
+        self._export_then = None
+        # The state the map file on disk was last written from. `None` means
+        # "not by us, not this session" - so the first Share action rebuilds
+        # rather than trusting a file it has never seen written.
+        self._written_signature: str | None = None
+        self._last_export_path: Path | None = None
+
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
         self.tabs.addTab(_scrollable(self._build_map_tab()), "Map")
@@ -526,7 +555,7 @@ class MainDialog(QDialog):
         self.tabs.addTab(_scrollable(self._build_appearance_tab()), "Appearance")
         self.tabs.addTab(self._build_fidelity_tab(), "Fidelity")
         self.tabs.addTab(self._build_help_tab(), "Help")
-        self.tabs.setCornerWidget(self._build_help_corner(), Qt.Corner.TopRightCorner)
+        self.tabs.setCornerWidget(self._build_tab_corner(), Qt.Corner.TopRightCorner)
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
@@ -1055,10 +1084,27 @@ class MainDialog(QDialog):
         Enablement hangs on the *path*, not on the file existing: an action that
         needs the map writes it first. Requiring the file to exist would leave
         the menu dead on first open with nothing to press to wake it.
+
+        **Every action, not just the button.** A disabled `QToolButton` still
+        holds an enabled `QMenu`, and an enabled `QAction` keeps its shortcut
+        live on the dialog - so `Ctrl+O` would fire Open in browser with no map
+        file set, from a button the user can see is greyed out.
         """
         if not hasattr(self, "share_button"):
             return
-        self.share_button.setEnabled(self._map_file() is not None)
+        ready = self._map_file() is not None
+        self.share_button.setEnabled(ready)
+        for key, action in getattr(self, "share_actions", {}).items():
+            action.setEnabled(ready)
+            # Restored from the originals rather than remembered off the widget:
+            # overwriting the tooltip on the way down would lose the real one
+            # the first time a map file was cleared, and the action would spend
+            # the rest of the session explaining a state it is no longer in.
+            action.setToolTip(
+                self._share_tooltips[key]
+                if ready
+                else "Choose a map file on the Map tab first"
+            )
 
     def _remember_destination(self, path: Path) -> None:
         """Store the folder, never the file name.
@@ -1742,32 +1788,149 @@ class MainDialog(QDialog):
 
     # ---- Help tab -------------------------------------------------------
 
-    def _build_help_corner(self) -> QWidget:
-        """A way to reach a person, from every tab, for no vertical space.
+    def _build_tab_corner(self) -> QWidget:
+        """Preview and Share, on screen from whichever tab is open.
 
-        The Help tab holds the guides, and someone who is stuck on the Layers
-        tab does not go looking through documentation - they want to ask. But
-        this dialog cannot afford another row to say so: `_resize_to_fit_screen`
-        exists because a fixed height once put the Export button behind the
-        Windows taskbar with no way to reach it, and three rows already sit
-        below the tabs.
+        The corner used to hold `Get help ↗`, which was put there because "this
+        dialog cannot afford another row" - `_resize_to_fit_screen` exists
+        because a fixed height once put the Export button behind the Windows
+        taskbar with no way to reach it.
 
-        The tab bar's own corner is the space that was already there. It costs
-        nothing in height, it is on screen whichever tab is open, and being
-        chrome rather than a form control it never competes with Export.
+        That reasoning still holds and this does not break it. The two actions
+        that were at the foot of the dialog move up here, the bottom row empties
+        to Discord and Close, and the dialog is no taller than it was. Help goes
+        down into the space they left.
+
+        They belong here for the same reason the count does: these are the two
+        things a user does *to* the map, and the tab they happen to be reading
+        when they decide to do one is not the dialog's business.
         """
-        button = QPushButton("Get help ↗", self)
-        button.setFlat(True)
-        # The arrow is doing real work here: everything else in this dialog acts
-        # on the project in front of you, and this one thing leaves for a
-        # browser. Saying so in the label is cheaper than an apology afterwards.
-        button.setToolTip(
-            "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
-            "Ask a question, suggest something, or report a bug - no GitHub "
-            "account needed."
+        corner = QWidget(self)
+        layout = QHBoxLayout(corner)
+        layout.setContentsMargins(0, 0, 6, 0)
+        layout.setSpacing(6)
+
+        self.preview_button = QToolButton(corner)
+        self.preview_button.setText("Preview")
+        self.preview_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.MenuButtonPopup
         )
-        button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
-        return button
+        self.preview_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.preview_button.clicked.connect(self.on_preview)
+        self.preview_button.setMenu(self._build_preview_menu())
+        layout.addWidget(self.preview_button)
+
+        self.share_button = QToolButton(corner)
+        self.share_button.setText("Share")
+        self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.share_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        # The face is the most common of the menu's actions, not a separate one:
+        # a split button whose face does something absent from its own menu is a
+        # button people press by accident.
+        self.share_button.clicked.connect(self.on_open_in_browser)
+        self.share_button.setMenu(self._build_share_menu())
+        layout.addWidget(self.share_button)
+
+        return corner
+
+    def _build_preview_menu(self) -> QMenu:
+        """One item, and room for more when somebody asks for a second.
+
+        `Live preview` was a checkbox in the bottom row. It is the only setting
+        in this dialog that changes what *another* control does rather than what
+        the map contains, so it belongs on that control rather than beside it.
+        """
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+
+        self.live_action = QAction("Live preview", self)
+        self.live_action.setCheckable(True)
+        self.live_action.setChecked(
+            QSettings().value(LIVE_PREVIEW_KEY, True, type=bool)
+        )
+        self.live_action.setToolTip(
+            "Serve the preview from this machine and reload the open tab as you "
+            "change settings. Switch off to open the preview as a file instead."
+        )
+        self.live_action.toggled.connect(self._on_live_toggled)
+        menu.addAction(self.live_action)
+        return menu
+
+    def _build_share_menu(self) -> QMenu:
+        """Everything that sends the map somewhere, in one list.
+
+        Tooltips rather than descriptions in the labels: one line per action
+        keeps the menu scannable, and a style that drops section titles must
+        still leave every label readable on its own - which is why each one
+        names its object ("Export share ZIP", not "ZIP").
+        """
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+
+        self.share_actions: dict[str, QAction] = {}
+        # The wording each action carries when it is available. Kept apart from
+        # the widgets so `_update_share_enabled` can put it back after having
+        # replaced it with the reason the item was greyed out.
+        self._share_tooltips: dict[str, str] = {}
+
+        def add(key: str, label: str, tip: str, slot, shortcut: str = "") -> QAction:
+            action = QAction(label, self)
+            action.setToolTip(tip)
+            if shortcut:
+                action.setShortcut(shortcut)
+            action.triggered.connect(slot)
+            menu.addAction(action)
+            self.share_actions[key] = action
+            self._share_tooltips[key] = tip
+            return action
+
+        add(
+            "copy_path",
+            "Copy file path",
+            "Copies the map file's path to the clipboard",
+            self.on_copy_map_path,
+        )
+        add(
+            "reveal",
+            _reveal_label(),
+            "Shows the map file in your file manager",
+            self.on_reveal_map_file,
+        )
+        add(
+            "open",
+            "Open in browser",
+            "Opens the map in your browser",
+            self.on_open_in_browser,
+            "Ctrl+O",
+        )
+
+        menu.addSection("Publish")
+        add(
+            "publish",
+            "Publish with NIKA hosting... (waitlist)",
+            "Hosting is not live yet. This opens a short form so we can see how "
+            "many people want it.",
+            self.on_publish,
+        )
+
+        menu.addSection("Export")
+        add(
+            "zip",
+            "Export share ZIP...",
+            "A zip to email or upload - passes mail filters that quarantine .html",
+            self.on_export_share_zip,
+        )
+        add(
+            "folder",
+            "Export folder for hosting...",
+            "A folder to copy to any static web host",
+            self.on_export_folder,
+        )
+        return menu
 
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)
@@ -1805,57 +1968,32 @@ class MainDialog(QDialog):
     # ---- Buttons --------------------------------------------------------
 
     def _build_button_row(self) -> QHBoxLayout:
+        """Chrome only: somewhere to ask, somewhere to leave.
+
+        Everything that acts on the map moved to the tab corner. What is left is
+        the pair every dialog has - a way to get help and a way to close - with
+        the running commentary between them.
+        """
         row = QHBoxLayout()
+
+        # Named for where it goes, not for what it is. "Help" beside a Help tab
+        # that holds the guides would be two things with one name; this one
+        # opens a chat with people, which is a different answer to a different
+        # question. The arrow marks that it leaves for a browser, the way every
+        # outward link in this dialog does.
+        discord = QPushButton("Discord ↗", self)
+        discord.setFlat(True)
+        discord.setToolTip(
+            "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
+            "Ask a question, suggest something, or report a bug - no GitHub "
+            "account needed."
+        )
+        discord.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
+        row.addWidget(discord)
+
         self.status_label = QLabel("", self)
         self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, 1)
-
-        # Remembered per machine. Ticking it does not open anything on its own -
-        # the user asked for nothing to auto-launch a browser - it only decides
-        # what Preview does when they press it.
-        self.live_check = QCheckBox("Live preview", self)
-        self.live_check.setChecked(QSettings().value(LIVE_PREVIEW_KEY, True, type=bool))
-        self.live_check.setToolTip(
-            "Serve the preview from this machine and reload the open tab as you "
-            "change settings. Switch off to open the preview as a file instead."
-        )
-        self.live_check.toggled.connect(self._on_live_toggled)
-        row.addWidget(self.live_check)
-
-        self.preview_button = QPushButton("Preview", self)
-        self.preview_button.clicked.connect(self.on_preview)
-        row.addWidget(self.preview_button)
-
-        # A demand probe, not a feature. Hosting does not exist yet; this opens
-        # the feature-request form so the interest can be counted before the
-        # auth flow, blob storage and expiry job get built on a hypothesis.
-        # Labelled with the arrow every other outward link in this dialog uses,
-        # because pressing it leaves for a browser rather than acting on the
-        # project - and never enabled/disabled with the export buttons, since
-        # it has nothing to do with whether the project is exportable.
-        self.host_button = QPushButton("Host ↗", self)
-        self.host_button.setToolTip(
-            "Hosting a map on NIKA's servers is not built yet. This opens a "
-            "short form so we can see how many people want it."
-        )
-        self.host_button.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(FEATURE_REQUEST_URL))
-        )
-        row.addWidget(self.host_button)
-
-        self.export_button = QPushButton("Export", self)
-        self.export_button.setDefault(True)
-        self.export_button.clicked.connect(self.on_export)
-        row.addWidget(self.export_button)
-
-        # Enabled only once there is something to open. The file:// path is
-        # exercised here, against the artifact that actually ships, rather than
-        # against a preview copy of it.
-        self.open_export_button = QPushButton("Open exported map", self)
-        self.open_export_button.setEnabled(False)
-        self.open_export_button.clicked.connect(self._on_open_export)
-        self._last_export_path: Path | None = None
-        row.addWidget(self.open_export_button)
 
         close = QPushButton("Close", self)
         close.clicked.connect(self.reject)
@@ -1939,8 +2077,8 @@ class MainDialog(QDialog):
             self.progress_bar.setRange(0, 0)  # indeterminate until told otherwise
             self.progress_bar.setFormat(label)
             self.status_label.setText(label)
-            self.export_button.setEnabled(False)
             self.preview_button.setEnabled(False)
+            self.share_button.setEnabled(False)
         else:
             self.progress_bar.reset()
             self._update_export_readiness()
@@ -2072,11 +2210,6 @@ class MainDialog(QDialog):
         if not enabled:
             self._stop_live_preview()
 
-    def _on_open_export(self) -> None:
-        if self._last_export_path is None:
-            return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_export_path)))
-
     def _poll_for_changes(self) -> None:
         """Restart the debounce whenever any setting differs from last build."""
         if self._shut_down or self._server is None:
@@ -2166,8 +2299,12 @@ class MainDialog(QDialog):
         self._update_export_summary(len(selected))
 
     def _set_ready(self, ready: bool, message: str) -> None:
-        self.export_button.setEnabled(ready)
         self.preview_button.setEnabled(ready)
+        # Share needs a destination as well as something to put in it, so its
+        # own rule is applied on top rather than instead.
+        self.share_button.setEnabled(ready)
+        if ready:
+            self._update_share_enabled()
         self.status_label.setText(message)
 
     # ---- Actions --------------------------------------------------------
@@ -2313,7 +2450,7 @@ class MainDialog(QDialog):
             return
 
         identity = self._project_identity()
-        live = self.live_check.isChecked()
+        live = self.live_action.isChecked()
         writer = self._writer()
 
         def work(progress: Progress):
@@ -2364,9 +2501,9 @@ class MainDialog(QDialog):
         self._stop_live_preview()
         with contextlib.suppress(Exception):
             # Reflect reality without re-entering `_on_live_toggled`'s teardown.
-            self.live_check.blockSignals(True)
-            self.live_check.setChecked(False)
-            self.live_check.blockSignals(False)
+            self.live_action.blockSignals(True)
+            self.live_action.setChecked(False)
+            self.live_action.blockSignals(False)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
         self.status_label.setText(
@@ -2390,8 +2527,119 @@ class MainDialog(QDialog):
         self._server = server
         return url
 
+    # ---- Share -----------------------------------------------------------
+
+    def _with_current_map_file(self, then) -> None:
+        """Run `then(path)` once the map file on disk matches the project.
+
+        The one rule the whole Share menu is built on. Every action needs a file
+        that is current, and none of them should make the user think about
+        producing one: pressing Export before Copy file path was a step that
+        existed only because the dialog could not do it itself.
+
+        Rebuilds only when something actually changed - `_ensure_export` keys
+        its cache on `data_snapshot`, so a run of Share actions after one write
+        costs nothing.
+        """
+        destination = self._map_file()
+        if destination is None:
+            self._warn_no_map_file()
+            return
+
+        if destination.exists() and not self._map_file_is_stale():
+            then(destination)
+            return
+
+        self._export_then = then
+        self.on_export()
+
+    def _map_file_is_stale(self) -> bool:
+        """Whether the project has moved since the map file was last written."""
+        return self._written_signature != self.state.snapshot()
+
+    def on_copy_map_path(self) -> None:
+        """The path, on the clipboard, for pasting into anything at all.
+
+        Does not build first. This is the one Share action that asks about the
+        file's *name* rather than its contents, and making somebody wait through
+        a rebuild to learn where a file lives would be absurd.
+        """
+        destination = self._map_file()
+        if destination is None:
+            self._warn_no_map_file()
+            return
+        QGuiApplication.clipboard().setText(str(destination))
+        self.status_label.setText(f"Copied {destination}")
+
+    def on_reveal_map_file(self) -> None:
+        """Open the file manager at the folder holding the map file.
+
+        **The folder, not the file selected in it.** Selecting the file needs a
+        platform command - `open -R` on macOS, `explorer /select,` on Windows -
+        and running system commands is exactly what CONTRIBUTING.md rule 2
+        forbids, after qgis2web shelled out to `apt-get` and took QGIS down with
+        it on every non-Debian machine. Reaching for `QProcess` instead of
+        `subprocess` would dodge the guard rather than honour the rule.
+
+        The folder is enough in practice: the map file is the one the user just
+        named in the field above, so they know what they are looking for. Copy
+        file path is there for the times they do not.
+        """
+        self._with_current_map_file(
+            lambda destination: (
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination.parent))),
+                self.status_label.setText(f"Opened {destination.parent}"),
+            )
+        )
+
+    def on_open_in_browser(self) -> None:
+        """The map itself, in a real browser, from the real file.
+
+        The `file://` path is exercised here against the artifact that actually
+        ships, rather than against a preview copy of it - which is the whole
+        reason this is not just Preview.
+        """
+        self._with_current_map_file(
+            lambda destination: (
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination))),
+                self.status_label.setText(
+                    f"Opened {destination.name} in your browser."
+                ),
+            )
+        )
+
+    def on_publish(self) -> None:
+        """Hosting, for as long as hosting is a form rather than a feature.
+
+        A demand probe, not a feature: this opens the waitlist so the interest
+        can be counted before the auth flow, blob storage and expiry job get
+        built on a hypothesis. Deliberately one method with one job, so the
+        release that makes hosting real replaces a body rather than a menu.
+        """
+        QDesktopServices.openUrl(QUrl(FEATURE_REQUEST_URL))
+        self.status_label.setText(
+            "Hosting is not live yet - the waitlist form opened in your browser."
+        )
+
+    def on_export_share_zip(self) -> None:
+        self._export_tier(OutputMode.SHARE_ZIP)
+
+    def on_export_folder(self) -> None:
+        self._export_tier(OutputMode.FOLDER)
+
+    def _export_tier(self, mode: OutputMode) -> None:
+        """Produce a zip or a folder, alongside the map file rather than as it.
+
+        These are copies taken at a moment, for somebody else. The map file is
+        untouched: a user who emails a zip still has their document where they
+        left it, which is exactly what 0.1.x could not say.
+        """
+        self._pending_mode = mode
+        self._ensure_export(self._export_with, "Reading the project...")
+
     def on_export(self) -> None:
-        """Write the artifact wherever the user asks for it."""
+        """Write the map file itself."""
+        self._pending_mode = OutputMode.STANDALONE_HTML
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
         self._ensure_export(self._export_with, "Reading the project...")
 
@@ -2402,10 +2650,14 @@ class MainDialog(QDialog):
         # reports success, and the Processing algorithm already refuses on
         # the same input - the two entry points must not disagree.
         if not export.is_exportable:
+            self._export_then = None
             self._warn_not_exportable(export)
             return
 
-        mode = self.state.output_mode
+        # Set by whichever action started this, rather than read off the state:
+        # packaging is no longer something the dialog holds between presses, it
+        # is an argument to the one press.
+        mode = self._pending_mode
 
         # Issue #29: never quietly hand over a single file that will not travel.
         # This used to switch the selection to Share ZIP itself, which was worse
@@ -2416,15 +2668,18 @@ class MainDialog(QDialog):
         if mode is OutputMode.STANDALONE_HTML:
             reason = standalone_ineligible_reason(export)
             if reason is not None and not self._confirm_oversized_single_file(reason):
+                self._export_then = None
                 return
 
         # After the blocking checks: no point downloading the runtime for a
         # project that was never going to export.
         if not self._runtime_ready():
+            self._export_then = None
             return
 
         destination = self._resolve_destination(mode)
         if destination is None:
+            self._export_then = None
             return
 
         writer = self._writer()
@@ -2451,6 +2706,7 @@ class MainDialog(QDialog):
                     "This map cannot be exported yet:\n\n"
                     + "\n".join(f"- {reason}" for reason in built.reasons),
                 )
+                self._export_then = None
                 return
 
             result, outcome = built
@@ -2459,10 +2715,15 @@ class MainDialog(QDialog):
 
             # The file:// check happens here, against the bytes that ship.
             self._last_export_path = Path(outcome.path)
-            self.open_export_button.setEnabled(True)
+            if mode is OutputMode.STANDALONE_HTML:
+                # What the map file was written from, so a later Share action
+                # can tell "already current" from "the project has moved on".
+                self._written_signature = self.state.snapshot()
+            self._update_save_status()
 
             summary = outcome.summary()
             self.status_label.setText(summary)
+
             # The writer's warnings (licence caps, a runtime that does not match
             # the lock, an oversized single file) are things the recipient will
             # experience. Dropping them here is how a user ends up handing over
@@ -2476,7 +2737,14 @@ class MainDialog(QDialog):
                     + "\n".join(f"- {warning}" for warning in result.warnings)
                     + "\n\nThe Fidelity tab lists the detail.",
                 )
-            else:
+
+            # A Share action asked for this write as a step on the way to
+            # something else. Confirming it with a modal would interrupt the
+            # thing they actually asked for, so the follow-on runs instead.
+            then, self._export_then = self._export_then, None
+            if then is not None:
+                then(Path(outcome.path))
+            elif not result.warnings:
                 QMessageBox.information(self, "Export complete", summary)
 
         self._start_job(work, on_written, "Writing the map...")
