@@ -45,33 +45,36 @@ exporting a map should not quietly edit your project's metadata.
 Setting a name here does not by itself draw it on the map. That is the
 **Map title** switch on the [Appearance tab](#caption), which is off by default.
 
-### How to share it
+### Map file
 
-Three mutually exclusive output modes. There is more on choosing between them in
-[sharing a map](sharing.md).
+Where your map lives on disk. Type a path or press **Choose**.
 
-| Mode | Produces | The recipient |
-|---|---|---|
-| **Standalone HTML** | One `.html` file | Double-clicks it. Nothing else needed |
-| **Share ZIP** | A `.zip` with the map and a short README | Extracts it, opens `index.html` |
-| **Folder** | `index.html`, `onlymap.js` and a README, side by side | Serves it over `http(s)` |
+The map file is always a single `.html` file — one file that opens by
+double-clicking, with all of your data inside it. **You are no longer asked to
+pick a format before you have shared anything.** A zip or a folder is made from
+the Share menu at the moment you need one, because which of them you want
+depends on who you are sending it to, and you work that out afterwards.
+
+The field starts **empty**, and the plugin never guesses a path for you. Press
+**Choose** and it opens beside your project file, named after it.
 
 Underneath is a line of measured size advice, not a generic warning: it reports
-how large your map's data actually is and says when Standalone HTML would become
-slow to open or awkward to email.
+how large your map's data actually is, and says when the file would become slow
+to open or awkward to email.
 
-**Folder does not open by double-clicking.** Browsers refuse to load the runtime
-from a `file://` page when it sits in a separate file, so a folder has to be
-served. Pick Standalone HTML if you want something that opens off a disk.
+Below that, a line saying what the file on disk is doing:
 
-### Filepath
+| It says | It means |
+|---|---|
+| *Choose a map file to enable Preview and Share.* | No path set yet. Nothing has been written |
+| *Not written yet.* | The path is set; the file does not exist until you preview or share |
+| *Saved just now — 2.9 MB — 5 layers* | Live preview is running and the file is being kept up to date |
+| *Last written 20 min ago* | Written earlier. Sharing rewrites it if the project has moved on |
 
-Where the export is written. Type a path or press **Browse**. The folder is
-remembered between exports.
-
-The file is named after the map name, with anything that is not a letter, digit,
-space, hyphen or underscore replaced — so a layer called `Site A / B` cannot
-silently write into a subdirectory.
+**The map file is rewritten, never re-confirmed.** It is your document, so the
+plugin does not ask "replace the existing file?" every time — that question
+belongs to a zip or a folder you are making for somebody else, and those still
+ask.
 
 ### Basemap
 
@@ -116,8 +119,8 @@ equator. When you choose it, the fidelity report says so.
 
 ### The summary line
 
-At the bottom of the tab, a plain sentence saying what pressing **Export** will
-produce, given every choice above. It is a consequence, not a setting.
+At the bottom of the tab, a plain sentence saying what the map file will
+contain, given every choice above. It is a consequence, not a setting.
 
 ---
 
@@ -139,8 +142,8 @@ Two of these matter beyond tidiness:
 - Unticking **Popups** is how you keep attribute data out of a map you are
   sending someone. The values are not hidden — they never reach the file, so
   there is nothing to recover by opening it in a text editor.
-- Unticking **Include** or **Popups** makes the file smaller, which matters most
-  for Standalone HTML.
+- Unticking **Include** or **Popups** makes the file smaller, which matters
+  because the map file carries all of its data inside it.
 
 Unticking any box affects that layer only. The map still works, with less on it.
 
@@ -244,7 +247,7 @@ opening on a wall of *Kept* buries what matters.
 
 | Verdict | Meaning |
 |---|---|
-| **Blocked** | The export must not proceed. Export stays disabled while this is present |
+| **Blocked** | The export must not proceed. Preview and Share stay disabled while this is present |
 | **Not exported** | Cannot be represented, and was left out. The map is still produced |
 | **Changed** | Exported, but approximated — the detail says how |
 | **Rasterised** | Drawn as an image because the style has no live equivalent |
@@ -294,26 +297,49 @@ you press Preview again.
 If the preview cannot be served — a firewall, a locked-down machine — it falls
 back to a file automatically and tells you so.
 
-### Preview
+### Preview and Share
 
-Builds the map and opens it in your default browser. **Nothing else in the plugin
-ever opens a browser.**
+Both sit in the **top-right corner of the tab bar**, so they are within reach
+whichever tab you are reading.
 
-### Export
+**Preview** builds the map and opens it in your default browser. **Nothing else
+in the plugin ever opens a browser.** The small arrow beside it holds the
+**Live preview** switch described above.
 
-Writes the real artifact. Greyed out when the export cannot be produced
-correctly, with the reason beside it rather than a silent refusal:
+**Share** is everything you might do with the finished map. Its own face opens
+the map in a browser; the arrow beside it opens the menu:
+
+| Row | What it does |
+|---|---|
+| **Copy file path** | Puts the map file's path on the clipboard |
+| **Show in file manager** | Opens the folder the map file is in |
+| **Open in browser** | Opens **the real file** — the one you would send someone — rather than a preview copy, so what you check is what they get |
+| **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
+| **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming in a later release |
+| **Export share ZIP** | A `.zip` to email or upload, for when a mail filter blocks `.html` |
+| **Export folder for hosting** | `index.html`, `onlymap.js` and a README side by side, to copy to a web host |
+| **Make a cartograph with QGIS2Carto** | Coming in a later release |
+
+**Every row needs a map file first.** Until you have set one on the Map tab they
+are all greyed out, and each says so if you hover it.
+
+**You never have to produce the file yourself.** Any row that needs the map
+writes it first, and skips the write when the file is already up to date. There
+is no Export button any more, because there is nothing left for it to do.
+
+A folder does not open by double-clicking: browsers refuse to load the runtime
+from a `file://` page when it sits in a separate file, so a folder has to be
+served. That is what the map file is for.
+
+Preview and Share are both greyed out when the map cannot be produced correctly,
+with the reason in the bar at the foot of the dialog rather than a silent
+refusal:
 
 | The reason says | Fix |
 |---|---|
 | *Add a vector layer to the project to export.* | The project has no exportable layer |
 | *Tick at least one layer to include.* | Everything is unticked on the Layers tab |
 | A blocked item | Open the Fidelity tab; it names the layer and why |
-
-### Open exported map
-
-Enabled once an export succeeds. It opens **the real file** — the one you would
-send someone — rather than a preview copy, so what you check is what they get.
 
 ### Progress and Cancel
 
@@ -328,6 +354,6 @@ not export twice.
 
 - [Your first export](first-export.md) — the same ground as a walkthrough
 - [What gets exported](supported-features.md) — what each verdict is based on
-- [Sharing a map](sharing.md) — choosing between the three output modes
+- [Sharing a map](sharing.md) — which Share row to reach for, and why
 - [Troubleshooting](troubleshooting.md) — when a control is not doing what this
   page says

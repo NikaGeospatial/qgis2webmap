@@ -39,11 +39,11 @@ howto:
       text: >-
         Press Preview to build the map and open it in your browser. With Live
         preview ticked the tab updates by itself as you change settings.
-    - name: Export
-      anchor: 6-export
+    - name: Share it
+      anchor: 6-share-it
       text: >-
-        Pick an output mode on the Map tab - Standalone HTML, Share ZIP or
-        Folder - then press Export. Open exported map opens the real file.
+        Set a Map file on the Map tab, then use Share in the top-right corner -
+        open it in a browser, or make a zip or a folder from it.
     - name: Check the Fidelity tab
       anchor: 7-check-the-fidelity-tab
       text: >-
@@ -101,8 +101,8 @@ Two of these are worth knowing about beyond the tidiness:
 - Unticking **Popups** is how you keep attribute data out of a map you are
   sending someone. The values are not merely hidden - they never reach the file,
   so there is nothing to find by opening it in a text editor.
-- Unticking **Include** or **Popups** makes the exported file smaller, which
-  matters most for [Standalone HTML](sharing.md).
+- Unticking **Include** or **Popups** makes the map file smaller, which matters
+  because it carries all of its data inside it. See [sharing a map](sharing.md).
 
 Unticking any of them affects that layer only. The map still works, with less on
 it. Settings are remembered per layer, and they survive changes to the project.
@@ -136,18 +136,26 @@ between projects.
 If the preview cannot be served - a firewall or a locked-down machine - it opens
 as a file automatically and tells you so. Nothing is lost.
 
-## 6. Export
+## 6. Share it
 
-Pick how you want to share it on the Map tab, then press **Export**.
+Set a **Map file** on the Map tab - press **Choose** and it offers a name beside
+your project. That one `.html` file is your map.
 
-![The three output modes - Standalone HTML, Share ZIP and Folder - numbered one to three.](images/export-02-formats.png)
+![The Map file field on the Map tab, with the Choose button beside it.](images/export-02-formats.png)
 
-The line under those choices says what you are about to produce, and the strip
-above the buttons says what will change on the way out. If Export is greyed out,
-the reason is shown beside it.
+Then use **Share**, in the top-right corner of the dialog:
 
-Once an export succeeds, **Open exported map** opens the real file - the one you
-would send to someone - so you can check it before sharing.
+- **Open in browser** shows you the real file - the one you would send to
+  someone - so you can check it before sharing.
+- **Export share ZIP** makes a zip to email, for when a mail filter blocks
+  `.html`.
+- **Export folder for hosting** makes a folder to copy to a web server.
+
+**You do not have to write the file first.** Each of those writes it for you if
+it is missing or out of date. The line under the Map file field says which it is.
+
+If Share is greyed out, you have not set a Map file yet. If Preview is greyed out
+too, the reason is in the bar at the foot of the dialog.
 
 ## 7. Check the Fidelity tab
 

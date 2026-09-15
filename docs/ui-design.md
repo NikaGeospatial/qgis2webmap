@@ -29,7 +29,7 @@ This file records what we do differently and why, so the reasoning survives.
 
 | Tab | Contents |
 |---|---|
-| **Map** | Map name, description, output tier, size readout, Export |
+| **Map** | Map name, Map file, size readout, save status |
 | **Layers** | One list, per-layer settings inline, popup fields in a non-reflowing expander |
 | **Appearance** | Widgets — on by default, live toggles |
 | **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology |
@@ -100,15 +100,46 @@ A persistent readout on the Map tab showing the measured artifact size and the
 tier it implies:
 
 ```
-Standalone HTML — 3.7 MB · opens by double-click, no internet needed
+The map file inlines every feature — 3.7 MB · opens by double-click
 ```
 
 Rationale: artifact weight is the main practical constraint on a shareable map,
 and the incumbent gives no indication of it until the export is on disk. Showing
-it while the user configures makes the tier choice self-explanatory.
+it while the user configures is what makes the size a decision rather than a
+discovery.
 
-## Export button
+## The map is a document
 
-Disabled when the export cannot be produced correctly, with the reason shown next
-to it — over a licence cap, a required asset missing, no exportable layers. This
-is [`docs/architecture.md`](architecture.md) non-negotiable 5 surfaced in the UI.
+The Map tab carries a **Map file** path, and that one `.html` file is the map.
+There is no "how to share it" choice before the user has shared anything: a zip
+or a folder is derived from the file at the moment one is needed, from the Share
+menu, because which of them is wanted depends on the recipient.
+
+The field starts empty and is never guessed at. Earlier versions remembered only
+the *folder* of the last export, so any reconstructed file name would have named
+a file the user never wrote — and with the file being kept up to date, that would
+have quietly sat a second map beside their real one.
+
+## Preview and Share, in the tab corner
+
+Both live in the tab bar's top-right corner, reachable from whichever tab is
+open. They are the two things a user does *to* the map, and the tab they happen
+to be reading when they decide to do one is not the dialog's business.
+
+This reverses an earlier call. The corner previously held a help link, placed
+there because "this dialog cannot afford another row" — the same constraint that
+produced `_resize_to_fit_screen`, after a fixed height put the Export button
+behind the Windows taskbar with no way to reach it. That reasoning still holds
+and this does not break it: the two controls moved *up* out of the bottom row,
+which emptied rather than grew. The dialog is no taller than it was.
+
+Every Share row is disabled until a map file is set, and each says why on hover.
+A row that needs the file writes it first, so there is nothing to press
+beforehand — which is what let the Export button go.
+
+## Disabled with a reason, never silent
+
+Preview and Share are disabled when the map cannot be produced correctly, with
+the reason in the status bar — over a licence cap, a required asset missing, no
+exportable layers. This is [`docs/architecture.md`](architecture.md)
+non-negotiable 5 surfaced in the UI.

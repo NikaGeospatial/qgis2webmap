@@ -4,6 +4,60 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **The map is a file you keep, not an export you repeat.** The Map tab's *How
+  to share it* choice — Standalone HTML, Share ZIP, Folder — is gone, and a
+  **Map file** path takes its place. That one `.html` file is the map. A zip or
+  a folder is derived from it at the moment you need one, because which you want
+  depends on who is receiving it, and that is decided afterwards rather than
+  before.
+
+  The field starts empty and is never guessed at. Earlier versions remembered
+  only the *folder* of the last export, so any reconstructed name would have
+  pointed at a file you never wrote — and with the file being kept current, that
+  would have quietly left a second map beside your real one. Pressing **Choose**
+  offers a name beside your project file.
+
+  A project saved by an older version keeps its stored packaging choice on disk,
+  and this version deliberately ignores it: honouring `outputMode=share_zip`
+  would have made the map file a zip named `.html`.
+
+- **Preview and Share moved to the top-right corner of the tab bar**, so both
+  are within reach from whichever tab you are reading. The row at the foot of
+  the dialog is now chrome only — a link to the Discord channel, and Close.
+
+  **The Export button is gone**, and nothing replaced it. Every Share action
+  writes the map file first when it is missing or out of date, and skips the
+  write when it is neither, so there is no longer a step to remember before
+  sharing.
+
+- **Share collects everything you might do with a finished map**: copy its path,
+  show it in your file manager, open the real file in a browser, make a share
+  ZIP or a folder for a web host, or join the hosting waitlist. Every row is
+  disabled until a map file is set, and says so on hover rather than being
+  silently inert.
+
+- **Live preview now also keeps the map file up to date.** It already meant
+  "keep rebuilding as I work", so it is the switch that decides this too — the
+  plugin never writes to your disk on a schedule you did not ask for. With it
+  off, nothing is written in the background and Share writes on demand. A line
+  under the Map file field always says which of those is happening. Anyone
+  upgrading is told this once, on first open.
+
+### Fixed
+- **Closing the preview tab now stops the preview server.** It used to run until
+  the dialog was closed or Live preview was unticked, holding a loopback socket
+  with nothing on screen saying so. Reloading the page is not mistaken for
+  closing it: a reload drops the page's connection and opens a new one, so the
+  server waits out a grace period before deciding its audience has gone.
+
+- **A browser hanging up mid-download no longer prints a traceback** into the
+  QGIS Python console. A preview page is several megabytes, so navigating away
+  or reloading during the load severs the connection by definition — ordinary
+  browsing was being reported as a plugin fault.
+
 ## [0.1.4] - 2026-08-26
 
 ### Changed
