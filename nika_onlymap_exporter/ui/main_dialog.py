@@ -151,6 +151,15 @@ LIVE_POLL_MS = 300
 # a change per pixel, and each rebuild re-runs the production writer.
 LIVE_DEBOUNCE_MS = 400
 
+# How long every preview page must be gone before the server shuts itself down.
+#
+# Generous on purpose. A reload drops the page's `EventSource` and opens a new
+# one, so this has to outlast a full reload of a page carrying a multi-megabyte
+# inlined runtime on a slow machine - and the cost of waiting too long is one
+# idle loopback socket, while the cost of being too eager is the server dying
+# under a user who is still working.
+PREVIEW_IDLE_STOP_SECONDS = 20.0
+
 # Where the live-preview preference lives. QSettings, not the project file: it
 # describes how someone likes to work, not what the map is, so it should follow
 # the person between projects rather than travel inside one.
@@ -1074,9 +1083,33 @@ class MainDialog(QDialog):
             return
 
         megabytes = stat.st_size / 1024 / 1024
-        self.save_status.setText(
-            f"Last written {_ago(stat.st_mtime)} - {megabytes:.1f} MB"
-        )
+        layers = len(self.state.selected_layer_ids(self._available_layer_ids()))
+        detail = f"{megabytes:.1f} MB - {layers} layer{'s' if layers != 1 else ''}"
+
+        # The two states read differently because they promise different things.
+        # While a session is live the file tracks the dialog, so "Saved" is a
+        # fact about now. With no session it is a fact about the past, and the
+        # sentence has to say what will close the gap - otherwise a file written
+        # twenty minutes ago looks current simply because it exists.
+        if self._autosave_is_running():
+            self.save_status.setText(f"Saved {_ago(stat.st_mtime)} - {detail}")
+        elif self._map_file_is_stale():
+            self.save_status.setText(
+                f"Last written {_ago(stat.st_mtime)} - {detail}. "
+                "The project has changed since; Share rebuilds it."
+            )
+        else:
+            self.save_status.setText(f"Last written {_ago(stat.st_mtime)} - {detail}")
+
+    def _autosave_is_running(self) -> bool:
+        """Whether the map file is currently being kept up to date.
+
+        Both halves are required, and that is the point. The checkbox alone is a
+        stored preference - it says what Preview will do when pressed, not that
+        anything is happening - so a ticked box with no server must not produce
+        a status line claiming the file is being saved.
+        """
+        return self._server is not None and self.live_action.isChecked()
 
     def _update_share_enabled(self) -> None:
         """Share needs somewhere to write before any of it means anything.
@@ -2214,11 +2247,51 @@ class MainDialog(QDialog):
         """Restart the debounce whenever any setting differs from last build."""
         if self._shut_down or self._server is None:
             return
+
+        if self._preview_tab_was_closed():
+            self._stop_live_preview()
+            self.status_label.setText(
+                "Preview tab closed, so the preview server stopped. "
+                "Press Preview to start it again."
+            )
+            self._update_save_status()
+            return
+
         current = self.state.snapshot()
         if current == self._last_snapshot:
             return
         self._last_snapshot = current
         self._rebuild_timer.start()
+
+    def _autosave_map_file(self, export, writer, map_file: Path | None):
+        """Write the user's map file from a read already in hand.
+
+        Runs on a worker thread, so it takes everything it needs as arguments
+        and touches no widget.
+
+        **Not `write_preview`.** The served copy carries an injected EventSource
+        listener so the tab can be told to reload; the user's map file must
+        never contain it, or every recipient's browser would sit reconnecting to
+        a server on somebody else's machine. Same read, same writer, different
+        artifact.
+
+        `build_artifact` stages through a temporary directory and moves the
+        result into place, so a failure part-way leaves the previous map intact
+        rather than a half-written one where the user keeps theirs.
+
+        Returns the exception on failure rather than raising: a refusal here is
+        not worth a modal, because the user is typing in a dialog rather than
+        asking for a file.
+        """
+        if map_file is None:
+            return None
+        try:
+            build_artifact(
+                export, map_file, mode=OutputMode.STANDALONE_HTML, writer=writer
+            )
+        except (ExportBlockedError, OSError) as exc:
+            return exc
+        return None
 
     def _rebuild_live_preview(self) -> None:
         """Rewrite the artifact and tell the open tab to reload.
@@ -2245,23 +2318,56 @@ class MainDialog(QDialog):
         def then(export, _report) -> None:
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
+            # Read on this thread too: the worker must not touch a widget.
+            map_file = self._map_file()
+            signature = self.state.snapshot()
 
             def work(progress: Progress):
                 progress.step(READ_SHARE, "Updating the preview...")
                 write_preview(
                     export, self._project_identity(), writer=writer, live=True
                 )
-                return None
+                return self._autosave_map_file(export, writer, map_file)
 
-            def on_written(_result) -> None:
+            def on_written(result) -> None:
                 if self._shut_down or self._server is None:
                     return
                 self._server.notify_reload()
+                if isinstance(result, Exception):
+                    self.status_label.setText(
+                        f"Preview updated. The map file was not written: {result}"
+                    )
+                    return
+                if map_file is not None:
+                    self._written_signature = signature
+                    self._last_export_path = map_file
+                self._update_save_status()
                 self.status_label.setText("Live preview updated.")
 
             self._start_job(work, on_written, "Updating the preview...", quiet=True)
 
         self._ensure_export(then, "Updating the preview...", quiet=True)
+
+    def _preview_tab_was_closed(self) -> bool:
+        """Whether the browser has gone away and is not coming back.
+
+        The server used to outlive its audience: it ran until the dialog closed
+        or the checkbox was unticked, with nothing on screen saying a socket was
+        open. Closing the tab is the clearest statement a user can make that
+        they are done looking, so it is treated as one.
+
+        **Why a grace period rather than a count of zero.** `notify_reload` tells
+        the page to reload itself, which drops its `EventSource` and opens a new
+        one, so the client count dips to zero on every single rebuild. Acting on
+        that dip would kill the server on the user's first edit - the grace has
+        to be comfortably longer than a reload takes, and a reload here re-parses
+        a multi-megabyte inlined runtime.
+        """
+        if self._job is not None:
+            # A rebuild is in flight, so the tab is mid-reload by definition.
+            return False
+        idle = self._server.idle_seconds if self._server is not None else None
+        return idle is not None and idle > PREVIEW_IDLE_STOP_SECONDS
 
     def _stop_live_preview(self) -> None:
         self._watch_timer.stop()
@@ -2452,12 +2558,25 @@ class MainDialog(QDialog):
         identity = self._project_identity()
         live = self.live_action.isChecked()
         writer = self._writer()
+        # Starting a live session is the moment autosave begins, so the map file
+        # is written here rather than waiting for the first edit. Without this
+        # the status line claimed the file was being saved while no file existed
+        # - true only until something changed, which is not what "saved" means.
+        map_file = self._map_file() if live else None
+        signature = self.state.snapshot()
 
         def work(progress: Progress):
             progress.step(READ_SHARE, "Building the preview...")
-            return write_preview(export, identity, writer=writer, live=live)
+            result = write_preview(export, identity, writer=writer, live=live)
+            return result, self._autosave_map_file(export, writer, map_file)
 
-        def on_written(result) -> None:
+        def on_written(built) -> None:
+            result, autosave_error = built
+            if map_file is not None and autosave_error is None:
+                self._written_signature = signature
+                self._last_export_path = map_file
+            self._update_save_status()
+
             if not live:
                 self._stop_live_preview()
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
@@ -2479,9 +2598,23 @@ class MainDialog(QDialog):
 
             QDesktopServices.openUrl(QUrl(url))
             self._watch_timer.start()
-            self.status_label.setText(
-                "Live preview open. Changes here update the tab automatically."
-            )
+            # Again, now the server exists. The line computed above ran before
+            # `_ensure_server`, so `_autosave_is_running` was still false and it
+            # read "Last written" for a file that is now being kept current.
+            self._update_save_status()
+            if autosave_error is not None:
+                self.status_label.setText(
+                    f"Live preview open. The map file was not written: {autosave_error}"
+                )
+            elif map_file is not None:
+                self.status_label.setText(
+                    "Live preview open. Changes here update the tab and the map "
+                    "file automatically."
+                )
+            else:
+                self.status_label.setText(
+                    "Live preview open. Changes here update the tab automatically."
+                )
 
         self._start_job(work, on_written, "Building the preview...")
 

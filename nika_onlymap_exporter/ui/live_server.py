@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -104,6 +105,10 @@ class PreviewServer:
         self._httpd: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._clients: list[queue.Queue[str]] = []
+        # Whether a page has ever reached this server, and since when none
+        # has. Both feed `idle_seconds`; see it for why a boolean will not do.
+        self._ever_connected = False
+        self._empty_since: float | None = None
         self._lock = threading.Lock()
         self._stopping = False
 
@@ -166,16 +171,44 @@ class PreviewServer:
     def register(self, inbox: queue.Queue[str]) -> None:
         with self._lock:
             self._clients.append(inbox)
+            self._ever_connected = True
+            self._empty_since = None
 
     def unregister(self, inbox: queue.Queue[str]) -> None:
         with self._lock:
             if inbox in self._clients:
                 self._clients.remove(inbox)
+            if not self._clients:
+                self._empty_since = time.monotonic()
 
     @property
     def client_count(self) -> int:
         with self._lock:
             return len(self._clients)
+
+    @property
+    def idle_seconds(self) -> float | None:
+        """How long no page has been listening, or `None` if one is.
+
+        **The reason this is a duration and not a boolean.** `notify_reload`
+        makes the open tab reload itself, which tears down its `EventSource` and
+        opens a new one - so the client count passes through zero on *every*
+        rebuild. Anything that acted on "no clients right now" would shut the
+        server down on the user's first edit.
+
+        `None` until a page has ever connected, too: a server started moments
+        ago and not yet reached by the browser has no clients for a perfectly
+        ordinary reason, and is not idle.
+
+        Monotonic rather than wall-clock, so a clock change mid-session cannot
+        make a live preview look abandoned.
+        """
+        with self._lock:
+            if self._clients or not self._ever_connected:
+                return None
+            if self._empty_since is None:
+                return None
+            return time.monotonic() - self._empty_since
 
     def notify_reload(self) -> None:
         """Tell every connected page to reload itself."""

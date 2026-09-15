@@ -10,6 +10,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import http.client
+import queue
 import threading
 import time
 
@@ -199,3 +200,71 @@ class TestLifecycle:
         server = PreviewServer(tmp_path)
         with pytest.raises(RuntimeError):
             _ = server.port
+
+
+class TestIdleDetection:
+    """A closed tab should stop the server; a reload must not.
+
+    The server used to outlive its audience - it ran until the dialog closed,
+    with nothing on screen saying a socket was open on the user's machine.
+    """
+
+    def test_a_server_nobody_has_opened_is_not_idle(self, tmp_path) -> None:
+        """Started moments ago and not yet reached is an ordinary state.
+
+        Reporting it as idle would let a caller shut the server down in the gap
+        between starting it and the browser arriving.
+        """
+        server = PreviewServer(tmp_path)
+        assert server.idle_seconds is None
+
+    def test_a_connected_page_is_not_idle(self, tmp_path) -> None:
+        server = PreviewServer(tmp_path)
+        inbox: queue.Queue[str] = queue.Queue()
+        server.register(inbox)
+        assert server.idle_seconds is None
+
+    def test_idle_time_starts_when_the_last_page_goes(self, tmp_path) -> None:
+        server = PreviewServer(tmp_path)
+        inbox: queue.Queue[str] = queue.Queue()
+        server.register(inbox)
+        server.unregister(inbox)
+
+        idle = server.idle_seconds
+        assert idle is not None
+        assert idle >= 0
+
+    def test_a_reload_does_not_read_as_idle(self, tmp_path) -> None:
+        """The race this whole design exists for.
+
+        `notify_reload` makes the page reload, which drops its `EventSource` and
+        opens a new one - so the client count passes through zero on *every*
+        rebuild. A caller acting on "no clients right now" would kill the server
+        on the user's first edit.
+        """
+        server = PreviewServer(tmp_path)
+        first: queue.Queue[str] = queue.Queue()
+        server.register(first)
+
+        # The reload: the old stream ends, the new one opens.
+        server.unregister(first)
+        second: queue.Queue[str] = queue.Queue()
+        server.register(second)
+
+        assert server.idle_seconds is None, "a reconnect must clear the idle clock"
+
+    def test_the_clock_restarts_after_a_reconnect(self, tmp_path) -> None:
+        """A second close is measured from itself, not from the first."""
+        server = PreviewServer(tmp_path)
+        first: queue.Queue[str] = queue.Queue()
+        server.register(first)
+        server.unregister(first)
+        time.sleep(0.05)
+
+        second: queue.Queue[str] = queue.Queue()
+        server.register(second)
+        server.unregister(second)
+
+        idle = server.idle_seconds
+        assert idle is not None
+        assert idle < 0.05, "the clock should time the latest close, not the first"

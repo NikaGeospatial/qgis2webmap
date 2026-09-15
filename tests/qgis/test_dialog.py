@@ -376,6 +376,115 @@ class TestTabCorner:
             dialog.close()
 
 
+class TestAutosaveIsGatedOnALiveSession:
+    """The plugin must not write to the user's disk uninvited.
+
+    Live preview already means "keep rebuilding as I work", so it is the consent
+    autosave needs. A ticked checkbox with no session is a stored preference
+    about what Preview will do - not a statement that anything is happening.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_a_ticked_box_alone_is_not_a_running_autosave(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_action.setChecked(True)
+            assert dialog._server is None
+            assert dialog._autosave_is_running() is False
+        finally:
+            dialog.close()
+
+    def test_a_running_session_with_the_box_off_is_not_autosaving(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            dialog._server = PreviewServer(tmp_path)
+            dialog.live_action.blockSignals(True)
+            dialog.live_action.setChecked(False)
+            dialog.live_action.blockSignals(False)
+
+            assert dialog._autosave_is_running() is False
+        finally:
+            dialog._server = None
+            dialog.close()
+
+    def test_polling_does_not_stop_a_server_mid_reload(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """The reload race, at the level that would actually bite.
+
+        A rebuild drops the page's `EventSource` and opens a new one, so the
+        client count dips to zero every time. The poll must not read that dip as
+        an abandoned preview and tear the server down under a working user.
+        """
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            server = PreviewServer(tmp_path)
+            dialog._server = server
+
+            # A page connected and has just dropped, exactly as in a reload.
+            import queue
+
+            inbox: queue.Queue[str] = queue.Queue()
+            server.register(inbox)
+            server.unregister(inbox)
+
+            assert dialog._preview_tab_was_closed() is False
+            dialog._poll_for_changes()
+            assert dialog._server is server, "a reload must not stop the server"
+        finally:
+            dialog._server = None
+            dialog.close()
+
+    def test_a_long_gone_tab_stops_the_server(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui import main_dialog as module
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            server = PreviewServer(tmp_path)
+            dialog._server = server
+
+            import queue
+
+            inbox: queue.Queue[str] = queue.Queue()
+            server.register(inbox)
+            server.unregister(inbox)
+
+            # Past the grace period rather than sleeping through it.
+            monkeypatch.setattr(module, "PREVIEW_IDLE_STOP_SECONDS", -1.0)
+
+            assert dialog._preview_tab_was_closed() is True
+            dialog._poll_for_changes()
+
+            assert dialog._server is None
+            assert "stopped" in dialog.status_label.text()
+        finally:
+            dialog._server = None
+            dialog.close()
+
+
 class TestShareBuildsWhatItNeeds:
     """No Share action should make the user produce a file first.
 
