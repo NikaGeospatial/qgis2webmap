@@ -40,6 +40,7 @@ from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
+    QIcon,
     QPalette,
     QTextDocument,
 )
@@ -170,6 +171,28 @@ LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 # of the project, so it should follow them into the next one.
 LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
 
+# Whether the "the map is now a file you keep" notice has been shown on this
+# machine. Its own key rather than a flag on the preference it explains: turning
+# Live preview off and on again must not bring the notice back.
+UPGRADE_NOTICE_KEY = "qgis2webmap/upgradeNoticeShown"
+
+# Which QGIS theme icon each Share row wears. A table rather than nine literals
+# at the call sites, so a test can check every name against the icons this QGIS
+# build actually has - which is the only part of an icon that can be verified
+# without a screen. See `TestShareMenuIcons` for why `isNull` cannot be used.
+SHARE_MENU_ICONS = {
+    "copy_path": "mActionEditCopy.svg",
+    "reveal": "mIconFolderOpen.svg",
+    "open": "mIconHtml.svg",
+    "publish": "mActionSharingExport.svg",
+    "enhance": "mActionShowAllLayers.svg",
+    "critique": "mActionShowAllLayers.svg",
+    "zip": "mActionFileSaveAs.svg",
+    "folder": "mIconFolder.svg",
+    "cartograph": "mActionSaveAsPDF.svg",
+}
+
+
 # Small enough that the dialog fits a laptop screen in landscape. Without an
 # explicit floor Qt takes the tallest tab's size hint as the minimum, and on
 # Windows that made the window impossible to shorten - it could be grown and
@@ -294,6 +317,24 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
         f"Please include the log.</p>"
     )
     box.exec()
+
+
+def _theme_icon(name: str):
+    """A QGIS theme icon, or an empty one if this build has not got it.
+
+    Icon names are resource paths compiled into QGIS, not files on disk, and
+    they come and go between releases. `getThemeIcon` returns a null `QIcon` for
+    a name that has gone rather than raising, so a menu built against a newer
+    QGIS still opens on an older one - it just loses a picture.
+
+    Wrapped rather than called inline so that the failure is stated once, here,
+    instead of being invisible at nine call sites.
+    """
+    from qgis.core import QgsApplication
+
+    with contextlib.suppress(Exception):
+        return QgsApplication.getThemeIcon(f"/{name}")
+    return QIcon()
 
 
 def _reveal_label() -> str:
@@ -604,6 +645,50 @@ class MainDialog(QDialog):
         self._rebuild_timer.timeout.connect(self._rebuild_live_preview)
 
         self.refresh_layers()
+        # Deferred to the event loop rather than run here. A modal raised inside
+        # `__init__` blocks construction: the caller is still waiting for the
+        # object to exist, the dialog it belongs to has not been shown, and the
+        # notice arrives on top of nothing. `singleShot(0, ...)` puts it after
+        # the dialog is on screen, where it reads as a note about what the user
+        # is looking at.
+        QTimer.singleShot(0, self._explain_the_new_model_once)
+
+    def _explain_the_new_model_once(self) -> None:
+        """Tell an upgrading user that Live preview now writes a file.
+
+        **Why this exists at all.** `LIVE_PREVIEW_KEY` defaults to on and is
+        remembered per machine, so almost everyone upgrading already has it
+        ticked. That same stored `True` quietly acquires a second meaning here -
+        *also keep a file on my disk up to date* - and a setting that changes
+        what it does without being touched is exactly the kind of surprise this
+        dialog is supposed to avoid.
+
+        Shown once per machine and never again, keyed separately from the
+        preference itself so switching Live preview off and on does not bring it
+        back. A fresh install sees nothing: there is no old behaviour to
+        reconcile, and the Map tab already explains itself.
+        """
+        settings = QSettings()
+        if settings.value(UPGRADE_NOTICE_KEY, False, type=bool):
+            return
+        # Nothing to reconcile for someone who has never used the plugin. The
+        # export-directory setting is the marker: it is written after a
+        # successful export and by nothing else.
+        used_before = bool(settings.value(LAST_EXPORT_DIR_KEY, "", type=str))
+        settings.setValue(UPGRADE_NOTICE_KEY, True)
+        if not used_before:
+            return
+
+        QMessageBox.information(
+            self,
+            "The map is now a file you keep",
+            "This version replaces the Export button with a Map file.\n\n"
+            "Set where the map lives on the Map tab, and Share does the rest - "
+            "a ZIP, a folder for a web host, or just opening it in a browser.\n\n"
+            "While Live preview is on, that file is kept up to date as you work. "
+            "Switch Live preview off in the Preview menu if you would rather it "
+            "were written only when you share it.",
+        )
 
     def _resize_to_fit_screen(self) -> None:
         """Open at a comfortable size, but never taller than the screen allows.
@@ -1913,6 +1998,9 @@ class MainDialog(QDialog):
         def add(key: str, label: str, tip: str, slot, shortcut: str = "") -> QAction:
             action = QAction(label, self)
             action.setToolTip(tip)
+            name = SHARE_MENU_ICONS.get(key, "")
+            if name:
+                action.setIcon(_theme_icon(name))
             if shortcut:
                 action.setShortcut(shortcut)
             action.triggered.connect(slot)
@@ -1950,6 +2038,25 @@ class MainDialog(QDialog):
             self.on_publish,
         )
 
+        # Not wired yet, and present anyway. The menu's shape is part of what is
+        # being reviewed, and a row that is missing reads as a decision not to
+        # have it - so these say what they will do and admit they do not do it
+        # yet, rather than being silently absent or silently inert.
+        menu.addSection("NIKA")
+        add(
+            "enhance",
+            "Enhance with NIKA AI...",
+            "Opens a hand-off dialog with a prompt to paste into NIKA",
+            lambda: self._not_wired_yet("Enhance with NIKA AI"),
+        )
+        add(
+            "critique",
+            "Ask NIKA for a critique...",
+            "Opens a hand-off dialog asking NIKA to review the map as a "
+            "cartographer would",
+            lambda: self._not_wired_yet("Ask NIKA for a critique"),
+        )
+
         menu.addSection("Export")
         add(
             "zip",
@@ -1963,7 +2070,29 @@ class MainDialog(QDialog):
             "A folder to copy to any static web host",
             self.on_export_folder,
         )
+        add(
+            "cartograph",
+            "Make a cartograph with QGIS2Carto...",
+            "Opens QGIS2Carto with this map as a live frame",
+            lambda: self._not_wired_yet("Make a cartograph with QGIS2Carto"),
+        )
         return menu
+
+    def _not_wired_yet(self, what: str) -> None:
+        """Say plainly that a menu row is not built, rather than doing nothing.
+
+        A row that silently does nothing is the worst of the three options - the
+        user cannot tell a broken feature from an unfinished one. Naming the
+        release it belongs to would be a promise this branch cannot keep, so it
+        says only that it is coming.
+        """
+        QMessageBox.information(
+            self,
+            f"{what} is not built yet",
+            f"{what} is coming in a later release.\n\nThe menu entry is here so "
+            "the shape of the Share menu can be reviewed; pressing it does "
+            "nothing else yet.",
+        )
 
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)

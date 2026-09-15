@@ -376,6 +376,144 @@ class TestTabCorner:
             dialog.close()
 
 
+class TestShareMenuIcons:
+    """Icon names have to be real, and cannot be checked by looking.
+
+    A bare PyQGIS environment has no Qt SVG image-format plugin, so *every* SVG
+    icon loads null here whether the name is right or not - asserting
+    `not icon.isNull()` would pass nothing and prove nothing. The resource,
+    however, either exists in the compiled theme or it does not, and that is
+    exactly the mistake worth catching: a name invented from memory, or one
+    retired by a later QGIS.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_every_icon_name_resolves_to_a_real_resource(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import QFile
+
+        from nika_onlymap_exporter.ui.main_dialog import SHARE_MENU_ICONS
+
+        missing = [
+            name
+            for name in SHARE_MENU_ICONS.values()
+            if not QFile(f":/images/themes/default/{name}").exists()
+        ]
+        assert not missing, f"icon names not in this QGIS build: {missing}"
+
+    def test_every_menu_row_that_claims_an_icon_has_one_set(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Catches a row added later without its entry in the icon table."""
+        from nika_onlymap_exporter.ui.main_dialog import SHARE_MENU_ICONS
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert set(SHARE_MENU_ICONS) == set(dialog.share_actions), (
+                "every Share action should name an icon, and no icon should "
+                "name an action that does not exist"
+            )
+        finally:
+            dialog.close()
+
+
+class TestTheUpgradeNoticeIsShownOnce:
+    """Live preview quietly gains a second meaning; that has to be said once.
+
+    The setting defaults to on and is remembered per machine, so an upgrading
+    user's stored `True` starts writing a file without them touching anything.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def _clean_settings(self, monkeypatch, used_before: bool):
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        store: dict[str, object] = {}
+        if used_before:
+            store[module.LAST_EXPORT_DIR_KEY] = "/tmp"
+
+        class FakeSettings:
+            def value(self, key, default=None, type=None):
+                return store.get(key, default)
+
+            def setValue(self, key, value):  # noqa: N802
+                store[key] = value
+
+        monkeypatch.setattr(module, "QSettings", lambda *a, **k: FakeSettings())
+        return store
+
+    def test_an_upgrading_user_is_told_once(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        store = self._clean_settings(monkeypatch, used_before=True)
+        shown: list[str] = []
+        monkeypatch.setattr(
+            module.QMessageBox,
+            "information",
+            lambda _p, title, _t: shown.append(title),
+        )
+
+        first = self._dialog(project, make_memory_layer)
+        try:
+            # Constructing the dialog must not raise it: a modal inside
+            # `__init__` blocks the caller before the window even exists.
+            assert not shown, "the notice is deferred to the event loop"
+            first._explain_the_new_model_once()
+            assert shown, "an upgrading user should be told what changed"
+            assert store[module.UPGRADE_NOTICE_KEY] is True
+        finally:
+            first.close()
+
+        second = self._dialog(project, make_memory_layer)
+        try:
+            second._explain_the_new_model_once()
+            assert len(shown) == 1, "the notice must not return on every open"
+        finally:
+            second.close()
+
+    def test_a_fresh_install_is_told_nothing(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """There is no old behaviour to reconcile, so there is nothing to say."""
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        self._clean_settings(monkeypatch, used_before=False)
+        shown: list[str] = []
+        monkeypatch.setattr(
+            module.QMessageBox,
+            "information",
+            lambda _p, title, _t: shown.append(title),
+        )
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._explain_the_new_model_once()
+            assert not shown
+        finally:
+            dialog.close()
+
+
 class TestNothingOutlivesTheDialog:
     """A plugin must leave no socket and no thread behind.
 
