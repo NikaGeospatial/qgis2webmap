@@ -8,8 +8,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import OutputMode, PopupFieldMode
@@ -68,7 +66,7 @@ class TestSettingsPersistence:
     def test_round_trips_through_the_project(self, project) -> None:
         state = DialogState(
             map_name="My map",
-            output_mode=OutputMode.SHARE_ZIP,
+            map_file="/tmp/himalaya-peaks.html",
             show_legend=False,
         )
         state.layers["abc"] = LayerSettings(include=False, popup=False, label=True)
@@ -76,7 +74,7 @@ class TestSettingsPersistence:
 
         restored = load_state(project)
         assert restored.map_name == "My map"
-        assert restored.output_mode is OutputMode.SHARE_ZIP
+        assert restored.map_file == "/tmp/himalaya-peaks.html"
         assert restored.show_legend is False
         assert restored.layers["abc"].include is False
         assert restored.layers["abc"].label is True
@@ -84,16 +82,37 @@ class TestSettingsPersistence:
     def test_empty_project_yields_sensible_defaults(self, project) -> None:
         state = load_state(project)
         assert state.map_name == ""
+        # Empty, never guessed at: a guess would name a file the user never
+        # wrote, and autosaving to it would sit a second map beside their real
+        # one. See `DialogState.map_file`.
+        assert state.map_file == ""
         assert state.output_mode is OutputMode.STANDALONE_HTML
         assert state.show_legend is True
 
     def test_corrupt_entries_do_not_prevent_opening(self, project) -> None:
         """A bad setting must never stop the dialog; worst case is a re-pick."""
-        project.writeEntry("qgis2webmap", "outputMode", "not-a-mode")
         project.writeEntry("qgis2webmap", "layers", "{{{ not json")
         state = load_state(project)
-        assert state.output_mode is OutputMode.STANDALONE_HTML
         assert state.layers == {}
+
+    def test_a_0_1_x_packaging_choice_is_ignored_rather_than_honoured(
+        self, project
+    ) -> None:
+        """`outputMode` describes a control 0.2 does not have.
+
+        A project whose last 0.1.x export was a zip carries
+        `outputMode=share_zip`. Honouring it would quietly make the map file a
+        zip named `.html` - so it is read by nobody. The packaging choice now
+        happens per share, at the moment of sharing.
+        """
+        project.writeEntry("qgis2webmap", "outputMode", OutputMode.SHARE_ZIP.value)
+        assert load_state(project).output_mode is OutputMode.STANDALONE_HTML
+
+    def test_the_map_file_survives_a_round_trip_unchanged(self, project) -> None:
+        """Paths carry spaces, accents and separators; none may be mangled."""
+        awkward = "/home/someone/Mis Mapas/año 2026/peaks (final).html"
+        save_state(project, DialogState(map_file=awkward))
+        assert load_state(project).map_file == awkward
 
     def test_field_modes_round_trip_through_the_project(self, project) -> None:
         state = DialogState()
@@ -269,11 +288,13 @@ class TestPreview:
         assert "om-view-changed" not in outcome.path.read_text()
 
 
-class TestOutputModeIsExclusive:
-    """Three mutually exclusive choices, expressed as such.
+class TestPackagingIsNotAskedForUpFront:
+    """The map is a document, not a choice of three artifacts.
 
-    They were checkboxes that unpicked each other by hand, which promises
-    multi-select without delivering it and reads wrong to a screen reader.
+    0.1.x asked "how to share it" - standalone HTML, zip or folder - before the
+    user had shared anything. That is the wrong moment: the answer depends on
+    who is receiving it, which they work out afterwards. The map file is always
+    standalone HTML, and the other tiers are produced from the Share menu.
     """
 
     def _dialog(self, project, make_memory_layer):
@@ -286,34 +307,32 @@ class TestOutputModeIsExclusive:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_they_are_radio_buttons(self, qgis_app, project, make_memory_layer) -> None:
+    def test_the_map_tab_offers_no_packaging_choice(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
         from qgis.PyQt.QtWidgets import QRadioButton
 
         dialog = self._dialog(project, make_memory_layer)
-        assert dialog.mode_checks
-        for button in dialog.mode_checks.values():
-            assert isinstance(button, QRadioButton)
-        dialog.close()
+        try:
+            # Not just "the attribute is gone": a radio button anywhere on the
+            # Map tab would mean the choice came back under another name.
+            assert not hasattr(dialog, "mode_checks")
+            assert not hasattr(dialog, "mode_group")
+            assert dialog.findChildren(QRadioButton) == []
+        finally:
+            dialog.close()
 
-    def test_exactly_one_is_ever_selected(
+    def test_the_map_file_is_always_html(
         self, qgis_app, project, make_memory_layer
     ) -> None:
         from nika_onlymap_exporter.core.export_ir import OutputMode
 
         dialog = self._dialog(project, make_memory_layer)
-        for mode in OutputMode:
-            dialog.mode_checks[mode].click()
-            chosen = [m for m, b in dialog.mode_checks.items() if b.isChecked()]
-            assert chosen == [mode]
-            assert dialog.state.output_mode is mode
-        dialog.close()
-
-    def test_the_group_enforces_it_rather_than_the_handler(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        dialog = self._dialog(project, make_memory_layer)
-        assert dialog.mode_group.exclusive()
-        dialog.close()
+        try:
+            assert dialog.state.output_mode is OutputMode.STANDALONE_HTML
+            assert dialog._mode_suffix(OutputMode.STANDALONE_HTML) == ".html"
+        finally:
+            dialog.close()
 
 
 class TestFidelityStrip:
@@ -378,18 +397,26 @@ class TestExportSummary:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_it_names_the_artifact_the_chosen_mode_produces(
+    def test_it_names_the_artifact_the_map_file_is(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        from nika_onlymap_exporter.core.export_ir import OutputMode
-
         dialog = self._dialog(project, make_memory_layer)
-        dialog.mode_checks[OutputMode.SHARE_ZIP].click()
-        assert "zip" in dialog.export_summary.text()
+        try:
+            assert "HTML" in dialog.export_summary.text()
+        finally:
+            dialog.close()
 
-        dialog.mode_checks[OutputMode.STANDALONE_HTML].click()
-        assert "HTML" in dialog.export_summary.text()
-        dialog.close()
+    def test_it_names_the_destination_once_one_is_chosen(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """The field's effect has to be visible without pressing anything."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "peaks.html"
+            dialog.path_edit.setText(str(destination))
+            assert str(destination) in dialog.export_summary.text()
+        finally:
+            dialog.close()
 
     def test_it_says_nothing_when_no_layer_is_selected(
         self, qgis_app, project, make_memory_layer
@@ -907,43 +934,50 @@ class TestDestinationField:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_it_is_prefilled(self, qgis_app, project, make_memory_layer) -> None:
-        dialog = self._dialog(project, make_memory_layer)
-        assert dialog.path_edit.text().strip(), "the field must suggest somewhere"
-        dialog.close()
-
-    def test_the_suffix_follows_the_chosen_packaging(
+    def test_it_starts_empty_rather_than_guessing(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        """A zip export must not offer to write a `.html`."""
-        from nika_onlymap_exporter.core.export_ir import OutputMode
+        """A guessed path is worse than no path.
 
+        0.1.x stored only the *folder* of the last export, never the file name.
+        Reconstructing a name from it would point at a file the user never
+        wrote - and with autosave on, sit a second map beside their real one.
+        """
         dialog = self._dialog(project, make_memory_layer)
-        dialog._on_mode_selected(OutputMode.STANDALONE_HTML)
-        assert dialog.path_edit.text().endswith(".html")
+        try:
+            assert dialog.path_edit.text().strip() == ""
+            # Empty is not the same as broken: the placeholder has to say the
+            # field is the user's to fill, or a blank field on first open reads
+            # as the plugin having lost something.
+            assert "hoose" in dialog.path_edit.placeholderText()
+            assert "hoose" in dialog.save_status.text()
+        finally:
+            dialog.close()
 
-        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
-        assert dialog.path_edit.text().endswith(".zip")
-
-        # A folder is a directory name, so it carries no extension at all.
-        dialog._on_mode_selected(OutputMode.FOLDER)
-        assert not Path(dialog.path_edit.text()).suffix
-        dialog.close()
-
-    def test_changing_mode_keeps_the_folder_the_user_chose(
+    def test_a_stored_path_is_restored(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
-        """Only the extension is corrected. The location is theirs."""
-        from nika_onlymap_exporter.core.export_ir import OutputMode
+        """Reopening the plugin reopens the same file."""
+        from nika_onlymap_exporter.core.settings import DialogState, save_state
+
+        destination = tmp_path / "himalaya-peaks.html"
+        save_state(project, DialogState(map_file=str(destination)))
 
         dialog = self._dialog(project, make_memory_layer)
-        dialog.path_edit.setText(str(tmp_path / "somewhere" / "mine.html"))
-        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
+        try:
+            assert dialog.path_edit.text() == str(destination)
+        finally:
+            dialog.close()
 
-        chosen = Path(dialog.path_edit.text())
-        assert chosen.parent == tmp_path / "somewhere"
-        assert chosen.stem == "mine"
-        dialog.close()
+    def test_typing_a_path_records_it_on_the_state(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.path_edit.setText(str(tmp_path / "typed.html"))
+            assert dialog.state.map_file == str(tmp_path / "typed.html")
+        finally:
+            dialog.close()
 
     def test_the_summary_names_the_destination(
         self, qgis_app, project, make_memory_layer, tmp_path
@@ -966,9 +1000,16 @@ class TestDestinationField:
         assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
         dialog.close()
 
-    def test_an_existing_file_is_never_replaced_without_asking(
+    def test_rewriting_the_map_file_is_never_confirmed(
         self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
     ) -> None:
+        """The map file is the document. Rewriting it is the whole point.
+
+        0.1.x asked "replace the existing file?" because every export was a
+        fresh decision about a fresh destination. Asking that about the file the
+        user is editing would be absurd - and with autosave it would be a modal
+        every few seconds.
+        """
         from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui import main_dialog as module
 
@@ -976,19 +1017,41 @@ class TestDestinationField:
         existing.write_text("yesterday's map")
 
         dialog = self._dialog(project, make_memory_layer)
-        dialog.path_edit.setText(str(existing))
+        try:
+            dialog.path_edit.setText(str(existing))
 
-        asked = []
-        monkeypatch.setattr(
-            module.QMessageBox,
-            "question",
-            lambda *a, **k: (
-                asked.append(True) or module.QMessageBox.StandardButton.Cancel
-            ),
-        )
-        assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
-        assert asked, "overwriting must be confirmed, not assumed"
-        dialog.close()
+            asked = []
+            monkeypatch.setattr(
+                module.QMessageBox,
+                "question",
+                lambda *a, **k: (
+                    asked.append(True) or module.QMessageBox.StandardButton.Cancel
+                ),
+            )
+            assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) == existing
+            assert not asked, "the map file is rewritten, not re-confirmed"
+        finally:
+            dialog.close()
+
+    def test_no_map_file_is_explained_rather_than_written_somewhere(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """An empty field must not fall back to a guess or a silent default."""
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            told = []
+            monkeypatch.setattr(
+                module.QMessageBox,
+                "information",
+                lambda *a, **k: told.append(True),
+            )
+            assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
+            assert told, "the user has to be told why nothing happened"
+        finally:
+            dialog.close()
 
 
 class TestChromeChangesSkipTheRead:
@@ -1043,8 +1106,9 @@ class TestChromeChangesSkipTheRead:
 class TestOversizedSingleFileIsAWarningNotASwitch:
     """The dialog must never say one thing and write another.
 
-    Reported: exporting a large layer announced a switch to Share ZIP while the
-    radio buttons still showed Standalone HTML selected.
+    Reported against 0.1.x: exporting a large layer announced a switch to Share
+    ZIP while the radio buttons still showed Standalone HTML selected. There is
+    no mode to disagree with any more, so the rule is simply stated.
     """
 
     def _dialog(self, project, make_memory_layer):
@@ -1057,32 +1121,15 @@ class TestOversizedSingleFileIsAWarningNotASwitch:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_selecting_a_mode_moves_the_radio_button(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        from nika_onlymap_exporter.core.export_ir import OutputMode
-
-        dialog = self._dialog(project, make_memory_layer)
-        dialog._on_mode_selected(OutputMode.SHARE_ZIP)
-
-        assert dialog.mode_checks[OutputMode.SHARE_ZIP].isChecked()
-        assert not dialog.mode_checks[OutputMode.STANDALONE_HTML].isChecked()
-        dialog.close()
-
     def test_the_size_rule_is_stated_on_the_map_tab(
         self, qgis_app, project, make_memory_layer
     ) -> None:
         """The limit has to inform the choice, not arrive after it."""
-        from nika_onlymap_exporter.core.export_ir import OutputMode
-
         dialog = self._dialog(project, make_memory_layer)
-        dialog._on_mode_selected(OutputMode.STANDALONE_HTML)
-        assert "20 MB" in dialog.size_note.text()
-
-        # Nothing to warn about when the data is not inlined.
-        dialog._on_mode_selected(OutputMode.FOLDER)
-        assert dialog.size_note.text() == ""
-        dialog.close()
+        try:
+            assert "20 MB" in dialog.size_note.text()
+        finally:
+            dialog.close()
 
 
 class TestLicenseKeyResolution:

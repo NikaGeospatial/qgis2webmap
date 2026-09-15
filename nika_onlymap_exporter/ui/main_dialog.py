@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import time
 import traceback
 from html import escape as escape_html
 from pathlib import Path
@@ -42,7 +43,6 @@ from qgis.PyQt.QtGui import (
     QTextDocument,
 )
 from qgis.PyQt.QtWidgets import (
-    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -56,7 +56,6 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QRadioButton,
     QScrollArea,
     QTabWidget,
     QTextBrowser,
@@ -121,11 +120,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
 
 LOG_TAG = "QGIS2WebMap"
-MODE_LABELS = {
-    OutputMode.STANDALONE_HTML: "Standalone HTML - one file, opens by double-click",
-    OutputMode.SHARE_ZIP: "Share ZIP - a zip to email or upload",
-    OutputMode.FOLDER: "Folder - for publishing to a web server",
-}
 
 # Worded so the choice is readable without knowing the model: "with data" says
 # what happens, where qgis2web's "visible with data" needs its manual.
@@ -287,6 +281,31 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
         f"Please include the log.</p>"
     )
     box.exec()
+
+
+def _ago(when: float) -> str:
+    """How long ago a timestamp was, in the coarsest unit that is still true.
+
+    Coarse on purpose. The point of the line this feeds is "is my file current",
+    which "2 minutes ago" answers and "2 minutes 14 seconds ago" does not - and
+    a label that changes every second draws the eye away from the map.
+
+    A timestamp in the future reads as "just now" rather than a negative
+    duration: clock skew on a network share is somebody else's problem, and it
+    must not be reported as though the user did something wrong.
+    """
+    seconds = max(0.0, time.time() - when)
+    if seconds < 10:
+        return "just now"
+    if seconds < 90:
+        return f"{int(seconds)} s ago"
+    minutes = seconds / 60
+    if minutes < 90:
+        return f"{int(minutes)} min ago"
+    hours = minutes / 60
+    if hours < 36:
+        return f"{int(hours)} hour{'s' if int(hours) != 1 else ''} ago"
+    return f"{int(hours / 24)} days ago"
 
 
 def _help_label(text: str, parent: QWidget) -> QLabel:
@@ -615,53 +634,46 @@ class MainDialog(QDialog):
         )
         layout.addLayout(form)
 
-        # Radio buttons, not checkboxes. These three are mutually exclusive, and
-        # the previous checkbox version had to unpick the others by hand on every
-        # click - which promises multi-select, does not deliver it, and reads
-        # wrong to a screen reader. A QButtonGroup enforces the exclusivity that
-        # the model already had.
-        self.mode_box = QGroupBox("How to share it", page)
-        mode_layout = QVBoxLayout(self.mode_box)
-        self.mode_group = QButtonGroup(self.mode_box)
-        self.mode_group.setExclusive(True)
-        self.mode_checks: dict[OutputMode, QRadioButton] = {}
-        for mode, label in MODE_LABELS.items():
-            button = QRadioButton(label, self.mode_box)
-            button.setChecked(mode is self.state.output_mode)
-            button.clicked.connect(lambda _c, m=mode: self._on_mode_selected(m))
-            self.mode_group.addButton(button)
-            mode_layout.addWidget(button)
-            self.mode_checks[mode] = button
-
-        # The size rule, next to the choice it constrains. It used to appear
-        # only as a modal at the end of an export, which is both too late to
-        # inform the decision and - because the modal switched the selection
-        # without the radio buttons following - left the dialog claiming
-        # Standalone HTML while it built a zip.
-        self.size_note = QLabel("", self.mode_box)
-        self.size_note.setWordWrap(True)
-        self.size_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
-        mode_layout.addWidget(self.size_note)
-        layout.addWidget(self.mode_box)
-
-        # ---- Destination -------------------------------------------------
-        # Previously the only way to choose a location was a file dialog that
-        # appeared after pressing Export, so until then the dialog showed no
-        # sign that the location was the user's to pick at all. Visible field,
-        # remembered between exports, Browse for the picker.
-        destination_box = QGroupBox("Filepath", page)
+        # ---- The map file ------------------------------------------------
+        # There is no packaging choice here any more. 0.1.x asked "how to share
+        # it" - standalone HTML, zip or folder - before the user had shared
+        # anything, which is the wrong moment to ask: the answer depends on who
+        # they are sending it to, and they decide that afterwards. The map is
+        # now one HTML document, and the zip and folder tiers are produced from
+        # the Share menu at the point of sharing.
+        destination_box = QGroupBox("Map file", page)
         destination_layout = QVBoxLayout(destination_box)
 
         path_row = QHBoxLayout()
         self.path_edit = QLineEdit(destination_box)
-        self.path_edit.setPlaceholderText("Choose where the exported map is written")
+        self.path_edit.setPlaceholderText("Choose where the map file is written")
         self.path_edit.textChanged.connect(self._on_path_edited)
         path_row.addWidget(self.path_edit, 1)
 
-        browse = QPushButton("Browse...", destination_box)
-        browse.clicked.connect(self._on_browse_destination)
+        browse = QPushButton("Choose...", destination_box)
+        browse.clicked.connect(self._on_choose_map_file)
         path_row.addWidget(browse)
         destination_layout.addLayout(path_row)
+
+        # What the file on disk is doing right now, directly under the field
+        # that names it. Separate from the status line in the bottom bar, which
+        # reports work in progress: this one reports the file, and the two must
+        # never describe the same thing.
+        self.save_status = QLabel("", destination_box)
+        self.save_status.setWordWrap(True)
+        self.save_status.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        destination_layout.addWidget(self.save_status)
+
+        # The size rule, beneath the file it constrains. It used to appear only
+        # as a modal at the end of an export, which is both too late to inform
+        # the decision and - because the modal switched the selection without
+        # the radio buttons following - left the dialog claiming Standalone
+        # HTML while it built a zip. There is no selection to disagree with any
+        # more, but the number is still worth saying before anyone emails it.
+        self.size_note = QLabel("", destination_box)
+        self.size_note.setWordWrap(True)
+        self.size_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        destination_layout.addWidget(self.size_note)
 
         layout.addWidget(destination_box)
 
@@ -785,7 +797,12 @@ class MainDialog(QDialog):
         # updates the summary label created just above. An exception raised in a
         # Qt slot does not propagate - PyQt aborts the process - so a handler
         # that runs before the widget it touches exists takes QGIS down.
-        self._suggest_destination()
+        #
+        # The field is filled from the project or left empty; it is never
+        # guessed at. See `DialogState.map_file`.
+        if self.state.map_file:
+            self.path_edit.setText(self.state.map_file)
+        self._update_save_status()
         self._update_size_note()
         return page
 
@@ -828,13 +845,11 @@ class MainDialog(QDialog):
             self.export_summary.setText("")
             return
 
-        produced = {
-            OutputMode.STANDALONE_HTML: "one HTML file that opens by double-click",
-            OutputMode.SHARE_ZIP: "a zip to email or upload",
-            OutputMode.FOLDER: "a folder to publish to a web server",
-        }[self.state.output_mode]
         layers = f"{selected_count} layer{'s' if selected_count != 1 else ''}"
-        sentence = f"Export writes {produced}, carrying {layers}."
+        sentence = (
+            f"The map file is one HTML file that opens by double-click, "
+            f"carrying {layers}."
+        )
 
         # Naming the destination here is what makes the path field's effect
         # visible without pressing anything.
@@ -913,29 +928,25 @@ class MainDialog(QDialog):
     def _on_name_changed(self, text: str) -> None:
         self.state.map_name = text
 
-    def _on_mode_selected(self, mode: OutputMode) -> None:
-        # The button group handles deselecting the others; this only records the
-        # choice and refreshes what the summary says will be produced.
-        self.state.output_mode = mode
-        # Keep the radio buttons honest even when the mode was changed in code
-        # rather than by a click - the mismatch between "Standalone HTML is
-        # selected" and "a zip was written" came from exactly this gap.
-        button = self.mode_checks.get(mode)
-        if button is not None and not button.isChecked():
-            button.setChecked(True)
-        self._suggest_destination()
-        self._update_size_note()
-        self._update_export_readiness()
-
-    # ---- Destination ----------------------------------------------------
+    # ---- The map file ----------------------------------------------------
 
     def _mode_suffix(self, mode: OutputMode) -> str:
-        """The extension the chosen packaging produces. A folder has none."""
+        """The extension a packaging tier produces. A folder has none.
+
+        Still needed although the dialog no longer offers the choice: the Share
+        menu names a tier per action, and the picker it opens has to propose a
+        matching extension.
+        """
         return {
             OutputMode.STANDALONE_HTML: ".html",
             OutputMode.SHARE_ZIP: ".zip",
             OutputMode.FOLDER: "",
         }[mode]
+
+    def _map_file(self) -> Path | None:
+        """The chosen map file, or None while the field is empty."""
+        typed = self.path_edit.text().strip() if hasattr(self, "path_edit") else ""
+        return Path(typed) if typed else None
 
     def _default_basename(self) -> str:
         """Name the file after the map, falling back to the project."""
@@ -947,63 +958,107 @@ class MainDialog(QDialog):
         cleaned = "".join(c if c.isalnum() or c in " -_" else "_" for c in name).strip()
         return cleaned or "map"
 
-    def _on_path_edited(self, _text: str) -> None:
-        """Nothing to store on the state - the folder is saved after an export.
+    def _on_path_edited(self, text: str) -> None:
+        """Record the path and refresh everything that depends on having one.
 
-        Kept as a slot so the summary at the foot of the tab follows what is
-        typed rather than only what was browsed to.
+        Reachable from `textChanged`, which fires while the Map tab is still
+        being built, so every method called here guards on its own widget
+        existing. An exception raised in a Qt slot does not propagate - PyQt
+        aborts the process - so a handler that runs too early takes QGIS down.
         """
+        self.state.map_file = text.strip()
         self._update_export_summary(
             len(self.state.selected_layer_ids(self._available_layer_ids()))
         )
+        self._update_save_status()
+        self._update_share_enabled()
 
-    def _suggest_destination(self) -> None:
-        """Fill the path field with the last folder used and a matching name.
+    def _picker_start_directory(self) -> str:
+        """Where a file picker should open, in order of what it can know.
 
-        Only ever *suggests*: a path the user typed or browsed to during this
-        session keeps its directory, and only the extension is corrected to
-        match the packaging they chose. Rewriting their choice because they
-        clicked a different radio button would be the dialog arguing with them.
+        The folder beside the project first, because that is where the issue
+        says a map belongs and where the user will look for it. Then the folder
+        of the last export, which is the only thing 0.1.x remembered - it is a
+        useful hint here, in a dialog the user confirms, and a bad default in
+        the field itself, where they might not read it.
         """
-        if not hasattr(self, "path_edit"):
-            return
+        project_file = self.project.fileName()
+        if project_file:
+            parent = Path(project_file).parent
+            if parent.is_dir():
+                return str(parent)
 
-        suffix = self._mode_suffix(self.state.output_mode)
+        remembered = QSettings().value(LAST_EXPORT_DIR_KEY, "", type=str)
+        if remembered and Path(remembered).is_dir():
+            return remembered
+        return str(Path.home())
+
+    def _on_choose_map_file(self) -> None:
+        """Pick where the map file is written.
+
+        Always `.html`: the map file is the document, and the other packaging
+        tiers are produced from the Share menu into destinations of their own.
+        """
         current = self.path_edit.text().strip()
+        start = current or str(
+            Path(self._picker_start_directory()) / f"{self._default_basename()}.html"
+        )
+        chosen, _ = QFileDialog.getSaveFileName(
+            self, "Map file", start, "Web page (*.html)"
+        )
+        if not chosen:
+            return
+        # A user who types a name without an extension means the one format
+        # this field accepts, rather than a file the browser will not open.
+        path = Path(chosen)
+        if path.suffix.lower() != ".html":
+            path = path.with_suffix(".html")
+        self.path_edit.setText(str(path))
 
-        if current:
-            path = Path(current)
-            # A folder export names a directory, so any extension is dropped.
-            updated = path.with_suffix(suffix) if suffix else path.with_suffix("")
-            if str(updated) != current:
-                self.path_edit.setText(str(updated))
+    def _update_save_status(self) -> None:
+        """Say what the file on disk is, in one line under the field.
+
+        Three states, and the first is the one that matters: with no map file
+        chosen, every Share action is disabled, and this is where that is
+        explained. A disabled menu with no reason beside it is the failure this
+        label exists to prevent.
+        """
+        if not hasattr(self, "save_status"):
             return
 
-        directory = QSettings().value(LAST_EXPORT_DIR_KEY, "", type=str)
-        if not directory or not Path(directory).is_dir():
-            directory = str(Path.home())
-        self.path_edit.setText(
-            str(Path(directory) / f"{self._default_basename()}{suffix}")
+        destination = self._map_file()
+        if destination is None:
+            self.save_status.setText("Choose a map file to enable Preview and Share.")
+            return
+
+        if not destination.exists():
+            self.save_status.setText("Not written yet.")
+            return
+
+        try:
+            stat = destination.stat()
+        except OSError:
+            # The path is real enough to have been chosen but cannot be read -
+            # a disconnected network share, most likely. Saying so beats a
+            # traceback in a slot.
+            self.save_status.setText("The map file cannot be read from here.")
+            return
+
+        megabytes = stat.st_size / 1024 / 1024
+        self.save_status.setText(
+            f"Last written {_ago(stat.st_mtime)} - {megabytes:.1f} MB"
         )
 
-    def _on_browse_destination(self) -> None:
-        """The file picker, now reachable before pressing Export."""
-        mode = self.state.output_mode
-        current = self.path_edit.text().strip()
-        start = current or str(Path.home())
+    def _update_share_enabled(self) -> None:
+        """Share needs somewhere to write before any of it means anything.
 
-        if mode is OutputMode.FOLDER:
-            chosen = QFileDialog.getExistingDirectory(self, "Export to folder", start)
-        else:
-            filter_text = {
-                OutputMode.STANDALONE_HTML: "Web page (*.html)",
-                OutputMode.SHARE_ZIP: "Zip archive (*.zip)",
-            }[mode]
-            chosen, _ = QFileDialog.getSaveFileName(
-                self, "Export map", start, filter_text
-            )
-        if chosen:
-            self.path_edit.setText(chosen)
+        Enablement hangs on the *path*, not on the file existing: an action that
+        needs the map writes it first. Requiring the file to exist would leave
+        the menu dead on first open with nothing to press to wake it.
+        """
+        if not hasattr(self, "share_button"):
+            return
+        self.share_button.setEnabled(self._map_file() is not None)
 
     def _remember_destination(self, path: Path) -> None:
         """Store the folder, never the file name.
@@ -1031,15 +1086,10 @@ class MainDialog(QDialog):
             return
 
         limit_mb = SINGLE_FILE_WARN_BYTES // 1024 // 1024
-        if self.state.output_mode is not OutputMode.STANDALONE_HTML:
-            self.size_note.setText("")
-            self.size_note.setStyleSheet("")
-            return
-
         base = (
-            f"Standalone HTML inlines every feature into the one file, so it is "
-            f"the largest of the three. Past about {limit_mb} MB it gets slow "
-            f"to open and awkward to move around."
+            f"The map file inlines every feature, so it carries all the data "
+            f"itself. Past about {limit_mb} MB it gets slow to open and awkward "
+            f"to move around."
         )
 
         export = self._cached_export
@@ -1053,8 +1103,9 @@ class MainDialog(QDialog):
         if data_bytes > SINGLE_FILE_WARN_BYTES:
             self.size_note.setText(
                 f"This map's data is {megabytes:.0f} MB, past the {limit_mb} MB "
-                "where a single file starts to be unwieldy. Export still writes "
-                "it if you want it - Share ZIP is the practical choice."
+                "where a single file starts to be unwieldy. The map file is "
+                "still written - Share > Export share ZIP is the practical way "
+                "to send something this size."
             )
             self.size_note.setStyleSheet("color: #c0392b;")
         else:
@@ -2442,73 +2493,82 @@ class MainDialog(QDialog):
         box.setWindowTitle("This will be a large single file")
         box.setText(reason)
         box.setInformativeText(
-            "A standalone export inlines all the data into the one HTML file, "
-            "which is why it is this big. Share ZIP packages the same map to "
-            "send more easily."
+            "The map file inlines all the data into the one HTML file, which is "
+            "why it is this big. Share > Export share ZIP packages the same map "
+            "to send more easily."
         )
-        export_anyway = box.addButton(
-            "Export anyway", QMessageBox.ButtonRole.AcceptRole
+        write_anyway = box.addButton(
+            "Write it anyway", QMessageBox.ButtonRole.AcceptRole
         )
-        switch = box.addButton("Use Share ZIP", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(switch)
+        box.setDefaultButton(write_anyway)
         box.exec()
 
-        clicked = box.clickedButton()
-        if clicked is export_anyway:
-            return True
-        if clicked is switch:
-            # Change the selection *and* the radio buttons, then stop so the
-            # user sees the new state and presses Export themselves.
-            self._on_mode_selected(OutputMode.SHARE_ZIP)
-            self.status_label.setText(
-                "Switched to Share ZIP. Press Export again to write it."
-            )
-        return False
+        # No "switch to zip" button any more. Packaging is no longer a mode this
+        # dialog holds, so there is nothing to switch: the zip is one Share
+        # action away, and offering to change a setting that no longer exists
+        # would be worse than saying nothing.
+        return box.clickedButton() is write_anyway
 
     def _resolve_destination(self, mode: OutputMode) -> Path | None:
-        """Where to write, from the path field or from a picker.
+        """Where to write, for whichever tier is being produced.
 
-        The field is the normal route now, so pressing Export does not
-        interrupt with a file dialog the user already answered. An empty field
-        falls back to the picker, which is what the dialog always did.
+        Two different questions wearing one name, and they are answered
+        differently on purpose:
+
+        * **The map file** is the document. Its location was answered once, in
+          the field on the Map tab, and rewriting it is the whole point - so
+          there is no picker and no overwrite prompt. Asking "replace the
+          existing file?" about the file the user is editing would be absurd.
+        * **A zip or a folder** is a copy taken at a moment, for somebody else.
+          Each one is a fresh decision, so each opens a picker, seeded beside
+          the map file so the two land together by default.
         """
-        typed = self.path_edit.text().strip()
-        if not typed:
-            self._on_browse_destination()
-            typed = self.path_edit.text().strip()
-            if not typed:
+        if mode is OutputMode.STANDALONE_HTML:
+            destination = self._map_file()
+            if destination is None:
+                self._warn_no_map_file()
                 return None
-            # Chosen through the picker, which already asked about overwriting.
-            return Path(typed)
-
-        destination = Path(typed)
-        parent = destination if mode is OutputMode.FOLDER else destination.parent
-        if not parent.exists():
-            QMessageBox.warning(
-                self,
-                "Folder not found",
-                f"There is no folder at {parent}.\n\nPick somewhere that exists, "
-                "or create it first.",
-            )
-            return None
-
-        # Typed paths skip the file dialog, and with it the overwrite prompt it
-        # would have shown. Asking here is what keeps Export from silently
-        # replacing yesterday's map.
-        if mode is not OutputMode.FOLDER and destination.exists():
-            answer = QMessageBox.question(
-                self,
-                "Replace the existing file?",
-                f"{destination.name} already exists in {destination.parent}.\n\n"
-                "Exporting replaces it.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            if answer != QMessageBox.StandardButton.Yes:
+            if not destination.parent.exists():
+                QMessageBox.warning(
+                    self,
+                    "Folder not found",
+                    f"There is no folder at {destination.parent}.\n\nPick "
+                    "somewhere that exists, or create it first.",
+                )
                 return None
+            return destination
 
-        return destination
+        suffix = self._mode_suffix(mode)
+        base = self._map_file()
+        start_dir = (
+            str(base.parent) if base is not None else self._picker_start_directory()
+        )
+        stem = base.stem if base is not None else self._default_basename()
+
+        if mode is OutputMode.FOLDER:
+            chosen = QFileDialog.getExistingDirectory(
+                self, "Export folder for hosting", start_dir
+            )
+            return Path(chosen) if chosen else None
+
+        # The picker asks about overwriting on every platform, so this does not.
+        chosen, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export share ZIP",
+            str(Path(start_dir) / f"{stem}{suffix}"),
+            "Zip archive (*.zip)",
+        )
+        return Path(chosen) if chosen else None
+
+    def _warn_no_map_file(self) -> None:
+        """The one thing standing between the user and every Share action."""
+        QMessageBox.information(
+            self,
+            "Choose a map file first",
+            "This map has no file yet.\n\nSet one in the Map file field on the "
+            "Map tab, and Preview and Share will do the rest.",
+        )
 
     def _warn_not_exportable(self, export) -> None:
         """Explain a refusal in terms of what the user has to fix in QGIS."""

@@ -38,9 +38,24 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 SCOPE = "qgis2webmap"
 
 KEY_MAP_NAME = "mapName"
-KEY_OUTPUT_MODE = "outputMode"
 KEY_WIDGETS = "widgets"
 KEY_LAYERS = "layers"
+
+# Where the map file is written. The dialog treats that file as the map's
+# document: the path lives with the project so reopening the plugin reopens the
+# same file, rather than the user re-answering a picker every session.
+KEY_MAP_FILE = "mapFile"
+
+# Written by 0.1.x, never by 0.2. The dialog no longer offers a packaging choice
+# - the map file is always standalone HTML, and the zip and folder tiers are
+# produced on demand from the Share menu - so the stored value describes a
+# control that no longer exists.
+#
+# **Deliberately not read back either.** A 0.1.x project that last exported a
+# zip carries `outputMode=share_zip`, and honouring that would quietly make the
+# map file a zip named `.html`. Ignoring it costs an upgrading user nothing:
+# the packaging is now chosen per share, at the moment they share.
+KEY_OUTPUT_MODE_LEGACY = "outputMode"
 
 # The OnlyMap licence key, in QSettings rather than the project.
 #
@@ -309,6 +324,11 @@ DATA_FIELDS = (
 # the dialog for as long as reading the project takes.
 CHROME_FIELDS = (
     "output_mode",
+    # Where the artifact is written, not what is in it - so it cannot invalidate
+    # a read, but it must still be watched. With a live preview running, moving
+    # the map file has to move what is being written: leaving it out would keep
+    # rewriting the old path while the field on screen names a new one.
+    "map_file",
     "show_legend",
     "show_layer_switcher",
     "show_zoom_controls",
@@ -327,6 +347,17 @@ class DialogState:
     """Everything the dialog needs to remember between sessions."""
 
     map_name: str = ""
+    # Where the map file is written. Empty until the user chooses, and never
+    # guessed at: the only thing 0.1.x remembered was the *folder* of the last
+    # export, so a guess would name a file they never wrote. See
+    # `MainDialog._on_choose_map_file`, which seeds the picker with that folder
+    # instead - the same hint, in the one place the user confirms it.
+    map_file: str = ""
+    # No longer a control. Standalone HTML is what the map file always is; the
+    # other two tiers are produced on demand by the Share menu, which sets this
+    # for the duration of one export. Kept on the state because
+    # `to_export_settings` carries it into the export, and because the
+    # Processing algorithm still names its tier explicitly.
     output_mode: OutputMode = OutputMode.STANDALONE_HTML
     show_legend: bool = True
     show_layer_switcher: bool = True
@@ -448,10 +479,11 @@ def load_state(project: QgsProject) -> DialogState:
     if ok and name:
         state.map_name = name
 
-    mode_value, ok = project.readEntry(SCOPE, KEY_OUTPUT_MODE, "")
-    if ok and mode_value:
-        with contextlib.suppress(ValueError):
-            state.output_mode = OutputMode(mode_value)
+    map_file, ok = project.readEntry(SCOPE, KEY_MAP_FILE, "")
+    if ok and map_file:
+        state.map_file = map_file
+
+    # `KEY_OUTPUT_MODE_LEGACY` is deliberately not read; see its definition.
 
     widgets_json, ok = project.readEntry(SCOPE, KEY_WIDGETS, "")
     if ok and widgets_json:
@@ -496,7 +528,7 @@ def load_state(project: QgsProject) -> DialogState:
 def save_state(project: QgsProject, state: DialogState) -> None:
     """Write settings into the project. Marks it dirty, as any change should."""
     project.writeEntry(SCOPE, KEY_MAP_NAME, state.map_name)
-    project.writeEntry(SCOPE, KEY_OUTPUT_MODE, state.output_mode.value)
+    project.writeEntry(SCOPE, KEY_MAP_FILE, state.map_file)
     project.writeEntry(
         SCOPE,
         KEY_WIDGETS,
