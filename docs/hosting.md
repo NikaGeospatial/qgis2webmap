@@ -38,11 +38,16 @@ changes the file you export.
    token it is given is stored per machine — deliberately *not* in the `.qgz`,
    because a project file gets emailed, committed and handed to a contractor.
 2. **The map is built on your machine.** Nothing has left it yet.
-3. **You confirm.** The screen names the files, their total size, and the three
-   things below.
+3. **You confirm.** The screen names the map, the files, their total size, and
+   how many layers and features are in them.
 4. **Upload, then publish.**
 
-### What the confirmation says, and why
+### What publishing means, and why
+
+The confirmation screen names what leaves your machine and stops there. The
+three points below are the ones worth understanding before the first publish
+rather than re-reading on every one, so they live here instead of in the
+dialog.
 
 **Anyone with the link can open it.** A hosted map has no password, and a link
 that has been shared cannot be unshared.
