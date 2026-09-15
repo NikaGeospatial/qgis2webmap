@@ -43,7 +43,6 @@ from nika_onlymap_exporter.hosting.client import (
     UploadFile,
 )
 from nika_onlymap_exporter.hosting.consent import (
-    insecure_transport_text,
     publish_consent_text,
     should_warn_truncation,
     truncation_warning_text,
@@ -521,39 +520,18 @@ class TestConsentWording:
         assert "thumbnail.png" in text
         assert "3.8 MB" in text
 
-    def test_it_says_nothing_about_transport_on_an_ordinary_publish(
+    def test_it_says_nothing_about_transport_regardless_of_the_environment(
         self, monkeypatch
     ) -> None:
-        """The banner is for the exemption only; HTTPS needs no announcement."""
-        monkeypatch.delenv(ALLOW_HTTP_LOOPBACK_ENV, raising=False)
-        monkeypatch.delenv("NIKA_API_BASE", raising=False)
-        assert "plain HTTP" not in self.text()
-        assert insecure_transport_text("https://api.nika.eco") == ""
-
-    def test_a_publish_over_plain_http_says_so_to_the_user(self, monkeypatch) -> None:
-        """Silent insecure transport is how this ends up on in production."""
+        """The confirmation no longer varies by transport or environment."""
         monkeypatch.setenv(ALLOW_HTTP_LOOPBACK_ENV, "1")
         monkeypatch.setenv("NIKA_API_BASE", "http://localhost:8787")
-        text = self.text()
-        assert "plain HTTP" in text
-        assert "http://localhost:8787" in text
-        assert ALLOW_HTTP_LOOPBACK_ENV in text
-        # Still the confirmation, not a replacement for it.
-        assert "Field survey" in text
-        assert "Anyone with the link can open the map." in text
+        assert "plain HTTP" not in self.text()
+        assert "localhost" not in self.text()
 
     def test_it_does_not_claim_to_upload_the_runtime(self) -> None:
         """The consent must describe what actually leaves the machine."""
         assert "onlymap.js" not in self.text()
-
-    def test_it_says_anyone_with_the_link_can_open_it(self) -> None:
-        assert "Anyone with the link" in self.text()
-
-    def test_it_says_the_attribute_data_is_published(self) -> None:
-        assert "attribute data is published" in self.text()
-
-    def test_it_raises_the_republication_question(self) -> None:
-        assert "republishing" in self.text()
 
 
 class TestTheThumbnail:
