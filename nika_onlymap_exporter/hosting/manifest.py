@@ -90,3 +90,8 @@ class PublishManifest(TypedDict):
     # The producer of each is `packaging/publish_manifest`; see its note above
     # `TERRAIN_MESH_WORKER` for why the entries are path-pinned.
     runtimeScriptSources: list[str]
+    # What the exported page's own <title> says - the same text the dialog's
+    # "Map name" field produced (or the project title, or the file name; see
+    # `resolve_title`). The server uses this only to seed a brand-new map's
+    # dashboard title; nothing about the page's own title comes from here.
+    title: str

@@ -25,6 +25,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import hashlib
+import html
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -495,6 +496,25 @@ def derive_external_origins(page_html: str) -> tuple[str, ...]:
     return _within_cap(origins)
 
 
+_TITLE_TAG_PATTERN = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+def declared_title(page_html: str) -> str:
+    """What the page's own `<title>` says.
+
+    Read off the built page rather than threaded through as a parameter, the
+    same way `externalOrigins` is: the template writes exactly one `<title>`
+    (`templates/map.html`, `@TITLE@`), HTML-escaped, so unescaping it here
+    recovers the text `resolve_title` produced - the dialog's Map name field,
+    or the project title, or the file name. Empty when the tag is missing or
+    empty, which the server treats as "seed from the slug instead".
+    """
+    match = _TITLE_TAG_PATTERN.search(page_html)
+    if match is None:
+        return ""
+    return html.unescape(match.group(1)).strip()
+
+
 def build_publish_manifest(
     directory: Path,
     external_origins: Sequence[str] | None = None,
@@ -556,6 +576,7 @@ def build_publish_manifest(
         files=files,
         externalOrigins=list(origins),
         runtimeScriptSources=list(runtime_script_sources(page_html)),
+        title=declared_title(page_html),
     )
 
 

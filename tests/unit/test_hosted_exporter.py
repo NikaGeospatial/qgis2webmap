@@ -103,6 +103,7 @@ def make_manifest() -> PublishManifest:
         ],
         externalOrigins=[],
         runtimeScriptSources=[],
+        title="Test Map",
     )
 
 

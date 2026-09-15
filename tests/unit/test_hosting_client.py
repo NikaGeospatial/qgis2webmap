@@ -67,6 +67,7 @@ MANIFEST = PublishManifest(
     ],
     externalOrigins=[],
     runtimeScriptSources=[],
+    title="Test Map",
 )
 
 

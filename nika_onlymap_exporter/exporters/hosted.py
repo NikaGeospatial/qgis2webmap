@@ -257,6 +257,7 @@ class HostedExporter:
             files=measured,
             externalOrigins=list(self.manifest["externalOrigins"]),
             runtimeScriptSources=list(self.manifest["runtimeScriptSources"]),
+            title=self.manifest["title"],
         )
 
         self._report(-1, "Reserving the map address...")

@@ -334,6 +334,22 @@ class TestBuildPublishManifest:
         assert manifest["kind"] == ARTIFACT_KIND
         assert manifest["entry"] == ENTRY_NAME
 
+    def test_the_title_is_read_back_from_the_pages_own_title_tag(
+        self, tmp_path
+    ) -> None:
+        manifest = build_publish_manifest(build_hosted(tmp_path))
+        assert manifest["title"] == "Test map"
+
+    def test_a_page_with_no_title_tag_declares_an_empty_title(self, tmp_path) -> None:
+        directory = build_hosted(tmp_path)
+        entry = directory / ENTRY_NAME
+        entry.write_text(
+            entry.read_text(encoding="utf-8").replace("<title>Test map</title>", ""),
+            encoding="utf-8",
+        )
+        manifest = build_publish_manifest(directory)
+        assert manifest["title"] == ""
+
     def test_the_producer_is_read_from_metadata(self, tmp_path) -> None:
         manifest = build_publish_manifest(build_hosted(tmp_path))
         assert manifest["producer"] == {
