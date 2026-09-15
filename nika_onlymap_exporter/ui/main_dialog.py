@@ -3001,13 +3001,44 @@ class MainDialog(QDialog):
             # And which release that made, so the next publish can say what it
             # is based on and be told when the map has moved on since.
             save_hosted_release_n(self.project, prepared.start.release_n)
+            # `save_hosted_map_id`/`save_hosted_release_n` only set the entry
+            # in memory. Without a save here, switching to another project and
+            # back forgets this one was ever published: Host reverts to
+            # starting a NEW map with a fresh address instead of republishing,
+            # and on a full free tier that publish is simply refused - which is
+            # exactly the failure a real user has no way back from, because
+            # nothing in this dialog can tell them which of their published
+            # addresses used to belong to this project.
+            link_saved = self._persist_hosted_link()
             # The map now has an address, so the button stops saying Host.
             self._update_host_button()
             url = outcome.public_url or ""
             self.status_label.setText(outcome.open_instruction)
-            self._show_published(url)
+            self._show_published(url, link_saved=link_saved)
 
         self._start_job(work, on_published, "Uploading the map...")
+
+    def _persist_hosted_link(self) -> bool:
+        """Save the project to disk immediately after a successful publish.
+
+        `False` when there is nothing this can do: a project with no file name
+        has never been saved, so `QgsProject.write()` has no target to write
+        to, and guessing one would be a save the user never asked for. That
+        case is surfaced to the user rather than silently accepted, because it
+        is the one where the address really is lost the moment this project
+        closes.
+        """
+        if not self.project.fileName():
+            return False
+        try:
+            return bool(self.project.write())
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Could not save the project after publish:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Warning,
+            )
+            return False
 
     # -- The screens --
 
@@ -3089,15 +3120,31 @@ class MainDialog(QDialog):
         box.exec()
         return box.clickedButton() is publish
 
-    def _show_published(self, url: str) -> None:
+    def _show_published(self, url: str, *, link_saved: bool = True) -> None:
         box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle("Published")
-        box.setText("Your map is online.")
-        box.setInformativeText(
-            f"{url}\n\nAnyone with this link can open it. Pressing Host again "
-            "republishes to the same address."
-        )
+        if link_saved:
+            box.setIcon(QMessageBox.Icon.Information)
+            box.setWindowTitle("Published")
+            box.setText("Your map is online.")
+            box.setInformativeText(
+                f"{url}\n\nAnyone with this link can open it. Pressing Host again "
+                "republishes to the same address."
+            )
+        else:
+            # The map is live either way - this is a warning about what
+            # happens NEXT, not about what just happened. The project has
+            # never been saved, so `QgsProject` has nowhere to keep the map
+            # this became; closing it without a manual save loses the only
+            # record of which address is this project's.
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle("Published - but save this project")
+            box.setText("Your map is online, but the project has not been saved.")
+            box.setInformativeText(
+                f"{url}\n\nAnyone with this link can open it. But this project has "
+                "no file yet, so nothing on disk remembers this address. Save it now: "
+                "closing it unsaved means the next Host starts a SEPARATE map instead "
+                "of updating this one."
+            )
         copy = box.addButton("Copy link", QMessageBox.ButtonRole.ActionRole)
         open_it = box.addButton("Open in browser", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Close)
