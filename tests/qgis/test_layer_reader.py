@@ -92,6 +92,25 @@ class TestClipToExtent:
         details = " ".join(item.detail for item in report.items)
         assert "removed nothing" in details
 
+    def test_type_is_the_first_member_however_qgis_ordered_it(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """`QgsJsonExporter` writes top-level members alphabetically.
+
+        Measured directly against a real export: a six-feature transit line
+        layer put `"type"` at byte 132,172 of a 132,191-byte document, because
+        `bbox` and `features` both sort before it and `features` is the bulk of
+        the file. Every reader that trusts a small prefix to see the document's
+        type - our own hosting conformance check included - needs `type` first,
+        which is the conventional order every hand-written or GDAL-produced
+        GeoJSON file already uses. `export_geojson` restores it regardless of
+        what QGIS handed back.
+        """
+        layer = make_memory_layer("points", features=[("a", [1.0, 51.0])])
+        collection = export_geojson(layer, FidelityReportBuilder())
+        assert next(iter(collection)) == "type"
+        assert collection["type"] == "FeatureCollection"
+
 
 class TestHiddenDataLeavesTheFile:
     """Attributes the user hid must not be in the artifact.

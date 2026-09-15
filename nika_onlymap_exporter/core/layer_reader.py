@@ -247,6 +247,21 @@ def export_geojson(
             _report_clip(report, subject, layer_id, len(features), total)
         text = exporter.exportFeatures(features)
         collection = json.loads(text)
+        # `QgsJsonExporter` writes top-level members alphabetically (`bbox`,
+        # `features`, `geometry`, ... `type`), not in the conventional
+        # `type`-first order every other GeoJSON writer uses. For a layer with
+        # any real amount of geometry, `features` is the bulk of the document,
+        # so `type` lands wherever that array ends -- for a six-feature transit
+        # line export this measured at byte 132,172 of a 132,191-byte file. A
+        # reader that only looks at a prefix, ours included, never sees it.
+        # Moving `type` to the front costs nothing (dict re-insertion, not a
+        # re-encode) and matches what every hand-written or GDAL-produced
+        # GeoJSON file already does.
+        if "type" in collection:
+            collection = {
+                "type": collection["type"],
+                **{k: v for k, v in collection.items() if k != "type"},
+            }
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
             subject,
