@@ -22,6 +22,14 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+# The one hex -> SRI conversion in the codebase. Imported rather than repeated
+# so the generator cannot produce a base64 form the exporter would disagree
+# with: `cdn_runtime` treats the two spellings as the same 32 bytes, and a
+# second implementation here is exactly how they would stop being.
+from nika_onlymap_exporter.packaging.cdn_runtime import sri_from_hex  # noqa: E402
+
 RUNTIME_DIR = REPO_ROOT / "nika_onlymap_exporter" / "runtime"
 LOCK_FILE = RUNTIME_DIR / "runtime-lock.json"
 
@@ -45,6 +53,10 @@ COMMENT = [
     "the whole point of publishing it. Secret scanners cannot tell a checksum",
     "from a key by looking, so each digest line carries detect-secrets' own",
     "allowlist pragma to say so.",
+    "`sri` is the SAME digest bytes as `sha256`, base64-encoded in the form a",
+    "subresource-integrity attribute takes. Hosted exports load the runtime",
+    "from a CDN and pin it with that attribute, so the value has to ship here",
+    "rather than be computed from bytes the hosted page never sees.",
 ]
 
 # A 64-character hex string is what an API key looks like to a secret scanner,
@@ -75,8 +87,10 @@ def main(argv: list[str]) -> int:
             print(f"error: {path} is missing")
             return 1
         data = path.read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
         files[name] = {
-            "sha256": hashlib.sha256(data).hexdigest(),
+            "sha256": digest,
+            "sri": sri_from_hex(digest),
             "bytes": len(data),
         }
 

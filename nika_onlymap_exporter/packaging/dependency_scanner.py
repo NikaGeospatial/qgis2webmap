@@ -202,7 +202,7 @@ def hosted_relief_reason(project: ExportProject) -> str | None:
 
     **There is no declarative equivalent to drop it in favour of.** Checked
     against the pinned runtime's own attribute vocabulary
-    (`onlymapjs.html-data.json` in @nika-js/onlymap 0.7.4, the build
+    (`onlymapjs.html-data.json` in @nika-js/onlymap 0.7.6, the build
     `runtime-lock.json` pins): `<om-map>` has `zoom` for the *initial* camera
     and no clamp of any kind, `<om-behavior>` has no view-change trigger and no
     camera action to pair with one, and `terrain-max-zoom` -- the attribute
