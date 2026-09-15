@@ -21,6 +21,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import queue
+import sys
 import threading
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -48,6 +49,25 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
     # per asset per reload would bury anything the user needs to see.
     def log_message(self, format: str, *args: object) -> None:
         pass
+
+    def handle_error(self, request: object, client_address: object) -> None:
+        """Swallow the traceback when a browser hangs up mid-response.
+
+        `socketserver` prints an unhandled exception from a handler thread to
+        stderr, which in QGIS means a multi-line traceback in the Python
+        console. A disconnect is not an error here: a preview page is megabytes,
+        and a user who navigates away, hits reload, or closes the tab during the
+        load severs the socket by definition. Reporting it would make ordinary
+        browsing look like a plugin fault, in the same console `log_message` is
+        kept quiet for.
+
+        Anything else still surfaces, because a real failure in the handler is
+        worth seeing.
+        """
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)  # type: ignore[misc]
 
     def do_GET(self) -> None:
         if self.path.split("?", 1)[0] == RELOAD_PATH:

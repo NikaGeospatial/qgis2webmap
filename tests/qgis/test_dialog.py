@@ -98,7 +98,7 @@ class TestSettingsPersistence:
     def test_a_0_1_x_packaging_choice_is_ignored_rather_than_honoured(
         self, project
     ) -> None:
-        """`outputMode` describes a control 0.2 does not have.
+        """`outputMode` describes a control the dialog no longer has.
 
         A project whose last 0.1.x export was a zip carries
         `outputMode=share_zip`. Honouring it would quietly make the map file a
@@ -374,6 +374,134 @@ class TestTabCorner:
                 assert gone not in labels
         finally:
             dialog.close()
+
+
+class TestNothingOutlivesTheDialog:
+    """A plugin must leave no socket and no thread behind.
+
+    The preview server holds a loopback port and a thread pool for as long as it
+    runs. Every way the dialog can go away - the Close button, the window
+    manager, `plugin.unload()` when QGIS quits - has to take it with them.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def _running_server(self, dialog, tmp_path):
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        server = PreviewServer(tmp_path)
+        server.start()
+        dialog._server = server
+        return server
+
+    def _port_is_open(self, port: int) -> bool:
+        import socket
+
+        probe = socket.socket()
+        probe.settimeout(2)
+        try:
+            probe.connect(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+        finally:
+            probe.close()
+
+    def test_closing_the_dialog_releases_the_port(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        server = self._running_server(dialog, tmp_path)
+        port = server.port
+        assert self._port_is_open(port), "the server should be listening first"
+
+        dialog.close()
+
+        assert dialog._server is None
+        assert not self._port_is_open(port), "the port must not still be accepting"
+
+    def test_plugin_unload_takes_the_server_with_it(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """QGIS quitting unloads plugins; that path must reach the server.
+
+        `unload` calls `dialog.close()`, which is what fires `_shutdown`. If that
+        chain ever breaks, a QGIS session would end with a socket still bound.
+        """
+        from nika_onlymap_exporter.plugin import Qgis2WebMapPlugin
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802
+                return None
+
+            def removePluginWebMenu(self, *a):  # noqa: N802
+                pass
+
+            def removeToolBarIcon(self, *a):  # noqa: N802
+                pass
+
+        dialog = self._dialog(project, make_memory_layer)
+        server = self._running_server(dialog, tmp_path)
+        port = server.port
+
+        plugin = Qgis2WebMapPlugin(FakeIface())
+        plugin.dialog = dialog
+        plugin.unload()
+
+        assert plugin.dialog is None
+        assert dialog._shut_down, "unload must reach the dialog's teardown"
+        assert not self._port_is_open(port)
+
+    def test_no_worker_thread_survives_the_close(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """A thread outliving the widgets it emits into is a QGIS crash."""
+        import threading
+        import time
+
+        before = {t.name for t in threading.enumerate()}
+        dialog = self._dialog(project, make_memory_layer)
+        self._running_server(dialog, tmp_path)
+
+        dialog.close()
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            leaked = {
+                t.name
+                for t in threading.enumerate()
+                if t.name.startswith("qgis2webmap")
+            } - before
+            if not leaked:
+                break
+            time.sleep(0.05)
+
+        leaked = {
+            t.name for t in threading.enumerate() if t.name.startswith("qgis2webmap")
+        } - before
+        assert not leaked, f"threads left running: {leaked}"
+
+    def test_shutdown_is_idempotent(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """A window-manager close fires both `finished` and `closeEvent`."""
+        dialog = self._dialog(project, make_memory_layer)
+        self._running_server(dialog, tmp_path)
+
+        dialog.close()
+        dialog._shutdown()
+        dialog.close()
+
+        assert dialog._server is None
 
 
 class TestAutosaveIsGatedOnALiveSession:
