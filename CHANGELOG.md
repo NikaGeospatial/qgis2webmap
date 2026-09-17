@@ -7,6 +7,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Deployment-stamped builds.** `scripts/package_plugin.py --api-base
+  https://api-dev.nika.eco --label dev` writes a zip that publishes to the dev
+  deployment without anyone setting `NIKA_API_BASE` first. The repository copy
+  of `hosting/_build_target.py` is empty, so an unflagged build is a production
+  build. `NIKA_API_BASE` still outranks the stamp. The label is appended to the
+  zip filename and to the plugin name QGIS displays, because both zips install
+  into the same directory and one silently replaces the other.
 - **One-click hosting.** The **Host** button was a demand probe pointing at a
   feature-request form; it now signs in to NIKA through a browser device flow,
   builds the unbundled folder artifact, captures a thumbnail from the canvas

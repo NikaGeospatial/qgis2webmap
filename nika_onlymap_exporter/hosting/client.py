@@ -75,6 +75,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ._build_target import API_BASE as BUILD_API_BASE
 from .manifest import PublishManifest
 
 # The two deployments. Dev is never the default: a user who publishes to it
@@ -394,7 +395,12 @@ def _configured_api_base(explicit: str | None = None) -> str:
     ask *which* base is about to be used without having to survive - or
     swallow - the refusal that an unacceptable one raises.
     """
-    for candidate in (explicit, os.environ.get(API_BASE_ENV)):
+    # Most specific first. The environment still outranks the build stamp so a
+    # developer can point a dev-built plugin at a local stack without
+    # repackaging; the stamp outranks only the production default, which is
+    # what makes a dev zip publish to dev without anyone remembering to set
+    # anything.
+    for candidate in (explicit, os.environ.get(API_BASE_ENV), BUILD_API_BASE):
         text = (candidate or "").strip().rstrip("/")
         if text:
             return text
