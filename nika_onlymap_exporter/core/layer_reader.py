@@ -42,6 +42,7 @@ from .export_ir import (
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
+from .raster_style import style_from_renderer
 from .renderer_translator import translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
@@ -408,6 +409,20 @@ def raster_extent(layer: QgsRasterLayer) -> Extent | None:
     )
 
 
+def raster_style(
+    layer: QgsRasterLayer,
+) -> tuple[str | None, tuple[int, ...] | None, bool]:
+    """The colormap, band selection and ramp direction `COGLayer` should use.
+
+    A one-line adapter. The logic lives in `core.raster_style`, which imports no
+    QGIS: the renderer is read entirely through duck-typing, so keeping it out
+    of this module is what makes it unit-testable at all - nothing under
+    `tests/unit` can import `layer_reader`.
+    """
+    renderer = getattr(layer, "renderer", None)
+    return style_from_renderer(renderer() if callable(renderer) else None)
+
+
 def raster_rescale(layer: QgsRasterLayer) -> tuple[float | None, float | None]:
     """The contrast stretch the author was actually looking at.
 
@@ -523,6 +538,7 @@ def read_raster(
 
     band_count = int(provider.bandCount())
     rescale_min, rescale_max = raster_rescale(layer)
+    colormap, bands, reverse_colormap = raster_style(layer)
     extent = raster_extent(layer)
     crs = layer.crs()
 
@@ -538,6 +554,9 @@ def read_raster(
         nodata=raster_nodata(layer),
         rescale_min=rescale_min,
         rescale_max=rescale_max,
+        colormap=colormap,
+        bands=bands,
+        reverse_colormap=reverse_colormap,
         # Left `None` on purpose: answering it needs GDAL. See `RasterSpec`.
         is_cog=None,
     )

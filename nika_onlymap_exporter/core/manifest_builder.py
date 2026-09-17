@@ -640,10 +640,19 @@ def build_raster_layer_element(
     reference should point somewhere obviously wrong rather than nowhere.
 
     Only the attributes the schema marks valid on `COGLayer` are emitted:
-    `src`, `min`, `max`, `nodata`, plus the universal `id`, `type`, `label`,
-    `opacity` and `visible`. In particular there is no `color` shorthand - a
-    raster has no single colour to put in a legend swatch - and no `pickable`,
-    because a raster has no attributes to show in a popup.
+    `src`, `bands`, `colormap`, `reverse`, `min`, `max`, `nodata`, plus the
+    universal `id`, `type`, `label`, `opacity` and `visible`. In particular
+    there is no `color` shorthand - a raster has no single colour to put in a
+    legend swatch - and no `pickable`, because a raster has no attributes to
+    show in a popup.
+
+    `bands`, `colormap` and `reverse` arrived in the runtime's 0.7.0 raster
+    work. Until 2026-09-17 this function emitted none of them and its docstring
+    still described the 0.6.20 schema, so every styled raster published
+    unstyled: a QGIS project showing a Viridis DEM produced a hosted map with
+    the runtime's default grey. The lesson is in `layer_reader.raster_style` -
+    what the author sees is the renderer's doing, and dropping it silently
+    changes the map.
 
     `raster` is passed alongside the layer rather than read off it, so this
     element cannot be built for a layer that has none: the signature states
@@ -657,6 +666,33 @@ def build_raster_layer_element(
         ("label", layer.name),
         ("src", raster.reference),
     ]
+
+    # Band selection, 1-based as GDAL and `COGLayer` both count. A single band
+    # is the colormap path; a triple is an RGB composite and takes no colormap,
+    # which is why `raster_style` never returns both.
+    if raster.bands:
+        attributes.append(
+            (
+                "bands",
+                str(raster.bands[0])
+                if len(raster.bands) == 1
+                else "[" + ",".join(str(band) for band in raster.bands) + "]",
+            )
+        )
+
+    # The sprite colormap. Absent when the QGIS ramp has no counterpart in the
+    # runtime's vocabulary - see the table in `raster_style` for why a near-miss
+    # is not substituted.
+    if raster.colormap:
+        attributes.append(("colormap", raster.colormap))
+
+    # Spelled out rather than left bare. The runtime parses `reverse` as
+    # `type: "boolean"`, and `_attrs_to_string` drops a `None` value entirely -
+    # that is this module's way of saying "omit", not "bare attribute" - so a
+    # bare one could not be emitted here even if it were preferred. `visible`
+    # takes an explicit value for the same reason.
+    if raster.reverse_colormap:
+        attributes.append(("reverse", "true"))
 
     # deck.gl's rescaleMin/rescaleMax, carrying whatever contrast stretch the
     # QGIS renderer was showing. Emitted as a pair or not at all: supplying one

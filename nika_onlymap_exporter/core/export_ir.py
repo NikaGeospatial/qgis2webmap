@@ -646,6 +646,18 @@ class RasterSpec:
     rescale_min: float | None = None
     rescale_max: float | None = None
     is_cog: bool | None = None
+    #: Sprite colormap name for a SINGLE-band raster, already translated into
+    #: `COGLayer`'s vocabulary by `raster_style`. `None` means the renderer was
+    #: one we cannot express (a hand-built colour list, a paletted band), and
+    #: the runtime's own default applies rather than a guess of ours.
+    colormap: str | None = None
+    #: 1-based band selection, GDAL convention, as `COGLayer` takes it: a single
+    #: band for the colormap path, or exactly three for an RGB composite. `None`
+    #: leaves the runtime's defaults (band 1, or the first three).
+    bands: tuple[int, ...] | None = None
+    #: Whether the QGIS colour ramp was inverted. Carried separately because
+    #: `COGLayer` flips the sprite lookup rather than naming a reversed ramp.
+    reverse_colormap: bool = False
 
     @property
     def reference(self) -> str:
@@ -669,6 +681,9 @@ class RasterSpec:
             "src": self.src,
             "bandCount": self.band_count,
             "sourceCrs": self.source_crs,
+            "colormap": self.colormap,
+            "bands": list(self.bands) if self.bands else None,
+            "reverseColormap": self.reverse_colormap,
             "extent": self.extent.snapshot() if self.extent else None,
             "pixelWidth": self.pixel_width,
             "pixelHeight": self.pixel_height,

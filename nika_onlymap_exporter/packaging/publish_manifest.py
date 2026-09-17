@@ -457,6 +457,39 @@ def runtime_script_sources(page_html: str) -> tuple[str, ...]:
     return tuple(sorted(sources))
 
 
+# Where a COG layer's CRS lookup goes.
+#
+# A dependency bundled inside the runtime resolves a raster's PROJJSON over the
+# network for ANY code, including EPSG:3857 - which the runtime's own `crs.ts`
+# already has hardcoded:
+#
+#     const A = `https://epsg.io/${e}.json`, t = await fetch(A);
+#
+# Blocked by the page's own CSP, that fetch throws and the COG never draws. The
+# layer still appears in the legend with an empty swatch, which is how a hosted
+# Grand Canyon DEM rendered as nothing but its contours on 2026-09-17 while the
+# COG sat correctly in storage, valid and byte-range-served.
+#
+# This is an UPSTREAM BUG, and allowing the origin is a workaround, not the fix:
+# it makes every viewer of every raster map depend on a third-party service at
+# view time, for an answer the runtime already knows. When `@nika-js/onlymap`
+# stops looking up a CRS it has in its own table, delete this and the branch
+# below - `tests/unit/test_publish_manifest.py` names the version to check.
+COG_CRS_LOOKUP_ORIGINS = ("https://epsg.io",)
+
+_COG_LAYER_PATTERN = re.compile(r'type\s*=\s*"COGLayer"', re.IGNORECASE)
+
+
+def declares_cog_layer(page_html: str) -> bool:
+    """Whether the page carries a raster the runtime will fetch a CRS for.
+
+    Read off the built page for the same reason the basemap and terrain presets
+    are: the manifest is derived from what was actually written, not from what
+    the exporter believed it was writing.
+    """
+    return _COG_LAYER_PATTERN.search(page_html) is not None
+
+
 def derive_external_origins(page_html: str) -> tuple[str, ...]:
     """The origins the page will contact when it is opened.
 
@@ -492,6 +525,12 @@ def derive_external_origins(page_html: str) -> tuple[str, ...]:
     relief = declared_terrain(page_html)
     if relief is not None:
         origins.update(terrain_origins(relief))
+
+    # Only for pages that actually carry a raster: a vector-only map has no
+    # reason to reach epsg.io, and widening its CSP for a dependency it never
+    # exercises would be handing away a restriction for nothing.
+    if declares_cog_layer(page_html):
+        origins.update(COG_CRS_LOOKUP_ORIGINS)
 
     return _within_cap(origins)
 

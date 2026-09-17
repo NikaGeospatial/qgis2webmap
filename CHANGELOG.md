@@ -7,6 +7,21 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Fixed
+- **Hosted rasters rendered as empty legend entries.** The runtime resolves a
+  COG's CRS by fetching `https://epsg.io/{code}.json` — for any code, including
+  EPSG:3857, which it already has hardcoded — and the page's own CSP blocked it,
+  so every COG layer threw and drew nothing while the file sat valid and
+  byte-range-served in storage. That origin is now declared for pages that
+  actually carry a raster. It is a workaround for an upstream bug, not a fix:
+  when OnlyMap stops looking up a CRS it knows, `COG_CRS_LOOKUP_ORIGINS` and its
+  branch should be deleted.
+- **A raster's styling was dropped on publish.** The exporter emitted `src`,
+  `min`/`max`, `nodata` and `opacity` and nothing else, so a project showing a
+  Viridis-ramped DEM published as the runtime's default grey. `bands`,
+  `colormap` and `reverse` are now read from the QGIS renderer and emitted —
+  they have been available since the runtime's 0.7.0, and `manifest_builder`'s
+  docstring still described the 0.6.20 schema. A QGIS ramp with no counterpart
+  in the runtime's vocabulary emits no colormap rather than a near-miss.
 - **An expired session no longer strands a publish.** The two places a rejected
   token surfaced showed "Sign in again" and stopped, leaving the user to notice
   they had to press **Host** a second time. Both now open the browser straight
