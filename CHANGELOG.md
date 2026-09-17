@@ -6,6 +6,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **Pinned OnlyMap runtime moved to 0.8.0** (from 0.7.6). Verified
+  byte-identical on the npm tarball, jsDelivr and unpkg. The three CSP origin
+  tables in `packaging/publish_manifest.py` re-derived unchanged against it, so
+  only their `*_VERIFIED_AGAINST` constants moved.
+
 ### Added
 - **Deployment-stamped builds.** `scripts/package_plugin.py --api-base
   https://api-dev.nika.eco --label dev` writes a zip that publishes to the dev

@@ -17,13 +17,13 @@
     "rather than be computed from bytes the hosted page never sees."
   ],
   "package": "@nika-js/onlymap",
-  "version": "0.7.6",
+  "version": "0.8.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "5617e184d814ed701df2ca95f40ccc1af2eecce9909afa9afb4389443d6a0768", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "sri": "sha256-VhfhhNgU7XAd8sqV9AzMGvLuzOmQmvqa+0OJRD1qB2g=",
-      "bytes": 8341162
+      "sha256": "fb615a3be79d6321d2202d3834ec2ebf00118e0db8f5a84d220374a231302927", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "sri": "sha256-+2FaO+edYyHSIC04NOwuvwARjg249ahNIgN0ojEwKSc=",
+      "bytes": 8345033
     },
     "onlymapjs.css": {
       "sha256": "dcc8a840d879480a816c2173e5dda6c4cf3693cd2532832fa5c6a199278ba822", "_": "checksum of a public artifact # pragma: allowlist secret",

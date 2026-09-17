@@ -91,7 +91,7 @@ MEDIA_TYPES: dict[str, str] = {
 # the runtime's basemap registry fails loudly here rather than silently in a
 # recipient's browser. `scripts/verify_basemap_origins.py` does the re-reading;
 # this constant records that somebody ran it.
-BASEMAP_ORIGINS_VERIFIED_AGAINST = "0.7.6"
+BASEMAP_ORIGINS_VERIFIED_AGAINST = "0.8.0"
 
 # CARTO's two vector presets, and why one basemap needs six origins.
 #
@@ -145,7 +145,7 @@ BASEMAP_TILE_ORIGINS: dict[str, tuple[str, ...]] = {
 # different registries in the runtime, and a bump that moves one need not move
 # the other. Keeping the two versions separate makes "when was this last
 # checked" a fact about each table rather than an inference from the other's.
-TERRAIN_ORIGINS_VERIFIED_AGAINST = "0.7.6"
+TERRAIN_ORIGINS_VERIFIED_AGAINST = "0.8.0"
 
 # Relief preset to the origins its elevation tiles come from.
 #
@@ -284,7 +284,7 @@ TERRAIN_MESH_WORKER = (
 # reason the two origin tables have their own: the worker URL carries a
 # loaders.gl version that moves when deck.gl's dependency moves, entirely
 # independently of anything in the basemap or terrain registries.
-RUNTIME_SCRIPT_SOURCES_VERIFIED_AGAINST = "0.7.6"
+RUNTIME_SCRIPT_SOURCES_VERIFIED_AGAINST = "0.8.0"
 
 # Which whitelist entries a relief preset actually calls for.
 #
