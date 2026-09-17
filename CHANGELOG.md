@@ -6,6 +6,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **The bottom row names the NIKA account this QGIS profile is paired with**, so
+  you can see which one a map would be published to before publishing it, and
+  switch to another without hunting through settings files. Its menu offers
+  *Switch account* and *Sign out*; switching signs you in as somebody else
+  without signing you out first, so abandoning it halfway leaves you exactly
+  where you were.
+
+  Changing your plan is deliberately not offered here and happens on the web
+  instead. The plugin holds a token scoped to reading who you are and publishing
+  maps, and nothing else — it cannot reach billing, so a copy of it lifted off a
+  shared machine cannot spend money.
+
+  **The button is present but inert in this release.** Signing in arrives with
+  map hosting; until then it says so rather than appearing to work. Everything
+  this version exports is a file you own and share yourself, and none of it
+  needs an account.
+
 ### Changed
 - **The map is a file you keep, not an export you repeat.** The Map tab's *How
   to share it* choice — Standalone HTML, Share ZIP, Folder — is gone, and a

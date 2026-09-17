@@ -102,6 +102,7 @@ from ..packaging.dependency_scanner import (
     standalone_ineligible_reason,
 )
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
+from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
@@ -2137,6 +2138,12 @@ class MainDialog(QDialog):
         the running commentary between them.
         """
         row = QHBoxLayout()
+
+        # Who this QGIS profile is paired with, first in the row. Session
+        # chrome, true of every project, so it sits here rather than in the tab
+        # corner - see `account_button` for that division.
+        self.account_button = AccountButton(PendingHostingBackend(), self)
+        row.addWidget(self.account_button)
 
         # Named for where it goes, not for what it is. "Help" beside a Help tab
         # that holds the guides would be two things with one name; this one
