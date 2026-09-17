@@ -6,6 +6,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- **An expired session no longer strands a publish.** The two places a rejected
+  token surfaced showed "Sign in again" and stopped, leaving the user to notice
+  they had to press **Host** a second time. Both now open the browser straight
+  away and resume the publish once approval comes back. Bounded to one round per
+  attempt, so a token rejected immediately after a fresh sign-in is reported
+  rather than looping.
+
 ### Changed
 - **Pinned OnlyMap runtime moved to 0.8.0** (from 0.7.6). Verified
   byte-identical on the npm tarball, jsDelivr and unpkg. The three CSP origin

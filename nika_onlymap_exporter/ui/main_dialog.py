@@ -631,6 +631,12 @@ class MainDialog(QDialog):
         # rather than in a `with` block because a publish spans three jobs with
         # a question to the user between each pair, so no single scope owns it.
         self._publish_staging: Path | None = None
+        # True between an expired token being detected and the sign-in that
+        # answers it producing one. Bounds the automatic resume to a single
+        # round: a token rejected straight after a fresh sign-in is a
+        # server-side problem, not an expiry, and retrying it forever would
+        # bounce the user between browser and plugin with no way to read why.
+        self._resigning_in = False
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -2732,14 +2738,28 @@ class MainDialog(QDialog):
 
     # -- Signing in --
 
-    def _sign_in(self, then) -> None:
+    # Copy for the two reasons a sign-in starts. They differ because the second
+    # one interrupts work already in progress, and a message that opens
+    # "Publishing needs a NIKA account" reads as a question the user already
+    # answered - which is how a re-authentication starts to feel like a fault.
+    SIGN_IN_FIRST = (
+        "Publishing needs a NIKA account.\n\nYour browser opens NIKA's "
+        "sign-in page and you approve this computer there - the plugin "
+        "never sees your password. Nothing is uploaded by signing in."
+    )
+    SIGN_IN_AGAIN = (
+        "Your NIKA session has expired.\n\nYour browser opens NIKA's sign-in "
+        "page so you can approve this computer again. Publishing continues on "
+        "its own once you have - there is no need to press Host a second time. "
+        "Nothing has been uploaded."
+    )
+
+    def _sign_in(self, then, message: str | None = None) -> None:
         """Device flow: the browser signs in, the plugin never sees a password."""
         answer = QMessageBox.question(
             self,
             "Sign in to NIKA",
-            "Publishing needs a NIKA account.\n\nYour browser opens NIKA's "
-            "sign-in page and you approve this computer there - the plugin "
-            "never sees your password. Nothing is uploaded by signing in.",
+            message or self.SIGN_IN_FIRST,
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Ok,
         )
@@ -2761,6 +2781,39 @@ class MainDialog(QDialog):
             self._wait_for_sign_in(auth, flow, then)
 
         self._start_job(work, on_started, "Signing in to NIKA...")
+
+    def _sign_in_again(self, expired: Exception) -> None:
+        """Re-authenticate and resume the publish, without a second press of Host.
+
+        `clear_token()` has already run at the call site, so the stored token is
+        gone and this is a clean sign-in rather than a retry with a credential
+        the server just rejected.
+
+        Resuming through `on_host()` and not from where the failure happened:
+        both call sites discard the publish staging before they are reached, so
+        the built artifact no longer exists and the work genuinely has to start
+        from the export again. Pretending otherwise would republish a directory
+        that is not there.
+
+        The guard is what stops a token rejected IMMEDIATELY after a successful
+        sign-in from bouncing the user between browser and plugin forever -
+        which is what a server-side problem, rather than an expiry, looks like
+        from here. The second failure in one attempt is shown, not retried.
+        """
+        if self._resigning_in:
+            QMessageBox.warning(self, "Sign in again", str(expired))
+            self.status_label.setText("Not published. Nothing left this machine.")
+            return
+        self._resigning_in = True
+
+        def resume(_token) -> None:
+            # Cleared only once the sign-in actually produced a token, so a
+            # cancelled or timed-out attempt still counts as used and cannot be
+            # turned into a loop by pressing Ok repeatedly.
+            self._resigning_in = False
+            self.on_host()
+
+        self._sign_in(resume, message=self.SIGN_IN_AGAIN)
 
     def _wait_for_sign_in(self, auth: AuthClient, flow: DeviceFlow, then) -> None:
         label = sign_in_wait_message(flow)
@@ -2952,7 +3005,7 @@ class MainDialog(QDialog):
         def on_prepared(prepared) -> None:
             if isinstance(prepared, AuthRequiredError):
                 self._discard_publish_staging()
-                QMessageBox.warning(self, "Sign in again", str(prepared))
+                self._sign_in_again(prepared)
                 return
             if isinstance(prepared, PublishRefusedError):
                 # The server's own sentence, shown as it was written: it names
@@ -2994,7 +3047,7 @@ class MainDialog(QDialog):
         def on_published(outcome) -> None:
             self._discard_publish_staging()
             if isinstance(outcome, AuthRequiredError):
-                QMessageBox.warning(self, "Sign in again", str(outcome))
+                self._sign_in_again(outcome)
                 return
             # Remembered with the project, so pressing Host again republishes
             # to the same address instead of scattering a new link per edit.
