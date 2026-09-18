@@ -117,6 +117,7 @@ from ..hosting.client import (
     UploadFile,
 )
 from ..hosting.consent import (
+    basemap_warning_text,
     insecure_transport_text,
     publish_consent_text,
     should_warn_truncation,
@@ -3129,12 +3130,23 @@ class MainDialog(QDialog):
             ),
             layer_count=len(export.exportable_layers),
         )
-        # Prepended, not appended: it is a statement about how everything below
-        # travels, and a reader who stops after the first paragraph has still
-        # seen the one thing they could not have guessed. Empty on every
-        # ordinary publish, so the common path reads exactly as before.
-        insecure = insecure_transport_text()
-        box.setInformativeText(f"{insecure}\n\n{consent}" if insecure else consent)
+        # Prepended, not appended: these are statements about how everything
+        # below travels, and a reader who stops after the first paragraph has
+        # still seen the one thing they could not have guessed. Both are empty
+        # on an ordinary publish, so the common path reads exactly as before.
+        #
+        # The basemap caveat is a publish-time warning and not an export-time
+        # one on purpose: the same map exported to a file draws its basemap
+        # fine, and it is hosting that cannot identify itself to the provider.
+        notices = [
+            text
+            for text in (
+                insecure_transport_text(),
+                basemap_warning_text(export.settings.basemap),
+            )
+            if text
+        ]
+        box.setInformativeText("\n\n".join([*notices, consent]))
         publish = box.addButton("Publish", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         # Cancel is the default: this is the screen where a stray Return key

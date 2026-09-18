@@ -43,6 +43,7 @@ from nika_onlymap_exporter.hosting.client import (
     UploadFile,
 )
 from nika_onlymap_exporter.hosting.consent import (
+    basemap_warning_text,
     insecure_transport_text,
     publish_consent_text,
     should_warn_truncation,
@@ -549,6 +550,44 @@ class TestConsentWording:
     def test_it_does_not_claim_to_upload_the_runtime(self) -> None:
         """The consent must describe what actually leaves the machine."""
         assert "onlymap.js" not in self.text()
+
+
+class TestTheBasemapWarning:
+    """One preset can lose its tiles once the map is hosted; the rest cannot.
+
+    OpenStreetMap asks sites using their tiles to identify themselves, and a
+    hosted map cannot: a browser will not let a page set its User-Agent, and
+    these maps are served `Referrer-Policy: no-referrer` on purpose, because a
+    map's id is its subdomain and any referrer would hand an unlisted map's
+    address to the tile provider.
+    """
+
+    @pytest.mark.parametrize(
+        "preset", ["none", "positron", "liberty", "bright", "dark-matter", "voyager"]
+    )
+    def test_an_ordinary_basemap_says_nothing(self, preset) -> None:
+        # Empty so the caller can prepend it unconditionally, and so the
+        # publish everyone actually does reads exactly as it did before.
+        assert basemap_warning_text(preset) == ""
+
+    def test_openstreetmap_is_named_with_what_would_break(self) -> None:
+        text = basemap_warning_text("osm")
+
+        assert "OpenStreetMap" in text
+        # The consequence, not the mechanism: the map still works, the backdrop
+        # is what goes. An author reading this is deciding whether they mind.
+        assert "may stop loading" in text
+
+    def test_it_names_an_alternative_that_does_work(self) -> None:
+        # A warning with no way forward is a warning that gets clicked past.
+        text = basemap_warning_text("osm")
+        assert any(name in text for name in ("Positron", "Liberty", "Bright"))
+
+    def test_an_unknown_preset_is_silent_rather_than_guessed_at(self) -> None:
+        # `build_manifest` already degrades an unrecognised preset to "none", so
+        # inventing a warning here would describe a basemap the map will not use.
+        assert basemap_warning_text("carto/positron") == ""
+        assert basemap_warning_text("") == ""
 
 
 class TestTheThumbnail:

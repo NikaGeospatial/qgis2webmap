@@ -35,6 +35,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the map's colours rather than its measured values, so it cannot be
   restretched or read for measurements afterwards. Size usually falls — a
   2905×1420 Int16 DEM went from a 6.6 MB single-band COG to 3.2 MB.
+- **The publish confirmation now warns about the OpenStreetMap basemap.** A
+  hosted map cannot identify itself to OpenStreetMap the way their tile policy
+  asks: a browser will not let a page set its User-Agent, and hosted maps are
+  served `Referrer-Policy: no-referrer` deliberately, because a map's id is its
+  subdomain and any referrer would hand an unlisted map's address to the tile
+  provider. Their policy allows blocking without notice, so the backdrop can go
+  blank on a published map with nothing said. The confirmation names that and
+  points at Positron, Liberty or Bright; it does not refuse the publish, because
+  the tiles were verified serving normally on 2026-09-18 and the failure is
+  intermittent rather than certain. Exporting to a file is unaffected and says
+  nothing - that use works and the policy is written to allow it.
 - **The OnlyMap credit appeared twice, in opposite corners.** An unlicensed map
   gets the runtime's own badge bottom-left ("Built with OnlyMap by NIKA. Free
   for non-commercial use.") while the exporter's own chip said the same thing

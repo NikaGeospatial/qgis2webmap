@@ -23,6 +23,8 @@ hundred still is. Two of them fire:
 * Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
   `insecure_transport_text` says out loud. It is empty on every ordinary
   publish, so it costs the common path nothing.
+* A basemap whose provider may refuse to serve a *hosted* map is named by
+  `basemap_warning_text`, for the same "empty on the ordinary path" reason.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -74,6 +76,52 @@ def insecure_transport_text(api_base: str | None = None) -> str:
         "only safe because the address is this machine - nothing leaves it. "
         "Unset the variable to go back to requiring HTTPS."
     )
+
+
+# Presets whose tiles a hosted map may not be able to fetch, and what to say.
+#
+# Only `osm` today, and the reason is structural rather than a fault anyone can
+# fix in this plugin. The OSMF tile policy asks a website to "send a clear,
+# unique User-Agent string that names your app" and to "ensure a valid HTTP
+# Referer header is sent", and says access "may be blocked without prior
+# notice". A browser will not let a page set its own User-Agent, and hosted maps
+# are served with `Referrer-Policy: no-referrer` on purpose: a map's id is its
+# subdomain, so any referrer would hand the address of an unlisted map to the
+# tile provider. Meeting the policy would mean giving that up.
+#
+# Measured 2026-09-18 and it is NOT currently blocked: every tile came back 200,
+# with and without a referrer. So this warns rather than refuses - the failure is
+# intermittent and outside our control, which is exactly the kind a person should
+# be told about while they can still choose differently.
+#
+# A local export is deliberately absent. The same map opened from disk is one
+# person's own use, which the policy is written to allow, and a warning shown
+# where there is no problem is how warnings stop being read.
+_HOSTED_BASEMAP_WARNINGS = {
+    "osm": (
+        "The OpenStreetMap basemap may stop loading on a published map. "
+        "OpenStreetMap asks sites using their tiles to identify themselves, "
+        "which a hosted map cannot do - it is served without a Referer header "
+        "so that an unlisted map's address is never handed to the tile "
+        "provider - and their policy allows blocking without notice. The map "
+        "and its own layers are unaffected; only the backdrop would go blank. "
+        "Positron, Liberty and Bright carry no such restriction."
+    ),
+}
+
+
+def basemap_warning_text(basemap: str) -> str:
+    """What to warn about this basemap before it is published, or `""`.
+
+    Empty for every preset with no hosting caveat, which is all but one - so
+    callers prepend it unconditionally and the ordinary publish reads exactly as
+    it did before. The same shape as `insecure_transport_text`, for the same
+    reason.
+
+    Hosting only. This says nothing about exporting the same map to a file,
+    where the basemap works and the policy this warns about does not bite.
+    """
+    return _HOSTED_BASEMAP_WARNINGS.get(basemap, "")
 
 
 def publish_consent_text(

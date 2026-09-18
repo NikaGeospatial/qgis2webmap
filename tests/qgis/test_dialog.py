@@ -1222,3 +1222,79 @@ class TestHostButtonLabel:
         dialog._update_host_button()
         assert dialog.host_button.text().startswith("Republish")
         dialog.close()
+
+
+class TestThePublishConfirmation:
+    """That the confirmation actually carries the warnings, not just that the
+    strings exist.
+
+    `hosting.consent` is unit-tested and proves nothing about this screen: a
+    warning nobody prepends is a warning nobody sees. That exact gap - helper
+    covered, caller not - is how a folder export shipped with no vector data at
+    all on 2026-09-18, so the caller is pinned here.
+    """
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def _informative_text(self, monkeypatch, dialog, basemap: str) -> str:
+        """Run `_confirm_publish` against a QMessageBox that records and cancels."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        captured: dict[str, str] = {}
+        real_exec = QMessageBox.exec
+
+        def fake_exec(box):
+            captured["text"] = box.informativeText()
+            # Never show it: an exec() in a headless run would block forever.
+            return int(QMessageBox.StandardButton.Cancel)
+
+        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+        class FakeExport:
+            title = "Test map"
+            settings = ExportSettings(basemap=basemap)
+            exportable_layers = ()
+
+        try:
+            dialog._confirm_publish(FakeExport(), ())
+        finally:
+            monkeypatch.setattr(QMessageBox, "exec", real_exec)
+        return captured.get("text", "")
+
+    def test_the_osm_warning_reaches_the_screen(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            text = self._informative_text(monkeypatch, dialog, "osm")
+        finally:
+            dialog.close()
+
+        assert "OpenStreetMap" in text
+        # And the consent itself is still there - the warning is prepended to it,
+        # never in place of it.
+        assert "about to be uploaded" in text
+
+    def test_an_ordinary_basemap_leaves_the_screen_unchanged(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            text = self._informative_text(monkeypatch, dialog, "positron")
+        finally:
+            dialog.close()
+
+        assert "OpenStreetMap" not in text
+        assert "about to be uploaded" in text
+        # No leading blank lines from an empty notice joined in regardless.
+        assert text == text.lstrip()
