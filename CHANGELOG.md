@@ -17,11 +17,30 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   branch should be deleted.
 - **A raster's styling was dropped on publish.** The exporter emitted `src`,
   `min`/`max`, `nodata` and `opacity` and nothing else, so a project showing a
-  Viridis-ramped DEM published as the runtime's default grey. `bands`,
-  `colormap` and `reverse` are now read from the QGIS renderer and emitted —
-  they have been available since the runtime's 0.7.0, and `manifest_builder`'s
-  docstring still described the 0.6.20 schema. A QGIS ramp with no counterpart
-  in the runtime's vocabulary emits no colormap rather than a near-miss.
+  ramped DEM published as the runtime's default grey. A single-band raster's
+  QGIS style is now rendered into its pixels before conversion, which is exact
+  for every renderer QGIS has — including the paletted and hillshade ones
+  `COGLayer` cannot express at all. A multiband composite is untouched: its
+  pixels are already the colours the author sees.
+
+  Reading a `colormap` name off the renderer was tried first and does not work.
+  QGIS does not record which named ramp a user picked — choosing "Viridis"
+  copies its stops into an anonymous gradient — so a project loaded from disk
+  offers no ramp object and no name to send, and the attribute was emitted for
+  essentially nobody. Matching stop colours against the runtime's fourteen
+  names was the other candidate and is worse: most real ramps are near none of
+  them, and a near-miss draws the map in colours the author never chose.
+
+  The trade is stated per layer in the fidelity report: a baked file carries
+  the map's colours rather than its measured values, so it cannot be
+  restretched or read for measurements afterwards. Size usually falls — a
+  2905×1420 Int16 DEM went from a 6.6 MB single-band COG to 3.2 MB.
+- **Folder exports over 2 MB of vector data published no features at all.** That
+  tier gzips its layer data but writes the runtime as a sibling file, and the
+  branch that handles a sibling runtime emitted no inflater — so the page
+  carried base64 nothing could read. Rasters, legend and layer switcher all
+  drew; not one feature did, and nothing reported it. Hosted and single-file
+  exports were never affected.
 - **An expired session no longer strands a publish.** The two places a rejected
   token surfaced showed "Sign in again" and stopped, leaving the user to notice
   they had to press **Host** a second time. Both now open the browser straight
