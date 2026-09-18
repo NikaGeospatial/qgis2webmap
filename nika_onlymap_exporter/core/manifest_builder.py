@@ -640,19 +640,22 @@ def build_raster_layer_element(
     reference should point somewhere obviously wrong rather than nowhere.
 
     Only the attributes the schema marks valid on `COGLayer` are emitted:
-    `src`, `bands`, `colormap`, `reverse`, `min`, `max`, `nodata`, plus the
-    universal `id`, `type`, `label`, `opacity` and `visible`. In particular
-    there is no `color` shorthand - a raster has no single colour to put in a
-    legend swatch - and no `pickable`, because a raster has no attributes to
-    show in a popup.
+    `src`, `bands`, `min`, `max`, `nodata`, plus the universal `id`, `type`,
+    `label`, `opacity` and `visible`. In particular there is no `color`
+    shorthand - a raster has no single colour to put in a legend swatch - and
+    no `pickable`, because a raster has no attributes to show in a popup.
 
-    `bands`, `colormap` and `reverse` arrived in the runtime's 0.7.0 raster
-    work. Until 2026-09-17 this function emitted none of them and its docstring
-    still described the 0.6.20 schema, so every styled raster published
-    unstyled: a QGIS project showing a Viridis DEM produced a hosted map with
-    the runtime's default grey. The lesson is in `layer_reader.raster_style` -
-    what the author sees is the renderer's doing, and dropping it silently
-    changes the map.
+    **`colormap` is deliberately never emitted.** It was, briefly, and it never
+    fired: the runtime takes a colormap from a fixed vocabulary of fourteen
+    names, and QGIS does not record which named ramp a user picked - choosing
+    "Viridis" copies its stops into an anonymous gradient. Single-band colour
+    now reaches the map baked into the pixels instead, and a colormap on top of
+    already-coloured pixels would recolour them. See `RasterSpec.style_qml`.
+
+    A baked raster also emits no `min`/`max`: a stretch is a statement about
+    measured values, and after baking the bands are red, green, blue and alpha.
+    Applying the elevation range of a DEM to its own colour channels would
+    restretch the picture into something nobody chose.
 
     `raster` is passed alongside the layer rather than read off it, so this
     element cannot be built for a layer that has none: the signature states
@@ -667,10 +670,16 @@ def build_raster_layer_element(
         ("src", raster.reference),
     ]
 
-    # Band selection, 1-based as GDAL and `COGLayer` both count. A single band
-    # is the colormap path; a triple is an RGB composite and takes no colormap,
-    # which is why `raster_style` never returns both.
-    if raster.bands:
+    # Baked pixels are red, green, blue and alpha, whatever the source held.
+    # Everything below describes the SOURCE's bands and its measured range, so
+    # none of it survives the bake - and each attribute would actively break the
+    # picture rather than merely be ignored.
+    baked = raster.style_qml is not None
+
+    # Band selection, 1-based as GDAL and `COGLayer` both count. Only ever an
+    # RGB composite: a single-band raster is baked instead, so it has no band
+    # to select by the time the runtime sees it.
+    if raster.bands and not baked:
         attributes.append(
             (
                 "bands",
@@ -680,33 +689,25 @@ def build_raster_layer_element(
             )
         )
 
-    # The sprite colormap. Absent when the QGIS ramp has no counterpart in the
-    # runtime's vocabulary - see the table in `raster_style` for why a near-miss
-    # is not substituted.
-    if raster.colormap:
-        attributes.append(("colormap", raster.colormap))
-
-    # Spelled out rather than left bare. The runtime parses `reverse` as
-    # `type: "boolean"`, and `_attrs_to_string` drops a `None` value entirely -
-    # that is this module's way of saying "omit", not "bare attribute" - so a
-    # bare one could not be emitted here even if it were preferred. `visible`
-    # takes an explicit value for the same reason.
-    if raster.reverse_colormap:
-        attributes.append(("reverse", "true"))
-
     # deck.gl's rescaleMin/rescaleMax, carrying whatever contrast stretch the
     # QGIS renderer was showing. Emitted as a pair or not at all: supplying one
     # end leaves the other at a default unrelated to this raster's range, which
     # would restretch the image to something the author never saw.
     low, high = raster.rescale_min, raster.rescale_max
-    if low is not None and high is not None:
+    if low is not None and high is not None and not baked:
         attributes.append(("min", _number(low)))
         attributes.append(("max", _number(high)))
 
     # nodataOverride. The COG usually declares its own nodata and the runtime
     # honours it; this restates the value QGIS was masking with, which matters
     # when the file's header lost it in translation.
-    if raster.nodata is not None:
+    #
+    # Dropped for a baked raster, and this one is not merely redundant: QGIS
+    # renders its nodata pixels transparent, so the bake carries the mask in
+    # the alpha channel already. Restating a source value here - -9999 on a
+    # DEM, say - would tell the runtime to treat the colour -9999 as nodata,
+    # which matches nothing in an RGBA file.
+    if raster.nodata is not None and not baked:
         attributes.append(("nodata", _number(raster.nodata)))
 
     # Same two attributes, in the same order and with the same meaning, as the

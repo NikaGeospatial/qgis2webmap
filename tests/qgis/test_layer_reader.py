@@ -12,6 +12,7 @@ import pytest
 
 from nika_onlymap_exporter.core.export_ir import (
     AssetDisposition,
+    FidelityStatus,
     GeometryKind,
     PopupFieldMode,
     SourceKind,
@@ -22,6 +23,7 @@ from nika_onlymap_exporter.core.layer_reader import (
     read_layer,
     read_raster,
 )
+from nika_onlymap_exporter.packaging.raster_bake import _parsed
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -334,3 +336,108 @@ class TestReadRaster:
 
         assert export_layer is not None
         assert export_layer.is_raster is True
+
+
+class TestRasterColour:
+    """The half of the raster story that only a real QGIS layer can check.
+
+    The first attempt at carrying raster colour read a `colormap` name off the
+    renderer's colour ramp. Every unit test of it passed, because the stand-ins
+    exposed the API the code expected. Against a real project it fired for
+    nobody: QGIS copies a named ramp's stops into an anonymous gradient, so a
+    project loaded from disk has `sourceColorRamp() is None` and no name to
+    send. These tests exist at this tier for exactly that reason - they are the
+    ones the mistake could not have survived.
+    """
+
+    def test_a_ramped_raster_carries_its_style_for_baking(
+        self, qgis_app, make_raster_layer
+    ) -> None:
+        from qgis.core import (
+            QgsColorRampShader,
+            QgsRasterShader,
+            QgsSingleBandPseudoColorRenderer,
+        )
+        from qgis.PyQt.QtGui import QColor
+
+        layer = make_raster_layer()
+        shader_function = QgsColorRampShader(0, 255)
+        shader_function.setColorRampItemList(
+            [
+                QgsColorRampShader.ColorRampItem(0, QColor("#0000ff"), "low"),
+                QgsColorRampShader.ColorRampItem(255, QColor("#ff0000"), "high"),
+            ]
+        )
+        shader = QgsRasterShader()
+        shader.setRasterShaderFunction(shader_function)
+        layer.setRenderer(
+            QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
+        )
+
+        export_layer = read_raster(layer, FidelityReportBuilder())
+
+        assert export_layer is not None and export_layer.raster is not None
+        raster = export_layer.raster
+        # The QML is what `packaging.raster_bake` renders with. A ramp built
+        # like this one - which is how QGIS stores every ramp a user picks -
+        # has no name anywhere in it, which is the whole point.
+        assert raster.style_qml is not None
+        assert "colorrampshader" in raster.style_qml.lower()
+        assert raster.bands is None
+
+    def test_the_style_can_be_applied_back_to_a_fresh_layer(
+        self, qgis_app, make_raster_layer
+    ) -> None:
+        """The round trip the bake depends on.
+
+        `raster_bake` reopens the file and applies this QML to it. If the
+        document cannot be read back, every styled raster falls through to the
+        unstyled path and the colours are lost again - silently, because the
+        page still renders.
+        """
+        from qgis.core import QgsRasterLayer
+        from qgis.PyQt.QtXml import QDomDocument
+
+        layer = make_raster_layer()
+        export_layer = read_raster(layer, FidelityReportBuilder())
+        assert export_layer is not None and export_layer.raster is not None
+        qml = export_layer.raster.style_qml
+        assert qml is not None
+
+        fresh = QgsRasterLayer(layer.source(), "fresh")
+        document = QDomDocument()
+        # Via the production helper, not a bare truthiness check: on Qt6
+        # `setContent` returns a ParseResult, and a FAILED parse is a non-empty
+        # and therefore truthy tuple. Asserting on the raw return here would
+        # pass against a document that never parsed.
+        assert _parsed(document.setContent(qml)) is True
+        applied, message = fresh.importNamedStyle(document)
+        assert applied is True, message
+
+    def test_a_three_band_composite_is_carried_as_bands_not_baked(
+        self, qgis_app, make_raster_layer
+    ) -> None:
+        # Its pixels are already the colours the author sees, and re-encoding an
+        # orthophoto to RGBA would cost size and quality for nothing.
+        from qgis.core import QgsMultiBandColorRenderer
+
+        layer = make_raster_layer(bands=3)
+        layer.setRenderer(QgsMultiBandColorRenderer(layer.dataProvider(), 1, 2, 3))
+
+        export_layer = read_raster(layer, FidelityReportBuilder())
+
+        assert export_layer is not None and export_layer.raster is not None
+        assert export_layer.raster.bands == (1, 2, 3)
+        assert export_layer.raster.style_qml is None
+
+    def test_the_author_is_told_which_route_their_raster_took(
+        self, qgis_app, make_raster_layer
+    ) -> None:
+        # Baking trades the measured values away for exact colour, and that is
+        # not a trade to make silently.
+        report = FidelityReportBuilder()
+        read_raster(make_raster_layer(), report)
+
+        colours = [i for i in report.items if i.subject.startswith("Colours of")]
+        assert len(colours) == 1
+        assert colours[0].status is FidelityStatus.PRESERVED

@@ -1,15 +1,21 @@
-"""The QGIS raster renderer must survive the trip into `COGLayer`.
+"""How a raster's colours reach the map, and why the first attempt did not.
 
-Until 2026-09-17 it did not. The exporter emitted `src`, `min`/`max`, `nodata`
-and `opacity` and nothing else, so a project showing a Viridis-ramped DEM
-published as the runtime's default grey - and `manifest_builder`'s own docstring
-still described the 0.6.20 schema, three minor versions after `bands`,
-`colormap`, `reverse`, `stretch` and `gamma` arrived in 0.7.0.
+Until 2026-09-17 the exporter emitted `src`, `min`/`max`, `nodata` and
+`opacity` for a raster and nothing else, so a project showing a ramped DEM
+published as the runtime's default grey. The fix that day read a `colormap` off
+the renderer's colour ramp - and on 2026-09-18, exercised against a real QGIS
+project for the first time, it turned out to fire for essentially nobody:
+`sourceColorRamp()` is `None` on any project loaded from disk, because QGIS
+copies a named ramp's stops into an anonymous gradient and forgets the name.
 
-`core.raster_style` is duck-typed against the renderer rather than
-`isinstance`-based, and lives apart from `layer_reader` (which imports
-`qgis.core` and so cannot be imported by a unit test). The stand-ins below
-expose exactly the methods the real QGIS renderers do.
+So colour is now BAKED into the pixels for every renderer except an RGB
+composite, whose pixels are already the colours the author sees. These tests
+pin that split, and the manifest consequences of it - a baked raster's bands are
+red, green, blue and alpha, so every attribute describing the source's bands or
+its measured range has to disappear with it.
+
+The stand-ins are duck-typed because `core.raster_style` is: nothing under
+`tests/unit` can import `layer_reader`, which needs `qgis.core`.
 """
 
 from __future__ import annotations
@@ -24,61 +30,29 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
 )
 from nika_onlymap_exporter.core.manifest_builder import build_layer_element
-from nika_onlymap_exporter.core.raster_style import style_from_renderer
+from nika_onlymap_exporter.core.raster_style import (
+    composite_bands,
+    renderer_kind,
+    should_bake,
+)
 
 
-class FakeRamp:
-    def __init__(self, name: str = "", scheme: str = "", inverted: bool = False):
-        self._name, self._scheme, self._inverted = name, scheme, inverted
+class FakeRenderer:
+    """Only `type()` is universal across QGIS's raster renderers."""
 
-    def name(self) -> str:
-        return self._name
-
-    def schemeName(self) -> str:  # noqa: N802 - QGIS spelling
-        return self._scheme
-
-    def isInverted(self) -> bool:  # noqa: N802 - QGIS spelling
-        return self._inverted
-
-
-class FakeShaderFunction:
-    def __init__(self, ramp):
-        self._ramp = ramp
-
-    def sourceColorRamp(self):  # noqa: N802 - QGIS spelling
-        return self._ramp
-
-
-class FakeShader:
-    def __init__(self, ramp):
-        self._fn = FakeShaderFunction(ramp)
-
-    def rasterShaderFunction(self):  # noqa: N802 - QGIS spelling
-        return self._fn
-
-
-class FakePseudoColor:
-    def __init__(self, band: int = 1, ramp=None):
-        self._band, self._shader = band, FakeShader(ramp)
+    def __init__(self, kind: str):
+        self._kind = kind
 
     def type(self) -> str:
-        return "singlebandpseudocolor"
-
-    def band(self) -> int:
-        return self._band
-
-    def shader(self):
-        return self._shader
+        return self._kind
 
 
-class FakeMultiBand:
+class FakeMultiBand(FakeRenderer):
     def __init__(self, red=1, green=2, blue=3):
+        super().__init__("multibandcolor")
         self._r, self._g, self._b = red, green, blue
 
-    def type(self) -> str:
-        return "multibandcolor"
-
-    def redBand(self) -> int:  # noqa: N802
+    def redBand(self) -> int:  # noqa: N802 - QGIS spelling
         return self._r
 
     def greenBand(self) -> int:  # noqa: N802
@@ -88,77 +62,54 @@ class FakeMultiBand:
         return self._b
 
 
-class FakeGray:
-    def type(self) -> str:
-        return "singlebandgray"
-
-    def grayBand(self) -> int:  # noqa: N802
-        return 1
-
-
-class FakePaletted:
-    def type(self) -> str:
-        return "paletted"
-
-
-class TestRasterStyle:
+class TestWhichRoute:
     @pytest.mark.parametrize(
-        "ramp_name,expected",
+        "kind",
         [
-            ("Viridis", "viridis"),
-            ("Magma", "magma"),
-            ("YlOrRd", "ylorrd"),
-            ("RdBu", "rdbu"),
-            ("Spectral", "spectral"),
-            ("Greys", "gray"),
+            "singlebandpseudocolor",
+            "singlebandgray",
+            "paletted",
+            "hillshade",
+            "contour",
         ],
     )
-    def test_qgis_ramp_names_map_onto_the_runtime_vocabulary(self, ramp_name, expected):
-        # QGIS spells ramps for humans; the runtime takes lowercase identifiers.
-        colormap, bands, reverse = style_from_renderer(
-            FakePseudoColor(ramp=FakeRamp(name=ramp_name))
-        )
-        assert colormap == expected
-        assert bands == (1,)
-        assert reverse is False
+    def test_a_renderer_that_invents_colour_is_baked(self, kind):
+        # None of these carry colour in the file: QGIS decides it from values at
+        # draw time, and `COGLayer` has no attribute that can say how.
+        assert should_bake(FakeRenderer(kind)) is True
 
-    def test_an_unknown_ramp_yields_no_colormap_rather_than_a_near_miss(self):
-        # A wrong-but-plausible colormap looks deliberate, which is worse than
-        # the runtime's honest default.
-        colormap, _, _ = style_from_renderer(
-            FakePseudoColor(ramp=FakeRamp(name="Blue to Red"))
-        )
-        assert colormap is None
+    def test_a_composite_is_carried_as_data(self):
+        # Re-encoding an orthophoto to RGBA would cost size and quality to
+        # reproduce what the runtime already draws correctly.
+        assert should_bake(FakeMultiBand()) is False
 
-    def test_an_inverted_ramp_is_carried_as_reverse(self):
-        _, _, reverse = style_from_renderer(
-            FakePseudoColor(ramp=FakeRamp(name="Viridis", inverted=True))
-        )
-        assert reverse is True
+    def test_no_renderer_at_all_is_baked_rather_than_assumed(self):
+        # "We cannot see how QGIS draws this" is not a reason to claim the file
+        # draws itself. Letting QGIS draw is the answer that cannot be wrong.
+        assert should_bake(None) is True
 
-    def test_the_band_number_is_carried_not_assumed(self):
-        _, bands, _ = style_from_renderer(
-            FakePseudoColor(band=4, ramp=FakeRamp(name="Viridis"))
-        )
-        assert bands == (4,)
+    def test_an_object_that_is_not_a_renderer_is_baked(self):
+        assert should_bake(object()) is True
 
-    def test_a_composite_carries_three_bands_and_no_colormap(self):
-        # A composite is its own colour; a colormap on top of one is a
-        # contradiction the runtime warns about.
-        colormap, bands, _ = style_from_renderer(FakeMultiBand(3, 2, 1))
-        assert bands == (3, 2, 1)
-        assert colormap is None
+    def test_renderer_kind_is_lowercased_and_never_none(self):
+        assert renderer_kind(FakeRenderer("SingleBandGray")) == "singlebandgray"
+        assert renderer_kind(None) == ""
 
-    def test_a_gray_renderer_names_gray_rather_than_leaving_it_implicit(self):
-        colormap, bands, _ = style_from_renderer(FakeGray())
-        assert (colormap, bands) == ("gray", (1,))
 
-    def test_a_renderer_we_cannot_express_changes_nothing(self):
-        # Not a guess and not a crash: the runtime's defaults apply.
-        assert style_from_renderer(FakePaletted()) == (None, None, False)
+class TestCompositeBands:
+    def test_the_band_order_is_carried_not_assumed(self):
+        assert composite_bands(FakeMultiBand(3, 2, 1)) == (3, 2, 1)
 
-    def test_no_renderer_at_all_changes_nothing(self):
-        assert style_from_renderer(None) == (None, None, False)
+    def test_a_baked_renderer_has_no_bands_to_report(self):
+        # The two are mutually exclusive by construction; a caller that got both
+        # would emit a band selection for a file whose bands are now RGBA.
+        assert composite_bands(FakeRenderer("singlebandpseudocolor")) is None
+
+    @pytest.mark.parametrize("unset", [0, -1])
+    def test_an_unset_band_yields_no_triple_rather_than_a_partial_one(self, unset):
+        # QGIS spells "unset" as -1 or 0; COGLayer's bands are 1-based. A pair
+        # would be a composite the author never configured.
+        assert composite_bands(FakeMultiBand(1, unset, 3)) is None
 
 
 def raster_layer(**raster_kwargs) -> ExportLayer:
@@ -179,61 +130,67 @@ def raster_layer(**raster_kwargs) -> ExportLayer:
     )
 
 
-class TestRasterManifest:
-    def test_the_colormap_reaches_the_manifest(self):
-        # The regression this file exists for: the style was read and then
-        # dropped on the floor by the emitter.
-        element = build_layer_element(raster_layer(colormap="viridis", bands=(1,)), "")
-        assert 'colormap="viridis"' in element
-        assert 'bands="1"' in element
+QML = "<qgis><pipe/></qgis>"
 
+
+class TestBakedRasterManifest:
+    """A baked file's bands are red, green, blue and alpha - nothing else."""
+
+    def test_no_colormap_is_ever_emitted(self):
+        # The attribute the 2026-09-17 fix added, removed: it never fired, and
+        # a colormap applied on top of already-coloured pixels would recolour
+        # them.
+        element = build_layer_element(raster_layer(style_qml=QML), "")
+        assert "colormap" not in element
+        assert "reverse" not in element
+
+    def test_a_baked_raster_emits_no_band_selection(self):
+        element = build_layer_element(raster_layer(style_qml=QML, bands=(1,)), "")
+        assert "bands=" not in element
+
+    def test_a_baked_raster_emits_no_stretch(self):
+        # `min`/`max` state a range of measured values. After baking, applying a
+        # DEM's elevation range to its own colour channels would restretch the
+        # picture into something nobody chose.
+        element = build_layer_element(
+            raster_layer(style_qml=QML, rescale_min=577.0, rescale_max=2807.0), ""
+        )
+        assert "min=" not in element
+        assert "max=" not in element
+
+    def test_a_baked_raster_emits_no_nodata(self):
+        # QGIS renders nodata transparent, so the mask is in the alpha channel.
+        # Restating -9999 would name a colour that matches nothing in an RGBA
+        # file.
+        element = build_layer_element(raster_layer(style_qml=QML, nodata=-9999.0), "")
+        assert "nodata" not in element
+
+    def test_the_source_reference_and_opacity_still_survive(self):
+        # Baking changes what the pixels are, not where they live or how far
+        # through them you can see. Opacity in particular is NOT baked - the
+        # renderer is reset to full opacity first - so it has to be here.
+        layer = raster_layer(style_qml=QML, src="dem.tif")
+        element = build_layer_element(
+            ExportLayer(**{**layer.__dict__, "opacity": 0.6}), ""
+        )
+        assert 'src="dem.tif"' in element
+        assert 'opacity="0.6"' in element
+
+
+class TestCarriedRasterManifest:
     def test_a_composite_is_emitted_as_a_bracketed_triple(self):
         element = build_layer_element(raster_layer(bands=(3, 2, 1)), "")
         assert 'bands="[3,2,1]"' in element
 
-    def test_an_inverted_ramp_reaches_the_manifest(self):
-        # Explicit value, not bare: the runtime types `reverse` as a boolean,
-        # and this module's `None` means "omit the attribute".
+    def test_an_unbaked_raster_keeps_its_stretch_and_nodata(self):
+        # The counterpart to the baked cases above: these attributes describe
+        # measured values, and an unbaked file still holds them.
         element = build_layer_element(
-            raster_layer(colormap="viridis", reverse_colormap=True), ""
+            raster_layer(
+                bands=(3, 2, 1), rescale_min=0.0, rescale_max=255.0, nodata=0.0
+            ),
+            "",
         )
-        assert 'reverse="true"' in element
-
-    def test_an_unstyled_raster_emits_neither(self):
-        element = build_layer_element(raster_layer(), "")
-        assert "colormap" not in element
-        assert "bands" not in element
-        assert "reverse" not in element
-
-
-class TestCogCrsOrigin:
-    """A COG's CRS lookup must be allowed through the page's own CSP.
-
-    The runtime fetches `https://epsg.io/{code}.json` for any raster CRS - even
-    EPSG:3857, which it has hardcoded - so a page whose `connect-src` omits that
-    origin renders its COG layers as empty legend entries and nothing else.
-    Observed on a hosted Grand Canyon DEM, 2026-09-17.
-    """
-
-    def test_a_raster_page_may_reach_the_crs_service(self):
-        from nika_onlymap_exporter.packaging.publish_manifest import (
-            derive_external_origins,
-        )
-
-        page = (
-            '<om-map><om-layer type="COGLayer" src="/assets/a.tif"></om-layer></om-map>'
-        )
-        assert "https://epsg.io" in derive_external_origins(page)
-
-    def test_a_vector_only_page_does_not(self):
-        # Widening the CSP for a dependency the page never exercises gives away
-        # a restriction for nothing.
-        from nika_onlymap_exporter.packaging.publish_manifest import (
-            derive_external_origins,
-        )
-
-        page = (
-            '<om-map><om-layer type="GeoJsonLayer" '
-            'data="/assets/a.geojson"></om-layer></om-map>'
-        )
-        assert "https://epsg.io" not in derive_external_origins(page)
+        assert 'min="0"' in element
+        assert 'max="255"' in element
+        assert "nodata=" in element

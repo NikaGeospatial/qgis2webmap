@@ -11,6 +11,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from nika_onlymap_exporter.packaging.dependency_scanner import (
 )
 from nika_onlymap_exporter.packaging.hosted_assets import FLAT_NAME_PATTERN
 from nika_onlymap_exporter.packaging.publish_manifest import describe_file
+from nika_onlymap_exporter.packaging.raster_bake import StyleBakeError
 from nika_onlymap_exporter.packaging.raster_cog import CogResult, MissingCrsError
 from nika_onlymap_exporter.packaging.raster_staging import (
     raster_file_name,
@@ -576,3 +578,157 @@ class TestHostedAddressing:
         assert spec is not None
         assert spec.src == result.files[0].name
         assert result.staged[0].sha256 == ""
+
+
+class FakeBaker:
+    """Stands in for `raster_bake.bake`. Records what it was asked to render."""
+
+    def __init__(self, output: bytes = b"RGBA-BYTES") -> None:
+        self.output = output
+        self.calls: list[tuple[str, str, str]] = []
+
+    def __call__(self, source: str, style_qml: str, destination: str) -> str:
+        self.calls.append((source, style_qml, destination))
+        Path(destination).parent.mkdir(parents=True, exist_ok=True)
+        Path(destination).write_bytes(self.output)
+        return destination
+
+
+class FailingBaker:
+    def __call__(self, source: str, style_qml: str, destination: str) -> str:
+        raise StyleBakeError("QGIS could not write the styled copy of this raster.")
+
+
+QML = "<qgis><pipe/></qgis>"
+
+
+def baked_layer(source: Path) -> ExportLayer:
+    layer = raster_layer(source)
+    assert layer.raster is not None
+    return dataclasses.replace(
+        layer, raster=dataclasses.replace(layer.raster, style_qml=QML)
+    )
+
+
+class TestStyleBaking:
+    """Colour that QGIS invents has to be rendered into the pixels first.
+
+    The alternative was read off the renderer as a `colormap` name, shipped on
+    2026-09-17, and measured against a real project on 2026-09-18: QGIS does not
+    keep the name of the ramp a user picked, so it fired for nobody and every
+    styled DEM still published grey. See `core/raster_style.py`.
+    """
+
+    def test_the_converter_is_handed_the_baked_file_not_the_users_own(
+        self, tmp_path: Path
+    ) -> None:
+        source = write_source(tmp_path)
+        baker, converter = FakeBaker(), FakeConverter()
+        stage_rasters(
+            project_with(baked_layer(source)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=converter,
+            baker=baker,
+        )
+
+        assert baker.calls[0][0] == str(source)
+        assert baker.calls[0][1] == QML
+        # The whole point: had this been `source`, the colours would have been
+        # rendered and then thrown away.
+        assert converter.calls[0][0] == baker.calls[0][2]
+
+    def test_the_intermediate_never_lands_in_the_users_output(
+        self, tmp_path: Path
+    ) -> None:
+        # An RGBA render can be several times the size of the COG it becomes,
+        # and a failure part-way must not leave one beside index.html.
+        source = write_source(tmp_path)
+        out = tmp_path / "artifact"
+        baker = FakeBaker()
+        stage_rasters(
+            project_with(baked_layer(source)),
+            out,
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=FakeConverter(),
+            baker=baker,
+        )
+
+        assert out not in Path(baker.calls[0][2]).parents
+        assert not Path(baker.calls[0][2]).exists()
+
+    def test_an_unstyled_raster_is_never_baked(self, tmp_path: Path) -> None:
+        source = write_source(tmp_path)
+        baker, converter = FakeBaker(), FakeConverter()
+        stage_rasters(
+            project_with(raster_layer(source)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=converter,
+            baker=baker,
+        )
+
+        assert baker.calls == []
+        assert converter.calls[0][0] == str(source)
+
+    def test_a_failed_bake_keeps_the_layer_and_says_so(self, tmp_path: Path) -> None:
+        # Not blocking. A raster drawn from its values is a worse map than one
+        # drawn in its own colours; a map missing the layer is a broken one.
+        source = write_source(tmp_path)
+        report = FidelityReportBuilder()
+        converter = FakeConverter()
+        result = stage_rasters(
+            project_with(baked_layer(source)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            report,
+            converter=converter,
+            baker=FailingBaker(),
+        )
+
+        assert result.blocking_reasons == ()
+        assert converter.calls[0][0] == str(source)
+        assert any(
+            item.status is FidelityStatus.UNSUPPORTED and "Colours" in item.subject
+            for item in report.items
+        )
+
+    def test_a_failed_bake_clears_the_flag_so_the_manifest_stays_readable(
+        self, tmp_path: Path
+    ) -> None:
+        # `manifest_builder` reads `style_qml` to decide whether the file's
+        # bands are colours or measurements, and therefore whether min/max and
+        # nodata still describe it. Leaving it set after a failed bake would
+        # publish an unstyled raster with every attribute that makes it
+        # readable suppressed - the worst of both.
+        source = write_source(tmp_path)
+        result = stage_rasters(
+            project_with(baked_layer(source)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=FakeConverter(),
+            baker=FailingBaker(),
+        )
+
+        spec = result.project.layers[0].raster
+        assert spec is not None
+        assert spec.style_qml is None
+
+    def test_a_successful_bake_keeps_the_flag(self, tmp_path: Path) -> None:
+        source = write_source(tmp_path)
+        result = stage_rasters(
+            project_with(baked_layer(source)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=FakeConverter(),
+            baker=FakeBaker(),
+        )
+
+        spec = result.project.layers[0].raster
+        assert spec is not None
+        assert spec.style_qml == QML

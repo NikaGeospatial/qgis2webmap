@@ -19,8 +19,10 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsJsonExporter,
     QgsMapLayerType,
+    QgsReadWriteContext,
     QgsWkbTypes,
 )
+from qgis.PyQt.QtXml import QDomDocument
 
 from .elevation_translator import translate_elevation
 from .export_ir import (
@@ -42,7 +44,7 @@ from .export_ir import (
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
-from .raster_style import style_from_renderer
+from .raster_style import composite_bands, should_bake
 from .renderer_translator import translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
@@ -409,18 +411,34 @@ def raster_extent(layer: QgsRasterLayer) -> Extent | None:
     )
 
 
-def raster_style(
-    layer: QgsRasterLayer,
-) -> tuple[str | None, tuple[int, ...] | None, bool]:
-    """The colormap, band selection and ramp direction `COGLayer` should use.
+def raster_style(layer: QgsRasterLayer) -> tuple[tuple[int, ...] | None, str | None]:
+    """How this raster's colours reach the map: as bands, or as baked pixels.
 
-    A one-line adapter. The logic lives in `core.raster_style`, which imports no
-    QGIS: the renderer is read entirely through duck-typing, so keeping it out
-    of this module is what makes it unit-testable at all - nothing under
-    `tests/unit` can import `layer_reader`.
+    Returns the RGB band triple for a composite - whose pixels are already the
+    colours the author sees - and otherwise the layer's style as a QML document
+    for `packaging.raster_bake` to render into the pixels. Never both: the whole
+    point of the split is in `core.raster_style`, which imports no QGIS and
+    therefore holds the decision where a unit test can reach it.
+
+    A style that cannot be serialised returns `(None, None)`, which carries the
+    raster as unstyled data. That is a visible loss and `read_raster` reports
+    it; it is not a crash and not a guess.
     """
-    renderer = getattr(layer, "renderer", None)
-    return style_from_renderer(renderer() if callable(renderer) else None)
+    renderer_fn = getattr(layer, "renderer", None)
+    renderer = renderer_fn() if callable(renderer_fn) else None
+
+    if not should_bake(renderer):
+        return (composite_bands(renderer), None)
+
+    document = QDomDocument()
+    # `exportNamedStyle` returns a non-empty string on failure and writes
+    # nothing, so both halves are checked: an empty document would apply
+    # cleanly later and silently render the raster with no styling at all.
+    message = layer.exportNamedStyle(document, QgsReadWriteContext())
+    qml = document.toString()
+    if message or not qml:
+        return (None, None)
+    return (None, qml)
 
 
 def raster_rescale(layer: QgsRasterLayer) -> tuple[float | None, float | None]:
@@ -498,16 +516,19 @@ def read_raster(
     into the reader, and it would mean converting a file the user may yet
     cancel out of exporting.
 
-    What is deliberately *not* translated, and is reported instead:
+    Colour takes one of two routes, decided in `core.raster_style`:
 
-    * **Colour ramps.** A QGIS singleband-pseudocolour ramp is an arbitrary
-      list of stops; `COGLayer` takes a `colormap` whose accepted names the
-      runtime's schema does not enumerate. Guessing one would either be
-      ignored or draw the raster in colours the author never chose.
-    * **Band selection and order.** `COGLayer` has no band attribute at all,
-      so a three-band file draws with the bands the file itself declares.
-    * **Resampling, brightness/contrast, hillshade and blend mode.** No
-      attribute in the schema corresponds to any of them.
+    * **A multiband composite** is carried as data, with its R/G/B band numbers
+      on the layer element. Those pixels are already the colours the author
+      sees. Per-band contrast stretch is the one thing lost, and is reported.
+    * **Everything else** - pseudocolour, paletted, singleband grey, hillshade,
+      contour - has its style captured as QML here and rendered into the pixels
+      by `packaging.raster_bake` during the export. QGIS invents those colours
+      at draw time from an arbitrary stop list, and `COGLayer` has no way to
+      express one, so reproducing them means letting QGIS draw.
+
+    Still not translated, and reported rather than guessed: resampling method
+    and blend mode, neither of which the runtime's schema has an attribute for.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -538,7 +559,7 @@ def read_raster(
 
     band_count = int(provider.bandCount())
     rescale_min, rescale_max = raster_rescale(layer)
-    colormap, bands, reverse_colormap = raster_style(layer)
+    bands, style_qml = raster_style(layer)
     extent = raster_extent(layer)
     crs = layer.crs()
 
@@ -554,9 +575,8 @@ def read_raster(
         nodata=raster_nodata(layer),
         rescale_min=rescale_min,
         rescale_max=rescale_max,
-        colormap=colormap,
         bands=bands,
-        reverse_colormap=reverse_colormap,
+        style_qml=style_qml,
         # Left `None` on purpose: answering it needs GDAL. See `RasterSpec`.
         is_cog=None,
     )
@@ -591,39 +611,46 @@ def read_raster(
         layer_id,
     )
 
-    if band_count > 1:
-        report.unsupported(
-            f"Band rendering of '{name}'",
-            f"The layer has {band_count} bands. The map draws the bands the "
-            "file itself declares - the band numbers, order and per-band "
-            "contrast stretch you set in QGIS are not carried, because the map "
-            "library has no way to express them. Save the composite you want "
-            "as its own GeoTIFF if the arrangement matters.",
+    # Colour, which is the single biggest thing a raster can lose. Three
+    # outcomes, and which one applies is decided by `core.raster_style`:
+    if style_qml is not None:
+        report.preserved(
+            f"Colours of '{name}'",
+            "The colour ramp, classes and contrast stretch you set in QGIS are "
+            "rendered into the exported image, so the map shows exactly the "
+            "colours QGIS shows. The trade is that the exported file carries "
+            "those colours rather than the underlying values, so the map "
+            "cannot be restretched or read for measurements afterwards.",
             layer_id,
         )
-    elif not raster.has_rescale:
-        report.approximated(
-            f"Contrast of '{name}'",
-            "No minimum/maximum stretch could be read from this layer's "
-            "renderer, so the map stretches the raster across its own range. "
-            "The image may look lighter or darker than it does in QGIS. Set an "
-            "explicit min/max in the layer's Symbology tab to pin it.",
+    elif bands is not None:
+        report.preserved(
+            f"Colours of '{name}'",
+            f"The layer is a {band_count}-band colour composite, so its own "
+            f"pixels are the colours you see. Bands {', '.join(str(b) for b in bands)} "
+            "are drawn in red, green and blue order as they are in QGIS.",
             layer_id,
         )
-
-    # Colour is the single biggest raster loss and it applies to every renderer
-    # QGIS offers except a plain grey one, so it is stated unconditionally
-    # rather than guessed at per renderer.
-    renderer_name = type(layer.renderer()).__name__ if layer.renderer() else "unknown"
-    if renderer_name not in ("QgsSingleBandGrayRenderer", "QgsMultiBandColorRenderer"):
+        if not raster.has_rescale:
+            report.approximated(
+                f"Contrast of '{name}'",
+                "A composite has one contrast stretch per band and the map "
+                "takes a single pair, so the per-band stretch you set in QGIS "
+                "is not carried and the map stretches each band across its own "
+                "range. The image may look lighter or darker than it does in "
+                "QGIS.",
+                layer_id,
+            )
+    else:
+        # `raster_style` could not serialise the layer's styling. Rare, and it
+        # means the map draws the values rather than the picture - which is the
+        # old behaviour, so it is reported the way the old behaviour was.
         report.unsupported(
             f"Colours of '{name}'",
-            "The colour ramp or palette you applied to this raster is not "
-            "carried into the map: the map library takes a fixed set of named "
-            "colour maps rather than arbitrary stops, and picking one for you "
-            "would show the data in colours you did not choose. The raster "
-            "draws in greyscale. Export a styled RGB GeoTIFF from QGIS "
-            "(Raster > Conversion > Translate) if the colours matter.",
+            "This layer's styling could not be read out of QGIS, so the map "
+            "draws the raster from its values in greyscale rather than in the "
+            "colours you set. Re-applying the style in the layer's Symbology "
+            "tab and exporting again usually fixes it.",
             layer_id,
         )
 

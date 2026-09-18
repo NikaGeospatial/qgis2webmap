@@ -52,6 +52,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -60,6 +61,7 @@ from ..core.export_ir import ExportLayer, ExportProject, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
 from .dependency_scanner import standalone_raster_reason
 from .hosted_assets import RASTER_EXTENSION, hosted_asset_url, sha256_of_file
+from .raster_bake import StyleBakeError
 from .raster_cog import (
     CancelCheck,
     CogError,
@@ -194,6 +196,19 @@ def _convert(
     )
 
 
+#: Renders a QGIS style into a raster's pixels. Source path, QML, destination;
+#: returns the path written. Injectable for the same reason `Converter` is: the
+#: unit tier has neither QGIS nor a raster, and the decisions worth testing here
+#: are about what happens when it succeeds and when it fails.
+Baker = Callable[[str, str, str], str]
+
+
+def _bake(source: str, style_qml: str, destination: str) -> str:
+    from .raster_bake import bake
+
+    return bake(source, style_qml, destination)
+
+
 def stage_rasters(
     project: ExportProject,
     destination: Path,
@@ -202,6 +217,7 @@ def stage_rasters(
     on_progress: ProgressCallback | None = None,
     should_cancel: CancelCheck | None = None,
     converter: Converter | None = None,
+    baker: Baker | None = None,
     hosted: bool = False,
 ) -> RasterStagingResult:
     """Convert every raster layer and point its `RasterSpec.src` at the result.
@@ -263,6 +279,7 @@ def stage_rasters(
             destination=destination,
             report=report,
             converter=converter,
+            baker=baker or _bake,
             on_progress=step,
             should_cancel=should_cancel,
             hosted=hosted,
@@ -305,6 +322,7 @@ def _stage_one(
     destination: Path,
     report: FidelityReportBuilder,
     converter: Converter,
+    baker: Baker,
     on_progress: ProgressCallback | None,
     should_cancel: CancelCheck | None,
     hosted: bool = False,
@@ -315,32 +333,61 @@ def _stage_one(
     file_name = raster_file_name(layer.layer_id, index)
     target = destination / file_name
 
-    try:
-        result = converter(raster.path, str(target), on_progress, should_cancel)
-    except CogError as exc:
-        # Every `CogError` message is written to be shown to a user and carries
-        # its own next step, so it is passed through rather than re-worded into
-        # something vaguer. Blocking, not omitting: a map missing a layer the
-        # author put in it is the silent failure this project refuses.
-        reason = str(exc)
-        report.blocked(f"Raster '{layer.name}'", reason, layer.layer_id)
-        return _Outcome(layer=layer, blocking_reason=reason)
+    # The colours first, if this layer's are QGIS's doing rather than the
+    # file's. The bake writes a plain RGBA GeoTIFF into a temporary directory
+    # and `to_cog` converts that instead of the user's original; nothing below
+    # this block knows the difference, which is the point.
+    #
+    # Staged through a temporary directory rather than beside the artifact so a
+    # failure part-way leaves no half-rendered GeoTIFF in the user's output, and
+    # so the intermediate - which can be several times the size of the COG - is
+    # reclaimed as soon as the conversion has read it.
+    with tempfile.TemporaryDirectory(prefix="qgis2webmap-bake-") as bake_dir:
+        source = raster.path
+        baked = False
+        if raster.style_qml is not None:
+            try:
+                source = baker(
+                    raster.path, raster.style_qml, str(Path(bake_dir) / "styled.tif")
+                )
+                baked = True
+            except StyleBakeError as exc:
+                # Not blocking. A raster drawn from its values is a worse map
+                # than one drawn in its own colours, but it is still the map -
+                # and `read_raster` has already promised the colours, so the
+                # correction has to be louder than a debug line.
+                report.unsupported(
+                    f"Colours of '{layer.name}'", str(exc), layer.layer_id
+                )
 
-    # Never `target`: `to_cog` skips a source that is already a web-ready COG
-    # and hands back the source path, so assuming our own path here would read
-    # a file that was never written.
-    produced = Path(result.destination)
+        try:
+            result = converter(source, str(target), on_progress, should_cancel)
+        except CogError as exc:
+            # Every `CogError` message is written to be shown to a user and
+            # carries its own next step, so it is passed through rather than
+            # re-worded into something vaguer. Blocking, not omitting: a map
+            # missing a layer the author put in it is the silent failure this
+            # project refuses.
+            reason = str(exc)
+            report.blocked(f"Raster '{layer.name}'", reason, layer.layer_id)
+            return _Outcome(layer=layer, blocking_reason=reason)
+
+        # Never `target`: `to_cog` skips a source that is already a web-ready
+        # COG and hands back the source path, so assuming our own path here
+        # would read a file that was never written.
+        produced = Path(result.destination)
+
+        if produced != target:
+            # The skip path, and the only copy this module makes: `to_cog`
+            # declined to rewrite an already web-ready COG, so the artifact
+            # takes the source file as it stands. Still a copy rather than a
+            # reference -- the artifact has to be self-contained, and the user's
+            # file is not ours to move. Inside the `with` because on the baked
+            # path `produced` may BE the temporary file, which vanishes on exit.
+            shutil.copyfile(produced, target)
 
     for warning in result.warnings:
         report.approximated(f"Raster '{layer.name}'", warning, layer.layer_id)
-
-    if produced != target:
-        # The skip path, and the only copy this module makes: `to_cog` declined
-        # to rewrite an already web-ready COG, so the artifact takes the source
-        # file as it stands. Still a copy rather than a reference -- the
-        # artifact has to be self-contained, and the user's file is not ours to
-        # move.
-        shutil.copyfile(produced, target)
 
     report.preserved(f"Raster '{layer.name}'", result.describe(), layer.layer_id)
 
@@ -369,7 +416,19 @@ def _stage_one(
         # a COG when `to_cog` declined to rewrite it. The field describes what
         # the artifact points at, not what the user's disk held.
         layer=dataclasses.replace(
-            layer, raster=dataclasses.replace(raster, src=src, is_cog=True)
+            layer,
+            raster=dataclasses.replace(
+                raster,
+                src=src,
+                is_cog=True,
+                # Cleared when the bake did not happen, and this is not
+                # bookkeeping: `manifest_builder` reads `style_qml` to decide
+                # whether the file's bands are colours or measurements, and
+                # therefore whether `min`/`max`/`nodata` still describe it. A
+                # failed bake that left this set would publish an unstyled
+                # raster with every attribute that makes it readable suppressed.
+                style_qml=raster.style_qml if baked else None,
+            ),
         ),
         staged=staged,
         file=target,

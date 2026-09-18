@@ -646,18 +646,35 @@ class RasterSpec:
     rescale_min: float | None = None
     rescale_max: float | None = None
     is_cog: bool | None = None
-    #: Sprite colormap name for a SINGLE-band raster, already translated into
-    #: `COGLayer`'s vocabulary by `raster_style`. `None` means the renderer was
-    #: one we cannot express (a hand-built colour list, a paletted band), and
-    #: the runtime's own default applies rather than a guess of ours.
-    colormap: str | None = None
-    #: 1-based band selection, GDAL convention, as `COGLayer` takes it: a single
-    #: band for the colormap path, or exactly three for an RGB composite. `None`
-    #: leaves the runtime's defaults (band 1, or the first three).
+    #: 1-based band selection, GDAL convention, as `COGLayer` takes it: exactly
+    #: three bands for an RGB composite. `None` leaves the runtime's default
+    #: (the first three). Only ever set for a multiband composite - a
+    #: single-band raster carries its colours in its pixels instead, see
+    #: `style_qml`.
     bands: tuple[int, ...] | None = None
-    #: Whether the QGIS colour ramp was inverted. Carried separately because
-    #: `COGLayer` flips the sprite lookup rather than naming a reversed ramp.
-    reverse_colormap: bool = False
+    #: The QGIS style to BAKE INTO THE PIXELS before conversion, as a QML
+    #: document. `None` means the raster is carried as measured data and drawn
+    #: by the runtime's own defaults.
+    #:
+    #: This exists because a single-band raster has no colours of its own. The
+    #: ramp is something QGIS invents at draw time from an arbitrary list of
+    #: stops, and `COGLayer` takes a `colormap` from a fixed vocabulary of
+    #: fourteen names - so most ramps have no name to send. Worse, QGIS does not
+    #: keep the name of the ramp a user picked: choosing "Viridis" copies its
+    #: stops into an anonymous gradient, and a project reloaded from disk offers
+    #: no ramp object at all. An exporter that reads the renderer for a name
+    #: therefore finds nothing for almost every real project, which is exactly
+    #: what happened: every styled DEM published grey.
+    #:
+    #: A QML string rather than a handle on the QGIS layer, so this stays plain
+    #: data the way the rest of the IR is, and so the cost of rendering lands in
+    #: packaging - where the user has already committed to the export - rather
+    #: than in the reader, which also runs for the preview.
+    #:
+    #: A multiband composite is deliberately NOT baked: those pixels are already
+    #: the file's own colours, and re-encoding an orthophoto to RGBA would cost
+    #: size and quality to reproduce what the runtime draws correctly anyway.
+    style_qml: str | None = None
 
     @property
     def reference(self) -> str:
@@ -681,9 +698,11 @@ class RasterSpec:
             "src": self.src,
             "bandCount": self.band_count,
             "sourceCrs": self.source_crs,
-            "colormap": self.colormap,
             "bands": list(self.bands) if self.bands else None,
-            "reverseColormap": self.reverse_colormap,
+            # The QML itself is thousands of bytes of XML and would swamp a
+            # snapshot meant to be read in a diff. Whether the colours are baked
+            # is the fact that changes the map; the stops are in the project.
+            "styleBaked": self.style_qml is not None,
             "extent": self.extent.snapshot() if self.extent else None,
             "pixelWidth": self.pixel_width,
             "pixelHeight": self.pixel_height,
