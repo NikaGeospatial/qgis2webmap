@@ -33,7 +33,7 @@ from nika_onlymap_exporter.packaging.runtime_manager import (
     LocalRuntime,
     discover_runtime_dir,
 )
-from nika_onlymap_exporter.ui.links import FEATURE_REQUEST_URL
+from nika_onlymap_exporter.ui.links import FEATURE_REQUEST_URL, HOSTING_SALES_URL
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 
 
@@ -137,6 +137,10 @@ class TestEveryFixtureExports:
         # are ever confused.
         assert "om-preview-cta" not in html, name
         assert FEATURE_REQUEST_URL not in html, name
+        # Same rule for the sales booking link: it belongs in the dialog, where
+        # the person deciding whether to upgrade is, and never in a map they
+        # hand to someone else.
+        assert HOSTING_SALES_URL not in html, name
 
     def test_share_zip_is_openable_and_self_contained(
         self, fixture_project, runtime_available, tmp_path

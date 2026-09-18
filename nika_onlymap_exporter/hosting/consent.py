@@ -20,6 +20,13 @@ hundred still is. Two of them fire:
   past them is published *truncated*. That is the failure
   `truncation_warning_text` exists to prevent - truncation discovered by a map's
   audience rather than by its author.
+
+  This one is expected to stop firing. The platform intends free hosted maps to
+  carry a licence key that lifts the caps while KEEPING the attribution badge,
+  which needs a `hideBadge` claim the OnlyMap runtime does not honour yet. Until
+  it does, the server mints no key for a free map and the caps apply, exactly as
+  described here. `should_warn_truncation` keys off whether a key came back
+  rather than off a tier name, so it follows that change without an edit here.
 * Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
   `insecure_transport_text` says out loud. It is empty on every ordinary
   publish, so it costs the common path nothing.
@@ -35,6 +42,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..core.license_policy import CapViolation
+from ..ui.links import HOSTING_SALES_URL
 from .client import UploadFile, insecure_loopback_base
 
 
@@ -158,6 +166,7 @@ def truncation_warning_text(violations: Sequence[CapViolation]) -> str:
         f"{detail}\n\n"
         "The caps do not apply to the file you export and open yourself, which "
         "is why nothing has warned you about this before now. Split the "
-        "project across several maps, reduce the features, or upgrade the "
-        "account - or publish anyway, knowing what is missing."
+        "project across several maps, reduce the features, or talk to us about "
+        f"an account without the caps ({HOSTING_SALES_URL}) - or publish "
+        "anyway, knowing what is missing."
     )

@@ -153,6 +153,12 @@ class AuthRequiredError(HostingError):
 # authenticate a token that was never the problem.
 REFUSAL_MAP_LIMIT_REACHED = "map_limit_reached"
 REFUSAL_MAP_TOO_LARGE = "map_too_large"
+
+# The org has run out of TOTAL storage, as opposed to this one map being too
+# big. A different refusal because it has a different remedy: `map_too_large`
+# is fixed by simplifying this map, and this one by taking another map down or
+# negotiating more room. Arrives as 413, like `map_too_large`.
+REFUSAL_STORAGE_LIMIT_REACHED = "storage_limit_reached"
 REFUSAL_RATE_LIMITED = "publish_rate_limited"
 
 # The 409 that IS a question for the user. It shares its status with at least
@@ -194,6 +200,7 @@ class PublishRefusedError(HostingError):
         limit: int | None = None,
         limit_mb: float | None = None,
         actual_mb: float | None = None,
+        used_mb: float | None = None,
         retry_at: str = "",
     ) -> None:
         super().__init__(message)
@@ -201,8 +208,14 @@ class PublishRefusedError(HostingError):
         # `map_limit_reached`: how many maps the plan hosts.
         self.limit = limit
         # `map_too_large`: the per-map cap and what this map weighs, in MB.
+        # `storage_limit_reached` reuses both - the cap is the account-wide one
+        # and `actual_mb` is still this map - and adds `used_mb`.
         self.limit_mb = limit_mb
         self.actual_mb = actual_mb
+        # `storage_limit_reached`: what the account already stores, in MB.
+        # Without it the message is "you are over your limit" with no way to
+        # tell how far over, or whether taking one map down would be enough.
+        self.used_mb = used_mb
         # `publish_rate_limited`: when a slot frees, as an ISO 8601 instant.
         # The server's message carries a clock time to the minute; this is the
         # precise one, and the only form a caller can compute with.
@@ -798,6 +811,7 @@ def _structured_refusal(
         limit=_optional_int(details, "limit"),
         limit_mb=_optional_number(details, "limitMb"),
         actual_mb=_optional_number(details, "actualMb"),
+        used_mb=_optional_number(details, "usedMb"),
         retry_at=_text(details, "retryAt"),
     )
 

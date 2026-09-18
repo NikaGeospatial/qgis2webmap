@@ -25,6 +25,21 @@ DISCORD_URL = "https://discord.gg/RujwMpednf"
 # every source look identical. This one belongs to the plugin's Help tab.
 COMMUNITY_URL = "https://discord.gg/2CmbKkp5yg"
 
+# Where a hosting upgrade conversation starts.
+#
+# A booking link rather than a pricing page, because there is no self-serve paid
+# hosting tier to send anyone to: hosting ships as a free tier and an enterprise
+# tier agreed on a call. A "See pricing" link would lead to a page that cannot
+# sell the thing the person just asked for.
+#
+# The same link the marketing site uses everywhere (`nika-site`), deliberately -
+# a second booking link nobody maintains is worse than one that matches what is
+# already published.
+#
+# It must never appear in an exported artifact. It is plugin UI, shown to the
+# author, in the same category as FEATURE_REQUEST_URL below.
+HOSTING_SALES_URL = "https://cal.com/lawrence-nika/nika-expert"
+
 # The hosting feedback form. It used to be the whole of the "Host" button - a
 # demand probe with nothing behind it - and the dialog's button now runs the
 # real publish flow instead. What still points here is the preview's own chip,

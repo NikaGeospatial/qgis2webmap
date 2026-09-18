@@ -59,6 +59,7 @@ from nika_onlymap_exporter.hosting.manifest import (
 )
 from nika_onlymap_exporter.hosting.thumbnail import THUMBNAIL_FILENAME
 from nika_onlymap_exporter.packaging.publish_manifest import media_type_for
+from nika_onlymap_exporter.ui.links import HOSTING_SALES_URL
 from nika_onlymap_exporter.writers.onlymap_writer import ArtifactFile, ArtifactResult
 
 EMPTY_GEOJSON = {"type": "FeatureCollection", "features": []}
@@ -499,6 +500,16 @@ class TestTruncationWarning:
         assert "L5" in text
         assert "L6" in text
         assert "free" in text.lower()
+
+    def test_it_offers_a_way_out_that_someone_can_actually_take(self) -> None:
+        """The warning used to say "upgrade the account" and stop there.
+
+        There is no self-serve paid hosting tier to upgrade to - hosting is a
+        free tier and an enterprise tier agreed on a call - so an instruction
+        with no link was an instruction nobody could follow.
+        """
+        text = truncation_warning_text(detect_violations(self.over_the_cap()))
+        assert HOSTING_SALES_URL in text
 
 
 class TestConsentWording:
