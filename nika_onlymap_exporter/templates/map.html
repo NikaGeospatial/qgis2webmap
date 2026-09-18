@@ -269,6 +269,53 @@
         bottom: calc(12px + 54px + 8px) !important;
       }
 
+      /* The same credit, twice, in opposite corners.
+
+         An UNLICENSED map gets the runtime's own badge in the bottom-left -
+         "Built with OnlyMap by NIKA. Free for non-commercial use." - and this
+         component said "Built with OnlyMap by NIKA" in the bottom-right. Two
+         corners, one sentence, and the shorter one adds nothing the longer one
+         does not already say.
+
+         So ours yields to theirs when theirs is on the page, and the whole chip
+         goes when that would leave it holding nothing but its own disclosure
+         toggle. `[data-om-badge]` is the runtime's own marker and it mounts in
+         the light DOM, which is what makes it visible to `:has()` here.
+
+         Keyed on the badge rather than deleted outright, because a LICENSED map
+         has no runtime badge at all: `hideBadge` and the licence check gate it.
+         On those maps this footer is the only OnlyMap credit on the page, and it
+         stays. A data credit also always stays - it carries a licence obligation
+         and is not ours to drop. */
+      /* The disclosure rules below and the print rule both set the row back to
+         `display: block`, and `.om-credit:focus-within .om-credit-row` (0,3,0)
+         outranks a plain `body:has(...) .om-credit-row` (0,2,1) - so a small
+         screen would have revealed the duplicate again on focus. Spelled out
+         here rather than by `!important`, which would then have to be undone
+         somewhere else. The toggle goes with the row: a disclosure that reveals
+         nothing is worse than no disclosure. */
+      body:has([data-om-badge]) .om-credit .om-credit-row,
+      body:has([data-om-badge]) .om-credit:focus-within .om-credit-row,
+      body:has([data-om-badge]) .om-credit:hover .om-credit-row,
+      body:has([data-om-badge]) .om-credit-mark {
+        display: none;
+      }
+      body:has([data-om-badge]):not(:has(.om-credit-data)) .om-credit {
+        display: none;
+      }
+      /* The chip's height follows what is left in it, so the slot above it has
+         to follow too - the offsets further up assume the OnlyMap row is there.
+         With the badge present the chip is one line of data credit, or nothing
+         at all. */
+      body:has([data-om-badge]):has(.om-credit-data)
+        [data-om-widget-slot="bottom-end"] {
+        bottom: calc(12px + 36px + 8px) !important;
+      }
+      body:has([data-om-badge]):not(:has(.om-credit-data))
+        [data-om-widget-slot="bottom-end"] {
+        bottom: 12px !important;
+      }
+
       /* The runtime prints its licence notice in the bottom-left corner, where
          the manifest also puts the zoom controls and the scale bar - they
          overlapped. Document rules style a custom element's host, and beat the

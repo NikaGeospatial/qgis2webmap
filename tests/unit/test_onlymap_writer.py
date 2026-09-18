@@ -258,6 +258,61 @@ class TestCreditComponent:
         assert "body:has(.om-credit-data)" in markup
         assert "calc(12px + 54px + 8px)" in markup
 
+    def test_the_runtime_badge_silences_our_copy_of_the_same_credit(self) -> None:
+        """Two corners were saying the same sentence.
+
+        The runtime prints "Built with OnlyMap by NIKA. Free for non-commercial
+        use." bottom-left on an unlicensed map; this component said "Built with
+        OnlyMap by NIKA" bottom-right. Ours yields, and the whole chip goes when
+        that leaves nothing but its toggle.
+
+        Keyed on `[data-om-badge]` rather than removed outright: a LICENSED map
+        gets no runtime badge, and then this chip is the only OnlyMap credit on
+        the page.
+        """
+        markup = self.html()
+
+        assert "body:has([data-om-badge]) .om-credit .om-credit-row" in markup
+        assert "body:has([data-om-badge]) .om-credit-mark" in markup
+        assert (
+            "body:has([data-om-badge]):not(:has(.om-credit-data)) .om-credit" in markup
+        )
+
+    def test_the_hidden_row_is_specific_enough_to_beat_the_disclosure(self) -> None:
+        """`.om-credit:focus-within .om-credit-row` is (0,3,0).
+
+        A plain `body:has(...) .om-credit-row` is (0,2,1) and loses to it, so the
+        duplicate would have come back on a small screen the moment a keyboard
+        user tabbed to the toggle - hidden everywhere except where someone was
+        deliberately looking.
+        """
+        markup = self.html()
+
+        for state in ("focus-within", "hover"):
+            assert (
+                f"body:has([data-om-badge]) .om-credit:{state} .om-credit-row" in markup
+            )
+
+    def test_the_slot_reservation_follows_what_the_chip_still_holds(self) -> None:
+        # The offsets above assume the OnlyMap row is in the chip. With the badge
+        # present it is not, so a stale reservation would leave a visible gap
+        # between the attribution and the corner.
+        #
+        # Whitespace-normalised: these selectors wrap across lines in the
+        # stylesheet, and a test that broke on reformatting would be testing the
+        # formatter.
+        markup = " ".join(self.html().split())
+
+        for condition, offset in (
+            (":has(.om-credit-data)", "calc(12px + 36px + 8px)"),
+            (":not(:has(.om-credit-data))", "12px"),
+        ):
+            rule = (
+                f"body:has([data-om-badge]){condition} "
+                f'[data-om-widget-slot="bottom-end"] {{ bottom: {offset}'
+            )
+            assert rule in markup, rule
+
     def test_the_widget_stack_is_not_hand_offset(self) -> None:
         """The bottom-left corner is the runtime's flex slot to lay out.
 

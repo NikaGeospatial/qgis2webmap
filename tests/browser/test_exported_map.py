@@ -168,12 +168,23 @@ class TestTheCreditComponent:
         assert "Fixture Survey" in page.locator(".om-credit-data").inner_text()
 
     def test_the_links_are_reachable_by_keyboard(self, page, exported_map) -> None:
-        """A release gate, and the reason the component is anchors not divs."""
+        """A release gate, and the reason the credit is anchors not divs.
+
+        Read off whichever credit the page actually shows. On an unlicensed map
+        that is the runtime's own badge - our duplicate row is hidden, and
+        asserting focus on a `display: none` anchor would fail for a reason that
+        has nothing to do with keyboard access. A licensed map has no badge and
+        keeps our row, so the same assertion covers both.
+        """
         open_map(page, exported_map)
-        handles = page.locator(".om-credit a")
-        # Two: OnlyMap and NIKA. It was three before "Enhance" and "Host" were
-        # removed for pointing at 404s, and the data credit adds more when the
-        # fixture carries attribution.
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        shown = (
+            "[data-om-badge]"
+            if page.locator("[data-om-badge]").count()
+            else ".om-credit"
+        )
+        handles = page.locator(f"{shown} a")
+        # Two: OnlyMap and NIKA.
         assert handles.count() >= 2
         for index in range(handles.count()):
             link = handles.nth(index)
@@ -259,18 +270,57 @@ class TestTheCreditComponent:
 
 
 class TestSmallScreens:
-    def test_it_collapses_to_the_mark(self, page, exported_map) -> None:
+    """What the chip does at 480px, now that the OnlyMap row is usually gone.
+
+    The row and its disclosure toggle used to be the whole story here: the row
+    collapsed behind a mark and keyboard focus brought it back. On an UNLICENSED
+    map neither exists any more, because the runtime prints the same sentence in
+    the opposite corner and one of the two had to go. What must survive the
+    collapse is the data credit, which carries a licence obligation.
+    """
+
+    def test_the_data_credit_survives_the_narrow_layout(
+        self, page, exported_map
+    ) -> None:
         page.set_viewport_size({"width": 480, "height": 800})
         open_map(page, exported_map)
-        assert page.locator(".om-credit-mark").is_visible()
+        page.wait_for_selector("om-map canvas", timeout=30_000)
 
-    def test_focus_expands_it(self, page, exported_map) -> None:
-        """Expanding on keyboard focus is what keeps the collapsed state usable."""
+        assert page.locator(".om-credit-data").is_visible()
+        assert "Fixture Survey" in page.locator(".om-credit-data").inner_text()
+
+    def test_the_duplicate_row_and_its_toggle_are_gone(
+        self, page, exported_map
+    ) -> None:
+        """Both, and on focus too.
+
+        `.om-credit:focus-within .om-credit-row` is more specific than a plain
+        `body:has(...)` rule, so an under-specified fix would have hidden the
+        duplicate everywhere except the one place a keyboard user looks.
+        """
         page.set_viewport_size({"width": 480, "height": 800})
         open_map(page, exported_map)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        assert page.locator("[data-om-badge]").count() > 0, (
+            "this fixture is unlicensed, so the runtime badge must be present - "
+            "without it the rule under test does not apply at all"
+        )
 
-        page.locator(".om-credit-mark").focus()
-        assert page.locator(".om-credit-row").is_visible()
+        assert not page.locator(".om-credit-mark").is_visible()
+        assert not page.locator(".om-credit-row").is_visible()
+        page.locator(".om-credit").hover()
+        assert not page.locator(".om-credit-row").is_visible()
+
+    def test_the_runtime_badge_is_the_one_that_remains(
+        self, page, exported_map
+    ) -> None:
+        # The point of removing ours: the credit is still on the page, once.
+        open_map(page, exported_map)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+
+        badge = page.locator("[data-om-badge]")
+        assert badge.is_visible()
+        assert "OnlyMap" in badge.inner_text()
 
 
 class TestPopupFieldModes:

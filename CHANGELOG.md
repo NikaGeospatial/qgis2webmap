@@ -35,6 +35,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the map's colours rather than its measured values, so it cannot be
   restretched or read for measurements afterwards. Size usually falls — a
   2905×1420 Int16 DEM went from a 6.6 MB single-band COG to 3.2 MB.
+- **The OnlyMap credit appeared twice, in opposite corners.** An unlicensed map
+  gets the runtime's own badge bottom-left ("Built with OnlyMap by NIKA. Free
+  for non-commercial use.") while the exporter's own chip said the same thing
+  bottom-right. The chip now yields whenever that badge is on the page, and
+  disappears entirely when yielding leaves it holding nothing but its
+  disclosure toggle. It is keyed on the badge rather than deleted, because a
+  licensed map gets no badge and the chip is then the only OnlyMap credit
+  there is; a data credit always stays, badge or no badge.
 - **Folder exports over 2 MB of vector data published no features at all.** That
   tier gzips its layer data but writes the runtime as a sibling file, and the
   branch that handles a sibling runtime emitted no inflater — so the page
