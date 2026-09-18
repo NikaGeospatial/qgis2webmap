@@ -124,7 +124,12 @@ from ..hosting.consent import (
     truncation_warning_text,
 )
 from ..hosting.manifest import PublishManifest
-from ..hosting.thumbnail import THUMBNAIL_FILENAME, capture_canvas
+from ..hosting.thumbnail import (
+    THUMBNAIL_FILENAME,
+    capture_canvas,
+    render_extent,
+    size_for_extent,
+)
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.dependency_scanner import (
     SINGLE_FILE_WARN_BYTES,
@@ -2932,7 +2937,7 @@ class MainDialog(QDialog):
         # Captured on the GUI thread, on every publish including a republish:
         # a listing showing yesterday's picture beside today's map is a bug
         # nobody looking at the listing could ever detect.
-        thumbnail = self._publish_thumbnail()
+        thumbnail = self._publish_thumbnail(export)
 
         exporter = HostedExporter(
             authorized_client(token, transport=make_qgis_transport()),
@@ -3097,16 +3102,32 @@ class MainDialog(QDialog):
 
     # -- The screens --
 
-    def _publish_thumbnail(self) -> bytes:
-        """A picture of the canvas for the listing, or nothing at all.
+    def _publish_thumbnail(self, export) -> bytes:
+        """A picture of the map for the listing, or nothing at all.
+
+        Rendered at the extent the exported map opens on, NOT at whatever the
+        QGIS window happens to show - see `hosting/thumbnail`. The canvas grab
+        is kept as the fallback rather than deleted: a render can fail on a
+        layer QGIS declines to draw off-screen, and a picture of the author's
+        own view is still a better card than no picture at all.
 
         A missing thumbnail is not worth failing a publish over, so this never
         raises: the file is simply left out of the upload.
         """
         canvas = getattr(self.iface, "mapCanvas", None)
-        if canvas is None:
-            return b""
         try:
+            extent = getattr(export, "extent", None)
+            if extent is not None:
+                # Top-first, which is the order `setLayers` wants. `layerOrder`
+                # is the layer TREE's order - what the user sees in the panel
+                # and what the export itself draws in - rather than the
+                # registry's, which is insertion order and means nothing.
+                layers = self.project.layerTreeRoot().layerOrder()
+                rendered = render_extent(layers, extent, size_for_extent(extent))
+                if rendered:
+                    return rendered
+            if canvas is None:
+                return b""
             return capture_canvas(canvas())
         except Exception:
             QgsMessageLog.logMessage(

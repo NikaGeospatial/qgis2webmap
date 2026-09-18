@@ -35,6 +35,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the map's colours rather than its measured values, so it cannot be
   restretched or read for measurements afterwards. Size usually falls — a
   2905×1420 Int16 DEM went from a 6.6 MB single-band COG to 3.2 MB.
+- **The listing thumbnail showed the QGIS window, not the map.** It was a grab
+  of the canvas, while the published map opens on the `extent_source` extent -
+  the data extent by default - so the two agreed only by luck. An author zoomed
+  out one step published a card that was mostly empty canvas, letterboxed in
+  white, advertising a view their map never opens at. The picture is now
+  rendered off-screen at the extent the map opens on, at that extent's own
+  aspect ratio so there is no blank margin for the listing to crop around. The
+  canvas is never touched: nothing moves under the author mid-publish, and a
+  render that fails falls back to the old grab rather than to no picture.
+
+  The thumbnail is also a JPEG now rather than a PNG. The content is
+  continuous-tone - relief, colour ramps, imagery - which is what PNG is worst
+  at: the same pixels went from 1,571 KB to 190 KB. The artifact kind already
+  accepted `image/jpeg` for this role.
 - **The publish confirmation now warns about the OpenStreetMap basemap.** A
   hosted map cannot identify itself to OpenStreetMap the way their tile policy
   asks: a browser will not let a page set its User-Agent, and hosted maps are

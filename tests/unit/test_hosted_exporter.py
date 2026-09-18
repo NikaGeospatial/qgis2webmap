@@ -30,6 +30,7 @@ from nika_onlymap_exporter.core.license_policy import (
 )
 from nika_onlymap_exporter.exporters import hosted
 from nika_onlymap_exporter.exporters.hosted import (
+    THUMBNAIL_MEDIA_TYPE,
     HostedExporter,
     PublishCancelledError,
 )
@@ -56,6 +57,8 @@ from nika_onlymap_exporter.hosting.manifest import (
     PublishManifest,
     RuntimeInfo,
 )
+from nika_onlymap_exporter.hosting.thumbnail import THUMBNAIL_FILENAME
+from nika_onlymap_exporter.packaging.publish_manifest import media_type_for
 from nika_onlymap_exporter.writers.onlymap_writer import ArtifactFile, ArtifactResult
 
 EMPTY_GEOJSON = {"type": "FeatureCollection", "features": []}
@@ -509,7 +512,7 @@ class TestConsentWording:
             "Field survey",
             [
                 UploadFile("index.html", 2_000_000),
-                UploadFile("thumbnail.png", 2_000_000),
+                UploadFile(THUMBNAIL_FILENAME, 2_000_000),
             ],
             feature_count=1234,
             layer_count=3,
@@ -519,7 +522,7 @@ class TestConsentWording:
         text = self.text()
         assert "Field survey" in text
         assert "index.html" in text
-        assert "thumbnail.png" in text
+        assert THUMBNAIL_FILENAME in text
         assert "3.8 MB" in text
 
     def test_the_body_itself_never_varies_by_transport(self, monkeypatch) -> None:
@@ -590,6 +593,9 @@ class TestTheBasemapWarning:
         assert basemap_warning_text("") == ""
 
 
+THUMBNAIL_BYTES = b"\xff\xd8\xff-jpeg-bytes"
+
+
 class TestTheThumbnail:
     """This exporter's own file, so this exporter describes it."""
 
@@ -601,17 +607,27 @@ class TestTheThumbnail:
             ok(LIVE_PAYLOAD),
         )
 
-        make_exporter(transport, thumbnail_png=b"\x89PNG-bytes").export(
+        make_exporter(transport, thumbnail_png=THUMBNAIL_BYTES).export(
             built, tmp_path / "upload"
         )
 
         manifest = json.loads(transport.requests[0].body or b"{}")["manifest"]
-        entry = [item for item in manifest["files"] if item["path"] == "thumbnail.png"]
-        assert entry and entry[0]["mediaType"] == "image/png"
-        assert entry[0]["size"] == len(b"\x89PNG-bytes")
-        thumb = puts(transport)["https://uploads.example/thumbnail.png"]
-        assert thumb.body == b"\x89PNG-bytes"
-        assert thumb.headers["Content-Type"] == "image/png"
+        entry = [
+            item for item in manifest["files"] if item["path"] == THUMBNAIL_FILENAME
+        ]
+        # The declared type has to match the name: the SERVER picks the stored
+        # extension from the media type, so a JPEG announced as a PNG would be
+        # filed under an extension nothing asks for.
+        assert entry and entry[0]["mediaType"] == THUMBNAIL_MEDIA_TYPE
+        assert entry[0]["size"] == len(THUMBNAIL_BYTES)
+        thumb = puts(transport)[f"https://uploads.example/{THUMBNAIL_FILENAME}"]
+        assert thumb.body == THUMBNAIL_BYTES
+        assert thumb.headers["Content-Type"] == THUMBNAIL_MEDIA_TYPE
+
+    def test_its_name_and_its_declared_type_agree(self) -> None:
+        # Two constants in two modules that must not drift: `role_for` matches
+        # the thumbnail by NAME, and the store serves it by TYPE.
+        assert media_type_for(THUMBNAIL_FILENAME) == THUMBNAIL_MEDIA_TYPE
 
 
 class TestNoLicenceKeyIsEverUploaded:

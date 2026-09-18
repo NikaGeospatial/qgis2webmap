@@ -17,6 +17,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     BASEMAP_PRESETS,
     TERRAIN_PRESETS,
 )
+from nika_onlymap_exporter.hosting.thumbnail import THUMBNAIL_FILENAME
 from nika_onlymap_exporter.packaging.cdn_runtime import pinned_runtime
 from nika_onlymap_exporter.packaging.publish_manifest import (
     ARTIFACT_KIND,
@@ -80,8 +81,21 @@ class TestRoles:
         assert role_for(ENTRY_NAME) == "page"
 
     def test_the_thumbnail_is_named_not_sniffed(self) -> None:
-        """A PNG that is not the thumbnail has no role, so the name decides."""
-        assert role_for("thumbnail.png") == "thumbnail"
+        """The name decides, so the constant is what the test may name.
+
+        Spelled through `THUMBNAIL_FILENAME` rather than as a literal: the two
+        drifted apart when the thumbnail became a JPEG, and a test holding the
+        old string would have gone on passing against a file the exporter no
+        longer writes.
+        """
+        assert role_for(THUMBNAIL_FILENAME) == "thumbnail"
+
+    def test_an_image_that_is_not_the_thumbnail_is_refused(self) -> None:
+        # The other half of "named, not sniffed": an image with the right
+        # extension and the wrong name has no role, rather than being adopted
+        # as a second thumbnail.
+        with pytest.raises(PublishManifestError):
+            role_for("screenshot.jpg")
 
     def test_geojson_is_data(self) -> None:
         assert role_for("Points.geojson") == "data"

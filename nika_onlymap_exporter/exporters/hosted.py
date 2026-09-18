@@ -64,7 +64,7 @@ from .base import ExportOutcome
 # The thumbnail is this exporter's own addition rather than the writer's, so it
 # is this module that has to describe it to the manifest.
 THUMBNAIL_ROLE = "thumbnail"
-THUMBNAIL_MEDIA_TYPE = "image/png"
+THUMBNAIL_MEDIA_TYPE = "image/jpeg"
 
 # What a file is sent as when the manifest names no type. The server sniffs
 # nothing; a wrong type here is a map the browser downloads instead of
