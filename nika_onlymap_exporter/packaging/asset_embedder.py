@@ -65,11 +65,20 @@ def should_compress_data(total_data_bytes: int) -> bool:
     return total_data_bytes >= DATA_COMPRESSION_THRESHOLD_BYTES
 
 
-# The bootstrap. Order matters and is the whole trick: data blocks are converted
-# to real JSON *before* the runtime module is imported, because importing it
-# defines the custom elements, which immediately upgrades every <om-layer>
-# already in the document and reads its inline data.
-BOOTSTRAP_TEMPLATE = """
+# Inflating the DATA blocks, and nothing else. Split out from the runtime
+# bootstrap below because the two are needed in different combinations and were
+# once welded together, with consequences: the folder tier writes the runtime as
+# a sibling FILE, took the "runtime is a separate file" branch, and so emitted no
+# bootstrap at all - while still gzipping its data. Every folder export with more
+# than 2 MB of vector data therefore published `<om-layer>` elements whose only
+# child was base64 the runtime had no idea how to read. No error, no warning: the
+# map drew its rasters, its legend and its layer switcher, and not one feature.
+# Found on 2026-09-18 against the Grand Canyon demo.
+#
+# Order is the whole trick either way: data blocks become real JSON *before* the
+# runtime is imported, because importing it defines the custom elements, which
+# immediately upgrades every <om-layer> in the document and reads its data.
+DATA_INFLATE_TEMPLATE = """
       const inflate = async (text) => {{
         const bytes = Uint8Array.from(atob(text.trim()), (c) => c.charCodeAt(0));
         const stream = new Blob([bytes])
@@ -87,8 +96,10 @@ BOOTSTRAP_TEMPLATE = """
         json.textContent = await inflate(block.textContent);
         block.replaceWith(json);
       }}
+"""
 
-      // Then the runtime, which defines <om-map> and friends.
+# Then the runtime, for the single-file tier that carries it gzipped inline.
+RUNTIME_INFLATE_TEMPLATE = """
       const runtimeSource = await inflate(RUNTIME_GZ);
       const runtimeUrl = URL.createObjectURL(
         new Blob([runtimeSource], {{ type: "text/javascript" }})
@@ -98,9 +109,25 @@ BOOTSTRAP_TEMPLATE = """
 """
 
 
+def build_data_inflater(runtime_import: str) -> str:
+    """Inflate the data blocks, then load the runtime from a sibling file.
+
+    For the tier that writes `onlymap.js` beside the page. `await import` rather
+    than a bare one so the import cannot begin until inflation has finished:
+    `DecompressionStream` is genuinely asynchronous, so a plain
+    `import "./onlymap.js"` alongside it is a race the data loses.
+    """
+    body = DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
+    return f'{body}\n      await import("./{runtime_import}");\n'
+
+
 def build_bootstrap(runtime_base64: str) -> str:
-    """The module body that inflates the payloads and starts the map."""
-    body = BOOTSTRAP_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
+    """The module body that inflates the payloads and starts the map.
+
+    For the single-file tier, where the runtime travels gzipped in the page.
+    """
+    body = DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
+    body += RUNTIME_INFLATE_TEMPLATE.format()
     return f'      const RUNTIME_GZ = "{runtime_base64}";\n{body}'
 
 

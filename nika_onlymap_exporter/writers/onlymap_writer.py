@@ -37,6 +37,7 @@ from ..core.manifest_builder import (
 )
 from ..packaging.asset_embedder import (
     build_bootstrap,
+    build_data_inflater,
     gzip_base64,
     should_compress_data,
 )
@@ -280,7 +281,18 @@ class OnlyMapWriter:
             # An import rather than a `src=` attribute, so the template's single
             # script block serves both shapes. The inline module resolves it
             # against the document URL, which is the sibling file we wrote.
-            script_body = f'      import "./{runtime_file}";'
+            #
+            # Compressed data needs its inflater in the SAME block, ahead of the
+            # import. This branch used to emit the bare import and nothing else,
+            # so a folder export large enough to gzip its data shipped base64 no
+            # runtime could read - a map with rasters, legend and layer switcher
+            # and not one feature, with no error anywhere. See the note on
+            # `DATA_INFLATE_TEMPLATE`.
+            script_body = (
+                build_data_inflater(runtime_file)
+                if compress_data
+                else f'      import "./{runtime_file}";'
+            )
             runtime_element = _inline_runtime_element(script_body)
         elif compress:
             # Gzipped base64 plus a bootstrap that inflates it. Roughly a third

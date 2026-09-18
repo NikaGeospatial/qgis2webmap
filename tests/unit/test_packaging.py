@@ -31,6 +31,7 @@ from nika_onlymap_exporter.packaging.asset_embedder import (
     DATA_COMPRESSION_THRESHOLD_BYTES,
     GZIP_SCRIPT_TYPE,
     build_bootstrap,
+    build_data_inflater,
     gzip_base64,
     should_compress_data,
 )
@@ -83,6 +84,14 @@ def make_layer(**overrides) -> ExportLayer:
     )
     defaults.update(overrides)
     return ExportLayer(**defaults)
+
+
+def _verdict():
+    """The writer's own verdict for the stock project, rather than a handmade
+    one: what it contains is `license_policy`'s business, not this file's."""
+    return OnlyMapWriter(runtime_provider=FakeRuntime()).license_policy.evaluate(
+        make_project()
+    )
 
 
 def make_project(layers=None, **overrides) -> ExportProject:
@@ -141,6 +150,73 @@ class TestCompression:
 
     def test_bootstrap_releases_the_blob_url(self) -> None:
         assert "revokeObjectURL" in build_bootstrap("QUJD")
+
+    def test_a_sibling_runtime_still_gets_an_inflater(self) -> None:
+        """The folder tier gzips its data too, and once shipped no inflater.
+
+        `build_bootstrap` was the only thing that emitted one, and the folder
+        tier does not call it - it writes the runtime as a sibling file and took
+        a branch that emitted a bare `import`. So a folder export with more than
+        2 MB of vector data published `<om-layer>` elements whose only child was
+        base64 nothing could read: rasters, legend and layer switcher all drew,
+        and not one feature did. No error, no warning. Found 2026-09-18.
+        """
+        script = build_data_inflater("onlymap.js")
+        assert GZIP_SCRIPT_TYPE in script
+        assert 'await import("./onlymap.js")' in script
+
+    def test_a_folder_export_that_compresses_its_data_emits_the_inflater(
+        self, tmp_path
+    ) -> None:
+        """The caller, not the helper - which is where the bug actually was.
+
+        `build_data_inflater` having the right contents proves nothing if the
+        writer never calls it, and for the folder tier it never did. This test
+        renders a real page with compressed data and looks at the HTML, so the
+        two cannot drift apart again.
+        """
+        html = OnlyMapWriter(runtime_provider=FakeRuntime()).render_html(
+            make_project(),
+            FakeRuntime().load(),
+            _verdict(),
+            when=None,
+            compress=True,
+            compress_data=True,
+            runtime_file="onlymap.js",
+        )
+        assert GZIP_SCRIPT_TYPE in html
+        assert 'await import("./onlymap.js")' in html
+        # The inflate loop, not merely a mention of the type in a comment.
+        assert "DecompressionStream" in html
+
+    def test_a_folder_export_with_readable_data_keeps_the_plain_import(
+        self, tmp_path
+    ) -> None:
+        # The other half: a small map keeps editable JSON and needs no shim, so
+        # a page that shipped one would be carrying dead code in every export.
+        html = OnlyMapWriter(runtime_provider=FakeRuntime()).render_html(
+            make_project(),
+            FakeRuntime().load(),
+            _verdict(),
+            when=None,
+            compress=True,
+            compress_data=False,
+            runtime_file="onlymap.js",
+        )
+        assert 'import "./onlymap.js";' in html
+        assert "DecompressionStream" not in html
+
+    def test_the_sibling_import_waits_for_the_inflater(self) -> None:
+        """`await`, not a bare import.
+
+        `DecompressionStream` is genuinely asynchronous, so a plain
+        `import "./onlymap.js"` beside the inflate loop is a race - and the
+        loser is the data, because importing defines the custom elements, which
+        upgrade every layer and read whatever is in it at that moment.
+        """
+        script = build_data_inflater("onlymap.js")
+        assert script.index(GZIP_SCRIPT_TYPE) < script.index("await import")
+        assert 'import "./onlymap.js"' not in script
 
 
 class TestDependencyScanner:
