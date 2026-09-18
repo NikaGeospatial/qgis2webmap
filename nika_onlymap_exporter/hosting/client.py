@@ -155,6 +155,16 @@ REFUSAL_MAP_LIMIT_REACHED = "map_limit_reached"
 REFUSAL_MAP_TOO_LARGE = "map_too_large"
 REFUSAL_RATE_LIMITED = "publish_rate_limited"
 
+# The 409 that IS a question for the user. It shares its status with at least
+# one refusal that is not - `map_taken_down` - so the status alone cannot decide
+# which of the two arrived, and reading it as the conflict was a real bug: a
+# taken-down map produced "this map is at release 0, published by someone else,
+# publishing will replace release 0 with your version" over a "Publish anyway"
+# button, for a map nobody had touched and a release that does not exist. The
+# zero and the phantom colleague were an absent `currentRelease` and an absent
+# `publishedBy` read as data. Reported 2026-09-18.
+REFUSAL_RELEASE_CONFLICT = "release_conflict"
+
 # Codes that are a refusal to publish rather than a refusal to authenticate.
 # A whitelist, not a rule about which statuses may carry one: anything else on
 # a 401 or 403 stays an authentication failure, because guessing wrong in that
@@ -821,6 +831,33 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
     )
 
 
+def _is_release_conflict(response: HttpResponse) -> bool:
+    """Whether this 409 is the stale-client conflict rather than some other one.
+
+    Decided by `error.code`, because the status does not decide it: the server
+    answers 409 for a stale release AND for a republish of a map that has been
+    taken down, and only the first is a question worth putting a "Publish
+    anyway" button under. The second is a refusal with its own instructions,
+    and rendering it as the first told the publisher a colleague had overwritten
+    work nobody had touched.
+
+    A 409 carrying NO code is treated as the conflict, which is the behaviour
+    this had before there was a code to read. That is the conservative way round
+    for a client that may be talking to an older server: the conflict is the
+    only 409 such a server sends, and its dialog can be cancelled, whereas
+    misreading a genuine conflict as a flat refusal would drop the one screen
+    that lets a publisher rescue their work with `force`.
+    """
+    try:
+        payload = json.loads(response.body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return True
+    if not isinstance(payload, dict):
+        return True
+    code = _text(error_envelope(payload), "code")
+    return code in ("", REFUSAL_RELEASE_CONFLICT)
+
+
 def _raise_conflict(response: HttpResponse) -> None:
     """Turn a 409 at `start` into the typed question the dialog has to ask.
 
@@ -945,7 +982,7 @@ class HostingClient:
             payload["force"] = True
 
         response = self._post_raw("/maps/publish/start", payload)
-        if response.status == 409:
+        if response.status == 409 and _is_release_conflict(response):
             _raise_conflict(response)
         _raise_for_status(response, "starting the upload")
         data = decode_json(response, "starting the upload")

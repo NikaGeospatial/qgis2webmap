@@ -1034,3 +1034,89 @@ class TestReleaseNumberIsNumericOnTheWire:
         for bad in ({}, {"releaseN": None}, {"releaseN": "latest"}, {"releaseN": True}):
             with pytest.raises(HostingError, match="usable 'releaseN'"):
                 _required_int(bad, "releaseN", "starting the upload")
+
+
+class TestNotEveryConflictIsAReleaseConflict:
+    """409 is a status, not a meaning.
+
+    `POST /maps/publish/start` answers 409 for a stale release AND for a
+    republish of a map that has been taken down, and the client read the status
+    alone. So a taken-down map produced the stale-release dialog: "this map is
+    at release 0, published by someone else. Publishing will replace release 0
+    with your version", over a "Publish anyway" button. Nobody had published
+    anything - the zero was an absent `currentRelease` and the colleague an
+    absent `publishedBy`, both read as data. Reported 2026-09-18.
+    """
+
+    TAKEN_DOWN = json.dumps(
+        {
+            "error": {
+                "code": "map_taken_down",
+                "message": (
+                    "This map was taken down. Restore it from the dashboard, "
+                    "or publish it as a new map."
+                ),
+                "details": {},
+            }
+        }
+    ).encode("utf-8")
+
+    def test_a_taken_down_map_is_a_refusal_and_not_a_question(self) -> None:
+        api, _transport = client(HttpResponse(409, self.TAKEN_DOWN))
+
+        with pytest.raises(PublishRefusedError) as caught:
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+        assert caught.value.code == "map_taken_down"
+        # The server's own sentence, which already names the way out. Nothing
+        # about releases, nobody else's name, no release number.
+        assert "taken down" in str(caught.value)
+        assert "release" not in str(caught.value).lower()
+
+    def test_a_taken_down_map_is_not_offered_a_force_retry(self) -> None:
+        # The distinction that matters to the user: `PublishConflictError` is
+        # the only refusal the dialog puts a "Publish anyway" button under, and
+        # forcing past this one would only be refused again.
+        api, _transport = client(HttpResponse(409, self.TAKEN_DOWN))
+
+        with pytest.raises(PublishRefusedError):
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+    def test_a_real_release_conflict_still_asks_the_question(self) -> None:
+        api, _transport = client(HttpResponse(409, conflict_body()))
+
+        with pytest.raises(PublishConflictError) as caught:
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+        assert caught.value.current_release == 9
+
+    def test_a_409_with_no_code_is_still_read_as_the_conflict(self) -> None:
+        """The conservative way round for an older server.
+
+        A server predating the code field sends only the conflict on this
+        status, and misreading a genuine conflict as a flat refusal would drop
+        the one screen that lets a publisher rescue their work with `force`.
+        """
+        api, _transport = client(HttpResponse(409, conflict_body(nested=False)))
+
+        with pytest.raises(PublishConflictError):
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+    def test_an_unreadable_409_says_so_rather_than_inventing_a_conflict(
+        self,
+    ) -> None:
+        """A gateway's HTML, not our API - so there is no conflict to describe.
+
+        It is routed to `_raise_conflict` (no code means the conflict, see
+        above) and stops there, because the fields a conflict dialog needs
+        cannot be read out of it. That is the right end: a dialog naming
+        release 0 and an anonymous colleague would be the same invented detail
+        this class exists to prevent.
+        """
+        api, _transport = client(HttpResponse(409, b"<html>gateway</html>"))
+
+        with pytest.raises(HostingError) as caught:
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+        assert not isinstance(caught.value, PublishConflictError)
+        assert "not readable" in str(caught.value)

@@ -35,6 +35,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the map's colours rather than its measured values, so it cannot be
   restretched or read for measurements afterwards. Size usually falls — a
   2905×1420 Int16 DEM went from a 6.6 MB single-band COG to 3.2 MB.
+- **A taken-down map was reported as someone else's publish.** `409` is a
+  status, not a meaning: the server answers it both for a stale release and for
+  a republish of a map that has been taken down, and the plugin read the status
+  alone. So republishing a taken-down map raised the stale-release dialog -
+  "this map is at release 0, published by someone else. Publishing will replace
+  release 0 with your version" - over a **Publish anyway** button, for a map
+  nobody had touched and a release that does not exist. The zero was an absent
+  `currentRelease` and the colleague an absent `publishedBy`, both read as data.
+  The refusal is now routed by `error.code`, so a taken-down map gets the
+  server's own sentence and the way out it names. A 409 with no code at all is
+  still read as the conflict, which is what an older server sends.
 - **The listing thumbnail showed the QGIS window, not the map.** It was a grab
   of the canvas, while the published map opens on the `extent_source` extent -
   the data extent by default - so the two agreed only by luck. An author zoomed
