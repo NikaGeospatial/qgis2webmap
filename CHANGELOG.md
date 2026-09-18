@@ -68,10 +68,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   rather than looping.
 
 ### Changed
-- **Pinned OnlyMap runtime moved to 0.8.0** (from 0.7.6). Verified
-  byte-identical on the npm tarball, jsDelivr and unpkg. The three CSP origin
-  tables in `packaging/publish_manifest.py` re-derived unchanged against it, so
-  only their `*_VERIFIED_AGAINST` constants moved.
+- **Pinned OnlyMap runtime moved to 0.8.1** (from 0.7.6, via 0.8.0). Verified
+  from the npm tarball and then cross-checked byte-identical on jsDelivr and
+  unpkg. The three CSP origin tables in `packaging/publish_manifest.py`
+  re-derived unchanged against it, so only their `*_VERIFIED_AGAINST` constants
+  moved, and the attribute contract was re-run against 0.8.1's own
+  `onlymapjs.html-data.json` rather than a development mirror.
+
+  0.8.1 is a patch release: two cartograph fixes and a new `max-pitch`
+  attribute, none of which this exporter emits. The platform's
+  `SUPPORTED_RUNTIMES` gained the matching entry; 0.8.0 stays listed, because
+  removing a version does not upgrade the maps pinned to it.
 
 ### Added
 - **Deployment-stamped builds.** `scripts/package_plugin.py --api-base
