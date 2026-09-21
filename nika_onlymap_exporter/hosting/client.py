@@ -338,9 +338,11 @@ class PublishStart:
     changed in, and it means every byte is already stored - not that the server
     forgot to answer.
 
-    `license_key` is `None` on the free tier. That is a correct answer, not an
-    error, and the one signal the client gets about which caps the hosted map
-    will render under.
+    `license_key` is `None` whenever no key was minted FOR THIS CALL, which is
+    not the same as "this map renders under the caps". A key is map-scoped, so a
+    brand-new map has no id to mint against yet and the server answers `None` on
+    every first publish whatever the tier, then mints the real key once the map
+    exists. Read `caps_lifted`, never the key, to decide what to tell the user.
     """
 
     release_id: str
@@ -348,6 +350,23 @@ class PublishStart:
     release_n: int
     uploads: tuple[UploadTarget, ...] = ()
     license_key: str | None = None
+    #: The server's own answer to "will the served map have OnlyMap's caps
+    #: lifted". `None` from a server that predates the field.
+    caps_lifted: bool | None = None
+
+    @property
+    def renders_under_caps(self) -> bool:
+        """Whether the published map will really be capped and truncated.
+
+        The server's answer when it gives one. The fallback is the old
+        key-presence test, which is right for a REPUBLISH - where the map id
+        exists and a key would have been minted if the tier earned one - and
+        wrong for a first publish, where it produced a truncation warning for a
+        map that was about to be served uncapped.
+        """
+        if self.caps_lifted is not None:
+            return not self.caps_lifted
+        return self.license_key is None
 
     @property
     def is_free_tier(self) -> bool:
@@ -653,6 +672,18 @@ def _optional_text(data: JsonObject, key: str) -> str | None:
     free account must not read as a licensed one.
     """
     return _text(data, key) or None
+
+
+def _caps_lifted(data: JsonObject) -> bool | None:
+    """`capsLifted` from a publish/start reply, or `None` if it said nothing.
+
+    `None` is not "capped": it is a server too old to answer the question, and
+    the caller falls back to the presence of a licence key. Only a real boolean
+    is taken as an answer, so a string or a number - neither of which this field
+    is ever sent as - is treated as absent rather than as a truthy yes.
+    """
+    value = data.get("capsLifted")
+    return value if isinstance(value, bool) else None
 
 
 def _optional_int(data: JsonObject, key: str) -> int | None:
@@ -1017,6 +1048,7 @@ class HostingClient:
             release_n=_required_int(data, "releaseN", "starting the upload"),
             uploads=tuple(targets),
             license_key=_optional_text(data, "licenseKey"),
+            caps_lifted=_caps_lifted(data),
         )
 
     def upload(

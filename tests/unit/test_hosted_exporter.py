@@ -41,6 +41,7 @@ from nika_onlymap_exporter.hosting.client import (
     HttpRequest,
     HttpResponse,
     PublishConflictError,
+    PublishStart,
     UploadFile,
 )
 from nika_onlymap_exporter.hosting.consent import (
@@ -479,20 +480,51 @@ class TestTruncationWarning:
     def within_the_cap(self) -> ExportProject:
         return ExportProject(title="Small", layers=(make_layer("L0"),))
 
-    def test_it_fires_for_a_free_account_past_the_caps(self) -> None:
+    def test_it_fires_for_a_capped_account_past_the_caps(self) -> None:
         violations = detect_violations(self.over_the_cap())
         assert violations
-        assert should_warn_truncation(None, violations)
+        assert should_warn_truncation(True, violations)
 
-    def test_it_does_not_fire_for_a_paid_account(self) -> None:
+    def test_it_does_not_fire_when_the_caps_are_lifted(self) -> None:
         """The key lifts the limits, so nothing is lost and nothing is said."""
         violations = detect_violations(self.over_the_cap())
-        assert not should_warn_truncation("om_live_payload.signature", violations)
+        assert not should_warn_truncation(False, violations)
 
-    def test_it_does_not_fire_for_a_free_account_within_the_caps(self) -> None:
+    def test_it_does_not_fire_within_the_caps(self) -> None:
         assert not should_warn_truncation(
-            None, detect_violations(self.within_the_cap())
+            True, detect_violations(self.within_the_cap())
         )
+
+    def test_a_first_publish_with_caps_lifted_does_not_warn(self) -> None:
+        """The regression this signature exists for.
+
+        A first publish has no map id, so the server mints no key in the
+        `publish/start` reply whatever the tier - it mints the real one at
+        activation. Reading key presence warned about truncation for a map that
+        was then served complete, with all its layers and every feature.
+        """
+        start = PublishStart(
+            release_id="r1",
+            map_id="K7M2QX9VT4BD",
+            release_n=1,
+            license_key=None,
+            caps_lifted=True,
+        )
+        assert not start.renders_under_caps
+        assert not should_warn_truncation(
+            start.renders_under_caps, detect_violations(self.over_the_cap())
+        )
+
+    def test_an_older_server_falls_back_to_the_key(self) -> None:
+        """No `capsLifted` in the reply is not an answer of "uncapped"."""
+        capped = PublishStart(
+            release_id="r1", map_id="M", release_n=1, license_key=None
+        )
+        assert capped.renders_under_caps
+        keyed = PublishStart(
+            release_id="r1", map_id="M", release_n=1, license_key="om_live_a.b"
+        )
+        assert not keyed.renders_under_caps
 
     def test_the_wording_names_every_layer_that_will_be_cut(self) -> None:
         violations = detect_violations(self.over_the_cap())

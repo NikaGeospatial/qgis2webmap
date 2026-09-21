@@ -3032,7 +3032,7 @@ class MainDialog(QDialog):
                 self._reserve(exporter, result, staging, violations, force=True)
                 return
             if should_warn_truncation(
-                prepared.start.license_key, violations
+                prepared.start.renders_under_caps, violations
             ) and not self._confirm_truncation(violations):
                 self._discard_publish_staging()
                 self.status_label.setText("Not published. Nothing left this machine.")

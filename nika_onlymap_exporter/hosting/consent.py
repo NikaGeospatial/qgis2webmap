@@ -21,15 +21,18 @@ hundred still is. Two of them fire:
   `truncation_warning_text` exists to prevent - truncation discovered by a map's
   audience rather than by its author.
 
-  This one has largely stopped firing, and by design rather than by an edit.
-  OnlyMap 0.8.4 split the caps from the attribution badge - a licence key lifts
-  the caps, and the `keep-badge` attribute (set by the server as the page is
-  served) keeps the credit - so free hosted maps now carry a key too and are no
-  longer capped. `should_warn_truncation` keys off whether a key came back from
-  `publish/start` rather than off a tier name, which is exactly why that change
-  needed nothing here. It still fires in the one case that remains: a map pinned
-  to a runtime older than the platform's keep-badge floor is issued no key, so
-  its caps apply and truncation is real.
+  This one has largely stopped firing. OnlyMap 0.8.4 split the caps from the
+  attribution badge - a licence key lifts the caps, and the `keep-badge`
+  attribute (set by the server as the page is served) keeps the credit - so free
+  hosted maps carry a key too and are no longer capped. It still fires in the one
+  case that remains: a map pinned to a runtime older than the platform's
+  keep-badge floor is issued no key, so its caps apply and truncation is real.
+
+  Reading the returned licence key was NOT enough to tell those apart. A key is
+  map-scoped, so a first publish has no map id to mint against and comes back
+  keyless on every tier - which warned about truncation for maps that were then
+  served complete. The server answers the entitlement directly now, and
+  `PublishStart.renders_under_caps` is what this takes.
 * Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
   `insecure_transport_text` says out loud. It is empty on every ordinary
   publish, so it costs the common path nothing.
@@ -50,20 +53,28 @@ from .client import UploadFile, insecure_loopback_base
 
 
 def should_warn_truncation(
-    license_key: str | None, violations: Sequence[CapViolation]
+    renders_under_caps: bool, violations: Sequence[CapViolation]
 ) -> bool:
     """Whether the hosted map will lose data the author has not been told about.
 
-    Both halves are required. A free account publishing a project inside the
-    caps loses nothing, and a licensed account publishing one past them loses
-    nothing either - the key lifts the limits. Only the pair is a problem.
+    Both halves are required. An account whose maps render uncapped loses
+    nothing however large the project, and a capped account publishing a project
+    inside the caps loses nothing either. Only the pair is a problem.
 
-    **The tier is not knowable before `POST /maps/publish/start`.** That call
+    **Takes the server's answer, not a licence key.** This used to be
+    `license_key is None`, which was wrong for a first publish: a key is
+    map-scoped, so there is no id to mint against until the map exists, and the
+    server returns `None` on every first publish whatever the tier. That warned
+    about truncation for maps that were then served complete. `PublishStart.
+    renders_under_caps` prefers the server's own `capsLifted` and keeps the old
+    test as the fallback for a server that does not send it.
+
+    **The answer is not knowable before `POST /maps/publish/start`.** That call
     sends a title, filenames and sizes and no map data, so asking it before the
     last confirmation costs the user nothing and is what makes this warning
     possible while they can still stop.
     """
-    return license_key is None and bool(violations)
+    return renders_under_caps and bool(violations)
 
 
 def insecure_transport_text(api_base: str | None = None) -> str:
