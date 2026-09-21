@@ -21,12 +21,15 @@ hundred still is. Two of them fire:
   `truncation_warning_text` exists to prevent - truncation discovered by a map's
   audience rather than by its author.
 
-  This one is expected to stop firing. The platform intends free hosted maps to
-  carry a licence key that lifts the caps while KEEPING the attribution badge,
-  which needs a `hideBadge` claim the OnlyMap runtime does not honour yet. Until
-  it does, the server mints no key for a free map and the caps apply, exactly as
-  described here. `should_warn_truncation` keys off whether a key came back
-  rather than off a tier name, so it follows that change without an edit here.
+  This one has largely stopped firing, and by design rather than by an edit.
+  OnlyMap 0.8.4 split the caps from the attribution badge - a licence key lifts
+  the caps, and the `keep-badge` attribute (set by the server as the page is
+  served) keeps the credit - so free hosted maps now carry a key too and are no
+  longer capped. `should_warn_truncation` keys off whether a key came back from
+  `publish/start` rather than off a tier name, which is exactly why that change
+  needed nothing here. It still fires in the one case that remains: a map pinned
+  to a runtime older than the platform's keep-badge floor is issued no key, so
+  its caps apply and truncation is real.
 * Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
   `insecure_transport_text` says out loud. It is empty on every ordinary
   publish, so it costs the common path nothing.
