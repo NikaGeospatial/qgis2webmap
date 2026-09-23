@@ -24,6 +24,11 @@ from nika_onlymap_exporter.core.label_points import (
 # shape for asserting the centroid maths rather than a tolerance.
 SQUARE = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]
 
+# The same square with an elevation on every vertex, as `QgsJsonExporter` emits
+# it for a PolygonZ layer. Measured against QGIS 4.0.3: a layer whose wkbType
+# carries Z exports `[x, y, z]` coordinates, not `[x, y]`.
+SQUARE_Z = [[0.0, 0.0, 8849.0], *([x, y, 8849.0] for x, y in SQUARE[1:])]
+
 
 def feature(geometry, **properties):
     return {"type": "Feature", "geometry": geometry, "properties": properties}
@@ -74,6 +79,44 @@ class TestRepresentativePoint:
         tiny = [[10.0, 10.0], [10.1, 10.0], [10.1, 10.1], [10.0, 10.1], [10.0, 10.0]]
         geometry = {"type": "MultiPolygon", "coordinates": [[tiny], [SQUARE]]}
         assert representative_point(geometry) == (1.0, 1.0)
+
+    def test_a_z_polygon_labels_where_its_flat_twin_does(self) -> None:
+        """Height in the geometry must not change where the label lands.
+
+        A layer digitised with Z on, or draped over a DEM, exports every vertex
+        as `[x, y, z]`. Reading the ring by name - `for (x0, y0) in ...` - then
+        raises `ValueError: too many values to unpack (expected 2)` and takes
+        the whole export down, which is what a user hit on 0.1.4. The elevation
+        is not a label coordinate; it is ignored, exactly as it is for a point.
+        """
+        flat = representative_point({"type": "Polygon", "coordinates": [SQUARE]})
+        assert representative_point({"type": "Polygon", "coordinates": [SQUARE_Z]}) == (
+            flat
+        )
+
+    def test_a_z_multipolygon_still_labels_the_largest_part(self) -> None:
+        """The shoelace area loop destructures too, so it needs its own case."""
+        tiny_z = [
+            [10.0, 10.0, 1.0],
+            [10.1, 10.0, 1.0],
+            [10.1, 10.1, 1.0],
+            [10.0, 10.1, 1.0],
+            [10.0, 10.0, 1.0],
+        ]
+        geometry = {"type": "MultiPolygon", "coordinates": [[tiny_z], [SQUARE_Z]]}
+        assert representative_point(geometry) == (1.0, 1.0)
+
+    def test_a_z_polygon_with_a_degenerate_ring_falls_back_too(self) -> None:
+        """The fallback path reads coordinates the other way round, by index.
+
+        It already tolerates Z, but the two paths have to agree or a zero-area
+        Z ring would crash where its flat twin returns a point.
+        """
+        flat_z = [[0.0, 0.0, 5.0], [1.0, 0.0, 5.0], [2.0, 0.0, 5.0], [0.0, 0.0, 5.0]]
+        assert representative_point({"type": "Polygon", "coordinates": [flat_z]}) == (
+            0.75,
+            0.0,
+        )
 
     def test_degenerate_ring_falls_back_instead_of_dividing_by_zero(self) -> None:
         flat = [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [0.0, 0.0]]
