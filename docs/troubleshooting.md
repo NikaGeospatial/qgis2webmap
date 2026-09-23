@@ -166,6 +166,24 @@ QGIS only registers 3D renderers once something asks for them, and a project
 loaded earlier has already discarded its 3D settings. Re-open the project
 (the plugin registers 3D support when it loads) and export again.
 
+### Export fails with "too many values to unpack"
+
+Affects 0.1.4 and earlier. It happens when a **polygon layer stores elevation in
+its geometry** and that layer has labelling switched on. In QGIS, open Layer
+Properties → Information: if the geometry reads *Polygon (Z)* or
+*MultiPolygon (Z)* rather than plain *Polygon*, this is the layer. Data
+digitised with **Add Z dimension** ticked, shapes draped over a DEM, and
+anything imported from CityGML, IFC or a Z-enabled GeoPackage all arrive this
+way.
+
+Note this is not the same as extruded polygons. Extrusion reads a height from an
+*attribute* and leaves the geometry flat, and those layers were never affected.
+
+Fixed in the next release. Until then, either switch labelling off for that
+layer, or give it flat geometry — **Processing Toolbox → Vector geometry → Drop
+M/Z values**, which writes a new layer with the elevation removed. Dropping Z
+does not affect extrusion, because extrusion never reads the geometry's height.
+
 ### The Fidelity tab takes a long time to fill
 
 It reads every feature of every layer, so a large project takes a while. The

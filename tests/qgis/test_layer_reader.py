@@ -441,3 +441,82 @@ class TestRasterColour:
         colours = [i for i in report.items if i.subject.startswith("Colours of")]
         assert len(colours) == 1
         assert colours[0].status is FidelityStatus.PRESERVED
+
+
+class TestZGeometryReachesLabelling:
+    """The gap that let a PolygonZ layer abort a whole export.
+
+    Every demo project, fixture and unit case in this repo is flat, so nothing
+    ever proved what QGIS emits for a layer whose wkbType carries Z - and the
+    label centroid read each vertex as `(x, y)`. A user on 0.1.4 with a Z
+    polygon and labelling on got `ValueError: too many values to unpack`.
+
+    These run against real PyQGIS on purpose: the unit tier can assert what the
+    centroid does with a three-element vertex, but only this tier can prove
+    QGIS hands us one.
+    """
+
+    @staticmethod
+    def _z_polygon_layer(qgis_core_module, wkt: str):
+        layer = qgis_core_module.QgsVectorLayer(
+            "PolygonZ?crs=EPSG:4326&field=name:string", "peaks", "memory"
+        )
+        assert layer.isValid()
+        feature = qgis_core_module.QgsFeature(layer.fields())
+        feature.setAttribute(0, "Everest")
+        feature.setGeometry(qgis_core_module.QgsGeometry.fromWkt(wkt))
+        layer.dataProvider().addFeatures([feature])
+        layer.updateExtents()
+        return layer
+
+    def test_qgis_exports_z_polygons_with_three_element_vertices(
+        self, qgis_app
+    ) -> None:
+        """Pins the upstream behaviour the bug depended on.
+
+        If a future QGIS or a `setPrecision` change ever drops Z here, this
+        fails and tells us the guard below is no longer load-bearing - rather
+        than leaving a test that passes for the wrong reason.
+        """
+        layer = self._z_polygon_layer(
+            qgis_core, "POLYGON Z ((0 0 8849,1 0 8849,1 1 8849,0 1 8849,0 0 8849))"
+        )
+
+        collection = export_geojson(layer, FidelityReportBuilder())
+
+        assert collection is not None
+        ring = collection["features"][0]["geometry"]["coordinates"][0]
+        assert len(ring[0]) == 3
+
+    def test_a_labelled_z_polygon_exports_instead_of_raising(self, qgis_app) -> None:
+        from nika_onlymap_exporter.core.label_points import (
+            LABEL_PROPERTY,
+            build_label_collection,
+        )
+
+        layer = self._z_polygon_layer(
+            qgis_core, "POLYGON Z ((0 0 8849,2 0 8849,2 2 8849,0 2 8849,0 0 8849))"
+        )
+
+        collection = export_geojson(layer, FidelityReportBuilder())
+        labels = build_label_collection(collection, "name")
+
+        assert labels is not None
+        assert labels["features"][0]["properties"][LABEL_PROPERTY] == "Everest"
+        assert labels["features"][0]["geometry"]["coordinates"] == [1.0, 1.0]
+
+    def test_a_labelled_z_multipolygon_exports_too(self, qgis_app) -> None:
+        from nika_onlymap_exporter.core.label_points import build_label_collection
+
+        layer = self._z_polygon_layer(
+            qgis_core,
+            "MULTIPOLYGON Z (((10 10 1,10.1 10 1,10.1 10.1 1,10 10.1 1,10 10 1)),"
+            "((0 0 1,2 0 1,2 2 1,0 2 1,0 0 1)))",
+        )
+
+        collection = export_geojson(layer, FidelityReportBuilder())
+        labels = build_label_collection(collection, "name")
+
+        assert labels is not None
+        # The larger part, as for a flat multipolygon.
+        assert labels["features"][0]["geometry"]["coordinates"] == [1.0, 1.0]

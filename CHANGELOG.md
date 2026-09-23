@@ -7,6 +7,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Fixed
+- **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
+  whose geometry carries Z — digitised with Z switched on, draped over a DEM,
+  or imported from CityGML, IFC or a `PolygonZ` GeoPackage — exports every
+  vertex as `[x, y, z]`. The label-placement centroid read each vertex as
+  `(x, y)`, so it raised `ValueError: too many values to unpack (expected 2)`
+  and took every other layer down with it. Reported against 0.1.4; present ever
+  since labels were added.
+
+  Height lives in one of two places in QGIS, and only one of them was ever
+  tested. Extrusion driven by an attribute leaves the geometry flat, which is
+  what all three demo projects do and why they never caught this. Height stored
+  in the coordinates is a different route to the same-looking map, and every
+  fixture in this repository was flat.
+
+  The elevation is not a label coordinate, so it is dropped — the same thing
+  the point and line paths already did. The QGIS test tier now builds a real
+  `PolygonZ` layer and pins the fact that QGIS hands us three-element vertices,
+  so the guard cannot quietly stop being load-bearing.
 - **Relief maps drew an "API KEY REQUIRED" watermark instead of a basemap.**
   CARTO began requiring a key on their raster tiles in late August 2026 and are
   retiring the product. The endpoints still answer `200`; what changed is the

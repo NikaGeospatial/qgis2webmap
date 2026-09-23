@@ -45,7 +45,15 @@ def _ring_centroid(ring: Sequence[Sequence[float]]) -> tuple[float, float] | Non
     area2 = 0.0
     cx = 0.0
     cy = 0.0
-    for (x0, y0), (x1, y1) in zip(ring, [*ring[1:], ring[0]]):
+    # Read each vertex by index, never `for (x0, y0) in ...`. A layer whose
+    # wkbType carries Z - digitised with Z on, draped over a DEM, imported from
+    # CityGML - exports `[x, y, z]`, and destructuring two names out of three
+    # raised ValueError and aborted the whole export. The elevation is not a
+    # label coordinate, so it is dropped here the same way every other function
+    # in this module drops it.
+    for start, end in zip(ring, [*ring[1:], ring[0]]):
+        x0, y0 = start[0], start[1]
+        x1, y1 = end[0], end[1]
         cross = x0 * y1 - x1 * y0
         area2 += cross
         cx += (x0 + x1) * cross
@@ -121,10 +129,11 @@ def representative_point(geometry: dict[str, Any] | None) -> tuple[float, float]
             ring = polygon[0]
             if len(ring) < 3:
                 continue
+            # Indexed, not destructured, for the Z reason in `_ring_centroid`.
             area = abs(
                 sum(
-                    x0 * y1 - x1 * y0
-                    for (x0, y0), (x1, y1) in zip(ring, [*ring[1:], ring[0]])
+                    start[0] * end[1] - end[0] * start[1]
+                    for start, end in zip(ring, [*ring[1:], ring[0]])
                 )
             )
             if area > best_area:
