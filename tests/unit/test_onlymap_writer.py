@@ -344,6 +344,40 @@ class TestCreditComponent:
     def test_no_credits_means_no_data_line(self) -> None:
         assert 'class="om-credit-data"' not in self.html()
 
+    def test_relief_credits_the_imagery_provider(self) -> None:
+        """Nobody but the exporter can name the drape's provider: the imagery
+        is picked from the basemap by `RASTER_TEXTURE_TEMPLATES`, so it reaches
+        the runtime as a bare URL with no attribution attached to it."""
+        markup = self.html(
+            settings=ExportSettings(terrain="terrarium", basemap="voyager")
+        )
+        assert 'class="om-credit-data"' in markup
+        assert "NASA" in markup
+        assert "GIBS" in markup
+
+    def test_the_imagery_credit_shows_without_any_layer_credit(self) -> None:
+        """The regression the segment list exists to prevent: the old code
+        returned early on an empty layer-credit list, which would have dropped
+        NASA's credit from every map whose layers carry no metadata - which is
+        most of them."""
+        markup = self.html(
+            settings=ExportSettings(terrain="terrarium", basemap="voyager")
+        )
+        assert "Data:" not in markup.split('class="om-credit-data"')[1][:200]
+        assert "NASA" in markup
+
+    def test_a_flat_map_owes_no_imagery_credit(self) -> None:
+        """The drape is only fetched when relief is on."""
+        markup = self.html(settings=ExportSettings(basemap="voyager"))
+        assert "NASA" not in markup
+
+    def test_relief_over_a_vector_basemap_credits_nobody(self) -> None:
+        """liberty and bright get no drape, so there is no imagery to credit."""
+        markup = self.html(
+            settings=ExportSettings(terrain="terrarium", basemap="liberty")
+        )
+        assert "NASA" not in markup
+
     def test_layer_attribution_reaches_the_artifact(self) -> None:
         """The gap this closes: read from QGIS, stored, and never rendered."""
         layer = make_project().layers[0]

@@ -34,6 +34,7 @@ from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
     collect_data_payloads,
+    texture_credit,
 )
 from ..packaging.asset_embedder import (
     build_bootstrap,
@@ -708,9 +709,24 @@ def _attribution_block(project: ExportProject) -> str:
 
     These strings come from `QgsMapLayer` metadata, which is author-controlled
     text, so they are escaped rather than trusted as markup.
+
+    A relief map also owes its drape's provider a credit, and that one is ours
+    rather than the author's: the imagery is chosen by `RASTER_TEXTURE_TEMPLATES`
+    from the basemap, so nobody but this exporter is in a position to name it.
+    It is appended to the same line rather than given its own, because the chip
+    is already competing with the runtime's licence notice for the corner. Note
+    the emptiness rule now turns on *both* credits - a map with no layer
+    metadata still shows the imagery credit, where before an empty list was
+    enough to skip the whole element.
     """
+    segments: list[str] = []
     credits = collect_attributions(project)
-    if not credits:
+    if credits:
+        joined = "; ".join(_escape_text(credit) for credit in credits)
+        segments.append(f"Data: {joined}")
+    imagery = texture_credit(project.settings.terrain, project.settings.basemap)
+    if imagery is not None:
+        segments.append(_escape_text(imagery))
+    if not segments:
         return ""
-    joined = "; ".join(_escape_text(credit) for credit in credits)
-    return f'      <span class="om-credit-data">Data: {joined}</span>'
+    return f'      <span class="om-credit-data">{" &middot; ".join(segments)}</span>'

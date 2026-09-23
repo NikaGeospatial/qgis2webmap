@@ -7,6 +7,42 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Fixed
+- **Relief maps drew an "API KEY REQUIRED" watermark instead of a basemap.**
+  CARTO began requiring a key on their raster tiles in late August 2026 and are
+  retiring the product. The endpoints still answer `200`; what changed is the
+  picture, which is why nothing that checks status codes or tile sizes noticed.
+  Nothing in this repository changed either — v0.1.4 shipped on 2026-08-26 and
+  the tiles went bad days later — so relief broke on maps that had already been
+  exported and could not be fixed by re-exporting them.
+
+  The Positron, Dark Matter and Voyager drapes now come from NASA's Global
+  Imagery Browse Services: keyless, and a work of the US government, so
+  commercial use carries no restriction. Of every free raster source tested it
+  was the only one that is all three of keyless, licence-clean and actually
+  serving. GIBS caps ASTER at zoom 12, which is exactly `TERRAIN_MAX_ZOOM`, so
+  the camera clamp relief artifacts already carry is what makes it viable.
+
+  A key was considered and rejected. An export is a self-contained file, so the
+  key would ship in plain text in every copy a user hands out and could never be
+  rotated — the same objection that keeps the MapTiler presets out of
+  `TERRAIN_PRESETS`. CARTO's free tier is also explicitly non-commercial, and
+  covers the raster product being retired.
+
+  The cost is visible: ASTER is coloured shaded relief, so a relief map now
+  carries no roads, borders or labels. Every source tested that had them was
+  either licence-restricted (OpenTopoMap and osm.de are non-commercial, EOX
+  needs a paid licence) or keyless-but-unsanctioned — Esri's `World_Topo_Map`
+  looks the best of the lot and is served from a legacy endpoint their terms say
+  requires an account, which is the same shape as the thing that just broke.
+
+  `osm` is unchanged. Its drape is the same provider as its basemap, it was
+  never affected, and moving a working preset would be a fidelity regression.
+- **Relief maps credited nobody for their imagery.** A drape reaches the runtime
+  as a bare URL, so unlike `basemap="osm"` there is nothing for the attribution
+  control to name — the exporter picks the imagery, so only the exporter can
+  credit it. Relief maps now carry NASA's acknowledgement in the credit chip,
+  including maps whose layers carry no metadata of their own, which previously
+  skipped the element entirely.
 - **Hosted rasters rendered as empty legend entries.** The runtime resolves a
   COG's CRS by fetching `https://epsg.io/{code}.json` — for any code, including
   EPSG:3857, which it already has hardcoded — and the page's own CSP blocked it,

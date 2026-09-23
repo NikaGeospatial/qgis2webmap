@@ -173,22 +173,115 @@ TERRAIN_MAX_ZOOM = 12.0
 # without this the mountains render as a plain grey shell. liberty and bright
 # are deliberately absent: openfreemap serves vector styles only, and there is
 # no raster edition to drape.
+#
+# "Raster twin" stopped being true for three of these on 2026-09-22, and the
+# reason is worth recording because it will happen again. CARTO began requiring
+# an API key on their raster tiles in late August 2026 and are retiring the
+# product; the endpoints still answer 200, but the PNG they return is the real
+# map greyed out under an "API KEY REQUIRED" watermark. Nothing in this
+# repository changed - v0.1.4 shipped on 2026-08-26 and the tiles went bad days
+# later - so relief broke on maps that had already been exported.
+#
+# A key is not the way out. An export is a self-contained file, so the key would
+# ship in plain text in every copy a user ever hands out and could never be
+# rotated; that is the same objection that keeps the MapTiler presets out of
+# TERRAIN_PRESETS. CARTO's free tier is also explicitly non-commercial, and the
+# raster product it covers is the one being retired.
+#
+# So the three CARTO drapes move to NASA's Global Imagery Browse Services.
+# Keyless, and a work of the US government, so commercial use is unrestricted -
+# the only free raster source tested that is all three of keyless, licence-clean
+# and actually serving. Its ceiling is zoom 12, which is exactly TERRAIN_MAX_ZOOM
+# above, so the clamp the camera already has is what makes this viable.
+#
+# The cost is honest and visible: ASTER is coloured shaded relief, so a relief
+# map now carries no roads, borders or labels. Everything tested that *did* have
+# them was either licence-restricted (OpenTopoMap and osm.de are non-commercial;
+# EOX needs a paid licence) or keyless-but-unsanctioned - Esri's World_Topo_Map
+# looks the best of the lot and is served from a legacy endpoint their terms say
+# needs an account, which is precisely the shape of the thing that just broke.
+#
+# `osm` deliberately stays on openstreetmap.org. Its drape is the same provider
+# as its basemap, it was never affected by CARTO's change, and moving a working
+# preset onto a different provider's imagery would be a fidelity regression.
 RASTER_TEXTURE_TEMPLATES = {
     "osm": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    "positron": "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-    "dark-matter": "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    "voyager": "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+    # GIBS spells its REST tiles {z}/{y}/{x} - row before column, unlike the XYZ
+    # order every other template here uses. The runtime substitutes by name, so
+    # the order in the path is free; it is written this way because that is the
+    # order GIBS serves, and swapping the two silently returns a tile from the
+    # wrong place rather than a 404.
+    "positron": (
+        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
+        "/ASTER_GDEM_Color_Shaded_Relief/default/default"
+        "/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg"
+    ),
+    "dark-matter": (
+        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
+        "/ASTER_GDEM_Color_Shaded_Relief/default/default"
+        "/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg"
+    ),
+    "voyager": (
+        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
+        "/ASTER_GDEM_Color_Shaded_Relief/default/default"
+        "/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg"
+    ),
 }
 
 # Who serves those textures - for the fidelity note. Positron's raster twin
 # comes from carto.com even though its flat vector style is openfreemap.org,
 # so relief genuinely adds a third party the flat map never contacted.
+#
+# That paragraph still describes the right *shape* of the problem but no longer
+# names the right host: as of 2026-09-22 the three CARTO drapes are served by
+# NASA GIBS (see RASTER_TEXTURE_TEMPLATES). Positron remains the sharpest case -
+# its flat style comes from openfreemap.org and its drape now from
+# earthdata.nasa.gov, so relief adds a third party the flat map never contacted,
+# and it is a different third party again from the one the flat map uses.
+#
+# Registrable domain, not the tile host: `BASEMAP_HOSTS` above is read by a
+# person in the fidelity report, and "earthdata.nasa.gov" is what tells them who
+# they are depending on. The CSP needs the origin instead, and gets it from the
+# `terrain-texture` URL on the page - see `_FETCHED_URL_PATTERNS` in
+# `packaging/publish_manifest.py`, which is why no origin table changes here.
 TEXTURE_HOSTS = {
     "osm": "openstreetmap.org",
-    "positron": "carto.com",
-    "dark-matter": "carto.com",
-    "voyager": "carto.com",
+    "positron": "earthdata.nasa.gov",
+    "dark-matter": "earthdata.nasa.gov",
+    "voyager": "earthdata.nasa.gov",
 }
+
+# The credit a drape's provider asks to be shown, keyed the way the tables above
+# are. Only the GIBS presets have an entry, and the asymmetry is real rather
+# than an omission: OpenStreetMap's credit is rendered by the runtime's own
+# attribution control, because `basemap="osm"` tells it who to name. A drape is
+# just a URL we hand the TerrainLayer, so nothing downstream knows whose imagery
+# it is - if this file does not say it, the export credits nobody.
+#
+# NASA's acknowledgement wording, from their media-usage guidance. GIBS imagery
+# is a work of the US government and so carries no licence condition to satisfy;
+# this is a request, honoured because shipping someone's imagery uncredited in a
+# file that gets handed around is not a thing to do on a technicality.
+TEXTURE_CREDITS = {
+    "positron": ("Imagery courtesy of NASA/GSFC Global Imagery Browse Services (GIBS)"),
+    "dark-matter": (
+        "Imagery courtesy of NASA/GSFC Global Imagery Browse Services (GIBS)"
+    ),
+    "voyager": ("Imagery courtesy of NASA/GSFC Global Imagery Browse Services (GIBS)"),
+}
+
+
+def texture_credit(terrain: str, basemap: str) -> str | None:
+    """The imagery credit this export owes, or `None`.
+
+    Both halves are required, the same way `should_warn_truncation` needs both:
+    the drape is only fetched when relief is on, so a flat map owes nothing
+    however its basemap is set.
+    """
+    if terrain == "none" or terrain not in TERRAIN_PRESETS:
+        return None
+    return TEXTURE_CREDITS.get(basemap)
+
 
 # Looking straight down, an extruded map and a flat one are the same picture. So
 # when anything stands up - the user's own buildings, or a relief surface - the

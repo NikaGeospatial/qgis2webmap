@@ -44,6 +44,7 @@ from nika_onlymap_exporter.core.license_policy import FreeTierPolicy
 from nika_onlymap_exporter.core.manifest_builder import (
     LABEL_ELEMENT_SUFFIX,
     SCALE_DENOMINATOR_AT_ZOOM_0,
+    TERRAIN_MAX_ZOOM,
     WIDGET_POSITIONS,
     build_label_element,
     build_layer_element,
@@ -1705,16 +1706,47 @@ class TestTerrain:
 
     def test_texture_is_derived_from_the_basemap(self) -> None:
         """The runtime replaces the basemap while terrain is on, so the
-        texture is the restoration of a choice the user already made."""
+        texture is the restoration of a choice the user already made.
+
+        That restoration is now approximate for the three presets whose raster
+        twin was CARTO's: those tiles began returning an "API KEY REQUIRED"
+        watermark in late August 2026, so the drape is NASA GIBS shaded relief
+        instead. The choice being honoured is "show me the ground", not the
+        exact cartography - see RASTER_TEXTURE_TEMPLATES for why no key-bearing
+        alternative is acceptable in a file the user hands out.
+        """
         markup = build_manifest(
             make_project(
                 settings=ExportSettings(terrain="terrarium", basemap="voyager")
             )
         )
         assert (
-            'terrain-texture="https://basemaps.cartocdn.com/rastertiles/'
-            'voyager/{z}/{x}/{y}.png"' in markup
+            'terrain-texture="https://gibs.earthdata.nasa.gov/wmts/epsg3857'
+            "/best/ASTER_GDEM_Color_Shaded_Relief/default/default"
+            '/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg"' in markup
         )
+
+    def test_no_drape_is_served_by_cartos_retired_raster_tiles(self) -> None:
+        """The regression that broke relief on already-exported maps.
+
+        CARTO's raster endpoints still answer 200; what changed is the picture,
+        so nothing that checks status codes or tile sizes catches this. Pinning
+        the host is what makes a drift back to them fail here rather than in a
+        recipient's browser.
+        """
+        for basemap in ("positron", "dark-matter", "voyager"):
+            markup = build_manifest(
+                make_project(
+                    settings=ExportSettings(terrain="terrarium", basemap=basemap)
+                )
+            )
+            assert "cartocdn.com" not in markup, basemap
+
+    def test_every_drape_stays_within_the_camera_zoom_clamp(self) -> None:
+        """GIBS serves ASTER to zoom 12 and 404s above it, which is only safe
+        because TERRAIN_MAX_ZOOM caps the camera at exactly that. If the clamp
+        is ever raised, the drape disappears past the new ceiling."""
+        assert TERRAIN_MAX_ZOOM <= 12.0
 
     def test_no_texture_without_terrain(self) -> None:
         markup = build_manifest(
@@ -1761,7 +1793,7 @@ class TestTerrain:
         note = terrain_note("terrarium", basemap="voyager")
         assert note is not None
         assert "s3.amazonaws.com" in note
-        assert "carto.com" in note
+        assert "earthdata.nasa.gov" in note
         assert "unpkg.com" in note
 
     def test_no_camera_zoom_cap_is_emitted(self) -> None:
