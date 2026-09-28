@@ -348,11 +348,14 @@ def build_icon_atlas(
         for spec in layer_symbols(renderer)
     ]
 
-    report.preserved(
+    # Rasterised rather than kept: they look exactly as in QGIS, but they are
+    # pictures now, and the Fidelity tab should say what kind of thing
+    # arrived as well as whether it looks right.
+    report.raster_fallback(
         subject,
         f"{len(order)} marker{'' if len(order) == 1 else 's'} drawn by QGIS into "
-        "the map, so SVG files, parametrised fills, marker shapes and stacked "
-        "symbol layers appear as they do in QGIS.",
+        "the map as images, so SVG files, parametrised fills, marker shapes and "
+        "stacked symbol layers appear as they do in QGIS.",
         layer_id,
     )
 

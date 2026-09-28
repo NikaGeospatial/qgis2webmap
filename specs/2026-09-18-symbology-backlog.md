@@ -287,8 +287,9 @@ Correcting things already read but never emitted, or claims that went stale.
       *Reporting* is instant; *fixing* is not, and reporting is the honest first
       move.
 - [ ] **`docs/supported-features.md`** — two rows are now false.
-- [ ] **Retire or wire up `RASTER_FALLBACK`** — the docs advertise a verdict no
-      code emits.
+- [x] **Retire or wire up `RASTER_FALLBACK`** — wired up on
+      `feat/fidelity-tab`: markers QGIS draws into the icon atlas, and raster
+      colours baked into the pixels, now report *Rasterised* instead of *Kept*.
 
 ### Bucket 2 — real time, size or open questions
 

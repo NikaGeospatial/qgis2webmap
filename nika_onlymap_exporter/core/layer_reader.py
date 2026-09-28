@@ -614,7 +614,9 @@ def read_raster(
     # Colour, which is the single biggest thing a raster can lose. Three
     # outcomes, and which one applies is decided by `core.raster_style`:
     if style_qml is not None:
-        report.preserved(
+        # Rasterised: the colours become pixels, which is exactly the trade the
+        # detail spells out.
+        report.raster_fallback(
             f"Colours of '{name}'",
             "The colour ramp, classes and contrast stretch you set in QGIS are "
             "rendered into the exported image, so the map shows exactly the "
