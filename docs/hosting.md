@@ -85,19 +85,19 @@ Two things follow from that. The upload is ~8.3 MB smaller than the folder on
 your disk, and your plan's per-map size allowance is spent entirely on your own
 map and its data.
 
-### The free plan truncates a hosted map
+### Hosted maps are not truncated
 
-This is the one that surprises people, because it does not apply to the file
-you export and open yourself. OnlyMap's free-plan caps — 5 layers, and 25,000
-rows per layer — apply on a hosted `http(s)` page and nowhere else. A project
-past them, published on a free account, is **visibly incomplete to whoever
-opens the link**, and the plugin has to tell you that before it uploads rather
-than let your audience discover it.
+OnlyMap's free-plan caps — 5 layers, and 25,000 rows per layer — apply on a
+hosted `http(s)` page unless the page carries a licence key. NIKA hosting serves
+every map with one, on the free tier too, so a hosted map shows every layer and
+every feature. The limits a free account meets are NIKA's own: the number of
+maps, their size, and how long they stay up.
 
-So it does: if your account is on the free tier and the project is past the
-caps, a second screen names every layer that will be cut before anything is
-uploaded. You can publish anyway — the plugin never decides that for you — but
-not without knowing.
+The one exception is a map built against an OnlyMap runtime older than the one
+the key works with. The plugin knows this before anything is uploaded, and if
+your project would lose layers or features, a second screen names every layer
+that would be cut. You can publish anyway — the plugin never decides that for
+you — but not without knowing.
 
 ## What an exported map does on the network
 
