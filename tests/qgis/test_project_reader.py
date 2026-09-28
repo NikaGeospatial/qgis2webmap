@@ -466,3 +466,38 @@ class TestPerLayerToggles:
         )
 
         assert result.layers[0].labeling.enabled
+
+
+class TestBrokenLayers:
+    """A layer QGIS could not load is named, and only when it is exported."""
+
+    def broken(self, project):
+        layer = qgis_core.QgsVectorLayer("/nonexistent/roads.shp", "roads", "ogr")
+        assert not layer.isValid()
+        project.addMapLayer(layer)
+        return layer
+
+    def test_the_row_names_the_layer_and_belongs_to_it(
+        self, project, make_memory_layer
+    ) -> None:
+        """It used to say "1 layer(s) could not be loaded", leaving the user to
+        find which one."""
+        project.addMapLayer(make_memory_layer("ok", features=[("a", [0.0, 0.0])]))
+        broken = self.broken(project)
+        report = FidelityReportBuilder()
+        read_project(project, report)
+
+        blocked = report.by_status(FidelityStatus.BLOCKED)
+        assert [item.subject for item in blocked] == ["Layer 'roads'"]
+        assert blocked[0].layer_id == broken.id()
+
+    def test_an_unticked_broken_layer_is_not_a_problem(
+        self, project, make_memory_layer
+    ) -> None:
+        ok = make_memory_layer("ok", features=[("a", [0.0, 0.0])])
+        project.addMapLayer(ok)
+        self.broken(project)
+        report = FidelityReportBuilder()
+        read_project(project, report, selected_layer_ids=frozenset({ok.id()}))
+
+        assert not report.has_blockers
