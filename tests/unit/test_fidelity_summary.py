@@ -14,7 +14,10 @@ from __future__ import annotations
 from nika_onlymap_exporter.core.export_ir import FidelityItem, FidelityStatus
 from nika_onlymap_exporter.core.fidelity_summary import (
     WHOLE_MAP,
+    ReportState,
+    Tone,
     needs_attention,
+    strip_message,
     summarise,
 )
 
@@ -223,9 +226,16 @@ class TestStripText:
             "1 layer cannot be exported · 2 things change on export."
         )
 
-    def test_nothing_to_export_is_said_plainly(self) -> None:
-        items = [item("Project layers", BLOCKED, "There is nothing to export.")]
-        assert summarise(items).strip_text().startswith("Nothing can be exported")
+    def test_a_whole_map_blocker_is_counted_as_a_thing(self) -> None:
+        items = [
+            item("Project layers", BLOCKED, "There is nothing to export."),
+            item("Layer 'Roads'", BLOCKED, "gone", "r"),
+        ]
+        assert (
+            summarise(items, NAMES)
+            .strip_text()
+            .startswith("2 things cannot be exported")
+        )
 
 
 def test_only_losses_need_attention() -> None:
@@ -234,3 +244,48 @@ def test_only_losses_need_attention() -> None:
     assert not needs_attention(CHANGED)
     assert not needs_attention(IMAGE)
     assert not needs_attention(KEPT)
+
+
+class TestStripMessage:
+    """Every state the strip can be in has words, a tone and a fitting button."""
+
+    def test_before_any_check_it_says_so_rather_than_nothing(self) -> None:
+        """Silence before a check read as "nothing changes"."""
+        message = strip_message(ReportState.NOT_CHECKED)
+        assert message.text == "Not checked yet."
+        assert message.button == "Check now"
+        assert message.tone is Tone.QUIET
+
+    def test_while_checking_there_is_nothing_to_press(self) -> None:
+        assert strip_message(ReportState.CHECKING).button is None
+
+    def test_an_out_of_date_report_is_never_shown_as_current(self) -> None:
+        summary = summarise([item("Labels on 'Roads'", CHANGED, "x", "r")], NAMES)
+        message = strip_message(ReportState.OUT_OF_DATE, summary)
+        assert "Out of date" in message.text
+        assert "1 thing" not in message.text
+        assert message.button == "Check again"
+        assert message.tone is Tone.WARNING
+
+    def test_a_failed_check_is_an_error_not_a_verdict(self) -> None:
+        message = strip_message(ReportState.FAILED, error="disk on fire")
+        assert message.text == "The check could not finish: disk on fire"
+        assert message.tone is Tone.ERROR
+
+    def test_a_clean_current_report_says_nothing(self) -> None:
+        summary = summarise([item("Symbology of 'Roads'", KEPT, "x", "r")], NAMES)
+        message = strip_message(ReportState.CURRENT, summary)
+        assert message.text == ""
+        assert message.button is None
+
+    def test_tone_and_button_follow_the_worst_verdict(self) -> None:
+        cases = [
+            (CHANGED, Tone.INFO, "See what changes"),
+            (IMAGE, Tone.INFO, "See what changes"),
+            (LOST, Tone.WARNING, "See what changes"),
+            (BLOCKED, Tone.ERROR, "Review problems"),
+        ]
+        for status, tone, button in cases:
+            summary = summarise([item("Layer 'Roads'", status, "x", "r")], NAMES)
+            message = strip_message(ReportState.CURRENT, summary)
+            assert (message.tone, message.button) == (tone, button), status

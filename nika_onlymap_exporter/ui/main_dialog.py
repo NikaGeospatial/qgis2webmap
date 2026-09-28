@@ -11,8 +11,9 @@ Four rules this file holds:
    Appearance options default to `"None"`, so a project title set in Project
    Properties never reaches the map.
 2. **State is visible.** No control whose current value cannot be read off it.
-3. **Never offer an export we know is broken.** Export is disabled with the
-   reason beside it.
+3. **Never offer an export we know is broken without saying so.** Export is
+   disabled with the reason beside it when there is nothing to export, and
+   names what will be missing, and asks, before writing a map without it.
 4. **Never close QGIS.** Every entry point is wrapped; a failure is a message.
 
 Built in Python rather than a `.ui` file on purpose: the tab set is stable and
@@ -70,13 +71,19 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.export_ir import (
+    ExportProject,
     ExtentSource,
-    FidelityStatus,
     OutputMode,
     OverlayCorner,
     PopupFieldMode,
 )
 from ..core.fidelity_report import FidelityReportBuilder
+from ..core.fidelity_summary import (
+    ReportState,
+    ReportSummary,
+    strip_message,
+    summarise,
+)
 from ..core.license_policy import (
     default_policy,
     detect_violations,
@@ -139,6 +146,7 @@ from ..packaging.dependency_scanner import (
 from ..packaging.publish_manifest import PublishManifestError, build_publish_manifest
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
+from .fidelity_panel import FidelityPanel, FidelityStrip, Proceed, ask_before
 from .hosting_transport import make_qgis_transport
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
@@ -179,9 +187,6 @@ POPUP_MODE_LABELS = {
     PopupFieldMode.HIDDEN: "Do not show this field",
 }
 
-# Long enough to say what happened, short enough that every row stays one line.
-DETAIL_SUMMARY_LENGTH = 110
-
 # Keeps the mode combos aligned down the list however long the field names are.
 FIELD_NAME_COLUMN_WIDTH = 160
 
@@ -189,6 +194,10 @@ FIELD_NAME_COLUMN_WIDTH = 160
 # short JSON string, so the cost is noise; the interval only bounds how long a
 # change waits before the debounce even starts.
 LIVE_POLL_MS = 300
+
+# How often the Fidelity tab and strip check whether the report on screen still
+# describes the current settings.
+FIDELITY_POLL_MS = 500
 
 # How long a change must settle before a rebuild. Dragging a colour picker emits
 # a change per pixel, and each rebuild re-runs the production writer.
@@ -455,31 +464,6 @@ def _scrollable(page: QWidget) -> QScrollArea:
     return area
 
 
-def _summarise(detail: str) -> str:
-    """The one-line form of a fidelity note, cut on a word boundary."""
-    if len(detail) <= DETAIL_SUMMARY_LENGTH:
-        return detail
-    cut = detail[:DETAIL_SUMMARY_LENGTH].rsplit(" ", 1)[0]
-    return f"{cut} ..."
-
-
-STATUS_LABELS = {
-    FidelityStatus.PRESERVED: "Kept",
-    FidelityStatus.APPROXIMATED: "Changed",
-    FidelityStatus.RASTER_FALLBACK: "Rasterised",
-    FidelityStatus.UNSUPPORTED: "Not exported",
-    FidelityStatus.BLOCKED: "Blocked",
-}
-
-# Problems first. A report opening on a wall of "Kept" buries what matters.
-STATUS_ORDER = {
-    FidelityStatus.BLOCKED: 0,
-    FidelityStatus.UNSUPPORTED: 1,
-    FidelityStatus.APPROXIMATED: 2,
-    FidelityStatus.RASTER_FALLBACK: 3,
-    FidelityStatus.PRESERVED: 4,
-}
-
 # Installed plugins carry the guides at `help/`, copied there by
 # scripts/package_plugin.py. A git checkout has no such directory, so fall back
 # to the authored source in `docs/` - which means a contributor running from a
@@ -643,6 +627,13 @@ class MainDialog(QDialog):
         # server-side problem, not an expiry, and retrying it forever would
         # bounce the user between browser and plugin with no way to read why.
         self._resigning_in = False
+        # What the Fidelity tab and strip are showing, and against which
+        # settings. See `_fidelity_is_stale`.
+        self._fidelity_dirty = True
+        self._fidelity_signature: str | None = None
+        self._fidelity_state = ReportState.NOT_CHECKED
+        self._fidelity_error = ""
+        self._fidelity_summary: ReportSummary | None = None
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -658,6 +649,16 @@ class MainDialog(QDialog):
         layout.addWidget(self._build_fidelity_strip())
         layout.addWidget(self._build_progress_row())
         layout.addLayout(self._build_button_row())
+
+        # Notices a report going out of date whatever changed it. Polled, like
+        # the live preview, because a signal per setting is what let Include,
+        # Popup, Label and the map name change the export without marking the
+        # report stale. Comparing one short JSON string twice a second is noise.
+        self._fidelity_timer = QTimer(self)
+        self._fidelity_timer.setInterval(FIDELITY_POLL_MS)
+        self._fidelity_timer.timeout.connect(self._refresh_fidelity_freshness)
+        self._fidelity_timer.start()
+        self._refresh_fidelity_freshness()
 
         # The list tracks QGIS live; there is no refresh button because there is
         # nothing to refresh.
@@ -1758,57 +1759,65 @@ class MainDialog(QDialog):
     # ---- Fidelity tab ---------------------------------------------------
 
     def _build_fidelity_tab(self) -> QWidget:
-        page = QWidget(self)
-        layout = QVBoxLayout(page)
-        layout.addWidget(
-            QLabel(
-                "What survives the export, and what does not - checked before "
-                "you export, so nothing is left to discover later.",
-                page,
-            )
-        )
-        self.fidelity_tree = QTreeWidget(page)
-        self.fidelity_tree.setColumnCount(3)
-        self.fidelity_tree.setHeaderLabels(["Item", "Result", "Detail"])
-        # The item names identify *which* layer a note is about, so eliding them
-        # to "Data of 'al..." makes the report unreadable on a project with
-        # several similarly-named layers. They size to their content; the detail
-        # is what gets shortened, and it expands on click.
-        header = self.fidelity_tree.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.fidelity_tree.setWordWrap(True)
-        layout.addWidget(self.fidelity_tree)
-        return page
+        # The page itself lives in `fidelity_panel`. The dialog owns reading the
+        # project and where a jump lands, so those are wired here.
+        self.fidelity_panel = FidelityPanel(self)
+        self.fidelity_panel.check_requested.connect(self._check_fidelity)
+        self.fidelity_panel.show_layer_requested.connect(self._show_layer_in_list)
+        self.fidelity_panel.show_tab_requested.connect(self._show_tab)
+        return self.fidelity_panel
 
-    def _show_fidelity(self, report: FidelityReportBuilder) -> None:
-        self.fidelity_tree.clear()
+    @property
+    def _fidelity_is_stale(self) -> bool:
+        """Whether the report on screen no longer describes the project.
+
+        Derived from the settings as well as flagged: a flag set by hand in each
+        handler is how ticking Include, Popup or Label, or renaming the map,
+        left an old report looking current. The flag stays for what the
+        settings cannot see - layers added, removed or renamed in QGIS.
+        """
+        return (
+            self._fidelity_dirty
+            or self._fidelity_signature is None
+            or self._fidelity_signature != self.state.data_snapshot()
+        )
+
+    @_fidelity_is_stale.setter
+    def _fidelity_is_stale(self, stale: bool) -> None:
+        self._fidelity_dirty = stale
+        self._refresh_fidelity_freshness()
+
+    def _show_fidelity(
+        self, report: FidelityReportBuilder, signature: str | None = None
+    ) -> None:
+        """Show a report. `signature` is the data snapshot it was read against;
+        `None` means the settings as they are now."""
+        self._fidelity_signature = (
+            signature if signature is not None else self.state.data_snapshot()
+        )
+        self._fidelity_state = ReportState.CURRENT
         self._fidelity_is_stale = False
         self._update_fidelity_strip(report)
-        for entry in sorted(report.items, key=lambda i: STATUS_ORDER[i.status]):
-            item = QTreeWidgetItem(self.fidelity_tree)
-            item.setText(0, entry.subject)
-            item.setText(1, STATUS_LABELS[entry.status])
-            item.setText(2, _summarise(entry.detail))
-            item.setToolTip(2, entry.detail)
-
-            # The full text goes on a child row rather than wrapping in place:
-            # a dozen wrapped paragraphs is a wall, and the point of this tab is
-            # that a user can scan it and then read the one that matters.
-            if len(entry.detail) > DETAIL_SUMMARY_LENGTH:
-                detail = QTreeWidgetItem(item)
-                detail.setFirstColumnSpanned(True)
-                detail.setText(0, entry.detail)
-                detail.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        if self._fidelity_summary is not None:
+            self.fidelity_panel.show_summary(self._fidelity_summary)
+        self._refresh_fidelity_freshness()
 
     def _show_fidelity_error(self, message: str) -> None:
         """Leave the tab saying why it is empty, never just empty."""
-        self.fidelity_tree.clear()
-        item = QTreeWidgetItem(self.fidelity_tree)
-        item.setText(0, "Report unavailable")
-        item.setText(1, STATUS_LABELS[FidelityStatus.BLOCKED])
-        item.setText(2, f"The project could not be read: {message}")
+        self._fidelity_state = ReportState.FAILED
+        self._fidelity_error = message
+        self._fidelity_summary = None
+        self.fidelity_panel.show_error(message)
+        self._show_fidelity_strip()
+
+    def _fidelity_summary_of(self, report: FidelityReportBuilder) -> ReportSummary:
+        """Group a report under the names and order the Layers panel shows."""
+        tree_layers = self.project.layerTreeRoot().findLayers()
+        return summarise(
+            getattr(report, "items", ()) or (),
+            {tree_layer.layerId(): tree_layer.name() for tree_layer in tree_layers},
+            [tree_layer.layerId() for tree_layer in tree_layers],
+        )
 
     def _on_tab_changed(self, index: int) -> None:
         """Fill the Fidelity tab when the user opens it.
@@ -1829,15 +1838,55 @@ class MainDialog(QDialog):
         """
         if self.tabs.tabText(index) != "Fidelity" or not self._fidelity_is_stale:
             return
+        if self._fidelity_state is ReportState.CHECKING:
+            return
+        self._check_fidelity()
 
+    def _check_fidelity(self) -> None:
+        """Read the project for a fresh report, or show a cached one."""
+
+        def then(_export: ExportProject, report: FidelityReportBuilder) -> None:
+            # A cached read skips `_ensure_export`'s own display, and a report
+            # that was only marked stale by hand is still worth showing.
+            if self._fidelity_is_stale:
+                self._show_fidelity(report, self._cached_signature)
+
+        self._ensure_export(then, "Checking the project...")
+
+    def _begin_fidelity_check(self) -> None:
         # A placeholder rather than an empty table: the whole reason this tab
         # computes on open is that "empty" reads as "nothing to report".
-        self.fidelity_tree.clear()
-        pending = QTreeWidgetItem(self.fidelity_tree)
-        pending.setText(0, "Checking...")
-        pending.setText(2, "Reading the project to see what the export changes.")
+        self._fidelity_state = ReportState.CHECKING
+        self.fidelity_panel.show_checking()
+        self._show_fidelity_strip()
 
-        self._ensure_export(lambda _export, _report: None, "Checking the project...")
+    def _end_fidelity_check_without_report(self) -> None:
+        """A check that was stopped leaves the last report, marked for what it is."""
+        if self._fidelity_state is not ReportState.CHECKING:
+            return
+        if self._fidelity_summary is None:
+            self._fidelity_state = ReportState.NOT_CHECKED
+            self.fidelity_panel.show_not_checked()
+        else:
+            self._fidelity_state = ReportState.OUT_OF_DATE
+        self._refresh_fidelity_freshness()
+
+    def _show_layer_in_list(self, layer_id: str) -> None:
+        """The Fidelity tab's "Show in Layers": that layer's row, selected."""
+        self._show_tab("Layers")
+        for index in range(self.layer_tree.topLevelItemCount()):
+            item = self.layer_tree.topLevelItem(index)
+            if item.data(0, Qt.ItemDataRole.UserRole) == layer_id:
+                self.layer_tree.setCurrentItem(item)
+                self.layer_tree.scrollToItem(item)
+                return
+        self.status_label.setText("That layer is no longer in the project.")
+
+    def _show_tab(self, title: str) -> None:
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == title:
+                self.tabs.setCurrentIndex(index)
+                return
 
     # ---- Help tab -------------------------------------------------------
 
@@ -2096,6 +2145,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
+        self._end_fidelity_check_without_report()
         # A cancelled publish leaves a second copy of the whole map in a temp
         # directory. No-op for every other job.
         self._discard_publish_staging()
@@ -2107,6 +2157,8 @@ class MainDialog(QDialog):
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Warning)
+        if self._fidelity_state is ReportState.CHECKING:
+            self._show_fidelity_error(message)
         self.status_label.setText(
             f"Live preview could not be updated ({message}) - see the QGIS log."
         )
@@ -2117,7 +2169,9 @@ class MainDialog(QDialog):
         self.cancel_button.setEnabled(True)
         self._discard_publish_staging()
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
-        if self._fidelity_is_stale:
+        # Only a failed read is a failed check. A write or an upload failing says
+        # nothing about what the map contains.
+        if self._fidelity_state is ReportState.CHECKING:
             self._show_fidelity_error(message)
         show_failure(self, "Something went wrong", message)
 
@@ -2131,28 +2185,24 @@ class MainDialog(QDialog):
         the decision it should have informed, if at all - so the count lives
         here, always on screen, and opens the detail when clicked.
         """
-        strip = QWidget(self)
-        row = QHBoxLayout(strip)
-        row.setContentsMargins(0, 0, 0, 0)
+        self.fidelity_strip = FidelityStrip(self)
+        # Under their old names too: the dialog tests here and on the 0.2 branch
+        # read these two directly.
+        self.fidelity_summary = self.fidelity_strip.label
+        self.fidelity_link = self.fidelity_strip.button
+        self.fidelity_strip.button_clicked.connect(self._on_fidelity_strip_clicked)
+        return self.fidelity_strip
 
-        self.fidelity_summary = QLabel("", strip)
-        # Derived from the palette rather than a hardcoded grey: this dialog sits
-        # inside whatever Qt theme the user runs, light or dark, and a fixed
-        # colour is unreadable in one of them.
-        self.fidelity_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
-        row.addWidget(self.fidelity_summary, 1)
-
-        self.fidelity_link = QPushButton("What changes?", strip)
-        self.fidelity_link.setFlat(True)
-        self.fidelity_link.clicked.connect(self._show_fidelity_tab)
-        row.addWidget(self.fidelity_link)
-        return strip
+    def _on_fidelity_strip_clicked(self) -> None:
+        # "Check now" and "Check again" check where the user is; everything
+        # else the strip offers is reading, which happens on the Fidelity tab.
+        if self._fidelity_state in (ReportState.NOT_CHECKED, ReportState.OUT_OF_DATE):
+            self._check_fidelity()
+        else:
+            self._show_fidelity_tab()
 
     def _show_fidelity_tab(self) -> None:
-        for index in range(self.tabs.count()):
-            if self.tabs.tabText(index) == "Fidelity":
-                self.tabs.setCurrentIndex(index)
-                return
+        self._show_tab("Fidelity")
 
     def _update_fidelity_strip(self, report) -> None:
         """Summarise the report in one line, problems first.
@@ -2161,33 +2211,36 @@ class MainDialog(QDialog):
         an always-present count trains people to ignore it, and the absence of a
         warning is itself the message.
         """
-        items = list(getattr(report, "items", ()) or ())
-        notable = [
-            item
-            for item in items
-            if item.status
-            in (
-                FidelityStatus.BLOCKED,
-                FidelityStatus.UNSUPPORTED,
-                FidelityStatus.APPROXIMATED,
-                FidelityStatus.RASTER_FALLBACK,
-            )
-        ]
-        blocked = sum(1 for item in notable if item.status is FidelityStatus.BLOCKED)
+        self._fidelity_summary = self._fidelity_summary_of(report)
+        self.fidelity_strip.show_message(
+            strip_message(ReportState.CURRENT, self._fidelity_summary)
+        )
 
-        if blocked:
-            self.fidelity_summary.setText(
-                f"{blocked} layer{'s' if blocked != 1 else ''} cannot be exported."
+    def _show_fidelity_strip(self) -> None:
+        self.fidelity_strip.show_message(
+            strip_message(
+                self._fidelity_state, self._fidelity_summary, self._fidelity_error
             )
-        elif notable:
-            count = len(notable)
-            self.fidelity_summary.setText(
-                f"{count} thing{'s' if count != 1 else ''} change on export."
-            )
-        else:
-            self.fidelity_summary.setText("")
+        )
 
-        self.fidelity_link.setVisible(bool(items))
+    def _refresh_fidelity_freshness(self) -> None:
+        """Mark the report out of date the moment it stops describing the map.
+
+        An old report shown as if current is worse than none: it answers the
+        question the user is about to act on, wrongly.
+        """
+        if getattr(self, "_shut_down", False) or not hasattr(self, "fidelity_strip"):
+            return
+        if self._fidelity_state in (ReportState.CURRENT, ReportState.OUT_OF_DATE):
+            self._fidelity_state = (
+                ReportState.OUT_OF_DATE
+                if self._fidelity_is_stale
+                else ReportState.CURRENT
+            )
+        self.fidelity_panel.set_out_of_date(
+            self._fidelity_state is ReportState.OUT_OF_DATE
+        )
+        self._show_fidelity_strip()
 
     # ---- Live preview ---------------------------------------------------
 
@@ -2391,11 +2444,16 @@ class MainDialog(QDialog):
             self._cached_export = export
             self._cached_report = report
             self._cached_signature = signature
-            self._show_fidelity(report)
+            self._show_fidelity(report, signature)
             self._update_size_note()
             then(export, report)
 
-        return self._start_job(work, on_success, label, quiet=quiet)
+        # Every read is a check: it is what fills the Fidelity tab, whichever
+        # button asked for it.
+        started = self._start_job(work, on_success, label, quiet=quiet)
+        if started:
+            self._begin_fidelity_check()
+        return started
 
     def _invalidate_export_cache(self) -> None:
         """Forget the last read. Called whenever the data could have changed."""
@@ -2523,12 +2581,15 @@ class MainDialog(QDialog):
 
     def _export_with(self, export, _report) -> None:
         """Everything after the read: the checks, the location, the write."""
-        # A blocked item means a layer could not be read at all. Exporting
-        # anyway writes a map that is quietly missing data while the dialog
-        # reports success, and the Processing algorithm already refuses on
-        # the same input - the two entry points must not disagree.
-        if not export.is_exportable:
+        # An export with no layer in it is refused: there is no map to write.
+        # A Blocked item is different - a layer that could not be read - and
+        # that is the user's call once they have been told which one, not a
+        # refusal. The Processing algorithm still refuses, because a batch run
+        # has nobody to ask.
+        if not export.exportable_layers:
             self._warn_not_exportable(export)
+            return
+        if not self._confirm_despite_problems(export, "Export"):
             return
 
         mode = self.state.output_mode
@@ -2687,6 +2748,18 @@ class MainDialog(QDialog):
 
         return destination
 
+    def _confirm_despite_problems(self, export: ExportProject, action: str) -> bool:
+        """Name what will not work, then let the user go on or go and look.
+
+        Blocked used to disable Export outright, which left someone with one
+        broken layer among ten unable to share the other nine. The warning
+        names each item, so continuing is a decision rather than an accident.
+        """
+        choice = ask_before(self, export.blocking_items, action)
+        if choice is Proceed.REVIEW:
+            self._show_fidelity_tab()
+        return choice is Proceed.CONTINUE
+
     def _warn_not_exportable(self, export) -> None:
         """Explain a refusal in terms of what the user has to fix in QGIS."""
         reasons = [item.detail for item in export.blocking_items] or [
@@ -2732,8 +2805,12 @@ class MainDialog(QDialog):
         self._ensure_export(self._host_with, "Reading the project...")
 
     def _host_with(self, export, _report) -> None:
-        if not export.is_exportable:
+        # The same rule as exporting: nothing to publish is refused, a layer
+        # that could not be read is a warning.
+        if not export.exportable_layers:
             self._warn_not_exportable(export)
+            return
+        if not self._confirm_despite_problems(export, "Publish"):
             return
         if not self._runtime_ready():
             return
@@ -3300,6 +3377,7 @@ class MainDialog(QDialog):
         # Before the watcher, because a rebuild triggered mid-teardown would run
         # against a half-disconnected dialog.
         self._stop_live_preview()
+        self._fidelity_timer.stop()
         with contextlib.suppress(Exception):
             self._discard_publish_staging()
         # The preview files exist only to be served by the dialog's own

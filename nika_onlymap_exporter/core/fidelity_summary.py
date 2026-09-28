@@ -38,6 +38,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import Enum
 
 from .export_ir import FidelityItem, FidelityStatus
 
@@ -218,11 +219,18 @@ class ReportSummary:
             if any(row.status is FidelityStatus.BLOCKED for row in group.rows)
         )
         whole_map = self.whole_map
-        map_blocked = whole_map is not None and any(
-            row.status is FidelityStatus.BLOCKED for row in whole_map.rows
+        map_blocked = (
+            0
+            if whole_map is None
+            else sum(
+                1 for row in whole_map.rows if row.status is FidelityStatus.BLOCKED
+            )
         )
         if map_blocked:
-            parts.append("Nothing can be exported as it is")
+            # Not every whole-map blocker means an empty map, so it is counted
+            # as a thing rather than dramatised as "nothing can be exported".
+            things = _plural(blocked_layers + map_blocked, "thing")
+            parts.append(f"{things} cannot be exported")
         elif blocked_layers:
             parts.append(f"{_plural(blocked_layers, 'layer')} cannot be exported")
         else:
@@ -357,3 +365,67 @@ def _plural(count: int, noun: str) -> str:
 
 def _changes(count: int) -> str:
     return f"{_plural(count, 'thing')} change{'s' if count == 1 else ''}"
+
+
+class ReportState(Enum):
+    """Where the report on screen stands relative to the project."""
+
+    NOT_CHECKED = "not_checked"
+    CHECKING = "checking"
+    CURRENT = "current"
+    OUT_OF_DATE = "out_of_date"
+    FAILED = "failed"
+
+
+class Tone(Enum):
+    """How loudly the strip speaks. The UI maps each to an icon and a role."""
+
+    QUIET = "quiet"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class StripMessage:
+    """The strip's text, tone and button label. `button` None hides it."""
+
+    text: str
+    tone: Tone
+    button: str | None
+
+
+def strip_message(
+    state: ReportState, summary: ReportSummary | None = None, error: str = ""
+) -> StripMessage:
+    """What the always-visible strip says, for every state the report can be in.
+
+    It used to have one state: a count, or nothing. So before the first check
+    it said nothing, which reads as "nothing changes" - the inversion the
+    Fidelity tab computes on open to avoid - and after a settings change it
+    went on showing the old count as if it were current.
+    """
+    if state is ReportState.NOT_CHECKED:
+        return StripMessage("Not checked yet.", Tone.QUIET, "Check now")
+    if state is ReportState.CHECKING:
+        return StripMessage("Checking what the export changes...", Tone.QUIET, None)
+    if state is ReportState.FAILED:
+        return StripMessage(
+            f"The check could not finish: {error}" if error else "The check failed.",
+            Tone.ERROR,
+            "See why",
+        )
+    if state is ReportState.OUT_OF_DATE:
+        return StripMessage(
+            "Out of date - something changed since the last check.",
+            Tone.WARNING,
+            "Check again",
+        )
+
+    if summary is None or not summary.change_count:
+        return StripMessage("", Tone.QUIET, None)
+    if summary.blocked_rows:
+        return StripMessage(summary.strip_text(), Tone.ERROR, "Review problems")
+    if any(group.needs_attention for group in summary.groups):
+        return StripMessage(summary.strip_text(), Tone.WARNING, "See what changes")
+    return StripMessage(summary.strip_text(), Tone.INFO, "See what changes")
