@@ -76,9 +76,8 @@ Vector points, lines and polygons are exported, along with layer order,
 groups and opacity. So are raster layers from a file on disk - a GeoTIFF
 travels as a Cloud-Optimized GeoTIFF in a Folder or Share ZIP export, in the
 colours QGIS draws it; a single HTML file cannot carry one. Data in any CRS is
-reprojected to WGS84 on the way out. Scale-dependent visibility does not
-survive - a layer set to show only between two scales shows at every zoom
-instead, and the Fidelity tab flags it before you export.
+reprojected to WGS84 on the way out. Scale-dependent visibility survives as the
+matching web zoom levels, and the Fidelity tab shows which zooms it became.
 
 Whatever cannot be translated exactly is listed on the plugin's **Fidelity** tab
 *before* the export runs, with a verdict per layer — kept, changed, rasterised,

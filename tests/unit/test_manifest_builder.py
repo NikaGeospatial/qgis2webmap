@@ -33,6 +33,7 @@ from nika_onlymap_exporter.core.export_ir import (
     PopupFieldMode,
     PopupFieldSpec,
     PopupSpec,
+    RasterSpec,
     RendererKind,
     RendererSpec,
     ScaleRange,
@@ -41,7 +42,6 @@ from nika_onlymap_exporter.core.export_ir import (
 )
 from nika_onlymap_exporter.core.license_policy import FreeTierPolicy
 from nika_onlymap_exporter.core.manifest_builder import (
-    SCALE_DENOMINATOR_AT_ZOOM_0,
     TERRAIN_MAX_ZOOM,
     WIDGET_POSITIONS,
     build_label_element,
@@ -50,6 +50,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     build_manifest,
     build_popup_elements,
     build_popup_reset_behaviors,
+    build_raster_layer_element,
     build_widget_elements,
     collect_attributions,
     color_literal,
@@ -61,7 +62,6 @@ from nika_onlymap_exporter.core.manifest_builder import (
     line_color_expression,
     needs_image_legend,
     numeric_expression,
-    scale_to_zoom,
     terrain_note,
 )
 
@@ -78,6 +78,31 @@ GEOJSON = {
         }
     ],
 }
+
+
+def make_raster_layer(**overrides) -> ExportLayer:
+    """A raster layer as `layer_reader` builds one: no geojson, a `RasterSpec`.
+
+    Deliberately not `make_layer(raster=...)` - a raster is not a vector layer
+    with extra fields, and a helper that started from the vector defaults would
+    hide exactly the mistake these tests exist to catch.
+    """
+    defaults = dict(
+        layer_id="dem",
+        name="Elevation",
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.FILE,
+        popup=PopupSpec(enabled=False),
+        raster=RasterSpec(
+            path="/data/dem.tif",
+            band_count=1,
+            source_crs="EPSG:32631",
+            pixel_width=2048,
+            pixel_height=1024,
+        ),
+    )
+    defaults.update(overrides)
+    return ExportLayer(**defaults)
 
 
 def make_layer(**overrides) -> ExportLayer:
@@ -116,21 +141,6 @@ class TestColorLiteral:
 
     def test_missing_colour_falls_back(self) -> None:
         assert color_literal(None) == "'#888888'"
-
-
-class TestScaleToZoom:
-    def test_zoom_zero_is_the_reference_denominator(self) -> None:
-        assert scale_to_zoom(SCALE_DENOMINATOR_AT_ZOOM_0) == pytest.approx(0.0)
-
-    def test_halving_the_denominator_adds_one_zoom_level(self) -> None:
-        assert scale_to_zoom(SCALE_DENOMINATOR_AT_ZOOM_0 / 2) == pytest.approx(1.0)
-
-    def test_conversion_is_inverted_not_proportional(self) -> None:
-        """A smaller denominator means more zoomed in, so a higher zoom."""
-        assert scale_to_zoom(1_000) > scale_to_zoom(1_000_000)
-
-    def test_degenerate_input_is_clamped(self) -> None:
-        assert scale_to_zoom(0) == 0.0
 
 
 class TestFillExpression:
@@ -438,23 +448,27 @@ class TestLayerElement:
         assert '<script type="application/json">' in markup
         assert "data=" not in markup
 
-    def test_scale_visibility_is_not_emitted_at_all(self) -> None:
-        """Regression: it used to emit an attribute the runtime rejects.
+    def test_scale_visibility_is_the_any_layer_zoom_range(self) -> None:
+        """Regression: it once emitted an attribute the runtime rejects.
 
         `visible-min-zoom`/`visible-max-zoom` are declared in the runtime's
         schema and map to deck.gl's TileLayer props. On the GeoJsonLayer we
         emit, the runtime logged `Unknown attribute ... likely a typo` in the
         recipient's console and showed the layer at every zoom regardless.
-        The values were also paired straight across, so `scale_to_zoom`'s
-        inversion produced min > max.
-
-        Emitting nothing beats emitting a warning that does nothing; the loss
-        is stated in the Fidelity tab instead.
+        `visible-zoom-range` is the runtime's own any-layer attribute.
         """
-        layer = make_layer(scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000))
+        layer = make_layer(
+            scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+            visible_zoom_range=(8.21, 18.17),
+        )
         markup = build_layer_element(layer)
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
         assert "visible-min-zoom" not in markup
         assert "visible-max-zoom" not in markup
+
+    def test_a_layer_without_a_range_carries_none(self) -> None:
+        markup = build_layer_element(make_layer())
+        assert "zoom" not in markup
 
     def test_popup_layer_is_pickable_and_highlights(self) -> None:
         layer = make_layer(
@@ -768,6 +782,145 @@ class TestWidgetPositions:
         assert "title=" in legend.group(0)
 
 
+class TestRasterLayer:
+    """`<om-layer type="COGLayer">` for a georeferenced raster.
+
+    Before this the reader returned `None` for every raster and the layer left
+    the map entirely, with a fidelity note as its only trace. The tests here
+    pin the two things that made that worth changing: the element exists, and
+    it carries nothing the runtime does not understand.
+    """
+
+    def test_a_raster_becomes_a_cog_layer(self) -> None:
+        markup = build_layer_element(make_raster_layer())
+        assert 'type="COGLayer"' in markup
+        assert 'src="/data/dem.tif"' in markup
+        assert 'label="Elevation"' in markup
+
+    def test_it_carries_no_vector_styling(self) -> None:
+        """A raster has no symbology, so none of the accessors may appear -
+        `get-fill-color` on a COGLayer is an attribute the runtime rejects."""
+        markup = build_layer_element(make_raster_layer())
+        for attribute in (
+            "get-fill-color",
+            "get-line-color",
+            "get-line-width",
+            "point-type",
+            "pickable",
+            "color=",
+        ):
+            assert attribute not in markup
+
+    def test_it_has_no_data_payload(self) -> None:
+        """The pixels are referenced, not inlined. A `<script>` child would be
+        an empty JSON body the runtime would try to parse as features."""
+        markup = build_layer_element(make_raster_layer())
+        assert "<script" not in markup
+        assert markup.rstrip().endswith("></om-layer>")
+
+    def test_packaged_src_wins_over_the_source_path(self) -> None:
+        """Packaging rewrites `src` to whatever the artifact actually carries;
+        the on-disk path stays in the model for the converter to read."""
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/data/dem.tif", src="./dem_cog.tif")
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'src="./dem_cog.tif"' in markup
+        assert "/data/dem.tif" not in markup
+
+    def test_the_contrast_stretch_is_emitted_as_a_pair(self) -> None:
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/d.tif", rescale_min=0.0, rescale_max=3200.0)
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'min="0"' in markup
+        assert 'max="3200"' in markup
+
+    def test_half_a_stretch_is_emitted_as_none(self) -> None:
+        """rescaleMin and rescaleMax are a pair: one alone leaves the other at
+        a default unrelated to this raster and restretches the image."""
+        layer = make_raster_layer(
+            raster=RasterSpec(path="/d.tif", rescale_min=0.0, rescale_max=None)
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'min="' not in markup
+        assert 'max="' not in markup
+
+    def test_nodata_is_emitted_when_the_source_masks_a_value(self) -> None:
+        layer = make_raster_layer(raster=RasterSpec(path="/d.tif", nodata=-9999.0))
+        assert 'nodata="-9999"' in build_raster_layer_element(layer, layer.raster)
+
+    def test_opacity_and_visibility_match_the_vector_path(self) -> None:
+        layer = make_raster_layer(opacity=0.25, visible=False)
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'opacity="0.25"' in markup
+        assert 'visible="false"' in markup
+
+    def test_an_opaque_visible_raster_emits_neither(self) -> None:
+        layer = make_raster_layer()
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert "opacity=" not in markup
+        assert "visible=" not in markup
+
+    def test_scale_visibility_is_emitted_as_on_vectors(self) -> None:
+        """Parity with vectors: the zoom range is valid on any layer type."""
+        layer = make_raster_layer(
+            scale_range=ScaleRange(min_scale=1e6, max_scale=1e3),
+            visible_zoom_range=(8.21, 18.17),
+        )
+        markup = build_raster_layer_element(layer, layer.raster)
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
+
+    def test_a_raster_reaches_the_manifest_in_draw_order(self) -> None:
+        """Document order is draw order, so a raster under a vector layer in
+        QGIS has to come out first - the classic upside-down-map bug."""
+        markup = build_manifest(
+            make_project([make_raster_layer(), make_layer(layer_id="roads")])
+        )
+        assert markup.index('id="dem"') < markup.index('id="roads"')
+
+    def test_a_raster_only_project_is_exportable(self) -> None:
+        """`exportable_layers` used to mean "has geojson", which dropped every
+        raster before the manifest ever saw it."""
+        project = make_project([make_raster_layer()])
+        assert project.is_exportable
+        assert 'type="COGLayer"' in build_manifest(project)
+
+    def test_a_raster_produces_no_label_or_popup_element(self) -> None:
+        markup = build_manifest(make_project([make_raster_layer()]))
+        assert "TextLayer" not in markup
+        assert "om-overlay" not in markup
+
+
+class TestRasterSpec:
+    """The model's own invariants, independent of any markup."""
+
+    def test_a_vector_layer_is_not_a_raster(self) -> None:
+        assert make_layer().is_raster is False
+        assert make_raster_layer().is_raster is True
+
+    def test_the_reference_falls_back_to_the_source_path(self) -> None:
+        """A manifest built before packaging resolves `src` points somewhere
+        visibly wrong rather than nowhere at all."""
+        assert RasterSpec(path="/d.tif").reference == "/d.tif"
+        assert RasterSpec(path="/d.tif", src="./x.tif").reference == "./x.tif"
+
+    def test_cog_detection_starts_unanswered(self) -> None:
+        """`None`, not `False`: the reader has no GDAL and must not claim to
+        know. `packaging/raster_cog.is_cog` fills it in."""
+        assert RasterSpec(path="/d.tif").is_cog is None
+
+    def test_the_snapshot_is_json_ready_and_ordered(self) -> None:
+        snapshot = make_raster_layer().snapshot()
+        assert snapshot["geometryKind"] == "raster"
+        assert snapshot["raster"]["path"] == "/data/dem.tif"
+        assert snapshot["raster"]["isCog"] is None
+        assert json.dumps(snapshot)
+
+    def test_a_vector_snapshot_carries_a_null_raster(self) -> None:
+        assert make_layer().snapshot()["raster"] is None
+
+
 class TestAttributeContract:
     """Every attribute we emit must exist in the runtime's own schema.
 
@@ -782,6 +935,7 @@ class TestAttributeContract:
                 make_layer(
                     layer_id="styled",
                     scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+                    visible_zoom_range=(8.21, 18.17),
                     opacity=0.5,
                     visible=False,
                     renderer=RendererSpec(
@@ -1193,21 +1347,18 @@ class TestLabelLayer:
         )
         assert build_label_element(layer) == ""
 
-    def test_labels_carry_no_scale_visibility_either(self) -> None:
-        """Labels followed their layer's zoom range; there is none to follow.
-
-        Kept as a pair with the layer's own test so the two cannot drift: a
-        label bounded by a zoom range its geometry does not share would be the
-        rendering bug the old behaviour was written to prevent.
-        """
+    def test_labels_follow_their_layers_zoom_range(self) -> None:
+        """Kept as a pair with the layer's own test so the two cannot drift: a
+        label outliving the geometry it names is the rendering bug this
+        prevents."""
         layer = make_layer(
             geojson=self.LABELLED,
             labeling=LabelingSpec(enabled=True, field_name="name"),
             scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+            visible_zoom_range=(8.21, 18.17),
         )
         markup = build_label_element(layer)
-        assert "visible-min-zoom" not in markup
-        assert "visible-max-zoom" not in markup
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
 
     def test_label_layers_are_emitted_after_every_geometry_layer(self) -> None:
         """Otherwise the layer stacked above paints over the labels below it."""
