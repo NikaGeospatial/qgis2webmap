@@ -83,10 +83,10 @@ Be aware that the data itself is in the file, in full. If a layer contains
 information that should not be shared, do not include that layer in the export.
 The Fidelity tab lists exactly which layers were included.
 
-## The one thing the plugin downloads
+## The one thing exporting downloads
 
-The plugin itself makes exactly one network request in its entire life: the
-first time you build a map, it downloads the OnlyMap runtime from npm — about
+Exporting makes exactly one network request in its entire life: the first time
+you build a map, the plugin downloads the OnlyMap runtime from npm — about
 4.8 MB, once per computer, after showing you the licence and asking. See
 [installation](installation.md).
 
@@ -96,14 +96,32 @@ your project, your layers or your machine. npm can see that some computer at
 your IP address downloaded a public file, which is what any software download
 looks like.
 
-After that, the plugin never contacts anything again. Exporting is entirely
-local — your data is read from disk and written into the file, and no part of
-it leaves your computer.
+After that, exporting never contacts anything again. It works fully offline —
+your data is read from disk and written into the file, and no part of it leaves
+your computer.
 
 ## If you publish or host a map
 
-Publishing to NIKA hosting, and asking an AI assistant to modify a map, are
-separate actions that you start yourself. Nothing is uploaded automatically.
+Hosting is the exception, and necessarily so: putting a map on NIKA only works
+by talking to NIKA's servers. Publishing to NIKA hosting, and asking an AI
+assistant to modify a map, are separate actions that you start yourself. Nothing
+is uploaded automatically, and a project you never press **Host** on never
+causes a request to NIKA.
+
+What the hosting features send, all of it to NIKA's API:
+
+- **Signing in.** Your browser opens NIKA's sign-in page; the plugin receives a
+  sign-in token, which is stored on this computer and never in the project.
+- **Publishing.** First a description of the map — its title, file names, sizes
+  and checksums, and the runtime version — and then, once you have confirmed,
+  the map's files and a thumbnail.
+- **Checking the published map.** While the dialog is open on a project that
+  has been published, the plugin asks NIKA about that one map — when the dialog
+  opens, when you come back to it, after a publish, and about once a minute — so
+  the Host button can say whether the map can still be updated, or has been
+  taken down. Each check sends the map's id and your sign-in token, and nothing
+  about the project's contents. It is skipped when you are not signed in, and
+  fails silently when you are offline.
 
 ## This website
 

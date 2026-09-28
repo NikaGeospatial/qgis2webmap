@@ -81,8 +81,10 @@ you send a map to open it with no internet connection and nothing installed.
 It is a separate NIKA product with its own licence, so the plugin shows you that
 licence and asks before it fetches anything, rather than downloading quietly.
 
-After that one download, **everything works offline**, on every project, for
-good. Exporting itself never touches the network.
+After that one download, **exporting works fully offline**, on every project,
+for good. Exporting itself never touches the network. Hosting a map on NIKA is
+the one feature that has to talk to NIKA's servers — see
+[privacy](privacy.md#if-you-publish-or-host-a-map) for what it sends.
 
 > **Start with the dialog, not with Processing.** The *Export to OnlyMap web map*
 > Processing algorithm cannot show you a licence — there is nobody to show it to

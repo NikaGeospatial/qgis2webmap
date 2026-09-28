@@ -116,9 +116,9 @@ someone open your map with nothing installed. It is a separate commercial produc
 with its own licence, which is why it is fetched rather than bundled into this
 GPL plugin, and why you are shown the licence first.
 
-About 4.8 MB. After that, everything works offline, and exporting itself never
-touches the network. See [privacy](privacy.md) for what that request does and
-does not send.
+About 4.8 MB. After that, exporting works fully offline and never touches the
+network; only the hosting features talk to NIKA's servers. See
+[privacy](privacy.md) for what that request does and does not send.
 
 ### The download fails
 
@@ -265,6 +265,23 @@ through the `ONLYMAP_LICENSE_KEY` environment variable or the Processing
 algorithm's licence parameter. Lifted limits are a technical convenience and not
 a licence grant — commercial use needs a key either way. See
 [size limits on the free plan](supported-features.md#size-limits-on-the-free-plan).
+
+### The button says "Host as new map"
+
+The map this project was published as can no longer be updated: it was taken
+down in the NIKA dashboard, it no longer exists, or it belongs to a different
+NIKA organisation from the one you are signed in to. Pressing the button
+publishes the project as a new map at a new address; the old address is left as
+it is. To bring the old map back instead, restore it from the dashboard — the
+button returns to **Republish** within a minute, or as soon as you come back to
+the dialog.
+
+### "The plugin lost contact with NIKA while the server was checking it"
+
+The upload finished and only the final check was interrupted, so the map has
+most likely gone live. Press **Republish** once you are back online: the plugin
+recognises its own upload and carries on from it, rather than warning that
+someone else has published.
 
 ### The map is blank on my own site but fine locally
 

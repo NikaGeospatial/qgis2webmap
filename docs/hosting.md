@@ -24,8 +24,18 @@ NIKA to serve it.
 ## Hosting with NIKA
 
 Press **Host** in the export dialog. The map is uploaded to NIKA and you get a
-public link, and pressing Host again on the same project republishes to the
-same address rather than scattering a new link with every edit.
+public link, and the button then says **Republish**: pressing it again on the
+same project republishes to the same address rather than scattering a new link
+with every edit.
+
+The button follows the map on NIKA's side, not just what the project remembers.
+While the dialog is open it checks the published map in the background (see
+[privacy](privacy.md#if-you-publish-or-host-a-map) for what that sends), and if
+the map has been taken down in the dashboard, no longer exists, or belongs to a
+different NIKA organisation from the one you are signed in to, the button says
+**Host as new map**: pressing it publishes the project as a new map with a new
+address and leaves the old one as it is. A paused map can still be republished;
+it stays paused until it is resumed in the dashboard.
 
 It is a separate, explicit step and never a side effect of exporting. Nothing
 about pressing **Export** uploads anything, and nothing about pressing **Host**
@@ -49,7 +59,8 @@ three points below are the ones worth understanding before the first publish
 rather than re-reading on every one, so they live here instead of in the
 dialog.
 
-**Anyone with the link can open it.** A hosted map has no password, and a link
+**Anyone with the link can open it** — unless you give the map a password in the
+NIKA dashboard, on plans that include password protection. Without one, a link
 that has been shared cannot be unshared.
 
 **The data goes with the map.** Every feature is embedded in the page.

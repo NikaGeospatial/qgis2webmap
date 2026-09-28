@@ -7,6 +7,25 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Fixed
+- **A project could not be published again once its map was taken down.** The
+  Host button read only the map id stored in the project, so a map taken down
+  in the dashboard, deleted, or owned by another organisation still said
+  Republish, and every press was refused. The dialog now checks the map's real
+  state in the background while it is open and offers **Host as new map**,
+  which detaches the stale id and publishes fresh; a refused republish offers
+  the same. A map id from another organisation was also reported as an expired
+  sign-in.
+- **One dropped request while "Verifying..." desynced the release number.** The
+  map went live but the project kept the old release, and the next Host showed a
+  false "published by you... your copy is older" conflict. The status poll now
+  retries transient failures with backoff, and the next publish adopts the
+  project's own upload by its release id; a first publish interrupted the same
+  way no longer creates a second map.
+- **Wording that was not true.** The success message said anyone with the link
+  could open a password-protected map; Cancel said "Nothing was written" after
+  the upload had finished; a lost release race read as a stale-copy conflict at
+  "release 0"; and an unreachable server showed `[Errno 111]` instead of a
+  sentence.
 - **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
   whose geometry carries Z — digitised with Z switched on, draped over a DEM,
   or imported from CityGML, IFC or a `PolygonZ` GeoPackage — exports every

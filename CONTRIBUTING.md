@@ -38,8 +38,11 @@
    in 0.1.3; `tests/browser/test_exported_map.py` pins the permitted endpoint so
    a second one cannot appear unnoticed, and `docs/privacy.md` says what a
    report contains. Everything else about the *exported map* still holds with
-   the cable unplugged. Exporting is also local — the plugin's only other
-   network request in its whole life is the one-time runtime download in rule 2.
+   the cable unplugged. Exporting is also local — its only other network
+   request in its whole life is the one-time runtime download in rule 2. This
+   rule is about EXPORT: the hosting features (sign-in, publish, and the Host
+   button's background status check) necessarily talk to NIKA's API, only when
+   a project is being hosted, and `docs/privacy.md` lists what each sends.
 
 ## Architecture
 

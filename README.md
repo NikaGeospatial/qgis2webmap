@@ -92,7 +92,8 @@ choose `dist/qgis2webmap-<version>.zip`.
 Requires QGIS 3.44 or newer (QGIS 4 supported).
 
 **The first export downloads the map runtime** — about 4.8 MB, once per computer,
-after showing you its licence. Everything works offline after that. The runtime
+after showing you its licence. Exporting works fully offline after that (hosting
+on NIKA is the one feature that talks to NIKA's servers). The runtime
 is the code that draws the map in a browser and is built into every map you
 export; it is a separate commercial product with its own licence, which is why
 it is fetched rather than bundled into this GPL plugin. See
@@ -173,9 +174,9 @@ See [enhance a map with AI](docs/enhance-with-ai.md).
 An exported map is a plain HTML file, so any static host works — GitHub Pages,
 S3, Netlify, a folder on a web server. Or press **Host** in the dialog: the
 plugin signs you in to NIKA through your browser, shows you what is about to
-leave your machine, and publishes the map to a public link. Pressing Host again
-on the same project republishes to the same address. Nothing uploads on its
-own, ever. See [putting a map online](docs/hosting.md).
+leave your machine, and publishes the map to a public link. Pressing it again
+(it then says Republish) on the same project republishes to the same address.
+Nothing uploads on its own, ever. See [putting a map online](docs/hosting.md).
 
 ## Usage
 
