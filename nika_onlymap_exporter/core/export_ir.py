@@ -849,6 +849,11 @@ class ExportLayer:
     visible: bool = True
     opacity: float = 1.0
     scale_range: ScaleRange = field(default_factory=ScaleRange)
+    # `scale_range` translated into the runtime's `[min, max)` zoom range by
+    # `core.zoom_range`. Computed by the reader, which is the only place that
+    # knows the map's latitude and can ask QGIS what its scale readout means for
+    # this project's CRS. `None` means the layer shows at every zoom.
+    visible_zoom_range: tuple[float, float] | None = None
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )
@@ -893,6 +898,9 @@ class ExportLayer:
             "visible": self.visible,
             "opacity": round(self.opacity, 4),
             "scaleRange": self.scale_range.snapshot(),
+            "visibleZoomRange": (
+                list(self.visible_zoom_range) if self.visible_zoom_range else None
+            ),
             "renderer": self.renderer.snapshot(),
             "labeling": self.labeling.snapshot(),
             "elevation": self.elevation.snapshot(),

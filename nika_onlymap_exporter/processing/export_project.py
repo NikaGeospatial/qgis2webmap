@@ -214,10 +214,19 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
                 "directory. Choose a path that is a folder or does not exist yet."
             )
 
+        if not export.exportable_layers:
+            raise QgsProcessingException(
+                "There is nothing to export. Add at least one vector or raster "
+                "layer with data to the project."
+            )
+        # Still a refusal here, unlike the dialog, which warns and lets the user
+        # decide: a batch run has nobody to ask, and writing a map with a layer
+        # quietly missing is the outcome a warning exists to prevent.
         if not export.is_exportable:
             raise QgsProcessingException(
-                "There is nothing to export. Add at least one vector layer with "
-                "features to the project."
+                "Some of the project could not be read, so the map would be "
+                "missing it:\n"
+                + "\n".join(item.detail for item in export.blocking_items)
             )
 
         # `build_artifact`, not a local write-then-export pair: it is what stages

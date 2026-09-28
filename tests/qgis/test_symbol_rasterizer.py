@@ -296,7 +296,8 @@ class TestBuildIconAtlas:
         _, _, report = atlas_for(layer)
         markers = [i for i in report.items if i.subject.startswith("Markers of")]
         assert markers
-        assert markers[0].status is FidelityStatus.PRESERVED
+        # Rasterised, not Kept: the marker looks right but arrives as a picture.
+        assert markers[0].status is FidelityStatus.RASTER_FALLBACK
 
     def test_a_line_layer_with_markers_is_reported_not_rasterised(
         self, qgis_app, make_memory_layer

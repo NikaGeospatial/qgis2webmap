@@ -272,9 +272,10 @@ Both are structural fixes for our silent-drop bug class.
 
 Correcting things already read but never emitted, or claims that went stale.
 
-- [ ] **Scale-dependent visibility** → `visible-zoom-range`, vector and raster.
-      `ScaleRange` is already in the IR and `scale_to_zoom()` is already written.
-      Delete two suppressions and two stale comments.
+- [x] **Scale-dependent visibility** → `visible-zoom-range`, vector and raster.
+      Done on `feat/fidelity-tab` in `core/zoom_range.py`. `scale_to_zoom()` was
+      not reusable: it assumed 256-pixel tiles at 0.28 mm, a zoom level away
+      from deck.gl's 512-pixel world, and ignored latitude and the project CRS.
 - [ ] **Symbol opacity on non-atlas layers** → fold into the RGBA alpha we
       already emit.
 - [ ] **`get-icon-angle`** — rotation is already read and already in the atlas
@@ -286,8 +287,9 @@ Correcting things already read but never emitted, or claims that went stale.
       *Reporting* is instant; *fixing* is not, and reporting is the honest first
       move.
 - [ ] **`docs/supported-features.md`** — two rows are now false.
-- [ ] **Retire or wire up `RASTER_FALLBACK`** — the docs advertise a verdict no
-      code emits.
+- [x] **Retire or wire up `RASTER_FALLBACK`** — wired up on
+      `feat/fidelity-tab`: markers QGIS draws into the icon atlas, and raster
+      colours baked into the pixels, now report *Rasterised* instead of *Kept*.
 
 ### Bucket 2 — real time, size or open questions
 

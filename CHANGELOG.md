@@ -6,6 +6,34 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Scale-dependent visibility reaches the web map.** A layer set to show only
+  between two scales in QGIS now shows only between the matching zoom levels,
+  through the runtime's `visible-zoom-range` - vector, raster and label layers
+  alike. The conversion is measured at the map's centre and in the project's
+  own CRS, and the Fidelity tab states the zooms. On a map tall enough for the
+  web map's Mercator scale to drift from QGIS's, it says by how many zoom
+  levels at the edges. Until now the range was dropped with a note, on a claim
+  that the runtime had nowhere to put it; it has had one since 0.6.22.
+
+### Changed
+- **The Fidelity tab is grouped by layer, problems first.** One line sums it
+  up - `5 layers · 1 needs attention · 10 things change` - then a "Whole map"
+  group and one group per layer, the layers that lose something first. A layer
+  that comes through exactly is one `✓ exact` line, rows repeating the same
+  sentence for several classes are merged into one, and Kept rows fold behind
+  **Show what is kept**. Selecting a row shows the whole of it in a pane beside
+  the list - the old table cut details off at 110 characters - with a button to
+  where the fix is: **Show in Layers**, or **Go to Map tab**.
+- **A Blocked item no longer stops the export.** Export and Host name each
+  Blocked item and ask: go on without it, review it on the Fidelity tab, or
+  cancel. One layer QGIS could not load used to stop the other nine being
+  shared. A map with no layer at all is still refused, and the Processing
+  algorithm still refuses a Blocked item, because a batch run has nobody to ask.
+- **Markers QGIS draws into the map, and raster colours baked into the
+  pixels, are reported as Rasterised** rather than Kept. They look as they do in
+  QGIS, but they arrive as pictures. The verdict was documented and never used.
+
 ### Fixed
 - **A project could not be published again once its map was taken down.** The
   Host button read only the map id stored in the project, so a map taken down
@@ -26,6 +54,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the upload had finished; a lost release race read as a stale-copy conflict at
   "release 0"; and an unreachable server showed `[Errno 111]` instead of a
   sentence.
+- **The fidelity report went on looking current after the settings changed.**
+  Ticking Include, Popup or Label, or renaming the map, never marked it stale.
+  The report and the strip under every tab now say **Out of date** the moment it
+  stops describing the map, with **Check again**. Before the first check the
+  strip says so, where it used to say nothing - which read as "nothing changes".
+- **The strip counted what it did not say.** "2 layers cannot be exported"
+  counted report entries, so two problems with one layer read as two layers. It
+  now counts what it names, and a problem is printed at full strength with
+  QGIS's warning or error icon rather than in the dimmest colour available.
+- **A broken layer is named.** "1 layer(s) could not be loaded" left the user to
+  find which; the row now names the layer and sits in its group. A broken layer
+  you have unticked is no longer reported at all.
+- **A crash while checking was shown as a Blocked verdict** on the map. It is
+  now shown as what it is: the check did not finish, and why.
+- Report copy: "0.1.0" in three messages, "(unknown)" after a graduated layer's
+  class count, a Kept "Map description" row that read as a loss, and "Add a
+  vector layer" now that rasters export.
 - **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
   whose geometry carries Z — digitised with Z switched on, draped over a DEM,
   or imported from CityGML, IFC or a `PolygonZ` GeoPackage — exports every

@@ -235,20 +235,43 @@ The reason this plugin exists. It answers one question — *what does my recipie
 not get?* — **before** you export, not after.
 
 The report builds when you open the tab, reading every feature of every layer, so
-it takes a moment on a large project and shows a progress bar while it does. It
-rebuilds when the project changes.
+it takes a moment on a large project and shows a progress bar while it does.
+Preview, Export and Host read the project too, and refresh the report as they go.
 
-Three columns: the item, its verdict, and the detail. Long details open onto
-their own row when clicked. Problems are sorted to the top, because a report
-opening on a wall of *Kept* buries what matters.
+One line at the top sums it up — `5 layers · 1 needs attention · 10 things
+change`. A layer *needs attention* when something about it is Blocked or Not
+exported. Below that the report is grouped, problems first:
+
+- **Whole map** — settings that belong to no one layer: the basemap, relief,
+  where the map opens, its title.
+- **One group per layer**, the layers that lose something before the layers that
+  are only changed. A layer that comes through exactly is a single `✓ exact`
+  line.
+- Rows saying the same thing about several classes of one layer are merged into
+  one, with the number of classes.
+
+Select a row to read all of it in the pane beside the list. Where the fix is in
+this dialog, the pane has a button that goes there: **Show in Layers** for a
+layer, **Go to Map tab** for the basemap and the other map settings.
+
+**Kept** rows are hidden so the changes stand out. **Show what is kept** brings
+them back — nothing is left out of the report, only folded away.
+
+When something changes after a check — a layer ticked or unticked, the map
+renamed, a layer added in QGIS — the report is marked **Out of date** rather than
+going on looking current. **Check again** refreshes it. Restyling a layer in
+QGIS is the one change it cannot see; check again after one.
 
 | Verdict | Meaning |
 |---|---|
-| **Blocked** | The export must not proceed. Export stays disabled while this is present |
+| **Blocked** | Cannot be carried into the map at all — usually a layer QGIS could not load. Export still works, but asks first and names what will be missing |
 | **Not exported** | Cannot be represented, and was left out. The map is still produced |
 | **Changed** | Exported, but approximated — the detail says how |
-| **Rasterised** | Drawn as an image because the style has no live equivalent |
+| **Rasterised** | Drawn into the map as an image: markers QGIS draws itself, or a raster's colours baked into its pixels. It looks as it does in QGIS, but it is a picture now |
 | **Kept** | Survives exactly as set in QGIS |
+
+If the check itself fails, the tab says so and why. That is not a verdict: it
+says nothing about your map, only that the check did not finish.
 
 Worth reading before you send a map on, and **essential before you host one**:
 this tab is what names every layer over the free plan's
@@ -267,13 +290,19 @@ offline. **Open the full documentation** opens this site in your browser.
 
 Between the tabs and the buttons, always visible, whichever tab you are on:
 
-- `3 things change on export.` — or
-- `1 layer cannot be exported.` — or
+- `Not checked yet.` — before the first check. **Check now** runs one.
+- `1 layer needs attention · 10 things change on export.` — **See what
+  changes** opens the Fidelity tab.
+- `1 layer cannot be exported · 10 things change on export.` — when something is
+  Blocked. **Review problems** opens the Fidelity tab.
+- `Out of date - something changed since the last check.` — **Check again**
+  refreshes it without leaving the tab you are on.
 - nothing at all.
 
-**Nothing at all is the good case.** A permanent "0 things change" trains people
-to stop reading it, so a clean export says nothing and the absence is the
-message. **What changes?** jumps to the Fidelity tab.
+**Nothing at all is the good case**, and it only appears after a check. A
+permanent "0 things change" trains people to stop reading it, so a clean export
+says nothing and the absence is the message. Anything worth reading is printed
+at full strength with QGIS's own warning or error icon beside it.
 
 ---
 
@@ -301,14 +330,19 @@ ever opens a browser.**
 
 ### Export
 
-Writes the real artifact. Greyed out when the export cannot be produced
-correctly, with the reason beside it rather than a silent refusal:
+Writes the real artifact. Greyed out only when there is nothing to export, with
+the reason beside it rather than a silent refusal:
 
 | The reason says | Fix |
 |---|---|
-| *Add a vector layer to the project to export.* | The project has no exportable layer |
+| *Add a vector or raster layer to the project to export.* | The project has no exportable layer |
 | *Tick at least one layer to include.* | Everything is unticked on the Layers tab |
-| A blocked item | Open the Fidelity tab; it names the layer and why |
+
+**A Blocked item does not grey it out.** Pressing Export with one names each
+Blocked item and asks: **Export anyway**, **Review on the Fidelity tab**, or
+Cancel. Host asks the same before anything is uploaded. A layer QGIS could not
+load should not stop you sharing the nine that loaded — but it should never go
+missing without you being told which one.
 
 ### Open exported map
 

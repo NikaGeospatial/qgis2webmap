@@ -440,7 +440,8 @@ class TestRasterColour:
 
         colours = [i for i in report.items if i.subject.startswith("Colours of")]
         assert len(colours) == 1
-        assert colours[0].status is FidelityStatus.PRESERVED
+        # Baked into the pixels, so Rasterised: exact colours, no values.
+        assert colours[0].status is FidelityStatus.RASTER_FALLBACK
 
 
 class TestZGeometryReachesLabelling:

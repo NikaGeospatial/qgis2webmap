@@ -614,7 +614,9 @@ def read_raster(
     # Colour, which is the single biggest thing a raster can lose. Three
     # outcomes, and which one applies is decided by `core.raster_style`:
     if style_qml is not None:
-        report.preserved(
+        # Rasterised: the colours become pixels, which is exactly the trade the
+        # detail spells out.
+        report.raster_fallback(
             f"Colours of '{name}'",
             "The colour ramp, classes and contrast stretch you set in QGIS are "
             "rendered into the exported image, so the map shows exactly the "
@@ -651,16 +653,6 @@ def read_raster(
             "draws the raster from its values in greyscale rather than in the "
             "colours you set. Re-applying the style in the layer's Symbology "
             "tab and exporting again usually fixes it.",
-            layer_id,
-        )
-
-    if layer.hasScaleBasedVisibility():
-        report.suppressed_setting(
-            f"Scale visibility of '{name}'",
-            "This layer is set to show only between two scales. Web maps built "
-            "by this plugin show it at every zoom instead - the map runtime "
-            "this export is pinned to has no per-layer zoom range. Remove the "
-            "scale range if showing it throughout is wrong.",
             layer_id,
         )
 
@@ -815,16 +807,6 @@ def read_layer(
         f"Popup fields of '{name}'",
         layer_id,
     )
-
-    if layer.hasScaleBasedVisibility():
-        report.suppressed_setting(
-            f"Scale visibility of '{name}'",
-            "This layer is set to show only between two scales. Web maps built "
-            "by this plugin show it at every zoom instead - the map library has "
-            "no per-layer zoom range for vector layers. Split the layer or "
-            "remove the scale range if showing it throughout is wrong.",
-            layer_id,
-        )
 
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:

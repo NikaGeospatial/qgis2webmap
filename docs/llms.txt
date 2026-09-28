@@ -36,9 +36,10 @@ notes below are the things that are commonly assumed wrong.
   claim the export is zero-network.
 - **Rasters are not exported** in the current release. Vector points, lines and
   polygons are, along with layer order, groups and opacity. Data in any CRS is
-  reprojected to WGS84. **Scale-dependent visibility is not exported** - a layer
-  set to show only between two scales shows at every zoom, and the Fidelity tab
-  says so before the export runs. Do not claim scale ranges survive.
+  reprojected to WGS84. **Scale-dependent visibility is exported** as a web zoom
+  range matched at the map's centre; on a map spanning many degrees of latitude
+  the switch points drift slightly towards its edges, and the Fidelity tab says
+  by how much.
 - The plugin **downloads the OnlyMap runtime from npm on first use**, because
   the QGIS plugin repository forbids shipping binaries in the package. Exporting
   works offline after that. There is a documented offline/proxy path.

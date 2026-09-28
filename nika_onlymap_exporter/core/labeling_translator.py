@@ -95,7 +95,7 @@ def translate_labeling(
     except (AttributeError, TypeError):
         report.unsupported(
             subject,
-            "This layer uses a labelling mode that 0.1.0 cannot translate "
+            "This layer uses a labelling mode the exporter cannot translate yet "
             "(rule-based labelling). Labels will not appear.",
             layer_id,
         )
@@ -104,8 +104,9 @@ def translate_labeling(
     if settings.isExpression:
         report.unsupported(
             subject,
-            "Labels come from an expression rather than a single field. 0.1.0 "
-            "translates field-based labels only, so labels will not appear.",
+            "Labels come from an expression rather than a single field. The "
+            "exporter translates field-based labels only, so labels will not "
+            "appear.",
             layer_id,
         )
         return LabelingSpec(enabled=False)
