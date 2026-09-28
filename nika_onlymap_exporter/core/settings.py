@@ -60,6 +60,15 @@ KEY_HOSTED_MAP_ID = "hostedMapId"
 # release a project last published is not something the preview can render, so
 # folding it into `snapshot` would rebuild the map to record a publish.
 KEY_HOSTED_RELEASE_N = "hostedReleaseN"
+# The release this project reserved and uploaded but never saw go live - a
+# lost connection while the server was verifying, or Cancel pressed after the
+# upload. Kept so the next publish can ask the server about THAT release id,
+# which only this client was ever given, and adopt it if it did go live:
+# without it the project stayed a release behind its own upload and the next
+# Host showed a "someone else published" conflict about the user's own work.
+# Cleared once the release is settled either way. Same kind of fact as the two
+# above, so it lives beside them and is not a `DialogState` field either.
+KEY_HOSTED_PENDING_RELEASE = "hostedPendingReleaseId"
 KEY_LAYERS = "layers"
 
 # The OnlyMap licence key, in QSettings rather than the project.
@@ -581,3 +590,30 @@ def load_hosted_release_n(project: QgsProject) -> int | None:
 def save_hosted_release_n(project: QgsProject, n: int) -> None:
     """Remember which release a publish produced, so the next one follows it."""
     project.writeEntry(SCOPE, KEY_HOSTED_RELEASE_N, str(int(n)))
+
+
+def load_hosted_pending_release(project: QgsProject) -> str:
+    """The release id this project uploaded but never saw settle, or `""`."""
+    value, ok = project.readEntry(SCOPE, KEY_HOSTED_PENDING_RELEASE, "")
+    return value.strip() if ok and value else ""
+
+
+def save_hosted_pending_release(project: QgsProject, release_id: str) -> None:
+    """Remember an upload whose outcome this project has not yet seen."""
+    project.writeEntry(SCOPE, KEY_HOSTED_PENDING_RELEASE, (release_id or "").strip())
+
+
+def clear_hosted_pending_release(project: QgsProject) -> None:
+    project.removeEntry(SCOPE, KEY_HOSTED_PENDING_RELEASE)
+
+
+def detach_hosted_map(project: QgsProject) -> None:
+    """Forget the hosted map this project pointed at, so the next Host is new.
+
+    For a map that was taken down, no longer exists or belongs to another
+    organisation. Removes the entries rather than writing empty strings, so the
+    project reads exactly as one that was never published. The old map itself is
+    untouched - this only changes what the project remembers.
+    """
+    for key in (KEY_HOSTED_MAP_ID, KEY_HOSTED_RELEASE_N, KEY_HOSTED_PENDING_RELEASE):
+        project.removeEntry(SCOPE, key)

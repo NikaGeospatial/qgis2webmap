@@ -77,6 +77,7 @@ from typing import Literal
 
 from ._build_target import API_BASE as BUILD_API_BASE
 from .manifest import PublishManifest
+from .map_state import PRESENCE_OFFLINE, RemoteMapState, parse_map_state
 
 # The two deployments. Dev is never the default: a user who publishes to it
 # would get a URL that quietly stops working.
@@ -123,6 +124,16 @@ UPLOAD_ATTEMPTS = 3
 POLL_INTERVAL_SECONDS = 2.0
 POLL_TIMEOUT_SECONDS = 300.0
 
+# One dropped request while a release is being verified used to end the wait:
+# the map went live, but the project never recorded the release, and the next
+# publish then showed a false "your copy is older" conflict. A status check that
+# fails for a transient reason - no connection, a timeout, a 5xx - is retried
+# instead, backing off from two seconds and doubling to a ceiling, and only a
+# run of this many consecutive failures gives up. Still bounded overall by
+# `POLL_TIMEOUT_SECONDS`.
+POLL_TRANSIENT_ATTEMPTS = 6
+POLL_BACKOFF_CEILING_SECONDS = 30.0
+
 # The states `GET /maps/releases/{id}` reports. Only two of them are an ending.
 STATE_VERIFYING = "verifying"
 STATE_LIVE = "live"
@@ -161,6 +172,17 @@ REFUSAL_MAP_TOO_LARGE = "map_too_large"
 REFUSAL_STORAGE_LIMIT_REACHED = "storage_limit_reached"
 REFUSAL_RATE_LIMITED = "publish_rate_limited"
 
+# The three answers to a REPUBLISH that mean "the map this project points at is
+# not one you can update any more": taken down (409), gone (404), or owned by
+# another organisation (403). Each is answered the same way - offer to publish
+# the project as a new map - which is why they are grouped.
+REFUSAL_MAP_TAKEN_DOWN = "map_taken_down"
+REFUSAL_MAP_NOT_FOUND = "map_not_found"
+REFUSAL_MAP_FORBIDDEN = "map_forbidden"
+NEW_MAP_REFUSAL_CODES = frozenset(
+    {REFUSAL_MAP_TAKEN_DOWN, REFUSAL_MAP_NOT_FOUND, REFUSAL_MAP_FORBIDDEN}
+)
+
 # The 409 that IS a question for the user. It shares its status with at least
 # one refusal that is not - `map_taken_down` - so the status alone cannot decide
 # which of the two arrived, and reading it as the conflict was a real bug: a
@@ -175,7 +197,11 @@ REFUSAL_RELEASE_CONFLICT = "release_conflict"
 # A whitelist, not a rule about which statuses may carry one: anything else on
 # a 401 or 403 stays an authentication failure, because guessing wrong in that
 # direction hides a genuinely expired token behind a quota message.
-NON_AUTH_REFUSAL_CODES = frozenset({REFUSAL_MAP_LIMIT_REACHED})
+#
+# `map_forbidden` joined 2026-09-28. A project carrying another organisation's
+# map id - copied from a colleague, or opened after switching accounts - was
+# told its sign-in had expired, and signing in again changed nothing.
+NON_AUTH_REFUSAL_CODES = frozenset({REFUSAL_MAP_LIMIT_REACHED, REFUSAL_MAP_FORBIDDEN})
 
 
 class PublishRefusedError(HostingError):
@@ -581,9 +607,25 @@ def urllib_transport(request: HttpRequest) -> HttpResponse:
         # than "HTTP Error 402".
         return HttpResponse(status=int(exc.code), body=exc.read())
     except urllib.error.URLError as exc:
-        raise HostingError(f"Could not reach {request.url}.\n\n{exc.reason}") from exc
+        raise HostingError(unreachable_message(request.url)) from exc
     except OSError as exc:  # a reset or timeout mid-body arrives as this
-        raise HostingError(f"The connection to {request.url} failed.\n\n{exc}") from exc
+        raise HostingError(unreachable_message(request.url)) from exc
+
+
+def unreachable_message(url: str) -> str:
+    """What to say when NIKA could not be reached at all.
+
+    Plain English, naming the host and the two things a person can check. The
+    operating system's own wording - `[Errno 111] Connection refused`, `Name or
+    service not known` - told nobody what to do, and it stays available on the
+    chained exception for anyone reading a log.
+    """
+    host = urllib.parse.urlsplit(url).hostname or url
+    return (
+        f"Could not connect to NIKA's servers ({host}). Check that this computer is "
+        "online and try again. If it reaches the internet through a proxy, "
+        "check Settings -> Options -> Network in QGIS."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -923,6 +965,21 @@ def _raise_conflict(response: HttpResponse) -> None:
     # keys `error.details` does not have, which after the duplicate is removed
     # will be none of them.
     fields: JsonObject = {**data, **error_details(data)}
+    race = _text(error_envelope(data), "code") == REFUSAL_RELEASE_CONFLICT
+    if race and _optional_int(fields, "currentRelease") is None:
+        # The OTHER 409 with this code: two publishes of the map allocated a
+        # release number at the same instant and this one lost the race. It
+        # carries no release facts, and reading it as the stale-copy question
+        # produced "already at release 0 ... your copy is older" over a Publish
+        # anyway button. It is a refusal with a clear next step instead.
+        raise PublishRefusedError(
+            (
+                _text(error_envelope(data), "message")
+                or "Another publish of this map is in progress."
+            )
+            + "\n\nNothing was published.",
+            code=REFUSAL_RELEASE_CONFLICT,
+        )
     current = _optional_int(fields, "currentRelease") or 0
     published_by = _text(fields, "publishedBy")
     who = f" by {published_by}" if published_by else ""
@@ -947,6 +1004,15 @@ def _raise_conflict(response: HttpResponse) -> None:
         was_rollback=was_rollback,
         rolled_back_to=_optional_int(fields, "rolledBackTo"),
     )
+
+
+# Said when the status poll loses contact for good after `complete` succeeded.
+VERIFY_CONTACT_LOST_MESSAGE = (
+    "Your map was uploaded, but the plugin lost contact with NIKA while the "
+    "server was checking it. It has most likely gone live anyway. Press "
+    "Republish once you are back online: the plugin recognises its own upload "
+    "and carries on from it, without a conflict warning."
+)
 
 
 class HostingClient:
@@ -1161,7 +1227,7 @@ class HostingClient:
         user has to kill.
         """
         deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
-        status = self.release_status(release_id)
+        status = self._release_status_patiently(release_id, deadline)
         while True:
             if on_progress is not None:
                 on_progress(status)
@@ -1190,4 +1256,51 @@ class HostingClient:
                     "up; check your maps at nika.eco before republishing."
                 )
             self._sleep(POLL_INTERVAL_SECONDS)
-            status = self.release_status(release_id)
+            status = self._release_status_patiently(release_id, deadline)
+
+    def _release_status_patiently(
+        self, release_id: str, deadline: float
+    ) -> ReleaseStatus:
+        """`release_status`, retrying the failures that fix themselves.
+
+        Transient means a plain `HostingError`: no connection, a timeout, a 5xx,
+        a proxy's unreadable page. An expired sign-in or a structured refusal is
+        an answer, not a hiccup, and is raised at once.
+
+        Giving up says the upload itself finished, because it did: `complete`
+        has already been accepted, so the map is probably live, and the next
+        publish recognises the release as this client's own - see
+        `HostedExporter.pending_release_id`.
+        """
+        delay = POLL_INTERVAL_SECONDS
+        for attempt in range(1, POLL_TRANSIENT_ATTEMPTS + 1):
+            try:
+                return self.release_status(release_id)
+            except (AuthRequiredError, PublishRefusedError, PublishConflictError):
+                raise
+            except HostingError:
+                if attempt == POLL_TRANSIENT_ATTEMPTS or time.monotonic() >= deadline:
+                    break
+                self._sleep(delay)
+                delay = min(delay * 2, POLL_BACKOFF_CEILING_SECONDS)
+        raise HostingError(VERIFY_CONTACT_LOST_MESSAGE)
+
+    def map_state(self, map_id: str) -> RemoteMapState:
+        """What the server says about the map a project is linked to.
+
+        Never raises: every failure is itself a state - `offline` when the
+        server could not be reached, `signed_out` when the token was refused -
+        because the only caller is a background check whose job is to keep a
+        button honest, and a check that could fail loudly would be worse than
+        none. See `hosting.map_state`.
+        """
+        try:
+            url = require_secure_url(
+                f"{self.api_base}/maps/{urllib.parse.quote(map_id, safe='')}"
+            )
+            response = self._transport(
+                HttpRequest(method="GET", url=url, headers=self._headers())
+            )
+        except HostingError:
+            return RemoteMapState(map_id=map_id, presence=PRESENCE_OFFLINE)
+        return parse_map_state(map_id, response.status, response.body)

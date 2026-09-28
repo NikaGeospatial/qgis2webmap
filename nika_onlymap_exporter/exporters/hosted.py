@@ -48,11 +48,16 @@ import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from ..core.export_ir import OutputMode
 from ..hosting.client import (
+    STATE_LIVE,
+    STATE_VERIFYING,
+    AuthRequiredError,
     HostingClient,
     HostingError,
+    PublishRefusedError,
     PublishResult,
     PublishStart,
 )
@@ -78,6 +83,53 @@ PublishProgress = Callable[[int, str], None]
 
 class PublishCancelledError(HostingError):
     """The user stopped at the confirmation. Never reported as a failure."""
+
+
+# How far a publish got, so a cancellation or a failure can say what is true.
+# "Nothing was written" was said after every one of them, including a Cancel
+# pressed once the upload had finished and the map was going live anyway.
+PublishStage = Literal["local", "reserved", "uploading", "completing", "verifying"]
+STAGE_LOCAL: PublishStage = "local"
+STAGE_RESERVED: PublishStage = "reserved"
+STAGE_UPLOADING: PublishStage = "uploading"
+STAGE_COMPLETING: PublishStage = "completing"
+STAGE_VERIFYING: PublishStage = "verifying"
+
+
+def cancelled_publish_text(stage: PublishStage) -> str:
+    """What is true after Cancel, by how far the publish had got.
+
+    "Nothing was written" was said at every stage, including after the upload
+    had finished and the server was already putting the map live.
+    """
+    if stage == STAGE_UPLOADING:
+        return (
+            "Stopped part-way through the upload. Nothing new was published: "
+            "the map is unchanged, and NIKA discards the partial upload."
+        )
+    if stage in (STAGE_COMPLETING, STAGE_VERIFYING):
+        return (
+            "Stopped watching, but the upload had already finished, so the map "
+            "will most likely update anyway. Press Republish later to check - "
+            "the plugin recognises its own upload."
+        )
+    return "Stopped before anything was uploaded. Nothing was published."
+
+
+@dataclass(frozen=True)
+class PendingReconciliation:
+    """What asking about an earlier, unsettled upload established.
+
+    `settled` means the pending release id can be forgotten: it went live, it
+    failed, or the server has never heard of it. `adopted_map_id` and
+    `adopted_release_n` are set only when it went LIVE on the map this project
+    points at (or on a first publish, where the project had no map yet) - the
+    only case where the server's newer release is provably this client's own.
+    """
+
+    settled: bool
+    adopted_map_id: str | None = None
+    adopted_release_n: int | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +180,7 @@ class HostedExporter:
         release_n: int | None = None,
         on_progress: PublishProgress | None = None,
         force: bool = False,
+        pending_release_id: str | None = None,
     ) -> None:
         self.client = client
         self.title = title
@@ -148,6 +201,14 @@ class HostedExporter:
         # Only ever True because the user answered the conflict question with
         # "overwrite". Never a default and never decided here.
         self.force = force
+        # A release this project uploaded earlier and never saw settle. Asked
+        # about before the reservation, so an upload that did go live is
+        # adopted instead of being reported back as a colleague's conflict.
+        self.pending_release_id = pending_release_id
+        self.reconciliation: PendingReconciliation | None = None
+        # Written from the worker thread, read by the dialog after a cancel or a
+        # failure; a plain attribute is enough for that hand-off.
+        self.stage: PublishStage = STAGE_LOCAL
 
     @property
     def mode(self) -> OutputMode:
@@ -261,17 +322,68 @@ class HostedExporter:
         )
 
         self._report(-1, "Reserving the map address...")
+        self.reconciliation = self._reconcile_pending()
         start = self.client.start_publish(
             sent,
             map_id=self.map_id,
             release_n=self.release_n,
             force=self.force,
         )
+        self.stage = STAGE_RESERVED
         return PreparedPublish(
             start=start,
             manifest=sent,
             files=tuple(files),
             title=self.title,
+        )
+
+    def _reconcile_pending(self) -> PendingReconciliation | None:
+        """Settle an earlier upload whose outcome this project never saw.
+
+        The proof that a newer release is this client's own is the release id:
+        a UUID the server handed to this project's reservation and to nobody
+        else. Asking about it by id, and adopting its number only when it is
+        live on the map this project points at, is what distinguishes "my own
+        upload went live while I was offline" from "a colleague published" -
+        which the release NUMBER alone cannot.
+
+        Adopting raises the stored release to at least that number and never
+        lowers it. A colleague who published after it still produces the
+        conflict, correctly, because their release is higher again.
+
+        An expired sign-in is raised, as everywhere else. Any other failure to
+        ask leaves the pending id in place and the publish carries on exactly as
+        it would have without it: the worst case is the old false conflict, not
+        a lost publish.
+        """
+        release_id = self.pending_release_id
+        if not release_id:
+            return None
+        try:
+            status = self.client.release_status(release_id)
+        except AuthRequiredError:
+            raise
+        except PublishRefusedError:
+            # A structured refusal is the server saying it has no such release
+            # for this organisation - nothing is pending any more.
+            return PendingReconciliation(settled=True)
+        except HostingError:
+            return PendingReconciliation(settled=False)
+
+        if status.state == STATE_VERIFYING:
+            return PendingReconciliation(settled=False)
+        if status.state != STATE_LIVE or not status.map_id:
+            return PendingReconciliation(settled=True)
+        if self.map_id and status.map_id != self.map_id:
+            # Live, but on a map this project no longer points at - it was
+            # detached since. Nothing to adopt.
+            return PendingReconciliation(settled=True)
+
+        adopted_n = max(self.release_n or 0, status.release_n)
+        self.map_id = status.map_id
+        self.release_n = adopted_n
+        return PendingReconciliation(
+            settled=True, adopted_map_id=status.map_id, adopted_release_n=adopted_n
         )
 
     def publish(self, prepared: PreparedPublish) -> ExportOutcome:
@@ -296,6 +408,7 @@ class HostedExporter:
             # is honest where one stuck at 0% is not.
             percent = int(100 * index / (total + 1))
             self._report(percent, f"Uploading {name} ({index + 1} of {total})...")
+            self.stage = STAGE_UPLOADING
             self.client.upload(
                 target,
                 path.read_bytes(),
@@ -303,11 +416,17 @@ class HostedExporter:
             )
 
         self._report(int(100 * total / (total + 1)), "Publishing...")
+        self.stage = STAGE_COMPLETING
         self.client.complete(prepared.start.release_id)
+        self.stage = STAGE_VERIFYING
         # The upload finishing and the map being up are different moments: the
         # server verifies every digest it was promised before it serves a byte.
         self._report(99, "Verifying...")
-        published = self.client.await_release(prepared.start.release_id)
+        # Each poll reports, which is also what lets Cancel stop the wait.
+        published = self.client.await_release(
+            prepared.start.release_id,
+            on_progress=lambda _status: self._report(99, "Verifying..."),
+        )
         return self._outcome(prepared, published)
 
     def _outcome(

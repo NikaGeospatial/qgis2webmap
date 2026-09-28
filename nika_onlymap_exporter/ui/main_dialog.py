@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
+from qgis.PyQt.QtCore import QEvent, QSettings, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
@@ -91,15 +91,23 @@ from ..core.settings import (
     PRECISION_FULL,
     DialogState,
     LayerSettings,
+    clear_hosted_pending_release,
+    detach_hosted_map,
     load_hosted_map_id,
+    load_hosted_pending_release,
     load_hosted_release_n,
     load_state,
     resolve_license_key,
     save_hosted_map_id,
+    save_hosted_pending_release,
     save_hosted_release_n,
     save_state,
 )
-from ..exporters.hosted import HostedExporter, PreparedPublish
+from ..exporters.hosted import (
+    HostedExporter,
+    PreparedPublish,
+    cancelled_publish_text,
+)
 from ..hosting.auth import (
     AuthClient,
     DeviceFlow,
@@ -111,6 +119,7 @@ from ..hosting.auth import (
     save_token,
 )
 from ..hosting.client import (
+    NEW_MAP_REFUSAL_CODES,
     AuthRequiredError,
     PublishConflictError,
     PublishRefusedError,
@@ -124,6 +133,16 @@ from ..hosting.consent import (
     truncation_warning_text,
 )
 from ..hosting.manifest import PublishManifest
+from ..hosting.map_state import (
+    ACTION_HOST_AS_NEW,
+    PRESENCE_UNCHECKED,
+    RemoteMapState,
+    host_action,
+    host_button_label,
+    host_button_tooltip,
+    new_map_reason,
+    presence_for_refusal_code,
+)
 from ..hosting.thumbnail import (
     THUMBNAIL_FILENAME,
     capture_canvas,
@@ -139,6 +158,7 @@ from ..packaging.dependency_scanner import (
 from ..packaging.publish_manifest import PublishManifestError, build_publish_manifest
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from .background_job import BackgroundJob, Progress
+from .hosted_map_watch import HostedMapWatch
 from .hosting_transport import make_qgis_transport
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
@@ -643,6 +663,11 @@ class MainDialog(QDialog):
         # server-side problem, not an expiry, and retrying it forever would
         # bounce the user between browser and plugin with no way to read why.
         self._resigning_in = False
+        # What the server last said about this project's hosted map, and the
+        # exporter of the publish in progress - read by a cancel or a failure to
+        # say what is actually true about how far it got.
+        self._remote_state = RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
+        self._active_exporter: HostedExporter | None = None
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -669,6 +694,15 @@ class MainDialog(QDialog):
         # a different `.qgz` is opened, with different contents inside it.
         self.project.readProject.connect(self._update_host_button)
         self.project.cleared.connect(self._update_host_button)
+
+        # The same button, kept honest against the SERVER as well as the
+        # project: a map taken down in the dashboard, deleted, or owned by
+        # another organisation leaves its id in the `.qgz`. Checked in the
+        # background - see `ui.hosted_map_watch` for when, and what it sends.
+        self._map_watch = HostedMapWatch(self, lambda: load_hosted_map_id(self.project))
+        self._map_watch.changed.connect(self._on_remote_state)
+        self.project.readProject.connect(self._on_project_switched)
+        self.project.cleared.connect(self._on_project_switched)
 
         # `finished` covers every way the dialog can close, including the Close
         # button. `closeEvent` alone does not: on Qt5, `QDialog::done()` hides
@@ -1975,7 +2009,36 @@ class MainDialog(QDialog):
         another `.qgz` with it still on screen, and after a first publish the
         button in front of them would otherwise go on saying Host.
         """
-        self.host_button.setText(self._host_button_label())
+        stored = load_hosted_map_id(self.project)
+        action = host_action(stored, self._remote_state)
+        self.host_button.setText(host_button_label(action))
+        self.host_button.setToolTip(host_button_tooltip(stored, self._remote_state))
+
+    def _on_remote_state(self, state: RemoteMapState) -> None:
+        self._remote_state = state
+        self._update_host_button()
+
+    def _on_project_switched(self, *_args) -> None:
+        """A different `.qgz` is not the same map: forget, then ask about it."""
+        self._remote_state = RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
+        self._update_host_button()
+        if self.isVisible():
+            self._map_watch.check(force=True)
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().showEvent(event)
+        self._map_watch.start()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 - Qt API
+        self._map_watch.stop()
+        super().hideEvent(event)
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        # Coming back to the dialog from a browser is exactly when a map may
+        # have been taken down; the watch throttles repeats.
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self._map_watch.check()
 
     # ---- Progress -------------------------------------------------------
 
@@ -2099,7 +2162,14 @@ class MainDialog(QDialog):
         # A cancelled publish leaves a second copy of the whole map in a temp
         # directory. No-op for every other job.
         self._discard_publish_staging()
-        self.status_label.setText("Stopped. Nothing was written.")
+        exporter, self._active_exporter = self._active_exporter, None
+        self.status_label.setText(
+            "Stopped. Nothing was written."
+            if exporter is None
+            else cancelled_publish_text(exporter.stage)
+        )
+        if exporter is not None:
+            self._map_watch.check(force=True)
 
     def _on_job_failed_quietly(self, message: str, details: str) -> None:
         """A background failure the user did not ask about. Log and say so once."""
@@ -2116,6 +2186,9 @@ class MainDialog(QDialog):
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
         self._discard_publish_staging()
+        if self._active_exporter is not None:
+            self._active_exporter = None
+            self._map_watch.check(force=True)
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
         if self._fidelity_is_stale:
             self._show_fidelity_error(message)
@@ -2939,6 +3012,19 @@ class MainDialog(QDialog):
         # nobody looking at the listing could ever detect.
         thumbnail = self._publish_thumbnail(export)
 
+        # A project whose map the server has said is gone - taken down, deleted,
+        # or another organisation's - is published as a NEW map. The press of a
+        # button labelled "Host as new map" is the decision; the confirmation
+        # below says so again before anything leaves the machine.
+        stored_map_id = load_hosted_map_id(self.project)
+        as_new = host_action(stored_map_id, self._remote_state) == ACTION_HOST_AS_NEW
+        new_map_notice = (
+            f"{new_map_reason(self._remote_state)} This publishes the project as a "
+            "NEW map with a new address; the old one is left as it is."
+            if as_new
+            else ""
+        )
+
         exporter = HostedExporter(
             authorized_client(token, transport=make_qgis_transport()),
             title=export.title,
@@ -2947,18 +3033,26 @@ class MainDialog(QDialog):
             # it are what the release is verified against.
             manifest=manifest,
             thumbnail_png=thumbnail,
-            map_id=load_hosted_map_id(self.project) or None,
-            release_n=load_hosted_release_n(self.project),
+            map_id=None if as_new else stored_map_id or None,
+            release_n=None if as_new else load_hosted_release_n(self.project),
+            pending_release_id=None
+            if as_new
+            else load_hosted_pending_release(self.project) or None,
         )
         staging = self._publish_staging
         if staging is None:  # pragma: no cover - defensive
             return
 
         files = _publishable_files(manifest, thumbnail)
-        if not self._confirm_publish(export, files):
+        if not self._confirm_publish(export, files, new_map_notice):
             self._discard_publish_staging()
             self.status_label.setText("Not published. Nothing left this machine.")
             return
+        if as_new:
+            # Forgotten now rather than on success, so an upload that goes live
+            # while this dialog has lost contact is adopted as THIS project's new
+            # map on the next press, instead of being set against the old id.
+            detach_hosted_map(self.project)
 
         violations = detect_violations(export)
         self._reserve(exporter, result, staging, violations, force=False)
@@ -2978,7 +3072,7 @@ class MainDialog(QDialog):
         confirmation and the free-tier warning back on screen a second time for
         a question the user has already answered.
         """
-        based_on = load_hosted_release_n(self.project)
+        self._active_exporter = exporter
         # Set here rather than at construction because the only thing that can
         # ever turn it on is the answer to the question below, and the exporter
         # documents it as exactly that.
@@ -3009,11 +3103,40 @@ class MainDialog(QDialog):
                 return exc
 
         def on_prepared(prepared) -> None:
+            self._apply_reconciliation(exporter)
             if isinstance(prepared, AuthRequiredError):
+                self._active_exporter = None
                 self._discard_publish_staging()
                 self._sign_in_again(prepared)
                 return
+            if isinstance(prepared, PublishRefusedError) and (
+                prepared.code in NEW_MAP_REFUSAL_CODES and exporter.map_id
+            ):
+                # The map this project points at cannot be updated any more,
+                # and the server has just proved it. Offered as a question,
+                # because unlike a press of "Host as new map" nobody has chosen
+                # this yet.
+                presence = presence_for_refusal_code(prepared.code)
+                if presence is not None:
+                    self._on_remote_state(
+                        RemoteMapState(map_id=exporter.map_id, presence=presence)
+                    )
+                if not self._confirm_host_as_new():
+                    self._active_exporter = None
+                    self._discard_publish_staging()
+                    self.status_label.setText(
+                        "Not published. Nothing left this machine."
+                    )
+                    return
+                detach_hosted_map(self.project)
+                self._update_host_button()
+                exporter.map_id = None
+                exporter.release_n = None
+                exporter.pending_release_id = None
+                self._reserve(exporter, result, staging, violations, force=False)
+                return
             if isinstance(prepared, PublishRefusedError):
+                self._active_exporter = None
                 # The server's own sentence, shown as it was written: it names
                 # the limit, the sizes or the time to retry, which is more than
                 # this dialog knows. `PublishRefusedError` carries each of
@@ -3023,7 +3146,10 @@ class MainDialog(QDialog):
                 self.status_label.setText("Not published. Nothing left this machine.")
                 return
             if isinstance(prepared, PublishConflictError):
-                if not self._confirm_republish(prepared, based_on):
+                # What this copy is based on AFTER any adoption of its own
+                # earlier upload, which is the number the question is about.
+                if not self._confirm_republish(prepared, exporter.release_n):
+                    self._active_exporter = None
                     self._discard_publish_staging()
                     self.status_label.setText(
                         "Not published. Nothing left this machine."
@@ -3034,9 +3160,14 @@ class MainDialog(QDialog):
             if should_warn_truncation(
                 prepared.start.renders_under_caps, violations
             ) and not self._confirm_truncation(violations):
+                self._active_exporter = None
                 self._discard_publish_staging()
                 self.status_label.setText("Not published. Nothing left this machine.")
                 return
+            # Recorded before a byte is sent: if the connection drops while the
+            # server is verifying, this id is how the next publish recognises
+            # the release as this project's own - see `HostedExporter`.
+            save_hosted_pending_release(self.project, prepared.start.release_id)
             self._upload(exporter, prepared)
 
         self._start_job(work, on_prepared, "Reserving the map address...")
@@ -3045,22 +3176,30 @@ class MainDialog(QDialog):
         def work(progress: Progress):
             exporter.on_progress = progress.step
             try:
-                return exporter.publish(prepared)
+                outcome = exporter.publish(prepared)
             except AuthRequiredError as exc:
                 clear_token()
                 return exc
+            # One more read, so the sentence the user is given about who can
+            # open the map is true: a map with a password is not open to
+            # "anyone with this link". Never fails the publish - see `map_state`.
+            return outcome, exporter.client.map_state(prepared.start.map_id)
 
-        def on_published(outcome) -> None:
+        def on_published(published) -> None:
+            self._active_exporter = None
             self._discard_publish_staging()
-            if isinstance(outcome, AuthRequiredError):
-                self._sign_in_again(outcome)
+            if isinstance(published, AuthRequiredError):
+                self._sign_in_again(published)
                 return
+            outcome, state = published
             # Remembered with the project, so pressing Host again republishes
             # to the same address instead of scattering a new link per edit.
             save_hosted_map_id(self.project, prepared.start.map_id)
             # And which release that made, so the next publish can say what it
             # is based on and be told when the map has moved on since.
             save_hosted_release_n(self.project, prepared.start.release_n)
+            # Settled: the next publish has nothing of its own to look for.
+            clear_hosted_pending_release(self.project)
             # `save_hosted_map_id`/`save_hosted_release_n` only set the entry
             # in memory. Without a save here, switching to another project and
             # back forgets this one was ever published: Host reverts to
@@ -3071,12 +3210,54 @@ class MainDialog(QDialog):
             # addresses used to belong to this project.
             link_saved = self._persist_hosted_link()
             # The map now has an address, so the button stops saying Host.
-            self._update_host_button()
+            protected = state.is_answer and state.has_password
+            self._on_remote_state(
+                state
+                if state.is_answer
+                else RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
+            )
             url = outcome.public_url or ""
-            self.status_label.setText(outcome.open_instruction)
-            self._show_published(url, link_saved=link_saved)
+            self.status_label.setText(
+                f"Published at {url} - visitors need the map's password to open it."
+                if protected
+                else outcome.open_instruction
+            )
+            self._show_published(url, link_saved=link_saved, protected=protected)
 
         self._start_job(work, on_published, "Uploading the map...")
+
+    def _apply_reconciliation(self, exporter: HostedExporter) -> None:
+        """Record what asking about an earlier, unsettled upload established.
+
+        On the GUI thread, because the project is only ever written from here;
+        the asking happened on the worker, inside `HostedExporter.prepare`.
+        """
+        outcome = exporter.reconciliation
+        if outcome is None:
+            return
+        if outcome.adopted_map_id and outcome.adopted_release_n is not None:
+            save_hosted_map_id(self.project, outcome.adopted_map_id)
+            save_hosted_release_n(self.project, outcome.adopted_release_n)
+            self._update_host_button()
+        if outcome.settled:
+            clear_hosted_pending_release(self.project)
+
+    def _confirm_host_as_new(self) -> bool:
+        """Ask before a refused republish becomes a brand-new map."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Publish as a new map?")
+        box.setText(new_map_reason(self._remote_state))
+        box.setInformativeText(
+            "It can be published again as a NEW map, with a new address. The "
+            "old address is left as it is, and this project will point at the "
+            "new map from now on."
+        )
+        publish = box.addButton("Host as new map", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is publish
 
     def _persist_hosted_link(self) -> bool:
         """Save the project to disk immediately after a successful publish.
@@ -3137,7 +3318,7 @@ class MainDialog(QDialog):
             )
             return b""
 
-    def _confirm_publish(self, export, files) -> bool:
+    def _confirm_publish(self, export, files, new_map_notice: str = "") -> bool:
         """The mandatory confirmation. See `hosting.consent` for the wording."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
@@ -3162,6 +3343,7 @@ class MainDialog(QDialog):
         notices = [
             text
             for text in (
+                new_map_notice,
                 insecure_transport_text(),
                 basemap_warning_text(export.settings.basemap),
             )
@@ -3211,15 +3393,22 @@ class MainDialog(QDialog):
         box.exec()
         return box.clickedButton() is publish
 
-    def _show_published(self, url: str, *, link_saved: bool = True) -> None:
+    def _show_published(
+        self, url: str, *, link_saved: bool = True, protected: bool = False
+    ) -> None:
+        who_can_open = (
+            "It is password-protected: visitors need the map's password to open it."
+            if protected
+            else "Anyone with this link can open it."
+        )
         box = QMessageBox(self)
         if link_saved:
             box.setIcon(QMessageBox.Icon.Information)
             box.setWindowTitle("Published")
             box.setText("Your map is online.")
             box.setInformativeText(
-                f"{url}\n\nAnyone with this link can open it. Pressing Host again "
-                "republishes to the same address."
+                f"{url}\n\n{who_can_open} Pressing Republish "
+                "updates the map at the same address."
             )
         else:
             # The map is live either way - this is a warning about what
@@ -3231,7 +3420,7 @@ class MainDialog(QDialog):
             box.setWindowTitle("Published - but save this project")
             box.setText("Your map is online, but the project has not been saved.")
             box.setInformativeText(
-                f"{url}\n\nAnyone with this link can open it. But this project has "
+                f"{url}\n\n{who_can_open} But this project has "
                 "no file yet, so nothing on disk remembers this address. Save it now: "
                 "closing it unsaved means the next Host starts a SEPARATE map instead "
                 "of updating this one."
@@ -3310,6 +3499,10 @@ class MainDialog(QDialog):
         for signal in (self.project.readProject, self.project.cleared):
             with contextlib.suppress(Exception):
                 signal.disconnect(self._update_host_button)
+            with contextlib.suppress(Exception):
+                signal.disconnect(self._on_project_switched)
+        with contextlib.suppress(Exception):
+            self._map_watch.stop()
         self.watcher.disconnect_all()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API

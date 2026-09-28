@@ -28,6 +28,7 @@ from ..hosting.client import (
     HttpRequest,
     HttpResponse,
     Transport,
+    unreachable_message,
 )
 
 
@@ -35,7 +36,7 @@ def make_qgis_transport(feedback: Any = None) -> Transport:
     """A `Transport` backed by QGIS networking. `feedback` makes Cancel work."""
 
     def send(request: HttpRequest) -> HttpResponse:
-        from qgis.core import QgsBlockingNetworkRequest
+        from qgis.core import Qgis, QgsBlockingNetworkRequest, QgsMessageLog
         from qgis.PyQt.QtCore import QByteArray, QUrl
         from qgis.PyQt.QtNetwork import QNetworkRequest
 
@@ -66,11 +67,15 @@ def make_qgis_transport(feedback: Any = None) -> Transport:
         # client's own handling of it says far more than
         # `QgsBlockingNetworkRequest`'s generic message.
         if code != QgsBlockingNetworkRequest.ErrorCode.NoError and status is None:
-            raise HostingError(
-                f"Could not reach {request.url}.\n\n{fetcher.errorMessage()}\n\n"
-                "If this computer reaches the internet through a proxy, check "
-                "Settings -> Options -> Network in QGIS."
+            # The plain-English sentence, shared with the stdlib transport. Qt's
+            # own wording ("Connection refused", "Host ... not found") is logged
+            # rather than shown: it names a symptom, never what to do.
+            QgsMessageLog.logMessage(
+                f"Hosting request to {request.url} failed: {fetcher.errorMessage()}",
+                "QGIS2WebMap",
+                level=Qgis.MessageLevel.Warning,
             )
+            raise HostingError(unreachable_message(request.url))
 
         return HttpResponse(status=int(status or 0), body=content)
 

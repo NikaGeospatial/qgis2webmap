@@ -1298,3 +1298,286 @@ class TestThePublishConfirmation:
         assert "about to be uploaded" in text
         # No leading blank lines from an empty notice joined in regardless.
         assert text == text.lstrip()
+
+
+class TestHostButtonFollowsTheServer:
+    """The label and the publish path, driven by what the SERVER says.
+
+    A map taken down in the dashboard, deleted, or owned by another organisation
+    left its id in the `.qgz`, the button kept saying Republish, and every press
+    was refused: a project that could never be published again. Nothing here
+    touches the network - the dialog is never shown, so the background watch is
+    never started, and the publish stages run against stand-ins.
+    """
+
+    MAP_ID = "k7m2qx9vt4bdp3w8n5r2h6j9c"
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def _state(self, presence, map_id=None, **fields):
+        from nika_onlymap_exporter.hosting.map_state import RemoteMapState
+
+        return RemoteMapState(map_id=map_id or self.MAP_ID, presence=presence, **fields)
+
+    @pytest.mark.parametrize("presence", ["taken_down", "missing", "other_org"])
+    def test_a_dead_map_offers_host_as_new(
+        self, qgis_app, project, make_memory_layer, presence
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._on_remote_state(self._state(presence))
+            assert dialog.host_button.text() == "Host as new map ↗"
+            assert "new map" in dialog.host_button.toolTip()
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize("presence", ["live", "paused", "offline", "signed_out"])
+    def test_an_updatable_or_unknown_map_stays_republish(
+        self, qgis_app, project, make_memory_layer, presence
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._on_remote_state(self._state(presence))
+            assert dialog.host_button.text() == "Republish ↗"
+        finally:
+            dialog.close()
+
+    def test_opening_another_project_forgets_the_last_answer(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._on_remote_state(self._state("taken_down"))
+            dialog._on_project_switched()
+            assert dialog.host_button.text() == "Republish ↗"
+        finally:
+            dialog.close()
+
+    def test_the_new_map_notice_reaches_the_confirmation(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        captured: dict[str, str] = {}
+        monkeypatch.setattr(
+            QMessageBox,
+            "exec",
+            lambda box: captured.setdefault("text", box.informativeText()) and 0,
+        )
+
+        class FakeExport:
+            title = "Test map"
+            settings = ExportSettings(basemap="positron")
+            exportable_layers = ()
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._confirm_publish(FakeExport(), (), "OLD MAP WAS TAKEN DOWN.")
+        finally:
+            dialog.close()
+        assert captured["text"].startswith("OLD MAP WAS TAKEN DOWN.")
+        assert "about to be uploaded" in captured["text"]
+
+    def _run_jobs_inline(self, monkeypatch, dialog) -> None:
+        """Every stage runs its work and its callback on the spot."""
+        from nika_onlymap_exporter.ui import main_dialog
+
+        class InlineProgress:
+            def step(self, _percent, _message):
+                pass
+
+            def check_cancelled(self):
+                pass
+
+        def start_job(work, on_success, label, quiet=False):
+            on_success(work(InlineProgress()))
+            return True
+
+        monkeypatch.setattr(dialog, "_start_job", start_job)
+        monkeypatch.setattr(main_dialog, "should_warn_truncation", lambda *_a: False)
+
+    def test_a_refused_republish_can_become_a_new_map(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """The server proves the map is gone; the user agrees; the stale id is
+        dropped and the SAME build is reserved again as a new map."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            load_hosted_pending_release,
+            save_hosted_map_id,
+            save_hosted_release_n,
+        )
+        from nika_onlymap_exporter.hosting.client import PublishRefusedError
+
+        save_hosted_map_id(project, self.MAP_ID)
+        save_hosted_release_n(project, 3)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        asked: list[bool] = []
+        monkeypatch.setattr(
+            dialog, "_confirm_host_as_new", lambda: asked.append(True) or True
+        )
+        uploaded: list[object] = []
+        monkeypatch.setattr(
+            dialog, "_upload", lambda exporter, prepared: uploaded.append(prepared)
+        )
+
+        class Start:
+            release_id = "rel_new"
+            renders_under_caps = False
+
+        class Prepared:
+            start = Start()
+
+        class FakeExporter:
+            def __init__(self):
+                self.map_id = TestHostButtonFollowsTheServer.MAP_ID
+                self.release_n = 3
+                self.pending_release_id = None
+                self.reconciliation = None
+                self.force = False
+                self.on_progress = None
+                self.calls: list[str | None] = []
+
+            def prepare(self, _result, _destination):
+                self.calls.append(self.map_id)
+                if self.map_id:
+                    raise PublishRefusedError("taken down", code="map_taken_down")
+                return Prepared()
+
+        exporter = FakeExporter()
+        try:
+            dialog._reserve(exporter, None, tmp_path, [], force=False)
+            assert asked == [True]
+            assert exporter.calls == [self.MAP_ID, None]
+            assert exporter.release_n is None
+            assert load_hosted_map_id(project) == ""
+            assert load_hosted_pending_release(project) == "rel_new"
+            assert len(uploaded) == 1
+        finally:
+            dialog.close()
+
+    def test_declining_keeps_the_project_as_it_was(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+        from nika_onlymap_exporter.hosting.client import PublishRefusedError
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        monkeypatch.setattr(dialog, "_confirm_host_as_new", lambda: False)
+
+        class FakeExporter:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 1
+            pending_release_id = None
+            reconciliation = None
+            force = False
+            on_progress = None
+
+            def prepare(self, _result, _destination):
+                raise PublishRefusedError("gone", code="map_forbidden")
+
+        try:
+            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
+            assert load_hosted_map_id(project) == self.MAP_ID
+            assert dialog.host_button.text() == "Host as new map ↗"
+            assert "Nothing left this machine" in dialog.status_label.text()
+        finally:
+            dialog.close()
+
+    def test_a_password_protected_map_is_not_described_as_open_to_anyone(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import load_hosted_pending_release
+
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        shown: dict[str, object] = {}
+        monkeypatch.setattr(
+            dialog,
+            "_show_published",
+            lambda url, link_saved=True, protected=False: shown.update(
+                url=url, protected=protected
+            ),
+        )
+        state = self._state("live", has_password=True)
+
+        class Outcome:
+            public_url = "https://maps.example/m"
+            open_instruction = "Published at x - anyone with the link can open it."
+
+        class FakeClient:
+            def map_state(self, _map_id):
+                return state
+
+        class FakeExporter:
+            client = FakeClient()
+            on_progress = None
+            stage = "verifying"
+
+            def publish(self, _prepared):
+                return Outcome()
+
+        class Start:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 1
+            release_id = "rel_1"
+
+        class Prepared:
+            start = Start()
+
+        from nika_onlymap_exporter.core.settings import save_hosted_pending_release
+
+        # Settled by the success, so the next publish has nothing to look for.
+        save_hosted_pending_release(project, "rel_1")
+        try:
+            dialog._upload(FakeExporter(), Prepared())
+            assert shown["protected"] is True
+            assert "password" in dialog.status_label.text()
+            assert "anyone" not in dialog.status_label.text()
+            assert load_hosted_pending_release(project) == ""
+        finally:
+            dialog.close()
+
+    def test_cancel_after_the_upload_does_not_claim_nothing_was_written(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+
+        class FakeExporter:
+            stage = "verifying"
+
+        try:
+            dialog._active_exporter = FakeExporter()
+            dialog._on_job_cancelled()
+            assert "Nothing was written" not in dialog.status_label.text()
+            assert "most likely update anyway" in dialog.status_label.text()
+            # An export's cancel still says what it always did.
+            dialog._on_job_cancelled()
+            assert dialog.status_label.text() == "Stopped. Nothing was written."
+        finally:
+            dialog.close()
