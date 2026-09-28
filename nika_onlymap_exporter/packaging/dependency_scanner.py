@@ -313,7 +313,7 @@ def scan(
 
     if not project.exportable_layers:
         blocking.append(
-            "There are no layers to export. Add a vector layer with features."
+            "There are no layers to export. Add a vector or raster layer with data."
         )
 
     if mode is OutputMode.STANDALONE_HTML:

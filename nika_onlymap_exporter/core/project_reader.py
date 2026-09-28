@@ -261,7 +261,9 @@ def read_project(
     tree_layers = list(reversed(root.findLayers()))
 
     layers = []
-    skipped_invalid = 0
+    # Named, not counted: "1 layer(s) could not be loaded" left the user to
+    # find which one, and the Fidelity tab groups a named row under its layer.
+    skipped_invalid: list[tuple[str, str]] = []
 
     # Counted up front so the progress bar can show "3 of 12" rather than a bar
     # that only ever fills at the end.
@@ -282,11 +284,16 @@ def read_project(
             continue
 
         map_layer = tree_layer.layer()
-        if map_layer is None or not map_layer.isValid():
-            skipped_invalid += 1
+        # Selection first: a broken layer the user has unticked is not part of
+        # the export, so it has no business being reported as a problem with it.
+        if (
+            selected_layer_ids is not None
+            and tree_layer.layerId() not in selected_layer_ids
+        ):
             continue
 
-        if selected_layer_ids is not None and map_layer.id() not in selected_layer_ids:
+        if map_layer is None or not map_layer.isValid():
+            skipped_invalid.append((tree_layer.layerId(), tree_layer.name()))
             continue
 
         if progress is not None:
@@ -313,19 +320,20 @@ def read_project(
         if export_layer is not None:
             layers.append(export_layer)
 
-    if skipped_invalid:
+    for layer_id, name in skipped_invalid:
         report.blocked(
-            "Project layers",
-            f"{skipped_invalid} layer(s) could not be loaded - their data source "
-            "is missing or unreadable. Fix the broken layers in QGIS, or remove "
-            "them, before exporting.",
+            f"Layer '{name}'",
+            "QGIS could not load this layer - its data source is missing or "
+            "unreadable - so the map would be exported without it. Fix the "
+            "layer's source in QGIS, or untick it on the Layers tab.",
+            layer_id,
         )
 
     if not layers:
         report.blocked(
             "Project layers",
-            "There is nothing to export. Add at least one vector layer with "
-            "features to the project.",
+            "There is nothing to export. Add at least one vector or raster "
+            "layer with data to the project.",
         )
 
     if settings.quantize_precision is not None:
@@ -553,6 +561,7 @@ def _report_project_metadata(
         # a richer export would have included.
         report.preserved(
             "Map description",
-            "No project abstract is set, so the map has no description. Add one "
-            "in Project Properties > Metadata if you want one.",
+            "The project has no description, so there is none to carry over - "
+            "the map matches QGIS. To give the map one, write it under Project "
+            "Properties > Metadata > Abstract.",
         )

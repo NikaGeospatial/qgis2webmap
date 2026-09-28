@@ -2278,7 +2278,9 @@ class MainDialog(QDialog):
         selected = self.state.selected_layer_ids(available)
 
         if not available:
-            self._set_ready(False, "Add a vector layer to the project to export.")
+            self._set_ready(
+                False, "Add a vector or raster layer to the project to export."
+            )
         elif not selected:
             self._set_ready(False, "Tick at least one layer to include.")
         else:

@@ -294,6 +294,29 @@ class TestGraduated:
         assert len(spec.classes) == 2
         assert report.by_status(FidelityStatus.APPROXIMATED)
 
+    def test_an_unknown_method_is_not_printed_as_one(
+        self, project, make_memory_layer
+    ) -> None:
+        """ "with 2 classes (unknown)" read as a fault in the Kept row."""
+        layer = self._graduated_layer(
+            make_memory_layer, qgis_core.QgsClassificationCustom
+        )
+        report = FidelityReportBuilder()
+        translate_renderer(layer, report)
+
+        (kept,) = report.by_status(FidelityStatus.PRESERVED)
+        assert kept.detail == "Graduated on 'length' with 2 classes."
+
+    def test_a_known_method_is_named_in_words(self, project, make_memory_layer) -> None:
+        layer = self._graduated_layer(
+            make_memory_layer, qgis_core.QgsClassificationEqualInterval
+        )
+        report = FidelityReportBuilder()
+        translate_renderer(layer, report)
+
+        kept = [i.detail for i in report.by_status(FidelityStatus.PRESERVED)]
+        assert "Graduated on 'length' with 2 classes (equal interval)." in kept
+
 
 class TestUnsupportedRenderer:
     def test_rule_based_is_named_in_the_report(

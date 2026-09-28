@@ -519,8 +519,9 @@ def translate_renderer(
     kind_name = type(renderer).__name__
     report.unsupported(
         subject,
-        f"{kind_name} is not translated in 0.1.0. Supported renderers are single "
-        "symbol, categorized and graduated. The layer will use a default style.",
+        f"This renderer ({kind_name}) is not translated yet. Supported renderers "
+        "are single symbol, categorized and graduated. The layer will use a "
+        "default style.",
         layer_id,
     )
     return RendererSpec(kind=RendererKind.UNSUPPORTED, unsupported_reason=kind_name)
@@ -660,10 +661,17 @@ def _translate_graduated(
             layer_id,
         )
 
+    # The method in brackets only when there is one to name: "(unknown)" read
+    # as a fault, and the approximated row above already says why it is absent.
+    method = (
+        ""
+        if classification is ClassificationMethod.UNKNOWN
+        else f" ({classification.value.replace('_', ' ')})"
+    )
     report.preserved(
         subject,
-        f"Graduated on '{field_name}' with {len(classes)} classes "
-        f"({classification.value}).",
+        f"Graduated on '{field_name}' with {len(classes)} "
+        f"class{'' if len(classes) == 1 else 'es'}{method}.",
         layer_id,
     )
     return RendererSpec(
