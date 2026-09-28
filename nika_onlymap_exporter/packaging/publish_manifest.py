@@ -29,6 +29,7 @@ import html
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Final
 from urllib.parse import urlsplit
 
 from ..hosting.manifest import (
@@ -47,7 +48,7 @@ from .hosted_assets import FLAT_NAME_PATTERN
 # Both are re-exported from the wire contract rather than restated, so the
 # emitter and the client cannot drift apart on the two values the server keys
 # its kind registry off.
-SCHEMA_VERSION = MANIFEST_SCHEMA_VERSION
+SCHEMA_VERSION: Final = MANIFEST_SCHEMA_VERSION
 
 # The kind, and the reason there is one. A publisher storing several kinds of
 # artifact needs to know what it is holding before it can decide what to do

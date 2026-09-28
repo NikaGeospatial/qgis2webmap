@@ -21,12 +21,12 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Final, Literal, TypedDict
 
 # The one manifest shape this client speaks. Sent verbatim; a server that
 # introduces a second will say so in `schemaVersion`, and this plugin will
 # refuse rather than guess.
-MANIFEST_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION: Final = 1
 MANIFEST_KIND = "onlymap-map/v1"
 
 # The roles this kind admits. A closed set rather than a free string: the

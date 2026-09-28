@@ -180,6 +180,7 @@ from .runtime_setup import ensure_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
+    from qgis.PyQt.QtGui import QColor
 
 LOG_TAG = "QGIS2WebMap"
 MODE_LABELS = {
@@ -1767,14 +1768,14 @@ class MainDialog(QDialog):
             with contextlib.suppress(ValueError):
                 self.state.title_corner = OverlayCorner(value)
 
-    def _on_widget_color(self, attribute: str, color: object) -> None:
+    def _on_widget_color(self, attribute: str, color: QColor | None) -> None:
         """A null colour means "leave the runtime's own default alone"."""
         if color is None or not color.isValid() or color.alpha() == 0:
             setattr(self.state, attribute, "")
             return
         setattr(self.state, attribute, color.name())
 
-    def _on_highlight_color(self, color: object) -> None:
+    def _on_highlight_color(self, color: QColor | None) -> None:
         """Kept in CSS order with alpha last, the form the manifest emits.
 
         A fully transparent pick is a real choice here - "no visible highlight" -

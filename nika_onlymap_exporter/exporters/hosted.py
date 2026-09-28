@@ -61,14 +61,14 @@ from ..hosting.client import (
     PublishResult,
     PublishStart,
 )
-from ..hosting.manifest import ManifestFile, PublishManifest
+from ..hosting.manifest import ManifestFile, PublishManifest, Role
 from ..hosting.thumbnail import THUMBNAIL_FILENAME
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
 
 # The thumbnail is this exporter's own addition rather than the writer's, so it
 # is this module that has to describe it to the manifest.
-THUMBNAIL_ROLE = "thumbnail"
+THUMBNAIL_ROLE: Role = "thumbnail"
 THUMBNAIL_MEDIA_TYPE = "image/jpeg"
 
 # What a file is sent as when the manifest names no type. The server sniffs

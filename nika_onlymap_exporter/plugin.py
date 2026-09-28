@@ -29,6 +29,9 @@ from qgis.PyQt.QtWidgets import QAction, QMessageBox
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
 
+    from .processing.provider import Qgis2WebMapProvider
+    from .ui.main_dialog import MainDialog
+
 LOG_TAG = "QGIS2WebMap"
 MENU_TITLE = "&QGIS2WebMap by NIKA"
 ACTION_TEXT = "Create web map"
@@ -41,8 +44,8 @@ class Qgis2WebMapPlugin:
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
         self.action: QAction | None = None
-        self.dialog = None
-        self.provider = None
+        self.dialog: MainDialog | None = None
+        self.provider: Qgis2WebMapProvider | None = None
 
     # ---- QGIS lifecycle -------------------------------------------------
 

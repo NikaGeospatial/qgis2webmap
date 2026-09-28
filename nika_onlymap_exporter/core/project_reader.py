@@ -42,6 +42,7 @@ from .settings import LayerSettings
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsLayerTreeNode, QgsProject
+    from qgis.gui import QgsMapCanvas
 
 DEFAULT_TITLE = "Untitled map"
 
@@ -119,7 +120,7 @@ def _highlight_text(color: Color | None) -> str:
     return f"#{color.r:02x}{color.g:02x}{color.b:02x}{alpha:02x}"
 
 
-def extent_from_canvas(canvas: object) -> Extent | None:
+def extent_from_canvas(canvas: QgsMapCanvas) -> Extent | None:
     """The QGIS canvas rectangle, reprojected to WGS84.
 
     Lives here rather than in the dialog so the Processing algorithm can reach

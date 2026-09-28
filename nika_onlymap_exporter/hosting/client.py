@@ -322,8 +322,8 @@ class UploadFile:
 # presign. A closed set: an unrecognised mode is a version mismatch and is
 # refused by name, never quietly treated as one of these.
 UploadMode = Literal["presigned", "direct"]
-UPLOAD_MODE_PRESIGNED = "presigned"
-UPLOAD_MODE_DIRECT = "direct"
+UPLOAD_MODE_PRESIGNED: UploadMode = "presigned"
+UPLOAD_MODE_DIRECT: UploadMode = "direct"
 
 
 @dataclass(frozen=True)

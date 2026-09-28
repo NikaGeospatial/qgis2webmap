@@ -24,6 +24,7 @@ from .label_points import apply_capitalization
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
+    from qgis.PyQt.QtGui import QColor
 
 # What the runtime's default atlas already covers.
 ASCII_PRINTABLE = frozenset(string.printable)
@@ -33,7 +34,7 @@ ASCII_PRINTABLE = frozenset(string.printable)
 CHARACTER_SCAN_LIMIT = 5000
 
 
-def _color_from_qcolor(qcolor: object) -> Color | None:
+def _color_from_qcolor(qcolor: QColor | None) -> Color | None:
     if qcolor is None or not getattr(qcolor, "isValid", lambda: False)():
         return None
     return Color(r=qcolor.red(), g=qcolor.green(), b=qcolor.blue(), a=qcolor.alphaF())
