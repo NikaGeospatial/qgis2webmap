@@ -21,13 +21,23 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
-from qgis.core import QgsLayerTreeLayer
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsDistanceArea,
+    QgsLayerTreeLayer,
+    QgsPointXY,
+    QgsRectangle,
+    QgsScaleCalculator,
+)
 
 from .export_ir import (
     Color,
+    ExportLayer,
     ExportProject,
     ExportSettings,
     Extent,
@@ -39,6 +49,7 @@ from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
 from .manifest_builder import TERRAIN_PRESETS, basemap_note, terrain_note
 from .settings import LayerSettings
+from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsLayerTreeNode, QgsProject
@@ -426,6 +437,7 @@ def read_project(
             )
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
+    layers = _translate_scale_visibility(project, layers, extent, report)
     title = resolve_title(project, title_override)
 
     _report_project_metadata(project, title, title_override, report)
@@ -440,6 +452,92 @@ def read_project(
         settings=settings,
         fidelity=report.items,
     )
+
+
+def _translate_scale_visibility(
+    project: QgsProject,
+    layers: list[ExportLayer],
+    extent: Extent | None,
+    report: FidelityReportBuilder,
+) -> list[ExportLayer]:
+    """Give every layer with a QGIS scale range its web zoom range, and say so.
+
+    Runs after the extent, because a zoom level only corresponds to a scale at
+    a particular latitude - the one the map opens on. The pure translation is
+    `core.zoom_range`; the one number it cannot work out alone is what QGIS's
+    scale readout means in this project's CRS, which is measured here.
+    """
+    if not any(layer.scale_range.is_set for layer in layers):
+        return layers
+
+    longitude, latitude = extent.center if extent is not None else (0.0, 0.0)
+    factor = _qgis_scale_factor(project, longitude, latitude)
+    edges = (
+        [
+            (edge, _qgis_scale_factor(project, longitude, edge))
+            for edge in (extent.south, extent.north)
+        ]
+        if extent is not None
+        else None
+    )
+
+    translated: list[ExportLayer] = []
+    for layer in layers:
+        visibility = translate_scale_range(layer.scale_range, latitude, factor, edges)
+        if visibility.status is not None:
+            report.record(
+                f"Scale visibility of '{layer.name}'",
+                visibility.status,
+                visibility.detail,
+                layer.layer_id,
+            )
+        if visibility.zoom_range is not None:
+            layer = dataclasses.replace(layer, visible_zoom_range=visibility.zoom_range)
+        translated.append(layer)
+    return translated
+
+
+def _qgis_scale_factor(project: QgsProject, longitude: float, latitude: float) -> float:
+    """QGIS's scale readout divided by the true ground scale, at one point.
+
+    Measured with QGIS's own `QgsScaleCalculator` - in the project's CRS and
+    with the project's scale method - on a small box around the point, against
+    the box's true width on the WGS84 ellipsoid. 1.0 in a metre-based
+    projection; about `1 / cos(latitude)` in EPSG:3857; whatever QGIS's
+    latitude method gives in a geographic CRS. Anything that cannot be measured
+    falls back to 1.0, the metre-based case, rather than failing the export.
+    """
+    crs = project.crs()
+    if not crs.isValid():
+        return 1.0
+    half = 0.005
+    pixels = 1000
+    try:
+        transform = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem(WGS84), crs, project.transformContext()
+        )
+        box = transform.transformBoundingBox(
+            QgsRectangle(
+                longitude - half, latitude - half, longitude + half, latitude + half
+            )
+        )
+        calculator = QgsScaleCalculator(96, crs.mapUnits())
+        method = getattr(project, "scaleMethod", None)
+        if method is not None:
+            calculator.setMethod(method())
+        reported = calculator.calculate(box, pixels)
+        distance = QgsDistanceArea()
+        distance.setEllipsoid("WGS84")
+        metres = distance.measureLine(
+            QgsPointXY(longitude - half, latitude),
+            QgsPointXY(longitude + half, latitude),
+        )
+    except (RuntimeError, ValueError, TypeError, AttributeError):
+        return 1.0
+    true_scale = metres / (pixels * CSS_PIXEL_METRES)
+    if not (reported > 0 and true_scale > 0):
+        return 1.0
+    return float(reported / true_scale)
 
 
 def _resolve_extent(

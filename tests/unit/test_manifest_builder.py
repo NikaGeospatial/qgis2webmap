@@ -43,7 +43,6 @@ from nika_onlymap_exporter.core.export_ir import (
 from nika_onlymap_exporter.core.license_policy import FreeTierPolicy
 from nika_onlymap_exporter.core.manifest_builder import (
     LABEL_ELEMENT_SUFFIX,
-    SCALE_DENOMINATOR_AT_ZOOM_0,
     TERRAIN_MAX_ZOOM,
     WIDGET_POSITIONS,
     build_label_element,
@@ -67,7 +66,6 @@ from nika_onlymap_exporter.core.manifest_builder import (
     needs_image_legend,
     needs_static_legend,
     numeric_expression,
-    scale_to_zoom,
     terrain_note,
 )
 
@@ -147,21 +145,6 @@ class TestColorLiteral:
 
     def test_missing_colour_falls_back(self) -> None:
         assert color_literal(None) == "'#888888'"
-
-
-class TestScaleToZoom:
-    def test_zoom_zero_is_the_reference_denominator(self) -> None:
-        assert scale_to_zoom(SCALE_DENOMINATOR_AT_ZOOM_0) == pytest.approx(0.0)
-
-    def test_halving_the_denominator_adds_one_zoom_level(self) -> None:
-        assert scale_to_zoom(SCALE_DENOMINATOR_AT_ZOOM_0 / 2) == pytest.approx(1.0)
-
-    def test_conversion_is_inverted_not_proportional(self) -> None:
-        """A smaller denominator means more zoomed in, so a higher zoom."""
-        assert scale_to_zoom(1_000) > scale_to_zoom(1_000_000)
-
-    def test_degenerate_input_is_clamped(self) -> None:
-        assert scale_to_zoom(0) == 0.0
 
 
 class TestFillExpression:
@@ -469,23 +452,27 @@ class TestLayerElement:
         assert '<script type="application/json">' in markup
         assert "data=" not in markup
 
-    def test_scale_visibility_is_not_emitted_at_all(self) -> None:
-        """Regression: it used to emit an attribute the runtime rejects.
+    def test_scale_visibility_is_the_any_layer_zoom_range(self) -> None:
+        """Regression: it once emitted an attribute the runtime rejects.
 
         `visible-min-zoom`/`visible-max-zoom` are declared in the runtime's
         schema and map to deck.gl's TileLayer props. On the GeoJsonLayer we
         emit, the runtime logged `Unknown attribute ... likely a typo` in the
         recipient's console and showed the layer at every zoom regardless.
-        The values were also paired straight across, so `scale_to_zoom`'s
-        inversion produced min > max.
-
-        Emitting nothing beats emitting a warning that does nothing; the loss
-        is stated in the Fidelity tab instead.
+        `visible-zoom-range` is the runtime's own any-layer attribute.
         """
-        layer = make_layer(scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000))
+        layer = make_layer(
+            scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+            visible_zoom_range=(8.21, 18.17),
+        )
         markup = build_layer_element(layer)
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
         assert "visible-min-zoom" not in markup
         assert "visible-max-zoom" not in markup
+
+    def test_a_layer_without_a_range_carries_none(self) -> None:
+        markup = build_layer_element(make_layer())
+        assert "zoom" not in markup
 
     def test_popup_layer_is_pickable_and_highlights(self) -> None:
         layer = make_layer(
@@ -936,12 +923,14 @@ class TestRasterLayer:
         assert "opacity=" not in markup
         assert "visible=" not in markup
 
-    def test_scale_visibility_is_not_emitted(self) -> None:
-        """Parity with vectors, and required by the pinned runtime: 0.6.20 has
-        no per-layer zoom range at all. `layer_reader` reports the loss."""
-        layer = make_raster_layer(scale_range=ScaleRange(min_scale=1e6, max_scale=1e3))
+    def test_scale_visibility_is_emitted_as_on_vectors(self) -> None:
+        """Parity with vectors: the zoom range is valid on any layer type."""
+        layer = make_raster_layer(
+            scale_range=ScaleRange(min_scale=1e6, max_scale=1e3),
+            visible_zoom_range=(8.21, 18.17),
+        )
         markup = build_raster_layer_element(layer, layer.raster)
-        assert "zoom" not in markup
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
 
     def test_a_raster_reaches_the_manifest_in_draw_order(self) -> None:
         """Document order is draw order, so a raster under a vector layer in
@@ -1007,6 +996,7 @@ class TestAttributeContract:
                 make_layer(
                     layer_id="styled",
                     scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+                    visible_zoom_range=(8.21, 18.17),
                     opacity=0.5,
                     visible=False,
                     renderer=RendererSpec(
@@ -1481,21 +1471,18 @@ class TestLabelLayer:
         )
         assert build_label_element(layer) == ""
 
-    def test_labels_carry_no_scale_visibility_either(self) -> None:
-        """Labels followed their layer's zoom range; there is none to follow.
-
-        Kept as a pair with the layer's own test so the two cannot drift: a
-        label bounded by a zoom range its geometry does not share would be the
-        rendering bug the old behaviour was written to prevent.
-        """
+    def test_labels_follow_their_layers_zoom_range(self) -> None:
+        """Kept as a pair with the layer's own test so the two cannot drift: a
+        label outliving the geometry it names is the rendering bug this
+        prevents."""
         layer = make_layer(
             geojson=self.LABELLED,
             labeling=LabelingSpec(enabled=True, field_name="name"),
             scale_range=ScaleRange(min_scale=1_000_000, max_scale=1_000),
+            visible_zoom_range=(8.21, 18.17),
         )
         markup = build_label_element(layer)
-        assert "visible-min-zoom" not in markup
-        assert "visible-max-zoom" not in markup
+        assert 'visible-zoom-range="[8.21, 18.17]"' in markup
 
     def test_label_layers_are_emitted_after_every_geometry_layer(self) -> None:
         """Otherwise the layer stacked above paints over the labels below it."""

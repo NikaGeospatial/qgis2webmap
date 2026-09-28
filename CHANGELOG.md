@@ -6,6 +6,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Scale-dependent visibility reaches the web map.** A layer set to show only
+  between two scales in QGIS now shows only between the matching zoom levels,
+  through the runtime's `visible-zoom-range` - vector, raster and label layers
+  alike. The conversion is measured at the map's centre and in the project's
+  own CRS, and the Fidelity tab states the zooms. On a map tall enough for the
+  web map's Mercator scale to drift from QGIS's, it says by how many zoom
+  levels at the edges. Until now the range was dropped with a note, on a claim
+  that the runtime had nowhere to put it; it has had one since 0.6.22.
+
 ### Fixed
 - **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
   whose geometry carries Z — digitised with Z switched on, draped over a DEM,

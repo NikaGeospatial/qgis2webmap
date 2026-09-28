@@ -501,3 +501,64 @@ class TestBrokenLayers:
         read_project(project, report, selected_layer_ids=frozenset({ok.id()}))
 
         assert not report.has_blockers
+
+
+class TestScaleVisibility:
+    """QGIS scale ranges reach the map as a zoom range, and say so."""
+
+    def test_a_scale_range_becomes_a_zoom_range(
+        self, project, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer("pts", features=[("a", [0.0, 0.0])])
+        layer.setScaleBasedVisibility(True)
+        layer.setMinimumScale(1_000_000)
+        layer.setMaximumScale(1_000)
+        project.addMapLayer(layer)
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+        report = FidelityReportBuilder()
+
+        result = read_project(project, report)
+
+        assert result.layers[0].visible_zoom_range is not None
+        low, high = result.layers[0].visible_zoom_range
+        # At the equator in EPSG:3857: zoom = log2(295,829,355 / scale).
+        assert low == pytest.approx(8.21, abs=0.02)
+        assert high == pytest.approx(18.17, abs=0.02)
+        rows = [i for i in report.items if i.subject == "Scale visibility of 'pts'"]
+        assert [row.status for row in rows] == [FidelityStatus.PRESERVED]
+        assert rows[0].layer_id == layer.id()
+        assert "every zoom" not in rows[0].detail
+
+    def test_no_scale_range_means_no_zoom_range(
+        self, project, make_memory_layer
+    ) -> None:
+        project.addMapLayer(make_memory_layer("pts", features=[("a", [0.0, 0.0])]))
+        result = read_project(project, FidelityReportBuilder())
+        assert result.layers[0].visible_zoom_range is None
+
+
+class TestQgisScaleFactor:
+    """What a QGIS scale readout means, measured by QGIS for the project CRS."""
+
+    def factor(self, project, crs: str, longitude: float, latitude: float) -> float:
+        from nika_onlymap_exporter.core.project_reader import _qgis_scale_factor
+
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem(crs))
+        return _qgis_scale_factor(project, longitude, latitude)
+
+    def test_web_mercator_reads_one_over_cos_latitude(self, project) -> None:
+        assert self.factor(project, "EPSG:3857", 15.0, 60.0) == pytest.approx(
+            2.0, rel=0.01
+        )
+
+    def test_a_metre_projection_reads_true_scale(self, project) -> None:
+        # UTM 33N's central meridian is 15E, where its scale factor is 0.9996.
+        assert self.factor(project, "EPSG:32633", 15.0, 60.0) == pytest.approx(
+            1.0, abs=0.01
+        )
+
+    def test_an_invalid_crs_falls_back_to_true_scale(self, project) -> None:
+        from nika_onlymap_exporter.core.project_reader import _qgis_scale_factor
+
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem())
+        assert _qgis_scale_factor(project, 0.0, 0.0) == 1.0

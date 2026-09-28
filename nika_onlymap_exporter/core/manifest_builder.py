@@ -54,10 +54,6 @@ from .label_points import (
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .license_policy import CapVerdict
 
-# Web Mercator scale denominator at zoom 0, 96 dpi, at the equator. Converting
-# QGIS scale-visibility into zoom levels needs a reference point and this is the
-# conventional one.
-SCALE_DENOMINATOR_AT_ZOOM_0 = 559_082_264.0
 MAX_WEB_ZOOM = 24
 
 # One deck.gl layer class covers points, lines and polygons, including mixed
@@ -427,20 +423,6 @@ def value_literal(value: object) -> str:
     return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-def scale_to_zoom(scale_denominator: float) -> float:
-    """QGIS scale denominator to web zoom level.
-
-    QGIS thinks in denominators where *larger* means more zoomed out; web maps
-    think in zoom levels where larger means more zoomed in. So the relationship
-    is inverted as well as logarithmic, which is exactly the kind of conversion
-    that gets silently reversed - hence its own function and its own test.
-    """
-    if scale_denominator <= 0:
-        return 0.0
-    zoom = math.log2(SCALE_DENOMINATOR_AT_ZOOM_0 / scale_denominator)
-    return max(0.0, min(float(MAX_WEB_ZOOM), zoom))
-
-
 # --------------------------------------------------------------------------
 # Styling expressions
 # --------------------------------------------------------------------------
@@ -525,6 +507,19 @@ def _number(value: float) -> str:
     if value == int(value):
         return str(int(value))
     return repr(round(value, 6))
+
+
+def _zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
+    """`visible-zoom-range` for a layer that has one, else nothing.
+
+    Written as a JSON array because that is what the runtime parses: anything
+    it cannot read as two finite numbers with `min < max` is ignored with a
+    console warning and the layer shows at every zoom.
+    """
+    if layer.visible_zoom_range is None:
+        return None
+    low, high = layer.visible_zoom_range
+    return ("visible-zoom-range", f"[{_number(low)}, {_number(high)}]")
 
 
 def _class_symbols(renderer: RendererSpec) -> list[SymbolSpec]:
@@ -812,12 +807,11 @@ def build_raster_layer_element(
     if not layer.visible:
         attributes.append(("visible", "false"))
 
-    # Scale visibility is omitted for exactly the reason it is omitted on
-    # vectors - see the long note in `build_layer_element`. `visible-zoom-range`
-    # does appear in the 0.6.26 schema as a genuinely any-layer attribute, but
-    # the pinned runtime is 0.6.20 and does not have it, so emitting it would
-    # log an unknown-attribute warning in the recipient's console and change
-    # nothing. `layer_reader` records the loss either way.
+    # Scale visibility, the same attribute as on vectors - see the note in
+    # `build_layer_element`.
+    zoom_range = _zoom_range_attribute(layer)
+    if zoom_range is not None:
+        attributes.append(zoom_range)
 
     return "\n".join(
         [
@@ -1000,26 +994,24 @@ def build_layer_element(
     if not layer.visible:
         attributes.append(("visible", "false"))
 
-    # QGIS scale visibility is NOT emitted, because the runtime has nowhere to
-    # put it.
+    # QGIS scale visibility, as `visible-zoom-range` - the runtime's per-layer
+    # zoom range for any layer type, `[min, max)`.
     #
-    # `visible-min-zoom`/`visible-max-zoom` are declared in the runtime's
-    # `onlymapjs.html-data.json` and map to deck.gl's `visibleMinZoom` /
-    # `visibleMaxZoom` -- which are TileLayer props. On the GeoJsonLayer we
-    # actually emit, the runtime rejects them outright: every affected export
-    # logged `Unknown attribute "visible-min-zoom" ... likely a typo` in the
-    # recipient's console and the layer stayed visible at every zoom.
+    # Not `visible-min-zoom`/`visible-max-zoom`. Those are declared in the
+    # runtime's `onlymapjs.html-data.json` but map to deck.gl's
+    # `visibleMinZoom` / `visibleMaxZoom`, which are TileLayer props: on the
+    # GeoJsonLayer we emit, every affected export once logged `Unknown
+    # attribute "visible-min-zoom" ... likely a typo` in the recipient's
+    # console and the layer stayed visible at every zoom. A flat schema keyed
+    # only on `om-layer` cannot express "valid on TileLayer, not on this one",
+    # which is why nothing caught it.
     #
-    # That is why the flat schema could not catch it: an attribute list keyed
-    # only on `om-layer` cannot express "valid on TileLayer, not on this one".
-    #
-    # Emitting nothing is better than emitting a warning that does nothing, and
-    # `layer_reader` records the loss in the Fidelity tab so it is a stated
-    # limitation rather than a silent one. If the runtime grows real per-layer
-    # zoom visibility, restore this and mind the inversion: `scale_to_zoom`
-    # already flips the sense, so QGIS's *minimum scale* (zoomed furthest in)
-    # produces the *largest* zoom and belongs on the MAX attribute. The code
-    # this replaced paired them straight across and emitted min > max.
+    # The range itself is worked out by the reader through `core.zoom_range`,
+    # which also minds the inversion the old code got wrong: QGIS's *minimum*
+    # scale is its most zoomed-out limit and becomes the *minimum* zoom.
+    zoom_range = _zoom_range_attribute(layer)
+    if zoom_range is not None:
+        attributes.append(zoom_range)
 
     if layer.popup.enabled and layer.popup.visible_fields:
         attributes.append(("pickable", "true"))
@@ -1221,10 +1213,11 @@ def build_label_element(
     if not layer.visible:
         attributes.append(("visible", "false"))
 
-    # Labels used to follow their layer's scale visibility, so a label could
-    # not outlive the geometry it names. Nothing to follow any more: the layer
-    # itself no longer carries zoom visibility. See the note on the vector
-    # layer's attributes above.
+    # Labels follow their layer's zoom range, so a label can never outlive the
+    # geometry it names.
+    zoom_range = _zoom_range_attribute(layer)
+    if zoom_range is not None:
+        attributes.append(zoom_range)
 
     if data_url is not None:
         return _element_with_external_data(attributes, indent, inner)

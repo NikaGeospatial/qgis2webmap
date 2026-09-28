@@ -654,16 +654,6 @@ def read_raster(
             layer_id,
         )
 
-    if layer.hasScaleBasedVisibility():
-        report.suppressed_setting(
-            f"Scale visibility of '{name}'",
-            "This layer is set to show only between two scales. Web maps built "
-            "by this plugin show it at every zoom instead - the map runtime "
-            "this export is pinned to has no per-layer zoom range. Remove the "
-            "scale range if showing it throughout is wrong.",
-            layer_id,
-        )
-
     return ExportLayer(
         layer_id=layer_id,
         name=name,
@@ -815,16 +805,6 @@ def read_layer(
         f"Popup fields of '{name}'",
         layer_id,
     )
-
-    if layer.hasScaleBasedVisibility():
-        report.suppressed_setting(
-            f"Scale visibility of '{name}'",
-            "This layer is set to show only between two scales. Web maps built "
-            "by this plugin show it at every zoom instead - the map library has "
-            "no per-layer zoom range for vector layers. Split the layer or "
-            "remove the scale range if showing it throughout is wrong.",
-            layer_id,
-        )
 
     feature_count = len(geojson.get("features") or ())
     if feature_count == 0:
