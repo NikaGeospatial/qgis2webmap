@@ -153,10 +153,11 @@ would send to someone - so you can check it before sharing.
 
 Before sending the map on, look at **Fidelity**. It lists everything that
 changed on the way out of QGIS - symbology that could not be translated exactly,
-settings that will not appear, layers that were left out. Nothing is dropped
-silently.
+settings that will not appear, layers that were left out - grouped by layer, with
+the problems first. Select a row to read all of it. Nothing is dropped silently:
+what comes through exactly is folded under **Show what is kept**.
 
-![The Fidelity tab with the Not exported and Changed verdicts highlighted.](images/export-06-fidelity-report.png)
+![The Fidelity tab grouped by layer, with a Not exported row selected and its full detail beside the list.](images/export-06-fidelity-report.png)
 
 That report before the export, rather than a surprise after it, is the main
 difference from [qgis2web](qgis2web-comparison.md) if you are choosing between

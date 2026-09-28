@@ -33,9 +33,9 @@ faq:
   - q: Why is the Export button greyed out?
     a: >-
       The reason is printed beside the button. Either the project has no vector
-      layer to export, or every layer is unticked in the Include column on the
-      Layers tab, or the Fidelity tab has a Blocked item naming the layer and
-      the reason.
+      or raster layer to export, or every layer is unticked in the Include
+      column on the Layers tab. A Blocked item on the Fidelity tab does not
+      grey it out - Export names it and asks before writing.
   - q: Why is my exported map blank, or showing a message about JavaScript?
     a: >-
       You are opening it somewhere that does not run JavaScript - an email
@@ -149,13 +149,15 @@ on.
 
 ### Export is greyed out
 
-The reason is printed beside the button. The three you will meet:
+The reason is printed beside the button. The two you will meet:
 
 | The reason says | What to do |
 |---|---|
-| *Add a vector layer to the project to export.* | The project has no vector layer. Raster-only projects have nothing to export |
+| *Add a vector or raster layer to the project to export.* | The project has no layer that can be exported |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
-| Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
+
+A **Blocked** item on the Fidelity tab is not one of them: Export stays
+available, and names the item and asks before it writes anything.
 
 ### Extruded polygons export flat
 

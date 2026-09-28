@@ -22,8 +22,10 @@ This file records what we do differently and why, so the reasoning survives.
    it did not.
 3. **State is visible.** No control whose current value cannot be read from the
    control itself.
-4. **Never offer an export we know is broken.** Export is disabled with a stated
-   reason rather than producing a bad artifact.
+4. **Never offer an export we know is broken without saying so.** Export is
+   disabled with a stated reason when there is nothing to export. When part of
+   the map cannot be carried - a layer QGIS could not load - Export names it and
+   asks before writing, rather than refusing the rest of the map.
 
 ## Tabs
 
@@ -32,7 +34,7 @@ This file records what we do differently and why, so the reasoning survives.
 | **Map** | Map name, description, output tier, size readout, Export |
 | **Layers** | One list, per-layer settings inline, popup fields in a non-reflowing expander |
 | **Appearance** | Widgets — on by default, live toggles |
-| **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology |
+| **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology. Grouped by layer, problems first, Kept folded away; marks itself out of date when the settings change |
 | **Help** | About, privacy statement, documentation links |
 
 ## Map name
@@ -109,6 +111,10 @@ it while the user configures makes the tier choice self-explanatory.
 
 ## Export button
 
-Disabled when the export cannot be produced correctly, with the reason shown next
-to it — over a licence cap, a required asset missing, no exportable layers. This
-is [`docs/architecture.md`](architecture.md) non-negotiable 5 surfaced in the UI.
+Disabled only when there is nothing to export - no exportable layer, or every
+layer unticked - with the reason shown next to it. Everything else that can go
+wrong is said at the moment it costs something: a Blocked item on the Fidelity
+tab is named in a warning before the write, with the choice to go on; a required
+asset the writer cannot carry refuses the write with its own reason; a licence
+cap is a Changed row, because it only bites once the map is served. This is
+[`docs/architecture.md`](architecture.md) non-negotiable 5 surfaced in the UI.

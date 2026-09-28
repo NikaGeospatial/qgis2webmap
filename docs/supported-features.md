@@ -5,7 +5,7 @@ description: >-
   Layers, symbology, labels, popups, height, terrain and attribution - what is preserved, what is approximated, and what is not exported.
 lead_image:
   src: /images/dialog-fidelity-tab.png
-  alt: The Fidelity tab listing each layer with a verdict of Kept, Changed or Not exported.
+  alt: The Fidelity tab, grouped by layer with the problems first and the full detail of the selected row beside the list.
 ---
 
 # What gets exported

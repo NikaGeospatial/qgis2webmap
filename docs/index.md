@@ -68,8 +68,8 @@ verdicts:
     - key: Rasterised
       tone: changed
       text: >-
-        It comes out as a picture instead of a live layer, because the web has
-        no equivalent for that style.
+        It comes out as a picture drawn by QGIS - it looks right, but it can
+        no longer be restyled.
     - key: Not exported
       tone: blocked
       text: >-
@@ -78,8 +78,8 @@ verdicts:
     - key: Blocked
       tone: blocked
       text: >-
-        Exporting would produce a broken map, so the Export button stays off
-        until it is fixed.
+        It cannot be carried at all - usually a layer QGIS could not load.
+        Export asks before going on without it, and names it.
 
 sections:
   - title: Start here
