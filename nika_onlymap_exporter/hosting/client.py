@@ -138,7 +138,6 @@ POLL_BACKOFF_CEILING_SECONDS = 30.0
 STATE_VERIFYING = "verifying"
 STATE_LIVE = "live"
 STATE_FAILED = "failed"
-TERMINAL_STATES = (STATE_LIVE, STATE_FAILED)
 
 USER_AGENT = "QGIS2WebMap-by-NIKA"
 
@@ -440,14 +439,6 @@ class ReleaseStatus:
     # it names the file or digest that did not match, which no message written
     # here could.
     error: str | None = None
-
-    @property
-    def is_terminal(self) -> bool:
-        return self.state in TERMINAL_STATES
-
-    @property
-    def is_live(self) -> bool:
-        return self.state == STATE_LIVE
 
 
 @dataclass(frozen=True)
