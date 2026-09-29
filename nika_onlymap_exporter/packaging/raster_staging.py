@@ -129,12 +129,6 @@ class StagedRaster:
     # minutes and one that took two seconds, and users ask.
     reused_source: bool = False
 
-    @property
-    def saved_bytes(self) -> int:
-        """How much smaller conversion made it. Negative when it grew, which is
-        the honest answer for a source that was already JPEG-compressed."""
-        return self.source_bytes - self.cog_bytes
-
     def snapshot(self) -> dict[str, Any]:
         return {
             "layerId": self.layer_id,
@@ -164,11 +158,6 @@ class RasterStagingResult:
     @property
     def can_export(self) -> bool:
         return not self.blocking_reasons
-
-    @property
-    def artifact_bytes(self) -> int:
-        """What the rasters add to the artifact."""
-        return sum(item.cog_bytes for item in self.staged)
 
     def snapshot(self) -> dict[str, Any]:
         return {

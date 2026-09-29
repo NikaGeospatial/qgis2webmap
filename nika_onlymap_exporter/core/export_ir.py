@@ -688,10 +688,6 @@ class RasterSpec:
         at a default that has nothing to do with this raster's range."""
         return self.rescale_min is not None and self.rescale_max is not None
 
-    @property
-    def pixel_count(self) -> int:
-        return self.pixel_width * self.pixel_height
-
     def snapshot(self) -> dict[str, Any]:
         return {
             "path": self.path,
