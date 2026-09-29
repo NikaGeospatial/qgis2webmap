@@ -31,8 +31,9 @@ with every edit.
 The button follows the map on NIKA's side, not just what the project remembers.
 While the dialog is open it checks the published map in the background (see
 [privacy](privacy.md#if-you-publish-or-host-a-map) for what that sends), and if
-the map has been taken down in the dashboard, no longer exists, or belongs to a
-different NIKA organisation from the one you are signed in to, the button says
+the map has been taken down or deleted in the dashboard, no longer exists, or
+belongs to a different NIKA organisation from the one you are signed in to, the
+button says
 **Host as new map**: pressing it publishes the project as a new map with a new
 address and leaves the old one as it is. A paused map can still be republished;
 it stays paused until it is resumed in the dashboard.
@@ -40,6 +41,24 @@ it stays paused until it is resumed in the dashboard.
 It is a separate, explicit step and never a side effect of exporting. Nothing
 about pressing **Export** uploads anything, and nothing about pressing **Host**
 changes the file you export.
+
+### Taking a map down, and deleting it
+
+Both happen in the NIKA dashboard, not in QGIS.
+
+**Take down** stops the map serving and keeps it: it can be restored from the
+dashboard for 30 days, and its name is held for 7 days so an old link cannot
+land on a different map.
+
+**Delete permanently** — the red button on the map's page, which asks you to
+type the map's name — skips all of that. Every address the map had answers
+"not found" at once, its data is deleted, its name is free for another map
+straight away, and nothing can bring it back: not the dashboard, not NIKA
+support. A project that pointed at it offers **Host as new map**.
+
+**What counts toward your storage:** only maps that are live or paused. A map
+that is taken down, deleted, expired or stopped does not count, so any of those
+frees its space for the next publish.
 
 ### What happens, in order
 

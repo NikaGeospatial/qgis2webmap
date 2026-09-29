@@ -168,6 +168,18 @@ class TestParseMapState:
         response = refusal(404, "map_not_found")
         assert parse_map_state(MAP_ID, 404, response.body).presence == PRESENCE_MISSING
 
+    def test_a_permanently_deleted_map_offers_host_as_new(self) -> None:
+        """The control plane answers a deleted map's tombstone with exactly the
+        404 an unknown id gets (`resolveManagedMap`), so no new code is needed
+        here - this pins the reply body it sends so that stays true."""
+        body = json.dumps(
+            {"error": {"code": "map_not_found", "message": "Unknown map."}}
+        ).encode()
+        state = parse_map_state(MAP_ID, 404, body)
+        assert state.presence == PRESENCE_MISSING
+        assert host_action(MAP_ID, state) == ACTION_HOST_AS_NEW
+        assert host_button_label(ACTION_HOST_AS_NEW) == "Host as new map ↗"
+
     def test_a_403_map_forbidden_is_another_organisations_map(self) -> None:
         response = refusal(403, "map_forbidden")
         state = parse_map_state(MAP_ID, 403, response.body)
