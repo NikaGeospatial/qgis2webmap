@@ -258,9 +258,9 @@ layer, **Go to Map tab** for the basemap and the other map settings.
 them back — nothing is left out of the report, only folded away.
 
 When something changes after a check — a layer ticked or unticked, the map
-renamed, a layer added in QGIS — the report is marked **Out of date** rather than
-going on looking current. **Check again** refreshes it. Restyling a layer in
-QGIS is the one change it cannot see; check again after one.
+renamed, a layer added, restyled or edited and saved in QGIS — the report is
+marked **Out of date** rather than going on looking current. **Check again**
+refreshes it.
 
 | Verdict | Meaning |
 |---|---|

@@ -227,6 +227,142 @@ class TestLayerWatcher:
         assert rebuilds == []
 
 
+def _points(name: str):
+    return qgis_core.QgsVectorLayer(
+        "Point?crs=EPSG:4326&field=n:string", name, "memory"
+    )
+
+
+def _restyle(layer) -> None:
+    """What Apply in Layer Properties does: a new renderer, then the signal."""
+    layer.setRenderer(
+        qgis_core.QgsSingleSymbolRenderer(
+            qgis_core.QgsMarkerSymbol.createSimple({"color": "red"})
+        )
+    )
+    layer.emitStyleChanged()
+
+
+class TestLayerContentWatcher:
+    """Restyling a layer moves nothing in the tree, so the tree watcher never saw
+    it: the Fidelity report and the dialog's cached read stayed "current"."""
+
+    def test_restyles_collapse_into_one_change(self, qgis_app, project) -> None:
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        layers = [_points("a"), _points("b")]
+        for layer in layers:
+            project.addMapLayer(layer)
+        watcher = LayerContentWatcher(project)
+        changes = []
+        watcher.changed.connect(lambda: changes.append(1))
+
+        for layer in layers:
+            _restyle(layer)
+        QCoreApplication.processEvents()
+        assert changes == [1]
+        watcher.disconnect_all()
+
+    def test_a_labels_only_apply_counts_as_a_change(self, qgis_app, project) -> None:
+        """Label, opacity and scale-range edits change no renderer: Apply sends
+        `styleChanged` and nothing else."""
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        layer = _points("a")
+        project.addMapLayer(layer)
+        watcher = LayerContentWatcher(project)
+        changes = []
+        watcher.changed.connect(lambda: changes.append(1))
+
+        layer.setLabeling(
+            qgis_core.QgsVectorLayerSimpleLabeling(qgis_core.QgsPalLayerSettings())
+        )
+        layer.setLabelsEnabled(True)
+        layer.emitStyleChanged()
+        QCoreApplication.processEvents()
+        assert changes == [1]
+        watcher.disconnect_all()
+
+    def test_committed_edits_count_as_a_change(self, qgis_app, project) -> None:
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        layer = _points("a")
+        project.addMapLayer(layer)
+        watcher = LayerContentWatcher(project)
+        changes = []
+        watcher.changed.connect(lambda: changes.append(1))
+
+        layer.startEditing()
+        feature = qgis_core.QgsFeature(layer.fields())
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(1, 2))
+        )
+        layer.addFeature(feature)
+        assert layer.commitChanges()
+        QCoreApplication.processEvents()
+        assert changes == [1]
+        watcher.disconnect_all()
+
+    def test_it_follows_layers_in_and_out_of_the_project(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        watcher = LayerContentWatcher(project)
+        changes = []
+        watcher.changed.connect(lambda: changes.append(1))
+
+        late = _points("late")
+        project.addMapLayer(late)
+        assert late.id() in watcher.watched_layer_ids()
+        _restyle(late)
+        QCoreApplication.processEvents()
+        assert changes == [1], "a layer added after the dialog opened was not watched"
+
+        # Removal releases the layer's connections before QGIS deletes it.
+        kept = _points("kept")
+        project.addMapLayer(kept)
+        project.takeMapLayer(kept)
+        assert kept.id() not in watcher.watched_layer_ids()
+        assert kept.receivers(kept.styleChanged) == 0
+        watcher.disconnect_all()
+
+    def test_disconnect_all_leaves_nothing_connected(self, qgis_app, project) -> None:
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        layer = _points("a")
+        project.addMapLayer(layer)
+        # Baselines, not zero: QGIS connects to some of these itself.
+        before = layer.receivers(layer.styleChanged)
+        before_renderer = layer.receivers(layer.rendererChanged)
+        watcher = LayerContentWatcher(project)
+        assert layer.receivers(layer.styleChanged) == before + 1
+        assert layer.receivers(layer.rendererChanged) == before_renderer + 1
+        changes = []
+        watcher.changed.connect(lambda: changes.append(1))
+
+        watcher.disconnect_all()
+        assert layer.receivers(layer.styleChanged) == before
+        assert layer.receivers(layer.rendererChanged) == before_renderer
+        _restyle(layer)
+        after = _points("after")
+        project.addMapLayer(after)
+        _restyle(after)
+        QCoreApplication.processEvents()
+        assert changes == []
+        assert watcher.watched_layer_ids() == []
+
+
 class TestPreview:
     def test_preview_path_is_stable_for_a_project(self) -> None:
         """A changing URL is why the incumbent's reload button is useless."""

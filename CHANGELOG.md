@@ -38,6 +38,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   QGIS, but they arrive as pictures. The verdict was documented and never used.
 
 ### Fixed
+- **Restyling a layer in QGIS went unnoticed while the dialog was open.** The
+  Fidelity report kept describing the old symbology as current, and Export and
+  Host could reuse the project read taken before the restyle - shipping the old
+  style. Applying a style change in Layer Properties or the Styling panel, or
+  saving edits to a layer, now marks the report **Out of date** and discards the
+  earlier read, and a running preview rebuilds.
 - **A project could not be published again once its map was taken down.** The
   Host button read only the map id stored in the project, so a map taken down
   in the dashboard, deleted, or owned by another organisation still said

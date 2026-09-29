@@ -226,6 +226,42 @@ class TestFreshness:
         dialog.refresh_layers()  # what the layer watcher does
         assert dialog.fidelity_summary.text().startswith("Out of date")
 
+    def test_restyling_a_layer_in_qgis_makes_it_out_of_date(
+        self, dialog, project
+    ) -> None:
+        """Restyling was the one change the report could not see, and the
+        cached read went on being handed to Export and Host."""
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        dialog._show_fidelity(mixed_report(project))
+        dialog._cached_export = object()
+        dialog._cached_signature = dialog.state.data_snapshot()
+        assert not dialog._fidelity_is_stale
+
+        roads = next(
+            layer for layer in project.mapLayers().values() if layer.name() == "roads"
+        )
+        roads.setRenderer(
+            qgis_core.QgsSingleSymbolRenderer(
+                qgis_core.QgsMarkerSymbol.createSimple({"color": "red"})
+            )
+        )
+        roads.emitStyleChanged()
+        QCoreApplication.processEvents()
+
+        assert dialog._fidelity_is_stale
+        assert dialog.fidelity_summary.text().startswith("Out of date")
+        assert dialog._cached_export is None, "a restyle left the old read in the cache"
+
+    def test_closing_the_dialog_disconnects_from_every_layer(
+        self, dialog, project
+    ) -> None:
+        layers = list(project.mapLayers().values())
+        open_counts = [layer.receivers(layer.styleChanged) for layer in layers]
+        dialog.close()
+        closed_counts = [layer.receivers(layer.styleChanged) for layer in layers]
+        assert closed_counts == [count - 1 for count in open_counts]
+
     def test_the_strip_uses_full_strength_text_for_problems(
         self, dialog, project
     ) -> None:

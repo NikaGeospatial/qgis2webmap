@@ -168,7 +168,7 @@ from .background_job import BackgroundJob, Progress
 from .fidelity_panel import FidelityPanel, FidelityStrip, Proceed, ask_before
 from .hosted_map_watch import HostedMapWatch
 from .hosting_transport import make_qgis_transport
-from .layer_watcher import LayerTreeWatcher
+from .layer_watcher import LayerContentWatcher, LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
     COMMUNITY_URL,
     COMPANY_URL,
@@ -690,6 +690,10 @@ class MainDialog(QDialog):
         # nothing to refresh.
         self.watcher = LayerTreeWatcher(self.project, self)
         self.watcher.changed.connect(self.refresh_layers)
+        # What the layers LOOK like, which the tree does not carry: a restyle
+        # (or saved edits) changes the map without moving anything above.
+        self.content_watcher = LayerContentWatcher(self.project, self)
+        self.content_watcher.changed.connect(self._project_content_changed)
 
         # The Host button describes the project, not the dialog, and the dialog
         # outlives the project: `QgsProject.instance()` is the same object after
@@ -1316,13 +1320,9 @@ class MainDialog(QDialog):
         layout.addLayout(bulk)
         return page
 
-    def refresh_layers(self) -> None:
-        """Rebuild the list from the project.
-
-        Settings survive because they live in `DialogState`, keyed by layer id -
-        never in the widgets being discarded here. That is what lets the list
-        follow QGIS without a refresh button that mutates settings.
-        """
+    def _project_content_changed(self) -> None:
+        """The map changed in QGIS: a layer added, removed, reordered, renamed,
+        restyled or edited. Everything read from the project before is stale."""
         # The layers changed, so any report already on screen describes a
         # project that no longer exists. Marked rather than recomputed: it is
         # only worth building when the user actually looks at it.
@@ -1340,6 +1340,15 @@ class MainDialog(QDialog):
         # one rebuild per change rather than one per signal.
         if getattr(self, "_server", None) is not None:
             self._rebuild_timer.start()
+
+    def refresh_layers(self) -> None:
+        """Rebuild the list from the project.
+
+        Settings survive because they live in `DialogState`, keyed by layer id -
+        never in the widgets being discarded here. That is what lets the list
+        follow QGIS without a refresh button that mutates settings.
+        """
+        self._project_content_changed()
 
         if not hasattr(self, "layer_tree"):
             return
@@ -3585,6 +3594,7 @@ class MainDialog(QDialog):
         with contextlib.suppress(Exception):
             self._map_watch.stop()
         self.watcher.disconnect_all()
+        self.content_watcher.disconnect_all()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         self._shutdown()
