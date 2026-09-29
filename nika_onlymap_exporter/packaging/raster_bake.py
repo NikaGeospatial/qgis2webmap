@@ -39,10 +39,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-#: What `raster_staging` injects in place of this module's `bake`. Source path,
-#: QML document, destination path; returns the path actually written.
-BakeCallable = Any
-
 
 class StyleBakeError(RuntimeError):
     """The style could not be rendered into the pixels.
