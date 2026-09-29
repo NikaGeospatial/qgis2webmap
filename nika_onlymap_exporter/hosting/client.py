@@ -203,6 +203,23 @@ REFUSAL_RELEASE_CONFLICT = "release_conflict"
 # told its sign-in had expired, and signing in again changed nothing.
 NON_AUTH_REFUSAL_CODES = frozenset({REFUSAL_MAP_LIMIT_REACHED, REFUSAL_MAP_FORBIDDEN})
 
+# The server's answer when a desktop sign-in asks for something only the
+# dashboard may do. The plugin is only a way to put a map online: taking a map
+# down, deleting, renaming or password-protecting it is done at nika.eco, and a
+# plugin token is refused all of it. The token itself is fine, so this must
+# never read as an expired sign-in - clearing a working token and sending the
+# user to sign in again would change nothing. The plugin only calls routes the
+# server allows it, so seeing this at all means the two disagree about what a
+# plugin may do, and the fix is an update, not a sign-in.
+REFUSAL_DESKTOP_TOKEN_NOT_PERMITTED = "desktop_token_not_permitted"
+DESKTOP_TOKEN_NOT_PERMITTED_MESSAGE = (
+    "NIKA does not let the QGIS plugin do this ({what}). Your sign-in is still "
+    "valid; there is no need to sign in again.\n\n"
+    "The plugin only publishes maps. Taking a map down, deleting, renaming or "
+    "password-protecting it is done from your dashboard at nika.eco. If this "
+    "appeared while publishing, update QGIS2WebMap and try again."
+)
+
 
 class PublishRefusedError(HostingError):
     """The server refused to publish and said why in a form we can act on.
@@ -904,6 +921,13 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
         # these two statuses stays an authentication failure.
         if refusal is not None and refusal.code in NON_AUTH_REFUSAL_CODES:
             raise refusal
+        if refusal is not None and refusal.code == REFUSAL_DESKTOP_TOKEN_NOT_PERMITTED:
+            # Our own sentence rather than the server's, which is written for
+            # every desktop client and says to sign in on the web.
+            raise PublishRefusedError(
+                DESKTOP_TOKEN_NOT_PERMITTED_MESSAGE.format(what=what),
+                code=REFUSAL_DESKTOP_TOKEN_NOT_PERMITTED,
+            )
         raise AuthRequiredError(
             "Your NIKA sign-in is no longer valid. Sign in again and republish."
         )

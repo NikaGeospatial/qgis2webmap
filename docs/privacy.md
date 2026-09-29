@@ -112,6 +112,10 @@ What the hosting features send, all of it to NIKA's API:
 
 - **Signing in.** Your browser opens NIKA's sign-in page; the plugin receives a
   sign-in token, which is stored on this computer and never in the project.
+  That token is for publishing: besides reading your account details, it can
+  only publish maps and check a published map's state. NIKA refuses it the
+  rest — it cannot list, take down, delete, rename or password-protect a map,
+  and cannot reach billing — so a copy of it is not a way to manage your maps.
 - **Publishing.** First a description of the map — its title, file names, sizes
   and checksums, and the runtime version — and then, once you have confirmed,
   the map's files and a thumbnail.

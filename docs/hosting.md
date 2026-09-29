@@ -44,7 +44,10 @@ changes the file you export.
 
 ### Taking a map down, and deleting it
 
-Both happen in the NIKA dashboard, not in QGIS.
+Both happen in the NIKA dashboard, not in QGIS. So does everything else about
+managing a published map — renaming it, pausing and resuming it, passwords and
+access links. The plugin is only a way to put a map online, and NIKA refuses
+its sign-in anything more.
 
 **Take down** stops the map serving and keeps it: it can be restored from the
 dashboard for 30 days, and its name is held for 7 days so an old link cannot

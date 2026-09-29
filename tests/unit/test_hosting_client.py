@@ -822,6 +822,41 @@ class TestStructuredRefusals:
         with pytest.raises(AuthRequiredError):
             api.start_publish(MANIFEST)
 
+    def test_a_route_the_plugin_may_not_use_is_not_a_sign_in_problem(self) -> None:
+        """Map management is dashboard-only, and a plugin token asking for it is
+        refused `desktop_token_not_permitted`. The token is fine: reading this
+        as an expired sign-in would clear it and send the user round a sign-in
+        that changes nothing."""
+        refused = self.refusal(
+            403,
+            "desktop_token_not_permitted",
+            "This action cannot be performed with a desktop app token. "
+            "Sign in on the web to continue.",
+            {},
+        )
+        assert not isinstance(refused, AuthRequiredError)
+        assert refused.code == "desktop_token_not_permitted"
+        message = str(refused)
+        assert "no need to sign in again" in message
+        assert "dashboard at nika.eco" in message
+        assert "starting the upload" in message
+
+    def test_the_same_refusal_on_the_release_poll_is_not_retried(self) -> None:
+        body = json.dumps(
+            {
+                "error": {
+                    "code": "desktop_token_not_permitted",
+                    "message": "no",
+                    "details": {},
+                }
+            }
+        ).encode("utf-8")
+        api, transport = client(HttpResponse(403, body))
+        with pytest.raises(PublishRefusedError) as caught:
+            api.await_release("rel_1")
+        assert caught.value.code == "desktop_token_not_permitted"
+        assert len(transport.requests) == 1
+
     def test_a_403_with_an_auth_code_is_still_a_sign_in_problem(self) -> None:
         body = json.dumps(
             {"error": {"code": "not_a_member", "message": "no", "details": {}}}

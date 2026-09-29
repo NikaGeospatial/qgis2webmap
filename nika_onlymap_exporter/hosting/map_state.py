@@ -192,6 +192,11 @@ def parse_map_state(map_id: str, status: int, body: bytes) -> RemoteMapState:
         return RemoteMapState(map_id=map_id, presence=PRESENCE_MISSING)
     if status == 403 and code == "map_forbidden":
         return RemoteMapState(map_id=map_id, presence=PRESENCE_OTHER_ORG)
+    if status == 403 and code == "desktop_token_not_permitted":
+        # The server does not let a plugin token read this, which says nothing
+        # about the map and nothing wrong with the sign-in. "Could not tell",
+        # so the stored id keeps deciding and nobody is sent to sign in again.
+        return RemoteMapState(map_id=map_id, presence=PRESENCE_OFFLINE)
     if status in (401, 403):
         return RemoteMapState(map_id=map_id, presence=PRESENCE_SIGNED_OUT)
     # 5xx, 429, a proxy's page, a 404 from something that is not our API: none

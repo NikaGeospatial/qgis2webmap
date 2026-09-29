@@ -186,9 +186,16 @@ class TestParseMapState:
         assert state.presence == PRESENCE_OTHER_ORG
         assert state.needs_new_map
 
-    @pytest.mark.parametrize(
-        "code", ["insufficient_scope", "desktop_token_not_permitted", ""]
-    )
+    def test_a_route_the_plugin_may_not_use_is_could_not_tell(self) -> None:
+        """Not signed out: the token is fine, and sending the user to sign in
+        again would change nothing. Not a foreign map either."""
+        response = refusal(403, "desktop_token_not_permitted")
+        state = parse_map_state(MAP_ID, 403, response.body)
+        assert state.presence == PRESENCE_OFFLINE
+        assert not state.is_answer
+        assert not state.needs_new_map
+
+    @pytest.mark.parametrize("code", ["insufficient_scope", "not_a_member", ""])
     def test_any_other_403_is_a_sign_in_problem_not_a_foreign_map(self, code) -> None:
         """Reading a lapsed token as "another organisation's map" would offer to
         fork a perfectly good map."""
