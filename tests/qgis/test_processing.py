@@ -125,6 +125,91 @@ class TestAlgorithmRuns:
             )
 
 
+class _RecordingFeedback(qgis_core.QgsProcessingFeedback):
+    """Keeps what the algorithm tells the Processing log, by severity."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.warnings: list[str] = []
+
+    def pushWarning(self, warning: str) -> None:  # noqa: N802 -- QGIS API
+        self.warnings.append(warning)
+        super().pushWarning(warning)
+
+
+class TestBlockedItems:
+    """A Blocked item - part of the project QGIS could not read - stops a batch
+    export unless the run says in advance to export the rest anyway."""
+
+    @staticmethod
+    def _project_with_a_missing_layer(project, make_memory_layer):
+        project.addMapLayer(
+            make_memory_layer("pts", features=[("Ashford", [0.87, 51.15])])
+        )
+        ghost = qgis_core.QgsVectorLayer("/nonexistent/ghost.shp", "ghost", "ogr")
+        assert not ghost.isValid()
+        project.addMapLayer(ghost)
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(project)
+        return context
+
+    def test_the_parameter_exists_and_defaults_to_refusing(self, algorithm) -> None:
+        definition = algorithm.parameterDefinition("EXPORT_BLOCKED")
+        assert definition is not None
+        assert definition.description() == "Export even if some items are blocked"
+        assert definition.defaultValue() is False
+
+    def test_by_default_a_blocked_item_refuses_and_lists_the_problem(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        context = self._project_with_a_missing_layer(project, make_memory_layer)
+        destination = tmp_path / "map.html"
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+
+        with pytest.raises(qgis_core.QgsProcessingException) as excinfo:
+            algorithm.processAlgorithm(
+                {"OUTPUT": str(destination), "MODE": 0, "TITLE": ""},
+                context,
+                qgis_core.QgsProcessingFeedback(),
+            )
+        message = str(excinfo.value)
+        assert "could not be read" in message
+        assert "could not load this layer" in message
+        assert "Export even if some items are blocked" in message
+        assert not destination.exists()
+
+    def test_when_asked_it_exports_the_rest_and_warns_about_each_blocked_item(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        context = self._project_with_a_missing_layer(project, make_memory_layer)
+        destination = tmp_path / "map.html"
+        feedback = _RecordingFeedback()
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+
+        results = algorithm.processAlgorithm(
+            {
+                "OUTPUT": str(destination),
+                "MODE": 0,
+                "TITLE": "",
+                "EXPORT_BLOCKED": True,
+            },
+            context,
+            feedback,
+        )
+
+        assert Path(results["OUTPUT"]).is_file()
+        missing = [w for w in feedback.warnings if w.startswith("Missing from the map")]
+        assert len(missing) == 1
+        assert "ghost" in missing[0]
+        assert any("Exporting anyway" in w for w in feedback.warnings)
+
+
 class TestRuntimePreflight:
     """The licence gate has to fire before the work, not after it.
 

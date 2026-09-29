@@ -29,7 +29,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Blocked item and ask: go on without it, review it on the Fidelity tab, or
   cancel. One layer QGIS could not load used to stop the other nine being
   shared. A map with no layer at all is still refused, and the Processing
-  algorithm still refuses a Blocked item, because a batch run has nobody to ask.
+  algorithm still refuses a Blocked item by default, because a batch run has
+  nobody to ask. Its new **Export even if some items are blocked** parameter
+  (off by default) is the batch run answering in advance: the map is written
+  without them, and each missing item is logged as a warning.
 - **Markers QGIS draws into the map, and raster colours baked into the
   pixels, are reported as Rasterised** rather than Kept. They look as they do in
   QGIS, but they arrive as pictures. The verdict was documented and never used.
