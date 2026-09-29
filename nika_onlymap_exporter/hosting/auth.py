@@ -66,11 +66,6 @@ TOKEN_SETTING = "qgis2webmap/hostingToken"
 # has no QGIS profile to read, and this is the only way it can publish.
 TOKEN_ENV = "NIKA_HOSTING_TOKEN"
 
-# What a desktop token looks like. Shape only - the server is the authority on
-# whether it is still valid - but it catches the paste of the wrong string
-# before it is stored and fails on the next publish.
-TOKEN_PREFIX = "desk_"
-
 # Shown in the account's device list and stored against the session, so the
 # user can tell which client they approved and revoke it by name later.
 DEVICE_NAME = "QGIS plugin"
@@ -141,12 +136,6 @@ class DeviceFlow:
 # Returns True to keep waiting, False to give up. The poll loop's only link to
 # a Cancel button, so it stays free of Qt.
 KeepWaiting = Callable[[], bool]
-
-
-def looks_like_token(value: str) -> bool:
-    return value.strip().startswith(TOKEN_PREFIX) and len(value.strip()) > len(
-        TOKEN_PREFIX
-    )
 
 
 def load_token() -> str:
