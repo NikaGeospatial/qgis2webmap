@@ -59,6 +59,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
     LAYER_SWITCHER = "LAYER_SWITCHER"
     ZOOM_CONTROLS = "ZOOM_CONTROLS"
     SCALE_BAR = "SCALE_BAR"
+    EXPORT_BLOCKED = "EXPORT_BLOCKED"
 
     def createInstance(self):  # noqa: N802 -- QGIS Processing API
         return ExportProjectAlgorithm()
@@ -83,7 +84,12 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             "anonymous usage report to NIKA when they load, and nothing "
             "else — see docs/privacy.md.\n\n"
             "Anything that cannot be translated exactly is reported in the log "
-            "rather than dropped silently. For the full fidelity report, and "
+            "rather than dropped silently. If part of the project cannot be "
+            "read at all (a Blocked item, such as a layer whose data source is "
+            "missing), the export stops and lists the problems, unless "
+            "'Export even if some items are blocked' is ticked - then the map "
+            "is written without them and each one is logged as a warning. "
+            "For the full fidelity report, and "
             "for per-layer popup and label choices, use "
             "Web → QGIS2WebMap by NIKA.\n\n"
             "<b>First run on a new computer:</b> open Web → QGIS2WebMap by NIKA "
@@ -129,6 +135,15 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             (self.SCALE_BAR, "Scale bar"),
         ):
             self.addParameter(QgsProcessingParameterBoolean(key, label, True))
+
+        # Off by default: a batch run has nobody to ask, so the safe answer to
+        # "part of the project could not be read" stays a refusal. Ticking it is
+        # the batch equivalent of the dialog's "export anyway".
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.EXPORT_BLOCKED, "Export even if some items are blocked", False
+            )
+        )
 
         self.addParameter(
             QgsProcessingParameterFileDestination(
@@ -219,15 +234,26 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
                 "There is nothing to export. Add at least one vector or raster "
                 "layer with data to the project."
             )
-        # Still a refusal here, unlike the dialog, which warns and lets the user
-        # decide: a batch run has nobody to ask, and writing a map with a layer
-        # quietly missing is the outcome a warning exists to prevent.
-        if not export.is_exportable:
-            raise QgsProcessingException(
-                "Some of the project could not be read, so the map would be "
-                "missing it:\n"
-                + "\n".join(item.detail for item in export.blocking_items)
+        # Still a refusal here by default, unlike the dialog, which warns and
+        # lets the user decide: a batch run has nobody to ask, and writing a map
+        # with a layer quietly missing is the outcome a warning exists to
+        # prevent. `EXPORT_BLOCKED` is the user deciding in advance - and then
+        # it is not quiet: every missing item is a warning in the log.
+        if export.blocking_items:
+            if not self.parameterAsBool(parameters, self.EXPORT_BLOCKED, context):
+                raise QgsProcessingException(
+                    "Some of the project could not be read, so the map would be "
+                    "missing it:\n"
+                    + "\n".join(item.detail for item in export.blocking_items)
+                    + "\n\nTick 'Export even if some items are blocked' to "
+                    "export the rest anyway."
+                )
+            feedback.pushWarning(
+                f"Exporting anyway, as requested: {len(export.blocking_items)} "
+                "blocked item(s) will be missing from the map."
             )
+            for item in export.blocking_items:
+                feedback.pushWarning(f"Missing from the map - {item.subject}: {item.detail}")
 
         # `build_artifact`, not a local write-then-export pair: it is what stages
         # through a temporary directory (so a batch run leaves no half-written

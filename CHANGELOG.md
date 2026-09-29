@@ -39,7 +39,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   current.
 - **Blocked warns instead of refusing.** A layer QGIS could not read no longer
   stops the rest of the map from exporting: Export names what will be missing
-  and asks. An empty map is still refused.
+  and asks. An empty map is still refused. The Processing algorithm still
+  refuses a Blocked item by default, because a batch run has nobody to ask. Its
+  new **Export even if some items are blocked** parameter (off by default) is
+  the batch run answering in advance: the map is written without them, and each
+  missing item is logged as a warning.
 - **Save to, beside Export as.** The place is chosen once on the Map tab and
   saved with the project, as the type already was; switching the type keeps the
   name (`peaks.html` becomes `peaks.zip`). Export is the filled button in the
