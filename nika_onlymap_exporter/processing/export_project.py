@@ -253,7 +253,9 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
                 "blocked item(s) will be missing from the map."
             )
             for item in export.blocking_items:
-                feedback.pushWarning(f"Missing from the map - {item.subject}: {item.detail}")
+                feedback.pushWarning(
+                    f"Missing from the map - {item.subject}: {item.detail}"
+                )
 
         # `build_artifact`, not a local write-then-export pair: it is what stages
         # through a temporary directory (so a batch run leaves no half-written
