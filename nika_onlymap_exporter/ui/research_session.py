@@ -238,8 +238,11 @@ class ResearchSession(QObject):
         try:
             outcome = service.on_response(item.id, status)
             if outcome == RETRY:
-                # Offline, or the server is having a moment: stop here and try
-                # the whole queue again at the next dialog open or export.
+                # Offline, the server is having a moment, or it turned this
+                # report away without saying why: stop here and try the whole
+                # queue again at the next dialog open or export. A report
+                # turned away too often is dropped (`GAVE_UP`), and the send
+                # carries on with the next one.
                 self._finish()
                 return
             self._sending = False

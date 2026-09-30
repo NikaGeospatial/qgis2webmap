@@ -71,8 +71,13 @@ from nika_onlymap_exporter.research.profile import (
     Profile,
 )
 from nika_onlymap_exporter.research.project_facts import format_from_source
-from nika_onlymap_exporter.research.queue import MAX_QUEUED, enqueue
-from nika_onlymap_exporter.research.service import ResearchService
+from nika_onlymap_exporter.research.queue import MAX_QUEUED, QueuedReport, enqueue
+from nika_onlymap_exporter.research.service import (
+    GAVE_UP,
+    MAX_REPORT_ATTEMPTS,
+    RETRY,
+    ResearchService,
+)
 from nika_onlymap_exporter.research.state import load_state, save_state
 from nika_onlymap_exporter.research.tally import (
     FAILURE_CLASSES,
@@ -780,6 +785,53 @@ class TestResponses:
         report_id = self._queued(service)
         service.on_response(report_id, status)
         assert [i.id for i in service.state.queue] == [report_id]
+
+    @pytest.mark.parametrize("status", [403, 404, 409, 302])
+    def test_an_unexplained_refusal_is_dropped_after_bounded_attempts(
+        self, tmp_path: Path, clock: Clock, status: int
+    ) -> None:
+        path = tmp_path / "research.json"
+        service = ResearchService(path, ENV, today=clock)
+        report_id = self._queued(service)
+        for attempt in range(1, MAX_REPORT_ATTEMPTS):
+            # A fresh load each time: the count survives between sends.
+            service = ResearchService(path, ENV, today=clock)
+            assert service.on_response(report_id, status) == RETRY
+            assert [(i.id, i.attempts) for i in service.state.queue] == [
+                (report_id, attempt)
+            ]
+        service = ResearchService(path, ENV, today=clock)
+        assert service.on_response(report_id, status) == GAVE_UP
+        assert service.state.queue == []
+        assert load_state(path).queue == []
+
+    @pytest.mark.parametrize("status", [None, 408, 429, 500, 502, 503])
+    def test_server_or_network_trouble_never_counts(
+        self, service: ResearchService, status: int | None
+    ) -> None:
+        report_id = self._queued(service)
+        for _ in range(MAX_REPORT_ATTEMPTS * 3):
+            assert service.on_response(report_id, status) == RETRY
+        assert [(i.id, i.attempts) for i in service.state.queue] == [(report_id, 0)]
+
+    def test_attempts_are_per_report(self, service: ResearchService) -> None:
+        first = self._queued(service)
+        service.record_output(make_export((make_layer("B"),)), "/b.qgz")
+        second = service.state.queue[1].id
+        for _ in range(MAX_REPORT_ATTEMPTS - 1):
+            service.on_response(first, 403)
+        service.on_response(second, 403)
+        assert [i.attempts for i in service.state.queue] == [
+            MAX_REPORT_ATTEMPTS - 1,
+            1,
+        ]
+
+    def test_a_queue_saved_before_attempts_reads_as_none_yet(self) -> None:
+        item = QueuedReport.from_stored({"id": "a", "body": "{}"})
+        assert item is not None and item.attempts == 0
+        for bad in (-1, "3", True, 2.5):
+            again = QueuedReport.from_stored({"id": "a", "body": "{}", "attempts": bad})
+            assert again is not None and again.attempts == 0
 
     def test_410_ends_research_for_good(self, service: ResearchService) -> None:
         report_id = self._queued(service)

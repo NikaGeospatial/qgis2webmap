@@ -24,7 +24,7 @@ from .envelope import Environment, local_now, utc_offset_hours
 from .fingerprint import map_key, new_map_id, structure_fingerprint
 from .map_report import MapReportWire, ProjectFacts, build_map_report, encode
 from .profile import Profile
-from .queue import QueuedReport, enqueue, remove
+from .queue import QueuedReport, count_attempt, enqueue, remove
 from .state import ResearchState, load_state, save_state
 from .tally import (
     TallyWire,
@@ -39,10 +39,20 @@ SENT = "sent"
 ENDED_BY_SERVER = "ended"
 REFUSED = "refused"
 RETRY = "retry"
+# Retried until `MAX_REPORT_ATTEMPTS` answers counted against it, then dropped
+# so the reports behind it are not held up for good.
+GAVE_UP = "gave_up"
 
 # The server has read the report and said no. Sending the same bytes again
 # would only repeat that, so these are dropped rather than kept for retry.
 _REFUSED_STATUSES = frozenset({400, 413, 415, 422})
+
+# Answers that say the server or the network is struggling, not that anything
+# is wrong with the report: retried for as long as it takes, never counted.
+_TRANSIENT_STATUSES = frozenset({408, 429})
+
+# How many answers counted against one report before it is dropped.
+MAX_REPORT_ATTEMPTS = 5
 
 
 def classify_response(status: int | None) -> str:
@@ -56,6 +66,19 @@ def classify_response(status: int | None) -> str:
     if status in _REFUSED_STATUSES:
         return REFUSED
     return RETRY
+
+
+def counts_against_report(status: int | None) -> bool:
+    """A retry answer that the report itself may be the cause of.
+
+    A 403, 404 or 409 sent again gets the same answer again, but nothing says
+    for certain that it would, so the report is retried a few times rather
+    than dropped at once. No answer at all, a 408, a 429 or a 5xx is trouble
+    on the way or at the server, and a report is never dropped for that.
+    """
+    if classify_response(status) != RETRY or status is None:
+        return False
+    return status not in _TRANSIENT_STATUSES and not 500 <= status < 600
 
 
 class ResearchService:
@@ -207,6 +230,11 @@ class ResearchService:
             self.state.forget_collected()
         elif outcome in (SENT, REFUSED):
             remove(self.state.queue, report_id)
+        elif counts_against_report(status):
+            attempts = count_attempt(self.state.queue, report_id)
+            if attempts is not None and attempts >= MAX_REPORT_ATTEMPTS:
+                remove(self.state.queue, report_id)
+                outcome = GAVE_UP
         self._save()
         return outcome
 

@@ -163,7 +163,8 @@ How it works:
 - Reports are sent in the background through QGIS's own network settings,
   without your NIKA sign-in, and never delay an export. If they cannot be sent
   they wait (at most 50) and are retried the next time you open the dialog or
-  export.
+  export. One that NIKA's server keeps turning away is deleted after five
+  tries rather than kept forever.
 - Choosing **Don't share** later deletes anything still waiting to be sent,
   along with the maps' random codes: if you share again, your maps get new ones.
 - Research sharing ends for good on **31 January 2027**: after that date the

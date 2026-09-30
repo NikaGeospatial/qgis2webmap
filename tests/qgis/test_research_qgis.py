@@ -196,6 +196,33 @@ class TestSender:
         assert len(poster.sent) == 2
         assert session.service().state.queue == []
 
+    def test_a_report_turned_away_too_often_stops_blocking_the_queue(
+        self, qgis_app, tmp_path, read_export, project
+    ) -> None:
+        from nika_onlymap_exporter.research.service import MAX_REPORT_ATTEMPTS
+        from nika_onlymap_exporter.ui.research_session import ResearchSession
+
+        # The first report is always answered 403; the one behind it would be
+        # accepted, but is never tried while the first holds the head.
+        poster = FakePoster([403] * MAX_REPORT_ATTEMPTS)
+        path = tmp_path / "r.json"
+        session = ResearchSession(path=path, poster=poster)
+        _share_and_export(session, read_export, project)
+        export, _ = read_export
+        session.service().record_output(export, "/other.qgz")
+        for _ in range(MAX_REPORT_ATTEMPTS - 2):
+            session = ResearchSession(path=path, poster=poster)  # a later open
+            session.flush()
+        assert [body["map_id"] for _, body in poster.sent] == [
+            poster.sent[0][1]["map_id"]
+        ] * (MAX_REPORT_ATTEMPTS - 1)
+        assert len(session.service().state.queue) == 2
+        session = ResearchSession(path=path, poster=poster)
+        session.flush()
+        # The fifth 403 drops the first; the second goes straight after.
+        assert len(poster.sent) == MAX_REPORT_ATTEMPTS + 1
+        assert session.service().state.queue == []
+
     def test_410_ends_it_for_good(
         self, qgis_app, tmp_path, read_export, project
     ) -> None:
