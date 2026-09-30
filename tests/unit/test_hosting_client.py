@@ -17,6 +17,7 @@ from hosting_fakes import FakeTransport, ok
 
 from nika_onlymap_exporter.hosting.client import (
     ALLOW_HTTP_LOOPBACK_ENV,
+    REFUSAL_FREE_MAP_EXPIRED,
     AuthRequiredError,
     HostingClient,
     HostingError,
@@ -1155,3 +1156,47 @@ class TestNotEveryConflictIsAReleaseConflict:
 
         assert not isinstance(caught.value, PublishConflictError)
         assert "not readable" in str(caught.value)
+
+
+class TestAnExpiredFreeMapIsARefusal:
+    """A free map past its days cannot be republished: a refusal, not a sign-in.
+
+    The server answers `POST /maps/publish/start` with 409 `free_map_expired`
+    and a message that names enterprise hosting as the way back. It shares its
+    status with the release conflict, and a refusal read as the conflict (a
+    "Publish anyway" question) or as an expired sign-in (a pointless sign-in
+    that clears a working token) would both tell the publisher the wrong thing.
+    """
+
+    MESSAGE = (
+        "Free maps stay online for 7 days, and this map's ended on 2026-09-20. "
+        "Publishing again cannot bring it back on the free plan - talk to us "
+        "about enterprise hosting to restore it."
+    )
+
+    def body(self) -> bytes:
+        return json.dumps(
+            {
+                "error": {
+                    "code": "free_map_expired",
+                    "message": self.MESSAGE,
+                    "details": {"expiredAt": "2026-09-20T08:00:00.000Z"},
+                }
+            }
+        ).encode("utf-8")
+
+    def test_the_server_message_as_a_publishing_refusal(self) -> None:
+        api, _transport = client(HttpResponse(409, self.body()))
+
+        with pytest.raises(PublishRefusedError) as caught:
+            api.start_publish(MANIFEST, map_id="m" * 25, release_n=4)
+
+        assert caught.value.code == REFUSAL_FREE_MAP_EXPIRED == "free_map_expired"
+        assert str(caught.value) == self.MESSAGE
+        assert not isinstance(caught.value, AuthRequiredError)
+        assert not isinstance(caught.value, PublishConflictError)
+
+    def test_not_offered_as_a_new_map(self) -> None:
+        from nika_onlymap_exporter.hosting.client import NEW_MAP_REFUSAL_CODES
+
+        assert REFUSAL_FREE_MAP_EXPIRED not in NEW_MAP_REFUSAL_CODES

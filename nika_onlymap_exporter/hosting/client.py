@@ -182,6 +182,14 @@ NEW_MAP_REFUSAL_CODES = frozenset(
     {REFUSAL_MAP_TAKEN_DOWN, REFUSAL_MAP_NOT_FOUND, REFUSAL_MAP_FORBIDDEN}
 )
 
+# A republish of a free map that has stopped or expired, once its free days are
+# over: the free plan does not bring such a map back, and the server's message
+# says enterprise hosting is what can. Another 409 that is NOT the release
+# conflict, and not a sign-in problem either, so it reaches the publisher as a
+# plain refusal in the server's own words. Deliberately not in
+# `NEW_MAP_REFUSAL_CODES`: the map still exists and is still this user's.
+REFUSAL_FREE_MAP_EXPIRED = "free_map_expired"
+
 # The 409 that IS a question for the user. It shares its status with at least
 # one refusal that is not - `map_taken_down` - so the status alone cannot decide
 # which of the two arrived, and reading it as the conflict was a real bug: a

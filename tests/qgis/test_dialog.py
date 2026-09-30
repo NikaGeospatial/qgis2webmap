@@ -1645,6 +1645,62 @@ class TestHostButtonFollowsTheServer:
         finally:
             dialog.close()
 
+    def test_an_expired_free_map_shows_the_servers_refusal(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """`free_map_expired`: the server's sentence in a warning, and nothing
+        else - no sign-in, no token cleared, no "Host as new map" question, and
+        the project still points at its map."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+        from nika_onlymap_exporter.hosting.client import PublishRefusedError
+        from nika_onlymap_exporter.ui import main_dialog
+
+        message = (
+            "Free maps stay online for 7 days, and this map's ended on "
+            "2026-09-20. Publishing again cannot bring it back on the free "
+            "plan - talk to us about enterprise hosting to restore it."
+        )
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, text, *a, **k: warnings.append((title, text)),
+        )
+        cleared: list[bool] = []
+        monkeypatch.setattr(main_dialog, "clear_token", lambda: cleared.append(True))
+        signed_in: list[object] = []
+        monkeypatch.setattr(dialog, "_sign_in_again", signed_in.append)
+        asked: list[bool] = []
+        monkeypatch.setattr(
+            dialog, "_confirm_host_as_new", lambda: asked.append(True) or True
+        )
+
+        class FakeExporter:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 2
+            pending_release_id = None
+            reconciliation = None
+            force = False
+            on_progress = None
+
+            def prepare(self, _result, _destination):
+                raise PublishRefusedError(message, code="free_map_expired")
+
+        try:
+            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
+            assert warnings == [("Cannot publish", message)]
+            assert cleared == [] and signed_in == [] and asked == []
+            assert load_hosted_map_id(project) == self.MAP_ID
+            assert "Nothing left this machine" in dialog.status_label.text()
+        finally:
+            dialog.close()
+
     def test_a_password_protected_map_is_not_described_as_open_to_anyone(
         self, qgis_app, project, make_memory_layer, monkeypatch
     ) -> None:
