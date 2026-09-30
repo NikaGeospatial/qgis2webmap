@@ -17,6 +17,7 @@ from hosting_fakes import FakeTransport, ok
 
 from nika_onlymap_exporter.hosting.client import (
     ALLOW_HTTP_LOOPBACK_ENV,
+    REFUSAL_FILE_TOO_LARGE,
     REFUSAL_FREE_MAP_EXPIRED,
     AuthRequiredError,
     HostingClient,
@@ -775,6 +776,28 @@ class TestStructuredRefusals:
         # Not rounded to a whole number: "this map is 12 MB and the limit is
         # 10 MB" would be a different, and wrong, sentence.
         assert refused.actual_mb == 12.4
+
+    def test_a_file_past_the_upload_ceiling_is_a_refusal_naming_the_file(
+        self,
+    ) -> None:
+        """R2's 5 GiB single-part limit, refused at start on every plan.
+
+        It reaches the publisher as the server's sentence, which names the
+        file - never as an expired sign-in or a bare HTTP 413.
+        """
+        refused = self.refusal(
+            413,
+            REFUSAL_FILE_TOO_LARGE,
+            "layer-0.geojson is 6 GB, and a single file can be at most 5 GB.",
+            {
+                "path": "layer-0.geojson",
+                "sizeBytes": 6 * 1024**3,
+                "limitBytes": 5 * 1024**3,
+            },
+        )
+        assert refused.code == "file_too_large"
+        assert "layer-0.geojson" in str(refused)
+        assert not isinstance(refused, AuthRequiredError)
 
     def test_the_rate_limit_carries_the_instant_not_just_the_clock_time(
         self,

@@ -169,6 +169,13 @@ REFUSAL_MAP_TOO_LARGE = "map_too_large"
 # is fixed by simplifying this map, and this one by taking another map down or
 # negotiating more room. Arrives as 413, like `map_too_large`.
 REFUSAL_STORAGE_LIMIT_REACHED = "storage_limit_reached"
+
+# One FILE is past what a single upload can carry: each file goes up in one
+# presigned R2 PUT, and R2 caps those at 5 GiB. Physical, so it applies on every
+# plan, including enterprise, which has no per-map size limit. A 413 like the
+# two above; the server's message names the file, and `error.details` carries
+# `path`, `sizeBytes` and `limitBytes`.
+REFUSAL_FILE_TOO_LARGE = "file_too_large"
 REFUSAL_RATE_LIMITED = "publish_rate_limited"
 
 # The three answers to a REPUBLISH that mean "the map this project points at is
