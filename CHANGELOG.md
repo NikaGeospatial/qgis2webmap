@@ -17,6 +17,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   that the runtime had nowhere to put it; it has had one since 0.6.22.
 
 ### Changed
+- **Exports use OnlyMap 0.10.10** (was 0.8.4). A popup opened by a click now
+  closes when you click away instead of staying until you click another
+  feature, and a legend entry shows its layer's own flat colour where it used
+  to show a grey square. Everything else renders pixel-identical to 0.8.4
+  across the nine comparison scenes. NIKA hosting must list 0.10.10 before a
+  map from this build can be published.
 - **The Fidelity tab is grouped by layer, problems first.** One line sums it
   up - `5 layers · 1 needs attention · 10 things change` - then a "Whole map"
   group and one group per layer, the layers that lose something first. A layer
