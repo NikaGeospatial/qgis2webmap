@@ -824,3 +824,56 @@ class TestEnvelope:
         )
         report = build_map_report(make_export((layer,)), ENV, Profile())
         assert report["layers"][0]["fields"] == ["visible", "hidden"]
+
+
+class TestWhatsNewExcerpt:
+    def test_ships_inside_the_plugin_with_the_research_marker(self) -> None:
+        import importlib.util
+
+        from nika_onlymap_exporter.research.preview import (
+            RESEARCH_MARKER,
+            WHATS_NEW_PATH,
+            read_whats_new,
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "_package_plugin", REPO_ROOT / "scripts" / "package_plugin.py"
+        )
+        assert spec is not None and spec.loader is not None
+        packager = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(packager)
+
+        assert WHATS_NEW_PATH.parent == packager.PACKAGE_DIR
+        assert packager.should_include(WHATS_NEW_PATH)
+        assert RESEARCH_MARKER in WHATS_NEW_PATH.read_text(encoding="utf-8")
+        before, after = read_whats_new()
+        assert before and after
+
+    def test_a_missing_excerpt_is_not_an_error(self, tmp_path: Path) -> None:
+        from nika_onlymap_exporter.research.preview import read_whats_new
+
+        assert read_whats_new(tmp_path / "absent.md") == ("", "")
+
+
+class TestPayloadPreview:
+    def test_sample_when_nothing_has_been_read(self, service: ResearchService) -> None:
+        from nika_onlymap_exporter.research.preview import (
+            SAMPLE_NOTE,
+            payload_preview_text,
+        )
+
+        text_ = payload_preview_text(service, None)
+        assert SAMPLE_NOTE in text_
+        assert '"kind": "map"' in text_
+        assert '"kind": "tally"' in text_
+        assert service.state.queue == []
+
+    def test_the_real_project_when_there_is_one(self, service: ResearchService) -> None:
+        from nika_onlymap_exporter.research.preview import (
+            SAMPLE_NOTE,
+            payload_preview_text,
+        )
+
+        text_ = payload_preview_text(service, make_export())
+        assert SAMPLE_NOTE not in text_
+        assert "Kranji site survey" in text_
