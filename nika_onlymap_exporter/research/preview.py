@@ -132,12 +132,6 @@ def payload_preview_text(
         + "\n\n"
         + TALLY_NOTE
     )
-    contact = service.preview_contact()
-    if contact is not None:
-        parts.append(
-            "Once, on its own and never linked to your maps, because you gave "
-            "an email:\n" + _pretty(contact)
-        )
     return "\n\n".join(parts)
 
 

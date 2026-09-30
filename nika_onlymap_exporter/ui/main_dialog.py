@@ -2088,14 +2088,9 @@ class MainDialog(QDialog):
             if service is None:
                 return
             state = service.state
-            dialog = AboutYouDialog(
-                state.profile if editing else None,
-                state.email if editing else None,
-                self,
-            )
+            dialog = AboutYouDialog(state.profile if editing else None, self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                service.save_profile(dialog.profile(), dialog.email())
-                self._research.flush()
+                service.save_profile(dialog.profile())
             elif not editing:
                 service.skip_profile()
         except Exception:

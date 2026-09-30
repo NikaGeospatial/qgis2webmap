@@ -23,11 +23,6 @@ ABOUT_YOU_INTRO = (
 
 ABOUT_YOU_NOTHING_SENT = "Nothing is sent unless you choose Share in the next step."
 
-EMAIL_NOTE = (
-    "Optional. Only used to contact you about early access to hosting or a "
-    "short interview. Sent once, on its own, and never linked to your maps."
-)
-
 RESEARCH_HEADING = "Help us decide what to build"
 
 RESEARCH_WHAT = (

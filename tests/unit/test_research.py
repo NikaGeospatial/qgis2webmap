@@ -35,7 +35,6 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
 )
 from nika_onlymap_exporter.research import consent, text
-from nika_onlymap_exporter.research.contact import normalise_email
 from nika_onlymap_exporter.research.envelope import (
     Environment,
     os_name,
@@ -129,13 +128,6 @@ TALLY_KEYS = ENVELOPE_KEYS | {
     "distinct_maps",
     "failures",
     "recurring_maps",
-}
-CONTACT_KEYS = ENVELOPE_KEYS | {
-    "email",
-    "audience",
-    "sector",
-    "use_cases",
-    "use_case_other",
 }
 PROFILE_KEYS = {"audience", "sector", "use_cases", "use_case_other"}
 
@@ -666,7 +658,7 @@ class TestQueue:
         self, tmp_path: Path, service: ResearchService
     ) -> None:
         service.choose(True)
-        service.save_profile(Profile.build("team", "water", [], None), "a@b.co")
+        service.save_profile(Profile.build("team", "water", [], None))
         service.record_output(make_export(), "/a.qgz")
         assert [p.name for p in tmp_path.iterdir()] == ["research.json"]
 
@@ -695,7 +687,7 @@ class TestConsentGate:
         assert service.record_output(make_export(), "/a.qgz") is False
         service.record_preview()
         service.record_failure("blocked")
-        service.save_profile(Profile(), "a@b.co")
+        service.save_profile(Profile())
         assert service.state.queue == []
         assert service.state.weeks == {}
         assert service.pending() == []
@@ -803,31 +795,83 @@ class TestResponses:
         assert reopened.consent == consent.ENDED
 
 
-class TestContact:
-    def test_sent_once_only_with_share(self, service: ResearchService) -> None:
-        service.save_profile(Profile.build("team", "water", [], None), "a@b.co")
-        assert service.state.queue == []
-        service.choose(True)
-        service.choose(True)
-        bodies = queued_bodies(service)
-        assert [b["kind"] for b in bodies] == ["contact"]
-        assert set(bodies[0]) == CONTACT_KEYS
-        assert bodies[0]["email"] == "a@b.co"
-        assert bodies[0]["sector"] == "water"
+class TestNoContact:
+    """The optional email was removed before release; nothing may bring it back."""
 
-    def test_no_email_no_contact(self, service: ResearchService) -> None:
-        service.save_profile(Profile(), "not an email")
+    def _legacy(self, tmp_path: Path) -> Path:
+        # What a 0.2.0-dev build that still had the email left behind.
+        contact = {
+            "schema": 2,
+            "kind": "contact",
+            "plugin_version": "0.2.0",
+            "qgis_version": "3.44",
+            "os": "linux",
+            "email": "person@example.org",
+            "audience": None,
+            "sector": None,
+            "use_cases": [],
+            "use_case_other": None,
+        }
+        path = tmp_path / "research.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "consent": "share",
+                    "salt": "s" * 32,
+                    "profile_answered": True,
+                    "email": "person@example.org",
+                    "contact_sent": True,
+                    "queue": [
+                        {"id": "c1", "body": json.dumps(contact)},
+                        {"id": "m1", "body": '{"kind":"map"}'},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_a_stored_email_and_queued_contact_are_dropped_on_load(
+        self, tmp_path: Path, clock: Clock
+    ) -> None:
+        path = self._legacy(tmp_path)
+        service = ResearchService(path, ENV, today=clock)
+        assert [item.id for item in service.pending()] == ["m1"]
+        assert "email" not in service.state.to_stored()
+        # Rewritten at once, not only at the next save.
+        on_disk = path.read_text(encoding="utf-8")
+        assert "person@example.org" not in on_disk
+        assert "contact_sent" not in on_disk
+        assert json.loads(on_disk)["consent"] == "share"
+
+    def test_a_clean_state_is_not_rewritten_on_load(
+        self, tmp_path: Path, clock: Clock
+    ) -> None:
+        path = tmp_path / "research.json"
+        path.write_text('{"consent": "share"}', encoding="utf-8")
+        ResearchService(path, ENV, today=clock)
+        assert path.read_text(encoding="utf-8") == '{"consent": "share"}'
+
+    def test_sharing_queues_nothing_but_maps_and_tallies(
+        self, service: ResearchService, clock: Clock
+    ) -> None:
+        service.save_profile(Profile.build("team", "water", [], None))
         service.choose(True)
         assert service.state.queue == []
-        assert normalise_email("  a@b.co ") == "a@b.co"
-
-    def test_map_reports_never_carry_the_email(self, service: ResearchService) -> None:
-        service.save_profile(Profile(), "person@example.org")
-        service.choose(True)
         service.record_output(make_export(), "/a.qgz")
-        maps = [i.body for i in service.state.queue if '"kind":"map"' in i.body]
-        assert maps
-        assert all("person@example.org" not in body for body in maps)
+        clock.day += timedelta(days=7)
+        service.prepare_flush()
+        assert {b["kind"] for b in queued_bodies(service)} == {"map", "tally"}
+
+    def test_the_preview_shows_no_contact_report(
+        self, tmp_path: Path, clock: Clock
+    ) -> None:
+        from nika_onlymap_exporter.research.preview import payload_preview_text
+
+        service = ResearchService(self._legacy(tmp_path), ENV, today=clock)
+        text = payload_preview_text(service, None)
+        assert '"contact"' not in text
+        assert "person@example.org" not in text
 
 
 class TestOnce:
@@ -854,21 +898,18 @@ class TestEnvelope:
     def test_every_report_carries_the_envelope(
         self, service: ResearchService, clock: Clock
     ) -> None:
-        service.save_profile(
-            Profile.build("self", "hobby_personal", [], None), "a@b.co"
-        )
+        service.save_profile(Profile.build("self", "hobby_personal", [], None))
         service.choose(True)
         service.record_output(make_export(), "/a.qgz")
         clock.day += timedelta(days=7)
         service.prepare_flush()
         bodies = queued_bodies(service)
-        assert {b["kind"] for b in bodies} == {"contact", "map", "tally"}
+        assert {b["kind"] for b in bodies} == {"map", "tally"}
         for body in bodies:
             assert body["schema"] == 2
             assert body["plugin_version"] == "0.1.5"
             assert body["os"] == "linux"
-            if body["kind"] != "contact":
-                assert set(body["profile"]) == PROFILE_KEYS  # type: ignore[arg-type]
+            assert set(body["profile"]) == PROFILE_KEYS  # type: ignore[arg-type]
 
     def test_popup_mode_hidden_fields_are_still_names_only(self) -> None:
         layer = make_layer(
@@ -1067,10 +1108,9 @@ class TestMapId:
         preview = service.preview_map_report(make_export(), identity="/a.qgz")
         assert preview["map_id"] == real
 
-    def test_tally_and_contact_carry_no_map_id(
+    def test_tallies_carry_no_map_id(
         self, service: ResearchService, clock: Clock
     ) -> None:
-        service.save_profile(Profile(), "a@b.co")
         service.choose(True)
         service.record_output(make_export(), "/a.qgz")
         map_id = map_bodies(service)[0]["map_id"]
@@ -1136,13 +1176,6 @@ class TestUtcOffset:
         service.prepare_flush()
         tally = next(b for b in queued_bodies(service) if b["kind"] == "tally")
         assert tally["utc_offset_hours"] == -3
-
-    def test_not_on_contact_reports(self, service: ResearchService) -> None:
-        service.save_profile(Profile(), "a@b.co")
-        service.choose(True)
-        (contact,) = queued_bodies(service)
-        assert contact["kind"] == "contact"
-        assert "utc_offset_hours" not in contact
 
 
 # ---- v2: exports_by_block -------------------------------------------------

@@ -113,8 +113,8 @@ which also has **See exactly what is sent**: the report built from your open
 project, in the exact form it would be sent.
 
 Before that window, an optional **About you** step asks who your maps are for,
-your sector, what the maps do, and optionally an email. The answers are stored
-on your computer and are only sent if you choose Share.
+your sector and what the maps do. It does not ask for your name or email. The
+answers are stored on your computer and are only sent if you choose Share.
 
 If you choose Share, the plugin sends, to NIKA's API:
 
@@ -141,9 +141,6 @@ If you choose Share, the plugin sends, to NIKA's API:
 - **With the map and weekly reports**: your computer's time zone, as a whole
   number of hours from UTC (for example `8` for Singapore, `6` for India's
   +5:30).
-- **Once, only if you gave an email**: that email, so NIKA can contact you
-  about early access to hosting or an interview. It is sent on its own and
-  never linked to your map reports.
 - With each report: your About you answers, the plugin and QGIS versions, and
   your operating system (Windows, macOS, Linux).
 

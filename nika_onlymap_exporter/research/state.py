@@ -43,6 +43,12 @@ MAX_SENT_FINGERPRINTS = 1000
 MAX_KNOWN_MAPS = 2000
 MAX_TALLIED_WEEKS = 120
 
+# The optional email and its `kind: "contact"` report were removed before
+# release. A tester's state from a build that had them still may; both are
+# dropped on load, and the file is rewritten without them.
+RETIRED_KEYS = frozenset({"email", "contact_sent"})
+RETIRED_CONTACT_KIND = "contact"
+
 
 @dataclass
 class ResearchState:
@@ -51,8 +57,6 @@ class ResearchState:
     # True once About you was answered or skipped, so it is never shown again.
     profile_answered: bool = False
     profile: Profile = field(default_factory=Profile)
-    email: str | None = None
-    contact_sent: bool = False
     # The plugin version whose What's new was last shown.
     whats_new_seen: str | None = None
     sent_fingerprints: list[str] = field(default_factory=list)
@@ -80,7 +84,6 @@ class ResearchState:
         self.sent_fingerprints.clear()
         self.map_first_week.clear()
         self.map_ids.clear()
-        self.contact_sent = False
 
     def remember_fingerprint(self, fingerprint: str) -> None:
         if fingerprint in self.sent_fingerprints:
@@ -128,8 +131,6 @@ class ResearchState:
                 "use_cases": list(profile.use_cases),
                 "use_case_other": profile.use_case_other,
             },
-            "email": self.email,
-            "contact_sent": self.contact_sent,
             "whats_new_seen": self.whats_new_seen,
             "sent_fingerprints": list(self.sent_fingerprints),
             "map_first_week": dict(self.map_first_week),
@@ -162,8 +163,6 @@ class ResearchState:
                 if isinstance(profile_raw, Mapping)
                 else Profile()
             ),
-            email=_text(stored.get("email")),
-            contact_sent=stored.get("contact_sent") is True,
             whats_new_seen=_text(stored.get("whats_new_seen")),
             sent_fingerprints=_texts(stored.get("sent_fingerprints")),
             map_first_week=(
@@ -193,8 +192,36 @@ class ResearchState:
                 else {}
             ),
             tallied_weeks=_texts(stored.get("tallied_weeks")),
-            queue=[item for item in queued if item is not None],
+            queue=[
+                item
+                for item in queued
+                if item is not None and not _is_retired_contact(item.body)
+            ],
         )
+
+
+def _is_retired_contact(body: str) -> bool:
+    """A queued `kind: "contact"` report, from a build that still had the email."""
+    try:
+        report = json.loads(body)
+    except ValueError:
+        return False
+    return isinstance(report, Mapping) and report.get("kind") == RETIRED_CONTACT_KIND
+
+
+def holds_retired_contact(stored: object) -> bool:
+    """Whether a stored state still has the email, or a contact report queued."""
+    if not isinstance(stored, Mapping):
+        return False
+    if RETIRED_KEYS & stored.keys():
+        return True
+    queue_raw = stored.get("queue")
+    if not isinstance(queue_raw, list):
+        return False
+    return any(
+        item is not None and _is_retired_contact(item.body)
+        for item in (QueuedReport.from_stored(raw) for raw in queue_raw)
+    )
 
 
 def _text(value: object) -> str | None:
@@ -206,14 +233,23 @@ def _texts(value: object) -> list[str]:
 
 
 def load_state(path: Path) -> ResearchState:
+    """Read the state. One left with a retired email is rewritten without it."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError:
         return ResearchState()
     try:
-        return ResearchState.from_stored(json.loads(raw))
+        stored = json.loads(raw)
     except ValueError:
         return ResearchState()
+    state = ResearchState.from_stored(stored)
+    if holds_retired_contact(stored):
+        # Not left on disk until something else happens to save: the address
+        # is gone from memory already, and a failed rewrite only means the
+        # next save removes it instead.
+        with contextlib.suppress(OSError):
+            save_state(path, state)
+    return state
 
 
 def save_state(path: Path, state: ResearchState) -> None:

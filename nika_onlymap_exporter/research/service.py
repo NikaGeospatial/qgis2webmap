@@ -20,7 +20,6 @@ from pathlib import Path
 
 from ..core.export_ir import ExportProject
 from . import consent
-from .contact import ContactWire, build_contact, normalise_email
 from .envelope import Environment, local_now, utc_offset_hours
 from .fingerprint import map_key, new_map_id, structure_fingerprint
 from .map_report import MapReportWire, ProjectFacts, build_map_report, encode
@@ -115,7 +114,6 @@ class ResearchService:
         if share:
             self.state.consent = consent.SHARE
             self.state.ensure_salt()
-            self._queue_contact()
         else:
             self.state.consent = consent.DONT_SHARE
             # Withdrawing drops what was waiting, as well as stopping what is
@@ -123,15 +121,9 @@ class ResearchService:
             self.state.forget_collected()
         self._save()
 
-    def save_profile(self, profile: Profile, email: str | None) -> None:
-        normalised = normalise_email(email)
-        if normalised != self.state.email:
-            self.state.contact_sent = False
+    def save_profile(self, profile: Profile) -> None:
         self.state.profile = profile
-        self.state.email = normalised
         self.state.profile_answered = True
-        if self.collecting():
-            self._queue_contact()
         self._save()
 
     def skip_profile(self) -> None:
@@ -258,11 +250,6 @@ class ResearchService:
             self.utc_offset_hours(),
         )
 
-    def preview_contact(self) -> ContactWire | None:
-        if self.state.email is None:
-            return None
-        return build_contact(self.state.email, self.env, self.state.profile)
-
     # ---- Internals ------------------------------------------------------
 
     def _existing_map_id(self, identity: str | None) -> str | None:
@@ -294,14 +281,6 @@ class ResearchService:
             enqueue(self.state.queue, encode(tally).decode("utf-8"))
             self.state.remember_tallied(week)
         return rolled
-
-    def _queue_contact(self) -> None:
-        email = self.state.email
-        if email is None or self.state.contact_sent or not self.collecting():
-            return
-        contact = build_contact(email, self.env, self.state.profile)
-        enqueue(self.state.queue, encode(contact).decode("utf-8"))
-        self.state.contact_sent = True
 
     def _apply_hard_stop(self) -> None:
         """Past `RESEARCH_ENDS`, anything still waiting is deleted, not sent."""

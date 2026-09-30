@@ -8,9 +8,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ### Added
 - **Opt-in research sharing, off unless you choose Share.** After an update,
-  an optional **About you** step (who the maps are for, sector, what they do,
-  an optional email) and a **What's new** window that asks, with two equal
-  buttons, whether to share anonymous research reports. With Share, the plugin
+  an optional **About you** step (who the maps are for, sector, what they do)
+  and a **What's new** window that asks, with two equal buttons, whether to
+  share anonymous research reports. With Share, the plugin
   sends a short description of each exported or published map - its title,
   layer and field names, formats, feature-count bands, coordinate system,
   extent band and centre rounded to a whole degree - once per map and again

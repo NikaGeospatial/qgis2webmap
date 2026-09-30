@@ -268,9 +268,9 @@ class TestDialogs:
         from nika_onlymap_exporter.ui.about_you_dialog import AboutYouDialog
 
         start = Profile.build("team", "forestry", ["monitoring", "other"], "carbon")
-        dialog = AboutYouDialog(start, "a@b.co")
+        dialog = AboutYouDialog(start)
         assert dialog.profile() == start
-        assert dialog.email() == "a@b.co"
+        assert not hasattr(dialog, "email_edit")
         dialog.audience_buttons["public"].setChecked(True)
         dialog.use_case_boxes["monitoring"].setChecked(False)
         assert dialog.profile().audience == "public"

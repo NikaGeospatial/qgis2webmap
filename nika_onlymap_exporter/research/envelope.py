@@ -20,7 +20,6 @@ SCHEMA_VERSION = 2
 
 KIND_MAP = "map"
 KIND_TALLY = "tally"
-KIND_CONTACT = "contact"
 
 OS_VALUES = ("windows", "macos", "linux", "other")
 

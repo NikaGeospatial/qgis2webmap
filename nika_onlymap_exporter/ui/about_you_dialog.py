@@ -52,7 +52,6 @@ class AboutYouDialog(QDialog):
     def __init__(
         self,
         profile: Profile | None = None,
-        email: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -100,12 +99,7 @@ class AboutYouDialog(QDialog):
         self.other_edit.setMaxLength(MAX_OTHER_LENGTH)
         self.other_edit.setPlaceholderText("Anything else about what you map")
         details.addRow("In your words", self.other_edit)
-
-        self.email_edit = QLineEdit(email or "", self)
-        self.email_edit.setPlaceholderText("you@example.com")
-        details.addRow("Email", self.email_edit)
         layout.addLayout(details)
-        layout.addWidget(_note(text.EMAIL_NOTE, self))
 
         nothing_sent = _note(text.ABOUT_YOU_NOTHING_SENT, self)
         nothing_sent.setTextFormat(Qt.TextFormat.PlainText)
@@ -139,6 +133,3 @@ class AboutYouDialog(QDialog):
             [value for value, box in self.use_case_boxes.items() if box.isChecked()],
             self.other_edit.text(),
         )
-
-    def email(self) -> str:
-        return self.email_edit.text().strip()
