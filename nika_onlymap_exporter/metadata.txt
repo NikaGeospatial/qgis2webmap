@@ -51,7 +51,10 @@ changelog=0.2.0
     New, and off unless you choose it: a one-time question about who your maps
     are for, and an option to share anonymous descriptions of the maps you
     make (titles, layer and field names, no data, no locations finer than
-    about 110 km). See the Privacy page; change it any time on the Help tab.
+    about 110 km, and a random per-map code that links versions of one map
+    but never you or your account) and weekly counts, including exports by
+    time of day and your time zone. See the Privacy page; change it any time
+    on the Help tab.
     0.1.4
     Fixes: layer labels rendered nothing at all in every previous release -
     a map with labelling switched on exported without any text on it.

@@ -128,10 +128,19 @@ If you choose Share, the plugin sends, to NIKA's API:
   `site` to `world`; the centre of the map rounded to the nearest whole degree
   (about 110 km); the basemap and relief presets; which features you used
   (legend, popups, relief, labels and so on); the output type; and whether the
-  project's time settings are on.
+  project's time settings are on. Each map's reports also carry a **random
+  code made for that map** (`map_id`), so NIKA can tell that two reports are
+  two versions of the same map. It is made from random numbers alone, is kept
+  only in the file described below, and is never linked to you, your computer
+  or your NIKA account — it is not the hosted map's ID, and choosing Don't
+  share deletes it.
 - **Once a week**: counts of exports, previews, publishes and failures, how
-  many different maps you exported, and how many of them you also exported in
-  an earlier week.
+  many different maps you exported, how many of them you also exported in
+  an earlier week, and the week's exports counted by the local time of day
+  you made them, in six four-hour blocks (midnight–4 am, 4–8 am and so on).
+- **With the map and weekly reports**: your computer's time zone, as a whole
+  number of hours from UTC (for example `8` for Singapore, `6` for India's
+  +5:30).
 - **Once, only if you gave an email**: that email, so NIKA can contact you
   about early access to hosting or an interview. It is sent on its own and
   never linked to your map reports.
@@ -141,7 +150,8 @@ If you choose Share, the plugin sends, to NIKA's API:
 **Never sent:** feature values or geometry, any coordinate finer than a whole
 degree, file paths, web addresses, user names or passwords, your IP address
 (NIKA's server uses it only transiently to limit request rates, and never
-stores or logs it), or any ID that links reports to you or your computer.
+stores or logs it), or any ID that links reports to you, your computer or your
+NIKA account.
 Before anything is stored for sending, every name and title is cleaned: a path
 is cut to its file name, web addresses are removed, and email addresses and
 long numbers are replaced with `[email]` and `[number]`.
@@ -151,12 +161,14 @@ How it works:
 - Everything is kept in one small file, `qgis2webmap/research.json`, in your
   QGIS profile folder. To decide whether a map has already been reported, the
   plugin keeps a salted hash of the project and its layer structure there; the
-  salt is random per computer, and neither it nor the hash is ever sent.
+  salt is random per computer, and neither it nor the hash is ever sent. Each
+  map's random code is kept there too, beside that hash.
 - Reports are sent in the background through QGIS's own network settings,
   without your NIKA sign-in, and never delay an export. If they cannot be sent
   they wait (at most 50) and are retried the next time you open the dialog or
   export.
-- Choosing **Don't share** later deletes anything still waiting to be sent.
+- Choosing **Don't share** later deletes anything still waiting to be sent,
+  along with the maps' random codes: if you share again, your maps get new ones.
 - Research sharing ends for good on **31 January 2027**: after that date the
   plugin sends nothing and deletes anything waiting, whatever you chose. NIKA
   can also end it earlier from its side, and the plugin then stops for good.

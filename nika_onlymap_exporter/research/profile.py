@@ -1,8 +1,9 @@
 """The "About you" answers: who the maps are for, the sector, what they do.
 
 Stored locally and attached to each report only after the user chose Share. No
-identifier links reports together; the profile rides along on each report so
-answers can be joined to what people build without an ID.
+identifier links a person's reports together (a map's own reports share a
+random `map_id`, which says nothing about who made it); the profile rides along
+on each report so answers can be joined to what people build without an ID.
 
 The value lists are the spec's, character for character - the server rejects
 anything else, and a mismatch here would silently drop every report.

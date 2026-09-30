@@ -41,8 +41,9 @@ explicit actions you start yourself — nothing is uploaded automatically.
 **The plugin asks once whether to share anonymous research reports**, and sends
 nothing unless you choose Share: a short description of each exported map (its
 title, layer and field names, formats, a rough size and a centre rounded to a
-whole degree) and weekly counts. Never feature values, paths, or anything that
-identifies you. Change it any time on the Help tab; it ends on 31 January 2027.
+whole degree, plus a random per-map code that links the versions of one map)
+and weekly counts, including exports by time of day and your time zone to the
+nearest hour. Never feature values, paths, or anything that identifies you. Change it any time on the Help tab; it ends on 31 January 2027.
 
 See the [privacy page](https://qgis2webmap.nikaplanet.com/privacy.html)
 for exactly what is and isn't sent.

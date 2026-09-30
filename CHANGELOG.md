@@ -14,9 +14,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   sends a short description of each exported or published map - its title,
   layer and field names, formats, feature-count bands, coordinate system,
   extent band and centre rounded to a whole degree - once per map and again
-  only when its layers change, plus weekly counts of exports, previews,
-  publishes and failures. Never feature values or geometry, paths, web
-  addresses or any identifier; names are cleaned before anything is stored.
+  only when its layers change, with a random code made for each map so its
+  versions can be linked (never linked to you, your computer or your NIKA
+  account), plus weekly counts of exports, previews, publishes and failures,
+  with exports also counted by local time of day in four-hour blocks. Map and
+  weekly reports carry the computer's UTC offset to the nearest hour. Never
+  feature values or geometry, paths, web addresses or any identifier of you;
+  names are cleaned before anything is stored.
   **See exactly what is sent** shows the report for the open project, and the
   Help tab's **Research sharing** row changes the choice at any time. Reports
   go in the background without the NIKA sign-in, and research ends for good on

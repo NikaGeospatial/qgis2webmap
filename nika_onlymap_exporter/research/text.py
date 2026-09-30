@@ -36,16 +36,21 @@ RESEARCH_WHAT = (
     "the map title, layer and field names, layer types and formats, a rough "
     "feature count, the project's coordinate system, how big an area the map "
     "covers, its centre rounded to the nearest whole degree (about 110 km), and "
-    "which features you used. Once a week it also sends counts of exports, "
-    "previews, publishes and failures. Your About you answers go with each one."
+    "which features you used. A random code made for each map links that "
+    "map's versions together; it is never linked to you, this computer or "
+    "your NIKA account. Once a week it also sends counts of exports, previews, "
+    "publishes and failures, with the exports also counted by the time of day "
+    "you made them (in four-hour blocks). The map and weekly reports include "
+    "your time zone, to the nearest hour. Your About you answers go with each "
+    "one."
 )
 
 RESEARCH_NEVER = (
     "Never sent: feature values or geometry, anything more precise than a whole "
     "degree, file paths, web addresses, user names or passwords, or any ID that "
-    "links reports to you or this computer. Names are cleaned first: paths are "
-    "cut to the file name, and web addresses, emails and long numbers are "
-    "removed."
+    "links reports to you, this computer or your NIKA account. Names are "
+    "cleaned first: paths are cut to the file name, and web addresses, emails "
+    "and long numbers are removed."
 )
 
 RESEARCH_CHANGE = (
