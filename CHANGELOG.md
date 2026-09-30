@@ -76,6 +76,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   which detaches the stale id and publishes fresh; a refused republish offers
   the same. A map id from another organisation was also reported as an expired
   sign-in.
+- **A free map whose 7 days are over is refused, and says so.** Republishing
+  an expired or stopped free map past its expiry now shows NIKA's own message
+  (only enterprise hosting can bring it back) as a publishing refusal, never as
+  a sign-in problem, and the Host button's tooltip and the hosting guide no
+  longer promise that a republish always brings such a map back. The guide
+  also now says only live maps count toward storage, as the server counts it.
 - **One dropped request while "Verifying..." desynced the release number.** The
   map went live but the project kept the old release, and the next Host showed a
   false "published by you... your copy is older" conflict. The status poll now

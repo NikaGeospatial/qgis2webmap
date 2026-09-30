@@ -15,7 +15,9 @@ the Host control offers:
 
 * `host`        - no map yet: publishing creates one.
 * `republish`   - a map this user can update: live, paused, expired or stopped.
-                  A republish brings an expired or stopped map back.
+                  A republish brings an expired or stopped map back, except on
+                  the free plan once its free days are over: the server then
+                  refuses with `free_map_expired` (see `hosting/client.py`).
 * `host_as_new` - the stored map was taken down, no longer exists, or belongs
                   to another organisation. Publishing detaches the stale id and
                   creates a fresh map; the old address is left as it is.
@@ -257,7 +259,8 @@ def host_button_tooltip(stored_map_id: str, state: RemoteMapState) -> str:
     if presence in (PRESENCE_EXPIRED, PRESENCE_STOPPED):
         return (
             "Update this project's hosted map. It is not currently online; "
-            "republishing brings it back." + common
+            "republishing brings it back, except for a free map whose 7 days "
+            "are over, which needs enterprise hosting." + common
         )
     if presence == PRESENCE_LIVE:
         return (

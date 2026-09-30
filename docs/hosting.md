@@ -36,7 +36,10 @@ belongs to a different NIKA organisation from the one you are signed in to, the
 button says
 **Host as new map**: pressing it publishes the project as a new map with a new
 address and leaves the old one as it is. A paused map can still be republished;
-it stays paused until it is resumed in the dashboard.
+it stays paused until it is resumed in the dashboard. An expired or stopped map
+comes back online when you republish it, except on the free plan once its 7
+days are over: NIKA then refuses the publish and says why, and only enterprise
+hosting can bring that map back.
 
 It is a separate, explicit step and never a side effect of exporting. Nothing
 about pressing **Export** uploads anything, and nothing about pressing **Host**
@@ -59,8 +62,8 @@ type the map's name — skips all of that. Every address the map had answers
 straight away, and nothing can bring it back: not the dashboard, not NIKA
 support. A project that pointed at it offers **Host as new map**.
 
-**What counts toward your storage:** only maps that are live or paused. A map
-that is taken down, deleted, expired or stopped does not count, so any of those
+**What counts toward your storage:** only maps that are live. A map that is
+paused, taken down, deleted, expired or stopped does not count, so any of those
 frees its space for the next publish.
 
 ### What happens, in order
