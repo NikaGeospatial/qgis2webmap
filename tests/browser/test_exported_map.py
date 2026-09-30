@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import pytest
 
+from nika_onlymap_exporter.core.manifest_builder import RASTER_TEXTURE_TEMPLATES
+
 # The runtime's telemetry endpoint, observed rather than documented - the
 # licence names the reports but not the host. Matched as a prefix so a path
 # change does not fail the suite, and kept narrow so a *different* host does.
@@ -523,7 +525,12 @@ class TestTexturedTerrain:
                 route.abort()
                 if any(
                     host in route.request.url
-                    for host in ("s3.amazonaws.com", "cartocdn.com", "unpkg.com")
+                    for host in (
+                        "s3.amazonaws.com",
+                        "cartocdn.com",
+                        "gibs.earthdata.nasa.gov",
+                        "unpkg.com",
+                    )
                 )
                 else route.continue_()
             ),
@@ -533,9 +540,7 @@ class TestTexturedTerrain:
         get = "() => document.querySelector('om-map').getAttribute('%s')"
         assert page.evaluate(get % "terrain") == "terrarium"
         texture = page.evaluate(get % "terrain-texture")
-        assert texture == (
-            "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-        )
+        assert texture == RASTER_TEXTURE_TEMPLATES["voyager"]
         # No per-layer terrain mode: everything drapes, which is the
         # painted-mountains look the feature exists for.
         assert (
