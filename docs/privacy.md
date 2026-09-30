@@ -85,10 +85,12 @@ The Fidelity tab lists exactly which layers were included.
 
 ## The one thing exporting downloads
 
-Exporting makes exactly one network request in its entire life: the first time
-you build a map, the plugin downloads the OnlyMap runtime from npm — about
-4.8 MB, once per computer, after showing you the licence and asking. See
-[installation](installation.md).
+Exporting downloads one thing in its entire life: the first time you build a
+map, the plugin downloads the OnlyMap runtime from npm — about 4.8 MB, once per
+computer, after showing you the licence and asking. See
+[installation](installation.md). The only other request an export can cause is
+a research report, and only if you chose **Share** — see
+[research sharing](#research-sharing-off-unless-you-choose-share) below.
 
 That request sends nothing about you or your data. It is an anonymous download
 of a public package: no account, no token, no identifier, and nothing about
@@ -96,9 +98,68 @@ your project, your layers or your machine. npm can see that some computer at
 your IP address downloaded a public file, which is what any software download
 looks like.
 
-After that, exporting never contacts anything again. It works fully offline —
-your data is read from disk and written into the file, and no part of it leaves
-your computer.
+After that, with research sharing off (the default), exporting never contacts
+anything again. It works fully offline — your data is read from disk and written
+into the file, and no part of it leaves your computer.
+
+## Research sharing: off unless you choose Share
+
+To decide what to build next, NIKA asks — once, in the "What's new" window
+shown after an update — whether you are willing to share a short, anonymous
+description of the maps you make. **Nothing is sent unless you click Share.**
+Don't share, or closing the window without choosing, sends nothing. You can
+change your mind at any time on the **Help** tab, under **Research sharing**,
+which also has **See exactly what is sent**: the report built from your open
+project, in the exact form it would be sent.
+
+Before that window, an optional **About you** step asks who your maps are for,
+your sector, what the maps do, and optionally an email. The answers are stored
+on your computer and are only sent if you choose Share.
+
+If you choose Share, the plugin sends, to NIKA's API:
+
+- **After an export or publish, once per map** (and again only if its layers
+  are added, removed or renamed, or their fields change): the map title; each
+  layer's name, type (point, line, polygon, raster), source type (file,
+  database, web service), format (such as `gpkg` or `shp`), a feature-count
+  band such as `101-1k`, its field *names*, and whether it has a date field,
+  labels, popups and which kind of styling; the project's coordinate system
+  (such as `EPSG:27700`); how large an area the map covers, as a band from
+  `site` to `world`; the centre of the map rounded to the nearest whole degree
+  (about 110 km); the basemap and relief presets; which features you used
+  (legend, popups, relief, labels and so on); the output type; and whether the
+  project's time settings are on.
+- **Once a week**: counts of exports, previews, publishes and failures, how
+  many different maps you exported, and how many of them you also exported in
+  an earlier week.
+- **Once, only if you gave an email**: that email, so NIKA can contact you
+  about early access to hosting or an interview. It is sent on its own and
+  never linked to your map reports.
+- With each report: your About you answers, the plugin and QGIS versions, and
+  your operating system (Windows, macOS, Linux).
+
+**Never sent:** feature values or geometry, any coordinate finer than a whole
+degree, file paths, web addresses, user names or passwords, your IP address
+(NIKA's server uses it only transiently to limit request rates, and never
+stores or logs it), or any ID that links reports to you or your computer.
+Before anything is stored for sending, every name and title is cleaned: a path
+is cut to its file name, web addresses are removed, and email addresses and
+long numbers are replaced with `[email]` and `[number]`.
+
+How it works:
+
+- Everything is kept in one small file, `qgis2webmap/research.json`, in your
+  QGIS profile folder. To decide whether a map has already been reported, the
+  plugin keeps a salted hash of the project and its layer structure there; the
+  salt is random per computer, and neither it nor the hash is ever sent.
+- Reports are sent in the background through QGIS's own network settings,
+  without your NIKA sign-in, and never delay an export. If they cannot be sent
+  they wait (at most 50) and are retried the next time you open the dialog or
+  export.
+- Choosing **Don't share** later deletes anything still waiting to be sent.
+- Research sharing ends for good on **31 January 2027**: after that date the
+  plugin sends nothing and deletes anything waiting, whatever you chose. NIKA
+  can also end it earlier from its side, and the plugin then stops for good.
 
 ## If you publish or host a map
 
@@ -106,7 +167,8 @@ Hosting is the exception, and necessarily so: putting a map on NIKA only works
 by talking to NIKA's servers. Publishing to NIKA hosting, and asking an AI
 assistant to modify a map, are separate actions that you start yourself. Nothing
 is uploaded automatically, and a project you never press **Host** on never
-causes a request to NIKA.
+causes a request to NIKA — apart from the research reports above, and only if
+you chose **Share**.
 
 What the hosting features send, all of it to NIKA's API:
 

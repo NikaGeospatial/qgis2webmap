@@ -284,6 +284,12 @@ this tab is what names every layer over the free plan's
 The same guides you are reading now, bundled into the plugin and rendered
 offline. **Open the full documentation** opens this site in your browser.
 
+**Research sharing**, at the bottom, says whether you chose to share anonymous
+research reports, with buttons to switch between **Share** and **Don't
+share**, to edit your **About you** answers, and to **See exactly what is
+sent** from the open project. It is off until you choose Share; see
+[privacy](privacy.md#research-sharing-off-unless-you-choose-share).
+
 ---
 
 ## The fidelity strip

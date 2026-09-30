@@ -84,7 +84,9 @@ licence and asks before it fetches anything, rather than downloading quietly.
 After that one download, **exporting works fully offline**, on every project,
 for good. Exporting itself never touches the network. Hosting a map on NIKA is
 the one feature that has to talk to NIKA's servers — see
-[privacy](privacy.md#if-you-publish-or-host-a-map) for what it sends.
+[privacy](privacy.md#if-you-publish-or-host-a-map) for what it sends. The one
+optional exception is research sharing, which is off unless you choose **Share**
+— see [privacy](privacy.md#research-sharing-off-unless-you-choose-share).
 
 > **Start with the dialog, not with Processing.** The *Export to OnlyMap web map*
 > Processing algorithm cannot show you a licence — there is nobody to show it to

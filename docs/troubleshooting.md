@@ -117,8 +117,9 @@ with its own licence, which is why it is fetched rather than bundled into this
 GPL plugin, and why you are shown the licence first.
 
 About 4.8 MB. After that, exporting works fully offline and never touches the
-network; only the hosting features talk to NIKA's servers. See
-[privacy](privacy.md) for what that request does and does not send.
+network; only the hosting features talk to NIKA's servers, and research sharing
+if you chose Share. See [privacy](privacy.md) for what that request does and
+does not send.
 
 ### The download fails
 

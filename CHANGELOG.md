@@ -7,6 +7,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Opt-in research sharing, off unless you choose Share.** After an update,
+  an optional **About you** step (who the maps are for, sector, what they do,
+  an optional email) and a **What's new** window that asks, with two equal
+  buttons, whether to share anonymous research reports. With Share, the plugin
+  sends a short description of each exported or published map - its title,
+  layer and field names, formats, feature-count bands, coordinate system,
+  extent band and centre rounded to a whole degree - once per map and again
+  only when its layers change, plus weekly counts of exports, previews,
+  publishes and failures. Never feature values or geometry, paths, web
+  addresses or any identifier; names are cleaned before anything is stored.
+  **See exactly what is sent** shows the report for the open project, and the
+  Help tab's **Research sharing** row changes the choice at any time. Reports
+  go in the background without the NIKA sign-in, and research ends for good on
+  31 January 2027. See the privacy page.
 - **Scale-dependent visibility reaches the web map.** A layer set to show only
   between two scales in QGIS now shows only between the matching zoom levels,
   through the runtime's `visible-zoom-range` - vector, raster and label layers

@@ -31,6 +31,10 @@ notes below are the things that are commonly assumed wrong.
   Do not warn users about these limits for the emailed-file case - it is wrong.
 - **Nothing is uploaded automatically.** Export is entirely local. Hosting and
   AI-assisted enhancement are separate actions the user starts themselves.
+  The one opt-in exception is research sharing: off unless the user clicks
+  Share, it sends an anonymous description of each exported map (names,
+  formats, bands, a whole-degree centre - never feature values, paths or an
+  identifier) and weekly counts, until 31 January 2027. See the privacy page.
 - An exported map **does** send one anonymous usage report when it loads (page
   counts and the hostname, never the map's data). See the privacy page; do not
   claim the export is zero-network.

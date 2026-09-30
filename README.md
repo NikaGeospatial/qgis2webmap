@@ -38,6 +38,12 @@ works with no internet connection, on a machine that has never had QGIS
 installed. Publishing to NIKA hosting and AI-assisted enhancement are separate,
 explicit actions you start yourself — nothing is uploaded automatically.
 
+**The plugin asks once whether to share anonymous research reports**, and sends
+nothing unless you choose Share: a short description of each exported map (its
+title, layer and field names, formats, a rough size and a centre rounded to a
+whole degree) and weekly counts. Never feature values, paths, or anything that
+identifies you. Change it any time on the Help tab; it ends on 31 January 2027.
+
 See the [privacy page](https://qgis2webmap.nikaplanet.com/privacy.html)
 for exactly what is and isn't sent.
 
@@ -93,7 +99,8 @@ Requires QGIS 3.44 or newer (QGIS 4 supported).
 
 **The first export downloads the map runtime** — about 4.8 MB, once per computer,
 after showing you its licence. Exporting works fully offline after that (hosting
-on NIKA is the one feature that talks to NIKA's servers). The runtime
+on NIKA talks to NIKA's servers, and so does research sharing, but only if you
+choose Share). The runtime
 is the code that draws the map in a browser and is built into every map you
 export; it is a separate commercial product with its own licence, which is why
 it is fetched rather than bundled into this GPL plugin. See
