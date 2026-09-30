@@ -1544,7 +1544,7 @@ class TestHostButtonFollowsTheServer:
             def check_cancelled(self):
                 pass
 
-        def start_job(work, on_success, label, quiet=False):
+        def start_job(work, on_success, label, quiet=False, failure_class="other"):
             on_success(work(InlineProgress()))
             return True
 

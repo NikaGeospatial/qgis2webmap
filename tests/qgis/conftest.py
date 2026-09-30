@@ -99,6 +99,27 @@ def isolated_settings(tmp_path_factory):
     QSettings.setDefaultFormat(previous_format)
 
 
+@pytest.fixture(autouse=True)
+def isolated_research(tmp_path_factory, monkeypatch):
+    """Keep research sharing off the developer's profile and off the network.
+
+    The dialog keeps its research state in the QGIS profile directory, which on
+    a developer machine is their real one. Every test in this tier gets its own
+    file instead, and the default sender is replaced with one that fails the
+    test outright: no test may ever post a report anywhere.
+    """
+    from nika_onlymap_exporter.ui import research_session
+
+    path = tmp_path_factory.mktemp("research") / "research.json"
+    monkeypatch.setattr(research_session, "research_state_path", lambda: path)
+
+    def refuse(url, body, done):
+        raise AssertionError(f"a test tried to send a research report to {url}")
+
+    monkeypatch.setattr(research_session, "qgis_poster", refuse)
+    return path
+
+
 @pytest.fixture
 def runtime_required() -> None:
     """Skip a test that cannot run without the OnlyMap runtime.

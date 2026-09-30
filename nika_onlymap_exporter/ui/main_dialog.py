@@ -163,7 +163,13 @@ from ..packaging.dependency_scanner import (
     standalone_ineligible_reason,
 )
 from ..packaging.publish_manifest import PublishManifestError, build_publish_manifest
-from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
+from ..packaging.runtime_manager import FetchingRuntime, discover_runtime_dir
+from ..research import consent as research_consent
+from ..research import tally as research_tally
+from ..research import text as research_text
+from ..research.preview import payload_preview_text, read_whats_new
+from ..writers.onlymap_writer import PLUGIN_VERSION, ExportBlockedError, OnlyMapWriter
+from .about_you_dialog import AboutYouDialog
 from .background_job import BackgroundJob, Progress
 from .fidelity_panel import FidelityPanel, FidelityStrip, Proceed, ask_before
 from .hosted_map_watch import HostedMapWatch
@@ -184,7 +190,9 @@ from .preview import (
     remove_preview,
     write_preview,
 )
+from .research_session import ResearchSession, facts_for
 from .runtime_setup import ensure_runtime
+from .whats_new_dialog import PayloadDialog, WhatsNewDialog
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
@@ -660,6 +668,15 @@ class MainDialog(QDialog):
         self._fidelity_state = ReportState.NOT_CHECKED
         self._fidelity_error = ""
         self._fidelity_summary: ReportSummary | None = None
+        # Opt-in research sharing. Built before the tabs because the Help tab
+        # shows the current choice. Nothing is collected until Share; see
+        # `research/consent.py`.
+        self._research = ResearchSession(self)
+        self._first_open_started = False
+        # The export a publish in progress was built from, for its map report.
+        self._research_export: ExportProject | None = None
+        # What a failure of the running job counts as in the weekly tally.
+        self._job_failure_class = research_tally.OTHER
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
@@ -1992,7 +2009,166 @@ class MainDialog(QDialog):
             lambda: QDesktopServices.openUrl(QUrl(COMMUNITY_URL))
         )
         layout.addWidget(community_button)
+        layout.addWidget(self._build_research_row(page))
         return page
+
+    # ---- Research sharing -----------------------------------------------
+
+    def _build_research_row(self, page: QWidget) -> QWidget:
+        """The current research choice, and every way to change or inspect it."""
+        box = QGroupBox("Research sharing", page)
+        column = QVBoxLayout(box)
+        self.research_status = QLabel("", box)
+        self.research_status.setWordWrap(True)
+        column.addWidget(self.research_status)
+
+        row = QHBoxLayout()
+        self.research_share_button = QPushButton("Share", box)
+        self.research_share_button.clicked.connect(
+            lambda: self._set_research_choice(True)
+        )
+        self.research_dont_share_button = QPushButton("Don't share", box)
+        self.research_dont_share_button.clicked.connect(
+            lambda: self._set_research_choice(False)
+        )
+        about_button = QPushButton("About you...", box)
+        about_button.clicked.connect(lambda: self._ask_about_you(editing=True))
+        see_button = QPushButton(research_text.SEE_WHAT_IS_SENT, box)
+        see_button.clicked.connect(self._show_research_payload)
+        for button in (
+            self.research_share_button,
+            self.research_dont_share_button,
+            about_button,
+            see_button,
+        ):
+            button.setAutoDefault(False)
+            row.addWidget(button)
+        column.addLayout(row)
+        self._refresh_research_row()
+        return box
+
+    def _refresh_research_row(self) -> None:
+        try:
+            service = self._research.service()
+            state = service.consent if service is not None else "unset"
+            over = service is not None and not service.can_ask()
+            self.research_status.setText(research_text.choice_line(state, over))
+            self.research_share_button.setEnabled(
+                not over and state != research_consent.SHARE
+            )
+            self.research_dont_share_button.setEnabled(
+                not over and state != research_consent.DONT_SHARE
+            )
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Research sharing row:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+
+    def _set_research_choice(self, share: bool) -> None:
+        try:
+            service = self._research.service()
+            if service is not None:
+                service.choose(share)
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Research sharing choice:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+        self._refresh_research_row()
+        if share:
+            self._research.flush()
+
+    def _ask_about_you(self, editing: bool = False) -> None:
+        """About you. From the Help tab, `editing` pre-fills the saved answers."""
+        try:
+            service = self._research.service()
+            if service is None:
+                return
+            state = service.state
+            dialog = AboutYouDialog(
+                state.profile if editing else None,
+                state.email if editing else None,
+                self,
+            )
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                service.save_profile(dialog.profile(), dialog.email())
+                self._research.flush()
+            elif not editing:
+                service.skip_profile()
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"About you:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+
+    def _research_payload(self) -> str:
+        """What would be sent, from the last read of this project if there is one."""
+        service = self._research.service()
+        if service is None:
+            return "Research sharing is unavailable on this installation."
+        export = self._cached_export
+        facts = facts_for(self.project, export) if export is not None else None
+        return payload_preview_text(service, export, facts)
+
+    def _show_research_payload(self) -> None:
+        try:
+            PayloadDialog(self._research_payload(), self).exec()
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Research payload preview:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+
+    def _show_whats_new(self) -> None:
+        service = self._research.service()
+        if service is None:
+            return
+        ask = service.can_ask() and service.consent == research_consent.UNSET
+        dialog = WhatsNewDialog(
+            PLUGIN_VERSION,
+            read_whats_new(),
+            ask=ask,
+            choice_line=research_text.choice_line(
+                service.consent, not service.can_ask()
+            ),
+            payload=self._research_payload,
+            parent=self,
+        )
+        dialog.exec()
+        service.mark_whats_new_seen(PLUGIN_VERSION)
+        if ask and dialog.choice is not None:
+            service.choose(dialog.choice)
+
+    def _run_first_open(self) -> None:
+        """About you, then the runtime, then What's new: once per plugin version.
+
+        The order is the spec's. About you comes first so the answers exist
+        before the one question that decides whether they are ever sent; the
+        runtime prompt is the existing one, asked only if the runtime is
+        missing, and declining it changes nothing - Export asks again exactly
+        as it always has.
+        """
+        try:
+            service = self._research.service()
+            if service is not None and service.needs_whats_new(PLUGIN_VERSION):
+                if service.needs_profile():
+                    self._ask_about_you()
+                if discover_runtime_dir() is None and not FetchingRuntime().is_cached():
+                    ensure_runtime(self)
+                self._show_whats_new()
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"First-open sequence:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+        self._refresh_research_row()
+        self._research.flush()
 
     # ---- Buttons --------------------------------------------------------
 
@@ -2087,6 +2263,12 @@ class MainDialog(QDialog):
     def showEvent(self, event) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)
         self._map_watch.start()
+        # Deferred so the dialog is on screen before anything is put over it,
+        # and guarded so a hide and show - or a nested dialog's own events -
+        # never runs the sequence twice.
+        if not self._first_open_started:
+            self._first_open_started = True
+            QTimer.singleShot(0, self._run_first_open)
 
     def hideEvent(self, event) -> None:  # noqa: N802 - Qt API
         self._map_watch.stop()
@@ -2131,6 +2313,7 @@ class MainDialog(QDialog):
         on_success,
         label: str,
         quiet: bool = False,
+        failure_class: str = research_tally.OTHER,
     ) -> bool:
         """Run `work` on a worker thread, `on_success` back on this one.
 
@@ -2150,6 +2333,7 @@ class MainDialog(QDialog):
 
         job = BackgroundJob(work, self)
         self._job = job
+        self._job_failure_class = failure_class
         job.progressed.connect(self._on_job_progress)
         job.failed.connect(
             self._on_job_failed_quietly if quiet else self._on_job_failed
@@ -2236,6 +2420,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
+        self._research.record_failure(self._job_failure_class)
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Warning)
         if self._fidelity_state is ReportState.CHECKING:
             self._show_fidelity_error(message)
@@ -2247,6 +2432,7 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
+        self._research.record_failure(self._job_failure_class)
         self._discard_publish_staging()
         if self._active_exporter is not None:
             self._active_exporter = None
@@ -2386,7 +2572,13 @@ class MainDialog(QDialog):
                 self._server.notify_reload()
                 self.status_label.setText("Live preview updated.")
 
-            self._start_job(work, on_written, "Updating the preview...", quiet=True)
+            self._start_job(
+                work,
+                on_written,
+                "Updating the preview...",
+                quiet=True,
+                failure_class=research_tally.WRITE_ERROR,
+            )
 
         self._ensure_export(then, "Updating the preview...", quiet=True)
 
@@ -2533,7 +2725,13 @@ class MainDialog(QDialog):
 
         # Every read is a check: it is what fills the Fidelity tab, whichever
         # button asked for it.
-        started = self._start_job(work, on_success, label, quiet=quiet)
+        started = self._start_job(
+            work,
+            on_success,
+            label,
+            quiet=quiet,
+            failure_class=research_tally.READ_ERROR,
+        )
         if started:
             self._begin_fidelity_check()
         return started
@@ -2555,6 +2753,7 @@ class MainDialog(QDialog):
         """
         if ensure_runtime(self) is not None:
             return True
+        self._research.record_runtime_missing()
         self.status_label.setText(
             "The OnlyMap runtime is needed to build a map. Nothing was written."
         )
@@ -2588,6 +2787,7 @@ class MainDialog(QDialog):
             return write_preview(export, identity, writer=writer, live=live)
 
         def on_written(result) -> None:
+            self._research.record_preview()
             if not live:
                 self._stop_live_preview()
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
@@ -2613,7 +2813,12 @@ class MainDialog(QDialog):
                 "Live preview open. Changes here update the tab automatically."
             )
 
-        self._start_job(work, on_written, "Building the preview...")
+        self._start_job(
+            work,
+            on_written,
+            "Building the preview...",
+            failure_class=research_tally.WRITE_ERROR,
+        )
 
     def _fall_back_to_file_preview(self, entry_path: Path) -> None:
         """Open the preview as a file, and say why it is not live.
@@ -2715,6 +2920,7 @@ class MainDialog(QDialog):
 
         def on_written(built) -> None:
             if isinstance(built, ExportBlockedError):
+                self._research.record_failure(research_tally.BLOCKED)
                 QMessageBox.warning(
                     self,
                     "Cannot export",
@@ -2726,6 +2932,8 @@ class MainDialog(QDialog):
             result, outcome = built
             save_state(self.project, self.state)
             self._remember_destination(destination)
+            # Counted, and reported only if the user chose Share. Never raises.
+            self._research.record_output(export, self._project_identity(), self.project)
 
             # The file:// check happens here, against the bytes that ship.
             self._last_export_path = Path(outcome.path)
@@ -2749,7 +2957,12 @@ class MainDialog(QDialog):
             else:
                 QMessageBox.information(self, "Export complete", summary)
 
-        self._start_job(work, on_written, "Writing the map...")
+        self._start_job(
+            work,
+            on_written,
+            "Writing the map...",
+            failure_class=research_tally.WRITE_ERROR,
+        )
 
     def _confirm_oversized_single_file(self, reason: str) -> bool:
         """Warn about an unwieldy single file, and let them have it anyway.
@@ -2845,6 +3058,7 @@ class MainDialog(QDialog):
 
     def _warn_not_exportable(self, export) -> None:
         """Explain a refusal in terms of what the user has to fix in QGIS."""
+        self._research.record_failure(research_tally.BLOCKED)
         reasons = [item.detail for item in export.blocking_items] or [
             "No layer in the selection could be read."
         ]
@@ -3072,6 +3286,7 @@ class MainDialog(QDialog):
 
         def on_built(built) -> None:
             if isinstance(built, ExportBlockedError):
+                self._research.record_failure(research_tally.BLOCKED)
                 self._discard_publish_staging()
                 QMessageBox.warning(
                     self,
@@ -3084,13 +3299,19 @@ class MainDialog(QDialog):
                 # The build finished but is not something a hosted release can
                 # describe. Its own message names the file, which is more use
                 # than a generic refusal would be.
+                self._research.record_failure(research_tally.PUBLISH_ERROR)
                 self._discard_publish_staging()
                 QMessageBox.warning(self, "Cannot publish", str(built))
                 return
             result, manifest = built
             self._confirm_and_reserve(export, token, result, manifest)
 
-        self._start_job(work, on_built, "Building the map to publish...")
+        self._start_job(
+            work,
+            on_built,
+            "Building the map to publish...",
+            failure_class=research_tally.PUBLISH_ERROR,
+        )
 
     def _confirm_and_reserve(
         self, export, token: str, result, manifest: PublishManifest
@@ -3144,6 +3365,7 @@ class MainDialog(QDialog):
             detach_hosted_map(self.project)
 
         violations = detect_violations(export)
+        self._research_export = export
         self._reserve(exporter, result, staging, violations, force=False)
 
     def _reserve(
@@ -3259,7 +3481,12 @@ class MainDialog(QDialog):
             save_hosted_pending_release(self.project, prepared.start.release_id)
             self._upload(exporter, prepared)
 
-        self._start_job(work, on_prepared, "Reserving the map address...")
+        self._start_job(
+            work,
+            on_prepared,
+            "Reserving the map address...",
+            failure_class=research_tally.PUBLISH_ERROR,
+        )
 
     def _upload(self, exporter: HostedExporter, prepared: PreparedPublish) -> None:
         def work(progress: Progress):
@@ -3306,6 +3533,14 @@ class MainDialog(QDialog):
                 else RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
             )
             url = outcome.public_url or ""
+            # Counted, and reported only if the user chose Share. Never raises.
+            self._research.record_output(
+                self._research_export,
+                self._project_identity(),
+                self.project,
+                hosted=True,
+                password=protected,
+            )
             self.status_label.setText(
                 f"Published at {url} - visitors need the map's password to open it."
                 if protected
@@ -3313,7 +3548,12 @@ class MainDialog(QDialog):
             )
             self._show_published(url, link_saved=link_saved, protected=protected)
 
-        self._start_job(work, on_published, "Uploading the map...")
+        self._start_job(
+            work,
+            on_published,
+            "Uploading the map...",
+            failure_class=research_tally.PUBLISH_ERROR,
+        )
 
     def _apply_reconciliation(self, exporter: HostedExporter) -> None:
         """Record what asking about an earlier, unsettled upload established.
