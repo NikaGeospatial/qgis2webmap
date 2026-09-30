@@ -19,7 +19,13 @@ from .profile import Profile
 
 MAX_EMAIL_LENGTH = 254
 
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The server's pattern, verbatim: plausible rather than RFC 5322-complete. An
+# address it would refuse is not stored here either, so a contact is never
+# queued only to be rejected.
+_EMAIL = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}"
+    r"[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
 
 
 class ContactWire(TypedDict):

@@ -329,6 +329,37 @@ class TestMapReport:
         assert all(len(layer["fields"]) <= MAX_FIELDS for layer in report["layers"])
         assert encoded_size(report) <= MAX_REPORT_BYTES
 
+    def test_the_largest_layers_lose_fields_first(self) -> None:
+        wide = tuple(
+            make_layer(
+                name=f"Wide{i}", fields=tuple(f"f{j}_{'y' * 50}" for j in range(50))
+            )
+            for i in range(40)
+        )
+        narrow = make_layer(name="Narrow", fields=("a", "b", "c"))
+        report = build_map_report(make_export((narrow, *wide)), ENV, Profile())
+        assert encoded_size(report) <= MAX_REPORT_BYTES
+        by_name = {layer["name"]: layer for layer in report["layers"]}
+        assert len(by_name) == 41
+        assert by_name["Narrow"]["fields"] == ["a", "b", "c"]
+        assert 3 <= len(by_name["Wide0"]["fields"]) < 50
+
+    def test_matches_the_server_patterns(self) -> None:
+        # nika-cf-workers apps/control-plane/src/research/schema.ts
+        format_pattern = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,19}$")
+        preset_pattern = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+        version_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$")
+        token_pattern = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+        report = build_map_report(
+            make_export(basemap="dark-matter", terrain="terrarium"), ENV, Profile()
+        )
+        assert all(format_pattern.match(layer["format"]) for layer in report["layers"])
+        assert preset_pattern.match(report["basemap"] or "")
+        assert version_pattern.match(report["plugin_version"])
+        assert version_pattern.match(report["qgis_version"])
+        assert len(report["features_used"]) <= 32
+        assert all(token_pattern.match(token) for token in report["features_used"])
+
     def test_features_used(self) -> None:
         layer = make_layer(
             labeling=LabelingSpec(enabled=True, field_name="name"),

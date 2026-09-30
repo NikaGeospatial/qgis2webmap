@@ -1,0 +1,122 @@
+{
+  "source": "nika-cf-workers apps/control-plane/test/research.test.mjs (branch build/research-ingest, commit 1d490fa), scrub tests, copied verbatim",
+  "note": "Both the plugin (research/scrub.py) and the server (research/scrub.ts) must produce `expected` for `input` cut to `max_length`. Update both sides together.",
+  "cases": [
+    {
+      "input": "C:\\Users\\Jane Smith\\Maps\\roads.shp",
+      "max_length": 60,
+      "expected": "roads"
+    },
+    {
+      "input": "/home/jsmith/projects/site.gpkg",
+      "max_length": 60,
+      "expected": "site"
+    },
+    {
+      "input": "Roads from ~/data/osm_roads.geojson",
+      "max_length": 60,
+      "expected": "Roads from osm_roads"
+    },
+    {
+      "input": "\\\\fileserver\\gis\\parcels.tab",
+      "max_length": 60,
+      "expected": "parcels"
+    },
+    {
+      "input": "layers/buildings.csv and more",
+      "max_length": 60,
+      "expected": "buildings and more"
+    },
+    {
+      "input": "Roads / Rail",
+      "max_length": 60,
+      "expected": "Roads / Rail"
+    },
+    {
+      "input": "Flood https://maps.example.gov/a/b/report-final.pdf zones",
+      "max_length": 60,
+      "expected": "Flood zones"
+    },
+    {
+      "input": "see www.example.com/x for details",
+      "max_length": 60,
+      "expected": "see for details"
+    },
+    {
+      "input": "file:///C:/Users/jane/x.tif",
+      "max_length": 60,
+      "expected": ""
+    },
+    {
+      "input": "Owner jane.smith+gis@example.co.uk",
+      "max_length": 60,
+      "expected": "Owner [email]"
+    },
+    {
+      "input": "Call +44 (0) 20 7946 0958 now",
+      "max_length": 60,
+      "expected": "Call [number] now"
+    },
+    {
+      "input": "tel 555-123-4567",
+      "max_length": 60,
+      "expected": "tel [number]"
+    },
+    {
+      "input": "ref 12.34.567",
+      "max_length": 60,
+      "expected": "ref [number]"
+    },
+    {
+      "input": "Parcel 123456",
+      "max_length": 60,
+      "expected": "Parcel [number]"
+    },
+    {
+      "input": "Scale 1:25000",
+      "max_length": 60,
+      "expected": "Scale 1:25000"
+    },
+    {
+      "input": "رقم ١٢٣٤٥٦",
+      "max_length": 60,
+      "expected": "رقم [number]"
+    },
+    {
+      "input": "  Drainage\t\n  lines \u0007 ",
+      "max_length": 60,
+      "expected": "Drainage lines"
+    },
+    {
+      "input": "Parcel 123\u0000456",
+      "max_length": 60,
+      "expected": "Parcel [number]"
+    },
+    {
+      "input": "a​b‮c",
+      "max_length": 60,
+      "expected": "abc"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "max_length": 60,
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "input": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "max_length": 140,
+      "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀",
+      "max_length": 60,
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"
+    }
+  ],
+  "idempotent": [
+    "C:\\Users\\Jane Smith\\Maps\\roads.shp",
+    "Owner jane@example.com tel +1 (555) 123-4567 parcel 123456",
+    "Flood https://x.example/a zones",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ]
+}

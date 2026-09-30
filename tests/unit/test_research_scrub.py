@@ -6,6 +6,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from nika_onlymap_exporter.research.scrub import (
@@ -26,7 +29,6 @@ class TestPaths:
             ("~/maps/survey.geojson", "survey"),
             ("./data/wells.csv", "wells"),
             ("data/roads.shp", "roads"),
-            ("/data/x.gpkg|layername=roads", "x"),
             ("Layer from /srv/share/rivers.shp here", "Layer from rivers here"),
             ("a/b/c", "c"),
         ],
@@ -36,9 +38,26 @@ class TestPaths:
     ) -> None:
         assert scrub(text) == expected
 
-    @pytest.mark.parametrize("text", ["2020/2021", "N/A", "Roads 2020/21", "In/Out"])
-    def test_a_lone_slash_in_ordinary_text_is_not_a_path(self, text: str) -> None:
+    @pytest.mark.parametrize("text", ["Roads / Rail", "A \\ B", "x // y"])
+    def test_separators_on_their_own_are_punctuation(self, text: str) -> None:
         assert scrub(text) == text
+
+    def test_any_token_with_a_separator_is_a_path(self) -> None:
+        # The server's reading, mirrored: stricter than guessing which slashes
+        # are prose, and it can only ever remove text, never keep more.
+        assert scrub("Roads 2020/2021") == "Roads 2021"
+
+    def test_an_anchored_path_with_spaces_keeps_no_folder(self) -> None:
+        cleaned = scrub("C:\\Users\\Jane Smith\\Maps\\roads.shp")
+        assert cleaned == "roads"
+
+    def test_an_email_inside_a_path_is_not_half_kept(self) -> None:
+        assert scrub("x/jane@corp.com") == "[email]"
+
+    def test_a_qgis_source_string_loses_its_folders(self) -> None:
+        # The provider options after `|` are kept, as the server keeps them;
+        # the folders, which are what identify someone, are not.
+        assert scrub("/home/alice/x.gpkg|layername=roads") == "x.gpkg|layername=roads"
 
     def test_no_directory_name_survives(self) -> None:
         cleaned = scrub("/home/alice.smith/Clients/AcmeCorp/site.shp")
@@ -113,6 +132,30 @@ class TestControlAndLength:
         assert scrub("   ") == ""
 
 
+VECTORS = json.loads(
+    (Path(__file__).with_name("research_scrub_vectors.json")).read_text(
+        encoding="utf-8"
+    )
+)
+
+
+class TestSharedVectorsWithTheServer:
+    """The server's own scrub test cases: both sides must agree on every one."""
+
+    @pytest.mark.parametrize(
+        "case", VECTORS["cases"], ids=lambda case: repr(case["input"][:30])
+    )
+    def test_same_output_as_the_server(self, case: dict[str, object]) -> None:
+        text = case["input"]
+        max_length = case["max_length"]
+        assert isinstance(text, str) and isinstance(max_length, int)
+        assert scrub(text, max_length) == case["expected"]
+
+    @pytest.mark.parametrize("text", VECTORS["idempotent"])
+    def test_idempotent_on_the_server_cases(self, text: str) -> None:
+        assert scrub(scrub(text)) == scrub(text)
+
+
 class TestIdempotence:
     @pytest.mark.parametrize(
         "text",
@@ -120,7 +163,8 @@ class TestIdempotence:
             "/home/alice/roads.shp",
             "Call +65 9123 4567 or mail a@b.com at https://x.com/y",
             "x" * 200,
-            "a/b.abcdefghij" + "z" * 55,
+            # Not a path until the cut leaves a short extension on the end.
+            "x" * 50 + "/b.abcdefghijk",
             "Parcel 123456 in /srv/share/p.gpkg",
             "  spaced\ttext\n",
             "[number] and [email] already",

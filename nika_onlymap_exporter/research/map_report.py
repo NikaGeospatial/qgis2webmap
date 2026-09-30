@@ -35,8 +35,9 @@ from .scrub import scrub
 
 MAX_LAYERS = 100
 MAX_FIELDS = 50
-# The server's limit on one request body.
-MAX_REPORT_BYTES = 64 * 1024
+# The server refuses a body over 64 KB with a 413. The report is kept under
+# 60 KB so a longer version string or profile can never tip it over.
+MAX_REPORT_BYTES = 60 * 1024
 
 LAYER_KINDS = ("point", "line", "polygon", "raster", "mesh", "other")
 LAYER_SOURCES = ("file", "database", "web_service", "memory", "other")
@@ -119,7 +120,7 @@ EXTENT_BAND_MAX = "world"
 EARTH_RADIUS_KM = 6371.0088
 
 _AUTHID = re.compile(r"^[A-Z][A-Z0-9_]{0,15}:[A-Za-z0-9_.\-]{1,24}$")
-_PRESET = re.compile(r"^[a-z0-9][a-z0-9\-]{0,31}$")
+_PRESET = re.compile(r"^[a-z0-9][a-z0-9_\-]{0,39}$")
 
 _KIND_BY_GEOMETRY = {
     GeometryKind.POINT: "point",
@@ -403,16 +404,44 @@ def encode(report: object) -> bytes:
 def fit_to_limit(report: MapReportWire) -> MapReportWire:
     """Trim a report that would exceed the server's body limit.
 
-    100 layers of 50 sixty-character field names is ~300 KB, far past the 64 KB
-    the server accepts, and a report refused for size is a report lost. Field
-    lists shrink first (every layer keeps its name, kind and style), then
-    layers are dropped from the top of the draw order.
+    100 layers of 50 sixty-character field names is ~300 KB, far past what the
+    server accepts, and a report refused for size is a report lost. Fields go
+    first, from the largest layers down: every layer is capped at the highest
+    field count that fits, so a layer with 50 fields loses some before one
+    with 5 loses any, and every layer keeps its name, kind and style. Only if
+    no field is left and it still does not fit are layers dropped, from the
+    top of the draw order.
+
+    Both searches are binary, so this encodes the report a dozen times at
+    most rather than once per field removed.
     """
-    for cap in (25, 10, 0):
+    if encoded_size(report) <= MAX_REPORT_BYTES:
+        return report
+    full = [list(layer["fields"]) for layer in report["layers"]]
+
+    def fits_with_cap(cap: int) -> bool:
+        for layer, fields in zip(report["layers"], full):
+            layer["fields"] = fields[:cap]
+        return encoded_size(report) <= MAX_REPORT_BYTES
+
+    low, high = 0, max((len(fields) for fields in full), default=0)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits_with_cap(middle):
+            low = middle
+        else:
+            high = middle - 1
+    if fits_with_cap(low):
+        return report
+
+    layers = report["layers"]
+    low, high = 0, len(layers)
+    while low < high:
+        middle = (low + high + 1) // 2
+        report["layers"] = layers[:middle]
         if encoded_size(report) <= MAX_REPORT_BYTES:
-            return report
-        for layer in report["layers"]:
-            del layer["fields"][cap:]
-    while report["layers"] and encoded_size(report) > MAX_REPORT_BYTES:
-        report["layers"].pop()
+            low = middle
+        else:
+            high = middle - 1
+    report["layers"] = layers[:low]
     return report
