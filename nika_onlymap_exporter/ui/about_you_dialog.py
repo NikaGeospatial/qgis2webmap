@@ -113,6 +113,8 @@ class AboutYouDialog(QDialog):
         font.setBold(True)
         nothing_sent.setFont(font)
         layout.addWidget(nothing_sent)
+        # Spare height goes below the questions, not between them.
+        layout.addStretch(1)
 
         buttons = QDialogButtonBox(self)
         save = buttons.addButton("Save", QDialogButtonBox.ButtonRole.AcceptRole)
