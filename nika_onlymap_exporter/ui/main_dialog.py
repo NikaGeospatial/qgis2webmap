@@ -2112,7 +2112,9 @@ class MainDialog(QDialog):
             return "Research sharing is unavailable on this installation."
         export = self._cached_export
         facts = facts_for(self.project, export) if export is not None else None
-        return payload_preview_text(service, export, facts)
+        return payload_preview_text(
+            service, export, facts, identity=self._project_identity()
+        )
 
     def _show_research_payload(self) -> None:
         try:

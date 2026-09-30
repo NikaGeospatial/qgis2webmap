@@ -1,8 +1,9 @@
 """The fields every report carries, and the environment they are read from.
 
-`schema`, `kind`, `plugin_version`, `qgis_version`, `os`, and the profile. The
-server adds `country` and `received_at` itself; nothing here names the machine,
-the user or the install.
+`schema`, `kind`, `plugin_version`, `qgis_version`, `os`, and the profile. Map
+and tally reports also carry `utc_offset_hours`, worked out here. The server
+adds `country` and `received_at` itself; nothing here names the machine, the
+user or the install.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -13,14 +14,19 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 KIND_MAP = "map"
 KIND_TALLY = "tally"
 KIND_CONTACT = "contact"
 
 OS_VALUES = ("windows", "macos", "linux", "other")
+
+# The server's bounds for `utc_offset_hours`: every offset in use lies inside.
+MIN_UTC_OFFSET_HOURS = -12
+MAX_UTC_OFFSET_HOURS = 14
 
 # `3.44.1-Solothurn` -> `3.44.1`. The release name adds nothing, and whatever
 # a packager appends after the number is not ours to forward.
@@ -61,3 +67,20 @@ def os_name(platform: str | None = None) -> str:
     if value.startswith("linux"):
         return "linux"
     return "other"
+
+
+def local_now() -> datetime:
+    """The machine's clock, with its current UTC offset attached."""
+    return datetime.now().astimezone()
+
+
+def utc_offset_hours(moment: datetime) -> int:
+    """`moment`'s UTC offset in whole hours, rounded half up: +5:30 is 6, -3:30 is -3.
+
+    Kept inside the server's -12..14 so a strange system clock cannot turn the
+    whole report into one the server refuses. A naive `moment` counts as UTC.
+    """
+    offset = moment.utcoffset()
+    seconds = int(offset.total_seconds()) if offset is not None else 0
+    hours = (seconds + 1800) // 3600
+    return max(MIN_UTC_OFFSET_HOURS, min(MAX_UTC_OFFSET_HOURS, hours))

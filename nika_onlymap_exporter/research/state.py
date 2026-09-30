@@ -1,7 +1,8 @@
 """Everything research keeps on this machine, in one small JSON file.
 
 The choice, the About you answers, the salt, the fingerprints already
-reported, the week counters and the outbound queue all live here, in the QGIS
+reported, each map's `map_id`, the week counters and the outbound queue all
+live here, in the QGIS
 profile directory (the path is chosen by `ui/research_session.py`; this module
 takes it as an argument, which is what lets the tests use `tmp_path`).
 
@@ -29,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import consent
-from .fingerprint import new_salt
+from .fingerprint import is_map_id, new_map_id, new_salt
 from .profile import Profile
 from .queue import QueuedReport
 from .tally import WeekCounters
@@ -57,6 +58,9 @@ class ResearchState:
     sent_fingerprints: list[str] = field(default_factory=list)
     # Local map key -> the ISO week it was first exported in.
     map_first_week: dict[str, str] = field(default_factory=dict)
+    # Local map key -> the random `map_id` its reports carry, oldest first.
+    # Keyed like `map_first_week`, so a map that gains a layer keeps its id.
+    map_ids: dict[str, str] = field(default_factory=dict)
     weeks: dict[str, WeekCounters] = field(default_factory=dict)
     # Weeks already turned into a tally, so a clock set backwards cannot
     # produce a second report for the same week.
@@ -75,6 +79,7 @@ class ResearchState:
         self.tallied_weeks.clear()
         self.sent_fingerprints.clear()
         self.map_first_week.clear()
+        self.map_ids.clear()
         self.contact_sent = False
 
     def remember_fingerprint(self, fingerprint: str) -> None:
@@ -91,6 +96,19 @@ class ResearchState:
             oldest = sorted(self.map_first_week.items(), key=lambda item: item[1])
             for stale, _ in oldest[: len(self.map_first_week) - MAX_KNOWN_MAPS]:
                 del self.map_first_week[stale]
+
+    def map_id_for(self, key: str) -> str:
+        """This map's `map_id`, made on first use and reused ever after."""
+        existing = self.map_ids.get(key)
+        if existing is not None:
+            return existing
+        map_id = new_map_id()
+        self.map_ids[key] = map_id
+        # Past the bound the longest-known go first; a map forgotten here only
+        # starts a new `map_id` if it is ever reported again.
+        while len(self.map_ids) > MAX_KNOWN_MAPS:
+            del self.map_ids[next(iter(self.map_ids))]
+        return map_id
 
     def remember_tallied(self, week: str) -> None:
         if week not in self.tallied_weeks:
@@ -115,6 +133,7 @@ class ResearchState:
             "whats_new_seen": self.whats_new_seen,
             "sent_fingerprints": list(self.sent_fingerprints),
             "map_first_week": dict(self.map_first_week),
+            "map_ids": dict(self.map_ids),
             "weeks": {week: c.to_stored() for week, c in self.weeks.items()},
             "tallied_weeks": list(self.tallied_weeks),
             "queue": [item.to_stored() for item in self.queue],
@@ -127,6 +146,7 @@ class ResearchState:
         profile_raw = stored.get("profile")
         weeks_raw = stored.get("weeks")
         first_raw = stored.get("map_first_week")
+        ids_raw = stored.get("map_ids")
         queue_raw = stored.get("queue")
         queued = (
             [QueuedReport.from_stored(item) for item in queue_raw]
@@ -153,6 +173,15 @@ class ResearchState:
                     if isinstance(week, str)
                 }
                 if isinstance(first_raw, Mapping)
+                else {}
+            ),
+            map_ids=(
+                {
+                    str(key): map_id
+                    for key, map_id in ids_raw.items()
+                    if isinstance(map_id, str) and is_map_id(map_id)
+                }
+                if isinstance(ids_raw, Mapping)
                 else {}
             ),
             weeks=(

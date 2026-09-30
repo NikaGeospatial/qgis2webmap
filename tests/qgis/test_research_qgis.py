@@ -89,7 +89,12 @@ class TestMapReportFromARealRead:
         export, target = read_export
         facts = facts_for(project, export)
         report = build_map_report(
-            export, Environment.build("0.1.5", "3.44", "linux"), Profile(), facts=facts
+            export,
+            Environment.build("0.1.5", "3.44", "linux"),
+            Profile(),
+            map_id="AbCdEfGhIjKlMnOpQrSt-_",
+            utc_offset_hours=8,
+            facts=facts,
         )
         body = json.dumps(report)
 
@@ -115,6 +120,8 @@ class TestMapReportFromARealRead:
             export,
             Environment.build("0.1.5", "3.44", "linux"),
             Profile(),
+            map_id="AbCdEfGhIjKlMnOpQrSt-_",
+            utc_offset_hours=8,
             facts=facts_for(project, export),
         )
         assert report["title"] == "Survey for [email] see parcels"

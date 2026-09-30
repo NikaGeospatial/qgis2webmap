@@ -26,15 +26,36 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 
 from ..core.export_ir import ExportProject
 
 SALT_BYTES = 32
+# 16 random bytes, URL-safe base64 without padding: always 22 characters.
+MAP_ID_BYTES = 16
+# The server's `^[A-Za-z0-9_-]{22}$`, used with `fullmatch` so a trailing
+# newline cannot slip past the `$`.
+_MAP_ID = re.compile(r"[A-Za-z0-9_-]{22}")
 
 
 def new_salt() -> str:
     return secrets.token_hex(SALT_BYTES)
+
+
+def new_map_id() -> str:
+    """The `map_id` a map's reports share. Random, never derived from anything.
+
+    Unlike the hashes above this one IS sent: it is what links the versions of
+    one map on the server. It is made from nothing but randomness, so it says
+    nothing about the map, the user, the install or the hosting account; the
+    link from a map to its id exists only in the local state file.
+    """
+    return secrets.token_urlsafe(MAP_ID_BYTES)
+
+
+def is_map_id(text: str) -> bool:
+    return _MAP_ID.fullmatch(text) is not None
 
 
 def _digest(salt: str, material: object) -> str:

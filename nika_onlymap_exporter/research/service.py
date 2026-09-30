@@ -15,14 +15,14 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from ..core.export_ir import ExportProject
 from . import consent
 from .contact import ContactWire, build_contact, normalise_email
-from .envelope import Environment
-from .fingerprint import map_key, structure_fingerprint
+from .envelope import Environment, local_now, utc_offset_hours
+from .fingerprint import map_key, new_map_id, structure_fingerprint
 from .map_report import MapReportWire, ProjectFacts, build_map_report, encode
 from .profile import Profile
 from .queue import QueuedReport, enqueue, remove
@@ -65,10 +65,14 @@ class ResearchService:
         path: Path,
         env: Environment,
         today: Callable[[], date] = date.today,
+        now: Callable[[], datetime] = local_now,
     ) -> None:
         self.path = path
         self.env = env
         self._today = today
+        # The local time with its UTC offset: the time-of-day block an export
+        # is counted in, and the `utc_offset_hours` a report carries.
+        self._now = now
         self.state: ResearchState = load_state(path)
         self._apply_hard_stop()
 
@@ -80,6 +84,9 @@ class ResearchService:
 
     def today(self) -> date:
         return self._today()
+
+    def utc_offset_hours(self) -> int:
+        return utc_offset_hours(self._now())
 
     def collecting(self) -> bool:
         return consent.may_collect(self.state.consent, self.today())
@@ -155,7 +162,7 @@ class ResearchService:
         if hosted:
             counters.publishes += 1
         else:
-            counters.exports += 1
+            counters.add_export(self._now().hour)
         salt = self.state.ensure_salt()
         key = map_key(salt, identity)
         counters.add_map(key)
@@ -168,6 +175,8 @@ class ResearchService:
                 export,
                 self.env,
                 self.state.profile,
+                map_id=self.state.map_id_for(key),
+                utc_offset_hours=self.utc_offset_hours(),
                 facts=facts,
                 hosted=hosted,
                 password=password,
@@ -215,19 +224,38 @@ class ResearchService:
         self,
         export: ExportProject,
         *,
+        identity: str | None = None,
         facts: ProjectFacts | None = None,
         hosted: bool = False,
     ) -> MapReportWire:
-        """The report an export of `export` would queue. Changes nothing."""
+        """The report an export of `export` would queue. Changes nothing.
+
+        The `map_id` is the map's own when it already has one. Otherwise it is
+        a fresh random one that is not kept: the real one is made, just as
+        randomly, the first time the map is actually reported.
+        """
         return build_map_report(
-            export, self.env, self.state.profile, facts=facts, hosted=hosted
+            export,
+            self.env,
+            self.state.profile,
+            map_id=self._existing_map_id(identity) or new_map_id(),
+            utc_offset_hours=self.utc_offset_hours(),
+            facts=facts,
+            hosted=hosted,
         )
 
     def preview_tally(self) -> TallyWire:
         week = iso_week(self.today())
-        counters = self.state.weeks.get(week) or WeekCounters(exports=3, previews=5)
+        counters = self.state.weeks.get(week) or WeekCounters(
+            exports=3, exports_by_block=[0, 0, 2, 1, 0, 0], previews=5
+        )
         return build_tally(
-            week, counters, self.state.map_first_week, self.env, self.state.profile
+            week,
+            counters,
+            self.state.map_first_week,
+            self.env,
+            self.state.profile,
+            self.utc_offset_hours(),
         )
 
     def preview_contact(self) -> ContactWire | None:
@@ -236,6 +264,13 @@ class ResearchService:
         return build_contact(self.state.email, self.env, self.state.profile)
 
     # ---- Internals ------------------------------------------------------
+
+    def _existing_map_id(self, identity: str | None) -> str | None:
+        # No salt means nothing was ever reported, so no map has an id yet;
+        # making one here would change the state a preview must not change.
+        if identity is None or not self.state.salt:
+            return None
+        return self.state.map_ids.get(map_key(self.state.salt, identity))
 
     def _week(self, week: str) -> WeekCounters:
         return self.state.weeks.setdefault(week, WeekCounters())
@@ -254,6 +289,7 @@ class ResearchService:
                 self.state.map_first_week,
                 self.env,
                 self.state.profile,
+                self.utc_offset_hours(),
             )
             enqueue(self.state.queue, encode(tally).decode("utf-8"))
             self.state.remember_tallied(week)

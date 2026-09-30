@@ -192,6 +192,8 @@ class MapReportWire(TypedDict):
     qgis_version: str
     os: str
     profile: ProfileWire
+    map_id: str
+    utc_offset_hours: int
     title: str | None
     layers: list[LayerWire]
     crs: str | None
@@ -361,11 +363,18 @@ def build_map_report(
     env: Environment,
     profile: Profile,
     *,
+    map_id: str,
+    utc_offset_hours: int,
     facts: ProjectFacts | None = None,
     hosted: bool = False,
     password: bool = False,
 ) -> MapReportWire:
-    """The report for one export or publish. Pure: it reads only its arguments."""
+    """The report for one export or publish. Pure: it reads only its arguments.
+
+    `map_id` is the map's random id from the local state (see
+    `fingerprint.new_map_id`), and `utc_offset_hours` the machine's offset
+    from `envelope.utc_offset_hours`; the caller supplies both.
+    """
     known = facts or ProjectFacts()
     layers = [
         build_layer(layer, known.layers.get(layer.layer_id))
@@ -378,6 +387,8 @@ def build_map_report(
         "qgis_version": env.qgis_version,
         "os": env.os,
         "profile": profile.to_wire(),
+        "map_id": map_id,
+        "utc_offset_hours": utc_offset_hours,
         "title": scrub(export.title) or None,
         "layers": layers,
         "crs": _crs(export.source_crs),

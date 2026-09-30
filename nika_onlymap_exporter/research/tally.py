@@ -4,6 +4,10 @@ A week's counters are reported only once that week is over, at the next dialog
 open or export, and never twice. The distinct and recurring map counts come
 from local map keys (see `fingerprint.map_key`), which are not sent.
 
+Exports are also counted by the local time of day they happened in, in six
+four-hour blocks (`exports_by_block`), and the tally carries the machine's UTC
+offset at the time it is built, so the blocks can be read against a clock.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -34,6 +38,20 @@ FAILURE_CLASSES = (
     OTHER,
 )
 
+# `exports_by_block[i]` counts exports made from local hour 4*i up to 4*i + 4:
+# [00-04, 04-08, 08-12, 12-16, 16-20, 20-24).
+HOURS_PER_BLOCK = 4
+TIME_BLOCKS = 24 // HOURS_PER_BLOCK
+
+
+def time_block(hour: int) -> int:
+    """The four-hour block a local hour (0-23) falls in."""
+    return min(max(hour, 0), 23) // HOURS_PER_BLOCK
+
+
+def _no_blocks() -> list[int]:
+    return [0] * TIME_BLOCKS
+
 
 def iso_week(day: date) -> str:
     """`YYYY-Www`, using the ISO year - 2027-01-01 is in `2026-W53`."""
@@ -44,11 +62,17 @@ def iso_week(day: date) -> str:
 @dataclass
 class WeekCounters:
     exports: int = 0
+    exports_by_block: list[int] = field(default_factory=_no_blocks)
     previews: int = 0
     publishes: int = 0
     failures: dict[str, int] = field(default_factory=dict)
     # Local map keys seen this week. Never sent; only their count is.
     maps: list[str] = field(default_factory=list)
+
+    def add_export(self, local_hour: int) -> None:
+        """One export, counted in the week and in its time-of-day block."""
+        self.exports += 1
+        self.exports_by_block[time_block(local_hour)] += 1
 
     def add_failure(self, failure_class: str) -> None:
         name = failure_class if failure_class in FAILURE_CLASSES else OTHER
@@ -61,6 +85,7 @@ class WeekCounters:
     def to_stored(self) -> dict[str, object]:
         return {
             "exports": self.exports,
+            "exports_by_block": list(self.exports_by_block),
             "previews": self.previews,
             "publishes": self.publishes,
             "failures": dict(self.failures),
@@ -87,8 +112,15 @@ class WeekCounters:
             if isinstance(maps_raw, list)
             else []
         )
+        blocks_raw = stored.get("exports_by_block")
+        blocks = (
+            [_count(count) for count in blocks_raw]
+            if isinstance(blocks_raw, list) and len(blocks_raw) == TIME_BLOCKS
+            else _no_blocks()
+        )
         return cls(
             exports=_count(stored.get("exports")),
+            exports_by_block=blocks,
             previews=_count(stored.get("previews")),
             publishes=_count(stored.get("publishes")),
             failures=failures,
@@ -111,8 +143,10 @@ class TallyWire(TypedDict):
     qgis_version: str
     os: str
     profile: ProfileWire
+    utc_offset_hours: int
     week: str
     exports: int
+    exports_by_block: list[int]
     previews: int
     publishes: int
     distinct_maps: int
@@ -137,6 +171,7 @@ def build_tally(
     first_week: Mapping[str, str],
     env: Environment,
     profile: Profile,
+    utc_offset_hours: int,
 ) -> TallyWire:
     return {
         "schema": SCHEMA_VERSION,
@@ -145,8 +180,10 @@ def build_tally(
         "qgis_version": env.qgis_version,
         "os": env.os,
         "profile": profile.to_wire(),
+        "utc_offset_hours": utc_offset_hours,
         "week": week,
         "exports": counters.exports,
+        "exports_by_block": list(counters.exports_by_block),
         "previews": counters.previews,
         "publishes": counters.publishes,
         "distinct_maps": len(counters.maps),

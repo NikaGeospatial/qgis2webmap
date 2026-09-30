@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -36,9 +36,15 @@ from nika_onlymap_exporter.core.export_ir import (
 )
 from nika_onlymap_exporter.research import consent, text
 from nika_onlymap_exporter.research.contact import normalise_email
-from nika_onlymap_exporter.research.envelope import Environment, os_name
+from nika_onlymap_exporter.research.envelope import (
+    Environment,
+    os_name,
+    utc_offset_hours,
+)
 from nika_onlymap_exporter.research.fingerprint import (
+    is_map_id,
     map_key,
+    new_map_id,
     structure_fingerprint,
 )
 from nika_onlymap_exporter.research.map_report import (
@@ -51,6 +57,7 @@ from nika_onlymap_exporter.research.map_report import (
     MAX_REPORT_BYTES,
     OUTPUTS,
     LayerFacts,
+    MapReportWire,
     ProjectFacts,
     build_map_report,
     encoded_size,
@@ -70,9 +77,11 @@ from nika_onlymap_exporter.research.service import ResearchService
 from nika_onlymap_exporter.research.state import load_state, save_state
 from nika_onlymap_exporter.research.tally import (
     FAILURE_CLASSES,
+    TIME_BLOCKS,
     WeekCounters,
     build_tally,
     iso_week,
+    time_block,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -84,6 +93,8 @@ EMPTY = {"type": "FeatureCollection", "features": []}
 ENVELOPE_KEYS = {"schema", "kind", "plugin_version", "qgis_version", "os"}
 MAP_KEYS = ENVELOPE_KEYS | {
     "profile",
+    "map_id",
+    "utc_offset_hours",
     "title",
     "layers",
     "crs",
@@ -109,8 +120,10 @@ LAYER_KEYS = {
 }
 TALLY_KEYS = ENVELOPE_KEYS | {
     "profile",
+    "utc_offset_hours",
     "week",
     "exports",
+    "exports_by_block",
     "previews",
     "publishes",
     "distinct_maps",
@@ -125,6 +138,32 @@ CONTACT_KEYS = ENVELOPE_KEYS | {
     "use_case_other",
 }
 PROFILE_KEYS = {"audience", "sector", "use_cases", "use_case_other"}
+
+
+# A valid `map_id` and offset for reports built outside the service.
+MAP_ID = "AbCdEfGhIjKlMnOpQrSt-_"
+OFFSET = 8
+
+
+def map_report(
+    export: ExportProject,
+    env: Environment,
+    profile: Profile,
+    *,
+    facts: ProjectFacts | None = None,
+    hosted: bool = False,
+    password: bool = False,
+) -> MapReportWire:
+    return build_map_report(
+        export,
+        env,
+        profile,
+        map_id=MAP_ID,
+        utc_offset_hours=OFFSET,
+        facts=facts,
+        hosted=hosted,
+        password=password,
+    )
 
 
 def make_layer(
@@ -169,14 +208,32 @@ class Clock:
         return self.day
 
 
+class LocalTime:
+    """The service's local clock: a time of day with a UTC offset."""
+
+    def __init__(self, moment: datetime) -> None:
+        self.moment = moment
+
+    def __call__(self) -> datetime:
+        return self.moment
+
+
+SINGAPORE = timezone(timedelta(hours=8))
+
+
 @pytest.fixture
 def clock() -> Clock:
     return Clock(date(2026, 10, 7))  # a Wednesday, ISO week 2026-W41
 
 
 @pytest.fixture
-def service(tmp_path: Path, clock: Clock) -> ResearchService:
-    return ResearchService(tmp_path / "research.json", ENV, today=clock)
+def local_time() -> LocalTime:
+    return LocalTime(datetime(2026, 10, 7, 9, 30, tzinfo=SINGAPORE))
+
+
+@pytest.fixture
+def service(tmp_path: Path, clock: Clock, local_time: LocalTime) -> ResearchService:
+    return ResearchService(tmp_path / "research.json", ENV, today=clock, now=local_time)
 
 
 def queued_bodies(service: ResearchService) -> list[dict[str, object]]:
@@ -227,13 +284,13 @@ class TestProfileMatchesSpec:
 
 class TestMapReport:
     def test_only_allow_listed_keys(self) -> None:
-        report = build_map_report(make_export(), ENV, Profile())
+        report = map_report(make_export(), ENV, Profile())
         assert set(report) == MAP_KEYS
         for layer in report["layers"]:
             assert set(layer) == LAYER_KEYS
 
     def test_values_are_in_their_enums(self) -> None:
-        report = build_map_report(
+        report = map_report(
             make_export(output_mode=OutputMode.SHARE_ZIP), ENV, Profile()
         )
         layer = report["layers"][0]
@@ -244,12 +301,12 @@ class TestMapReport:
         assert report["output"] == "zip"
         assert report["output"] in OUTPUTS
         assert set(report["features_used"]) <= set(FEATURES_USED)
-        assert report["schema"] == 1
+        assert report["schema"] == 2
         assert report["kind"] == "map"
         assert report["qgis_version"] == "3.44.1"
 
     def test_no_coordinate_finer_than_a_degree(self) -> None:
-        report = build_map_report(make_export(), ENV, Profile())
+        report = map_report(make_export(), ENV, Profile())
         assert report["cell"] == [1, 104]
         body = json.dumps(report)
         assert "103.7" not in body
@@ -267,7 +324,7 @@ class TestMapReport:
             ],
         }
         layer = make_layer(geojson=geojson)
-        body = json.dumps(build_map_report(make_export((layer,)), ENV, Profile()))
+        body = json.dumps(map_report(make_export((layer,)), ENV, Profile()))
         assert "SECRET-VALUE" not in body
         assert "gravel" not in body
         assert "103.123" not in body
@@ -278,7 +335,7 @@ class TestMapReport:
             name="/home/alice/clients/acme/parcels.shp",
             fields=("owner_email", "https://x.com/f", "tel +65 9123 4567"),
         )
-        report = build_map_report(
+        report = map_report(
             make_export((layer,), title="Map for bob@acme.com"), ENV, Profile()
         )
         assert report["title"] == "Map for [email]"
@@ -324,7 +381,7 @@ class TestMapReport:
             )
             for i in range(130)
         )
-        report = build_map_report(make_export(layers), ENV, Profile())
+        report = map_report(make_export(layers), ENV, Profile())
         assert len(report["layers"]) <= MAX_LAYERS
         assert all(len(layer["fields"]) <= MAX_FIELDS for layer in report["layers"])
         assert encoded_size(report) <= MAX_REPORT_BYTES
@@ -337,7 +394,7 @@ class TestMapReport:
             for i in range(40)
         )
         narrow = make_layer(name="Narrow", fields=("a", "b", "c"))
-        report = build_map_report(make_export((narrow, *wide)), ENV, Profile())
+        report = map_report(make_export((narrow, *wide)), ENV, Profile())
         assert encoded_size(report) <= MAX_REPORT_BYTES
         by_name = {layer["name"]: layer for layer in report["layers"]}
         assert len(by_name) == 41
@@ -350,7 +407,7 @@ class TestMapReport:
         preset_pattern = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
         version_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$")
         token_pattern = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-        report = build_map_report(
+        report = map_report(
             make_export(basemap="dark-matter", terrain="terrarium"), ENV, Profile()
         )
         assert all(format_pattern.match(layer["format"]) for layer in report["layers"])
@@ -366,7 +423,7 @@ class TestMapReport:
             elevation=ElevationSpec(extruded=True),
             visible_zoom_range=(10.0, 16.0),
         )
-        report = build_map_report(
+        report = map_report(
             make_export((layer,), terrain="terrarium", show_legend=True),
             ENV,
             Profile(),
@@ -392,7 +449,7 @@ class TestMapReport:
             layers={layer.layer_id: LayerFacts(format="gpkg", has_time_field=True)},
             temporal=True,
         )
-        report = build_map_report(make_export((layer,)), ENV, Profile(), facts=facts)
+        report = map_report(make_export((layer,)), ENV, Profile(), facts=facts)
         assert report["layers"][0]["format"] == "gpkg"
         assert report["layers"][0]["has_time_field"] is True
         assert report["temporal"] is True
@@ -405,7 +462,7 @@ class TestMapReport:
             raster=RasterSpec(path="/secret/dir/dem.tiff"),
             feature_count=0,
         )
-        report = build_map_report(make_export((raster,)), ENV, Profile())
+        report = map_report(make_export((raster,)), ENV, Profile())
         layer = report["layers"][0]
         assert layer["format"] == "tif"
         assert layer["kind"] == "raster"
@@ -414,12 +471,12 @@ class TestMapReport:
 
     def test_unknown_format_is_other(self) -> None:
         facts = ProjectFacts(layers={"Roads_id": LayerFacts(format="evil/../x")})
-        report = build_map_report(make_export(), ENV, Profile(), facts=facts)
+        report = map_report(make_export(), ENV, Profile(), facts=facts)
         assert report["layers"][0]["format"] == "other"
 
     def test_a_crs_that_is_not_an_authid_is_dropped(self) -> None:
         export = replace(make_export(), source_crs="+proj=tmerc +lat_0=1.366")
-        assert build_map_report(export, ENV, Profile())["crs"] is None
+        assert map_report(export, ENV, Profile())["crs"] is None
 
 
 class TestFormatFromSource:
@@ -511,7 +568,7 @@ class TestTally:
 
     def test_shape(self) -> None:
         counters = WeekCounters(exports=2, failures={"blocked": 1})
-        tally = build_tally("2026-W41", counters, {}, ENV, Profile())
+        tally = build_tally("2026-W41", counters, {}, ENV, Profile(), OFFSET)
         assert set(tally) == TALLY_KEYS
         assert set(tally["failures"]) == set(FAILURE_CLASSES)
         assert tally["failures"]["blocked"] == 1
@@ -807,7 +864,7 @@ class TestEnvelope:
         bodies = queued_bodies(service)
         assert {b["kind"] for b in bodies} == {"contact", "map", "tally"}
         for body in bodies:
-            assert body["schema"] == 1
+            assert body["schema"] == 2
             assert body["plugin_version"] == "0.1.5"
             assert body["os"] == "linux"
             if body["kind"] != "contact":
@@ -822,7 +879,7 @@ class TestEnvelope:
                 )
             )
         )
-        report = build_map_report(make_export((layer,)), ENV, Profile())
+        report = map_report(make_export((layer,)), ENV, Profile())
         assert report["layers"][0]["fields"] == ["visible", "hidden"]
 
 
@@ -877,3 +934,287 @@ class TestPayloadPreview:
         text_ = payload_preview_text(service, make_export())
         assert SAMPLE_NOTE not in text_
         assert "Kranji site survey" in text_
+
+
+# ---- v2: map_id -----------------------------------------------------------
+
+MAP_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{22}$")
+
+
+def map_bodies(service: ResearchService) -> list[dict[str, object]]:
+    return [body for body in queued_bodies(service) if body["kind"] == "map"]
+
+
+class TestMapId:
+    def test_shape(self) -> None:
+        ids = {new_map_id() for _ in range(200)}
+        assert len(ids) == 200
+        assert all(MAP_ID_PATTERN.match(map_id) for map_id in ids)
+        assert all(is_map_id(map_id) for map_id in ids)
+        assert not is_map_id("x" * 21)
+        assert not is_map_id("x" * 23)
+        assert not is_map_id("x" * 21 + "=")
+        assert not is_map_id("x" * 22 + "\n")
+
+    def test_every_map_report_carries_one(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        (body,) = map_bodies(service)
+        assert isinstance(body["map_id"], str)
+        assert MAP_ID_PATTERN.match(body["map_id"])
+
+    def test_reused_when_the_same_map_changes(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        # A layer added: the structure changes, so a second report goes, but
+        # it is still the same map and must say so.
+        service.record_output(
+            make_export((make_layer(), make_layer("Rivers"))), "/a.qgz"
+        )
+        # And again after a restart, from the stored state.
+        reopened = ResearchService(service.path, ENV, today=service.today)
+        reopened.record_output(make_export((make_layer("Only"),)), "/a.qgz")
+        bodies = map_bodies(reopened)
+        assert len(bodies) == 3
+        assert len({body["map_id"] for body in bodies}) == 1
+
+    def test_different_maps_get_different_ids(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        service.record_output(make_export(), "/b.qgz")
+        first, second = map_bodies(service)
+        assert first["map_id"] != second["map_id"]
+
+    def test_random_not_derived_from_the_map(self, tmp_path: Path) -> None:
+        """The same project on two installs gets two unrelated ids."""
+        ids = set()
+        for name in ("one", "two"):
+            other = ResearchService(tmp_path / f"{name}.json", ENV)
+            other.choose(True)
+            other.record_output(make_export(), "/a.qgz")
+            ids.add(map_bodies(other)[0]["map_id"])
+        assert len(ids) == 2
+
+    def test_stored_beside_the_fingerprints_keyed_by_map(
+        self, service: ResearchService
+    ) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        key = map_key(service.state.salt, "/a.qgz")
+        assert list(service.state.map_ids) == [key]
+        assert service.state.map_ids[key] == map_bodies(service)[0]["map_id"]
+        assert "/a.qgz" not in json.dumps(service.state.to_stored()["map_ids"])
+
+    def test_not_made_when_nothing_is_reported(self, service: ResearchService) -> None:
+        service.record_output(make_export(), "/a.qgz")  # no Share yet
+        assert service.state.map_ids == {}
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        service.record_output(make_export(), "/a.qgz")  # unchanged: no report
+        assert len(service.state.map_ids) == 1
+
+    def test_dont_share_forgets_them(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        before = map_bodies(service)[0]["map_id"]
+        service.choose(False)
+        assert service.state.map_ids == {}
+        assert "map_ids" in service.state.to_stored()
+        assert load_state(service.path).map_ids == {}
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        assert map_bodies(service)[0]["map_id"] != before
+
+    def test_the_410_forgets_them(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        service.on_response(service.state.queue[0].id, 410)
+        assert service.state.map_ids == {}
+
+    def test_a_malformed_stored_id_is_dropped(self, tmp_path: Path) -> None:
+        path = tmp_path / "research.json"
+        good = "AbCdEfGhIjKlMnOpQrSt-_"
+        path.write_text(
+            json.dumps({"map_ids": {"k1": good, "k2": "short", "k3": 7}}),
+            encoding="utf-8",
+        )
+        assert load_state(path).map_ids == {"k1": good}
+
+    def test_bounded(self, service: ResearchService) -> None:
+        from nika_onlymap_exporter.research.state import MAX_KNOWN_MAPS
+
+        state = service.state
+        for i in range(MAX_KNOWN_MAPS + 3):
+            state.map_id_for(f"key{i}")
+        assert len(state.map_ids) == MAX_KNOWN_MAPS
+        assert "key0" not in state.map_ids
+        assert f"key{MAX_KNOWN_MAPS + 2}" in state.map_ids
+
+    def test_preview_changes_nothing(self, service: ResearchService) -> None:
+        from nika_onlymap_exporter.research.preview import payload_preview_text
+
+        service.choose(True)
+        before = service.state.to_stored()
+        report = service.preview_map_report(make_export(), identity="/a.qgz")
+        assert MAP_ID_PATTERN.match(report["map_id"])
+        payload_preview_text(service, make_export(), identity="/a.qgz")
+        assert service.state.to_stored() == before
+
+    def test_preview_shows_the_maps_own_id(self, service: ResearchService) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        real = map_bodies(service)[0]["map_id"]
+        preview = service.preview_map_report(make_export(), identity="/a.qgz")
+        assert preview["map_id"] == real
+
+    def test_tally_and_contact_carry_no_map_id(
+        self, service: ResearchService, clock: Clock
+    ) -> None:
+        service.save_profile(Profile(), "a@b.co")
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")
+        map_id = map_bodies(service)[0]["map_id"]
+        clock.day += timedelta(days=7)
+        service.prepare_flush()
+        for item in service.state.queue:
+            if json.loads(item.body)["kind"] != "map":
+                assert "map_id" not in item.body
+                assert str(map_id) not in item.body
+
+
+# ---- v2: utc_offset_hours -------------------------------------------------
+
+
+def offset(hours: int, minutes: int = 0) -> datetime:
+    sign = -1 if hours < 0 else 1
+    delta = timedelta(hours=hours, minutes=sign * minutes)
+    return datetime(2026, 10, 7, 12, 0, tzinfo=timezone(delta))
+
+
+class TestUtcOffset:
+    @pytest.mark.parametrize(
+        ("moment", "expected"),
+        [
+            (offset(0), 0),
+            (offset(8), 8),
+            (offset(-5), -5),
+            (offset(5, 30), 6),  # India: half up
+            (offset(-3, 30), -3),  # Newfoundland: half up is towards zero
+            (offset(5, 45), 6),  # Nepal
+            (offset(9, 30), 10),  # Adelaide
+            (offset(-9, 30), -9),  # Marquesas
+            (offset(3, 29), 3),
+            (offset(-3, 31), -4),
+            (offset(14), 14),  # Kiribati, the server's top
+            (offset(-12), -12),  # the server's bottom
+            (offset(13, 45), 14),  # Chatham in summer
+            (offset(15), 14),  # a strange clock, kept in range
+            (offset(-13), -12),
+            (datetime(2026, 10, 7, 12, 0), 0),  # naive counts as UTC
+        ],
+    )
+    def test_rounded_to_the_nearest_hour_half_up(
+        self, moment: datetime, expected: int
+    ) -> None:
+        assert utc_offset_hours(moment) == expected
+
+    def test_on_map_reports_from_the_local_clock(
+        self, service: ResearchService, local_time: LocalTime
+    ) -> None:
+        service.choose(True)
+        local_time.moment = offset(5, 30)
+        service.record_output(make_export(), "/a.qgz")
+        assert map_bodies(service)[0]["utc_offset_hours"] == 6
+
+    def test_on_tallies_as_of_when_they_are_built(
+        self, service: ResearchService, clock: Clock, local_time: LocalTime
+    ) -> None:
+        service.choose(True)
+        service.record_output(make_export(), "/a.qgz")  # at +8
+        clock.day += timedelta(days=7)
+        local_time.moment = offset(-3, 30)
+        service.prepare_flush()
+        tally = next(b for b in queued_bodies(service) if b["kind"] == "tally")
+        assert tally["utc_offset_hours"] == -3
+
+    def test_not_on_contact_reports(self, service: ResearchService) -> None:
+        service.save_profile(Profile(), "a@b.co")
+        service.choose(True)
+        (contact,) = queued_bodies(service)
+        assert contact["kind"] == "contact"
+        assert "utc_offset_hours" not in contact
+
+
+# ---- v2: exports_by_block -------------------------------------------------
+
+
+class TestExportsByBlock:
+    @pytest.mark.parametrize(
+        ("hour", "block"),
+        [
+            (0, 0),
+            (3, 0),
+            (4, 1),
+            (7, 1),
+            (8, 2),
+            (11, 2),
+            (12, 3),
+            (16, 4),
+            (20, 5),
+            (23, 5),
+        ],
+    )
+    def test_four_hour_blocks(self, hour: int, block: int) -> None:
+        assert time_block(hour) == block
+
+    def test_counted_by_local_hour_like_exports(
+        self, service: ResearchService, clock: Clock, local_time: LocalTime
+    ) -> None:
+        service.choose(True)
+        for hour in (0, 3, 9, 23, 23):
+            local_time.moment = datetime(2026, 10, 7, hour, 15, tzinfo=SINGAPORE)
+            service.record_output(make_export(), "/a.qgz")
+        # A publish is not an export, here as in `exports`.
+        service.record_output(make_export(), "/a.qgz", hosted=True)
+        clock.day += timedelta(days=7)
+        service.prepare_flush()
+        tally = next(b for b in queued_bodies(service) if b["kind"] == "tally")
+        assert tally["exports_by_block"] == [2, 0, 1, 0, 0, 2]
+        assert tally["exports"] == 5
+        assert tally["publishes"] == 1
+
+    def test_the_local_hour_not_utc(
+        self, service: ResearchService, clock: Clock, local_time: LocalTime
+    ) -> None:
+        service.choose(True)
+        # 01:00 in Singapore is 17:00 UTC the day before: block 0, not 4.
+        local_time.moment = datetime(2026, 10, 7, 1, 0, tzinfo=SINGAPORE)
+        service.record_output(make_export(), "/a.qgz")
+        clock.day += timedelta(days=7)
+        service.prepare_flush()
+        tally = next(b for b in queued_bodies(service) if b["kind"] == "tally")
+        assert tally["exports_by_block"] == [1, 0, 0, 0, 0, 0]
+
+    def test_always_six_non_negative_counts(self) -> None:
+        tally = build_tally("2026-W41", WeekCounters(), {}, ENV, Profile(), 0)
+        assert tally["exports_by_block"] == [0] * TIME_BLOCKS == [0] * 6
+
+    def test_stored_and_restored(self) -> None:
+        counters = WeekCounters()
+        counters.add_export(13)
+        assert WeekCounters.from_stored(counters.to_stored()) == counters
+        assert counters.exports_by_block == [0, 0, 0, 1, 0, 0]
+
+    @pytest.mark.parametrize(
+        "stored",
+        [None, "x", [1, 2, 3], [1, 2, 3, 4, 5, 6, 7]],
+    )
+    def test_a_malformed_stored_block_list_reads_as_zeros(self, stored: object) -> None:
+        counters = WeekCounters.from_stored({"exports": 2, "exports_by_block": stored})
+        assert counters.exports_by_block == [0] * 6
+
+    def test_a_bad_count_inside_reads_as_zero(self) -> None:
+        counters = WeekCounters.from_stored(
+            {"exports_by_block": [1, -1, "2", True, 3.0, 4]}
+        )
+        assert counters.exports_by_block == [1, 0, 0, 0, 0, 4]
