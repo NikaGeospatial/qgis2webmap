@@ -92,7 +92,7 @@ MAP_ID_NOTE = (
     "map_id is a random code made on this computer the first time a map is "
     "reported, and sent again with every later version of the same map, so "
     "those versions can be told apart from other maps. It is never linked to "
-    "you or to your hosting account. utc_offset_hours is your computer's time "
+    "you or to your NIKA account. utc_offset_hours is your computer's time "
     "zone, to the nearest hour."
 )
 
@@ -122,14 +122,14 @@ def payload_preview_text(
         report = service.preview_map_report(export, identity=identity, facts=facts)
     parts.append(
         "After an export or publish, once per map and again only when its "
-        "layers change:\n" + _pretty(report) + "\n" + MAP_ID_NOTE
+        "layers change:\n" + _pretty(report) + "\n\n" + MAP_ID_NOTE
     )
     tally = _pretty(service.preview_tally())
     parts.append(
         "Once a week, with that week's counts (below: this week so far, or "
         "example numbers if nothing has been counted yet):\n"
         + tally
-        + "\n"
+        + "\n\n"
         + TALLY_NOTE
     )
     contact = service.preview_contact()
