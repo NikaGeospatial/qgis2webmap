@@ -2254,12 +2254,14 @@ class MainDialog(QDialog):
         """A different `.qgz` is not the same map: forget, then ask about it."""
         self._remote_state = RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
         self._update_host_button()
+        self._research.start_preview_session()
         if self.isVisible():
             self._map_watch.check(force=True)
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)
         self._map_watch.start()
+        self._research.start_preview_session()
         # Deferred so the dialog is on screen before anything is put over it,
         # and guarded so a hide and show - or a nested dialog's own events -
         # never runs the sequence twice.
@@ -2417,7 +2419,9 @@ class MainDialog(QDialog):
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
-        self._research.record_failure(self._job_failure_class)
+        self._research.record_quiet_failure(
+            self._job_failure_class, self._project_identity()
+        )
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Warning)
         if self._fidelity_state is ReportState.CHECKING:
             self._show_fidelity_error(message)
@@ -2785,6 +2789,7 @@ class MainDialog(QDialog):
 
         def on_written(result) -> None:
             self._research.record_preview()
+            self._research.start_preview_session()
             if not live:
                 self._stop_live_preview()
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))

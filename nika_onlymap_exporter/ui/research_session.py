@@ -131,6 +131,9 @@ class ResearchSession(QObject):
         self._service: ResearchService | None = None
         self._sending = False
         self._again = False
+        # (project, failure class) pairs already counted as quiet failures in
+        # this preview session. See `record_quiet_failure`.
+        self._quiet_failures: set[tuple[str, str]] = set()
 
     # ---- The service -------------------------------------------------------
 
@@ -185,6 +188,31 @@ class ResearchSession(QObject):
                 service.record_failure(failure_class)
         except Exception:
             _log_failure("recording a failure")
+
+    def record_quiet_failure(self, failure_class: str, project_key: str) -> None:
+        """A live-preview failure: counted once per class, project and session.
+
+        The live preview rebuilds on every edit, so one broken project being
+        edited for an hour would otherwise fail - and be counted - hundreds of
+        times. An export or a publish the user asked for goes through
+        `record_failure` and counts every time.
+        """
+        key = (project_key, failure_class)
+        if key in self._quiet_failures:
+            return
+        try:
+            service = self.service()
+            if service is None or not service.collecting():
+                # Not marked as counted: after Share it still counts once.
+                return
+            service.record_failure(failure_class)
+            self._quiet_failures.add(key)
+        except Exception:
+            _log_failure("recording a failure")
+
+    def start_preview_session(self) -> None:
+        """The dialog opened, Preview was pressed or the project changed."""
+        self._quiet_failures.clear()
 
     def record_runtime_missing(self) -> None:
         """The runtime is still missing after asking: a failure only if accepted.

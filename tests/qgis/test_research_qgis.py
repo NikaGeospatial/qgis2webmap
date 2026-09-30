@@ -262,6 +262,52 @@ class TestSender:
         session.flush()
 
 
+class TestQuietFailures:
+    """A live preview failing on every edit is one failure, not hundreds."""
+
+    def _session(self, tmp_path):
+        from nika_onlymap_exporter.ui.research_session import ResearchSession
+
+        session = ResearchSession(path=tmp_path / "r.json", poster=FakePoster([]))
+        session.service().choose(True)
+        return session
+
+    @staticmethod
+    def _failures(session) -> dict[str, int]:
+        (week,) = session.service().state.weeks.values()
+        return dict(week.failures)
+
+    def test_once_per_class_and_project_per_session(self, qgis_app, tmp_path) -> None:
+        session = self._session(tmp_path)
+        for _ in range(20):
+            session.record_quiet_failure("write_error", "/a.qgz")
+            session.record_quiet_failure("read_error", "/a.qgz")
+            session.record_quiet_failure("write_error", "/b.qgz")
+        assert self._failures(session) == {"write_error": 2, "read_error": 1}
+        session.start_preview_session()
+        session.record_quiet_failure("write_error", "/a.qgz")
+        assert self._failures(session)["write_error"] == 3
+
+    def test_explicit_failures_still_count_every_time(self, qgis_app, tmp_path) -> None:
+        session = self._session(tmp_path)
+        session.record_quiet_failure("write_error", "/a.qgz")
+        for _ in range(3):
+            session.record_failure("write_error")
+        assert self._failures(session) == {"write_error": 4}
+
+    def test_a_failure_before_share_still_counts_once_after(
+        self, qgis_app, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.ui.research_session import ResearchSession
+
+        session = ResearchSession(path=tmp_path / "r.json", poster=FakePoster([]))
+        session.record_quiet_failure("write_error", "/a.qgz")
+        session.service().choose(True)
+        session.record_quiet_failure("write_error", "/a.qgz")
+        session.record_quiet_failure("write_error", "/a.qgz")
+        assert self._failures(session) == {"write_error": 1}
+
+
 class TestRequest:
     def test_no_credentials_and_the_plugin_agent(self, qgis_app) -> None:
         from qgis.PyQt.QtNetwork import QNetworkRequest
@@ -406,6 +452,33 @@ class TestFirstOpen:
         dialog._run_first_open()
         assert shown == []
         assert "Research sharing is on" in dialog.research_status.text()
+        dialog.close()
+
+    def test_quiet_preview_failures_count_once_until_the_session_restarts(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.ui.research_session import ResearchSession
+
+        dialog = self._dialog(project, make_memory_layer)
+        dialog._research = ResearchSession(
+            dialog, path=tmp_path / "r.json", poster=FakePoster([])
+        )
+        service = dialog._research.service()
+        service.choose(True)
+
+        def failures() -> dict[str, int]:
+            (week,) = service.state.weeks.values()
+            return dict(week.failures)
+
+        dialog._job_failure_class = "write_error"
+        for _ in range(10):  # an hour of edits on a broken project
+            dialog._on_job_failed_quietly("broken", "details")
+        assert failures() == {"write_error": 1}
+        dialog._on_project_switched()
+        dialog._on_job_failed_quietly("broken", "details")
+        assert failures() == {"write_error": 2}
+        dialog._on_job_failed_quietly("broken", "details")
+        assert failures() == {"write_error": 2}
         dialog.close()
 
     def test_runtime_prompt_skipped_when_installed(
