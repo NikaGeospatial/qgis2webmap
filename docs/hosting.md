@@ -66,6 +66,22 @@ support. A project that pointed at it offers **Host as new map**.
 paused, taken down, deleted, expired or stopped does not count, so any of those
 frees its space for the next publish.
 
+### How big a map can be
+
+- **Free plan:** 25 MB per map, three maps, 75 MB in total.
+- **Enterprise:** no per-map limit — maps of any size up to your storage.
+- **Every plan:** no single file can be larger than 5 GB, because each file is
+  sent in one upload and that is the most one upload can carry. NIKA refuses
+  the publish before anything is uploaded and names the file.
+
+Every size limit is checked before any map data is uploaded, so a refused
+publish uploads nothing.
+
+Size is not free for the people opening the map, though. Vector layers are
+downloaded and read whole by the browser, so layers of hundreds of MB load
+slowly, and a single layer file above roughly 500 MB will not open in browsers
+at all. Rasters are read a tile at a time and are not affected.
+
 ### What happens, in order
 
 1. **You sign in, once.** Your browser opens NIKA's sign-in page and you
@@ -88,7 +104,7 @@ dialog.
 NIKA dashboard, on plans that include password protection. Without one, a link
 that has been shared cannot be unshared.
 
-**The data goes with the map.** Every feature is embedded in the page.
+**The data goes with the map.** Every feature is published with it.
 Publishing it publishes the attributes too, including any column you left in
 because it was convenient. Check the popup field list on the **Layers** tab
 before you publish anywhere — including a host of your own.
@@ -99,16 +115,17 @@ know which of your layers are yours to publish.
 
 ### What is actually uploaded
 
-The map page and a thumbnail of your canvas, and nothing else. The confirmation
-screen names both, so the list you approve is the list that is sent.
+The map page, the data files for its layers, and a thumbnail of your canvas, and
+nothing else. The confirmation screen names them, so the list you approve is
+the list that is sent.
 
 In particular the OnlyMap runtime — the ~8.3 MB of JavaScript that draws the
 map — **is not uploaded**. It is byte-identical for every map built against the
 same OnlyMap release, so NIKA already stores one copy per release and points
 your map at it; what leaves your machine is the version number, not the bytes.
 Two things follow from that. The upload is ~8.3 MB smaller than the folder on
-your disk, and your plan's per-map size allowance is spent entirely on your own
-map and its data.
+your disk, and every byte counted against your plan is your own map and its
+data.
 
 ### Hosted maps are not truncated
 

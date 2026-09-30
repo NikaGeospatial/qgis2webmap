@@ -57,6 +57,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   nobody to ask. Its new **Export even if some items are blocked** parameter
   (off by default) is the batch run answering in advance: the map is written
   without them, and each missing item is logged as a warning.
+- **The hosting guide states the size limits.** 25 MB per map on the free
+  plan; no per-map limit on enterprise, where maps can be any size up to your
+  storage; and no single file above 5 GB on any plan, which NIKA now refuses
+  before anything is uploaded, naming the file (shown as a publishing refusal).
+  It also says plainly that vector layers of hundreds of MB load slowly in a
+  browser, and that one above roughly 500 MB will not open.
 - **Markers QGIS draws into the map, and raster colours baked into the
   pixels, are reported as Rasterised** rather than Kept. They look as they do in
   QGIS, but they arrive as pictures. The verdict was documented and never used.
