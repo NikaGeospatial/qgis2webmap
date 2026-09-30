@@ -57,7 +57,7 @@ dashboard for 30 days, and its name is held for 7 days so an old link cannot
 land on a different map.
 
 **Delete permanently** — the red button on the map's page, which asks you to
-type the map's name — skips all of that. Every address the map had answers
+type CONFIRM — skips all of that. Every address the map had answers
 "not found" at once, its data is deleted, its name is free for another map
 straight away, and nothing can bring it back: not the dashboard, not NIKA
 support. A project that pointed at it offers **Host as new map**.
