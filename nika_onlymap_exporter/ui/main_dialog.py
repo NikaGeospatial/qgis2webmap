@@ -137,6 +137,7 @@ from ..hosting.client import (
     PublishConflictError,
     PublishRefusedError,
     UploadFile,
+    UploadLinkExpiredError,
 )
 from ..hosting.consent import (
     basemap_warning_text,
@@ -3657,6 +3658,11 @@ class MainDialog(QDialog):
             except AuthRequiredError as exc:
                 clear_token()
                 return exc
+            except UploadLinkExpiredError as exc:
+                # The upload ran past the time NIKA allows one publish. Its
+                # message says so and what to do; nothing here is a fault to
+                # report.
+                return exc
             except HostingError as exc:
                 # A plan refusal after the upload, or a check whose ending was
                 # never heard, is something to tell the user - not something
@@ -3684,6 +3690,13 @@ class MainDialog(QDialog):
                     self.status_label.setText("Not published.")
                     return
                 self._sign_in_again(published)
+                return
+            if isinstance(published, UploadLinkExpiredError):
+                # Shown, not counted as a crash: the message names the time
+                # limit and the remedy. Nothing went live, so nothing is
+                # written into the project.
+                QMessageBox.warning(self, "Not published", str(published))
+                self.status_label.setText("Not published. The map online is unchanged.")
                 return
             if isinstance(published, _ReleaseRefused):
                 # The same frame as a refusal before the upload: the server's

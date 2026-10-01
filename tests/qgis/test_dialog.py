@@ -2276,6 +2276,64 @@ class TestHostButtonFollowsTheServer:
         assert warnings == [("Upload not confirmed", VERIFY_CONTACT_LOST_MESSAGE)]
         assert crashes == []
 
+    def test_an_expired_upload_link_is_a_message_not_a_crash(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.hosting.client import UploadLinkExpiredError
+
+        message = "Uploading took longer than the 60 minutes NIKA allows."
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            warnings, crashes, counted = self._upload_failing(
+                monkeypatch, dialog, UploadLinkExpiredError(message), None
+            )
+        finally:
+            dialog.close()
+        assert warnings == [("Not published", message)]
+        assert crashes == []
+        assert counted == []
+
+    def test_a_previous_publish_still_verifying_is_a_plain_message(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """Raised from `prepare` when the last attempt is still being checked:
+        the exporter's own sentence, with no sign-in and no new-map question."""
+        from nika_onlymap_exporter.hosting.client import PublishRefusedError
+        from nika_onlymap_exporter.ui import main_dialog
+
+        message = "Your last publish is still being checked. Try again shortly."
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, text, *a, **k: warnings.append((title, text)),
+        )
+        crashes: list[str] = []
+        monkeypatch.setattr(
+            main_dialog, "show_failure", lambda _p, title, _m: crashes.append(title)
+        )
+
+        class FakeExporter:
+            map_id = None
+            release_n = None
+            pending_release_id = "rel_old"
+            reconciliation = None
+            force = False
+            on_progress = None
+
+            def prepare(self, _result, _destination):
+                raise PublishRefusedError(message, code="previous_publish_verifying")
+
+        try:
+            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
+        finally:
+            dialog.close()
+        assert warnings == [("Cannot publish", message)]
+        assert crashes == []
+
     def test_a_new_map_refused_after_the_upload_keeps_the_old_link(
         self, qgis_app, project, make_memory_layer, monkeypatch
     ) -> None:
