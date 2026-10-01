@@ -1903,6 +1903,118 @@ class TestHostButtonFollowsTheServer:
         assert "October 2026; republishing does not extend it." in shown["info"]
         assert "republishing does not extend it" in tooltip
 
+    def _upload_failing(self, monkeypatch, dialog, failure, release_status):
+        """Run the upload stage with a publish that raises `failure` while the
+        server is checking it; return the warnings and crash boxes shown."""
+        from nika_onlymap_exporter.ui import main_dialog
+
+        warnings: list[tuple[str, str]] = []
+        crashes: list[str] = []
+        counted: list[str] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, text, *a, **k: warnings.append((title, text)),
+        )
+        monkeypatch.setattr(
+            main_dialog, "show_failure", lambda _p, title, _m: crashes.append(title)
+        )
+        monkeypatch.setattr(dialog._research, "record_failure", counted.append)
+
+        class FakeClient:
+            def release_status(self, _release_id):
+                return release_status
+
+        class FakeExporter:
+            client = FakeClient()
+            on_progress = None
+            stage = "verifying"
+
+            def publish(self, _prepared):
+                raise failure
+
+        class Start:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 1
+            release_id = "rel_1"
+
+        class Prepared:
+            start = Start()
+
+        dialog._upload(FakeExporter(), Prepared())
+        return warnings, crashes, counted
+
+    def test_a_plan_refusal_after_the_upload_is_not_a_crash(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """The server re-checks the plan when it activates a release and fails
+        the release with the refusal's own sentence. That is "Cannot publish",
+        not "Something went wrong - please report it"."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+        from nika_onlymap_exporter.hosting.client import HostingError, ReleaseStatus
+
+        reason = "Your plan hosts 1 map, and you already have 1."
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            warnings, crashes, counted = self._upload_failing(
+                monkeypatch,
+                dialog,
+                HostingError(
+                    f"The hosting server could not publish this map.\n\n{reason}"
+                ),
+                ReleaseStatus(state="failed", error=reason),
+            )
+            assert load_hosted_map_id(project) == self.MAP_ID
+        finally:
+            dialog.close()
+        assert warnings == [("Cannot publish", reason)]
+        assert crashes == []
+        assert counted == []
+
+    def test_losing_contact_after_the_upload_is_not_a_crash(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.hosting.client import (
+            VERIFY_CONTACT_LOST_MESSAGE,
+            HostingError,
+        )
+
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            warnings, crashes, _counted = self._upload_failing(
+                monkeypatch, dialog, HostingError(VERIFY_CONTACT_LOST_MESSAGE), None
+            )
+        finally:
+            dialog.close()
+        assert warnings == [("Upload not confirmed", VERIFY_CONTACT_LOST_MESSAGE)]
+        assert crashes == []
+
+    def test_a_failure_the_server_did_not_decide_is_still_a_failure(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """A release still being checked is no verdict: the original error
+        goes on to the failure path rather than being dressed as a refusal."""
+        from nika_onlymap_exporter.hosting.client import HostingError, ReleaseStatus
+
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            with pytest.raises(HostingError, match="still verifying"):
+                self._upload_failing(
+                    monkeypatch,
+                    dialog,
+                    HostingError("The hosting server is still verifying this map"),
+                    ReleaseStatus(state="verifying"),
+                )
+        finally:
+            dialog.close()
+
     def test_cancel_after_the_upload_does_not_claim_nothing_was_written(
         self, qgis_app, project, make_memory_layer
     ) -> None:

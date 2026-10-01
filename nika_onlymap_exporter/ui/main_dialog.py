@@ -31,6 +31,7 @@ import re
 import shutil
 import tempfile
 import traceback
+from dataclasses import dataclass
 from datetime import datetime
 from html import escape as escape_html
 from pathlib import Path
@@ -111,6 +112,7 @@ from ..core.settings import (
     save_state,
 )
 from ..exporters.hosted import (
+    STAGE_VERIFYING,
     HostedExporter,
     PreparedPublish,
     cancelled_publish_text,
@@ -127,7 +129,10 @@ from ..hosting.auth import (
 )
 from ..hosting.client import (
     NEW_MAP_REFUSAL_CODES,
+    STATE_FAILED,
+    VERIFY_CONTACT_LOST_MESSAGE,
     AuthRequiredError,
+    HostingError,
     PublishConflictError,
     PublishRefusedError,
     UploadFile,
@@ -339,6 +344,53 @@ def _apply_saved_color(button: QgsColorButton, value: str) -> None:
         button.setColor(color)
     else:
         button.setToNull()
+
+
+@dataclass(frozen=True)
+class _ReleaseRefused:
+    """The server turned the uploaded release down, in its own words.
+
+    Not a crash: after the upload the server checks the plan again - map
+    count, storage, a free map's end date - because the plan can change while
+    the bytes are in flight, and a refusal there arrives as a failed release
+    whose reason is the same sentence `publish/start` would have said.
+    """
+
+    message: str
+
+
+@dataclass(frozen=True)
+class _ContactLost:
+    """The upload finished but the plugin never heard how the check ended."""
+
+    message: str
+
+
+def _explain_unfinished_publish(
+    exporter: HostedExporter, release_id: str, failure: HostingError
+) -> _ReleaseRefused | _ContactLost | None:
+    """What a publish that failed after the upload actually ran into, or None.
+
+    Runs on the worker. None means "a real failure": the caller re-raises and
+    it reaches the crash reporter as before.
+
+    The client says a release failed only as a sentence, so the release is
+    asked about once more by id rather than its message being parsed: a
+    `failed` state is the server's decision, whatever the words. Only once the
+    upload is complete - before that there is no verdict to ask for, and the
+    extra request would just fail the same way the upload did.
+    """
+    if str(failure) == VERIFY_CONTACT_LOST_MESSAGE:
+        return _ContactLost(str(failure))
+    if getattr(exporter, "stage", "") != STAGE_VERIFYING:
+        return None
+    try:
+        status = exporter.client.release_status(release_id)
+    except HostingError:
+        return None
+    if status.state != STATE_FAILED:
+        return None
+    return _ReleaseRefused(status.error or str(failure))
 
 
 def _publishable_files(
@@ -3508,6 +3560,16 @@ class MainDialog(QDialog):
             except AuthRequiredError as exc:
                 clear_token()
                 return exc
+            except HostingError as exc:
+                # A plan refusal after the upload, or a check whose ending was
+                # never heard, is something to tell the user - not something
+                # to ask them to report. Anything else is still a failure.
+                explained = _explain_unfinished_publish(
+                    exporter, prepared.start.release_id, exc
+                )
+                if explained is None:
+                    raise
+                return explained
             # One more read, so the sentence the user is given about who can
             # open the map is true: a map with a password is not open to
             # "anyone with this link". Never fails the publish - see `map_state`.
@@ -3518,6 +3580,26 @@ class MainDialog(QDialog):
             self._discard_publish_staging()
             if isinstance(published, AuthRequiredError):
                 self._sign_in_again(published)
+                return
+            if isinstance(published, _ReleaseRefused):
+                # The same frame as a refusal before the upload: the server's
+                # sentence, and the map at its address left as it was.
+                self._map_watch.check(force=True)
+                QMessageBox.warning(self, "Cannot publish", published.message)
+                self.status_label.setText(
+                    "Not published. The server turned the upload down."
+                )
+                return
+            if isinstance(published, _ContactLost):
+                # Counted, because the publish did not finish from here - but
+                # shown as what it is: probably live, and recognised as this
+                # project's own on the next press.
+                self._research.record_failure(research_tally.PUBLISH_ERROR)
+                QMessageBox.warning(self, "Upload not confirmed", published.message)
+                self.status_label.setText(
+                    "Uploaded, but not confirmed. Publish again once you are "
+                    "back online."
+                )
                 return
             outcome, state = published
             # Remembered with the project, so pressing Host again republishes
