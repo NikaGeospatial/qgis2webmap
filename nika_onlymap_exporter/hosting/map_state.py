@@ -362,7 +362,8 @@ def host_button_tooltip(stored_map_id: str, state: RemoteMapState) -> str:
         return (
             "Update this project's hosted map. It is not currently online; "
             "republishing brings it back, except for a free map whose 7 days "
-            "are over, which needs enterprise hosting." + notes + common
+            "are over: only enterprise hosting brings that one back, but it can "
+            "be published again as a new map." + notes + common
         )
     if presence == PRESENCE_LIVE:
         return (

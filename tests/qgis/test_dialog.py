@@ -1752,12 +1752,15 @@ class TestHostButtonFollowsTheServer:
         finally:
             dialog.close()
 
-    def test_an_expired_free_map_shows_the_servers_refusal(
-        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    @pytest.mark.parametrize("accepted", [False, True])
+    def test_an_expired_free_map_offers_a_new_map(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path, accepted
     ) -> None:
-        """`free_map_expired`: the server's sentence in a warning, and nothing
-        else - no sign-in, no token cleared, no "Host as new map" question, and
-        the project still points at its map."""
+        """`free_map_expired`: the free plan will not revive the map but would
+        take a new one, so the server's sentence comes with that offer - not a
+        dead-end warning, not a sign-in, not a cleared token. Declining leaves
+        everything as it was; accepting reserves the same build as a new map,
+        and the project keeps its old id until the new map exists."""
         from nika_onlymap_exporter.core.settings import (
             load_hosted_map_id,
             save_hosted_map_id,
@@ -1783,30 +1786,77 @@ class TestHostButtonFollowsTheServer:
         monkeypatch.setattr(main_dialog, "clear_token", lambda: cleared.append(True))
         signed_in: list[object] = []
         monkeypatch.setattr(dialog, "_sign_in_again", signed_in.append)
-        asked: list[bool] = []
+        asked: list[str] = []
         monkeypatch.setattr(
-            dialog, "_confirm_host_as_new", lambda: asked.append(True) or True
+            dialog,
+            "_confirm_expired_as_new",
+            lambda refusal: asked.append(refusal) or accepted,
+        )
+        uploaded: list[object] = []
+        monkeypatch.setattr(
+            dialog, "_upload", lambda exporter, prepared: uploaded.append(prepared)
         )
 
+        class Start:
+            release_id = "rel_new"
+            renders_under_caps = False
+
+        class Prepared:
+            start = Start()
+
         class FakeExporter:
-            map_id = TestHostButtonFollowsTheServer.MAP_ID
-            release_n = 2
-            pending_release_id = None
-            reconciliation = None
-            force = False
-            on_progress = None
+            def __init__(self):
+                self.map_id = TestHostButtonFollowsTheServer.MAP_ID
+                self.release_n = 2
+                self.pending_release_id = None
+                self.reconciliation = None
+                self.force = False
+                self.on_progress = None
+                self.calls: list[str | None] = []
 
             def prepare(self, _result, _destination):
-                raise PublishRefusedError(message, code="free_map_expired")
+                self.calls.append(self.map_id)
+                if self.map_id:
+                    raise PublishRefusedError(message, code="free_map_expired")
+                return Prepared()
 
+        exporter = FakeExporter()
         try:
-            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
-            assert warnings == [("Cannot publish", message)]
-            assert cleared == [] and signed_in == [] and asked == []
+            dialog._reserve(exporter, None, tmp_path, [], force=False)
+            assert asked == [message]
+            assert warnings == []
+            assert cleared == [] and signed_in == []
             assert load_hosted_map_id(project) == self.MAP_ID
-            assert "Nothing left this machine" in dialog.status_label.text()
+            if accepted:
+                assert exporter.calls == [self.MAP_ID, None]
+                assert len(uploaded) == 1
+            else:
+                assert exporter.calls == [self.MAP_ID]
+                assert uploaded == []
+                assert "Nothing left this machine" in dialog.status_label.text()
         finally:
             dialog.close()
+
+    def test_the_expired_map_question_says_what_happens_to_both_addresses(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        captured: dict[str, str] = {}
+
+        def exec_box(box):
+            captured.update(text=box.text(), info=box.informativeText())
+            return 0
+
+        monkeypatch.setattr(QMessageBox, "exec", exec_box)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert dialog._confirm_expired_as_new("SERVER SAYS EXPIRED.") is False
+        finally:
+            dialog.close()
+        assert captured["text"] == "SERVER SAYS EXPIRED."
+        assert "The old address stays offline" in captured["info"]
+        assert "fresh 7 days" in captured["info"]
 
     def test_a_password_protected_map_is_not_described_as_open_to_anyone(
         self, qgis_app, project, make_memory_layer, monkeypatch

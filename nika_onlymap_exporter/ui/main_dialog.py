@@ -129,6 +129,7 @@ from ..hosting.auth import (
 )
 from ..hosting.client import (
     NEW_MAP_REFUSAL_CODES,
+    REFUSAL_FREE_MAP_EXPIRED,
     STATE_FAILED,
     VERIFY_CONTACT_LOST_MESSAGE,
     AuthRequiredError,
@@ -3511,6 +3512,28 @@ class MainDialog(QDialog):
                 exporter.pending_release_id = None
                 self._reserve(exporter, result, staging, violations, force=False)
                 return
+            if (
+                isinstance(prepared, PublishRefusedError)
+                and prepared.code == REFUSAL_FREE_MAP_EXPIRED
+                and exporter.map_id
+            ):
+                # The free plan will not bring this map back, but it would
+                # take a NEW one: an expired map counts toward neither the map
+                # limit nor storage. So the refusal is a fork in the road, not
+                # a dead end - and still a question, because it means a new
+                # address.
+                if not self._confirm_expired_as_new(str(prepared)):
+                    self._active_exporter = None
+                    self._discard_publish_staging()
+                    self.status_label.setText(
+                        "Not published. Nothing left this machine."
+                    )
+                    return
+                exporter.map_id = None
+                exporter.release_n = None
+                exporter.pending_release_id = None
+                self._reserve(exporter, result, staging, violations, force=False)
+                return
             if isinstance(prepared, PublishRefusedError):
                 self._active_exporter = None
                 # The server's own sentence, shown as it was written: it names
@@ -3685,15 +3708,33 @@ class MainDialog(QDialog):
 
     def _confirm_host_as_new(self) -> bool:
         """Ask before a refused republish becomes a brand-new map."""
+        return self._ask_host_as_new(
+            new_map_reason(self._remote_state),
+            "It can be published again as a NEW map, with a new address. The "
+            "old address is left as it is, and this project will point at the "
+            "new map once it is online.",
+        )
+
+    def _confirm_expired_as_new(self, refusal: str) -> bool:
+        """Ask before a free map whose days are over is published as a new one.
+
+        `refusal` is the server's own sentence, shown first: it names the date
+        the map's free days ended and what could restore the old address.
+        """
+        return self._ask_host_as_new(
+            refusal,
+            "You can publish this project as a NEW map instead, with a new "
+            "address. The old address stays offline, and the new map gets a "
+            "fresh 7 days. This project will point at the new map once it is "
+            "online.",
+        )
+
+    def _ask_host_as_new(self, text: str, informative: str) -> bool:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
         box.setWindowTitle("Publish as a new map?")
-        box.setText(new_map_reason(self._remote_state))
-        box.setInformativeText(
-            "It can be published again as a NEW map, with a new address. The "
-            "old address is left as it is, and this project will point at the "
-            "new map from now on."
-        )
+        box.setText(text)
+        box.setInformativeText(informative)
         publish = box.addButton("Host as new map", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(QMessageBox.StandardButton.Cancel)
