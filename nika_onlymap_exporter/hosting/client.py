@@ -35,8 +35,12 @@ filename allowlist: the manifest names the files and the server's kind registry
 decides whether that set is a map. A client-side list could only ever be a
 stale copy of that decision, and it silently dropped data files.
 
-`licenseKey` coming back `None` is the free tier, not a failure. A free map
-keeps OnlyMap's own caps, which is what `hosting.consent` warns about.
+`licenseKey` coming back `None` is not a failure, and it is not "the free
+tier" either: the server issues the same key to every tier whose maps have
+OnlyMap's caps lifted, free included, and withholds it only when the runtime a
+map is served with cannot keep the attribution a free map must show. Whether a
+map will be capped is the server's `capsLifted`, read by
+`PublishStart.renders_under_caps`; `hosting.consent` warns from that.
 
 **HTTPS is not optional and is not configurable**, for both the API and the
 presigned URLs, and for the same reason `packaging.runtime_manager` refuses a
@@ -414,11 +418,10 @@ class PublishStart:
     changed in, and it means every byte is already stored - not that the server
     forgot to answer.
 
-    `license_key` is `None` whenever no key was minted FOR THIS CALL, which is
-    not the same as "this map renders under the caps". A key is map-scoped, so a
-    brand-new map has no id to mint against yet and the server answers `None` on
-    every first publish whatever the tier, then mints the real key once the map
-    exists. Read `caps_lifted`, never the key, to decide what to tell the user.
+    `license_key` is the server's one issued key, the same for every entitled
+    tier, or `None` when this map is not entitled to it. It says nothing about
+    the account's plan: free maps get it too. Read `renders_under_caps`, never
+    the key, to decide what to tell the user.
     """
 
     release_id: str
@@ -434,18 +437,14 @@ class PublishStart:
     def renders_under_caps(self) -> bool:
         """Whether the published map will really be capped and truncated.
 
-        The server's answer when it gives one. The fallback is the old
-        key-presence test, which is right for a REPUBLISH - where the map id
-        exists and a key would have been minted if the tier earned one - and
-        wrong for a first publish, where it produced a truncation warning for a
-        map that was about to be served uncapped.
+        The server's answer when it gives one. The fallback, for a server that
+        predates `capsLifted`, is whether a key came back. Such servers minted
+        keys per map, so a first publish came back keyless whatever the plan,
+        and this fallback warned about truncation for a map that was then
+        served uncapped - which is why it is only the fallback.
         """
         if self.caps_lifted is not None:
             return not self.caps_lifted
-        return self.license_key is None
-
-    @property
-    def is_free_tier(self) -> bool:
         return self.license_key is None
 
     def target_for(self, sha256: str) -> UploadTarget | None:

@@ -214,7 +214,7 @@ def full_publish(*already_stored: str) -> FakeTransport:
 
 class TestPublishing:
     def test_a_free_tier_publish_succeeds(self, built, tmp_path) -> None:
-        """A null `licenseKey` is the free tier, not a failure to publish."""
+        """A null `licenseKey` is not a failure to publish."""
         transport = full_publish()
         exporter = make_exporter(transport)
 
@@ -300,15 +300,19 @@ class TestPublishing:
         assert [request.method for request in transport.requests] == ["POST"]
         assert transport.requests[0].url.endswith("/maps/publish/start")
 
-    def test_the_confirmation_sees_the_tier(self, built, tmp_path) -> None:
-        transport = FakeTransport(start_answer(**{"licenseKey": None}))
+    def test_the_confirmation_sees_whether_the_map_is_capped(
+        self, built, tmp_path
+    ) -> None:
+        transport = FakeTransport(start_answer(capsLifted=False))
         seen: list[bool] = []
 
         with pytest.raises(PublishCancelledError):
             make_exporter(transport).export(
                 built,
                 tmp_path / "upload",
-                confirm=lambda prepared: seen.append(prepared.is_free_tier) or False,
+                confirm=lambda prepared: (
+                    seen.append(prepared.start.renders_under_caps) or False
+                ),
             )
 
         assert seen == [True]
@@ -543,10 +547,10 @@ class TestTruncationWarning:
     def test_a_first_publish_with_caps_lifted_does_not_warn(self) -> None:
         """The regression this signature exists for.
 
-        A first publish has no map id, so the server mints no key in the
-        `publish/start` reply whatever the tier - it mints the real one at
-        activation. Reading key presence warned about truncation for a map that
-        was then served complete, with all its layers and every feature.
+        Servers that minted keys per map sent none for a first publish, which
+        has no map id yet, whatever the plan. Reading key presence warned about
+        truncation for a map that was then served complete, with all its layers
+        and every feature.
         """
         start = PublishStart(
             release_id="r1",

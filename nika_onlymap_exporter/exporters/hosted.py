@@ -31,10 +31,10 @@ missing; republishing a map whose data did not change sends the page and
 nothing else.
 
 **Publishing is two acts, and they are separated on purpose.** `prepare` sends
-the manifest and gets back the upload targets and the account's tier - no map
-data leaves the machine. `publish` is what actually uploads. The gap between
-them is where the free-tier truncation warning goes, and it exists because a
-warning that arrives after the upload is not a warning.
+the manifest and gets back the upload targets and whether the served map will
+have OnlyMap's caps lifted - no map data leaves the machine. `publish` is what
+actually uploads. The gap between them is where the truncation warning goes,
+and it exists because a warning that arrives after the upload is not a warning.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -165,10 +165,6 @@ class PreparedPublish:
     manifest: PublishManifest
     files: tuple[tuple[str, Path], ...]
     title: str
-
-    @property
-    def is_free_tier(self) -> bool:
-        return self.start.is_free_tier
 
     @property
     def total_bytes(self) -> int:

@@ -28,11 +28,12 @@ hundred still is. Two of them fire:
   case that remains: a map pinned to a runtime older than the platform's
   keep-badge floor is issued no key, so its caps apply and truncation is real.
 
-  Reading the returned licence key was NOT enough to tell those apart. A key is
-  map-scoped, so a first publish has no map id to mint against and comes back
-  keyless on every tier - which warned about truncation for maps that were then
-  served complete. The server answers the entitlement directly now, and
-  `PublishStart.renders_under_caps` is what this takes.
+  The server answers that directly as `capsLifted`, and
+  `PublishStart.renders_under_caps` is what this takes. The returned licence key
+  is not the answer: the server issues one key to every entitled tier, free
+  included, and older servers minted it per map, so a first publish came back
+  keyless on every plan and warned about truncation for maps that were then
+  served complete.
 * Under the plain-HTTP loopback exemption the upload leaves unencrypted, which
   `insecure_transport_text` says out loud. It is empty on every ordinary
   publish, so it costs the common path nothing.
@@ -62,12 +63,12 @@ def should_warn_truncation(
     inside the caps loses nothing either. Only the pair is a problem.
 
     **Takes the server's answer, not a licence key.** This used to be
-    `license_key is None`, which was wrong for a first publish: a key is
-    map-scoped, so there is no id to mint against until the map exists, and the
-    server returns `None` on every first publish whatever the tier. That warned
-    about truncation for maps that were then served complete. `PublishStart.
-    renders_under_caps` prefers the server's own `capsLifted` and keeps the old
-    test as the fallback for a server that does not send it.
+    `license_key is None`, which was wrong for a first publish on the servers
+    that minted keys per map: there was no id to mint against until the map
+    existed, so every first publish came back keyless whatever the plan, and
+    this warned about truncation for maps that were then served complete.
+    `PublishStart.renders_under_caps` prefers the server's own `capsLifted` and
+    keeps the old test as the fallback for a server that does not send it.
 
     **The answer is not knowable before `POST /maps/publish/start`.** That call
     sends a title, filenames and sizes and no map data, so asking it before the

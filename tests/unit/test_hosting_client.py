@@ -421,22 +421,27 @@ class TestStartPublish:
         with pytest.raises(HostingError, match="releaseN"):
             api.start_publish(MANIFEST)
 
-    def test_the_free_tier_is_a_null_licence_key_not_an_error(self) -> None:
+    def test_a_null_licence_key_is_not_an_error(self) -> None:
         api, _transport = client(ok(start_payload(**{"licenseKey": None})))
         start = api.start_publish(MANIFEST)
         assert start.license_key is None
-        assert start.is_free_tier
 
-    def test_an_empty_licence_key_reads_as_the_free_tier(self) -> None:
-        """A server sending "" must not be mistaken for a licensed account."""
+    def test_an_empty_licence_key_reads_as_no_key(self) -> None:
+        """A server sending "" must not be mistaken for one that sent a key."""
         api, _transport = client(ok(start_payload(**{"licenseKey": ""})))
-        assert api.start_publish(MANIFEST).is_free_tier
+        assert api.start_publish(MANIFEST).license_key is None
 
     def test_a_licence_key_comes_back_intact(self) -> None:
         api, _transport = client(ok(start_payload(**{"licenseKey": "om_live_a.b"})))
         start = api.start_publish(MANIFEST)
         assert start.license_key == "om_live_a.b"
-        assert not start.is_free_tier
+
+    def test_the_caps_come_from_the_server_not_the_key(self) -> None:
+        """Every entitled tier, free included, gets the same key."""
+        api, _transport = client(
+            ok(start_payload(**{"licenseKey": None, "capsLifted": True}))
+        )
+        assert not api.start_publish(MANIFEST).renders_under_caps
 
 
 class TestDeduplication:
