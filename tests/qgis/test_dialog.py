@@ -1912,8 +1912,14 @@ class TestHostButtonFollowsTheServer:
         finally:
             dialog.close()
 
-    def _publish_and_capture(self, monkeypatch, dialog, state) -> dict[str, str]:
-        """Run the upload stage against stand-ins; return what the box said."""
+    def _publish_and_capture(
+        self, monkeypatch, dialog, state, map_id=MAP_ID, during=None
+    ) -> dict[str, str]:
+        """Run the upload stage against stand-ins; return what the box said.
+
+        `map_id` is the map the exporter updates (None for a new map), and
+        `during` runs while the upload is in flight - where a user opening
+        another project would."""
         from qgis.PyQt.QtWidgets import QMessageBox
 
         captured: dict[str, str] = {}
@@ -1934,12 +1940,17 @@ class TestHostButtonFollowsTheServer:
             def map_state(self, _map_id):
                 return state
 
+        updating = map_id
+
         class FakeExporter:
             client = FakeClient()
             on_progress = None
             stage = "verifying"
+            map_id = updating
 
             def publish(self, _prepared):
+                if during is not None:
+                    during()
                 return Outcome()
 
         class Start:
@@ -1953,6 +1964,169 @@ class TestHostButtonFollowsTheServer:
         dialog._upload(FakeExporter(), Prepared())
         captured["status"] = dialog.status_label.text()
         return captured
+
+    def _open_another_project(self, project, make_memory_layer, tmp_path):
+        """What File > Open does to `QgsProject.instance()`: same object, new
+        contents. Returns a function that does it, for `during`."""
+
+        def switch():
+            other = tmp_path / "other.qgz"
+            project.clear()
+            project.addMapLayer(make_memory_layer("rivers"))
+            project.write(str(other))
+            project.read(str(other))
+
+        return switch
+
+    @pytest.mark.parametrize("map_id", [MAP_ID, None])
+    def test_a_publish_finishing_after_a_project_switch_writes_nothing(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path, map_id
+    ) -> None:
+        """Project A uploads; the user opens project B. A's address must not
+        land in B - B's next Republish would replace A's public map - and B
+        must not be saved on A's behalf. The link is still handed over."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            load_hosted_pending_release,
+            load_hosted_release_n,
+        )
+
+        first = tmp_path / "first.qgz"
+        project.write(str(first))
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        persisted: list[bool] = []
+        monkeypatch.setattr(
+            dialog, "_persist_hosted_link", lambda: persisted.append(True) or True
+        )
+        dialog._publish_project = dialog._mark_project()
+        try:
+            shown = self._publish_and_capture(
+                monkeypatch,
+                dialog,
+                self._state("live"),
+                map_id=map_id,
+                during=self._open_another_project(project, make_memory_layer, tmp_path),
+            )
+            assert project.fileName().endswith("other.qgz")
+            assert load_hosted_map_id(project) == ""
+            assert load_hosted_release_n(project) is None
+            assert load_hosted_pending_release(project) == ""
+            assert dialog.host_button.text() == "Host ↗"
+        finally:
+            dialog.close()
+        assert persisted == []
+        assert shown["title"] == "Published - address not saved"
+        assert "https://maps.example/m" in shown["info"]
+        assert "You opened a different project" in shown["info"]
+        assert "'first.qgz'" in shown["info"]
+
+    def test_the_same_project_reopened_still_gets_its_address(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """Reloading the very file the publish started from is not a switch:
+        writing the address into it is what the publish was for."""
+        from nika_onlymap_exporter.core.settings import load_hosted_map_id
+
+        first = tmp_path / "first.qgz"
+        project.write(str(first))
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        monkeypatch.setattr(dialog, "_persist_hosted_link", lambda: True)
+        dialog._publish_project = dialog._mark_project()
+        try:
+            shown = self._publish_and_capture(
+                monkeypatch,
+                dialog,
+                self._state("live"),
+                during=lambda: project.read(str(first)),
+            )
+            assert load_hosted_map_id(project) == self.MAP_ID
+        finally:
+            dialog.close()
+        assert shown["title"] == "Published"
+
+    def test_a_switch_before_the_upload_stops_the_publish(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """Switched while the address was being reserved: no reconciliation is
+        written, no pending release, and no upload starts."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            load_hosted_pending_release,
+        )
+        from nika_onlymap_exporter.exporters.hosted import PendingReconciliation
+        from nika_onlymap_exporter.ui import main_dialog
+
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, text, *a, **k: warnings.append((title, text)),
+        )
+        uploaded: list[object] = []
+        monkeypatch.setattr(
+            dialog, "_upload", lambda exporter, prepared: uploaded.append(prepared)
+        )
+        switch = self._open_another_project(project, make_memory_layer, tmp_path)
+
+        class Start:
+            release_id = "rel_new"
+            renders_under_caps = False
+
+        class Prepared:
+            start = Start()
+
+        class FakeExporter:
+            map_id = None
+            release_n = None
+            pending_release_id = "rel_old"
+            force = False
+            on_progress = None
+            reconciliation = None
+
+            def prepare(self, _result, _destination):
+                switch()
+                self.reconciliation = PendingReconciliation(
+                    settled=True,
+                    adopted_map_id=TestHostButtonFollowsTheServer.MAP_ID,
+                    adopted_release_n=4,
+                )
+                return Prepared()
+
+        dialog._publish_project = dialog._mark_project()
+        try:
+            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
+            assert load_hosted_map_id(project) == ""
+            assert load_hosted_pending_release(project) == ""
+        finally:
+            dialog.close()
+        assert uploaded == []
+        assert [title for title, _text in warnings] == ["Not published"]
+        assert "nothing was uploaded" in warnings[0][1]
+
+    def test_a_switch_before_the_confirmation_stops_the_publish(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.ui import main_dialog
+
+        dialog = self._dialog(project, make_memory_layer)
+        warnings: list[str] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, _text, *a, **k: warnings.append(title),
+        )
+        dialog._publish_project = dialog._mark_project()
+        self._open_another_project(project, make_memory_layer, tmp_path)()
+        try:
+            notices = self._confirmation_notice(monkeypatch, dialog, tmp_path)
+        finally:
+            dialog.close()
+        assert notices == []
+        assert warnings == ["Not published"]
 
     def test_a_publish_onto_a_paused_map_does_not_say_online(
         self, qgis_app, project, make_memory_layer, monkeypatch

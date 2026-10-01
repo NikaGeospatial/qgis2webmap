@@ -367,6 +367,22 @@ class _ContactLost:
     message: str
 
 
+@dataclass(frozen=True)
+class _ProjectMark:
+    """Which project a publish started from.
+
+    `QgsProject.instance()` is one object for the whole QGIS session: opening
+    another `.qgz` mid-publish changes what is inside it, not which object the
+    dialog holds. So a publish remembers the project it began with - a count
+    of loads and clears, which moves whenever another project is opened or
+    the current one closed, and the file it was saved as - and writes its
+    result only into that project.
+    """
+
+    generation: int
+    file_name: str
+
+
 def _explain_unfinished_publish(
     exporter: HostedExporter, release_id: str, failure: HostingError
 ) -> _ReleaseRefused | _ContactLost | None:
@@ -713,6 +729,11 @@ class MainDialog(QDialog):
         # server-side problem, not an expiry, and retrying it forever would
         # bounce the user between browser and plugin with no way to read why.
         self._resigning_in = False
+        # Moved on by every project load and clear (`_on_project_switched`),
+        # and the project the publish in progress started from. See
+        # `_ProjectMark`.
+        self._project_generation = 0
+        self._publish_project: _ProjectMark | None = None
         # What the server last said about this project's hosted map, and the
         # exporter of the publish in progress - read by a cancel or a failure to
         # say what is actually true about how far it got.
@@ -2309,11 +2330,48 @@ class MainDialog(QDialog):
 
     def _on_project_switched(self, *_args) -> None:
         """A different `.qgz` is not the same map: forget, then ask about it."""
+        self._project_generation += 1
         self._remote_state = RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
         self._update_host_button()
         self._research.start_preview_session()
         if self.isVisible():
             self._map_watch.check(force=True)
+
+    def _mark_project(self) -> _ProjectMark:
+        return _ProjectMark(self._project_generation, self.project.fileName())
+
+    def _publish_project_switched(self) -> bool:
+        """Whether the project open now is not the one the publish started from.
+
+        The same file loaded again counts as the same project: writing the
+        address into it is exactly what the publish was for. An unsaved
+        project has no file to recognise it by, so any load or clear is a
+        switch.
+        """
+        mark = self._publish_project
+        if mark is None or mark.generation == self._project_generation:
+            return False
+        return not (mark.file_name and mark.file_name == self.project.fileName())
+
+    def _published_project_name(self) -> str:
+        mark = self._publish_project
+        name = Path(mark.file_name).name if mark and mark.file_name else ""
+        return f"'{name}'" if name else "the project you published from"
+
+    def _abandon_for_switched_project(self) -> None:
+        """Stop a publish whose project was replaced before the upload began."""
+        self._active_exporter = None
+        self._discard_publish_staging()
+        name = self._published_project_name()
+        QMessageBox.warning(
+            self,
+            "Not published",
+            f"You opened a different project while {name} was getting ready to "
+            "publish, so nothing was uploaded and nothing was written into the "
+            f"project open now.\n\nTo publish {name}, open it again and press "
+            "Host.",
+        )
+        self.status_label.setText("Not published. Nothing left this machine.")
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)
@@ -3158,6 +3216,9 @@ class MainDialog(QDialog):
 
         Signing in, when needed, happens before any of it.
         """
+        # Before the read: the export, the stored map id and the result all
+        # have to be about this one project.
+        self._publish_project = self._mark_project()
         self._ensure_export(self._host_with, "Reading the project...")
 
     def _host_with(self, export, _report) -> None:
@@ -3376,6 +3437,11 @@ class MainDialog(QDialog):
         self, export, token: str, result, manifest: PublishManifest
     ) -> None:
         """The confirmation, then the metadata-only reservation."""
+        if self._publish_project_switched():
+            # Everything below reads the project - its stored map id, its
+            # layers for the thumbnail - and would read the wrong one.
+            self._abandon_for_switched_project()
+            return
         # Captured on the GUI thread, on every publish including a republish:
         # a listing showing yesterday's picture beside today's map is a bug
         # nobody looking at the listing could ever detect.
@@ -3480,6 +3546,13 @@ class MainDialog(QDialog):
                 return exc
 
         def on_prepared(prepared) -> None:
+            if self._publish_project_switched():
+                # Before anything is written - the reconciliation, the pending
+                # release - and before a byte is uploaded: the reservation is
+                # simply never completed. First even for an expired sign-in,
+                # whose resume would publish the project open NOW.
+                self._abandon_for_switched_project()
+                return
             self._apply_reconciliation(exporter)
             if isinstance(prepared, AuthRequiredError):
                 self._active_exporter = None
@@ -3602,7 +3675,14 @@ class MainDialog(QDialog):
         def on_published(published) -> None:
             self._active_exporter = None
             self._discard_publish_staging()
+            switched = self._publish_project_switched()
             if isinstance(published, AuthRequiredError):
+                if switched:
+                    # Resuming would publish the project open NOW, which
+                    # nobody asked for.
+                    QMessageBox.warning(self, "Sign in again", str(published))
+                    self.status_label.setText("Not published.")
+                    return
                 self._sign_in_again(published)
                 return
             if isinstance(published, _ReleaseRefused):
@@ -3619,6 +3699,17 @@ class MainDialog(QDialog):
                 # shown as what it is: probably live, and recognised as this
                 # project's own on the next press.
                 self._research.record_failure(research_tally.PUBLISH_ERROR)
+                if switched:
+                    # Nothing is written into a project this upload is not for.
+                    QMessageBox.warning(
+                        self,
+                        "Upload not confirmed",
+                        f"{published.message}\n\nYou opened a different project "
+                        "while this map was uploading, so nothing was written "
+                        "into the project open now.",
+                    )
+                    self.status_label.setText("Uploaded, but not confirmed.")
+                    return
                 if exporter.map_id is None and load_hosted_map_id(self.project):
                     # A NEW map's upload went through, so the old id the
                     # project still holds is the one being left behind. Let it
@@ -3635,6 +3726,15 @@ class MainDialog(QDialog):
                 )
                 return
             outcome, state = published
+            if switched:
+                # The map is online, but its address belongs to a project that
+                # is no longer open. Writing it into this one would make ITS
+                # next Republish replace somebody else's public map, so nothing
+                # is written, and the user is given the link instead.
+                self._show_published_after_switch(
+                    exporter, outcome.public_url or "", state
+                )
+                return
             # Remembered with the project, so pressing Host again republishes
             # to the same address instead of scattering a new link per edit.
             save_hosted_map_id(self.project, prepared.start.map_id)
@@ -3879,6 +3979,53 @@ class MainDialog(QDialog):
         box.exec()
         return box.clickedButton() is publish
 
+    def _show_published_after_switch(
+        self, exporter: HostedExporter, url: str, state: RemoteMapState
+    ) -> None:
+        """A map that went online while its project was replaced by another.
+
+        Nothing is written into either project: the one open now is not this
+        map's, and the one that is was closed. Rewriting that `.qgz` on disk
+        without it open would mean loading and re-saving a whole project behind
+        the user's back, so the user is given the link and told what it means
+        for the next publish instead.
+        """
+        name = self._published_project_name()
+        if exporter.map_id:
+            # A republish: the closed project already holds this map's id.
+            subject = name if name.startswith("'") else name.capitalize()
+            note = (
+                "You opened a different project while this map was uploading, "
+                "so nothing was written into the project open now. "
+                f"{subject} already "
+                "points at this map: open it again and Republish updates the "
+                "same address. If it then says the map has been published "
+                "since, that was this upload."
+            )
+        else:
+            note = (
+                "You opened a different project while this map was uploading, "
+                f"so this address was not saved into {name}, and nothing was "
+                "written into the project open now. Copy the link and keep it: "
+                f"publishing {name} again may create a separate map rather than "
+                "update this one."
+            )
+        known = (
+            state
+            if state.is_answer
+            else RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
+        )
+        self.status_label.setText(
+            f"Published at {url} - the address was not saved, because the "
+            "project was switched."
+        )
+        self._show_published(
+            url,
+            protected=known.is_answer and known.has_password,
+            state=known,
+            switched_note=note,
+        )
+
     def _show_published(
         self,
         url: str,
@@ -3886,7 +4033,13 @@ class MainDialog(QDialog):
         link_saved: bool = True,
         protected: bool = False,
         state: RemoteMapState | None = None,
+        switched_note: str = "",
     ) -> None:
+        """The box after a successful publish, with the link and what it means.
+
+        `switched_note` replaces the usual advice when the project was switched
+        during the upload, so the address was saved nowhere.
+        """
         # What the server said about the map straight after the publish. The
         # headline follows it: a paused map takes the new release and stays
         # paused, so "online" is only said when it is.
@@ -3906,7 +4059,14 @@ class MainDialog(QDialog):
         expiry = expiry_sentence(state)
         expiry_paragraph = f"\n\n{expiry}" if expiry else ""
         box = QMessageBox(self)
-        if link_saved:
+        if switched_note:
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle("Published - address not saved")
+            box.setText(headline)
+            box.setInformativeText(
+                f"{url}\n\n{who_can_open}\n\n{switched_note}" + expiry_paragraph
+            )
+        elif link_saved:
             box.setIcon(
                 QMessageBox.Icon.Information if visible else QMessageBox.Icon.Warning
             )
