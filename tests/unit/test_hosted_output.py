@@ -266,6 +266,12 @@ class TestFlatFileName:
         second = flat_file_name("Roads", DATA_EXTENSION, {first})
         assert first != second
 
+    def test_names_differing_only_in_case_collide(self) -> None:
+        """'Roads' and 'roads' are one file on Windows and macOS."""
+        first = flat_file_name("Roads", DATA_EXTENSION)
+        second = flat_file_name("roads", DATA_EXTENSION, {first})
+        assert first.casefold() != second.casefold()
+
     def test_a_suffixed_collision_still_fits(self) -> None:
         """The suffix comes out of the stem, not out of the 64-character limit."""
         taken = {flat_file_name("z" * 200, DATA_EXTENSION)}

@@ -166,6 +166,10 @@ def flat_file_name(hint: str, extension: str, taken: Iterable[str] = ()) -> str:
     Collisions are resolved with a numeric suffix rather than by falling back to
     the digest, so two layers called the same thing still produce two files a
     person can tell apart.
+
+    A collision is judged ignoring case. 'Roads' and 'roads' are two names on
+    Linux and one file on Windows and macOS, where the second write would
+    replace the first layer's data without a word.
     """
     stem = re.sub(r"[^A-Za-z0-9._-]+", "-", hint).strip("-._")
     stem = re.sub(r"-{2,}", "-", stem) or FALLBACK_STEM
@@ -173,14 +177,14 @@ def flat_file_name(hint: str, extension: str, taken: Iterable[str] = ()) -> str:
         stem = f"{FALLBACK_STEM}-{stem}"
 
     budget = MAX_FLAT_NAME_LENGTH - len(extension)
-    used = set(taken)
+    used = {name.casefold() for name in taken}
     candidate = f"{stem[:budget]}{extension}"
 
     # Room for the suffix comes out of the stem, not out of the limit: appending
     # to an already-maximal name would produce a 65-character one that fails the
     # very rule this function exists to satisfy.
     counter = 2
-    while candidate in used:
+    while candidate.casefold() in used:
         suffix = f"-{counter}"
         candidate = f"{stem[: budget - len(suffix)]}{suffix}{extension}"
         counter += 1
