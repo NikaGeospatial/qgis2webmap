@@ -75,8 +75,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import BinaryIO, Literal
 
@@ -132,21 +132,21 @@ UPLOAD_ATTEMPTS = 3
 UPLOAD_ALREADY_STORED_STATUS = 412
 UPLOAD_ALREADY_STORED_CODE = "already_stored"
 
-# Every presigned upload URL is issued at `start` and stops working
-# `expiresIn` seconds later - fifteen minutes on the deployed server - and the
-# server has no way to issue fresh ones for a reservation already made. So a
-# publish whose files take longer than that to send, or that waits at the
-# truncation question that long, cannot finish. This client counts from the
-# moment the reply arrived, which is a little after the server signed, so a 403
-# from storage this close to that deadline is taken to be the expiry rather
-# than a broken signature.
+# Every presigned upload URL stops working `expiresIn` seconds after it was
+# issued - fifteen minutes on the deployed server. A publish whose files take
+# longer than that asks `POST /maps/publish/uploads` for fresh URLs for the
+# files it has not sent yet and carries on. The server caps how often one
+# upload may do that, and a server that predates the route cannot do it at
+# all; either way the publish then stops with `UPLOAD_LINK_EXPIRED_MESSAGE`.
+# This client counts from the moment a reply arrived, which is a little after
+# the server signed, so a 403 from storage this close to that deadline is taken
+# to be the expiry rather than a broken signature.
 UPLOAD_EXPIRY_MARGIN_SECONDS = 60.0
 UPLOAD_LINK_EXPIRED_MESSAGE = (
-    "Uploading took longer than the {minutes} minutes NIKA allows for one "
-    "publish, so it was stopped. Nothing was published; the map online is "
-    "unchanged.\n\nPublish again to start a fresh upload. If this keeps "
-    "happening, the map may be too large to send over this connection in "
-    "{minutes} minutes."
+    "Uploading took longer than NIKA allows for one publish, so it was "
+    "stopped. Nothing was published; the map online is unchanged.\n\n"
+    "Publish again to start a fresh upload. If this keeps happening, the map "
+    "may be too large to send over this connection."
 )
 
 # Verification is digest work over bytes the server already has, so it is fast
@@ -274,6 +274,20 @@ class UploadLinkExpiredError(HostingError):
     Its own type so a test - or a caller - can tell it from a dropped
     connection, which is what a plain 403 from storage used to be reported as.
     """
+
+
+class ReleaseFailedError(HostingError):
+    """The server checked the uploaded map and will not put it online.
+
+    The message is written from the server's failure code: whether publishing
+    again can help, and if not, what has to change first. `retry` says the
+    same thing to a caller.
+    """
+
+    def __init__(self, message: str, code: str | None, retry: bool) -> None:
+        super().__init__(message)
+        self.code = code
+        self.retry = retry
 
 
 class PublishRefusedError(HostingError):
@@ -519,10 +533,12 @@ class ReleaseStatus:
     map_id: str = ""
     release_n: int = 0
     public_url: str = ""
-    # The server's own account of why verification failed. Surfaced verbatim:
-    # it names the file or digest that did not match, which no message written
-    # here could.
+    # The server's own account of why verification failed. Kept in what the
+    # user is shown where it names the file or limit involved.
     error: str | None = None
+    # Why, as a fixed code - see `release_failure`. `None` from a server that
+    # predates it.
+    error_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -936,6 +952,20 @@ def _upload_target(entry: JsonObject, digest: str, api_base: str) -> UploadTarge
     )
 
 
+def _upload_targets(data: JsonObject, api_base: str) -> tuple[UploadTarget, ...]:
+    """The upload slots in a `start` or refresh reply."""
+    targets: list[UploadTarget] = []
+    raw_targets = data.get("uploads")
+    if isinstance(raw_targets, list):
+        for entry in raw_targets:
+            if not isinstance(entry, dict):
+                continue
+            digest = _text(entry, "sha256")
+            if digest:
+                targets.append(_upload_target(entry, digest, api_base))
+    return tuple(targets)
+
+
 def _refusal_payload(response: HttpResponse) -> JsonObject:
     """The refusal body, or an empty object if it was not JSON at all.
 
@@ -1017,9 +1047,8 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
     )
 
 
-def _link_expired(window: UploadWindow) -> UploadLinkExpiredError:
-    minutes = max(1, round(window.seconds / 60))
-    return UploadLinkExpiredError(UPLOAD_LINK_EXPIRED_MESSAGE.format(minutes=minutes))
+def _link_expired() -> UploadLinkExpiredError:
+    return UploadLinkExpiredError(UPLOAD_LINK_EXPIRED_MESSAGE)
 
 
 def _payload_size(payload: bytes | Path) -> int:
@@ -1151,6 +1180,66 @@ VERIFY_CONTACT_LOST_MESSAGE = (
 )
 
 
+# What a failed release's code means for the person publishing. Every message
+# starts by saying nothing changed online, then says whether publishing again
+# will help. `{detail}` is the server's own sentence, kept where it names the
+# file or the plan limit involved.
+NOT_PUBLISHED = "Your map was not published; nothing changed online."
+_RETRY_FAILURES: dict[str, str] = {
+    "upload_incomplete": (
+        "Some of its files did not reach NIKA. Publish again - this usually "
+        "works on the next try."
+    ),
+    "upload_damaged": (
+        "{detail}\n\nPublish again. If the same file fails again, export the "
+        "map again first."
+    ),
+    "release_superseded": (
+        "Another publish of this map went live while this one was being "
+        "checked. Publish again if yours should replace it."
+    ),
+    "check_interrupted": (
+        "NIKA could not finish checking it. Wait a few minutes and publish "
+        "again. If it keeps happening, contact NIKA support."
+    ),
+}
+_FINAL_FAILURES: dict[str, str] = {
+    "unsupported_file": (
+        "{detail}\n\nPublishing again will not help: change or remove that layer first."
+    ),
+    "export_invalid": (
+        "This version of QGIS2WebMap exported something NIKA cannot host:\n"
+        "{detail}\n\nPublishing again will not help. Update QGIS2WebMap from "
+        "the QGIS plugin manager, then publish."
+    ),
+}
+
+
+def release_failure(code: str | None, detail: str | None) -> ReleaseFailedError:
+    """The error a failed release raises, with what to do about it.
+
+    Any other code is the plan or the map's own state, re-checked when the
+    upload finished (a map limit, a free map's end date, a takedown), and the
+    server's sentence already names the remedy. No code at all is a server that
+    predates them, and gets its sentence as before.
+    """
+    text = detail or ""
+    if code in _RETRY_FAILURES:
+        body = _RETRY_FAILURES[code].format(detail=text)
+        return ReleaseFailedError(f"{NOT_PUBLISHED}\n\n{body}", code, retry=True)
+    if code in _FINAL_FAILURES:
+        body = _FINAL_FAILURES[code].format(detail=text)
+        return ReleaseFailedError(f"{NOT_PUBLISHED}\n\n{body}", code, retry=False)
+    if code:
+        return ReleaseFailedError(
+            f"{NOT_PUBLISHED}\n\n{text}".rstrip(), code, retry=False
+        )
+    suffix = f"\n\n{text}" if text else ""
+    return ReleaseFailedError(
+        f"The hosting server could not publish this map.{suffix}", None, retry=False
+    )
+
+
 class HostingClient:
     """The publish handshake against one API base, for one signed-in user."""
 
@@ -1234,24 +1323,46 @@ class HostingClient:
         _raise_for_status(response, "starting the upload")
         data = decode_json(response, "starting the upload")
 
-        targets: list[UploadTarget] = []
-        raw_targets = data.get("uploads")
-        if isinstance(raw_targets, list):
-            for entry in raw_targets:
-                if not isinstance(entry, dict):
-                    continue
-                digest = _text(entry, "sha256")
-                if digest:
-                    targets.append(_upload_target(entry, digest, self.api_base))
-
         return PublishStart(
             release_id=_required_text(data, "releaseId", "starting the upload"),
             map_id=_required_text(data, "mapId", "starting the upload"),
             release_n=_required_int(data, "releaseN", "starting the upload"),
-            uploads=tuple(targets),
+            uploads=_upload_targets(data, self.api_base),
             license_key=_optional_text(data, "licenseKey"),
             caps_lifted=_caps_lifted(data),
             expires_in=_optional_int(data, "expiresIn"),
+        )
+
+    def refresh_uploads(
+        self, start: PublishStart, sha256s: Sequence[str]
+    ) -> PublishStart:
+        """Fresh upload URLs for the files not sent yet, once the first ran out.
+
+        Returns `start` with its targets and window replaced. The server only
+        signs files this release's manifest already named, so nothing about
+        what is published changes - only how long there is to send it.
+
+        Any refusal - the server's cap on refreshes, a release that is no
+        longer a draft, or a server too old to have the route - ends the
+        publish with the expiry message, which says what to do.
+        """
+        try:
+            response = self._post_raw(
+                "/maps/publish/uploads",
+                {"releaseId": start.release_id, "sha256s": list(sha256s)},
+            )
+        except HostingError:
+            raise _link_expired() from None
+        if response.status == 401:
+            _raise_for_status(response, "continuing the upload")
+        if not 200 <= response.status < 300:
+            raise _link_expired()
+        data = decode_json(response, "continuing the upload")
+        return replace(
+            start,
+            uploads=_upload_targets(data, self.api_base),
+            expires_in=_optional_int(data, "expiresIn"),
+            received_at=time.monotonic(),
         )
 
     def upload(
@@ -1310,7 +1421,7 @@ class HostingClient:
         attempts = 0
         for _attempt in range(UPLOAD_ATTEMPTS):
             if window is not None and time.monotonic() >= window.expires_at:
-                raise _link_expired(window)
+                raise _link_expired()
             attempts += 1
             try:
                 response = self._put(target.url, payload, headers)
@@ -1326,7 +1437,7 @@ class HostingClient:
                 and window is not None
                 and time.monotonic() >= window.expires_at - UPLOAD_EXPIRY_MARGIN_SECONDS
             ):
-                raise _link_expired(window)
+                raise _link_expired()
             detail = server_message(response)
             last = f"HTTP {response.status}" + (f" - {detail}" if detail else "")
             # A presigned URL that has expired or been tampered with comes back
@@ -1394,6 +1505,7 @@ class HostingClient:
             release_n=_optional_int(data, "releaseN") or 0,
             public_url=_text(data, "publicUrl"),
             error=_optional_text(data, "error"),
+            error_code=_optional_text(data, "errorCode"),
         )
 
     def await_release(
@@ -1424,12 +1536,9 @@ class HostingClient:
                     release_n=status.release_n,
                 )
             if status.state == STATE_FAILED:
-                # Verbatim, and never replaced by a friendlier sentence: it
-                # names the file or digest that did not verify.
-                detail = f"\n\n{status.error}" if status.error else ""
-                raise HostingError(
-                    f"The hosting server could not publish this map.{detail}"
-                )
+                # The server's sentence is kept where it names the file or
+                # limit; the code decides what the user is told to do.
+                raise release_failure(status.error_code, status.error)
             if time.monotonic() >= deadline:
                 raise HostingError(
                     "The hosting server is still verifying this map after "

@@ -26,6 +26,7 @@ from nika_onlymap_exporter.hosting.client import (
     HttpResponse,
     PublishConflictError,
     PublishRefusedError,
+    ReleaseFailedError,
     UploadLinkExpiredError,
     UploadTarget,
     UploadWindow,
@@ -1048,7 +1049,7 @@ class TestExpiredUploadLinks:
                 b"x",
                 window=UploadWindow(expires_at=999.0, seconds=900),
             )
-        assert "15 minutes" in str(caught.value)
+        assert "longer than NIKA allows" in str(caught.value)
         assert "Check your connection" not in str(caught.value)
         assert transport.requests == []
 
@@ -1123,7 +1124,9 @@ class TestAwaitRelease:
         assert [request.method for request in transport.requests] == ["GET", "GET"]
         assert transport.requests[0].url == "https://api.example/maps/releases/rel_1"
 
-    def test_a_failed_release_surfaces_the_servers_error_verbatim(self) -> None:
+    def test_a_failed_release_from_an_older_server_surfaces_its_error_verbatim(
+        self,
+    ) -> None:
         api, _transport = client(
             ok(
                 {
@@ -1139,6 +1142,54 @@ class TestAwaitRelease:
             api.await_release("rel_1")
 
         assert "digest mismatch for data/points.geojson" in str(caught.value)
+
+    @pytest.mark.parametrize(
+        ("code", "retry", "advice"),
+        [
+            ("upload_incomplete", True, "Publish again"),
+            ("upload_damaged", True, "export the map again first"),
+            ("release_superseded", True, "Publish again if yours"),
+            ("check_interrupted", True, "Wait a few minutes"),
+            ("unsupported_file", False, "change or remove that layer"),
+            ("export_invalid", False, "Update QGIS2WebMap"),
+        ],
+    )
+    def test_a_failure_code_says_whether_publishing_again_will_help(
+        self, code, retry, advice
+    ) -> None:
+        api, _transport = client(
+            ok(
+                {
+                    "state": "failed",
+                    "error": "data/points.geojson changed while it uploaded.",
+                    "errorCode": code,
+                }
+            )
+        )
+
+        with pytest.raises(ReleaseFailedError) as caught:
+            api.await_release("rel_1")
+
+        assert caught.value.code == code
+        assert caught.value.retry is retry
+        message = str(caught.value)
+        assert message.startswith("Your map was not published; nothing changed online.")
+        assert advice in message
+        if code in ("upload_damaged", "unsupported_file", "export_invalid"):
+            # These name the file involved, which only the server knows.
+            assert "data/points.geojson" in message
+
+    def test_a_plan_code_carries_the_servers_own_remedy(self) -> None:
+        reason = "Your plan hosts 3 maps at a time. Take one down from the dashboard."
+        api, _transport = client(
+            ok({"state": "failed", "error": reason, "errorCode": "map_limit_reached"})
+        )
+
+        with pytest.raises(ReleaseFailedError) as caught:
+            api.await_release("rel_1")
+
+        assert caught.value.retry is False
+        assert reason in str(caught.value)
 
     def test_a_live_release_with_no_address_is_a_readable_failure(self) -> None:
         api, _transport = client(ok({"state": "live", "mapId": "m" * 25}))

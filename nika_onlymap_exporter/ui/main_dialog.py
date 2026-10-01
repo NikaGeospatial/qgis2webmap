@@ -136,6 +136,7 @@ from ..hosting.client import (
     HostingError,
     PublishConflictError,
     PublishRefusedError,
+    ReleaseFailedError,
     UploadFile,
     UploadLinkExpiredError,
 )
@@ -359,6 +360,8 @@ class _ReleaseRefused:
     """
 
     message: str
+    #: Whether publishing again may work - see `ReleaseFailedError`.
+    retry: bool = False
 
 
 @dataclass(frozen=True)
@@ -400,6 +403,9 @@ def _explain_unfinished_publish(
     """
     if str(failure) == VERIFY_CONTACT_LOST_MESSAGE:
         return _ContactLost(str(failure))
+    if isinstance(failure, ReleaseFailedError):
+        # Already says whether publishing again will help.
+        return _ReleaseRefused(str(failure), retry=failure.retry)
     if getattr(exporter, "stage", "") != STAGE_VERIFYING:
         return None
     try:
@@ -3702,6 +3708,10 @@ class MainDialog(QDialog):
                 # The same frame as a refusal before the upload: the server's
                 # sentence, and the map at its address left as it was.
                 self._map_watch.check(force=True)
+                if published.retry:
+                    QMessageBox.warning(self, "Not published", published.message)
+                    self.status_label.setText("Not published. Publish again to retry.")
+                    return
                 QMessageBox.warning(self, "Cannot publish", published.message)
                 self.status_label.setText(
                     "Not published. The server turned the upload down."

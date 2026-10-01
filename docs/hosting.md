@@ -104,7 +104,11 @@ at all. Rasters are read a tile at a time and are not affected.
 2. **The map is built on your machine.** Nothing has left it yet.
 3. **You confirm.** The screen names the map, the files, their total size, and
    how many layers and features are in them.
-4. **Upload, then publish.**
+4. **Upload, then publish.** Each upload link lasts 15 minutes; a slow upload
+   asks for fresh links and carries on, up to about four hours in all. Once
+   the files are in, NIKA checks them before the map goes live. If that check
+   fails, the message says whether publishing again will help or what has to
+   change first — a layer, the plugin version, or your plan.
 
 ### What publishing means, and why
 

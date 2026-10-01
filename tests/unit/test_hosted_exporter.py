@@ -420,25 +420,156 @@ class TestPublishing:
             make_exporter(transport).export(built, tmp_path / "upload")
 
 
+def refresh_answer(*offered: str, expires_in: int = 900):
+    """A refresh reply built from the digests the request asked for.
+
+    `offered` names, by position in that request ("0", "1", ...), the files
+    given a fresh URL; empty means all of them. The URL carries the position.
+    """
+
+    def answer(request: HttpRequest) -> HttpResponse:
+        asked = json.loads(request.body or b"{}")["sha256s"]
+        return ok(
+            {
+                "releaseId": "rel_1",
+                "expiresIn": expires_in,
+                "uploads": [
+                    {
+                        "sha256": digest,
+                        "upload": {
+                            "mode": "presigned",
+                            "url": f"https://uploads.example/fresh/{index}",
+                        },
+                    }
+                    for index, digest in enumerate(asked)
+                    if not offered or str(index) in offered
+                ],
+            }
+        )
+
+    return answer
+
+
+def refusal(status: int, code: str) -> HttpResponse:
+    body = {"error": {"code": code, "message": "refused"}}
+    return HttpResponse(status, json.dumps(body).encode("utf-8"))
+
+
 class TestUploadLinksThatExpireMidPublish:
-    def test_it_is_reported_as_the_expiry_not_as_the_connection(
-        self, built, tmp_path, monkeypatch
-    ) -> None:
-        """A slow upload, or a long look at the truncation warning, used to read
-        "Check your connection" on a connection that was fine."""
+    """The URLs from `start` last fifteen minutes; a slow upload asks for more."""
+
+    @staticmethod
+    def _past_the_window(monkeypatch):
         import time
 
-        transport = FakeTransport(start_answer(expiresIn=900))
-        exporter = make_exporter(transport)
-        prepared = exporter.prepare(built, tmp_path / "upload")
         later = time.monotonic() + 901
         monkeypatch.setattr(time, "monotonic", lambda: later)
+
+    def test_fresh_urls_are_fetched_for_the_unsent_files_and_the_publish_carries_on(
+        self, built, tmp_path, monkeypatch
+    ) -> None:
+        transport = FakeTransport(
+            start_answer(expiresIn=900),
+            refresh_answer(),
+            HttpResponse(200, b""),
+            HttpResponse(200, b""),
+            ok({"releaseId": "rel_1"}),
+            ok(LIVE_PAYLOAD),
+        )
+        exporter = make_exporter(transport)
+        prepared = exporter.prepare(built, tmp_path / "upload")
+        self._past_the_window(monkeypatch)
+
+        exporter.publish(prepared)
+
+        refresh = transport.requests[1]
+        assert refresh.url == "https://api.example/maps/publish/uploads"
+        sent = json.loads(transport.requests[0].body or b"{}")["manifest"]["files"]
+        assert json.loads(refresh.body or b"{}") == {
+            "releaseId": "rel_1",
+            "sha256s": [entry["sha256"] for entry in sent],
+        }
+        assert set(puts(transport)) == {
+            "https://uploads.example/fresh/0",
+            "https://uploads.example/fresh/1",
+        }
+
+    def test_a_file_the_refresh_leaves_out_is_not_sent(
+        self, built, tmp_path, monkeypatch
+    ) -> None:
+        """No slot means the server already holds those bytes."""
+        transport = FakeTransport(
+            start_answer(expiresIn=900),
+            refresh_answer("1"),
+            HttpResponse(200, b""),
+            ok({"releaseId": "rel_1"}),
+            ok(LIVE_PAYLOAD),
+        )
+        exporter = make_exporter(transport)
+        prepared = exporter.prepare(built, tmp_path / "upload")
+        self._past_the_window(monkeypatch)
+
+        exporter.publish(prepared)
+
+        assert set(puts(transport)) == {"https://uploads.example/fresh/1"}
+
+    def test_a_403_at_the_deadline_refreshes_and_retries_that_file(
+        self, built, tmp_path, monkeypatch
+    ) -> None:
+        """The URL ran out while the file was being sent."""
+        import time
+
+        clock = [time.monotonic()]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+
+        def expired(_request: HttpRequest) -> HttpResponse:
+            clock[0] += 901
+            return HttpResponse(403, b"")
+
+        transport = FakeTransport(
+            start_answer(expiresIn=900),
+            expired,
+            refresh_answer(),
+            HttpResponse(200, b""),
+            HttpResponse(200, b""),
+            ok({"releaseId": "rel_1"}),
+            ok(LIVE_PAYLOAD),
+        )
+        exporter = make_exporter(transport)
+
+        exporter.export(built, tmp_path / "upload")
+
+        assert [r.url for r in transport.requests][1:5] == [
+            "https://uploads.example/index.html",
+            "https://api.example/maps/publish/uploads",
+            "https://uploads.example/fresh/0",
+            "https://uploads.example/fresh/1",
+        ]
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            refusal(429, "upload_refresh_limit"),
+            refusal(409, "release_not_draft"),
+            # A server that predates the route.
+            refusal(404, "not_found"),
+            refusal(403, "desktop_token_not_permitted"),
+        ],
+    )
+    def test_a_refused_refresh_ends_with_the_expiry_message(
+        self, built, tmp_path, monkeypatch, answer
+    ) -> None:
+        """Not "check your connection": the connection was fine."""
+        transport = FakeTransport(start_answer(expiresIn=900), answer)
+        exporter = make_exporter(transport)
+        prepared = exporter.prepare(built, tmp_path / "upload")
+        self._past_the_window(monkeypatch)
 
         with pytest.raises(UploadLinkExpiredError) as caught:
             exporter.publish(prepared)
 
         assert "Publish again" in str(caught.value)
-        assert [r.method for r in transport.requests] == ["POST"]
+        assert puts(transport) == {}
 
 
 class TestAnEarlierFirstPublishStillBeingVerified:

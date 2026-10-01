@@ -61,6 +61,7 @@ from ..hosting.client import (
     PublishRefusedError,
     PublishResult,
     PublishStart,
+    UploadLinkExpiredError,
 )
 from ..hosting.manifest import ManifestFile, PublishManifest, Role
 from ..hosting.thumbnail import THUMBNAIL_FILENAME
@@ -440,10 +441,16 @@ class HostedExporter:
             if prepared.start.target_for(by_path[name]["sha256"]) is not None
         ]
         total = len(pending)
+        # Replaced whenever the upload URLs are refreshed; the release is the
+        # same one throughout.
+        start = prepared.start
         for index, (name, path) in enumerate(pending):
             entry = by_path[name]
-            target = prepared.start.target_for(entry["sha256"])
-            if target is None:  # pragma: no cover - `pending` filtered on this
+            digest = entry["sha256"]
+            unsent = [by_path[later]["sha256"] for later, _path in pending[index:]]
+            target = start.target_for(digest)
+            if target is None:
+                # The server already holds these exact bytes.
                 continue
             # A share of the bar per file rather than per byte: the transport
             # seam hands back no byte progress (the same limitation
@@ -452,13 +459,25 @@ class HostedExporter:
             percent = int(100 * index / (total + 1))
             self._report(percent, f"Uploading {name} ({index + 1} of {total})...")
             self.stage = STAGE_UPLOADING
+            content_type = entry["mediaType"] or DEFAULT_MEDIA_TYPE
             # The path, not its bytes: the client streams it from disk.
-            self.client.upload(
-                target,
-                path,
-                content_type=entry["mediaType"] or DEFAULT_MEDIA_TYPE,
-                window=prepared.start.upload_window,
-            )
+            try:
+                self.client.upload(
+                    target, path, content_type=content_type, window=start.upload_window
+                )
+            except UploadLinkExpiredError:
+                # The URLs ran out before this file could be sent. Once more
+                # with fresh ones for everything not yet sent; a second expiry
+                # ends the publish.
+                if start.upload_window is None:
+                    raise
+                start = self.client.refresh_uploads(start, unsent)
+                target = start.target_for(digest)
+                if target is None:
+                    continue
+                self.client.upload(
+                    target, path, content_type=content_type, window=start.upload_window
+                )
 
         self._report(int(100 * total / (total + 1)), "Publishing...")
         self.stage = STAGE_COMPLETING

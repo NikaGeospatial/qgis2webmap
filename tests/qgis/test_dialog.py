@@ -2257,6 +2257,30 @@ class TestHostButtonFollowsTheServer:
         assert crashes == []
         assert counted == []
 
+    @pytest.mark.parametrize(
+        ("retry", "title"), [(True, "Not published"), (False, "Cannot publish")]
+    )
+    def test_a_coded_failure_is_titled_by_whether_trying_again_helps(
+        self, qgis_app, project, make_memory_layer, monkeypatch, retry, title
+    ) -> None:
+        from nika_onlymap_exporter.hosting.client import ReleaseFailedError
+
+        message = "Your map was not published; nothing changed online."
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            warnings, crashes, counted = self._upload_failing(
+                monkeypatch,
+                dialog,
+                ReleaseFailedError(message, "upload_incomplete", retry=retry),
+                None,
+            )
+        finally:
+            dialog.close()
+        assert warnings == [(title, message)]
+        assert crashes == []
+        assert counted == []
+
     def test_losing_contact_after_the_upload_is_not_a_crash(
         self, qgis_app, project, make_memory_layer, monkeypatch
     ) -> None:
