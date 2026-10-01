@@ -11,6 +11,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 from hosting_fakes import FakeTransport, ok
@@ -25,7 +26,9 @@ from nika_onlymap_exporter.hosting.client import (
     HttpResponse,
     PublishConflictError,
     PublishRefusedError,
+    UploadLinkExpiredError,
     UploadTarget,
+    UploadWindow,
     _required_int,
     _upload_target,
     insecure_loopback_base,
@@ -1020,6 +1023,68 @@ class TestUpload:
         api, transport = client(HttpResponse(403, b"expired"))
         with pytest.raises(HostingError):
             api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
+        assert len(transport.requests) == 1
+
+
+class TestExpiredUploadLinks:
+    """The URLs from `start` stop working; the server cannot issue fresh ones."""
+
+    def test_the_window_is_read_from_the_reservation(self) -> None:
+        api, _transport = client(ok(start_payload(expiresIn=900)))
+        window = api.start_publish(MANIFEST).upload_window
+        assert window is not None
+        assert window.seconds == 900
+
+    def test_no_window_when_the_server_names_none(self) -> None:
+        api, _transport = client(ok(start_payload()))
+        assert api.start_publish(MANIFEST).upload_window is None
+
+    def test_past_the_window_nothing_is_sent(self, monkeypatch) -> None:
+        monkeypatch.setattr(time, "monotonic", lambda: 1000.0)
+        api, transport = client()
+        with pytest.raises(UploadLinkExpiredError) as caught:
+            api.upload(
+                UploadTarget(PAGE_SHA, "https://uploads/x"),
+                b"x",
+                window=UploadWindow(expires_at=999.0, seconds=900),
+            )
+        assert "15 minutes" in str(caught.value)
+        assert "Check your connection" not in str(caught.value)
+        assert transport.requests == []
+
+    def test_a_403_near_the_deadline_is_the_expiry(self, monkeypatch) -> None:
+        monkeypatch.setattr(time, "monotonic", lambda: 990.0)
+        api, transport = client(HttpResponse(403, b"Request has expired"))
+        with pytest.raises(UploadLinkExpiredError):
+            api.upload(
+                UploadTarget(PAGE_SHA, "https://uploads/x"),
+                b"x",
+                window=UploadWindow(expires_at=1000.0, seconds=900),
+            )
+        assert len(transport.requests) == 1
+
+    def test_a_403_well_inside_the_window_is_not_called_an_expiry(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(time, "monotonic", lambda: 100.0)
+        api, _transport = client(HttpResponse(403, b"SignatureDoesNotMatch"))
+        with pytest.raises(HostingError) as caught:
+            api.upload(
+                UploadTarget(PAGE_SHA, "https://uploads/x"),
+                b"x",
+                window=UploadWindow(expires_at=1000.0, seconds=900),
+            )
+        assert not isinstance(caught.value, UploadLinkExpiredError)
+
+    def test_the_dev_stacks_own_route_never_expires(self, monkeypatch) -> None:
+        monkeypatch.setenv(ALLOW_HTTP_LOOPBACK_ENV, "1")
+        monkeypatch.setattr(time, "monotonic", lambda: 5000.0)
+        api, transport = client(HttpResponse(204, b""))
+        api.upload(
+            UploadTarget(PAGE_SHA, "http://localhost:8787/up/x", mode="direct"),
+            b"x",
+            window=UploadWindow(expires_at=1000.0, seconds=900),
+        )
         assert len(transport.requests) == 1
 
 

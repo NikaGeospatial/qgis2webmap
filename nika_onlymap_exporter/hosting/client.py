@@ -132,6 +132,23 @@ UPLOAD_ATTEMPTS = 3
 UPLOAD_ALREADY_STORED_STATUS = 412
 UPLOAD_ALREADY_STORED_CODE = "already_stored"
 
+# Every presigned upload URL is issued at `start` and stops working
+# `expiresIn` seconds later - fifteen minutes on the deployed server - and the
+# server has no way to issue fresh ones for a reservation already made. So a
+# publish whose files take longer than that to send, or that waits at the
+# truncation question that long, cannot finish. This client counts from the
+# moment the reply arrived, which is a little after the server signed, so a 403
+# from storage this close to that deadline is taken to be the expiry rather
+# than a broken signature.
+UPLOAD_EXPIRY_MARGIN_SECONDS = 60.0
+UPLOAD_LINK_EXPIRED_MESSAGE = (
+    "Uploading took longer than the {minutes} minutes NIKA allows for one "
+    "publish, so it was stopped. Nothing was published; the map online is "
+    "unchanged.\n\nPublish again to start a fresh upload. If this keeps "
+    "happening, the map may be too large to send over this connection in "
+    "{minutes} minutes."
+)
+
 # Verification is digest work over bytes the server already has, so it is fast
 # for a small map and not instant for a large one. Two seconds is short enough
 # that a quick release feels immediate and long enough that a slow one is not
@@ -249,6 +266,14 @@ DESKTOP_TOKEN_NOT_PERMITTED_MESSAGE = (
     "password-protecting it is done from your dashboard at nika.eco. If this "
     "appeared while publishing, update QGIS2WebMap and try again."
 )
+
+
+class UploadLinkExpiredError(HostingError):
+    """The upload links ran out before every file was sent.
+
+    Its own type so a test - or a caller - can tell it from a dropped
+    connection, which is what a plain 403 from storage used to be reported as.
+    """
 
 
 class PublishRefusedError(HostingError):
@@ -410,6 +435,18 @@ class UploadTarget:
 
 
 @dataclass(frozen=True)
+class UploadWindow:
+    """How long a reservation's presigned upload URLs work for.
+
+    `expires_at` is on `time.monotonic`'s clock; `seconds` is the length the
+    server stated, kept so the message can name it.
+    """
+
+    expires_at: float
+    seconds: int
+
+
+@dataclass(frozen=True)
 class PublishStart:
     """The reservation. Nothing is live yet and nothing has been uploaded.
 
@@ -432,6 +469,20 @@ class PublishStart:
     #: The server's own answer to "will the served map have OnlyMap's caps
     #: lifted". `None` from a server that predates the field.
     caps_lifted: bool | None = None
+    #: How long the presigned upload URLs work for, from `expiresIn`. `None`
+    #: when the server did not say.
+    expires_in: int | None = None
+    #: When the reply arrived, on `time.monotonic`'s clock.
+    received_at: float = field(default_factory=time.monotonic, compare=False)
+
+    @property
+    def upload_window(self) -> UploadWindow | None:
+        """When this reservation's upload URLs stop working, if the server said."""
+        if self.expires_in is None or self.expires_in <= 0:
+            return None
+        return UploadWindow(
+            expires_at=self.received_at + self.expires_in, seconds=self.expires_in
+        )
 
     @property
     def renders_under_caps(self) -> bool:
@@ -966,6 +1017,11 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
     )
 
 
+def _link_expired(window: UploadWindow) -> UploadLinkExpiredError:
+    minutes = max(1, round(window.seconds / 60))
+    return UploadLinkExpiredError(UPLOAD_LINK_EXPIRED_MESSAGE.format(minutes=minutes))
+
+
 def _payload_size(payload: bytes | Path) -> int:
     """How many bytes an upload will send, without reading a file to find out."""
     if isinstance(payload, bytes):
@@ -1195,6 +1251,7 @@ class HostingClient:
             uploads=tuple(targets),
             license_key=_optional_text(data, "licenseKey"),
             caps_lifted=_caps_lifted(data),
+            expires_in=_optional_int(data, "expiresIn"),
         )
 
     def upload(
@@ -1202,8 +1259,13 @@ class HostingClient:
         target: UploadTarget,
         payload: bytes | Path,
         content_type: str = "application/octet-stream",
+        window: UploadWindow | None = None,
     ) -> None:
         """PUT one file's bytes to its presigned URL.
+
+        `window` is `PublishStart.upload_window`. Past it, a presigned upload
+        is not attempted at all, and a 403 near it is reported as the expiry it
+        is rather than as a connection problem.
 
         A `Path` is streamed from disk and opened afresh for each attempt, so a
         file of any size costs a read buffer rather than its own size in
@@ -1241,9 +1303,14 @@ class HostingClient:
         if target.is_authenticated:
             headers["Authorization"] = f"Bearer {self.token}"
         headers.update(dict(target.headers))
+        # Only a presigned URL expires; the dev stack's own route does not.
+        if target.mode != UPLOAD_MODE_PRESIGNED:
+            window = None
         last = ""
         attempts = 0
         for _attempt in range(UPLOAD_ATTEMPTS):
+            if window is not None and time.monotonic() >= window.expires_at:
+                raise _link_expired(window)
             attempts += 1
             try:
                 response = self._put(target.url, payload, headers)
@@ -1254,6 +1321,12 @@ class HostingClient:
             if 200 <= response.status < 300 or _already_stored(response):
                 return
 
+            if (
+                response.status == 403
+                and window is not None
+                and time.monotonic() >= window.expires_at - UPLOAD_EXPIRY_MARGIN_SECONDS
+            ):
+                raise _link_expired(window)
             detail = server_message(response)
             last = f"HTTP {response.status}" + (f" - {detail}" if detail else "")
             # A presigned URL that has expired or been tampered with comes back

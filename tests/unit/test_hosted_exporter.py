@@ -44,6 +44,7 @@ from nika_onlymap_exporter.hosting.client import (
     PublishRefusedError,
     PublishStart,
     UploadFile,
+    UploadLinkExpiredError,
 )
 from nika_onlymap_exporter.hosting.consent import (
     basemap_warning_text,
@@ -417,6 +418,27 @@ class TestPublishing:
 
         with pytest.raises(HostingError, match=r"digest mismatch for index\.html"):
             make_exporter(transport).export(built, tmp_path / "upload")
+
+
+class TestUploadLinksThatExpireMidPublish:
+    def test_it_is_reported_as_the_expiry_not_as_the_connection(
+        self, built, tmp_path, monkeypatch
+    ) -> None:
+        """A slow upload, or a long look at the truncation warning, used to read
+        "Check your connection" on a connection that was fine."""
+        import time
+
+        transport = FakeTransport(start_answer(expiresIn=900))
+        exporter = make_exporter(transport)
+        prepared = exporter.prepare(built, tmp_path / "upload")
+        later = time.monotonic() + 901
+        monkeypatch.setattr(time, "monotonic", lambda: later)
+
+        with pytest.raises(UploadLinkExpiredError) as caught:
+            exporter.publish(prepared)
+
+        assert "Publish again" in str(caught.value)
+        assert [r.method for r in transport.requests] == ["POST"]
 
 
 class TestAnEarlierFirstPublishStillBeingVerified:

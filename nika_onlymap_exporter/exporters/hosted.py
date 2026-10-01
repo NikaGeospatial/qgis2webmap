@@ -457,6 +457,7 @@ class HostedExporter:
                 target,
                 path,
                 content_type=entry["mediaType"] or DEFAULT_MEDIA_TYPE,
+                window=prepared.start.upload_window,
             )
 
         self._report(int(100 * total / (total + 1)), "Publishing...")
