@@ -41,6 +41,7 @@ from nika_onlymap_exporter.hosting.client import (
     HttpRequest,
     HttpResponse,
     PublishConflictError,
+    PublishRefusedError,
     PublishStart,
     UploadFile,
 )
@@ -412,6 +413,50 @@ class TestPublishing:
 
         with pytest.raises(HostingError, match=r"digest mismatch for index\.html"):
             make_exporter(transport).export(built, tmp_path / "upload")
+
+
+class TestAnEarlierFirstPublishStillBeingVerified:
+    """Its map id is not known yet; reserving again would make a second map."""
+
+    def test_no_reservation_is_sent(self, built, tmp_path) -> None:
+        transport = FakeTransport(ok({"state": "verifying", "mapId": MAP_ID}))
+        exporter = make_exporter(transport, pending_release_id="rel_mine")
+
+        with pytest.raises(PublishRefusedError) as caught:
+            exporter.prepare(built, tmp_path / "upload")
+
+        assert caught.value.code == hosted.REFUSAL_PREVIOUS_PUBLISH_VERIFYING
+        assert "still being checked" in str(caught.value)
+        assert [request.url for request in transport.requests] == [
+            "https://api.example/maps/releases/rel_mine"
+        ]
+        # Kept, so the next press asks about it again.
+        assert exporter.reconciliation is not None
+        assert not exporter.reconciliation.settled
+
+    def test_once_live_it_is_republished_rather_than_duplicated(
+        self, built, tmp_path
+    ) -> None:
+        transport = FakeTransport(ok(LIVE_PAYLOAD), start_answer())
+        exporter = make_exporter(transport, pending_release_id="rel_mine")
+
+        exporter.prepare(built, tmp_path / "upload")
+
+        body = json.loads(transport.requests[1].body or b"{}")
+        assert body["mapId"] == MAP_ID
+
+    def test_a_republish_is_not_held_back(self, built, tmp_path) -> None:
+        """Its map is known, so the new release lands on the same map."""
+        transport = FakeTransport(
+            ok({"state": "verifying", "mapId": MAP_ID}), start_answer()
+        )
+        exporter = make_exporter(
+            transport, map_id=MAP_ID, release_n=3, pending_release_id="rel_mine"
+        )
+
+        exporter.prepare(built, tmp_path / "upload")
+
+        assert transport.requests[1].url.endswith("/maps/publish/start")
 
 
 class TestDeduplication:

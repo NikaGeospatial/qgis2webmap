@@ -86,6 +86,19 @@ class PublishCancelledError(HostingError):
     """The user stopped at the confirmation. Never reported as a failure."""
 
 
+# This plugin's own refusal, not the server's: a FIRST publish whose earlier
+# attempt is still being verified. That attempt has no map id the project knows
+# of yet, so a new reservation would be one without a map id - a second map -
+# and the first would go live beside it a moment later. Raised as a
+# `PublishRefusedError` so the dialog shows it as what it is, a sentence to act
+# on, rather than as a failure.
+REFUSAL_PREVIOUS_PUBLISH_VERIFYING = "previous_publish_verifying"
+PREVIOUS_PUBLISH_VERIFYING_MESSAGE = (
+    "Your last publish is still being checked by NIKA's server. Try again in a "
+    "minute. Nothing was published this time."
+)
+
+
 # How far a publish got, so a cancellation or a failure can say what is true.
 # "Nothing was written" was said after every one of them, including a Cancel
 # pressed once the upload had finished and the map was going live anyway.
@@ -122,15 +135,18 @@ class PendingReconciliation:
     """What asking about an earlier, unsettled upload established.
 
     `settled` means the pending release id can be forgotten: it went live, it
-    failed, or the server has never heard of it. `adopted_map_id` and
-    `adopted_release_n` are set only when it went LIVE on the map this project
-    points at (or on a first publish, where the project had no map yet) - the
-    only case where the server's newer release is provably this client's own.
+    failed, or the server has never heard of it. `verifying` means the server
+    answered and is still checking it, as opposed to not answering at all.
+    `adopted_map_id` and `adopted_release_n` are set only when it went LIVE on
+    the map this project points at (or on a first publish, where the project
+    had no map yet) - the only case where the server's newer release is
+    provably this client's own.
     """
 
     settled: bool
     adopted_map_id: str | None = None
     adopted_release_n: int | None = None
+    verifying: bool = False
 
 
 @dataclass(frozen=True)
@@ -345,6 +361,15 @@ class HostedExporter:
 
         self._report(-1, "Reserving the map address...")
         self.reconciliation = self._reconcile_pending()
+        # Only a first publish is held back. A republish names its map, so the
+        # release it reserves now lands on the same map as the one being
+        # checked, and the newer of the two simply becomes current.
+        pending = self.reconciliation
+        if pending is not None and pending.verifying and not self.map_id:
+            raise PublishRefusedError(
+                PREVIOUS_PUBLISH_VERIFYING_MESSAGE,
+                code=REFUSAL_PREVIOUS_PUBLISH_VERIFYING,
+            )
         start = self.client.start_publish(
             sent,
             map_id=self.map_id,
@@ -393,7 +418,7 @@ class HostedExporter:
             return PendingReconciliation(settled=False)
 
         if status.state == STATE_VERIFYING:
-            return PendingReconciliation(settled=False)
+            return PendingReconciliation(settled=False, verifying=True)
         if status.state != STATE_LIVE or not status.map_id:
             return PendingReconciliation(settled=True)
         if self.map_id and status.map_id != self.map_id:
