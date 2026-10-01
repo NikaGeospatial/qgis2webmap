@@ -154,8 +154,8 @@ would send to someone - so you can check it before sharing.
 Before sending the map on, look at **Fidelity**. It lists everything that
 changed on the way out of QGIS - symbology that could not be translated exactly,
 settings that will not appear, layers that were left out - grouped by layer, with
-the problems first. Select a row to read all of it. Nothing is dropped silently:
-what comes through exactly is folded under **Show what is kept**.
+the problems first, each row with its full detail. Nothing is dropped silently:
+what comes through exactly is hidden until you tick **Kept** above the list.
 
 ![The Fidelity tab grouped by layer, with a Not exported row selected and its full detail beside the list.](images/export-06-fidelity-report.png)
 

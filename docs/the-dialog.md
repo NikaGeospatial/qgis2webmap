@@ -240,22 +240,34 @@ Preview, Export and Host read the project too, and refresh the report as they go
 
 One line at the top sums it up — `5 layers · 1 needs attention · 10 things
 change`. A layer *needs attention* when something about it is Blocked or Not
-exported. Below that the report is grouped, problems first:
+exported. Under it, one line describes the whole map: how many layers and
+features, roughly how much data, the output, the project's CRS, where the map
+opens and its basemap. Below that the report is grouped, problems first:
 
 - **Whole map** — settings that belong to no one layer: the basemap, relief,
   where the map opens, its title.
 - **One group per layer**, the layers that lose something before the layers that
   are only changed. A layer that comes through exactly is a single `✓ exact`
-  line.
+  line. Each layer's own line says what it is: its geometry and feature count,
+  how it is styled and on which field, its labels, how many fields its popups
+  show and how many go into the file, the zooms it shows at, and how much data
+  it adds.
+- Every row has its whole sentence in the **Detail** column.
 - Rows saying the same thing about several classes of one layer are merged into
-  one, with the number of classes.
+  one, with the number of classes. Expand it to see each class.
 
-Select a row to read all of it in the pane beside the list. Where the fix is in
-this dialog, the pane has a button that goes there: **Show in Layers** for a
-layer, **Go to Map tab** for the basemap and the other map settings.
+Select a row to see it in the pane below the list, with the classes it applies
+to. Where the fix is in this dialog, the pane has a button that goes there:
+**Show in Layers** for a layer, **Go to Map tab** for the basemap and the other
+map settings.
 
-**Kept** rows are hidden so the changes stand out. **Show what is kept** brings
-them back — nothing is left out of the report, only folded away.
+Above the list, checkboxes choose what it shows — one per verdict, each with
+how many rows it has, and one per topic: **Symbology**, **Labels**, **Popups &
+fields**, **Data** and **Map settings**. The search box finds rows by any word
+in them, or a layer by its name or by what it is ("polygons", "labels from").
+**Kept** rows are hidden by default so the changes stand out; tick **Kept** to
+bring them back. Your choices are remembered. Filtering only folds rows away:
+the counts at the top and in the strip are always about the whole report.
 
 When something changes after a check — a layer ticked or unticked, the map
 renamed, a layer added, restyled or edited and saved in QGIS — the report is

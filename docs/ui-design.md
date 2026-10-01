@@ -34,7 +34,7 @@ This file records what we do differently and why, so the reasoning survives.
 | **Map** | Map name, description, output tier, size readout, Export |
 | **Layers** | One list, per-layer settings inline, popup fields in a non-reflowing expander |
 | **Appearance** | Widgets — on by default, live toggles |
-| **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology. Grouped by layer, problems first, Kept folded away; marks itself out of date when the settings change or a layer is restyled in QGIS |
+| **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology. Grouped by layer, problems first, each row's full detail inline, each layer's facts (geometry, features, styling, labels, popups, zooms, size) on its own line; verdict and topic filters and search, Kept off by default; marks itself out of date when the settings change or a layer is restyled in QGIS |
 | **Help** | About, privacy statement, documentation links |
 
 ## Map name

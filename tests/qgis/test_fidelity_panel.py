@@ -92,7 +92,8 @@ class TestTheTab:
             "Not exported",
             "Changed",
         ]
-        assert panel.kept_toggle.text() == "Show what is kept (2)"
+        assert panel.kept_toggle.text() == "Kept (2)"
+        assert not panel.kept_toggle.isChecked()
 
         panel.kept_toggle.setChecked(True)
         roads = panel.tree.topLevelItem(1)
@@ -427,3 +428,187 @@ def test_summary_and_tab_agree(dialog, project) -> None:
         dialog.fidelity_panel.headline.text()
         == summarise(report.items, names).headline()
     )
+
+
+def child_texts(item, column: int = 0) -> list[str]:
+    return [item.child(i).text(column) for i in range(item.childCount())]
+
+
+class TestNothingIsOutOfReach:
+    """Every report item can be read in the list itself."""
+
+    def test_each_row_carries_its_sentence(self, dialog, project) -> None:
+        dialog._show_fidelity(mixed_report(project))
+        roads = dialog.fidelity_panel.tree.topLevelItem(1)
+        assert child_texts(roads, 2) == [
+            "A field is hidden.",
+            "Only the top symbol layer.",
+        ]
+
+    def test_a_merged_row_opens_into_its_classes(self, dialog, project) -> None:
+        dialog._show_fidelity(mixed_report(project))
+        roads = dialog.fidelity_panel.tree.topLevelItem(1)
+        merged = next(
+            roads.child(i)
+            for i in range(roads.childCount())
+            if roads.child(i).text(0) == "Symbology (3 classes)"
+        )
+        assert child_texts(merged) == [f"Symbology, range {n}" for n in (1, 2, 3)]
+        assert not merged.isExpanded()
+
+    def test_selecting_a_class_names_that_class(self, dialog, project) -> None:
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        roads = panel.tree.topLevelItem(1)
+        merged = roads.child(1)
+        panel.tree.setCurrentItem(merged.child(2))
+        assert panel.detail_title.text() == "roads: Symbology, range 3"
+        assert "Applies to:" in panel.detail_text.text()
+
+
+class TestFilters:
+    def visible_rows(self, panel) -> list[str]:
+        rows = []
+        for index in range(panel.tree.topLevelItemCount()):
+            group = panel.tree.topLevelItem(index)
+            rows.extend(f"{group.text(0)}/{text}" for text in child_texts(group))
+        return rows
+
+    def test_each_verdict_has_a_box_with_its_count(self, dialog, project) -> None:
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        labels = [check.text() for check in panel.verdict_checks.values()]
+        assert labels == [
+            "Blocked (0)",
+            "Not exported (2)",
+            "Changed (1)",
+            "Rasterised (0)",
+            "Kept (2)",
+        ]
+
+    def test_unticking_a_verdict_hides_its_rows(self, dialog, project) -> None:
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        panel.verdict_checks[FidelityStatus.UNSUPPORTED].setChecked(False)
+        assert self.visible_rows(panel) == ["roads/Symbology (3 classes)"]
+
+    def test_unticking_a_topic_hides_its_rows(self, dialog, project) -> None:
+        from nika_onlymap_exporter.core.fidelity_summary import Topic
+
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        assert panel.topic_checks[Topic.MAP].text() == "Map settings (1)"
+        panel.topic_checks[Topic.MAP].setChecked(False)
+        assert "Whole map/Basemap" not in self.visible_rows(panel)
+        assert "roads/Popup fields" in self.visible_rows(panel)
+
+    def test_popups_and_fields_shows_its_ampersand(self, dialog) -> None:
+        from nika_onlymap_exporter.core.fidelity_summary import Topic
+
+        box = dialog.fidelity_panel.topic_checks[Topic.POPUPS]
+        assert box.text().startswith("Popups && fields")
+
+    def test_search_narrows_the_list(self, dialog, project) -> None:
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        panel.search.setText("basemap")
+        assert self.visible_rows(panel) == ["Whole map/Basemap"]
+
+    def test_the_headline_still_counts_the_whole_report(self, dialog, project) -> None:
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        before = panel.headline.text()
+        panel.search.setText("basemap")
+        assert panel.headline.text() == before
+        assert dialog.fidelity_summary.text().endswith("3 things change on export.")
+
+    def test_filtering_everything_out_says_so(self, dialog, project) -> None:
+        """An empty list would read as "nothing to report"."""
+        panel = dialog.fidelity_panel
+        dialog._show_fidelity(mixed_report(project))
+        panel.search.setText("no such words anywhere")
+        assert top_level_titles(panel) == ["Nothing matches these filters"]
+
+    def test_the_choice_is_remembered(self, dialog, project) -> None:
+        from nika_onlymap_exporter.ui.fidelity_panel import FidelityPanel
+
+        dialog.fidelity_panel.kept_toggle.setChecked(True)
+        dialog.fidelity_panel.verdict_checks[FidelityStatus.APPROXIMATED].setChecked(
+            False
+        )
+        again = FidelityPanel()
+        assert again.kept_toggle.isChecked()
+        assert not again.verdict_checks[FidelityStatus.APPROXIMATED].isChecked()
+        again.close()
+
+
+class TestFacts:
+    def show_real_read(self, dialog, project):
+        """What `_ensure_export` does after a read, without the worker thread."""
+        from nika_onlymap_exporter.core.project_reader import read_project
+
+        report = FidelityReportBuilder()
+        export = read_project(project, report)
+        signature = dialog.state.data_snapshot()
+        dialog._cached_export = export
+        dialog._cached_report = report
+        dialog._cached_signature = signature
+        dialog._show_fidelity(report, signature)
+        return export
+
+    def test_each_layer_line_says_what_the_layer_is(self, dialog, project) -> None:
+        self.show_real_read(dialog, project)
+        panel = dialog.fidelity_panel
+        panel.kept_toggle.setChecked(True)
+        lines = {
+            panel.tree.topLevelItem(i).text(0): panel.tree.topLevelItem(i).text(2)
+            for i in range(panel.tree.topLevelItemCount())
+        }
+        assert lines["roads"].startswith("Points · 1 feature · Single symbol")
+        assert "of data" in lines["roads"]
+
+    def test_the_whole_map_is_summed_up(self, dialog, project) -> None:
+        self.show_real_read(dialog, project)
+        text = dialog.fidelity_panel.map_facts.text()
+        assert text.startswith("Map: 2 layers · 2 features")
+        assert dialog.fidelity_panel.map_facts.isVisibleTo(dialog.fidelity_panel)
+
+    def test_a_layer_can_be_found_by_what_it_is(self, dialog, project) -> None:
+        self.show_real_read(dialog, project)
+        panel = dialog.fidelity_panel
+        panel.search.setText("single symbol")
+        assert set(top_level_titles(panel)) == {"roads", "parks"}
+
+    def test_no_facts_from_a_read_the_report_did_not_come_from(
+        self, dialog, project
+    ) -> None:
+        self.show_real_read(dialog, project)
+        dialog._cached_signature = "something else"
+        dialog._show_fidelity(mixed_report(project))
+        assert not dialog.fidelity_panel.map_facts.isVisibleTo(dialog.fidelity_panel)
+
+
+def test_a_long_sentence_gets_a_row_tall_enough_to_read(qgis_app) -> None:
+    """The view measured a wrapped sentence as one endless line, so the row was
+    one line tall and the rest of the sentence was cut off."""
+    from nika_onlymap_exporter.ui.fidelity_panel import FidelityPanel
+
+    long_detail = "A sentence that goes on. " * 30
+    summary = summarise(
+        [
+            FidelityItem(
+                "Labels on 'roads'", FidelityStatus.UNSUPPORTED, long_detail, "r"
+            )
+        ],
+        {"r": "roads"},
+    )
+    panel = FidelityPanel()
+    panel.resize(900, 600)
+    panel.show()
+    panel.show_summary(summary)
+    qgis_app.processEvents()
+
+    row = panel.tree.topLevelItem(0).child(0)
+    line = panel.tree.fontMetrics().lineSpacing()
+    assert panel.tree.visualItemRect(row).height() >= 3 * line
+    panel.close()

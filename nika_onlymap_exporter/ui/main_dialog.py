@@ -95,6 +95,7 @@ from ..core.license_policy import (
 from ..core.manifest_builder import basemap_note, terrain_note
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
+from ..core.report_facts import ReportFacts, report_facts
 from ..core.settings import (
     MAX_PRECISION,
     MIN_PRECISION,
@@ -173,7 +174,7 @@ from ..hosting.thumbnail import (
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.dependency_scanner import (
     SINGLE_FILE_WARN_BYTES,
-    measure_data_bytes,
+    data_bytes_by_layer,
     standalone_ineligible_reason,
 )
 from ..packaging.publish_manifest import PublishManifestError, build_publish_manifest
@@ -788,6 +789,8 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature: str | None = None
+        # One per-layer size measurement per read; see `_layer_data_bytes`.
+        self._data_bytes_cache: tuple[ExportProject, dict[str, int]] | None = None
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
         self._pending_license_key: str | None = None
@@ -1409,7 +1412,7 @@ class MainDialog(QDialog):
             self.size_note.setStyleSheet("")
             return
 
-        data_bytes = measure_data_bytes(export)
+        data_bytes = sum(self._layer_data_bytes(export).values())
         megabytes = data_bytes / 1024 / 1024
         if data_bytes > SINGLE_FILE_WARN_BYTES:
             self.size_note.setText(
@@ -2015,8 +2018,45 @@ class MainDialog(QDialog):
         self._fidelity_is_stale = False
         self._update_fidelity_strip(report)
         if self._fidelity_summary is not None:
-            self.fidelity_panel.show_summary(self._fidelity_summary)
+            self.fidelity_panel.show_summary(
+                self._fidelity_summary, self._fidelity_facts(self._fidelity_signature)
+            )
         self._refresh_fidelity_freshness()
+
+    def _fidelity_facts(self, signature: str | None) -> ReportFacts | None:
+        """What the read behind this report knows about each layer.
+
+        Only from the cached read the report came from: a report shown without
+        one - or against a different read - gets no facts rather than facts
+        about some other version of the project.
+        """
+        export = self._cached_export
+        if not isinstance(export, ExportProject) or signature != self._cached_signature:
+            return None
+        try:
+            return report_facts(export, self._layer_data_bytes(export))
+        except Exception:
+            # Facts are a courtesy beside the report; never lose the report
+            # over one.
+            QgsMessageLog.logMessage(
+                f"Fidelity facts:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
+            return None
+
+    def _layer_data_bytes(self, export: ExportProject) -> dict[str, int]:
+        """Each layer's share of the file, measured once per read.
+
+        Serialising every layer is the costly part of the size note too, so
+        the note and the Fidelity tab share one measurement of the same read.
+        """
+        cached = self._data_bytes_cache
+        if cached is not None and cached[0] is export:
+            return cached[1]
+        sizes = data_bytes_by_layer(export)
+        self._data_bytes_cache = (export, sizes)
+        return sizes
 
     def _show_fidelity_error(self, message: str) -> None:
         """Leave the tab saying why it is empty, never just empty."""
@@ -2937,6 +2977,7 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature = None
+        self._data_bytes_cache = None
 
     def _runtime_ready(self) -> bool:
         """Make sure the OnlyMap runtime is installed before building anything.

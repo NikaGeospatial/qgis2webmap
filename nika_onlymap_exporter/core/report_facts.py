@@ -219,7 +219,9 @@ def _vector_facts(layer: ExportLayer) -> list[Fact]:
         shown = len(popup.visible_fields)
         total = len(popup.fields)
         hover = " on hover" if popup.on_hover else ""
-        facts.append(Fact("Popups", f"Popups{hover} show {shown} of {total} fields"))
+        facts.append(
+            Fact("Popups", f"Popups{hover} show {shown} of {_plural(total, 'field')}")
+        )
     in_file = _fields_in_file(layer)
     if in_file is not None:
         facts.append(Fact("Fields", f"{_plural(in_file, 'field')} in the file"))
