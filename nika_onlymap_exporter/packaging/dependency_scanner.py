@@ -174,16 +174,16 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
     if not names:
         return None
 
-    listed = ", ".join(f"'{name}'" for name in names)
-    plural = "layers" if len(names) > 1 else "layer"
+    listed = " and ".join(
+        [", ".join(f"'{name}'" for name in names[:-1]), f"'{names[-1]}'"]
+        if len(names) > 1
+        else [f"'{names[0]}'"]
+    )
+    noun = "raster layers" if len(names) > 1 else "a raster layer"
     return (
-        f"{listed} {'are' if len(names) > 1 else 'is'} a raster {plural}. A "
-        "single HTML file has to carry the pixels as text inside the page, and "
-        "a map reading a Cloud-Optimized GeoTIFF that way cannot fetch the "
-        "pieces of it that it needs, so it would draw the wrong image rather "
-        "than say anything was wrong. Export as a Folder (or Share ZIP) and "
-        "put it on a web server instead: the raster travels as its own file, "
-        "and the map then loads only the part of it that is on screen."
+        f"{listed} {'are' if len(names) > 1 else 'is'} {noun}, which cannot "
+        "be packed into a single HTML file. Choose Folder or Share ZIP as the "
+        "export format instead."
     )
 
 
