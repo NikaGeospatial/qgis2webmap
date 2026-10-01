@@ -100,6 +100,11 @@ _ANSWERED = frozenset(
 # The stored id is dead for publishing purposes.
 _NEEDS_NEW_MAP = frozenset({PRESENCE_TAKEN_DOWN, PRESENCE_MISSING, PRESENCE_OTHER_ORG})
 
+# The server's own sentence for a map NIKA took down (`map_held_by_nika`).
+HELD_BY_NIKA_MESSAGE = (
+    "NIKA took this map down. Contact support@nika.eco if you think this is a mistake."
+)
+
 HostAction = Literal["host", "republish", "host_as_new"]
 ACTION_HOST: HostAction = "host"
 ACTION_REPUBLISH: HostAction = "republish"
@@ -131,6 +136,9 @@ class RemoteMapState:
     #: if the plan makes room for it, or None. The server clears it on ANY
     #: republish, so pressing Republish is a choice to give that up.
     downgrade_hold_until: datetime | None = None
+    #: NIKA took the map down (abuse or a legal request). The owner cannot
+    #: restore or republish it, and the plugin does not offer a way around that.
+    held_by_nika: bool = False
 
     @property
     def is_answer(self) -> bool:
@@ -139,7 +147,9 @@ class RemoteMapState:
 
     @property
     def needs_new_map(self) -> bool:
-        return self.presence in _NEEDS_NEW_MAP
+        # A map NIKA took down is not offered as a new map: publishing it again
+        # under a new address would undo the takedown.
+        return self.presence in _NEEDS_NEW_MAP and not self.held_by_nika
 
 
 def unpublished() -> RemoteMapState:
@@ -198,6 +208,7 @@ def parse_map_state(map_id: str, status: int, body: bytes) -> RemoteMapState:
             public_url=_permanent_address(raw),
             expires_at=_timestamp(raw.get("expiresAt")),
             downgrade_hold_until=_timestamp(raw.get("downgradeHoldUntil")),
+            held_by_nika=raw.get("heldByNika") is True,
         )
 
     code = _error_code(payload)
@@ -340,6 +351,8 @@ def host_button_tooltip(stored_map_id: str, state: RemoteMapState) -> str:
         return "Publish this map to NIKA and get a public link." + common
     about_this = state.map_id == stored_map_id
     presence = state.presence if about_this else PRESENCE_UNCHECKED
+    if about_this and state.held_by_nika:
+        return HELD_BY_NIKA_MESSAGE
     if presence in _NEEDS_NEW_MAP:
         return (
             new_map_reason(state)

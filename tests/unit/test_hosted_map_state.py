@@ -76,6 +76,7 @@ from nika_onlymap_exporter.hosting.map_state import (
     ACTION_HOST,
     ACTION_HOST_AS_NEW,
     ACTION_REPUBLISH,
+    HELD_BY_NIKA_MESSAGE,
     PRESENCE_EXPIRED,
     PRESENCE_LIVE,
     PRESENCE_MISSING,
@@ -273,6 +274,22 @@ class TestHostAction:
     def test_a_dead_map_is_host_as_new(self, presence) -> None:
         assert host_action(MAP_ID, state(presence)) == ACTION_HOST_AS_NEW
         assert host_button_label(ACTION_HOST_AS_NEW) == "Host as new map ↗"
+
+    def test_a_map_nika_took_down_is_not_offered_as_a_new_map(self) -> None:
+        """Publishing it under a new address would undo the takedown. The
+        button stays Republish, which the server refuses with its own
+        sentence."""
+        held = RemoteMapState(
+            map_id=MAP_ID, presence=PRESENCE_TAKEN_DOWN, held_by_nika=True
+        )
+        assert host_action(MAP_ID, held) == ACTION_REPUBLISH
+        assert host_button_tooltip(MAP_ID, held) == HELD_BY_NIKA_MESSAGE
+
+    def test_held_by_nika_is_read_from_the_state_poll(self) -> None:
+        response = map_reply("takendown", heldByNika=True)
+        parsed = parse_map_state(MAP_ID, response.status, response.body)
+        assert parsed.held_by_nika
+        assert not parsed.needs_new_map
 
     def test_an_answer_about_another_id_is_ignored(self) -> None:
         """A reply that lands after a different project was opened describes
