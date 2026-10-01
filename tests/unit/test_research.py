@@ -34,7 +34,7 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererSpec,
     SourceKind,
 )
-from nika_onlymap_exporter.research import consent, text
+from nika_onlymap_exporter.research import consent
 from nika_onlymap_exporter.research.envelope import (
     Environment,
     os_name,
@@ -739,7 +739,6 @@ class TestConsentGate:
 class TestResearchEnds:
     def test_end_date(self) -> None:
         assert date(2027, 1, 31) == consent.RESEARCH_ENDS
-        assert text.END_DATE_TEXT == "31 January 2027"
 
     def test_last_day_still_collects(self) -> None:
         assert consent.may_collect(consent.SHARE, consent.RESEARCH_ENDS)

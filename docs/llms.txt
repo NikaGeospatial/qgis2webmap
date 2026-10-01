@@ -36,7 +36,7 @@ notes below are the things that are commonly assumed wrong.
   formats, bands, a whole-degree centre, and a random per-map code that links
   the versions of one map but never the user or their account - never feature
   values or paths) and weekly counts (including exports by local time of day
-  and the UTC offset to the nearest hour), until 31 January 2027. See the
+  and the UTC offset to the nearest hour), for a few versions only. See the
   privacy page.
 - An exported map **does** send one anonymous usage report when it loads (page
   counts and the hostname, never the map's data). See the privacy page; do not

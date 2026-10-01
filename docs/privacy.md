@@ -167,9 +167,10 @@ How it works:
   tries rather than kept forever.
 - Choosing **Don't share** later deletes anything still waiting to be sent,
   along with the maps' random codes: if you share again, your maps get new ones.
-- Research sharing ends for good on **31 January 2027**: after that date the
-  plugin sends nothing and deletes anything waiting, whatever you chose. NIKA
-  can also end it earlier from its side, and the plugin then stops for good.
+- Research sharing is temporary and ends for good in a few versions: the
+  plugin then sends nothing and deletes anything waiting, whatever you chose.
+  NIKA can also end it earlier from its side, and the plugin then stops for
+  good.
 
 ## If you publish or host a map
 

@@ -23,8 +23,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   names are cleaned before anything is stored.
   **See exactly what is sent** shows the report for the open project, and the
   Help tab's **Research sharing** row changes the choice at any time. Reports
-  go in the background without the NIKA sign-in, and research ends for good on
-  31 January 2027. See the privacy page.
+  go in the background without the NIKA sign-in, and research ends for good in
+  a few versions. See the privacy page.
 - **Scale-dependent visibility reaches the web map.** A layer set to show only
   between two scales in QGIS now shows only between the matching zoom levels,
   through the runtime's `visible-zoom-range` - vector, raster and label layers

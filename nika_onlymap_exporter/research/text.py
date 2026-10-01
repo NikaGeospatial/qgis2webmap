@@ -12,10 +12,6 @@ from __future__ import annotations
 
 from . import consent
 
-# Spelled out rather than formatted: `%B` follows the machine's locale and
-# `%-d` does not exist on Windows. A unit test holds it to `RESEARCH_ENDS`.
-END_DATE_TEXT = "31 January 2027"
-
 ABOUT_YOU_INTRO = (
     "A few questions about who your maps are for help us decide what to build "
     "next. Every question is optional. If you choose Share in the next step, "
@@ -52,8 +48,8 @@ RESEARCH_NEVER = (
 
 RESEARCH_CHANGE = (
     "Nothing is sent unless you choose Share. You can change your mind at any "
-    "time on the Help tab. Research sharing stops for good on "
-    f"{END_DATE_TEXT}."
+    "time on the Help tab. Research sharing is temporary and ends for good in "
+    "a few versions."
 )
 
 SEE_WHAT_IS_SENT = "See exactly what is sent"
