@@ -89,6 +89,7 @@ from nika_onlymap_exporter.hosting.map_state import (
     RemoteMapState,
     expiry_sentence,
     format_day,
+    hold_sentence,
     host_action,
     host_button_label,
     host_button_tooltip,
@@ -345,8 +346,9 @@ def utc_clock(monkeypatch):
 
 
 @pytest.mark.usefixtures("utc_clock")
-class TestFreeExpiry:
-    """The free plan's 7 days, which `parse_map_state` used to drop."""
+class TestServerDates:
+    """The free plan's 7 days and a downgrade's renewal hold, both of which
+    `parse_map_state` used to drop."""
 
     def test_the_end_date_is_read(self) -> None:
         response = map_reply("live", expiresAt=EXPIRES)
@@ -384,6 +386,28 @@ class TestFreeExpiry:
         parsed = parse_map_state(MAP_ID, 200, response.body)
         assert expiry_sentence(parsed) == ""
         assert "20 September" not in host_button_tooltip(MAP_ID, parsed)
+
+    @pytest.mark.parametrize("server", ["paused", "stopped"])
+    def test_a_held_map_warns_that_republishing_gives_up_the_hold(self, server) -> None:
+        response = map_reply(server, downgradeHoldUntil="2026-10-20T12:00:00.000Z")
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        expected = (
+            "This map is waiting to come back automatically if your plan makes "
+            "room for it by 20 October 2026. Republishing it now takes it off "
+            "that list."
+        )
+        assert parsed.downgrade_hold_until == datetime(
+            2026, 10, 20, 12, tzinfo=timezone.utc
+        )
+        assert hold_sentence(parsed) == expected
+        assert expected in host_button_tooltip(MAP_ID, parsed)
+
+    def test_no_hold_says_nothing_about_one(self) -> None:
+        response = map_reply("paused", downgradeHoldUntil=None)
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        assert parsed.downgrade_hold_until is None
+        assert hold_sentence(parsed) == ""
+        assert "come back automatically" not in host_button_tooltip(MAP_ID, parsed)
 
     def test_a_map_with_no_end_date_says_nothing_about_one(self) -> None:
         response = map_reply("live")

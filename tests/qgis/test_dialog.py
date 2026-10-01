@@ -1533,6 +1533,63 @@ class TestHostButtonFollowsTheServer:
         assert captured["text"].startswith("OLD MAP WAS TAKEN DOWN.")
         assert "about to be uploaded" in captured["text"]
 
+    def _confirmation_notice(self, monkeypatch, dialog, tmp_path) -> list[str]:
+        """Reach the publish confirmation and decline it; return its notice."""
+
+        class FakeExport:
+            title = "Test map"
+
+        notices: list[str] = []
+
+        def confirm(_export, _files, map_notice=""):
+            notices.append(map_notice)
+            return False
+
+        monkeypatch.setattr(dialog, "_publish_thumbnail", lambda _export: b"")
+        monkeypatch.setattr(dialog, "_confirm_publish", confirm)
+        dialog._publish_staging = tmp_path
+        dialog._confirm_and_reserve(FakeExport(), "desk_x", None, {"files": []})
+        return notices
+
+    def test_republishing_a_held_map_says_it_gives_up_the_hold(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """The server forgets a downgrade's renewal hold on ANY republish, so
+        the press that does it has to say so while it can still be cancelled."""
+        from datetime import datetime, timezone
+
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        hold = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+        try:
+            dialog._on_remote_state(self._state("paused", downgrade_hold_until=hold))
+            tooltip = dialog.host_button.toolTip()
+            notices = self._confirmation_notice(monkeypatch, dialog, tmp_path)
+        finally:
+            dialog.close()
+        assert "waiting to come back automatically" in tooltip
+        assert len(notices) == 1
+        assert "waiting to come back automatically" in notices[0]
+        assert (
+            "October 2026. Republishing it now takes it off that list." in (notices[0])
+        )
+
+    def test_an_ordinary_republish_carries_no_notice(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_hosted_map_id
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._on_remote_state(self._state("paused"))
+            notices = self._confirmation_notice(monkeypatch, dialog, tmp_path)
+        finally:
+            dialog.close()
+        assert notices == [""]
+
     def _run_jobs_inline(self, monkeypatch, dialog) -> None:
         """Every stage runs its work and its callback on the spot."""
         from nika_onlymap_exporter.ui import main_dialog

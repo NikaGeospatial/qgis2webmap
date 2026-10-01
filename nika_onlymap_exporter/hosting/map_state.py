@@ -126,6 +126,10 @@ class RemoteMapState:
     #: When the map goes offline by itself (the free plan's 7 days), or None
     #: for a map with no end date. A republish never moves it.
     expires_at: datetime | None = None
+    #: Until when a map a plan downgrade paused or stopped comes back by itself
+    #: if the plan makes room for it, or None. The server clears it on ANY
+    #: republish, so pressing Republish is a choice to give that up.
+    downgrade_hold_until: datetime | None = None
 
     @property
     def is_answer(self) -> bool:
@@ -192,6 +196,7 @@ def parse_map_state(map_id: str, status: int, body: bytes) -> RemoteMapState:
             has_password=raw.get("hasPassword") is True,
             public_url=_permanent_address(raw),
             expires_at=_timestamp(raw.get("expiresAt")),
+            downgrade_hold_until=_timestamp(raw.get("downgradeHoldUntil")),
         )
 
     code = _error_code(payload)
@@ -288,6 +293,24 @@ def expiry_sentence(state: RemoteMapState) -> str:
     return f"This map stays online until {day}; republishing does not extend it."
 
 
+def hold_sentence(state: RemoteMapState) -> str:
+    """What a republish costs a map a downgrade took off the air, or nothing.
+
+    The server lets such a map come back by itself if the plan makes room for
+    it before a date, and forgets that promise on any republish - so the
+    publisher is told before pressing, not after. Only paused and stopped maps
+    carry a hold; the server answers null once its date has passed.
+    """
+    until = state.downgrade_hold_until
+    if until is None or state.presence not in (PRESENCE_PAUSED, PRESENCE_STOPPED):
+        return ""
+    return (
+        "This map is waiting to come back automatically if your plan makes "
+        f"room for it by {format_day(until)}. Republishing it now takes it off "
+        "that list."
+    )
+
+
 def host_action(stored_map_id: str, state: RemoteMapState) -> HostAction:
     """What pressing Host does, for this project and this answer.
 
@@ -324,7 +347,9 @@ def host_button_tooltip(stored_map_id: str, state: RemoteMapState) -> str:
         )
     # Facts about this map that a press changes or does not change, said after
     # what the press does; empty for a map they do not apply to.
-    notes = "".join(f" {note}" for note in (expiry_sentence(state),) if note)
+    notes = "".join(
+        f" {note}" for note in (hold_sentence(state), expiry_sentence(state)) if note
+    )
     if presence == PRESENCE_PAUSED:
         return (
             "Update this project's hosted map. It is paused: republishing updates "

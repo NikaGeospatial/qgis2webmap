@@ -145,6 +145,7 @@ from ..hosting.map_state import (
     PRESENCE_UNCHECKED,
     RemoteMapState,
     expiry_sentence,
+    hold_sentence,
     host_action,
     host_button_label,
     host_button_tooltip,
@@ -3333,12 +3334,18 @@ class MainDialog(QDialog):
         # below says so again before anything leaves the machine.
         stored_map_id = load_hosted_map_id(self.project)
         as_new = host_action(stored_map_id, self._remote_state) == ACTION_HOST_AS_NEW
-        new_map_notice = (
-            f"{new_map_reason(self._remote_state)} This publishes the project as a "
-            "NEW map with a new address; the old one is left as it is."
-            if as_new
-            else ""
-        )
+        if as_new:
+            map_notice = (
+                f"{new_map_reason(self._remote_state)} This publishes the project "
+                "as a NEW map with a new address; the old one is left as it is."
+            )
+        elif stored_map_id and self._remote_state.map_id == stored_map_id:
+            # A map a downgrade took off the air loses its place in line to come
+            # back by itself the moment it is republished. Said here, where the
+            # press can still be taken back.
+            map_notice = hold_sentence(self._remote_state)
+        else:
+            map_notice = ""
 
         exporter = HostedExporter(
             authorized_client(token, transport=make_qgis_transport()),
@@ -3359,7 +3366,7 @@ class MainDialog(QDialog):
             return
 
         files = _publishable_files(manifest, thumbnail)
-        if not self._confirm_publish(export, files, new_map_notice):
+        if not self._confirm_publish(export, files, map_notice):
             self._discard_publish_staging()
             self.status_label.setText("Not published. Nothing left this machine.")
             return
@@ -3660,8 +3667,12 @@ class MainDialog(QDialog):
             )
             return b""
 
-    def _confirm_publish(self, export, files, new_map_notice: str = "") -> bool:
-        """The mandatory confirmation. See `hosting.consent` for the wording."""
+    def _confirm_publish(self, export, files, map_notice: str = "") -> bool:
+        """The mandatory confirmation. See `hosting.consent` for the wording.
+
+        `map_notice` is what this press does to the map beyond updating it:
+        publishing as a new map, or giving up a renewal hold.
+        """
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle("Publish this map?")
@@ -3685,7 +3696,7 @@ class MainDialog(QDialog):
         notices = [
             text
             for text in (
-                new_map_notice,
+                map_notice,
                 insecure_transport_text(),
                 basemap_warning_text(export.settings.basemap),
             )
