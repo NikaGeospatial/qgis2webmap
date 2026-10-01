@@ -296,3 +296,36 @@ def presence_for_refusal_code(code: str) -> MapPresence | None:
         "map_not_found": PRESENCE_MISSING,
         "map_forbidden": PRESENCE_OTHER_ORG,
     }.get(code)
+
+
+def published_headline(state: RemoteMapState) -> str:
+    """The first line of the box shown after a publish, true to the map's state.
+
+    A release going live is not the map being online: a paused map takes the
+    new release and stays paused, so "Your map is online" after it was a
+    promise nobody would see kept. Read from the state fetched straight after
+    the publish; when that could not be fetched, nothing is claimed beyond the
+    publish itself.
+    """
+    if state.presence == PRESENCE_PAUSED:
+        return (
+            "Published, but this map is paused, so visitors can't see it yet. "
+            "Resume it from the dashboard if your plan has room."
+        )
+    if state.presence in (PRESENCE_EXPIRED, PRESENCE_STOPPED):
+        return (
+            "Published, but this map is offline, so visitors can't see it. "
+            "Check it in your dashboard at nika.eco."
+        )
+    if state.presence == PRESENCE_LIVE:
+        return "Your map is online."
+    return "Your map has been published."
+
+
+def is_visible_to_visitors(state: RemoteMapState) -> bool:
+    """Whether a visitor following the link right now could reach the map.
+
+    Unknown counts as visible: the release did go live, and the only states
+    that say otherwise are ones the server has to have actually answered.
+    """
+    return state.presence not in (PRESENCE_PAUSED, PRESENCE_EXPIRED, PRESENCE_STOPPED)

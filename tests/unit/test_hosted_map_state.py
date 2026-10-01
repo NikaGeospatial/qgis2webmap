@@ -89,8 +89,10 @@ from nika_onlymap_exporter.hosting.map_state import (
     host_action,
     host_button_label,
     host_button_tooltip,
+    is_visible_to_visitors,
     parse_map_state,
     presence_for_refusal_code,
+    published_headline,
     unpublished,
 )
 from nika_onlymap_exporter.writers.onlymap_writer import ArtifactFile, ArtifactResult
@@ -292,6 +294,36 @@ class TestHostAction:
         assert presence_for_refusal_code("map_not_found") == PRESENCE_MISSING
         assert presence_for_refusal_code("map_forbidden") == PRESENCE_OTHER_ORG
         assert presence_for_refusal_code("map_limit_reached") is None
+
+
+class TestPublishedHeadline:
+    """What the box after a publish claims, read from the map's real state.
+
+    It said "Your map is online" after every publish, including onto a paused
+    map, which takes the release and stays paused.
+    """
+
+    def test_a_live_map_is_online(self) -> None:
+        assert published_headline(state(PRESENCE_LIVE)) == "Your map is online."
+        assert is_visible_to_visitors(state(PRESENCE_LIVE))
+
+    def test_a_paused_map_is_not_called_online(self) -> None:
+        headline = published_headline(state(PRESENCE_PAUSED))
+        assert "online" not in headline
+        assert "paused, so visitors can't see it yet" in headline
+        assert "Resume it from the dashboard if your plan has room." in headline
+        assert not is_visible_to_visitors(state(PRESENCE_PAUSED))
+
+    @pytest.mark.parametrize("presence", [PRESENCE_EXPIRED, PRESENCE_STOPPED])
+    def test_an_expired_or_stopped_map_is_offline(self, presence) -> None:
+        headline = published_headline(state(presence))
+        assert "offline" in headline
+        assert not is_visible_to_visitors(state(presence))
+
+    @pytest.mark.parametrize("presence", [PRESENCE_OFFLINE, PRESENCE_UNCHECKED])
+    def test_an_unknown_state_claims_only_the_publish(self, presence) -> None:
+        assert published_headline(state(presence)) == "Your map has been published."
+        assert is_visible_to_visitors(state(presence))
 
 
 # ---------------------------------------------------------------------------

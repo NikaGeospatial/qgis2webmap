@@ -1712,7 +1712,7 @@ class TestHostButtonFollowsTheServer:
         monkeypatch.setattr(
             dialog,
             "_show_published",
-            lambda url, link_saved=True, protected=False: shown.update(
+            lambda url, link_saved=True, protected=False, state=None: shown.update(
                 url=url, protected=protected
             ),
         )
@@ -1754,6 +1754,76 @@ class TestHostButtonFollowsTheServer:
             assert load_hosted_pending_release(project) == ""
         finally:
             dialog.close()
+
+    def _publish_and_capture(self, monkeypatch, dialog, state) -> dict[str, str]:
+        """Run the upload stage against stand-ins; return what the box said."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        captured: dict[str, str] = {}
+
+        def exec_box(box):
+            captured["title"] = box.windowTitle()
+            captured["text"] = box.text()
+            captured["info"] = box.informativeText()
+            return 0
+
+        monkeypatch.setattr(QMessageBox, "exec", exec_box)
+
+        class Outcome:
+            public_url = "https://maps.example/m"
+            open_instruction = "Published at x - anyone with the link can open it."
+
+        class FakeClient:
+            def map_state(self, _map_id):
+                return state
+
+        class FakeExporter:
+            client = FakeClient()
+            on_progress = None
+            stage = "verifying"
+
+            def publish(self, _prepared):
+                return Outcome()
+
+        class Start:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 1
+            release_id = "rel_1"
+
+        class Prepared:
+            start = Start()
+
+        dialog._upload(FakeExporter(), Prepared())
+        captured["status"] = dialog.status_label.text()
+        return captured
+
+    def test_a_publish_onto_a_paused_map_does_not_say_online(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            shown = self._publish_and_capture(
+                monkeypatch, dialog, self._state("paused")
+            )
+        finally:
+            dialog.close()
+        assert "online" not in shown["text"]
+        assert "paused, so visitors can't see it yet" in shown["text"]
+        assert "Anyone with this link can open it." not in shown["info"]
+        assert "anyone" not in shown["status"]
+
+    def test_a_publish_onto_a_live_map_says_online(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            shown = self._publish_and_capture(monkeypatch, dialog, self._state("live"))
+        finally:
+            dialog.close()
+        assert shown["text"].startswith("Your map is online.")
+        assert "Anyone with this link can open it." in shown["info"]
 
     def test_cancel_after_the_upload_does_not_claim_nothing_was_written(
         self, qgis_app, project, make_memory_layer

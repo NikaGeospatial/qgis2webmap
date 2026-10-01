@@ -147,8 +147,10 @@ from ..hosting.map_state import (
     host_action,
     host_button_label,
     host_button_tooltip,
+    is_visible_to_visitors,
     new_map_reason,
     presence_for_refusal_code,
+    published_headline,
 )
 from ..hosting.thumbnail import (
     THUMBNAIL_FILENAME,
@@ -3529,11 +3531,12 @@ class MainDialog(QDialog):
             link_saved = self._persist_hosted_link()
             # The map now has an address, so the button stops saying Host.
             protected = state.is_answer and state.has_password
-            self._on_remote_state(
+            known = (
                 state
                 if state.is_answer
                 else RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
             )
+            self._on_remote_state(known)
             url = outcome.public_url or ""
             # Counted, and reported only if the user chose Share. Never raises.
             self._research.record_output(
@@ -3543,12 +3546,19 @@ class MainDialog(QDialog):
                 hosted=True,
                 password=protected,
             )
-            self.status_label.setText(
-                f"Published at {url} - visitors need the map's password to open it."
-                if protected
-                else outcome.open_instruction
+            if not is_visible_to_visitors(known):
+                self.status_label.setText(
+                    f"Published at {url} - but visitors can't see it yet."
+                )
+            elif protected:
+                self.status_label.setText(
+                    f"Published at {url} - visitors need the map's password to open it."
+                )
+            else:
+                self.status_label.setText(outcome.open_instruction)
+            self._show_published(
+                url, link_saved=link_saved, protected=protected, state=known
             )
-            self._show_published(url, link_saved=link_saved, protected=protected)
 
         self._start_job(
             work,
@@ -3725,31 +3735,47 @@ class MainDialog(QDialog):
         return box.clickedButton() is publish
 
     def _show_published(
-        self, url: str, *, link_saved: bool = True, protected: bool = False
+        self,
+        url: str,
+        *,
+        link_saved: bool = True,
+        protected: bool = False,
+        state: RemoteMapState | None = None,
     ) -> None:
-        who_can_open = (
-            "It is password-protected: visitors need the map's password to open it."
-            if protected
-            else "Anyone with this link can open it."
-        )
+        # What the server said about the map straight after the publish. The
+        # headline follows it: a paused map takes the new release and stays
+        # paused, so "online" is only said when it is.
+        state = state or RemoteMapState(map_id="", presence=PRESENCE_UNCHECKED)
+        headline = published_headline(state)
+        visible = is_visible_to_visitors(state)
+        if protected:
+            who_can_open = (
+                "It is password-protected: visitors need the map's password to open it."
+            )
+        elif visible:
+            who_can_open = "Anyone with this link can open it."
+        else:
+            who_can_open = "Once it is back online, anyone with this link can open it."
         box = QMessageBox(self)
         if link_saved:
-            box.setIcon(QMessageBox.Icon.Information)
+            box.setIcon(
+                QMessageBox.Icon.Information if visible else QMessageBox.Icon.Warning
+            )
             box.setWindowTitle("Published")
-            box.setText("Your map is online.")
+            box.setText(headline)
             box.setInformativeText(
                 f"{url}\n\n{who_can_open} Pressing Republish "
                 "updates the map at the same address."
             )
         else:
-            # The map is live either way - this is a warning about what
+            # The publish happened either way - this is a warning about what
             # happens NEXT, not about what just happened. The project has
             # never been saved, so `QgsProject` has nowhere to keep the map
             # this became; closing it without a manual save loses the only
             # record of which address is this project's.
             box.setIcon(QMessageBox.Icon.Warning)
             box.setWindowTitle("Published - but save this project")
-            box.setText("Your map is online, but the project has not been saved.")
+            box.setText(f"{headline} But the project has not been saved.")
             box.setInformativeText(
                 f"{url}\n\n{who_can_open} But this project has "
                 "no file yet, so nothing on disk remembers this address. Save it now: "
