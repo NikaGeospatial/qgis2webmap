@@ -17,6 +17,7 @@ from typing import Any
 
 from ..core.export_ir import (
     AssetDisposition,
+    ExportLayer,
     ExportProject,
     OutputMode,
 )
@@ -109,29 +110,52 @@ def raster_bytes(project: ExportProject) -> int:
     the common path touches no disk at all; `os.path.getsize` is the fallback
     for a project assembled without one.
     """
-    total = 0
+    return sum(
+        _raster_layer_bytes(layer)
+        for layer in project.exportable_layers
+        if layer.raster is not None
+    )
+
+
+def _raster_layer_bytes(layer: ExportLayer) -> int:
+    """One raster's source size; see `raster_bytes`. 0 when it cannot be read."""
+    raster = layer.raster
+    if raster is None:
+        return 0
+    recorded = next(
+        (
+            dependency.size_bytes
+            for dependency in layer.dependencies
+            if dependency.identifier == raster.path
+            and dependency.size_bytes is not None
+        ),
+        None,
+    )
+    if recorded is not None:
+        return recorded
+    try:
+        return os.path.getsize(raster.path)
+    except OSError:
+        # A missing raster is already a blocking dependency; adding a guess
+        # for it here would only make the size message wrong as well.
+        return 0
+
+
+def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
+    """Each exported layer's share of `measure_data_bytes`, by layer id.
+
+    The same measurement split per layer, so the Fidelity tab can say which
+    layer the megabytes are in without a second serialisation of its own.
+    """
+    sizes: dict[str, int] = {}
     for layer in project.exportable_layers:
-        if layer.raster is None:
-            continue
-        recorded = next(
-            (
-                dependency.size_bytes
-                for dependency in layer.dependencies
-                if dependency.identifier == layer.raster.path
-                and dependency.size_bytes is not None
-            ),
-            None,
-        )
-        if recorded is not None:
-            total += recorded
-            continue
-        try:
-            total += os.path.getsize(layer.raster.path)
-        except OSError:
-            # A missing raster is already a blocking dependency; adding a guess
-            # for it here would only make the size message wrong as well.
-            continue
-    return total
+        size = _raster_layer_bytes(layer)
+        if layer.geojson is not None:
+            size += len(
+                json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8")
+            )
+        sizes[layer.layer_id] = size
+    return sizes
 
 
 def measure_data_bytes(project: ExportProject) -> int:
@@ -144,13 +168,7 @@ def measure_data_bytes(project: ExportProject) -> int:
     invisible: `standalone_ineligible_reason` cheerfully approved a project
     that could not be written into an openable file.
     """
-    total = raster_bytes(project)
-    for layer in project.exportable_layers:
-        if layer.geojson is not None:
-            total += len(
-                json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8")
-            )
-    return total
+    return sum(data_bytes_by_layer(project).values())
 
 
 def standalone_raster_reason(project: ExportProject) -> str | None:

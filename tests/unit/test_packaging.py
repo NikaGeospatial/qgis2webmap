@@ -389,3 +389,17 @@ class TestExporters:
         with pytest.raises(ExportBlockedError):
             build_artifact(make_project(layers=[]), destination, writer=self._writer())
         assert not destination.exists()
+
+
+def test_data_bytes_by_layer_splits_the_total_measurement() -> None:
+    from nika_onlymap_exporter.packaging.dependency_scanner import (
+        data_bytes_by_layer,
+    )
+
+    project = make_project(
+        [make_layer(), make_layer(layer_id="more", name="More points")]
+    )
+    sizes = data_bytes_by_layer(project)
+    assert set(sizes) == {"pts", "more"}
+    assert all(size > 0 for size in sizes.values())
+    assert sum(sizes.values()) == measure_data_bytes(project)
