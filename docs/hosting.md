@@ -36,10 +36,23 @@ belongs to a different NIKA organisation from the one you are signed in to, the
 button says
 **Host as new map**: pressing it publishes the project as a new map with a new
 address and leaves the old one as it is. A paused map can still be republished;
-it stays paused until it is resumed in the dashboard. An expired or stopped map
+it stays paused until it is resumed in the dashboard, and the message after
+publishing says so rather than calling it online. An expired or stopped map
 comes back online when you republish it, except on the free plan once its 7
-days are over: NIKA then refuses the publish and says why, and only enterprise
-hosting can bring that map back.
+days are over: NIKA then says why and offers to publish the project as a new
+map instead. The old address stays offline, and the new map gets a fresh 7
+days; only enterprise hosting can bring the old map back.
+
+A free map's end date is shown after publishing and on the button's tooltip.
+Republishing does not move it. A map that a plan downgrade paused or stopped
+may be waiting to come back by itself if your plan makes room for it by a
+certain date; republishing it takes it off that list, and the tooltip and the
+confirmation screen say so before anything is sent.
+
+Keep the project open until the upload finishes. If you open another project
+meanwhile, the map still goes online, but its address is not saved into either
+project: the plugin shows you the link and says so, and nothing is written into
+the project you switched to.
 
 It is a separate, explicit step and never a side effect of exporting. Nothing
 about pressing **Export** uploads anything, and nothing about pressing **Host**
