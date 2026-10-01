@@ -11,14 +11,22 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from nika_onlymap_exporter.core.export_ir import FidelityItem, FidelityStatus
 from nika_onlymap_exporter.core.fidelity_summary import (
+    TOPIC_BY_HEAD,
     WHOLE_MAP,
+    ReportFilter,
     ReportState,
     Tone,
+    Topic,
     needs_attention,
     strip_message,
+    subject_head,
     summarise,
+    topic_of,
 )
 
 KEPT = FidelityStatus.PRESERVED
@@ -289,3 +297,143 @@ class TestStripMessage:
             summary = summarise([item("Layer 'Roads'", status, "x", "r")], NAMES)
             message = strip_message(ReportState.CURRENT, summary)
             assert (message.tone, message.button) == (tone, button), status
+
+
+class TestNothingIsLost:
+    def test_a_merged_row_keeps_every_item_label(self) -> None:
+        """ "(4 classes)" has to open into the four classes it stands for."""
+        summary = summarise(volcanoes_like(), NAMES, ORDER)
+        volcanoes = next(g for g in summary.groups if g.title == "Volcanoes")
+        merged = next(row for row in volcanoes.rows if row.is_merged)
+        assert merged.item_labels == tuple(
+            f"Symbology, range {n}" for n in (1, 2, 3, 4)
+        )
+        assert len(merged.item_labels) == len(merged.subjects)
+
+    def test_an_item_recorded_twice_is_listed_twice(self) -> None:
+        twice = [item("Symbology of 'Roads'", CHANGED, "Dashes.", "r")] * 2
+        (row,) = summarise(twice, NAMES, ORDER).groups[0].rows
+        assert row.item_labels == ("Symbology", "Symbology")
+
+    def test_every_item_is_reachable_through_its_row(self) -> None:
+        items = volcanoes_like()
+        summary = summarise(items, NAMES, ORDER)
+        reachable = [
+            subject
+            for group in summary.groups
+            for row in group.rows
+            for subject in row.subjects
+        ]
+        assert sorted(reachable) == sorted(i.subject for i in items)
+
+
+# Every subject the package records, as written in the source: the literal
+# start of a report call's first argument, of a `subject = ...` assignment, or
+# of a licence violation's `subject=`.
+_SUBJECT_IN_SOURCE = re.compile(
+    r"""(?:\.(?:preserved|approximated|unsupported|blocked|raster_fallback|"""
+    r"""record|suppressed_setting)\(\s*|subject\s*=\s*)f?"([^"{]+)""",
+)
+PACKAGE = Path(__file__).resolve().parents[2] / "nika_onlymap_exporter"
+
+
+def recorded_subject_heads() -> set[str]:
+    heads: set[str] = set()
+    for path in PACKAGE.rglob("*.py"):
+        for match in _SUBJECT_IN_SOURCE.finditer(path.read_text(encoding="utf-8")):
+            heads.add(subject_head(match.group(1)))
+    return heads
+
+
+class TestTopics:
+    def test_the_subjects_translators_record_are_sorted_by_topic(self) -> None:
+        assert topic_of("Symbology of 'Roads', class 3") is Topic.SYMBOLOGY
+        assert topic_of("Markers of 'Roads'") is Topic.SYMBOLOGY
+        assert topic_of("Scale visibility of 'Roads'") is Topic.SYMBOLOGY
+        assert topic_of("Labels on 'Roads'") is Topic.LABELS
+        assert topic_of("Popup fields of 'Roads'") is Topic.POPUPS
+        assert topic_of("Layer 'Roads'") is Topic.DATA
+        assert topic_of("Feature count in 'Roads'") is Topic.DATA
+        assert topic_of("Layer count") is Topic.MAP
+        assert topic_of("Basemap") is Topic.MAP
+
+    def test_a_subject_nobody_listed_is_other(self) -> None:
+        assert topic_of("Something new about 'Roads'") is Topic.OTHER
+
+    def test_a_layer_named_like_a_topic_does_not_confuse_it(self) -> None:
+        assert topic_of("Labels on 'Basemap'") is Topic.LABELS
+
+    def test_every_subject_in_the_source_has_a_topic(self) -> None:
+        """A new kind of report row must be given a topic, or it hides in Other."""
+        heads = recorded_subject_heads()
+        # The scan must find the subjects or it proves nothing.
+        assert {"Symbology", "Labels", "Basemap", "Artifact size"} <= heads
+        assert sorted(heads - set(TOPIC_BY_HEAD)) == []
+
+
+class TestFilter:
+    def summary(self):
+        return summarise(volcanoes_like(), NAMES, ORDER)
+
+    def visible(self, report_filter: ReportFilter) -> list[str]:
+        return [
+            f"{group.title}/{row.label}"
+            for group in self.summary().groups
+            for row in report_filter.rows(group)
+        ]
+
+    def test_by_default_kept_is_hidden_and_everything_else_shown(self) -> None:
+        shown = self.visible(ReportFilter())
+        assert "Whole map/Basemap" in shown
+        assert "Whole map/Map title" not in shown
+        assert "Roads/Popup fields" in shown
+
+    def test_a_verdict_can_be_hidden(self) -> None:
+        only_lost = ReportFilter(verdicts=frozenset({LOST}))
+        assert self.visible(only_lost) == ["Whole map/Basemap", "Roads/Popup fields"]
+
+    def test_a_topic_can_be_hidden(self) -> None:
+        no_map = ReportFilter(topics=frozenset(Topic) - {Topic.MAP})
+        assert "Whole map/Basemap" not in self.visible(no_map)
+        assert "Roads/Popup fields" in self.visible(no_map)
+
+    def test_search_reads_label_detail_and_subject(self) -> None:
+        assert self.visible(ReportFilter(text="COLLISION")) == ["Volcanoes/Labels"]
+        assert self.visible(ReportFilter(text="range 3")) == [
+            "Volcanoes/Symbology (4 classes)"
+        ]
+
+    def test_searching_a_layer_name_shows_its_rows(self) -> None:
+        summary = self.summary()
+        roads = next(g for g in summary.groups if g.title == "Roads")
+        assert ReportFilter(text="roads").rows(roads, roads.title)
+
+    def test_an_exact_layer_stays_listed_unless_searched_away(self) -> None:
+        parks = next(g for g in self.summary().groups if g.title == "Parks")
+        assert ReportFilter().shows_group(parks, "Polygons")
+        assert ReportFilter(text="polygon").shows_group(parks, "Polygons")
+        assert not ReportFilter(text="roads").shows_group(parks, "Polygons")
+
+    def test_a_group_with_nothing_left_is_not_listed(self) -> None:
+        roads = next(g for g in self.summary().groups if g.title == "Roads")
+        only_changed = ReportFilter(verdicts=frozenset({CHANGED}))
+        assert not only_changed.shows_group(roads)
+
+
+class TestFilterCounts:
+    def test_verdict_counts_count_rows_like_the_headline(self) -> None:
+        summary = summarise(volcanoes_like(), NAMES, ORDER)
+        counts = summary.verdict_counts()
+        assert counts[CHANGED] == 2  # four ranges merged into one, and labels
+        assert counts[LOST] == 2
+        assert counts[KEPT] == 4
+        assert counts[BLOCKED] == 0
+        changes = sum(n for status, n in counts.items() if status is not KEPT)
+        assert changes == summary.change_count
+
+    def test_topic_counts_follow_the_verdicts_ticked(self) -> None:
+        summary = summarise(volcanoes_like(), NAMES, ORDER)
+        assert summary.topic_counts()[Topic.MAP] == 2
+        problems = frozenset({LOST, CHANGED})
+        assert summary.topic_counts(problems)[Topic.MAP] == 1
+        assert summary.topic_counts(problems)[Topic.SYMBOLOGY] == 1

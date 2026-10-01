@@ -17,9 +17,14 @@ This module turns the list into what a person reads:
   number of rows a reader will find listed, not the number of report entries
   behind them.
 
-Nothing is dropped on the way: every item lands in exactly one row, and Kept
-rows stay reachable - the tab hides them behind a toggle, it does not delete
-them.
+Nothing is dropped on the way: every item lands in exactly one row, a merged
+row keeps each item's own label in `item_labels`, and Kept rows stay reachable -
+the tab hides them behind a toggle, it does not delete them.
+
+**Filtering.** Each row has a verdict and a `Topic` - symbology, labels, popups,
+data, map settings - read from the subject the translators recorded.
+`ReportFilter` decides which rows the tab shows; the headline and the strip
+always count the whole report, whatever is filtered out of view.
 
 Extension points, deliberately not built yet: a destination-aware mode (file,
 own server, NIKA hosting) changes which verdicts need attention, and that
@@ -73,6 +78,61 @@ _CONNECTOR = re.compile(r"\s+(?:of|on|in|for)$")
 _QUOTED = re.compile(r"'([^']+)'")
 
 
+class Topic(Enum):
+    """What part of the map a report row is about, for the tab's filters."""
+
+    SYMBOLOGY = "Symbology"
+    LABELS = "Labels"
+    POPUPS = "Popups & fields"
+    DATA = "Data"
+    MAP = "Map settings"
+    OTHER = "Other"
+
+
+# A subject's head - the words before the quoted layer name - to its topic.
+# Every subject the translators record is listed; `tests/unit` reads them out
+# of the source and fails if a new one would land in Other unnoticed.
+TOPIC_BY_HEAD = {
+    "Symbology": Topic.SYMBOLOGY,
+    "Markers": Topic.SYMBOLOGY,
+    "Colours": Topic.SYMBOLOGY,
+    "Contrast": Topic.SYMBOLOGY,
+    "Height": Topic.SYMBOLOGY,
+    "Scale visibility": Topic.SYMBOLOGY,
+    "Labels": Topic.LABELS,
+    "Popup fields": Topic.POPUPS,
+    "Data": Topic.DATA,
+    "Data source": Topic.DATA,
+    "Layer": Topic.DATA,
+    "Raster": Topic.DATA,
+    "Raster files": Topic.DATA,
+    "Feature count": Topic.DATA,
+    "Artifact size": Topic.DATA,
+    "Basemap": Topic.MAP,
+    "Terrain": Topic.MAP,
+    "Relief": Topic.MAP,
+    "Map extent": Topic.MAP,
+    "Map title": Topic.MAP,
+    "Map description": Topic.MAP,
+    "Clip to the current view": Topic.MAP,
+    "Coordinate precision": Topic.MAP,
+    "Layer count": Topic.MAP,
+    "Project layers": Topic.MAP,
+}
+
+
+def subject_head(subject: str) -> str:
+    """ "Symbology of 'Roads', class 3" -> "Symbology"; "Layer count" as is."""
+    head = subject.split("'", 1)[0].strip()
+    head = _CONNECTOR.sub("", head)
+    return _CLASS_SUFFIX.sub("", head).strip(" ,")
+
+
+def topic_of(subject: str) -> Topic:
+    """The topic a report subject belongs to; Other for one nobody listed."""
+    return TOPIC_BY_HEAD.get(subject_head(subject), Topic.OTHER)
+
+
 def needs_attention(status: FidelityStatus) -> bool:
     """Whether a verdict means something the recipient will not get.
 
@@ -91,10 +151,21 @@ class ReportRow:
     detail: str
     layer_id: str | None = None
     subjects: tuple[str, ...] = ()
+    # Each merged item's own label, in step with `subjects`: "Symbology,
+    # class 3" for every class behind "Symbology (5 classes)".
+    item_labels: tuple[str, ...] = ()
 
     @property
     def verdict(self) -> str:
         return VERDICT_LABELS[self.status]
+
+    @property
+    def is_merged(self) -> bool:
+        return len(self.subjects) > 1
+
+    @property
+    def topic(self) -> Topic:
+        return topic_of(self.subjects[0] if self.subjects else self.label)
 
     @property
     def is_kept(self) -> bool:
@@ -154,6 +225,48 @@ class ReportGroup:
 
 
 @dataclass(frozen=True)
+class ReportFilter:
+    """Which rows the tab shows. The default hides Kept and nothing else."""
+
+    verdicts: frozenset[FidelityStatus] = frozenset(
+        status for status in FidelityStatus if status is not FidelityStatus.PRESERVED
+    )
+    topics: frozenset[Topic] = frozenset(Topic)
+    text: str = ""
+
+    def shows(self, row: ReportRow, group_text: str = "") -> bool:
+        """Whether `row` passes. `group_text` is its group's title and facts:
+        a search that names the layer shows all of that layer's rows."""
+        if row.status not in self.verdicts or row.topic not in self.topics:
+            return False
+        return self.matches(group_text) or self.matches(
+            " ".join((row.label, row.detail, *row.subjects))
+        )
+
+    def matches(self, text: str) -> bool:
+        needle = self.text.strip().casefold()
+        return not needle or needle in text.casefold()
+
+    def rows(self, group: ReportGroup, group_text: str = "") -> tuple[ReportRow, ...]:
+        return tuple(row for row in group.rows if self.shows(row, group_text))
+
+    def shows_group(self, group: ReportGroup, group_text: str = "") -> bool:
+        """Whether a group is listed at all.
+
+        A group with a row to show is. So is a layer that came through
+        exactly, as its one "exact" line - that line is itself the news about
+        the layer - unless a search leaves it out.
+        """
+        if self.rows(group, group_text):
+            return True
+        return (
+            not group.is_whole_map
+            and group.is_exact
+            and self.matches(f"{group.title} {group_text}")
+        )
+
+
+@dataclass(frozen=True)
 class ReportSummary:
     """The whole report, grouped, with the counts the tab and strip print."""
 
@@ -188,6 +301,26 @@ class ReportSummary:
     @property
     def is_empty(self) -> bool:
         return not self.groups
+
+    def verdict_counts(self) -> dict[FidelityStatus, int]:
+        """Rows per verdict, across the whole report, merged rows once."""
+        counts = dict.fromkeys(FidelityStatus, 0)
+        for group in self.groups:
+            for row in group.rows:
+                counts[row.status] += 1
+        return counts
+
+    def topic_counts(
+        self, verdicts: frozenset[FidelityStatus] | None = None
+    ) -> dict[Topic, int]:
+        """Rows per topic among the verdicts given - all of them by default -
+        so a topic's count says how many rows ticking it would show."""
+        counts = dict.fromkeys(Topic, 0)
+        for group in self.groups:
+            for row in group.rows:
+                if verdicts is None or row.status in verdicts:
+                    counts[row.topic] += 1
+        return counts
 
     def headline(self) -> str:
         """ "5 layers · 1 needs attention · 10 things change"."""
@@ -333,6 +466,7 @@ def _rows(items: list[FidelityItem], layer_name: str | None) -> tuple[ReportRow,
                 detail=detail,
                 layer_id=group[0].layer_id,
                 subjects=tuple(item.subject for item in group),
+                item_labels=tuple(labels[key]),
             )
         )
     return tuple(sorted(rows, key=lambda row: VERDICT_ORDER[row.status]))
