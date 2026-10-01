@@ -19,8 +19,9 @@ the Host control offers:
                   the free plan once its free days are over: the server then
                   refuses with `free_map_expired` (see `hosting/client.py`).
 * `host_as_new` - the stored map was taken down, no longer exists, or belongs
-                  to another organisation. Publishing detaches the stale id and
-                  creates a fresh map; the old address is left as it is.
+                  to another organisation. Publishing creates a fresh map, and
+                  the project swaps the stale id for it once the new map
+                  exists; the old address is left as it is.
 
 When the server cannot be asked - offline, signed out, not checked yet - the
 action falls back to the stored id, which is exactly what the button did

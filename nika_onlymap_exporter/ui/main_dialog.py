@@ -3422,11 +3422,12 @@ class MainDialog(QDialog):
             self._discard_publish_staging()
             self.status_label.setText("Not published. Nothing left this machine.")
             return
-        if as_new:
-            # Forgotten now rather than on success, so an upload that goes live
-            # while this dialog has lost contact is adopted as THIS project's new
-            # map on the next press, instead of being set against the old id.
-            detach_hosted_map(self.project)
+        # The old id is NOT forgotten here, even for a new map: the server can
+        # still refuse it - the plan is full, say - and a project already cut
+        # loose from its live map would stay that way once saved. The exporter
+        # carries the intent instead; the project changes only once the new map
+        # exists (`on_published`), or once its upload has gone through and
+        # contact was lost (`_ContactLost`).
 
         violations = detect_violations(export)
         self._research_export = export
@@ -3503,8 +3504,8 @@ class MainDialog(QDialog):
                         "Not published. Nothing left this machine."
                     )
                     return
-                detach_hosted_map(self.project)
-                self._update_host_button()
+                # The project keeps its old id until the new map exists; see
+                # `_confirm_and_reserve`.
                 exporter.map_id = None
                 exporter.release_n = None
                 exporter.pending_release_id = None
@@ -3595,6 +3596,15 @@ class MainDialog(QDialog):
                 # shown as what it is: probably live, and recognised as this
                 # project's own on the next press.
                 self._research.record_failure(research_tally.PUBLISH_ERROR)
+                if exporter.map_id is None and load_hosted_map_id(self.project):
+                    # A NEW map's upload went through, so the old id the
+                    # project still holds is the one being left behind. Let it
+                    # go now and keep only the pending release: that is what
+                    # lets the next press adopt the new map as this project's,
+                    # rather than measure it against the old one.
+                    detach_hosted_map(self.project)
+                    save_hosted_pending_release(self.project, prepared.start.release_id)
+                    self._update_host_button()
                 QMessageBox.warning(self, "Upload not confirmed", published.message)
                 self.status_label.setText(
                     "Uploaded, but not confirmed. Publish again once you are "

@@ -1663,11 +1663,61 @@ class TestHostButtonFollowsTheServer:
             assert asked == [True]
             assert exporter.calls == [self.MAP_ID, None]
             assert exporter.release_n is None
-            assert load_hosted_map_id(project) == ""
+            # Still linked to the old map: the new one does not exist until
+            # its upload succeeds, and a refusal before then must not leave
+            # the project pointing at nothing.
+            assert load_hosted_map_id(project) == self.MAP_ID
             assert load_hosted_pending_release(project) == "rel_new"
             assert len(uploaded) == 1
         finally:
             dialog.close()
+
+    def test_a_new_map_the_plan_refuses_leaves_the_project_linked(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """Agreeing to a new map and then hitting the plan's map limit used to
+        leave the project cut loose from its old map, permanently once saved."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            load_hosted_release_n,
+            save_hosted_map_id,
+            save_hosted_release_n,
+        )
+        from nika_onlymap_exporter.hosting.client import PublishRefusedError
+        from nika_onlymap_exporter.ui import main_dialog
+
+        save_hosted_map_id(project, self.MAP_ID)
+        save_hosted_release_n(project, 3)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        monkeypatch.setattr(dialog, "_confirm_host_as_new", lambda: True)
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            main_dialog.QMessageBox,
+            "warning",
+            lambda _parent, title, text, *a, **k: warnings.append((title, text)),
+        )
+
+        class FakeExporter:
+            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            release_n = 3
+            pending_release_id = None
+            reconciliation = None
+            force = False
+            on_progress = None
+
+            def prepare(self, _result, _destination):
+                if self.map_id:
+                    raise PublishRefusedError("gone", code="map_taken_down")
+                raise PublishRefusedError("Plan full.", code="map_limit_reached")
+
+        try:
+            dialog._reserve(FakeExporter(), None, tmp_path, [], force=False)
+            assert load_hosted_map_id(project) == self.MAP_ID
+            assert load_hosted_release_n(project) == 3
+        finally:
+            dialog.close()
+        assert warnings == [("Cannot publish", "Plan full.")]
 
     def test_declining_keeps_the_project_as_it_was(
         self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
@@ -1903,9 +1953,13 @@ class TestHostButtonFollowsTheServer:
         assert "October 2026; republishing does not extend it." in shown["info"]
         assert "republishing does not extend it" in tooltip
 
-    def _upload_failing(self, monkeypatch, dialog, failure, release_status):
+    def _upload_failing(
+        self, monkeypatch, dialog, failure, release_status, map_id=MAP_ID
+    ):
         """Run the upload stage with a publish that raises `failure` while the
-        server is checking it; return the warnings and crash boxes shown."""
+        server is checking it; return the warnings and crash boxes shown.
+
+        `map_id` is the map the exporter is updating: None for a new map."""
         from nika_onlymap_exporter.ui import main_dialog
 
         warnings: list[tuple[str, str]] = []
@@ -1925,16 +1979,19 @@ class TestHostButtonFollowsTheServer:
             def release_status(self, _release_id):
                 return release_status
 
+        updating = map_id
+
         class FakeExporter:
             client = FakeClient()
             on_progress = None
             stage = "verifying"
+            map_id = updating
 
             def publish(self, _prepared):
                 raise failure
 
         class Start:
-            map_id = TestHostButtonFollowsTheServer.MAP_ID
+            map_id = updating or "n" * 25
             release_n = 1
             release_id = "rel_1"
 
@@ -1994,6 +2051,115 @@ class TestHostButtonFollowsTheServer:
             dialog.close()
         assert warnings == [("Upload not confirmed", VERIFY_CONTACT_LOST_MESSAGE)]
         assert crashes == []
+
+    def test_a_new_map_refused_after_the_upload_keeps_the_old_link(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+        from nika_onlymap_exporter.hosting.client import HostingError, ReleaseStatus
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            self._upload_failing(
+                monkeypatch,
+                dialog,
+                HostingError("The hosting server could not publish this map."),
+                ReleaseStatus(state="failed", error="Your plan is full."),
+                map_id=None,
+            )
+            assert load_hosted_map_id(project) == self.MAP_ID
+        finally:
+            dialog.close()
+
+    def test_a_new_maps_unconfirmed_upload_is_adopted_next_time(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """The upload of a NEW map went through and contact was lost. The old
+        id is let go then - and only then - with the pending release kept, so
+        the next press adopts the new map instead of measuring it against the
+        old one."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            load_hosted_pending_release,
+            save_hosted_map_id,
+            save_hosted_pending_release,
+        )
+        from nika_onlymap_exporter.hosting.client import (
+            VERIFY_CONTACT_LOST_MESSAGE,
+            HostingError,
+        )
+
+        save_hosted_map_id(project, self.MAP_ID)
+        save_hosted_pending_release(project, "rel_1")
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            self._upload_failing(
+                monkeypatch,
+                dialog,
+                HostingError(VERIFY_CONTACT_LOST_MESSAGE),
+                None,
+                map_id=None,
+            )
+            assert load_hosted_map_id(project) == ""
+            assert load_hosted_pending_release(project) == "rel_1"
+        finally:
+            dialog.close()
+
+    def test_a_new_map_replaces_the_old_link_once_it_exists(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+
+        save_hosted_map_id(project, "o" * 25)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            self._publish_and_capture(monkeypatch, dialog, self._state("live"))
+            assert load_hosted_map_id(project) == self.MAP_ID
+        finally:
+            dialog.close()
+
+    def test_confirming_a_new_map_does_not_forget_the_old_one_yet(
+        self, qgis_app, project, make_memory_layer, monkeypatch, tmp_path
+    ) -> None:
+        """Host as new map, confirmed: the exporter is told, the project is
+        not - a refusal of the new map must leave it linked to the old one."""
+        from nika_onlymap_exporter.core.settings import (
+            load_hosted_map_id,
+            save_hosted_map_id,
+        )
+        from nika_onlymap_exporter.ui import main_dialog
+
+        class FakeExport:
+            title = "Test map"
+
+        save_hosted_map_id(project, self.MAP_ID)
+        dialog = self._dialog(project, make_memory_layer)
+        reserved: list[object] = []
+        monkeypatch.setattr(main_dialog, "detect_violations", lambda _export: [])
+        monkeypatch.setattr(dialog, "_publish_thumbnail", lambda _export: b"")
+        monkeypatch.setattr(dialog, "_confirm_publish", lambda *_a: True)
+        monkeypatch.setattr(
+            dialog, "_reserve", lambda exporter, *_a, **_k: reserved.append(exporter)
+        )
+        dialog._publish_staging = tmp_path
+        try:
+            dialog._on_remote_state(self._state("taken_down"))
+            dialog._confirm_and_reserve(FakeExport(), "desk_x", None, {"files": []})
+            assert load_hosted_map_id(project) == self.MAP_ID
+        finally:
+            dialog.close()
+        assert len(reserved) == 1
+        assert reserved[0].map_id is None
 
     def test_a_failure_the_server_did_not_decide_is_still_a_failure(
         self, qgis_app, project, make_memory_layer, monkeypatch
