@@ -144,6 +144,7 @@ from ..hosting.map_state import (
     ACTION_HOST_AS_NEW,
     PRESENCE_UNCHECKED,
     RemoteMapState,
+    expiry_sentence,
     host_action,
     host_button_label,
     host_button_tooltip,
@@ -3756,6 +3757,10 @@ class MainDialog(QDialog):
             who_can_open = "Anyone with this link can open it."
         else:
             who_can_open = "Once it is back online, anyone with this link can open it."
+        # A free map's end date, which a republish does not move: the one thing
+        # about this map that will change without anybody touching it.
+        expiry = expiry_sentence(state)
+        expiry_paragraph = f"\n\n{expiry}" if expiry else ""
         box = QMessageBox(self)
         if link_saved:
             box.setIcon(
@@ -3765,7 +3770,7 @@ class MainDialog(QDialog):
             box.setText(headline)
             box.setInformativeText(
                 f"{url}\n\n{who_can_open} Pressing Republish "
-                "updates the map at the same address."
+                "updates the map at the same address." + expiry_paragraph
             )
         else:
             # The publish happened either way - this is a warning about what
@@ -3780,7 +3785,7 @@ class MainDialog(QDialog):
                 f"{url}\n\n{who_can_open} But this project has "
                 "no file yet, so nothing on disk remembers this address. Save it now: "
                 "closing it unsaved means the next Host starts a SEPARATE map instead "
-                "of updating this one."
+                "of updating this one." + expiry_paragraph
             )
         copy = box.addButton("Copy link", QMessageBox.ButtonRole.ActionRole)
         open_it = box.addButton("Open in browser", QMessageBox.ButtonRole.ActionRole)

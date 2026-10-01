@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -86,6 +87,8 @@ from nika_onlymap_exporter.hosting.map_state import (
     PRESENCE_TAKEN_DOWN,
     PRESENCE_UNCHECKED,
     RemoteMapState,
+    expiry_sentence,
+    format_day,
     host_action,
     host_button_label,
     host_button_tooltip,
@@ -324,6 +327,69 @@ class TestPublishedHeadline:
     def test_an_unknown_state_claims_only_the_publish(self, presence) -> None:
         assert published_headline(state(presence)) == "Your map has been published."
         assert is_visible_to_visitors(state(presence))
+
+
+EXPIRES = "2026-10-08T12:00:00.000Z"
+
+
+@pytest.fixture
+def utc_clock(monkeypatch):
+    """Days are shown on the local calendar; pin it so the date is the date."""
+    import time
+
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+@pytest.mark.usefixtures("utc_clock")
+class TestFreeExpiry:
+    """The free plan's 7 days, which `parse_map_state` used to drop."""
+
+    def test_the_end_date_is_read(self) -> None:
+        response = map_reply("live", expiresAt=EXPIRES)
+        parsed = parse_map_state(MAP_ID, response.status, response.body)
+        assert parsed.expires_at == datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
+
+    @pytest.mark.parametrize("value", [None, "", "next week", 7, True])
+    def test_no_or_unreadable_date_is_no_end_date(self, value) -> None:
+        response = map_reply("live", expiresAt=value)
+        assert parse_map_state(MAP_ID, 200, response.body).expires_at is None
+
+    def test_the_day_is_spelled_out(self) -> None:
+        assert format_day(datetime(2026, 10, 8, 12, tzinfo=timezone.utc)) == (
+            "8 October 2026"
+        )
+
+    def test_a_live_map_with_an_end_date_says_so(self) -> None:
+        response = map_reply("live", expiresAt=EXPIRES)
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        expected = (
+            "This map stays online until 8 October 2026; republishing does not "
+            "extend it."
+        )
+        assert expiry_sentence(parsed) == expected
+        assert expected in host_button_tooltip(MAP_ID, parsed)
+
+    def test_a_paused_map_is_not_said_to_stay_online(self) -> None:
+        response = map_reply("paused", expiresAt=EXPIRES)
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        assert "8 October 2026" in host_button_tooltip(MAP_ID, parsed)
+        assert "stays online" not in expiry_sentence(parsed)
+
+    def test_an_expired_map_is_not_promised_a_past_date(self) -> None:
+        response = map_reply("expired", expiresAt="2026-09-20T12:00:00.000Z")
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        assert expiry_sentence(parsed) == ""
+        assert "20 September" not in host_button_tooltip(MAP_ID, parsed)
+
+    def test_a_map_with_no_end_date_says_nothing_about_one(self) -> None:
+        response = map_reply("live")
+        parsed = parse_map_state(MAP_ID, 200, response.body)
+        assert expiry_sentence(parsed) == ""
+        assert "republishing does not extend" not in host_button_tooltip(MAP_ID, parsed)
 
 
 # ---------------------------------------------------------------------------

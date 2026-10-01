@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal
 
 # Where the map stands, as far as this plugin can tell.
@@ -122,6 +123,9 @@ class RemoteMapState:
     has_password: bool = False
     #: The permanent address, when the server named one.
     public_url: str = ""
+    #: When the map goes offline by itself (the free plan's 7 days), or None
+    #: for a map with no end date. A republish never moves it.
+    expires_at: datetime | None = None
 
     @property
     def is_answer(self) -> bool:
@@ -187,6 +191,7 @@ def parse_map_state(map_id: str, status: int, body: bytes) -> RemoteMapState:
             ),
             has_password=raw.get("hasPassword") is True,
             public_url=_permanent_address(raw),
+            expires_at=_timestamp(raw.get("expiresAt")),
         )
 
     code = _error_code(payload)
@@ -215,6 +220,72 @@ def _permanent_address(raw: dict[str, object]) -> str:
             url = entry.get("url")
             return url if isinstance(url, str) else ""
     return ""
+
+
+def _timestamp(value: object) -> datetime | None:
+    """An ISO 8601 instant from the server, or None for anything else.
+
+    The server writes `Date.toISOString()` - `2026-10-08T09:30:00.000Z` - and
+    `fromisoformat` before Python 3.11 does not read the `Z`. A value with no
+    zone is taken as UTC, which is what the server's clock is.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+_MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def format_day(moment: datetime) -> str:
+    """A date as people say it - `8 October 2026` - on this computer's calendar.
+
+    Spelled out rather than numeric, because `08/10/2026` is a different day
+    on either side of the Atlantic. English month names regardless of the
+    system locale: every other word in the dialog is English.
+    """
+    local = moment.astimezone()
+    return f"{local.day} {_MONTHS[local.month - 1]} {local.year}"
+
+
+def expiry_sentence(state: RemoteMapState) -> str:
+    """When this map goes offline by itself, for a map that still has a day to go.
+
+    Empty for a map with no end date, and for one that is already offline: an
+    expired map's date is in the past, and the tooltip already says how such a
+    map comes back.
+    """
+    if state.expires_at is None or state.presence not in (
+        PRESENCE_LIVE,
+        PRESENCE_PAUSED,
+    ):
+        return ""
+    day = format_day(state.expires_at)
+    if state.presence == PRESENCE_PAUSED:
+        # "Stays online" would be wrong twice over for a map nobody can see.
+        return (
+            f"This map's hosting ends on {day}, paused or not; republishing "
+            "does not extend it."
+        )
+    return f"This map stays online until {day}; republishing does not extend it."
 
 
 def host_action(stored_map_id: str, state: RemoteMapState) -> HostAction:
@@ -251,20 +322,27 @@ def host_button_tooltip(stored_map_id: str, state: RemoteMapState) -> str:
             + " Pressing this publishes the project as a new map with a new address."
             + common
         )
+    # Facts about this map that a press changes or does not change, said after
+    # what the press does; empty for a map they do not apply to.
+    notes = "".join(f" {note}" for note in (expiry_sentence(state),) if note)
     if presence == PRESENCE_PAUSED:
         return (
             "Update this project's hosted map. It is paused: republishing updates "
-            "it, and it stays paused until it is resumed from the dashboard." + common
+            "it, and it stays paused until it is resumed from the dashboard."
+            + notes
+            + common
         )
     if presence in (PRESENCE_EXPIRED, PRESENCE_STOPPED):
         return (
             "Update this project's hosted map. It is not currently online; "
             "republishing brings it back, except for a free map whose 7 days "
-            "are over, which needs enterprise hosting." + common
+            "are over, which needs enterprise hosting." + notes + common
         )
     if presence == PRESENCE_LIVE:
         return (
-            "Update this project's hosted map at the address it already has." + common
+            "Update this project's hosted map at the address it already has."
+            + notes
+            + common
         )
     if presence == PRESENCE_SIGNED_OUT:
         return (

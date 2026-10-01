@@ -1824,6 +1824,27 @@ class TestHostButtonFollowsTheServer:
             dialog.close()
         assert shown["text"].startswith("Your map is online.")
         assert "Anyone with this link can open it." in shown["info"]
+        assert "republishing does not extend it" not in shown["info"]
+
+    def test_a_free_maps_end_date_is_shown_after_publishing(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        from datetime import datetime, timezone
+
+        # Midday, so the day is the same on every test machine's calendar.
+        expires = datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
+        dialog = self._dialog(project, make_memory_layer)
+        self._run_jobs_inline(monkeypatch, dialog)
+        try:
+            shown = self._publish_and_capture(
+                monkeypatch, dialog, self._state("live", expires_at=expires)
+            )
+            tooltip = dialog.host_button.toolTip()
+        finally:
+            dialog.close()
+        assert "stays online until" in shown["info"]
+        assert "October 2026; republishing does not extend it." in shown["info"]
+        assert "republishing does not extend it" in tooltip
 
     def test_cancel_after_the_upload_does_not_claim_nothing_was_written(
         self, qgis_app, project, make_memory_layer
