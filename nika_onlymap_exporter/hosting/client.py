@@ -116,6 +116,17 @@ UPLOAD_TIMEOUT_SECONDS = 300
 # progress bar that will never move.
 UPLOAD_ATTEMPTS = 3
 
+# Storage's answer when the file is already there. Every presigned PUT is signed
+# with `If-None-Match: *`, so R2 refuses to overwrite an existing object with
+# 412, and the local dev stack's upload route says the same thing as a 409 with
+# this code. Neither is a failure: the store is content addressed, so an object
+# under that name already holds exactly these bytes - and `complete` reads it
+# back and checks its digest before anything goes live, however it got there.
+# The case that matters is a PUT that landed but whose reply was lost: the retry
+# meets the object the first attempt wrote.
+UPLOAD_ALREADY_STORED_STATUS = 412
+UPLOAD_ALREADY_STORED_CODE = "already_stored"
+
 # Verification is digest work over bytes the server already has, so it is fast
 # for a small map and not instant for a large one. Two seconds is short enough
 # that a quick release feels immediate and long enough that a slow one is not
@@ -948,6 +959,21 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
     )
 
 
+def _already_stored(response: HttpResponse) -> bool:
+    """Whether an upload was refused only because the bytes are already there.
+
+    See `UPLOAD_ALREADY_STORED_STATUS`. The 409 is matched by its code, because
+    the dev stack's upload route also answers 409 for a release that has stopped
+    accepting uploads, and that one is a real refusal.
+    """
+    if response.status == UPLOAD_ALREADY_STORED_STATUS:
+        return True
+    if response.status != 409:
+        return False
+    code = _text(error_envelope(_refusal_payload(response)), "code")
+    return code == UPLOAD_ALREADY_STORED_CODE
+
+
 def _is_release_conflict(response: HttpResponse) -> bool:
     """Whether this 409 is the stale-client conflict rather than some other one.
 
@@ -1188,7 +1214,9 @@ class HostingClient:
             headers["Authorization"] = f"Bearer {self.token}"
         headers.update(dict(target.headers))
         last = ""
+        attempts = 0
         for _attempt in range(UPLOAD_ATTEMPTS):
+            attempts += 1
             try:
                 response = self._transport(
                     HttpRequest(
@@ -1203,7 +1231,7 @@ class HostingClient:
                 last = str(exc)
                 continue
 
-            if 200 <= response.status < 300:
+            if 200 <= response.status < 300 or _already_stored(response):
                 return
 
             detail = server_message(response)
@@ -1215,9 +1243,10 @@ class HostingClient:
             if response.status < 500 and response.status != 429:
                 break
 
+        tries = "1 attempt" if attempts == 1 else f"{attempts} attempts"
         raise HostingError(
-            f"Uploading {target.sha256[:12]} failed after {UPLOAD_ATTEMPTS} "
-            f"attempts.\n\n{last}\n\nNothing was published; the map you have on "
+            f"Uploading {target.sha256[:12]} failed after {tries}."
+            f"\n\n{last}\n\nNothing was published; the map you have on "
             "disk is unchanged. Check your connection and try again."
         )
 

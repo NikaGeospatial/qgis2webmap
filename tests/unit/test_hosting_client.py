@@ -947,6 +947,36 @@ class TestUpload:
             api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
         assert len(transport.requests) == 3
 
+    def test_a_lost_reply_then_already_stored_is_a_success(self) -> None:
+        """The first PUT landed but its answer never arrived; the retry meets it."""
+        api, transport = client(
+            HostingError("connection reset"), HttpResponse(412, b"")
+        )
+        api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
+        assert len(transport.requests) == 2
+
+    def test_the_dev_stacks_already_stored_is_a_success(self) -> None:
+        body = json.dumps(
+            {"error": {"code": "already_stored", "message": "stored"}}
+        ).encode("utf-8")
+        api, transport = client(HttpResponse(409, body))
+        api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
+        assert len(transport.requests) == 1
+
+    def test_another_409_is_still_a_failure(self) -> None:
+        body = json.dumps(
+            {"error": {"code": "release_not_draft", "message": "closed"}}
+        ).encode("utf-8")
+        api, _transport = client(HttpResponse(409, body))
+        with pytest.raises(HostingError, match="closed"):
+            api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
+
+    def test_the_error_counts_the_attempts_actually_made(self) -> None:
+        api, _transport = client(HttpResponse(500, b"boom"), HttpResponse(400, b"bad"))
+        with pytest.raises(HostingError) as caught:
+            api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), b"x")
+        assert "after 2 attempts" in str(caught.value)
+
     def test_a_rejected_signature_is_not_retried(self) -> None:
         """Re-PUTting tens of megabytes into a certain 403 helps nobody."""
         api, transport = client(HttpResponse(403, b"expired"))
