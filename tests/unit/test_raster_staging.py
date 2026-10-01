@@ -732,3 +732,15 @@ class TestStyleBaking:
         spec = result.project.layers[0].raster
         assert spec is not None
         assert spec.style_qml == QML
+
+
+class TestPreviewMode:
+    """A raster map is previewed as a folder; everything else as one file."""
+
+    def test_a_raster_map_previews_as_a_folder(self) -> None:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.ui.preview import preview_mode
+
+        raster = project_with(vector_layer(), raster_layer(Path("/nowhere/a.tif")))
+        assert preview_mode(raster) is OutputMode.FOLDER
+        assert preview_mode(project_with(vector_layer())) is OutputMode.STANDALONE_HTML

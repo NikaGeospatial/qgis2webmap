@@ -31,7 +31,7 @@ import re
 import shutil
 import tempfile
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from html import escape as escape_html
 from pathlib import Path
@@ -201,6 +201,7 @@ from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
 from .live_server import PreviewServer
 from .preview import (
     preview_directory,
+    preview_mode,
     prune_stale_previews,
     remove_preview,
     write_preview,
@@ -238,6 +239,11 @@ FIELD_NAME_COLUMN_WIDTH = 160
 # short JSON string, so the cost is noise; the interval only bounds how long a
 # change waits before the debounce even starts.
 LIVE_POLL_MS = 300
+
+# How long the live preview keeps serving with no browser tab watching it. A
+# closed tab is noticed at its next heartbeat, so this is on top of that; long
+# enough that reloading the tab never trips it.
+LIVE_IDLE_STOP_SECONDS = 30.0
 
 # How often the Fidelity tab and strip check whether the report on screen still
 # describes the current settings.
@@ -879,6 +885,9 @@ class MainDialog(QDialog):
         self._map_watch.changed.connect(self._on_remote_state)
         self.project.readProject.connect(self._on_project_switched)
         self.project.cleared.connect(self._on_project_switched)
+        # Settings go into the project as QGIS writes it, so a save made with
+        # the dialog still open keeps the choices made since it opened.
+        self.project.writeProject.connect(self._on_project_writing)
 
         # `finished` covers every way the dialog can close, including the Close
         # button. `closeEvent` alone does not: on Qt5, `QDialog::done()` hides
@@ -2760,8 +2769,20 @@ class MainDialog(QDialog):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_export_path)))
 
     def _poll_for_changes(self) -> None:
-        """Restart the debounce whenever any setting differs from last build."""
+        """Restart the debounce whenever any setting differs from last build.
+
+        Stops the preview once no tab has watched it for a while: rebuilding a
+        map nobody is looking at costs CPU on every change, and the server
+        would otherwise live as long as the dialog.
+        """
         if self._shut_down or self._server is None:
+            return
+        if self._server.idle_seconds() > LIVE_IDLE_STOP_SECONDS:
+            self._stop_live_preview()
+            self.status_label.setText(
+                "Live preview stopped because its browser tab was closed. "
+                "Press Preview to open it again."
+            )
             return
         current = self.state.snapshot()
         if current == self._last_snapshot:
@@ -2937,7 +2958,13 @@ class MainDialog(QDialog):
         """
         signature = self.state.data_snapshot()
         if self._cached_export is not None and self._cached_signature == signature:
-            then(self._cached_export, self._cached_report)
+            # The read is reused, but the settings it carries are the ones it
+            # was taken with: a colour or control changed since would never
+            # reach the page. Today's settings replace them.
+            current = replace(
+                self._cached_export, settings=self.state.to_export_settings()
+            )
+            then(current, self._cached_report)
             return True
 
         # Read on the GUI thread, where the canvas lives, and hand the plain
@@ -3016,7 +3043,8 @@ class MainDialog(QDialog):
             return
 
         identity = self._project_identity()
-        live = self.live_check.isChecked()
+        # A raster map is previewed as a folder, which only works served.
+        live = self.live_check.isChecked() or preview_mode(export) is OutputMode.FOLDER
         writer = self._writer()
 
         def work(progress: Progress):
@@ -4254,6 +4282,19 @@ class MainDialog(QDialog):
             shutil.rmtree(staging, ignore_errors=True)
 
     # ---- Lifecycle ------------------------------------------------------
+
+    def _on_project_writing(self, _document: object) -> None:
+        """Put the current settings into the project QGIS is saving."""
+        if self._shut_down:
+            return
+        try:
+            save_state(self.project, self.state)
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Could not save export settings:\n{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Info,
+            )
 
     def _shutdown(self) -> None:
         """Persist settings and drop every signal connection.
