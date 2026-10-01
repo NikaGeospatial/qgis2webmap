@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -106,6 +107,10 @@ class PreviewServer:
         self._clients: list[queue.Queue[str]] = []
         self._lock = threading.Lock()
         self._stopping = False
+        # When the last open tab went away, on `time.monotonic`'s clock; None
+        # while one is connected. A tab that closes is noticed at its next
+        # heartbeat, when writing to it fails.
+        self._idle_since: float | None = time.monotonic()
 
     @property
     def stopping(self) -> bool:
@@ -166,16 +171,27 @@ class PreviewServer:
     def register(self, inbox: queue.Queue[str]) -> None:
         with self._lock:
             self._clients.append(inbox)
+            self._idle_since = None
 
     def unregister(self, inbox: queue.Queue[str]) -> None:
         with self._lock:
             if inbox in self._clients:
                 self._clients.remove(inbox)
+            if not self._clients and self._idle_since is None:
+                self._idle_since = time.monotonic()
 
     @property
     def client_count(self) -> int:
         with self._lock:
             return len(self._clients)
+
+    def idle_seconds(self, now: float | None = None) -> float:
+        """How long no tab has been watching, or 0 while one is."""
+        with self._lock:
+            since = self._idle_since
+        if since is None:
+            return 0.0
+        return max(0.0, (time.monotonic() if now is None else now) - since)
 
     def notify_reload(self) -> None:
         """Tell every connected page to reload itself."""

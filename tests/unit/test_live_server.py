@@ -199,3 +199,30 @@ class TestLifecycle:
         server = PreviewServer(tmp_path)
         with pytest.raises(RuntimeError):
             _ = server.port
+
+
+class TestIdle:
+    """How long no tab has been watching - what lets the dialog stop serving."""
+
+    def test_idle_from_the_start_until_a_tab_connects(self, tmp_path) -> None:
+        import queue
+
+        server = PreviewServer(tmp_path)
+        assert server.idle_seconds() >= 0.0
+        inbox: queue.Queue[str] = queue.Queue()
+        server.register(inbox)
+        assert server.idle_seconds() == 0.0
+
+    def test_the_clock_starts_when_the_last_tab_leaves(self, tmp_path) -> None:
+        import queue
+        import time
+
+        server = PreviewServer(tmp_path)
+        first: queue.Queue[str] = queue.Queue()
+        second: queue.Queue[str] = queue.Queue()
+        server.register(first)
+        server.register(second)
+        server.unregister(first)
+        assert server.idle_seconds() == 0.0
+        server.unregister(second)
+        assert server.idle_seconds(time.monotonic() + 30) >= 29.0
