@@ -204,7 +204,7 @@ from .preview import (
 )
 from .research_session import ResearchSession, facts_for
 from .runtime_setup import ensure_runtime
-from .whats_new_dialog import PayloadDialog, WhatsNewDialog
+from .whats_new_dialog import PayloadDialog, ResearchChoiceDialog, WhatsNewDialog
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
@@ -2214,20 +2214,23 @@ class MainDialog(QDialog):
         dialog = WhatsNewDialog(
             PLUGIN_VERSION,
             read_whats_new(),
-            ask=ask,
-            choice_line=research_text.choice_line(
-                service.consent, not service.can_ask()
-            ),
-            payload=self._research_payload,
+            choice_line=""
+            if ask
+            else research_text.choice_line(service.consent, not service.can_ask()),
             parent=self,
         )
         dialog.exec()
         service.mark_whats_new_seen(PLUGIN_VERSION)
-        if ask and dialog.choice is not None:
-            service.choose(dialog.choice)
+        if not ask:
+            return
+        question = ResearchChoiceDialog(self._research_payload, self)
+        question.exec()
+        if question.choice is not None:
+            service.choose(question.choice)
 
     def _run_first_open(self) -> None:
-        """About you, then the runtime, then What's new: once per plugin version.
+        """About you, the runtime, What's new, then the research question: once per
+        plugin version.
 
         The order is the spec's. About you comes first so the answers exist
         before the one question that decides whether they are ever sent; the

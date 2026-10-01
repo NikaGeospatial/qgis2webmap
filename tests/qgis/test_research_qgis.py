@@ -359,11 +359,9 @@ class TestDialogs:
         dialog.deleteLater()
 
     def test_share_and_dont_share_have_equal_weight(self, qgis_app) -> None:
-        from nika_onlymap_exporter.ui.whats_new_dialog import WhatsNewDialog
+        from nika_onlymap_exporter.ui.whats_new_dialog import ResearchChoiceDialog
 
-        dialog = WhatsNewDialog(
-            "0.1.5", ("new", "fixed"), ask=True, choice_line="", payload=lambda: ""
-        )
+        dialog = ResearchChoiceDialog(lambda: "")
         for button in (dialog.share_button, dialog.dont_share_button):
             assert not button.isDefault()
             assert not button.autoDefault()
@@ -376,22 +374,24 @@ class TestDialogs:
         dialog.deleteLater()
 
     def test_share_click(self, qgis_app) -> None:
-        from nika_onlymap_exporter.ui.whats_new_dialog import WhatsNewDialog
+        from nika_onlymap_exporter.ui.whats_new_dialog import ResearchChoiceDialog
 
-        dialog = WhatsNewDialog(
-            "0.1.5", ("", ""), ask=True, choice_line="", payload=lambda: ""
-        )
+        dialog = ResearchChoiceDialog(lambda: "")
         dialog.share_button.click()
         assert dialog.choice is True
         dialog.deleteLater()
 
-    def test_no_question_once_chosen(self, qgis_app) -> None:
+    def test_whats_new_never_asks_and_scrolls_as_one(self, qgis_app) -> None:
+        """The changelog is one view; the question lives in its own window."""
+        from qgis.PyQt.QtWidgets import QTextBrowser
+
         from nika_onlymap_exporter.ui.whats_new_dialog import WhatsNewDialog
 
-        dialog = WhatsNewDialog(
-            "0.1.5", ("a", "b"), ask=False, choice_line="Off.", payload=lambda: ""
-        )
+        dialog = WhatsNewDialog("0.1.5", ("- new", "- fixed"), choice_line="Off.")
         assert not hasattr(dialog, "share_button")
+        assert len(dialog.findChildren(QTextBrowser)) == 1
+        text = dialog.notes.toPlainText()
+        assert text.index("new") < text.index("fixed")
         dialog.deleteLater()
 
 
@@ -422,11 +422,16 @@ class TestFirstOpen:
 
         def whats_new_exec(self):
             shown.append("whats_new")
+            return QDialog.DialogCode.Accepted
+
+        def question_exec(self):
+            shown.append("question")
             self.choice = True
             return QDialog.DialogCode.Accepted
 
         monkeypatch.setattr(main_dialog.AboutYouDialog, "exec", about_exec)
         monkeypatch.setattr(main_dialog.WhatsNewDialog, "exec", whats_new_exec)
+        monkeypatch.setattr(main_dialog.ResearchChoiceDialog, "exec", question_exec)
         monkeypatch.setattr(
             main_dialog, "discover_runtime_dir", lambda: None, raising=True
         )
@@ -443,7 +448,7 @@ class TestFirstOpen:
         dialog._research._poster = lambda url, body, done: sent.append(url)
 
         dialog._run_first_open()
-        assert shown == ["about", "runtime", "whats_new"]
+        assert shown == ["about", "runtime", "whats_new", "question"]
         service = dialog._research.service()
         assert service.consent == consent.SHARE
         assert service.state.profile_answered
@@ -499,13 +504,18 @@ class TestFirstOpen:
             "exec",
             lambda self: shown.append("whats_new") or QDialog.DialogCode.Rejected,
         )
+        monkeypatch.setattr(
+            main_dialog.ResearchChoiceDialog,
+            "exec",
+            lambda self: shown.append("question") or QDialog.DialogCode.Rejected,
+        )
         monkeypatch.setattr(main_dialog, "discover_runtime_dir", lambda: Path("/x"))
         monkeypatch.setattr(
             main_dialog, "ensure_runtime", lambda parent=None: shown.append("runtime")
         )
         dialog = self._dialog(project, make_memory_layer)
         dialog._run_first_open()
-        assert shown == ["about", "whats_new"]
+        assert shown == ["about", "whats_new", "question"]
         # Closed without choosing: research stays off.
         assert dialog._research.service().consent == "unset"
         dialog.close()
