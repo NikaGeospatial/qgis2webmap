@@ -869,6 +869,70 @@ class TestDialogConstruction:
         dialog.close()
 
 
+class TestHelpLabels:
+    """A hint sits directly under its control, as tall as its text.
+
+    In a form row a wrapped label took the height of a four-line guess and
+    centred one line in it, which left a blank gap above and below every hint
+    on the Map and Appearance tabs.
+    """
+
+    def _form(self, qgis_app, indent: int = 0):
+        from qgis.PyQt.QtWidgets import QCheckBox, QFormLayout, QWidget
+
+        from nika_onlymap_exporter.ui.main_dialog import _help_label
+
+        page = QWidget()
+        form = QFormLayout(page)
+        check = QCheckBox("Map title", page)
+        form.addRow(check)
+        hint = _help_label("A sentence that fits on one line.", page, indent)
+        form.addRow("", hint)
+        page.resize(1100, 400)
+        page.show()
+        qgis_app.processEvents()
+        return page, check, hint
+
+    def test_a_one_line_hint_is_one_line_tall(self, qgis_app) -> None:
+        page, _check, hint = self._form(qgis_app)
+        line = hint.fontMetrics().lineSpacing()
+        assert hint.height() < 2 * line
+        page.close()
+
+    def test_the_text_starts_at_the_top_of_the_hint(self, qgis_app) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        page, _check, hint = self._form(qgis_app)
+        assert hint.alignment() & Qt.AlignmentFlag.AlignTop
+        page.close()
+
+    def test_an_indent_moves_the_text_right_but_not_down(self, qgis_app) -> None:
+        """`QLabel.setIndent` also indents from the top when top-aligned."""
+        page, _check, hint = self._form(qgis_app, indent=20)
+        margins = hint.contentsMargins()
+        assert margins.left() == 20
+        assert margins.top() == 0
+        assert hint.indent() <= 0
+        page.close()
+
+    def test_an_empty_basemap_warning_takes_no_row(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        dialog = MainDialog(FakeIface(), None)
+        assert dialog.basemap_warning.isHidden()
+        dialog.basemap_combo.setCurrentIndex(1)
+        assert not dialog.basemap_warning.isHidden()
+        assert dialog.basemap_warning.text()
+        dialog.close()
+
+
 class TestHelpTab:
     """Help must show the same guides the website serves."""
 

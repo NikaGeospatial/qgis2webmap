@@ -39,11 +39,12 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import QEvent, QSettings, Qt, QTimer, QUrl
+from qgis.PyQt.QtCore import QEvent, QSettings, QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
     QPalette,
+    QResizeEvent,
     QTextDocument,
 )
 from qgis.PyQt.QtWidgets import (
@@ -63,6 +64,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QStyle,
     QTabWidget,
     QTextBrowser,
     QTreeWidget,
@@ -541,17 +543,80 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
     box.exec()
 
 
-def _help_label(text: str, parent: QWidget) -> QLabel:
+# PyQt ships no stubs, so QLabel is `Any` to mypy; the ignore is that boundary.
+class _WrappedLabel(QLabel):  # type: ignore[misc, unused-ignore]
+    """A word-wrapped label that asks for the height its text really needs.
+
+    A wrapped QLabel sizes itself for a narrow guess at its width - four lines
+    for a sentence that fits on one - and QFormLayout gives a field exactly that
+    height, centring the text in it. That was the blank gap above and below
+    every hint on the Map and Appearance tabs. Answering from the width the
+    label actually has, and asking again when it changes, makes the row as tall
+    as the wrapped text and no taller.
+    """
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt override
+        hint = super().sizeHint()
+        if self.width() > 0:
+            return QSize(hint.width(), self.heightForWidth(self.width()))
+        return hint
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        if event.size().width() != event.oldSize().width():
+            self.updateGeometry()
+
+
+# A little more room below a hint than above it, so it reads as belonging to
+# the control over it rather than to the one that follows.
+HELP_BOTTOM_MARGIN = 3
+
+
+def _checkbox_text_indent(widget: QWidget) -> int:
+    """How far a checkbox's text sits from its left edge, in pixels.
+
+    A hint under a checkbox lines up with the words it explains rather than
+    with the box, so it reads as part of that option and not the next one.
+    """
+    style = widget.style()
+    return int(
+        style.pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+        + style.pixelMetric(QStyle.PixelMetric.PM_CheckBoxLabelSpacing)
+    )
+
+
+def _set_row_visible(field: QWidget, visible: bool) -> None:
+    """Show or hide a whole QFormLayout row, its empty label included."""
+    parent = field.parentWidget()
+    form = parent.layout() if parent is not None else None
+    if isinstance(form, QFormLayout) and hasattr(form, "setRowVisible"):
+        form.setRowVisible(field, visible)
+        return
+    # Qt before 6.4 has no `setRowVisible`: hide the row's widgets instead.
+    field.setVisible(visible)
+    label = form.labelForField(field) if isinstance(form, QFormLayout) else None
+    if label is not None:
+        label.setVisible(visible)
+
+
+def _help_label(text: str, parent: QWidget, indent: int = 0) -> QLabel:
     """A quiet line of guidance under a control.
 
     Several settings explained themselves only in a tooltip, which is invisible
     unless you already suspect there is something to read - and the setting most
     in need of explaining, coordinate precision, is the one that throws data
     away. Colour comes from the palette so it stays legible in a dark theme.
+
+    `indent` lines the hint up under a checkbox's text; see
+    `_checkbox_text_indent`.
     """
-    label = QLabel(text, parent)
+    label = _WrappedLabel(text, parent)
     label.setWordWrap(True)
     label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+    label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+    # A margin, not `setIndent`: QLabel applies its indent to every edge the
+    # text is aligned to, so a top-aligned label grew the same gap above it.
+    label.setContentsMargins(indent, 0, 0, HELP_BOTTOM_MARGIN)
     return label
 
 
@@ -974,7 +1039,7 @@ class MainDialog(QDialog):
 
         # Warning rather than help: this is the only setting that changes what
         # the *recipient's* machine does, and it cannot be undone after sending.
-        self.basemap_warning = QLabel("", basemap_box)
+        self.basemap_warning = _WrappedLabel("", basemap_box)
         self.basemap_warning.setWordWrap(True)
         basemap_form.addRow("", self.basemap_warning)
         self._update_basemap_warning()
@@ -990,7 +1055,7 @@ class MainDialog(QDialog):
         self.terrain_combo.currentIndexChanged.connect(self._on_terrain_changed)
         basemap_form.addRow("Ground surface", self.terrain_combo)
 
-        self.terrain_warning = QLabel("", basemap_box)
+        self.terrain_warning = _WrappedLabel("", basemap_box)
         self.terrain_warning.setWordWrap(True)
         basemap_form.addRow("", self.terrain_warning)
         self._update_terrain_warning()
@@ -1031,6 +1096,7 @@ class MainDialog(QDialog):
                 "plan's 25,000-feature limit. The Fidelity tab reports how many "
                 "features each layer loses.",
                 data_box,
+                _checkbox_text_indent(self.clip_check),
             ),
         )
 
@@ -1165,6 +1231,8 @@ class MainDialog(QDialog):
         the recipient rather than on the person choosing it.
         """
         note = basemap_note(self.state.basemap)
+        # An empty row still costs a row's spacing, so it goes until needed.
+        _set_row_visible(self.basemap_warning, note is not None)
         if note is None:
             self.basemap_warning.setText("")
             self.basemap_warning.setStyleSheet("")
@@ -1185,6 +1253,7 @@ class MainDialog(QDialog):
     def _update_terrain_warning(self) -> None:
         """The same warning shape as the basemap, for the same reason."""
         note = terrain_note(self.state.terrain, basemap=self.state.basemap)
+        _set_row_visible(self.terrain_warning, note is not None)
         if note is None:
             self.terrain_warning.setText("")
             self.terrain_warning.setStyleSheet("")
@@ -1730,12 +1799,12 @@ class MainDialog(QDialog):
         self.title_check.toggled.connect(self._on_title_toggled)
         form.addRow(self.title_check)
         form.addRow(
-            "",
             _help_label(
                 "Draws the map name over the map. The legend drops its own "
                 "heading while this is on, so the title is not shown twice.",
                 box,
-            ),
+                _checkbox_text_indent(self.title_check),
+            )
         )
 
         self.abstract_check = QCheckBox("Project description", box)
@@ -1743,12 +1812,12 @@ class MainDialog(QDialog):
         self.abstract_check.toggled.connect(self._on_abstract_toggled)
         form.addRow(self.abstract_check)
         form.addRow(
-            "",
             _help_label(
                 "The abstract from Project Properties > Metadata. Nothing "
                 "appears if the project has none.",
                 box,
-            ),
+                _checkbox_text_indent(self.abstract_check),
+            )
         )
 
         self.corner_combo = QComboBox(box)
@@ -1833,6 +1902,7 @@ class MainDialog(QDialog):
             _help_label(
                 "Hover replaces click rather than adding to it.",
                 box,
+                _checkbox_text_indent(self.hover_check),
             )
         )
 
