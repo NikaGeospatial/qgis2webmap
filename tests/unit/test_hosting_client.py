@@ -1179,6 +1179,24 @@ class TestAwaitRelease:
             # These name the file involved, which only the server knows.
             assert "data/points.geojson" in message
 
+    def test_an_abandoned_upload_ends_the_wait_at_once(self) -> None:
+        """`expired` is final; it used to be polled until the 5-minute timeout."""
+        api, transport = client(
+            ok(
+                {
+                    "state": "expired",
+                    "error": "The upload was never completed.",
+                    "errorCode": "upload_incomplete",
+                }
+            )
+        )
+
+        with pytest.raises(ReleaseFailedError) as caught:
+            api.await_release("rel_1")
+
+        assert caught.value.retry is True
+        assert len(transport.requests) == 1
+
     def test_a_plan_code_carries_the_servers_own_remedy(self) -> None:
         reason = "Your plan hosts 3 maps at a time. Take one down from the dashboard."
         api, _transport = client(

@@ -1535,9 +1535,12 @@ class HostingClient:
                     public_url=status.public_url,
                     release_n=status.release_n,
                 )
-            if status.state == STATE_FAILED:
-                # The server's sentence is kept where it names the file or
-                # limit; the code decides what the user is told to do.
+            if status.state != STATE_VERIFYING:
+                # `failed`, or any other ending - an upload the server gave up
+                # on is `expired` - will never go live, so waiting out the
+                # timeout would only delay the same answer. The server's
+                # sentence is kept where it names the file or limit; the code
+                # decides what the user is told to do.
                 raise release_failure(status.error_code, status.error)
             if time.monotonic() >= deadline:
                 raise HostingError(
