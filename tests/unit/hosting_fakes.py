@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 from nika_onlymap_exporter.hosting.client import HttpRequest, HttpResponse
@@ -29,8 +30,16 @@ class FakeTransport:
     def __init__(self, *responses) -> None:
         self.responses = list(responses)
         self.requests: list[HttpRequest] = []
+        # The URLs whose body arrived as an open file rather than as bytes.
+        # Such a body is read here, as a real transport would send it, and the
+        # request is recorded with those bytes so tests can still compare it.
+        self.streamed: list[str] = []
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
+        body = request.body
+        if body is not None and not isinstance(body, bytes):
+            self.streamed.append(request.url)
+            request = dataclasses.replace(request, body=body.read())
         self.requests.append(request)
         if not self.responses:
             raise AssertionError(f"unexpected request to {request.url}")

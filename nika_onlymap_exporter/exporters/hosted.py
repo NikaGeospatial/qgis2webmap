@@ -43,6 +43,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 from collections.abc import Callable
@@ -232,6 +233,11 @@ class HostedExporter:
         bytes that goes online is then a directory somebody can look at, and
         what is published is decided by what was copied rather than by trusting
         what the writer happened to leave behind.
+
+        Every file but the page is staged as a hard link where the disk allows
+        one, so a 4 GB raster does not take another 4 GB to stage and minutes to
+        copy. The page is always a real copy: it is the one file edited here,
+        and editing a link would edit the writer's own output with it.
         """
         destination.mkdir(parents=True, exist_ok=True)
         source_dir = result.entry_path.parent
@@ -255,7 +261,9 @@ class HostedExporter:
                 )
             target = destination / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
+            _stage_file(
+                source, target, linkable=entry["path"] != self.manifest["entry"]
+            )
             staged.append((entry, target))
 
         entry_name = self.manifest["entry"]
@@ -295,16 +303,30 @@ class HostedExporter:
         # server verifies the stored object against, so measuring before the
         # strip would declare bytes that no longer exist: R2 refuses the PUT on
         # a length mismatch, and the release fails verification on a digest one.
+        #
+        # Every file but the page keeps the digest the writer's manifest gave
+        # it, when the size on disk still agrees: `build_publish_manifest`
+        # hashed those exact bytes moments ago, and hashing a large raster a
+        # second time costs minutes and proves nothing new. Should the bytes
+        # somehow differ anyway, the server's own read-back at `complete` fails
+        # the release by name rather than serving them. The page is always
+        # re-hashed, because it is the one file this method may have changed.
         measured: list[ManifestFile] = []
         files: list[tuple[str, Path]] = []
         for entry, path in staged:
+            size = path.stat().st_size
+            reusable = (
+                entry["path"] != entry_name
+                and entry["size"] == size
+                and _is_sha256(entry["sha256"])
+            )
             measured.append(
                 ManifestFile(
                     path=entry["path"],
                     role=entry["role"],
                     mediaType=entry["mediaType"] or DEFAULT_MEDIA_TYPE,
-                    size=path.stat().st_size,
-                    sha256=_sha256(path),
+                    size=size,
+                    sha256=entry["sha256"] if reusable else _sha256(path),
                 )
             )
             files.append((entry["path"], path))
@@ -409,9 +431,10 @@ class HostedExporter:
             percent = int(100 * index / (total + 1))
             self._report(percent, f"Uploading {name} ({index + 1} of {total})...")
             self.stage = STAGE_UPLOADING
+            # The path, not its bytes: the client streams it from disk.
             self.client.upload(
                 target,
-                path.read_bytes(),
+                path,
                 content_type=entry["mediaType"] or DEFAULT_MEDIA_TYPE,
             )
 
@@ -480,6 +503,31 @@ def _safe_relative_path(path: str) -> PurePosixPath:
             "published. Nothing was uploaded."
         )
     return candidate
+
+
+def _stage_file(source: Path, target: Path, *, linkable: bool) -> None:
+    """Put one file into the staging directory, as a link where that is safe.
+
+    A link fails across disks, on file systems without them and where a stale
+    file is already in the way; each of those falls back to the copy this used
+    to make every time.
+    """
+    if linkable:
+        if target.exists():
+            target.unlink()
+        try:
+            os.link(source, target)
+            return
+        except OSError:
+            pass
+    shutil.copy2(source, target)
+
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _is_sha256(value: str) -> bool:
+    return _SHA256_PATTERN.match(value) is not None
 
 
 def _sha256(path: Path) -> str:

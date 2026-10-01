@@ -35,6 +35,7 @@ from nika_onlymap_exporter.packaging.publish_manifest import (
     basemap_origins,
     build_publish_manifest,
     derive_external_origins,
+    describe_file,
     media_type_for,
     role_for,
     runtime_script_sources,
@@ -74,6 +75,26 @@ def build_relief_page(tmp_path):
         page.replace("<om-map", '<om-map terrain="terrarium"', 1), encoding="utf-8"
     )
     return tmp_path
+
+
+class TestDescribeFile:
+    def test_a_file_larger_than_one_block_hashes_as_a_whole_read_did(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Hashed in blocks, with the digest reading it whole always gave."""
+        data = bytes(range(256)) * 9000  # past the 1 MiB block size
+        path = tmp_path / "big.tif"
+        path.write_bytes(data)
+        monkeypatch.setattr(
+            type(path),
+            "read_bytes",
+            lambda _self: pytest.fail("the whole file was read into memory"),
+        )
+
+        entry = describe_file(path)
+
+        assert entry["sha256"] == hashlib.sha256(data).hexdigest()
+        assert entry["size"] == len(data)
 
 
 class TestRoles:

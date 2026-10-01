@@ -24,7 +24,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import hashlib
 import html
 import re
 from collections.abc import Iterable, Sequence
@@ -43,7 +42,7 @@ from ..hosting.manifest import (
 )
 from ..hosting.thumbnail import THUMBNAIL_FILENAME
 from .cdn_runtime import pinned_runtime
-from .hosted_assets import FLAT_NAME_PATTERN
+from .hosted_assets import FLAT_NAME_PATTERN, sha256_of_file
 
 # Both are re-exported from the wire contract rather than restated, so the
 # emitter and the client cannot drift apart on the two values the server keys
@@ -335,14 +334,16 @@ def media_type_for(name: str) -> str:
 
 
 def describe_file(path: Path) -> ManifestFile:
-    """One file's entry, hashed from the bytes on disk."""
-    data = path.read_bytes()
+    """One file's entry, hashed from the bytes on disk.
+
+    Hashed in blocks, never read whole: a hosted raster can be gigabytes.
+    """
     return ManifestFile(
         path=path.name,
         role=role_for(path.name),
         mediaType=media_type_for(path.name),
-        size=len(data),
-        sha256=hashlib.sha256(data).hexdigest(),
+        size=path.stat().st_size,
+        sha256=sha256_of_file(path),
     )
 
 

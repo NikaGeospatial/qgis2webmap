@@ -73,7 +73,8 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Literal
+from pathlib import Path
+from typing import BinaryIO, Literal
 
 from ._build_target import API_BASE as BUILD_API_BASE
 from .manifest import PublishManifest
@@ -322,11 +323,18 @@ class PublishConflictError(HostingError):
 
 @dataclass(frozen=True)
 class HttpRequest:
-    """One outbound request, as data, so a fake transport can assert on it."""
+    """One outbound request, as data, so a fake transport can assert on it.
+
+    `body` is a file opened for reading when a map file is uploaded, never that
+    file's bytes: a raster can be gigabytes, and reading it into memory - once
+    here and again as the transport's own copy - is what used to cost twice its
+    size in RAM. A transport sends a stream as it reads it, and must not assume
+    it can be read twice: `HostingClient.upload` opens a fresh one per attempt.
+    """
 
     method: str
     url: str
-    body: bytes | None = None
+    body: bytes | BinaryIO | None = None
     headers: Mapping[str, str] = field(default_factory=dict)
     timeout: int = REQUEST_TIMEOUT_SECONDS
 
@@ -959,6 +967,23 @@ def _raise_for_status(response: HttpResponse, what: str) -> None:
     )
 
 
+def _payload_size(payload: bytes | Path) -> int:
+    """How many bytes an upload will send, without reading a file to find out."""
+    if isinstance(payload, bytes):
+        return len(payload)
+    try:
+        return payload.stat().st_size
+    except OSError as exc:
+        raise HostingError(_unreadable_message(payload)) from exc
+
+
+def _unreadable_message(path: Path) -> str:
+    return (
+        f"Could not read {path.name} to upload it. Nothing was published; "
+        "export the map again and retry."
+    )
+
+
 def _already_stored(response: HttpResponse) -> bool:
     """Whether an upload was refused only because the bytes are already there.
 
@@ -1176,10 +1201,14 @@ class HostingClient:
     def upload(
         self,
         target: UploadTarget,
-        payload: bytes,
+        payload: bytes | Path,
         content_type: str = "application/octet-stream",
     ) -> None:
         """PUT one file's bytes to its presigned URL.
+
+        A `Path` is streamed from disk and opened afresh for each attempt, so a
+        file of any size costs a read buffer rather than its own size in
+        memory. `bytes` is for what is already in memory anyway.
 
         No Authorization header, by design - see the module docstring. Retried
         because the common failures here are transient and the alternative is
@@ -1208,7 +1237,7 @@ class HostingClient:
         # explanation. Ours fills in only where the server named nothing.
         headers: dict[str, str] = {
             "Content-Type": content_type,
-            "Content-Length": str(len(payload)),
+            "Content-Length": str(_payload_size(payload)),
         }
         if target.is_authenticated:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -1218,15 +1247,7 @@ class HostingClient:
         for _attempt in range(UPLOAD_ATTEMPTS):
             attempts += 1
             try:
-                response = self._transport(
-                    HttpRequest(
-                        method="PUT",
-                        url=target.url,
-                        body=payload,
-                        headers=headers,
-                        timeout=UPLOAD_TIMEOUT_SECONDS,
-                    )
-                )
+                response = self._put(target.url, payload, headers)
             except HostingError as exc:
                 last = str(exc)
                 continue
@@ -1249,6 +1270,35 @@ class HostingClient:
             f"\n\n{last}\n\nNothing was published; the map you have on "
             "disk is unchanged. Check your connection and try again."
         )
+
+    def _put(
+        self, url: str, payload: bytes | Path, headers: Mapping[str, str]
+    ) -> HttpResponse:
+        """One upload attempt, with a file opened just for it."""
+        if isinstance(payload, bytes):
+            return self._transport(
+                HttpRequest(
+                    method="PUT",
+                    url=url,
+                    body=payload,
+                    headers=headers,
+                    timeout=UPLOAD_TIMEOUT_SECONDS,
+                )
+            )
+        try:
+            stream = payload.open("rb")
+        except OSError as exc:
+            raise HostingError(_unreadable_message(payload)) from exc
+        with stream:
+            return self._transport(
+                HttpRequest(
+                    method="PUT",
+                    url=url,
+                    body=stream,
+                    headers=headers,
+                    timeout=UPLOAD_TIMEOUT_SECONDS,
+                )
+            )
 
     def complete(self, release_id: str) -> str:
         """Tell the server every promised byte is now in place.

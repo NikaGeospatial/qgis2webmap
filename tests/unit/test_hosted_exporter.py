@@ -763,6 +763,50 @@ class TestDeclaredSizesAndDigestsMatchWhatIsUploaded:
         body = puts(transport)["https://uploads.example/data/points.geojson"].body
         assert hashlib.sha256(body or b"").hexdigest() == data["sha256"]
 
+    def test_map_files_are_streamed_from_disk_not_read_into_memory(
+        self, built, tmp_path
+    ) -> None:
+        """A 4 GB raster read whole used to cost about 8 GB of memory."""
+        transport = full_publish()
+
+        make_exporter(transport).export(built, tmp_path / "upload")
+
+        assert sorted(transport.streamed) == sorted(puts(transport))
+        assert len(transport.streamed) == 2
+
+    def test_a_data_file_keeps_the_digest_the_writer_measured(
+        self, built, tmp_path, monkeypatch
+    ) -> None:
+        """Only the page, which `prepare` may edit, is hashed a second time."""
+        manifest = make_manifest()
+        data = manifest["files"][1]
+        data["size"] = len(POINTS_JSON.encode("utf-8"))
+        data["sha256"] = sha256_of(POINTS_JSON)
+        hashed: list[str] = []
+        real = hosted._sha256
+        monkeypatch.setattr(
+            hosted, "_sha256", lambda path: hashed.append(path.name) or real(path)
+        )
+
+        make_exporter(full_publish(), manifest=manifest).export(
+            built, tmp_path / "upload"
+        )
+
+        assert hashed == ["index.html"]
+
+    def test_a_stale_declared_size_is_measured_again(self, built, tmp_path) -> None:
+        """The fixture's manifest says size 0; the bytes on disk win."""
+        transport = full_publish()
+        make_exporter(transport).export(built, tmp_path / "upload")
+        manifest = json.loads(transport.requests[0].body or b"{}")["manifest"]
+        data = next(i for i in manifest["files"] if i["path"] == "data/points.geojson")
+        assert data["size"] == len(POINTS_JSON.encode("utf-8"))
+
+    def test_staging_never_edits_the_writers_own_page(self, built, tmp_path) -> None:
+        """The page is copied, never linked: stripping the key edits it."""
+        make_exporter(full_publish()).export(built, tmp_path / "upload")
+        assert "om_live_" in built.entry_path.read_text(encoding="utf-8")
+
     def test_the_strip_precedes_the_measurement_in_prepare(self) -> None:
         """Reordering these two lines would break publishing silently."""
         import inspect

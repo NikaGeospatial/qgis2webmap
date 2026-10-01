@@ -903,6 +903,39 @@ class TestUpload:
         assert request.body == b"hello"
         assert "Authorization" not in request.headers
 
+    def test_a_file_is_streamed_rather_than_read_into_memory(self, tmp_path) -> None:
+        path = tmp_path / "ortho.tif"
+        path.write_bytes(b"x" * 4096)
+        seen: list[object] = []
+
+        def transport(request):
+            seen.append(request.body)
+            assert hasattr(request.body, "read")
+            assert request.headers["Content-Length"] == "4096"
+            assert request.body.read() == b"x" * 4096
+            return HttpResponse(200, b"")
+
+        HostingClient("desk", "https://api.example", transport).upload(
+            UploadTarget(PAGE_SHA, "https://uploads/x"), path
+        )
+
+        assert len(seen) == 1
+        assert not isinstance(seen[0], bytes)
+
+    def test_each_retry_sends_the_whole_file_again(self, tmp_path) -> None:
+        """A stream is read once; a retry needs a fresh one, from the start."""
+        path = tmp_path / "data.geojson"
+        path.write_bytes(b"0123456789")
+        api, transport = client(HttpResponse(503, b""), HttpResponse(200, b""))
+
+        api.upload(UploadTarget(PAGE_SHA, "https://uploads/x"), path)
+
+        assert [request.body for request in transport.requests] == [
+            b"0123456789",
+            b"0123456789",
+        ]
+        assert transport.streamed == ["https://uploads/x"] * 2
+
     def test_the_servers_headers_are_sent_verbatim(self) -> None:
         """They are part of what the signature covers; editing them is a 403."""
         api, transport = client(HttpResponse(200, b""))
