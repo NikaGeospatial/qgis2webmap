@@ -18,7 +18,9 @@ END_DATE_TEXT = "31 January 2027"
 
 ABOUT_YOU_INTRO = (
     "A few questions about who your maps are for help us decide what to build "
-    "next. Every question is optional, and the answers stay on this computer."
+    "next. Every question is optional. If you choose Share in the next step, "
+    "your answers are sent to NIKA with each report; if not, they stay on "
+    "this computer."
 )
 
 ABOUT_YOU_NOTHING_SENT = "Nothing is sent unless you choose Share in the next step."
