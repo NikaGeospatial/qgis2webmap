@@ -525,21 +525,6 @@ class OnlyMapWriter:
         )
 
 
-def _network_dependencies(project: ExportProject) -> tuple[str, ...]:
-    """Anything the finished map would fetch when opened.
-
-    Empty is the goal and the default: no basemap, data inlined, telemetry off.
-    A non-empty result contradicts the promise in the README and should be
-    surfaced, not quietly tolerated.
-    """
-    remote: list[str] = []
-    for layer in project.layers:
-        for dependency in layer.dependencies:
-            if dependency.disposition.value == "remote":
-                remote.append(dependency.identifier)
-    return tuple(remote)
-
-
 def _escape_text(value: str) -> str:
     """Escape for HTML text content (the title appears in <title> and a footer)."""
     return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

@@ -780,13 +780,6 @@ class AssetDependency:
     credentials_detected: bool = False
     note: str | None = None
 
-    @property
-    def is_portable(self) -> bool:
-        return self.disposition in (
-            AssetDisposition.EMBEDDABLE,
-            AssetDisposition.COPYABLE,
-        )
-
     def snapshot(self) -> dict[str, Any]:
         return {
             "identifier": self.identifier,
@@ -972,10 +965,6 @@ class ExportSettings:
         return (
             self.quantize_precision is not None or self.simplify_tolerance is not None
         )
-
-    @property
-    def has_widget_colors(self) -> bool:
-        return self.widget_background is not None or self.widget_foreground is not None
 
     def snapshot(self) -> dict[str, Any]:
         return {

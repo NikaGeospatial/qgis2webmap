@@ -54,13 +54,6 @@ def gzip_base64(data: bytes) -> str:
     return base64.b64encode(gzip.compress(data, GZIP_LEVEL, mtime=0)).decode("ascii")
 
 
-def compression_ratio(original: bytes) -> float:
-    """How much smaller the embedded form is, base64 overhead included."""
-    if not original:
-        return 1.0
-    return len(gzip_base64(original)) / len(original)
-
-
 def should_compress_data(total_data_bytes: int) -> bool:
     return total_data_bytes >= DATA_COMPRESSION_THRESHOLD_BYTES
 
