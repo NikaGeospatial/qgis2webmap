@@ -60,3 +60,6 @@ nika_onlymap_exporter/runtime/*.css
 # published site is built by the Pages workflow from the sources, never from a
 # committed copy of this directory.
 /docs/_site/
+
+# Internal working notes, kept off the public repository
+/specs/

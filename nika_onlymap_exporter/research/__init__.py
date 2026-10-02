@@ -1,6 +1,6 @@
 """Opt-in user research: who uses the plugin, and for what.
 
-Specified in `specs/2026-09-30-user-research.md`, whose wire format is a
+Specified in the user-research spec kept with the server, whose wire format is a
 contract shared with the server. Everything in this package is pure Python so
 the rules that decide what may leave the machine can be read and tested without
 a QGIS application; the dialogs and the network live in `ui/`.

@@ -1,7 +1,7 @@
 """Opt-in user research: the rules that decide what may leave the machine.
 
 Everything here is pure Python and runs without QGIS. The wire format is the
-contract in `specs/2026-09-30-user-research.md`, shared with the server.
+user-research contract shared with the server.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
