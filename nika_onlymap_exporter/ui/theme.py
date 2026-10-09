@@ -631,6 +631,49 @@ def stylesheet(p: Palette, object_name: str) -> str:
     right: 10px;
 }}
 
+/* The corner's View | Export | Share: one control, one outline, dividers
+   between, Export filled. No arrows: one press opens View's and Share's menus. */
+{d} QToolButton[role="segment"] {{
+    background: {p.paper};
+    color: {p.ink};
+    border: 1px solid {p.muted};
+    border-radius: 0;
+    padding: 3px 16px;
+    min-height: 18px;
+    font-weight: 600;
+    margin: 0;
+}}
+{d} QToolButton[role="segment"][position="first"] {{
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}}
+{d} QToolButton[role="segment"][position="middle"] {{
+    border-left: none;
+}}
+{d} QToolButton[role="segment"][position="last"] {{
+    border-left: none;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}}
+{d} QToolButton[role="segment"]:hover {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="segment"][accent="true"] {{
+    background: {p.accent};
+    color: {p.on_accent};
+}}
+{d} QToolButton[role="segment"][accent="true"]:hover {{
+    background: {p.accent_hover};
+}}
+{d} QToolButton[role="segment"]:disabled {{
+    background: {p.paper};
+    color: {p.quiet};
+}}
+{d} QToolButton[role="segment"]::menu-indicator {{
+    image: none;
+    width: 0;
+}}
+
 /* Footer chips: outlined, so they read as things to press. */
 {d} QPushButton[role="chip"], {d} QToolButton[role="chip"] {{
     background: transparent;

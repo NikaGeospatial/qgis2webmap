@@ -322,7 +322,7 @@ class TestTabCorner:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            assert labels == ["Preview", "Export", "Share"]
+            assert labels == ["View", "Export", "Share"]
         finally:
             dialog.close()
 
@@ -333,8 +333,12 @@ class TestTabCorner:
         dialog = self._dialog(project, make_memory_layer)
         try:
             actions = dialog.preview_button.menu().actions()
-            assert [a.text() for a in actions] == ["Live preview"]
-            assert actions[0].isCheckable()
+            assert [a.text() for a in actions if a.text()] == [
+                "Preview",
+                "Live preview",
+            ]
+            assert not actions[0].isCheckable()  # Preview: an action
+            assert actions[-1].isCheckable()  # Live preview: a switch
         finally:
             dialog.close()
 
@@ -1838,6 +1842,28 @@ class TestExportIsBack:
         finally:
             dialog.close()
 
+    def test_the_corner_is_one_joined_control_without_arrows(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            buttons = [dialog.preview_button, dialog.export_button, dialog.share_button]
+            assert [b.property("position") for b in buttons] == [
+                "first",
+                "middle",
+                "last",
+            ]
+            assert all(b.property("role") == "segment" for b in buttons)
+            for button in (dialog.preview_button, dialog.share_button):
+                assert (
+                    button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+                )
+            assert "::menu-indicator" in dialog.styleSheet()
+        finally:
+            dialog.close()
+
     def test_export_is_the_filled_button_in_the_corner(
         self, qgis_app, project, make_memory_layer
     ) -> None:
@@ -1847,8 +1873,8 @@ class TestExportIsBack:
         try:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert dialog.export_button.parent() is corner
-            assert dialog.export_button.property("role") == "primary"
-            assert dialog.preview_button.property("role") == "secondary"
+            assert dialog.export_button.property("accent") is True
+            assert dialog.preview_button.property("accent") is False
         finally:
             dialog.close()
 

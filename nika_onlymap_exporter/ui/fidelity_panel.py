@@ -40,11 +40,12 @@ from qgis.PyQt.QtCore import QModelIndex, QRect, QSettings, QSize, Qt, pyqtSigna
 from qgis.PyQt.QtGui import QBrush, QFont, QIcon, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import (
     QAbstractButton,
-    QCheckBox,
+    QAction,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -52,6 +53,7 @@ from qgis.PyQt.QtWidgets import (
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -70,7 +72,7 @@ from ..core.fidelity_summary import (
     Topic,
 )
 from ..core.report_facts import ReportFacts, facts_line, facts_lines
-from .i18n import N_, tr
+from .i18n import N_, plural, tr
 
 # QGIS theme icons, by resource name. Verified present in QGIS 4.2's compiled
 # theme; a name that has gone yields a null icon rather than raising, so a row
@@ -210,8 +212,12 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             self,
         )
         intro.setWordWrap(True)
+        intro.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(intro)
 
+        # One row: what the report says, then the ways to narrow it. The
+        # filters were two rows of checkboxes above the list, which made the
+        # tab feel cramped; they are one menu now, with the same choices.
         top = QHBoxLayout()
         self.headline = QLabel(tr("Not checked yet."), self)
         self.headline.setWordWrap(True)
@@ -222,9 +228,12 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.check_button = QPushButton(tr("Check now"), self)
         self.check_button.clicked.connect(self.check_requested.emit)
         top.addWidget(self.check_button)
+        top.addLayout(self._build_filters())
         layout.addLayout(top)
 
         # The whole map in one line: what the map is, not what changes in it.
+        # Shown on the Whole map row, the way each layer's facts sit on its
+        # own row; kept as a label too, for its tooltip and for tests.
         self.map_facts = QLabel("", self)
         self.map_facts.setWordWrap(True)
         self.map_facts.setForegroundRole(QPalette.ColorRole.PlaceholderText)
@@ -232,7 +241,6 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.map_facts.setVisible(False)
-        layout.addWidget(self.map_facts)
 
         # Said above the rows, not instead of them: the old report is still the
         # best description there is until the new one lands, so it stays
@@ -256,8 +264,6 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         banner.addWidget(self.stale_text, 1)
         self.stale_banner.setVisible(False)
         layout.addWidget(self.stale_banner)
-
-        layout.addLayout(self._build_filters())
 
         splitter = QSplitter(Qt.Orientation.Vertical, self)
         splitter.setChildrenCollapsible(False)
@@ -293,60 +299,65 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
 
         self.show_not_checked()
 
-    def _build_filters(self) -> QVBoxLayout:
-        """Verdict and topic checkboxes and a search box, remembered per machine.
+    def _build_filters(self) -> QHBoxLayout:
+        """A Filter menu - each verdict and topic, ticked or not - and a search.
 
-        Kept is one of the verdicts, off by default so the changes stand out;
-        it replaces the old "Show what is kept" toggle. Hiding a verdict or a
-        topic folds rows away, it never drops them from the report - the
-        headline and the strip go on counting everything.
+        Remembered per machine. Kept is off by default so the changes stand
+        out. Hiding a verdict or a topic folds rows away, it never drops them
+        from the report - the headline and the strip go on counting everything.
+        The menu stays open while boxes are ticked, so several can be changed in
+        one visit.
         """
         settings = QSettings()
-        rows = QVBoxLayout()
-        rows.setSpacing(2)
+        row = QHBoxLayout()
+        self.filter_button = QToolButton(self)
+        self.filter_button.setText(tr("Filter"))
+        self.filter_button.setProperty("role", "chip")
+        self.filter_button.setProperty("hasMenu", True)
+        self.filter_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.filter_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = _StayOpenMenu(self.filter_button)
+        menu.setToolTipsVisible(True)
+        self.filter_button.setMenu(menu)
 
-        verdict_row = QHBoxLayout()
-        verdict_row.addWidget(QLabel(tr("Show:"), self))
-        self.verdict_checks: dict[FidelityStatus, QCheckBox] = {}
+        menu.addSection(tr("Show"))
+        self.verdict_checks: dict[FidelityStatus, QAction] = {}
         for status in FILTER_VERDICTS:
-            check = QCheckBox(VERDICT_LABELS[status], self)
-            check.setChecked(
+            action = menu.addAction(VERDICT_LABELS[status])
+            action.setCheckable(True)
+            action.setChecked(
                 _setting_bool(
                     settings,
                     FILTER_KEY + status.value,
                     status is not FidelityStatus.PRESERVED,
                 )
             )
-            check.setToolTip(tr(VERDICT_TIPS[status]))
-            check.toggled.connect(
+            action.setToolTip(tr(VERDICT_TIPS[status]))
+            action.toggled.connect(
                 lambda on, key=FILTER_KEY + status.value: self._on_filter(key, on)
             )
-            verdict_row.addWidget(check)
-            self.verdict_checks[status] = check
+            self.verdict_checks[status] = action
         # The old name, for the one toggle that existed before the rest.
         self.kept_toggle = self.verdict_checks[FidelityStatus.PRESERVED]
-        verdict_row.addStretch(1)
+
+        menu.addSection(tr("About"))
+        self.topic_checks: dict[Topic, QAction] = {}
+        for topic in Topic:
+            key = FILTER_KEY + "topic-" + topic.name.lower()
+            action = menu.addAction(_button_text(topic.value))
+            action.setCheckable(True)
+            action.setChecked(_setting_bool(settings, key, True))
+            action.toggled.connect(lambda on, key=key: self._on_filter(key, on))
+            self.topic_checks[topic] = action
+        row.addWidget(self.filter_button)
+
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Search the report"))
         self.search.setClearButtonEnabled(True)
         self.search.setMinimumWidth(SEARCH_WIDTH)
         self.search.textChanged.connect(self._rebuild)
-        verdict_row.addWidget(self.search)
-        rows.addLayout(verdict_row)
-
-        topic_row = QHBoxLayout()
-        topic_row.addWidget(QLabel(tr("About:"), self))
-        self.topic_checks: dict[Topic, QCheckBox] = {}
-        for topic in Topic:
-            key = FILTER_KEY + "topic-" + topic.name.lower()
-            check = QCheckBox(_button_text(topic.value), self)
-            check.setChecked(_setting_bool(settings, key, True))
-            check.toggled.connect(lambda on, key=key: self._on_filter(key, on))
-            topic_row.addWidget(check)
-            self.topic_checks[topic] = check
-        topic_row.addStretch(1)
-        rows.addLayout(topic_row)
-        return rows
+        row.addWidget(self.search)
+        return row
 
     def _build_detail_pane(self, parent: QWidget) -> QWidget:
         """The selected row in full, with where its fix lives in this dialog.
@@ -459,7 +470,6 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             tr("Map: {facts}").format(facts=map_line) if map_line else ""
         )
         self.map_facts.setToolTip(facts_lines(self._facts.map))
-        self.map_facts.setVisible(bool(map_line))
         self._update_filter_counts()
         self._rebuild()
 
@@ -515,6 +525,32 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         # Other is a fallback for a subject nobody sorted; a box for nothing
         # only raises the question of what it might be.
         self.topic_checks[Topic.OTHER].setVisible(bool(everything[Topic.OTHER]))
+        self._label_filter_button()
+
+    def _label_filter_button(self) -> None:
+        """Say on the button that something is folded away, and how much."""
+        if self._summary is None:
+            self.filter_button.setText(tr("Filter"))
+            return
+        verdicts = self._summary.verdict_counts()
+        hidden = sum(
+            verdicts[status]
+            for status, action in self.verdict_checks.items()
+            if not action.isChecked()
+        )
+        off_topics = sum(
+            1
+            for action in self.topic_checks.values()
+            if action.isVisible() and not action.isChecked()
+        )
+        if hidden or off_topics:
+            self.filter_button.setText(
+                plural(hidden, "Filter - {n} row hidden", "Filter - {n} rows hidden")
+                if not off_topics
+                else tr("Filter - some rows hidden")
+            )
+        else:
+            self.filter_button.setText(tr("Filter"))
 
     # ---- tree ------------------------------------------------------------
 
@@ -528,7 +564,11 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         quiet = QBrush(self.palette().color(QPalette.ColorRole.PlaceholderText))
 
         for group_index, group in enumerate(summary.groups):
-            facts = self._facts.for_layer(group.layer_id)
+            facts = (
+                self._facts.map
+                if group.is_whole_map
+                else self._facts.for_layer(group.layer_id)
+            )
             group_text = f"{group.title} {facts_line(facts)}"
             if not report_filter.shows_group(group, group_text):
                 continue
@@ -908,3 +948,18 @@ def _tone_of(status: FidelityStatus) -> Tone:
 
 def _empty() -> QPixmap:
     return QPixmap()
+
+
+class _StayOpenMenu(QMenu):  # type: ignore[misc, unused-ignore]
+    """A menu of checkboxes that stays open while they are ticked.
+
+    A plain menu closes on every click, so changing three filters meant
+    opening it three times.
+    """
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 - Qt override
+        action = self.activeAction()
+        if action is not None and action.isEnabled() and action.isCheckable():
+            action.trigger()
+            return
+        super().mouseReleaseEvent(event)

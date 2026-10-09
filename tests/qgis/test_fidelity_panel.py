@@ -560,9 +560,17 @@ class TestFacts:
 
     def test_the_whole_map_is_summed_up(self, dialog, project) -> None:
         self.show_real_read(dialog, project)
-        text = dialog.fidelity_panel.map_facts.text()
-        assert text.startswith("Map: 2 layers · 2 features")
-        assert dialog.fidelity_panel.map_facts.isVisibleTo(dialog.fidelity_panel)
+        panel = dialog.fidelity_panel
+        assert panel.map_facts.text().startswith("Map: 2 layers · 2 features")
+        # On the Whole map row, the way each layer's facts sit on its own row,
+        # rather than a separate line crowding the top of the tab.
+        panel.kept_toggle.setChecked(True)
+        lines = {
+            panel.tree.topLevelItem(i).text(0): panel.tree.topLevelItem(i).text(2)
+            for i in range(panel.tree.topLevelItemCount())
+        }
+        assert lines["Whole map"].startswith("2 layers · 2 features")
+        assert not panel.map_facts.isVisibleTo(panel)
 
     def test_a_layer_can_be_found_by_what_it_is(self, dialog, project) -> None:
         self.show_real_read(dialog, project)
@@ -576,7 +584,7 @@ class TestFacts:
         self.show_real_read(dialog, project)
         dialog._cached_signature = "something else"
         dialog._show_fidelity(mixed_report(project))
-        assert not dialog.fidelity_panel.map_facts.isVisibleTo(dialog.fidelity_panel)
+        assert dialog.fidelity_panel.map_facts.text() == ""
 
 
 def test_a_long_sentence_gets_a_row_tall_enough_to_read(qgis_app) -> None:

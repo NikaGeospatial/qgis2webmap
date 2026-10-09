@@ -7,6 +7,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **View, Export and Share are one joined control** in the top-right corner,
+  with Export filled. View's menu holds **Preview** and **Live preview**;
+  Share's holds everything else. Neither needs an arrow - one press opens it.
+- **The Fidelity tab's filters are one Filter menu** beside the summary rather
+  than two rows of checkboxes, and the whole-map facts sit on the Whole map
+  row, so the list starts higher with nothing taken out.
 - **The Fidelity tab is rebuilt for reading.** Grouped by layer with problems
   first and the whole-map settings on top; every row carries its whole
   sentence, wrapped, instead of being cut at 110 characters; each layer's line

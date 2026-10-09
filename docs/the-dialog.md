@@ -247,12 +247,12 @@ Preview and Export read the project too, and refresh the report as they go.
 
 One line at the top sums it up — `5 layers · 1 needs attention · 10 things
 change`. A layer *needs attention* when something about it is Blocked or Not
-exported. Under it, one line describes the whole map: how many layers and
-features, roughly how much data, the output, the project's CRS, where the map
-opens and its basemap. Below that the report is grouped, problems first:
+exported. Below it the report is grouped, problems first:
 
 - **Whole map** — settings that belong to no one layer: the basemap, relief,
-  where the map opens, its title.
+  where the map opens, its title. Its own line describes the whole map: how
+  many layers and features, roughly how much data, the output, where the map
+  opens and its basemap.
 - **One group per layer**, the layers that lose something before the layers that
   are only changed. A layer that comes through exactly is a single `✓ exact`
   line. Each layer's own line says what it is: its geometry and feature count,
@@ -268,9 +268,10 @@ to. Where the fix is in this dialog, the pane has a button that goes there:
 **Show in Layers** for a layer, **Go to Map tab** for the basemap and the other
 map settings.
 
-Above the list, checkboxes choose what it shows — one per verdict, each with
-how many rows it has, and one per topic: **Symbology**, **Labels**, **Popups &
-fields**, **Data** and **Map settings**. The search box finds rows by any word
+**Filter**, beside the summary, chooses what the list shows — one tick per
+verdict, each with how many rows it has, and one per topic: **Symbology**,
+**Labels**, **Popups & fields**, **Data** and **Map settings**. The menu stays
+open while you tick, and the button says how many rows are folded away. The search box finds rows by any word
 in them, or a layer by its name or by what it is ("polygons", "labels from").
 **Kept** rows are hidden by default so the changes stand out; tick **Kept** to
 bring them back. Your choices are remembered. Filtering only folds rows away:
@@ -353,14 +354,14 @@ you press Preview again.
 If the preview cannot be served — a firewall, a locked-down machine — it falls
 back to a file automatically and tells you so.
 
-### Preview and Share
+### View, Export and Share
 
-Both sit in the **top-right corner of the tab bar**, so they are within reach
-whichever tab you are reading.
+All three sit in the **top-right corner of the tab bar**, joined into one
+control, so they are within reach whichever tab you are reading.
 
-**Preview** builds the map and opens it in your default browser. **Nothing else
-in the plugin ever opens a browser.** The small arrow beside it holds the
-**Live preview** switch described above.
+**View** opens a short menu: **Preview** builds the map and opens it in your
+default browser, and **Live preview** is the switch described above. Apart from
+Share's Open in browser, nothing else in the plugin opens a browser.
 
 **Export** writes the map in the type and place chosen on the Map tab. It is
 the filled button, because it is what the plugin is for.
@@ -386,7 +387,7 @@ always works.
 **Rows that need the map write it first** when it is missing or out of date,
 so Copy file path or Open in browser never point at something stale.
 
-Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
+View's Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent
 refusal:
 

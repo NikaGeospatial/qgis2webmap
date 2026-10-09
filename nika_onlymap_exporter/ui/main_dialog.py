@@ -2200,18 +2200,21 @@ class MainDialog(QDialog):
         corner = QWidget(self)
         layout = QHBoxLayout(corner)
         layout.setContentsMargins(0, 0, 6, 0)
-        layout.setSpacing(6)
+        # One joined control - View | Export | Share - with one outline and
+        # dividers, rather than two outlined buttons around a borderless one.
+        layout.setSpacing(0)
 
+        # "View", not "Preview": pressing it opens a short menu whose first
+        # item is Preview, the way a View menu works in other programs.
         self.preview_button = QToolButton(corner)
-        self.preview_button.setText(tr("Preview"))
-        self.preview_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.MenuButtonPopup
-        )
+        self.preview_button.setText(tr("View"))
+        self.preview_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.preview_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self.preview_button.setProperty("role", "secondary")
-        self.preview_button.clicked.connect(self.on_preview)
+        self.preview_button.setProperty("role", "segment")
+        self.preview_button.setProperty("position", "first")
+        self.preview_button.setProperty("accent", False)
         self.preview_button.setMenu(self._build_preview_menu())
         layout.addWidget(self.preview_button)
 
@@ -2219,8 +2222,9 @@ class MainDialog(QDialog):
         # the type and place chosen on the Map tab.
         self.export_button = QToolButton(corner)
         self.export_button.setText(tr("Export"))
-        self.export_button.setProperty("role", "primary")
-        self.export_button.setProperty("hasMenu", False)
+        self.export_button.setProperty("role", "segment")
+        self.export_button.setProperty("position", "middle")
+        self.export_button.setProperty("accent", True)
         self.export_button.setToolTip(
             tr("Write the map in the type and place chosen on the Map tab")
         )
@@ -2229,7 +2233,9 @@ class MainDialog(QDialog):
 
         self.share_button = QToolButton(corner)
         self.share_button.setText(tr("Share"))
-        self.share_button.setProperty("role", "secondary")
+        self.share_button.setProperty("role", "segment")
+        self.share_button.setProperty("position", "last")
+        self.share_button.setProperty("accent", False)
         # A plain dropdown for now: pressing it opens the menu. It also holds
         # Discord, which needs no map file, so the button is never disabled;
         # the rows that do need one are.
@@ -2252,6 +2258,13 @@ class MainDialog(QDialog):
         """
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
+
+        preview = menu.addAction(tr("Preview"))
+        preview.setToolTip(
+            tr("Build the map and open it in your browser, without writing an export")
+        )
+        preview.triggered.connect(self.on_preview)
+        menu.addSeparator()
 
         self.live_action = QAction(tr("Live preview"), self)
         self.live_action.setCheckable(True)
