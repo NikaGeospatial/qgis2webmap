@@ -509,6 +509,28 @@ def stylesheet(p: Palette, object_name: str) -> str:
     background: {p.field};
 }}
 
+{d} QRadioButton {{
+    spacing: 8px;
+    background: transparent;
+}}
+{d} QRadioButton::indicator {{
+    width: 14px;
+    height: 14px;
+    border: 1px solid {p.muted};
+    border-radius: 8px;
+    background: {p.paper};
+}}
+{d} QRadioButton::indicator:hover {{
+    border-color: {p.ink};
+}}
+/* A thick accent ring reads as the filled dot of a chosen option. */
+{d} QRadioButton::indicator:checked {{
+    border: 5px solid {p.accent};
+    width: 6px;
+    height: 6px;
+    background: {p.paper};
+}}
+
 /* ---- Buttons ------------------------------------------------------- */
 {d} QPushButton {{
     background: {p.field};
@@ -580,6 +602,22 @@ def stylesheet(p: Palette, object_name: str) -> str:
     image: url({p.icon("chevron-on-accent")});
     width: 10px;
     height: 10px;
+}}
+{d} QToolButton[role="secondary"]::menu-button {{
+    border: none;
+    border-left: 1px solid {p.rule};
+    width: 24px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}}
+{d} QToolButton[role="secondary"]::menu-arrow {{
+    image: url({p.icon("chevron")});
+    width: 10px;
+    height: 10px;
+}}
+/* Export has no menu, so no room is kept for one. */
+{d} QToolButton[role="primary"][hasMenu="false"] {{
+    padding: 3px 16px;
 }}
 /* Share opens its menu from anywhere on the button: one chevron, no split. */
 {d} QToolButton[role="secondary"]::menu-indicator {{

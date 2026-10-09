@@ -7,6 +7,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Save to, beside Export as.** The place is chosen once on the Map tab and
+  saved with the project, as the type already was; switching the type keeps the
+  name (`peaks.html` becomes `peaks.zip`). Export is the filled button in the
+  top-right corner.
+- **Light or dark on purpose.** Settings > Appearance > Theme: Follow QGIS,
+  Light or Dark. It applies at once.
+- **Menus and drop-down lists open as part of their control**, flush under it
+  with the same outline, rather than as a separate box.
 - **Sections read as separate cards.** Each sits on a near-white card with a
   hairline border against a slightly darker window, in both light and dark,
   so it is clear where one group of settings ends and the next begins.
@@ -60,44 +68,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   needs an account.
 
 ### Changed
-- **The map is a file you keep, not an export you repeat.** The Map tab's *How
-  to share it* choice — Standalone HTML, Share ZIP, Folder — is gone, and a
-  **Map file** path takes its place. That one `.html` file is the map. A zip or
-  a folder is derived from it at the moment you need one, because which you want
-  depends on who is receiving it, and that is decided afterwards rather than
-  before.
+- **Preview, Export and Share moved to the top-right corner of the tab bar**, so
+  all three are within reach from whichever tab you are reading. The Map tab
+  keeps 0.1.4's *Export as* choice and gains a **Save to** field; Export writes
+  there without a picker.
 
-  The field starts empty and is never guessed at. Earlier versions remembered
-  only the *folder* of the last export, so any reconstructed name would have
-  pointed at a file you never wrote — and with the file being kept current, that
-  would have quietly left a second map beside your real one. Pressing **Choose**
-  offers a name beside your project file.
+- **Share collects what you might do with a finished map**: copy its path, show
+  it in your file manager, open the real file in a browser, or join the hosting
+  waitlist. Every row is disabled until Save to is set, and says so on hover
+  rather than being silently inert.
 
-  A project saved by an older version keeps its stored packaging choice on disk,
-  and this version deliberately ignores it: honouring `outputMode=share_zip`
-  would have made the map file a zip named `.html`.
-
-- **Preview and Share moved to the top-right corner of the tab bar**, so both
-  are within reach from whichever tab you are reading. The row at the foot of
-  the dialog is now chrome only — a link to the Discord channel, and Close.
-
-  **The Export button is gone**, and nothing replaced it. Every Share action
-  writes the map file first when it is missing or out of date, and skips the
-  write when it is neither, so there is no longer a step to remember before
-  sharing.
-
-- **Share collects everything you might do with a finished map**: copy its path,
-  show it in your file manager, open the real file in a browser, make a share
-  ZIP or a folder for a web host, or join the hosting waitlist. Every row is
-  disabled until a map file is set, and says so on hover rather than being
-  silently inert.
-
-- **Live preview now also keeps the map file up to date.** It already meant
-  "keep rebuilding as I work", so it is the switch that decides this too — the
-  plugin never writes to your disk on a schedule you did not ask for. With it
-  off, nothing is written in the background and Share writes on demand. A line
-  under the Map file field always says which of those is happening. Anyone
-  upgrading is told this once, on first open.
+- **Live preview also keeps a Standalone HTML export up to date** at its Save to
+  path. It already meant "keep rebuilding as I work", so it is the switch that
+  decides this too; a zip or a folder is only ever written by Export. A line
+  under Save to always says which is happening.
 
 ### Fixed
 - **Closing the preview tab now stops the preview server.** It used to run until

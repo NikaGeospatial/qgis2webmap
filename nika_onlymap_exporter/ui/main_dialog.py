@@ -46,6 +46,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -60,6 +61,7 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QTabWidget,
     QTextBrowser,
@@ -132,6 +134,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 LOG_TAG = "QGIS2WebMap"
 
+# The Map tab's "Export as" choice, worded as 0.1.4 had it: what each one is
+# for, not what it is called internally.
+MODE_LABELS = {
+    OutputMode.STANDALONE_HTML: N_("Standalone HTML - one file, opens by double-click"),
+    OutputMode.SHARE_ZIP: N_("Share ZIP - a zip to email or upload"),
+    OutputMode.FOLDER: N_("Folder - for publishing to a web server"),
+}
+
 # Worded so the choice is readable without knowing the model: "with data" says
 # what happens, where qgis2web's "visible with data" needs its manual.
 POPUP_MODE_LABELS = {
@@ -177,11 +187,6 @@ LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 # of the project, so it should follow them into the next one.
 LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
 
-# Whether the "the map is now a file you keep" notice has been shown on this
-# machine. Its own key rather than a flag on the preference it explains: turning
-# Live preview off and on again must not bring the notice back.
-UPGRADE_NOTICE_KEY = "qgis2webmap/upgradeNoticeShown"
-
 # Which QGIS theme icon each Share row wears. A table rather than nine literals
 # at the call sites, so a test can check every name against the icons this QGIS
 # build actually has - which is the only part of an icon that can be verified
@@ -193,8 +198,6 @@ SHARE_MENU_ICONS = {
     "publish": "mActionSharingExport.svg",
     "enhance": "mActionShowAllLayers.svg",
     "critique": "mActionShowAllLayers.svg",
-    "zip": "mActionFileSaveAs.svg",
-    "folder": "mIconFolder.svg",
     "cartograph": "mActionSaveAsPDF.svg",
 }
 
@@ -703,52 +706,6 @@ class MainDialog(QDialog):
         self._rebuild_timer.timeout.connect(self._rebuild_live_preview)
 
         self.refresh_layers()
-        # Deferred to the event loop rather than run here. A modal raised inside
-        # `__init__` blocks construction: the caller is still waiting for the
-        # object to exist, the dialog it belongs to has not been shown, and the
-        # notice arrives on top of nothing. `singleShot(0, ...)` puts it after
-        # the dialog is on screen, where it reads as a note about what the user
-        # is looking at.
-        QTimer.singleShot(0, self._explain_the_new_model_once)
-
-    def _explain_the_new_model_once(self) -> None:
-        """Tell an upgrading user that Live preview now writes a file.
-
-        **Why this exists at all.** `LIVE_PREVIEW_KEY` defaults to on and is
-        remembered per machine, so almost everyone upgrading already has it
-        ticked. That same stored `True` quietly acquires a second meaning here -
-        *also keep a file on my disk up to date* - and a setting that changes
-        what it does without being touched is exactly the kind of surprise this
-        dialog is supposed to avoid.
-
-        Shown once per machine and never again, keyed separately from the
-        preference itself so switching Live preview off and on does not bring it
-        back. A fresh install sees nothing: there is no old behaviour to
-        reconcile, and the Map tab already explains itself.
-        """
-        settings = QSettings()
-        if settings.value(UPGRADE_NOTICE_KEY, False, type=bool):
-            return
-        # Nothing to reconcile for someone who has never used the plugin. The
-        # export-directory setting is the marker: it is written after a
-        # successful export and by nothing else.
-        used_before = bool(settings.value(LAST_EXPORT_DIR_KEY, "", type=str))
-        settings.setValue(UPGRADE_NOTICE_KEY, True)
-        if not used_before:
-            return
-
-        QMessageBox.information(
-            self,
-            tr("The map is now a file you keep"),
-            tr(
-                "This version replaces the Export button with a Map file.\n\n"
-                "Set where the map lives on the Map tab, and Share does the rest - "
-                "a ZIP, a folder for a web host, or just opening it in a browser.\n\n"
-                "While Live preview is on, that file is kept up to date as you work. "
-                "Switch Live preview off in the Preview menu if you would rather it "
-                "were written only when you share it."
-            ),
-        )
 
     def _warn_style(self) -> str:
         """Warning text in the theme's warn colour.
@@ -841,12 +798,28 @@ class MainDialog(QDialog):
         # they are sending it to, and they decide that afterwards. The map is
         # now one HTML document, and the zip and folder tiers are produced from
         # the Share menu at the point of sharing.
-        destination_box = QGroupBox(tr("Map file"), page)
+        destination_box = QGroupBox(tr("Export"), page)
         destination_layout = QVBoxLayout(destination_box)
 
+        # Radio buttons, not checkboxes: the three are mutually exclusive, and
+        # the group enforces it. Restored from 0.1.4, where choosing the type
+        # before pressing Export is the whole flow.
+        destination_layout.addWidget(QLabel(tr("Export as"), destination_box))
+        self.mode_group = QButtonGroup(destination_box)
+        self.mode_group.setExclusive(True)
+        self.mode_buttons: dict[OutputMode, QRadioButton] = {}
+        for mode, label in MODE_LABELS.items():
+            button = QRadioButton(tr(label), destination_box)
+            button.setChecked(mode is self.state.output_mode)
+            button.toggled.connect(lambda on, m=mode: on and self._on_mode_selected(m))
+            self.mode_group.addButton(button)
+            destination_layout.addWidget(button)
+            self.mode_buttons[mode] = button
+
+        destination_layout.addWidget(QLabel(tr("Save to"), destination_box))
         path_row = QHBoxLayout()
         self.path_edit = QLineEdit(destination_box)
-        self.path_edit.setPlaceholderText(tr("Choose where the map file is written"))
+        self.path_edit.setPlaceholderText(tr("Choose where the export is written"))
         self.path_edit.textChanged.connect(self._on_path_edited)
         path_row.addWidget(self.path_edit, 1)
 
@@ -1213,26 +1186,57 @@ class MainDialog(QDialog):
             return remembered
         return str(Path.home())
 
+    def _on_mode_selected(self, mode: OutputMode) -> None:
+        """Switch the export type, carrying the chosen name across.
+
+        `peaks.html` becomes `peaks.zip` or a `peaks` folder rather than being
+        cleared, so changing the type never costs the user the place they
+        picked.
+        """
+        self.state.output_mode = mode
+        typed = self.path_edit.text().strip()
+        if typed:
+            path = Path(typed)
+            stem = (
+                path.with_suffix("")
+                if path.suffix.lower() in (".html", ".zip")
+                else path
+            )
+            self.path_edit.setText(str(stem) + self._mode_suffix(mode))
+        self._update_size_note()
+        self._update_share_enabled()
+
     def _on_choose_map_file(self) -> None:
         """Pick where the map file is written.
 
         Always `.html`: the map file is the document, and the other packaging
         tiers are produced from the Share menu into destinations of their own.
         """
+        mode = self.state.output_mode
+        suffix = self._mode_suffix(mode)
         current = self.path_edit.text().strip()
         start = current or str(
-            Path(self._picker_start_directory()) / f"{self._default_basename()}.html"
+            Path(self._picker_start_directory()) / f"{self._default_basename()}{suffix}"
         )
-        chosen, _ = QFileDialog.getSaveFileName(
-            self, tr("Map file"), start, tr("Web page (*.html)")
+        if mode is OutputMode.FOLDER:
+            chosen = QFileDialog.getExistingDirectory(
+                self, tr("Export folder for hosting"), str(Path(start).parent)
+            )
+            if chosen:
+                self.path_edit.setText(chosen)
+            return
+        file_filter = (
+            tr("Web page (*.html)")
+            if mode is OutputMode.STANDALONE_HTML
+            else tr("Zip archive (*.zip)")
         )
+        chosen, _ = QFileDialog.getSaveFileName(self, tr("Save to"), start, file_filter)
         if not chosen:
             return
-        # A user who types a name without an extension means the one format
-        # this field accepts, rather than a file the browser will not open.
+        # A name typed without an extension means the type chosen above.
         path = Path(chosen)
-        if path.suffix.lower() != ".html":
-            path = path.with_suffix(".html")
+        if path.suffix.lower() != suffix:
+            path = path.with_suffix(suffix)
         self.path_edit.setText(str(path))
 
     def _update_save_status(self) -> None:
@@ -1248,9 +1252,7 @@ class MainDialog(QDialog):
 
         destination = self._map_file()
         if destination is None:
-            self.save_status.setText(
-                tr("Choose a map file to enable Preview and Share.")
-            )
+            self.save_status.setText(tr("Choose where to save, then press Export."))
             return
 
         if not destination.exists():
@@ -1325,7 +1327,16 @@ class MainDialog(QDialog):
         if not hasattr(self, "share_button"):
             return
         ready = self._map_file() is not None and getattr(self, "_export_ready", True)
+        single_file = self.state.output_mode is OutputMode.STANDALONE_HTML
         for key, action in getattr(self, "share_actions", {}).items():
+            # Only a single HTML file opens from disk: a zip is unopened, and a
+            # folder's runtime will not load from a `file://` page.
+            if key == "open" and not single_file:
+                action.setEnabled(False)
+                action.setToolTip(
+                    tr("Only a Standalone HTML export opens straight in a browser")
+                )
+                continue
             action.setEnabled(ready)
             # Restored from the originals rather than remembered off the widget:
             # overwriting the tooltip on the way down would lose the real one
@@ -1334,7 +1345,7 @@ class MainDialog(QDialog):
             action.setToolTip(
                 self._share_tooltips[key]
                 if ready
-                else tr("Choose a map file on the Map tab first")
+                else tr("Choose where to save on the Map tab first")
             )
 
     def _remember_destination(self, path: Path) -> None:
@@ -1361,6 +1372,12 @@ class MainDialog(QDialog):
         """
         if not hasattr(self, "size_note"):
             return
+        # The single-file rule says nothing about a zip or a folder.
+        if self.state.output_mode is not OutputMode.STANDALONE_HTML:
+            self.size_note.setText("")
+            self.size_note.setVisible(False)
+            return
+        self.size_note.setVisible(True)
 
         limit_mb = SINGLE_FILE_WARN_BYTES // 1024 // 1024
         base = tr(
@@ -2088,10 +2105,22 @@ class MainDialog(QDialog):
         self.preview_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self.preview_button.setProperty("role", "primary")
+        self.preview_button.setProperty("role", "secondary")
         self.preview_button.clicked.connect(self.on_preview)
         self.preview_button.setMenu(self._build_preview_menu())
         layout.addWidget(self.preview_button)
+
+        # The plugin's main act, so the one filled button: writes the export in
+        # the type and place chosen on the Map tab.
+        self.export_button = QToolButton(corner)
+        self.export_button.setText(tr("Export"))
+        self.export_button.setProperty("role", "primary")
+        self.export_button.setProperty("hasMenu", False)
+        self.export_button.setToolTip(
+            tr("Write the map in the type and place chosen on the Map tab")
+        )
+        self.export_button.clicked.connect(self.on_export)
+        layout.addWidget(self.export_button)
 
         self.share_button = QToolButton(corner)
         self.share_button.setText(tr("Share"))
@@ -2217,19 +2246,6 @@ class MainDialog(QDialog):
             lambda: self._not_wired_yet(tr("Ask NIKA for a critique")),
         )
 
-        menu.addSection(tr("Export"))
-        add(
-            "zip",
-            tr("Export share ZIP..."),
-            tr("A zip to email or upload - passes mail filters that quarantine .html"),
-            self.on_export_share_zip,
-        )
-        add(
-            "folder",
-            tr("Export folder for hosting..."),
-            tr("A folder to copy to any static web host"),
-            self.on_export_folder,
-        )
         add(
             "cartograph",
             tr("Make a cartograph with QGIS2Carto..."),
@@ -2510,6 +2526,7 @@ class MainDialog(QDialog):
             self.progress_bar.setFormat(label)
             self.status_label.setText(label)
             self.preview_button.setEnabled(False)
+            self.export_button.setEnabled(False)
             for action in getattr(self, "share_actions", {}).values():
                 action.setEnabled(False)
         else:
@@ -2673,6 +2690,16 @@ class MainDialog(QDialog):
         self._last_snapshot = current
         self._rebuild_timer.start()
 
+    def _autosave_target(self) -> Path | None:
+        """The file Live preview keeps current: only ever a single HTML file.
+
+        A zip or a folder is a package to hand over, rebuilt when Export is
+        pressed; rewriting one on every edit would be slow and surprising.
+        """
+        if self.state.output_mode is not OutputMode.STANDALONE_HTML:
+            return None
+        return self._map_file()
+
     def _autosave_map_file(self, export, writer, map_file: Path | None):
         """Write the user's map file from a read already in hand.
 
@@ -2729,7 +2756,7 @@ class MainDialog(QDialog):
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
             # Read on this thread too: the worker must not touch a widget.
-            map_file = self._map_file()
+            map_file = self._autosave_target()
             signature = self.state.snapshot()
 
             def work(progress: Progress):
@@ -2821,6 +2848,8 @@ class MainDialog(QDialog):
 
     def _set_ready(self, ready: bool, message: str) -> None:
         self.preview_button.setEnabled(ready)
+        if hasattr(self, "export_button"):
+            self.export_button.setEnabled(ready)
         # Share's rows need a destination as well as something to put in it,
         # so their own rule is applied on top rather than instead.
         self._export_ready = ready
@@ -2981,7 +3010,7 @@ class MainDialog(QDialog):
         # is written here rather than waiting for the first edit. Without this
         # the status line claimed the file was being saved while no file existed
         # - true only until something changed, which is not what "saved" means.
-        map_file = self._map_file() if live else None
+        map_file = self._autosave_target() if live else None
         signature = self.state.snapshot()
 
         def work(progress: Progress):
@@ -3184,25 +3213,9 @@ class MainDialog(QDialog):
             tr("Hosting is not live yet - the waitlist form opened in your browser.")
         )
 
-    def on_export_share_zip(self) -> None:
-        self._export_tier(OutputMode.SHARE_ZIP)
-
-    def on_export_folder(self) -> None:
-        self._export_tier(OutputMode.FOLDER)
-
-    def _export_tier(self, mode: OutputMode) -> None:
-        """Produce a zip or a folder, alongside the map file rather than as it.
-
-        These are copies taken at a moment, for somebody else. The map file is
-        untouched: a user who emails a zip still has their document where they
-        left it, which is exactly what 0.1.x could not say.
-        """
-        self._pending_mode = mode
-        self._ensure_export(self._export_with, tr("Reading the project..."))
-
     def on_export(self) -> None:
-        """Write the map file itself."""
-        self._pending_mode = OutputMode.STANDALONE_HTML
+        """Write the export in the type and place chosen on the Map tab."""
+        self._pending_mode = self.state.output_mode
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
         self._ensure_export(self._export_with, tr("Reading the project..."))
 
@@ -3348,66 +3361,35 @@ class MainDialog(QDialog):
         return box.clickedButton() is write_anyway
 
     def _resolve_destination(self, mode: OutputMode) -> Path | None:
-        """Where to write, for whichever tier is being produced.
+        """Where to write: the Save to field, whichever type is chosen.
 
-        Two different questions wearing one name, and they are answered
-        differently on purpose:
-
-        * **The map file** is the document. Its location was answered once, in
-          the field on the Map tab, and rewriting it is the whole point - so
-          there is no picker and no overwrite prompt. Asking "replace the
-          existing file?" about the file the user is editing would be absurd.
-        * **A zip or a folder** is a copy taken at a moment, for somebody else.
-          Each one is a fresh decision, so each opens a picker, seeded beside
-          the map file so the two land together by default.
+        No picker at Export time. The type and the place were both chosen on
+        the Map tab, so pressing Export does exactly what it says.
         """
-        if mode is OutputMode.STANDALONE_HTML:
-            destination = self._map_file()
-            if destination is None:
-                self._warn_no_map_file()
-                return None
-            if not destination.parent.exists():
-                QMessageBox.warning(
-                    self,
-                    tr("Folder not found"),
-                    tr(
-                        "There is no folder at {path}.\n\nPick "
-                        "somewhere that exists, or create it first."
-                    ).format(path=destination.parent),
-                )
-                return None
-            return destination
-
-        suffix = self._mode_suffix(mode)
-        base = self._map_file()
-        start_dir = (
-            str(base.parent) if base is not None else self._picker_start_directory()
-        )
-        stem = base.stem if base is not None else self._default_basename()
-
-        if mode is OutputMode.FOLDER:
-            chosen = QFileDialog.getExistingDirectory(
-                self, tr("Export folder for hosting"), start_dir
+        destination = self._map_file()
+        if destination is None:
+            self._warn_no_map_file()
+            return None
+        if not destination.parent.exists():
+            QMessageBox.warning(
+                self,
+                tr("Folder not found"),
+                tr(
+                    "There is no folder at {path}.\n\nPick "
+                    "somewhere that exists, or create it first."
+                ).format(path=destination.parent),
             )
-            return Path(chosen) if chosen else None
-
-        # The picker asks about overwriting on every platform, so this does not.
-        chosen, _ = QFileDialog.getSaveFileName(
-            self,
-            tr("Export share ZIP"),
-            str(Path(start_dir) / f"{stem}{suffix}"),
-            tr("Zip archive (*.zip)"),
-        )
-        return Path(chosen) if chosen else None
+            return None
+        return destination
 
     def _warn_no_map_file(self) -> None:
         """The one thing standing between the user and every Share action."""
         QMessageBox.information(
             self,
-            tr("Choose a map file first"),
+            tr("Choose where to save first"),
             tr(
-                "This map has no file yet.\n\nSet one in the Map file field on the "
-                "Map tab, and Preview and Share will do the rest."
+                "This map has nowhere to be saved yet.\n\nFill in Save to on the "
+                "Map tab, then try again."
             ),
         )
 

@@ -95,17 +95,22 @@ class TestSettingsPersistence:
         state = load_state(project)
         assert state.layers == {}
 
-    def test_a_0_1_x_packaging_choice_is_ignored_rather_than_honoured(
-        self, project
-    ) -> None:
-        """`outputMode` describes a control the dialog no longer has.
+    def test_the_export_type_survives_a_round_trip(self, project) -> None:
+        """`outputMode` is the Export as choice again, kept with the project.
 
-        A project whose last 0.1.x export was a zip carries
-        `outputMode=share_zip`. Honouring it would quietly make the map file a
-        zip named `.html` - so it is read by nobody. The packaging choice now
-        happens per share, at the moment of sharing.
+        Under the same key 0.1.x wrote, so a project whose last export was a
+        zip reopens on Share ZIP rather than losing the choice.
         """
         project.writeEntry("qgis2webmap", "outputMode", OutputMode.SHARE_ZIP.value)
+        assert load_state(project).output_mode is OutputMode.SHARE_ZIP
+
+        state = load_state(project)
+        state.output_mode = OutputMode.FOLDER
+        save_state(project, state)
+        assert load_state(project).output_mode is OutputMode.FOLDER
+
+    def test_an_unknown_export_type_falls_back_to_a_single_file(self, project) -> None:
+        project.writeEntry("qgis2webmap", "outputMode", "carrier_pigeon")
         assert load_state(project).output_mode is OutputMode.STANDALONE_HTML
 
     def test_the_map_file_survives_a_round_trip_unchanged(self, project) -> None:
@@ -306,7 +311,7 @@ class TestTabCorner:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_the_corner_holds_preview_and_share(
+    def test_the_corner_holds_preview_export_and_share(
         self, qgis_app, project, make_memory_layer
     ) -> None:
         from qgis.PyQt.QtCore import Qt
@@ -317,7 +322,7 @@ class TestTabCorner:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            assert labels == ["Preview", "Share"]
+            assert labels == ["Preview", "Export", "Share"]
         finally:
             dialog.close()
 
@@ -351,7 +356,7 @@ class TestTabCorner:
             assert dialog.share_actions, "the menu should have actions to disable"
             for action in dialog.share_actions.values():
                 assert action.isEnabled() is False
-                assert "map file" in action.toolTip()
+                assert "Map tab" in action.toolTip()
 
             dialog.path_edit.setText(str(tmp_path / "peaks.html"))
             for action in dialog.share_actions.values():
@@ -465,93 +470,6 @@ class TestShareMenuIcons:
                 "every Share action should name an icon, and no icon should "
                 "name an action that does not exist"
             )
-        finally:
-            dialog.close()
-
-
-class TestTheUpgradeNoticeIsShownOnce:
-    """Live preview quietly gains a second meaning; that has to be said once.
-
-    The setting defaults to on and is remembered per machine, so an upgrading
-    user's stored `True` starts writing a file without them touching anything.
-    """
-
-    def _dialog(self, project, make_memory_layer):
-        from nika_onlymap_exporter.ui.main_dialog import MainDialog
-
-        class FakeIface:
-            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
-                return None
-
-        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
-        return MainDialog(FakeIface(), None)
-
-    def _clean_settings(self, monkeypatch, used_before: bool):
-        from nika_onlymap_exporter.ui import main_dialog as module
-
-        store: dict[str, object] = {}
-        if used_before:
-            store[module.LAST_EXPORT_DIR_KEY] = "/tmp"
-
-        class FakeSettings:
-            def value(self, key, default=None, type=None):
-                return store.get(key, default)
-
-            def setValue(self, key, value):  # noqa: N802
-                store[key] = value
-
-        monkeypatch.setattr(module, "QSettings", lambda *a, **k: FakeSettings())
-        return store
-
-    def test_an_upgrading_user_is_told_once(
-        self, qgis_app, project, make_memory_layer, monkeypatch
-    ) -> None:
-        from nika_onlymap_exporter.ui import main_dialog as module
-
-        store = self._clean_settings(monkeypatch, used_before=True)
-        shown: list[str] = []
-        monkeypatch.setattr(
-            module.QMessageBox,
-            "information",
-            lambda _p, title, _t: shown.append(title),
-        )
-
-        first = self._dialog(project, make_memory_layer)
-        try:
-            # Constructing the dialog must not raise it: a modal inside
-            # `__init__` blocks the caller before the window even exists.
-            assert not shown, "the notice is deferred to the event loop"
-            first._explain_the_new_model_once()
-            assert shown, "an upgrading user should be told what changed"
-            assert store[module.UPGRADE_NOTICE_KEY] is True
-        finally:
-            first.close()
-
-        second = self._dialog(project, make_memory_layer)
-        try:
-            second._explain_the_new_model_once()
-            assert len(shown) == 1, "the notice must not return on every open"
-        finally:
-            second.close()
-
-    def test_a_fresh_install_is_told_nothing(
-        self, qgis_app, project, make_memory_layer, monkeypatch
-    ) -> None:
-        """There is no old behaviour to reconcile, so there is nothing to say."""
-        from nika_onlymap_exporter.ui import main_dialog as module
-
-        self._clean_settings(monkeypatch, used_before=False)
-        shown: list[str] = []
-        monkeypatch.setattr(
-            module.QMessageBox,
-            "information",
-            lambda _p, title, _t: shown.append(title),
-        )
-
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            dialog._explain_the_new_model_once()
-            assert not shown
         finally:
             dialog.close()
 
@@ -916,53 +834,6 @@ class TestShareBuildsWhatItNeeds:
 
             assert not used
             assert told, "a refusal has to say what to do about it"
-        finally:
-            dialog.close()
-
-
-class TestPackagingIsNotAskedForUpFront:
-    """The map is a document, not a choice of three artifacts.
-
-    0.1.x asked "how to share it" - standalone HTML, zip or folder - before the
-    user had shared anything. That is the wrong moment: the answer depends on
-    who is receiving it, which they work out afterwards. The map file is always
-    standalone HTML, and the other tiers are produced from the Share menu.
-    """
-
-    def _dialog(self, project, make_memory_layer):
-        from nika_onlymap_exporter.ui.main_dialog import MainDialog
-
-        class FakeIface:
-            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
-                return None
-
-        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
-        return MainDialog(FakeIface(), None)
-
-    def test_the_map_tab_offers_no_packaging_choice(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        from qgis.PyQt.QtWidgets import QRadioButton
-
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            # Not just "the attribute is gone": a radio button anywhere on the
-            # Map tab would mean the choice came back under another name.
-            assert not hasattr(dialog, "mode_checks")
-            assert not hasattr(dialog, "mode_group")
-            assert dialog.findChildren(QRadioButton) == []
-        finally:
-            dialog.close()
-
-    def test_the_map_file_is_always_html(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        from nika_onlymap_exporter.core.export_ir import OutputMode
-
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            assert dialog.state.output_mode is OutputMode.STANDALONE_HTML
-            assert dialog._mode_suffix(OutputMode.STANDALONE_HTML) == ".html"
         finally:
             dialog.close()
 
@@ -1905,5 +1776,88 @@ class TestNoWastedHeight:
                 and label.height() > label.heightForWidth(label.width()) + 2
             ]
             assert not loose
+        finally:
+            dialog.close()
+
+
+class TestExportIsBack:
+    """0.1.4's flow: choose a type, choose where, press Export."""
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_three_types_with_a_single_file_first(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            buttons = dialog.mode_buttons
+            assert list(buttons) == [
+                OutputMode.STANDALONE_HTML,
+                OutputMode.SHARE_ZIP,
+                OutputMode.FOLDER,
+            ]
+            assert buttons[OutputMode.STANDALONE_HTML].isChecked()
+        finally:
+            dialog.close()
+
+    def test_picking_a_type_reshapes_the_path(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            dialog.mode_buttons[OutputMode.SHARE_ZIP].setChecked(True)
+            assert dialog.state.output_mode is OutputMode.SHARE_ZIP
+            assert dialog.path_edit.text() == str(tmp_path / "peaks.zip")
+            dialog.mode_buttons[OutputMode.FOLDER].setChecked(True)
+            assert dialog.path_edit.text() == str(tmp_path / "peaks")
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].setChecked(True)
+            assert dialog.path_edit.text() == str(tmp_path / "peaks.html")
+        finally:
+            dialog.close()
+
+    def test_export_writes_where_the_field_says_without_asking(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.mode_buttons[OutputMode.SHARE_ZIP].setChecked(True)
+            dialog.path_edit.setText(str(tmp_path / "peaks.zip"))
+            assert (
+                dialog._resolve_destination(OutputMode.SHARE_ZIP)
+                == tmp_path / "peaks.zip"
+            )
+        finally:
+            dialog.close()
+
+    def test_export_is_the_filled_button_in_the_corner(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            assert dialog.export_button.parent() is corner
+            assert dialog.export_button.property("role") == "primary"
+            assert dialog.preview_button.property("role") == "secondary"
+        finally:
+            dialog.close()
+
+    def test_share_no_longer_duplicates_export(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert "zip" not in dialog.share_actions
+            assert "folder" not in dialog.share_actions
         finally:
             dialog.close()

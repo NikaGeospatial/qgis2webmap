@@ -46,36 +46,39 @@ exporting a map should not quietly edit your project's metadata.
 Setting a name here does not by itself draw it on the map. That is the
 **Map title** switch on the [Appearance tab](#caption), which is off by default.
 
-### Map file
+### Export
 
-Where your map lives on disk. Type a path or press **Choose**.
+Choose **what to make** and **where it goes**, then press **Export** in the
+top-right corner.
 
-The map file is always a single `.html` file — one file that opens by
-double-clicking, with all of your data inside it. **You are no longer asked to
-pick a format before you have shared anything.** A zip or a folder is made from
-the Share menu at the moment you need one, because which of them you want
-depends on who you are sending it to, and you work that out afterwards.
+**Export as:**
 
-The field starts **empty**, and the plugin never guesses a path for you. Press
-**Choose** and it opens beside your project file, named after it.
+- **Standalone HTML** — one file that opens by double-clicking, with all of your
+  data inside it. The default.
+- **Share ZIP** — the same map zipped, with a short README. Use it when a mail
+  filter blocks `.html` attachments.
+- **Folder** — `index.html`, `onlymap.js` and a README side by side, to copy to a
+  web server. A folder has to be served; it does not open by double-clicking.
 
-Underneath is a line of measured size advice, not a generic warning: it reports
-how large your map's data actually is, and says when the file would become slow
-to open or awkward to email.
+**Save to** is where the export is written. Type a path or press **Choose**,
+which opens beside your project file, named after it. Switching the type keeps
+the name: `peaks.html` becomes `peaks.zip` or a `peaks` folder. Pressing Export
+writes there without asking again.
 
-Below that, a line saying what the file on disk is doing:
+For a Standalone HTML export, a line underneath gives measured size advice: how
+large your map's data actually is, and when the file would become slow to open
+or awkward to email.
+
+A second line says what is on disk:
 
 | It says | It means |
 |---|---|
-| *Choose a map file to enable Preview and Share.* | No path set yet. Nothing has been written |
-| *Not written yet.* | The path is set; the file does not exist until you preview or share |
-| *Saved just now — 2.9 MB — 5 layers* | Live preview is running and the file is being kept up to date |
-| *Last written 20 min ago* | Written earlier. Sharing rewrites it if the project has moved on |
+| *Choose where to save, then press Export.* | No path set yet. Nothing has been written |
+| *Not written yet.* | The path is set; nothing is there until you export |
+| *Saved just now — 2.9 MB — 5 layers* | Live preview is running and the HTML file is being kept up to date |
+| *Last written 20 min ago* | Written earlier. Export again if the project has moved on |
 
-**The map file is rewritten, never re-confirmed.** It is your document, so the
-plugin does not ask "replace the existing file?" every time — that question
-belongs to a zip or a folder you are making for somebody else, and those still
-ask.
+Both the type and the place are saved with the project.
 
 ### Basemap
 
@@ -327,8 +330,11 @@ whichever tab you are reading.
 in the plugin ever opens a browser.** The small arrow beside it holds the
 **Live preview** switch described above.
 
-**Share** is everything you might do with the finished map. Pressing it opens
-the menu:
+**Export** writes the map in the type and place chosen on the Map tab. It is
+the filled button, because it is what the plugin is for.
+
+**Share** is everything else you might do with the finished map. Pressing it
+opens the menu:
 
 | Row | What it does |
 |---|---|
@@ -337,24 +343,18 @@ the menu:
 | **Open in browser** | Opens **the real file** — the one you would send someone — rather than a preview copy, so what you check is what they get |
 | **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
 | **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming in a later release |
-| **Export share ZIP** | A `.zip` to email or upload, for when a mail filter blocks `.html` |
-| **Export folder for hosting** | `index.html`, `onlymap.js` and a README side by side, to copy to a web host |
 | **Make a cartograph with QGIS2Carto** | Coming in a later release |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
-**Every row that acts on the map needs a map file first.** Until you have set
-one on the Map tab they are greyed out, and each says so if you hover it.
-**Ask on Discord** always works.
+**Every row that acts on the map needs a Save to path first.** Until you have
+set one on the Map tab they are greyed out, and each says so if you hover it.
+**Open in browser** works for a Standalone HTML export only. **Ask on Discord**
+always works.
 
-**You never have to produce the file yourself.** Any row that needs the map
-writes it first, and skips the write when the file is already up to date. There
-is no Export button any more, because there is nothing left for it to do.
+**Rows that need the map write it first** when it is missing or out of date,
+so Copy file path or Open in browser never point at something stale.
 
-A folder does not open by double-clicking: browsers refuse to load the runtime
-from a `file://` page when it sits in a separate file, so a folder has to be
-served. That is what the map file is for.
-
-Preview, and Share's map rows, are greyed out when the map cannot be produced correctly,
+Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent
 refusal:
 

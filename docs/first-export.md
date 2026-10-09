@@ -42,8 +42,8 @@ howto:
     - name: Share it
       anchor: 6-share-it
       text: >-
-        Set a Map file on the Map tab, then use Share in the top-right corner -
-        open it in a browser, or make a zip or a folder from it.
+        On the Map tab choose Export as - Standalone HTML, Share ZIP or
+        Folder - and where to save it, then press Export.
     - name: Check the Fidelity tab
       anchor: 7-check-the-fidelity-tab
       text: >-
@@ -138,24 +138,20 @@ as a file automatically and tells you so. Nothing is lost.
 
 ## 6. Share it
 
-Set a **Map file** on the Map tab - press **Choose** and it offers a name beside
-your project. That one `.html` file is your map.
+On the Map tab, under **Export**:
 
-![The Map file field on the Map tab, with the Choose button beside it.](images/export-02-formats.png)
+1. Pick **Export as**: **Standalone HTML** (one file, opens by double-click),
+   **Share ZIP** (for email, when a filter blocks `.html`) or **Folder** (for a
+   web server).
+2. Set **Save to** - press **Choose** and it offers a name beside your project.
+3. Press **Export**, in the top-right corner of the dialog.
 
-Then use **Share**, in the top-right corner of the dialog:
+![The Export section on the Map tab, with the three types and the Save to field.](images/export-02-formats.png)
 
-- **Open in browser** shows you the real file - the one you would send to
-  someone - so you can check it before sharing.
-- **Export share ZIP** makes a zip to email, for when a mail filter blocks
-  `.html`.
-- **Export folder for hosting** makes a folder to copy to a web server.
+**Share**, beside it, has **Open in browser** to check the real file before you
+send it, and **Copy file path** to paste it anywhere.
 
-**You do not have to write the file first.** Each of those writes it for you if
-it is missing or out of date. The line under the Map file field says which it is.
-
-If Share is greyed out, you have not set a Map file yet. If Preview is greyed out
-too, the reason is in the bar at the foot of the dialog.
+If Export is greyed out, the reason is in the bar at the foot of the dialog.
 
 ## 7. Check the Fidelity tab
 
