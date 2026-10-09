@@ -1030,13 +1030,28 @@ class MainDialog(QDialog):
             self.export_summary.setText("")
             return
 
-        sentence = plural(
-            selected_count,
-            "The map file is one HTML file that opens by double-click, "
-            "carrying {n} layer.",
-            "The map file is one HTML file that opens by double-click, "
-            "carrying {n} layers.",
-        )
+        # Says what Export will make, in the type chosen above.
+        mode = self.state.output_mode
+        if mode is OutputMode.SHARE_ZIP:
+            sentence = plural(
+                selected_count,
+                "Export makes a zip to email or upload, carrying {n} layer.",
+                "Export makes a zip to email or upload, carrying {n} layers.",
+            )
+        elif mode is OutputMode.FOLDER:
+            sentence = plural(
+                selected_count,
+                "Export makes a folder for a web server, carrying {n} layer.",
+                "Export makes a folder for a web server, carrying {n} layers.",
+            )
+        else:
+            sentence = plural(
+                selected_count,
+                "Export makes one HTML file that opens by double-click, "
+                "carrying {n} layer.",
+                "Export makes one HTML file that opens by double-click, "
+                "carrying {n} layers.",
+            )
 
         # Naming the destination here is what makes the path field's effect
         # visible without pressing anything.
@@ -1205,6 +1220,9 @@ class MainDialog(QDialog):
             self.path_edit.setText(str(stem) + self._mode_suffix(mode))
         self._update_size_note()
         self._update_share_enabled()
+        self._update_export_summary(
+            len(self.state.selected_layer_ids(self._available_layer_ids()))
+        )
 
     def _on_choose_map_file(self) -> None:
         """Pick where the map file is written.
@@ -2289,9 +2307,10 @@ class MainDialog(QDialog):
         """The person's own preferences, apart from the map's.
 
         Everything here is true of every project - who is signed in, the
-        language, how previews behave - so it lives in one familiar place
-        rather than scattered across the footer and the Preview menu. The map's
-        own options stay on the Map, Layers and Appearance tabs.
+        language, the theme - so it lives in one familiar place rather than in
+        the footer. Live preview stays on the Preview button's menu, beside
+        the thing it changes. The map's own options stay on the Map, Layers and
+        Appearance tabs.
         """
         page = QWidget(self)
         layout = QVBoxLayout(page)
@@ -2348,19 +2367,6 @@ class MainDialog(QDialog):
         appearance_form.addRow(tr("Theme"), self.theme_picker)
         layout.addWidget(appearance_box)
 
-        preview_box = QGroupBox(tr("Preview"), page)
-        preview_layout = QVBoxLayout(preview_box)
-        # The same switch as the one in the Preview menu, kept in step with
-        # it: that one sits where the preview is started, this one where
-        # people look for settings.
-        self.live_check = QCheckBox(tr("Live preview"), preview_box)
-        self.live_check.setChecked(self.live_action.isChecked())
-        self.live_check.toggled.connect(self.live_action.setChecked)
-        self.live_action.toggled.connect(self._sync_live_check)
-        preview_layout.addWidget(self.live_check)
-        preview_layout.addWidget(_help_label(self.live_action.toolTip(), preview_box))
-        layout.addWidget(preview_box)
-
         about_box = QGroupBox(tr("About"), page)
         about_form = QFormLayout(about_box)
         about_form.addRow(
@@ -2384,14 +2390,6 @@ class MainDialog(QDialog):
         self._update_basemap_warning()
         self._update_terrain_warning()
         self._update_size_note()
-
-    def _sync_live_check(self, enabled: bool) -> None:
-        """Mirror the Preview menu's switch without echoing back into it."""
-        if not hasattr(self, "live_check"):
-            return
-        self.live_check.blockSignals(True)
-        self.live_check.setChecked(enabled)
-        self.live_check.blockSignals(False)
 
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)
@@ -3091,7 +3089,6 @@ class MainDialog(QDialog):
             self.live_action.blockSignals(True)
             self.live_action.setChecked(False)
             self.live_action.blockSignals(False)
-            self._sync_live_check(False)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
         self.status_label.setText(

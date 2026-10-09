@@ -283,22 +283,6 @@ class TestTheDialog:
         finally:
             dialog.close()
 
-    def test_live_preview_is_one_switch_in_two_places(
-        self, qgis_app, project, make_memory_layer
-    ):
-        dialog = _dialog(project, make_memory_layer)
-        try:
-            dialog.live_action.blockSignals(True)
-            dialog.live_action.setChecked(False)
-            dialog.live_action.blockSignals(False)
-            dialog.live_check.setChecked(False)
-            dialog.live_check.setChecked(True)
-            assert dialog.live_action.isChecked()
-            dialog.live_action.setChecked(False)
-            assert not dialog.live_check.isChecked()
-        finally:
-            dialog.close()
-
     def test_choosing_a_language_downloads_it_and_asks_to_reopen(
         self, installed_plugin, project, make_memory_layer
     ):

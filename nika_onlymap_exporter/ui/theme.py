@@ -105,11 +105,13 @@ PLUM_LIGHT = Palette(
 
 PLUM_DARK = Palette(
     name="plum-dark",
-    canvas="#0b030e",
-    paper="#170b1a",
-    field="#22132a",
-    hover="#2e1d33",
-    rule="#3a2b3e",
+    # Wider steps than the light theme's: the same ratios read as one flat
+    # plum in the dark, so window, card and field are each clearly lifted.
+    canvas="#08020a",
+    paper="#22142a",
+    field="#311f3a",
+    hover="#3d2a46",
+    rule="#56425e",
     ink="#f5f2e7",
     muted="#a39aa5",
     quiet="#817683",

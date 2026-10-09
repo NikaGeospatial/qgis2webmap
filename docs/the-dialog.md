@@ -277,8 +277,7 @@ Things that are true of every project, rather than of one map:
   in one of them and its pack is not downloaded yet, a bar at the top of the
   dialog offers it — nothing is downloaded until you press it. Switching
   reopens the dialog in the new language; QGIS does not need a restart.
-- **Live preview** — the same switch as in the Preview menu, described
-  [below](#live-preview).
+- **Appearance** — the dialog's theme: Follow QGIS, Light or Dark.
 - **About** — the plugin version and the OnlyMap runtime it is pinned to.
 
 ---

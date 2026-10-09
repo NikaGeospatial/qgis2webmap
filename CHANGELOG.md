@@ -25,8 +25,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   basemap warning sat in three times its height. The Map tab is about a quarter
   shorter, so there is less to scroll.
 - **A Settings tab, before Help**, for what is true of every project rather
-  than of one map: the NIKA account, the dialog's language, Live preview (still
-  also in the Preview menu) and the plugin and runtime versions. The account and
+  than of one map: the NIKA account, the dialog's language and theme, and the
+  plugin and runtime versions. Live preview stays on the Preview button's menu. The account and
   Discord no longer sit in the footer, which is now just the status line and
   Close.
 - **Share is a dropdown.** Pressing it opens the menu; Discord is at the foot of
