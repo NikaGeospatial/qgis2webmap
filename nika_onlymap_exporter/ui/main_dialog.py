@@ -101,12 +101,13 @@ from ..packaging.dependency_scanner import (
     measure_data_bytes,
     standalone_ineligible_reason,
 )
+from ..packaging.runtime_manager import read_lock
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from . import languages, theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
 from .i18n import N_, active_language, plural, tr
-from .language_button import LanguageButton, make_offer
+from .language_picker import LanguagePicker, make_offer
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
     COMMUNITY_URL,
@@ -644,8 +645,16 @@ class MainDialog(QDialog):
         # Held, not found by title: the title is translated.
         self._fidelity_page = self._build_fidelity_tab()
         self.tabs.addTab(self._fidelity_page, tr("Fidelity"))
-        self.tabs.addTab(self._build_help_tab(), tr("Help"))
+        self._help_page = self._build_help_tab()
+        self.tabs.addTab(self._help_page, tr("Help"))
         self.tabs.setCornerWidget(self._build_tab_corner(), Qt.Corner.TopRightCorner)
+        # After the corner: its Preview menu owns the Live preview action that
+        # this tab mirrors. Before Help, where people look for settings.
+        self.tabs.insertTab(
+            self.tabs.indexOf(self._help_page),
+            self._build_settings_tab(),
+            tr("Settings"),
+        )
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
@@ -1314,8 +1323,7 @@ class MainDialog(QDialog):
         """
         if not hasattr(self, "share_button"):
             return
-        ready = self._map_file() is not None
-        self.share_button.setEnabled(ready)
+        ready = self._map_file() is not None and getattr(self, "_export_ready", True)
         for key, action in getattr(self, "share_actions", {}).items():
             action.setEnabled(ready)
             # Restored from the originals rather than remembered off the widget:
@@ -2087,14 +2095,14 @@ class MainDialog(QDialog):
         self.share_button = QToolButton(corner)
         self.share_button.setText(tr("Share"))
         self.share_button.setProperty("role", "secondary")
-        self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        # A plain dropdown for now: pressing it opens the menu. It also holds
+        # Discord, which needs no map file, so the button is never disabled;
+        # the rows that do need one are.
+        self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.share_button.setProperty("hasMenu", True)
         self.share_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        # The face is the most common of the menu's actions, not a separate one:
-        # a split button whose face does something absent from its own menu is a
-        # button people press by accident.
-        self.share_button.clicked.connect(self.on_open_in_browser)
         self.share_button.setMenu(self._build_share_menu())
         layout.addWidget(self.share_button)
 
@@ -2227,6 +2235,19 @@ class MainDialog(QDialog):
             tr("Opens QGIS2Carto with this map as a live frame"),
             lambda: self._not_wired_yet(tr("Make a cartograph with QGIS2Carto")),
         )
+
+        menu.addSeparator()
+        discord = menu.addAction(tr("Ask on Discord ↗"))
+        discord.setToolTip(
+            tr(
+                "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
+                "Ask a question, suggest something, or report a bug - no GitHub "
+                "account needed."
+            )
+        )
+        discord.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
+        coming = menu.addAction(tr("More ways to share are coming soon"))
+        coming.setEnabled(False)
         return menu
 
     def _not_wired_yet(self, what: str) -> None:
@@ -2246,6 +2267,88 @@ class MainDialog(QDialog):
                 "nothing else yet."
             ).format(what=what),
         )
+
+    def _build_settings_tab(self) -> QWidget:
+        """The person's own preferences, apart from the map's.
+
+        Everything here is true of every project - who is signed in, the
+        language, how previews behave - so it lives in one familiar place
+        rather than scattered across the footer and the Preview menu. The map's
+        own options stay on the Map, Layers and Appearance tabs.
+        """
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+
+        account_box = QGroupBox(tr("NIKA account"), page)
+        account_form = QFormLayout(account_box)
+        self.account_button = AccountButton(PendingHostingBackend(), account_box)
+        # The widget itself, not a row layout: a form centres its label only
+        # against a widget, and the chip keeps its own width either way.
+        account_form.addRow(tr("Account"), self.account_button)
+        account_form.addRow(
+            "",
+            _help_label(
+                tr(
+                    "Publishing maps to NIKA needs an account. Exporting a file "
+                    "never does."
+                ),
+                account_box,
+            ),
+        )
+        layout.addWidget(account_box)
+
+        language_box = QGroupBox(tr("Language"), page)
+        language_form = QFormLayout(language_box)
+        self.language_picker = LanguagePicker(language_box)
+        self.language_picker.changed.connect(self.languageChanged)
+        language_form.addRow(tr("Show this dialog in"), self.language_picker)
+        language_form.addRow(
+            "",
+            _help_label(
+                tr(
+                    "English is built in. Other languages are a small download "
+                    "the first time you pick one. Follow QGIS uses the language "
+                    "QGIS is set to, when it is one of these."
+                ),
+                language_box,
+            ),
+        )
+        layout.addWidget(language_box)
+
+        preview_box = QGroupBox(tr("Preview"), page)
+        preview_layout = QVBoxLayout(preview_box)
+        # The same switch as the one in the Preview menu, kept in step with
+        # it: that one sits where the preview is started, this one where
+        # people look for settings.
+        self.live_check = QCheckBox(tr("Live preview"), preview_box)
+        self.live_check.setChecked(self.live_action.isChecked())
+        self.live_check.toggled.connect(self.live_action.setChecked)
+        self.live_action.toggled.connect(self._sync_live_check)
+        preview_layout.addWidget(self.live_check)
+        preview_layout.addWidget(_help_label(self.live_action.toolTip(), preview_box))
+        layout.addWidget(preview_box)
+
+        about_box = QGroupBox(tr("About"), page)
+        about_form = QFormLayout(about_box)
+        about_form.addRow(
+            tr("Plugin version"), QLabel(languages.plugin_version(), about_box)
+        )
+        about_form.addRow(
+            tr("OnlyMap runtime"),
+            QLabel(str(read_lock().get("version") or tr("not pinned")), about_box),
+        )
+        layout.addWidget(about_box)
+
+        layout.addStretch(1)
+        return page
+
+    def _sync_live_check(self, enabled: bool) -> None:
+        """Mirror the Preview menu's switch without echoing back into it."""
+        if not hasattr(self, "live_check"):
+            return
+        self.live_check.blockSignals(True)
+        self.live_check.setChecked(enabled)
+        self.live_check.blockSignals(False)
 
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)
@@ -2286,41 +2389,12 @@ class MainDialog(QDialog):
     # ---- Buttons --------------------------------------------------------
 
     def _build_button_row(self) -> QHBoxLayout:
-        """Chrome only: somewhere to ask, somewhere to leave.
+        """Chrome only: the running commentary, and a way to leave.
 
-        Everything that acts on the map moved to the tab corner. What is left is
-        the pair every dialog has - a way to get help and a way to close - with
-        the running commentary between them.
+        Everything that acts on the map is in the tab corner, the account and
+        language are on the Settings tab, and Discord is in the Share menu.
         """
         row = QHBoxLayout()
-
-        # Who this QGIS profile is paired with, first in the row. Session
-        # chrome, true of every project, so it sits here rather than in the tab
-        # corner - see `account_button` for that division.
-        self.account_button = AccountButton(PendingHostingBackend(), self)
-        row.addWidget(self.account_button)
-
-        # Named for where it goes, not for what it is. "Help" beside a Help tab
-        # that holds the guides would be two things with one name; this one
-        # opens a chat with people, which is a different answer to a different
-        # question. The arrow marks that it leaves for a browser, the way every
-        # outward link in this dialog does.
-        discord = QPushButton(tr("Discord ↗"), self)
-        discord.setProperty("role", "chip")
-        discord.setCursor(Qt.CursorShape.PointingHandCursor)
-        discord.setToolTip(
-            tr(
-                "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
-                "Ask a question, suggest something, or report a bug - no GitHub "
-                "account needed."
-            )
-        )
-        discord.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
-        row.addWidget(discord)
-
-        self.language_button = LanguageButton(self)
-        self.language_button.changed.connect(self.languageChanged)
-        row.addWidget(self.language_button)
 
         self.status_label = QLabel("", self)
         self.status_label.setWordWrap(True)
@@ -2409,7 +2483,8 @@ class MainDialog(QDialog):
             self.progress_bar.setFormat(label)
             self.status_label.setText(label)
             self.preview_button.setEnabled(False)
-            self.share_button.setEnabled(False)
+            for action in getattr(self, "share_actions", {}).values():
+                action.setEnabled(False)
         else:
             self.progress_bar.reset()
             self._update_export_readiness()
@@ -2719,11 +2794,10 @@ class MainDialog(QDialog):
 
     def _set_ready(self, ready: bool, message: str) -> None:
         self.preview_button.setEnabled(ready)
-        # Share needs a destination as well as something to put in it, so its
-        # own rule is applied on top rather than instead.
-        self.share_button.setEnabled(ready)
-        if ready:
-            self._update_share_enabled()
+        # Share's rows need a destination as well as something to put in it,
+        # so their own rule is applied on top rather than instead.
+        self._export_ready = ready
+        self._update_share_enabled()
         self.status_label.setText(message)
 
     # ---- Actions --------------------------------------------------------
@@ -2961,6 +3035,7 @@ class MainDialog(QDialog):
             self.live_action.blockSignals(True)
             self.live_action.setChecked(False)
             self.live_action.blockSignals(False)
+            self._sync_live_check(False)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
         self.status_label.setText(

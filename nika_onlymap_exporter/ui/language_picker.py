@@ -2,9 +2,9 @@
 
 Two widgets, both small:
 
-- `LanguageButton`, a footer chip naming the language in use. Its menu lists
-  "Follow QGIS", English, and every language this version has a pack for;
-  a language not yet downloaded says so, and picking it downloads it.
+- `LanguagePicker`, the list on the Settings tab: "Follow QGIS", English, and
+  every language this version has a pack for. A language not yet downloaded
+  says so, and picking it downloads it.
 - `LanguageOffer`, a one-line bar shown only while following QGIS when QGIS
   speaks a language we have but its pack is not here. Nothing is downloaded
   until the user presses its button.
@@ -19,15 +19,14 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QSettings, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QActionGroup, QGuiApplication
+from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QMessageBox,
     QPushButton,
-    QToolButton,
     QWidget,
 )
 
@@ -61,8 +60,8 @@ def _install(parent: QWidget, code: str, fetch: languages.Fetcher | None) -> boo
     return True
 
 
-class LanguageButton(QToolButton):
-    """A footer chip naming the language in use, with a menu to change it."""
+class LanguagePicker(QComboBox):
+    """The Settings tab's language list: Follow QGIS, English, then the packs."""
 
     changed = pyqtSignal()
 
@@ -71,55 +70,41 @@ class LanguageButton(QToolButton):
     ) -> None:
         super().__init__(parent)
         self._fetch = fetch
-        self.setProperty("role", "chip")
-        self.setProperty("hasMenu", True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.setText(languages.NATIVE_NAMES.get(active_language(), active_language()))
         self.setToolTip(tr("The language this dialog is shown in"))
-        self._menu = QMenu(self)
-        self._menu.setToolTipsVisible(True)
-        self._menu.aboutToShow.connect(self._build_menu)
-        self.setMenu(self._menu)
-        self.actions_by_choice: dict[str, object] = {}
-        self._build_menu()
+        self.refresh()
+        # `activated`, not `currentIndexChanged`: only a pick by the user may
+        # start a download, never the list being filled or reset.
+        self.activated.connect(self._on_activated)
 
-    def _build_menu(self) -> None:
-        self._menu.clear()
-        self.actions_by_choice = {}
-        group = QActionGroup(self._menu)
-        group.setExclusive(True)
-        setting = _setting()
-
-        follow = self._menu.addAction(tr("Follow QGIS"))
-        follow.setToolTip(
-            tr(
-                "Use the language QGIS is set to, when there is a pack for it. "
-                "Otherwise English."
-            )
-        )
-        self._menu.addSeparator()
-        entries = [(languages.AUTO, follow)]
+    def refresh(self) -> None:
+        """Rebuild the list, marking languages that still need a download."""
+        self.blockSignals(True)
+        self.clear()
+        follow = tr("Follow QGIS")
+        locale_code = languages.match_locale(qgis_locale())
+        if locale_code and languages.installed_pack(locale_code):
+            follow += f" ({languages.NATIVE_NAMES.get(locale_code, locale_code)})"
+        self.addItem(follow, languages.AUTO)
         for code in languages.available():
             name = languages.NATIVE_NAMES.get(code, code)
             if code != languages.ENGLISH and languages.installed_pack(code) is None:
                 name = tr("{language} - download").format(language=name)
-            entries.append((code, self._menu.addAction(name)))
+            self.addItem(name, code)
+        self.setCurrentIndex(max(0, self.findData(_setting())))
+        self.blockSignals(False)
 
-        for choice, action in entries:
-            action.setCheckable(True)
-            action.setChecked(choice == setting)
-            group.addAction(action)
-            action.triggered.connect(lambda _on=False, c=choice: self.choose(c))
-            self.actions_by_choice[choice] = action
+    def _on_activated(self, index: int) -> None:
+        self.choose(str(self.itemData(index)))
 
     def choose(self, choice: str) -> None:
         """Store `choice`, downloading its pack first if it needs one."""
         if choice not in (languages.AUTO, languages.ENGLISH) and not _install(
             self, choice, self._fetch
         ):
+            self.refresh()  # back to what is actually in use
             return
         QSettings().setValue(languages.SETTING_KEY, choice)
+        self.refresh()
         if languages.effective(choice, qgis_locale()) != active_language():
             self.changed.emit()
 

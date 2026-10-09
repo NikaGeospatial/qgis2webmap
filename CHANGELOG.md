@@ -7,11 +7,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **A Settings tab, before Help**, for what is true of every project rather
+  than of one map: the NIKA account, the dialog's language, Live preview (still
+  also in the Preview menu) and the plugin and runtime versions. The account and
+  Discord no longer sit in the footer, which is now just the status line and
+  Close.
+- **Share is a dropdown.** Pressing it opens the menu; Discord is at the foot of
+  it, with a note that more ways to share are coming.
 - **The dialog speaks seven languages**: English, Português (Brasil), 中文（简体）,
   हिन्दी, Español, العربية and Français. English is built in; the others are
   small downloads (about 14 KB each) fetched the first time you pick one, and
   checked against the copy released with this version before they are used.
-  Choose from the language button at the foot of the dialog. *Follow QGIS*, the
+  Choose on the Settings tab. *Follow QGIS*, the
   default, uses QGIS's own language when its pack is installed, and offers the
   download - never starting it - when it is not. Arabic is laid out right to
   left. Switching reopens the dialog in the new language; QGIS does not need a

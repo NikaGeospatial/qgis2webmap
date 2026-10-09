@@ -313,8 +313,8 @@ class TestTheCacheRoundTrips:
 
 
 class TestTheDialogSeatsIt:
-    def test_the_button_row_carries_the_account(self, qgis_app, project):
-        """Session chrome belongs in the bottom row, not the tab corner."""
+    def test_the_settings_tab_carries_the_account(self, qgis_app, project):
+        """True of every project, so it sits with the other settings."""
         from nika_onlymap_exporter.ui.account_button import AccountButton
         from nika_onlymap_exporter.ui.main_dialog import MainDialog
 
@@ -325,6 +325,12 @@ class TestTheDialogSeatsIt:
         dialog = MainDialog(FakeIface(), None)
         try:
             assert isinstance(dialog.account_button, AccountButton)
+            settings = next(
+                dialog.tabs.widget(i)
+                for i in range(dialog.tabs.count())
+                if dialog.tabs.tabText(i) == "Settings"
+            )
+            assert dialog.account_button in settings.findChildren(AccountButton)
         finally:
             dialog.close()
 
@@ -348,7 +354,7 @@ class TestTheDialogSeatsIt:
 
 
 class TestItLooksPressable:
-    """It sits in the footer as an outlined chip, not as bare text."""
+    """An outlined chip, not bare text, so it reads as something to press."""
 
     def test_it_is_a_chip_signed_out_and_in(self, qgis_app):
         out = _button(FakeBackend())

@@ -345,7 +345,9 @@ class TestTabCorner:
         """
         dialog = self._dialog(project, make_memory_layer)
         try:
-            assert dialog.share_button.isEnabled() is False
+            # The button itself stays usable: its menu also holds Discord,
+            # which needs no map file.
+            assert dialog.share_button.isEnabled() is True
             assert dialog.share_actions, "the menu should have actions to disable"
             for action in dialog.share_actions.values():
                 assert action.isEnabled() is False
@@ -369,9 +371,49 @@ class TestTabCorner:
         try:
             labels = {b.text() for b in dialog.findChildren(QPushButton)}
             assert "Close" in labels
-            assert "Discord ↗" in labels
+            # Discord moved into the Share menu.
+            assert "Discord ↗" not in labels
             for gone in ("Export", "Host ↗", "Open exported map", "Preview"):
                 assert gone not in labels
+        finally:
+            dialog.close()
+
+
+class TestShareIsADropdown:
+    """For now Share only opens its menu, which also points at Discord."""
+
+    def _dialog(self, project, make_memory_layer):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        return MainDialog(FakeIface(), None)
+
+    def test_pressing_share_opens_the_menu(self, qgis_app, project, make_memory_layer):
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert (
+                dialog.share_button.popupMode()
+                == QToolButton.ToolButtonPopupMode.InstantPopup
+            )
+        finally:
+            dialog.close()
+
+    def test_discord_is_always_there_and_more_is_promised(
+        self, qgis_app, project, make_memory_layer
+    ):
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            actions = [a for a in dialog.share_button.menu().actions() if a.text()]
+            discord, coming = actions[-2], actions[-1]
+            assert "Discord" in discord.text() and discord.isEnabled()
+            assert "coming soon" in coming.text().lower()
+            assert not coming.isEnabled()
         finally:
             dialog.close()
 
@@ -1121,10 +1163,11 @@ class TestLivePreviewLifecycle:
         """
         dialog = self._dialog(project, make_memory_layer)
         try:
-            assert dialog.share_button.isEnabled() is False
+            copy = dialog.share_actions["copy_path"]
+            assert copy.isEnabled() is False
 
             dialog.path_edit.setText(str(tmp_path / "peaks.html"))
-            assert dialog.share_button.isEnabled() is True
+            assert copy.isEnabled() is True
         finally:
             dialog.close()
 
@@ -1196,7 +1239,7 @@ class TestDialogConstruction:
     def test_builds_all_five_tabs(self, qgis_app, project, make_memory_layer) -> None:
         dialog = self._dialog(project, make_memory_layer)
         titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert titles == ["Map", "Layers", "Appearance", "Fidelity", "Help"]
+        assert titles == ["Map", "Layers", "Appearance", "Fidelity", "Settings", "Help"]
         dialog.close()
 
     def test_lists_the_project_layers(
@@ -1219,7 +1262,8 @@ class TestDialogConstruction:
                 1, Qt.CheckState.Unchecked
             )
         assert dialog.preview_button.isEnabled() is False
-        assert dialog.share_button.isEnabled() is False
+        for action in dialog.share_actions.values():
+            assert action.isEnabled() is False
         assert "at least one layer" in dialog.status_label.text()
         dialog.close()
 
@@ -1461,7 +1505,7 @@ class TestHelpTab:
 
         project.addMapLayer(make_memory_layer("pts", features=[("a", [1.0, 2.0])]))
         dialog = MainDialog(FakeIface(), None)
-        browser = dialog.tabs.widget(4).findChild(QTextBrowser)
+        browser = dialog._help_page.findChild(QTextBrowser)
 
         text = browser.toPlainText()
         assert "one anonymous usage report" in text

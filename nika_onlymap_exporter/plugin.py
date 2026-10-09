@@ -196,10 +196,18 @@ class Qgis2WebMapPlugin:
         needs a new dialog. Closing saves the settings, and the next one reads
         them back, so the user loses nothing but a blink.
         """
-        from qgis.PyQt.QtCore import QTimer
+        from qgis.PyQt.QtCore import QSettings, QTimer
+
+        from .ui import languages
+        from .ui.i18n import qgis_locale, use_language
 
         if self.dialog is not None:
             self.dialog.close()
+        # The language is applied here, not only at plugin load: the dialog
+        # stores the choice and asks to be rebuilt, and rebuilding without
+        # switching the catalogue first just draws the old language again.
+        setting = QSettings().value(languages.SETTING_KEY, languages.AUTO, type=str)
+        use_language(languages.effective(setting, qgis_locale()))
         QTimer.singleShot(0, self.run)
 
     def _on_dialog_finished(self, _result: int) -> None:

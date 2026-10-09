@@ -218,11 +218,18 @@ class TestTheDialog:
         dialog = _dialog(project, make_memory_layer)
         try:
             titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-            assert titles == ["Mapa", "Camadas", "Aparência", "Fidelidade", "Ajuda"]
+            assert titles == [
+                "Mapa",
+                "Camadas",
+                "Aparência",
+                "Fidelidade",
+                "Configurações",
+                "Ajuda",
+            ]
             # Found by the page, not the title, so it still works translated.
             dialog._show_fidelity_tab()
             assert dialog.tabs.currentWidget() is dialog._fidelity_page
-            assert dialog.language_button.text() == "Português (Brasil)"
+            assert dialog.language_picker.currentData() == "auto"
         finally:
             dialog.close()
 
@@ -241,13 +248,16 @@ class TestTheDialog:
             dialog.close()
             use_language("en")
 
-    def test_the_menu_marks_what_needs_downloading(
+    def test_the_list_marks_what_needs_downloading(
         self, installed_plugin, project, make_memory_layer
     ):
         dialog = _dialog(project, make_memory_layer)
         try:
-            actions = dialog.language_button.actions_by_choice
-            assert set(actions) == {
+            picker = dialog.language_picker
+            items = {
+                picker.itemData(i): picker.itemText(i) for i in range(picker.count())
+            }
+            assert list(items) == [
                 "auto",
                 "en",
                 "pt_BR",
@@ -256,10 +266,36 @@ class TestTheDialog:
                 "es",
                 "ar",
                 "fr",
-            }
-            assert actions["es"].text() == "Español - download"
-            assert actions["en"].text() == "English"
-            assert actions["auto"].isChecked()
+            ]
+            assert items["es"] == "Español - download"
+            assert items["en"] == "English"
+            assert picker.currentData() == "auto"
+        finally:
+            dialog.close()
+
+    def test_the_tabs_put_settings_before_help(
+        self, qgis_app, project, make_memory_layer
+    ):
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+            assert titles[-2:] == ["Settings", "Help"]
+        finally:
+            dialog.close()
+
+    def test_live_preview_is_one_switch_in_two_places(
+        self, qgis_app, project, make_memory_layer
+    ):
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            dialog.live_action.blockSignals(True)
+            dialog.live_action.setChecked(False)
+            dialog.live_action.blockSignals(False)
+            dialog.live_check.setChecked(False)
+            dialog.live_check.setChecked(True)
+            assert dialog.live_action.isChecked()
+            dialog.live_action.setChecked(False)
+            assert not dialog.live_check.isChecked()
         finally:
             dialog.close()
 
@@ -268,10 +304,10 @@ class TestTheDialog:
     ):
         from qgis.PyQt.QtCore import QSettings
 
-        from nika_onlymap_exporter.ui.language_button import LanguageButton
+        from nika_onlymap_exporter.ui.language_picker import LanguagePicker
 
         calls: list[str] = []
-        button = LanguageButton(None, fetch=serve_repo_packs(calls))
+        button = LanguagePicker(None, fetch=serve_repo_packs(calls))
         fired: list[bool] = []
         button.changed.connect(lambda: fired.append(True))
         button.choose("es")
@@ -283,10 +319,10 @@ class TestTheDialog:
     def test_choosing_english_while_in_english_changes_nothing(
         self, installed_plugin, project, make_memory_layer
     ):
-        from nika_onlymap_exporter.ui.language_button import LanguageButton
+        from nika_onlymap_exporter.ui.language_picker import LanguagePicker
 
         calls: list[str] = []
-        button = LanguageButton(None, fetch=serve_repo_packs(calls))
+        button = LanguagePicker(None, fetch=serve_repo_packs(calls))
         fired: list[bool] = []
         button.changed.connect(lambda: fired.append(True))
         button.choose("en")
@@ -295,9 +331,9 @@ class TestTheDialog:
     def test_the_offer_appears_for_a_portuguese_qgis(
         self, installed_plugin, project, make_memory_layer, monkeypatch
     ):
-        from nika_onlymap_exporter.ui import language_button
+        from nika_onlymap_exporter.ui import language_picker
 
-        monkeypatch.setattr(language_button, "qgis_locale", lambda: "pt_BR")
+        monkeypatch.setattr(language_picker, "qgis_locale", lambda: "pt_BR")
         dialog = _dialog(project, make_memory_layer)
         try:
             assert dialog.language_offer is not None
@@ -423,5 +459,42 @@ def test_the_plugin_reopens_the_dialog_in_the_new_language(
         assert plugin.dialog is not first
         assert plugin.dialog.isVisible()
     finally:
+        if plugin.dialog is not None:
+            plugin.dialog.close()
+
+
+def test_picking_a_language_reopens_the_dialog_in_it(
+    qgis_app, project, make_memory_layer
+):
+    """Reopening alone is not enough: the new dialog must be in the new language.
+
+    The first version reopened the dialog but only applied a language when
+    QGIS loaded the plugin, so a user who picked Portuguese saw English again.
+    """
+    from qgis.PyQt.QtCore import QSettings
+
+    from nika_onlymap_exporter.plugin import Qgis2WebMapPlugin
+    from nika_onlymap_exporter.ui import languages
+    from nika_onlymap_exporter.ui.i18n import use_language
+
+    class FakeIface:
+        def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+            return None
+
+    project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+    plugin = Qgis2WebMapPlugin(FakeIface())
+    try:
+        plugin.run()
+        plugin.dialog.language_picker.choose("pt_BR")
+        for _ in range(5):
+            qgis_app.processEvents()
+        assert plugin.dialog.tabs.tabText(0) == "Mapa"
+        plugin.dialog.language_picker.choose("en")
+        for _ in range(5):
+            qgis_app.processEvents()
+        assert plugin.dialog.tabs.tabText(0) == "Map"
+    finally:
+        QSettings().remove(languages.SETTING_KEY)
+        use_language("en")
         if plugin.dialog is not None:
             plugin.dialog.close()

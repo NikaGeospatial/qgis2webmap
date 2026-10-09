@@ -393,11 +393,13 @@ def stylesheet(p: Palette, object_name: str) -> str:
     border-color: {p.accent};
 }}
 
-/* The two things a user does to the map: a filled pill and an outlined one. */
+/* The two things a user does to the map: a filled button and an outlined one.
+   Gently rounded and no taller than the tab bar, which crops anything taller
+   from the top. */
 {d} QToolButton[role="primary"], {d} QToolButton[role="secondary"] {{
-    border-radius: 15px;
-    padding: 5px 34px 5px 16px;
-    min-height: 20px;
+    border-radius: 6px;
+    padding: 3px 30px 3px 14px;
+    min-height: 18px;
     font-weight: 600;
 }}
 {d} QToolButton[role="primary"] {{
@@ -423,18 +425,12 @@ def stylesheet(p: Palette, object_name: str) -> str:
     color: {p.quiet};
     border: 1px solid {p.rule};
 }}
-{d} QToolButton[role="primary"]::menu-button,
-{d} QToolButton[role="secondary"]::menu-button {{
-    border: none;
-    width: 26px;
-    border-top-right-radius: 15px;
-    border-bottom-right-radius: 15px;
-}}
 {d} QToolButton[role="primary"]::menu-button {{
+    border: none;
     border-left: 1px solid {p.accent_hover};
-}}
-{d} QToolButton[role="secondary"]::menu-button {{
-    border-left: 1px solid {p.rule};
+    width: 24px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
 }}
 {d} QToolButton[role="primary"]:disabled::menu-button {{
     border-left: 1px solid {p.rule};
@@ -444,10 +440,14 @@ def stylesheet(p: Palette, object_name: str) -> str:
     width: 10px;
     height: 10px;
 }}
-{d} QToolButton[role="secondary"]::menu-arrow {{
+/* Share opens its menu from anywhere on the button: one chevron, no split. */
+{d} QToolButton[role="secondary"]::menu-indicator {{
     image: url({p.icon("chevron")});
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
     width: 10px;
     height: 10px;
+    right: 10px;
 }}
 
 /* Footer chips: outlined, so they read as things to press. */
@@ -482,7 +482,7 @@ def stylesheet(p: Palette, object_name: str) -> str:
    to the other side by hand. */
 {d}[rtl="true"] QToolButton[role="primary"],
 {d}[rtl="true"] QToolButton[role="secondary"] {{
-    padding: 5px 16px 5px 34px;
+    padding: 3px 14px 3px 30px;
 }}
 {d}[rtl="true"] QToolButton[role="chip"][hasMenu="true"] {{
     padding-right: 12px;
