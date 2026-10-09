@@ -7,6 +7,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **The dialog wears NIKA's colours, and follows QGIS between light and dark.**
+  A light QGIS gets Plum-Light with a brass accent; Night Mapping and other dark
+  themes get Plum-Dark with a lime accent. Preview and Share are pills at the top
+  right, the open tab is underlined, and sections are a title and a rule rather
+  than a sunken grey box. The account and Discord at the foot are outlined
+  chips, so they read as things to press. The look is the dialog's own: nothing
+  else in QGIS is restyled.
+- **The dialog uses Inter**, bundled with the plugin (about 95 KB, Latin
+  scripts including Portuguese and Vietnamese), so it looks the same on Windows,
+  macOS and Linux. QGIS's own font is unchanged.
 - **The bottom row names the NIKA account this QGIS profile is paired with**, so
   you can see which one a map would be published to before publishing it, and
   switch to another without hunting through settings files. Its menu offers
