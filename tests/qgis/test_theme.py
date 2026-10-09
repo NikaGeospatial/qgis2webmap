@@ -203,3 +203,35 @@ class TestAttachedMenus:
             assert "combobox-popup: 0" in dialog.styleSheet()
         finally:
             dialog.close()
+
+
+class TestThemeChoice:
+    """Settings > Appearance can override QGIS: light or dark on purpose."""
+
+    def test_a_choice_overrides_qgis(self, qgis_app):
+        from nika_onlymap_exporter.ui import theme
+
+        dark_qgis = _palette_with_window("#323232")
+        light_qgis = _palette_with_window("#efefef")
+        assert theme.pick_palette(dark_qgis, "light") is theme.PLUM_LIGHT
+        assert theme.pick_palette(light_qgis, "dark") is theme.PLUM_DARK
+        assert theme.pick_palette(dark_qgis, "auto") is theme.PLUM_DARK
+
+    def test_switching_restyles_the_open_dialog(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui import theme
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            picker = dialog.theme_picker
+            picker.setCurrentIndex(picker.findData("dark"))
+            assert dialog.theme is theme.PLUM_DARK
+            assert theme.PLUM_DARK.canvas in dialog.styleSheet()
+            picker.setCurrentIndex(picker.findData("light"))
+            assert dialog.theme is theme.PLUM_LIGHT
+        finally:
+            QSettings().remove(theme.THEME_KEY)
+            dialog.close()

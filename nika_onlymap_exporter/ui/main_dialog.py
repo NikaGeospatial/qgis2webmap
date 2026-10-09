@@ -2316,6 +2316,22 @@ class MainDialog(QDialog):
         )
         layout.addWidget(language_box)
 
+        appearance_box = QGroupBox(tr("Appearance"), page)
+        appearance_form = QFormLayout(appearance_box)
+        self.theme_picker = QComboBox(appearance_box)
+        for value, label in (
+            ("auto", tr("Follow QGIS")),
+            ("light", tr("Light")),
+            ("dark", tr("Dark")),
+        ):
+            self.theme_picker.addItem(label, value)
+        self.theme_picker.setCurrentIndex(
+            max(0, self.theme_picker.findData(theme.chosen_theme()))
+        )
+        self.theme_picker.currentIndexChanged.connect(self._on_theme_changed)
+        appearance_form.addRow(tr("Theme"), self.theme_picker)
+        layout.addWidget(appearance_box)
+
         preview_box = QGroupBox(tr("Preview"), page)
         preview_layout = QVBoxLayout(preview_box)
         # The same switch as the one in the Preview menu, kept in step with
@@ -2342,6 +2358,16 @@ class MainDialog(QDialog):
 
         layout.addStretch(1)
         return page
+
+    def _on_theme_changed(self) -> None:
+        """Restyle in place: colours are not baked into labels the way text is."""
+        QSettings().setValue(theme.THEME_KEY, self.theme_picker.currentData())
+        self.theme = theme.apply(self)
+        theme.recolour_document(self.help_browser.document(), self.theme)
+        self.account_button.refresh()
+        self._update_basemap_warning()
+        self._update_terrain_warning()
+        self._update_size_note()
 
     def _sync_live_check(self, enabled: bool) -> None:
         """Mirror the Preview menu's switch without echoing back into it."""

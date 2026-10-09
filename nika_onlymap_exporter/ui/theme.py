@@ -122,8 +122,24 @@ PLUM_DARK = Palette(
 )
 
 
-def pick_palette(qgis_palette: QPalette) -> Palette:
-    """Plum-Dark under a dark QGIS theme, Plum-Light otherwise."""
+# Settings > Appearance: "auto" follows QGIS, or "light" / "dark" on purpose.
+THEME_KEY = "qgis2webmap/theme"
+THEME_CHOICES = ("auto", "light", "dark")
+
+
+def chosen_theme() -> str:
+    from qgis.PyQt.QtCore import QSettings
+
+    value = str(QSettings().value(THEME_KEY, "auto", type=str))
+    return value if value in THEME_CHOICES else "auto"
+
+
+def pick_palette(qgis_palette: QPalette, choice: str = "auto") -> Palette:
+    """The palette for `choice`; "auto" is Plum-Dark under a dark QGIS."""
+    if choice == "light":
+        return PLUM_LIGHT
+    if choice == "dark":
+        return PLUM_DARK
     window = qgis_palette.color(QPalette.ColorRole.Window)
     return PLUM_DARK if window.lightness() < 128 else PLUM_LIGHT
 
@@ -155,7 +171,9 @@ def load_fonts() -> str | None:
 def apply(dialog: QWidget) -> Palette:
     """Dress `dialog` in the NIKA theme that matches QGIS, and return it."""
     app = QApplication.instance()
-    palette = pick_palette(app.palette() if app is not None else dialog.palette())
+    palette = pick_palette(
+        app.palette() if app is not None else dialog.palette(), chosen_theme()
+    )
 
     family = load_fonts()
     if family is not None:
