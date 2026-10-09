@@ -35,6 +35,7 @@ from qgis.PyQt.QtGui import QFont, QIcon, QPainter, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
 from ..core.account import AccountIdentity, load_identity
+from .i18n import tr
 
 # Icon names verified present in QGIS 4.2's compiled theme. As with
 # `main_dialog.SHARE_MENU_ICONS` these are resource paths rather than files, and
@@ -151,9 +152,11 @@ class AccountButton(QToolButton):
         self.setIcon(_theme_icon(ICON_ACCOUNT))
         self._set_has_menu(False)
         self.setToolTip(
-            "Pair this QGIS profile with your NIKA account so you can publish "
-            "maps to it. Your browser opens NIKA's sign-in page; the plugin "
-            "never sees your password."
+            tr(
+                "Pair this QGIS profile with your NIKA account so you can publish "
+                "maps to it. Your browser opens NIKA's sign-in page; the plugin "
+                "never sees your password."
+            )
         )
         # No menu at all when signed out. A menu holding one item is a click
         # somebody has to make to discover there was no choice to make.
@@ -182,19 +185,23 @@ class AccountButton(QToolButton):
             plan.setEnabled(False)
         self._menu.addSeparator()
 
-        switch = self._menu.addAction("Switch account…")
+        switch = self._menu.addAction(tr("Switch account…"))
         switch.setIcon(_theme_icon(ICON_SWITCH))
         switch.setToolTip(
-            "Sign in as somebody else. Your browser opens NIKA's sign-in page; "
-            "this account stays paired until the new one is approved."
+            tr(
+                "Sign in as somebody else. Your browser opens NIKA's sign-in page; "
+                "this account stays paired until the new one is approved."
+            )
         )
         switch.triggered.connect(self._on_switch)
 
-        sign_out = self._menu.addAction("Sign out")
+        sign_out = self._menu.addAction(tr("Sign out"))
         sign_out.setIcon(_theme_icon(ICON_SIGN_OUT))
         sign_out.setToolTip(
-            "Unpair this QGIS profile and revoke its access to your NIKA "
-            "account. Maps you have already published stay online."
+            tr(
+                "Unpair this QGIS profile and revoke its access to your NIKA "
+                "account. Maps you have already published stay online."
+            )
         )
         sign_out.triggered.connect(self._on_sign_out)
 
@@ -238,7 +245,7 @@ class AccountButton(QToolButton):
         # coming back means going through the browser again.
         confirmed = QMessageBox.question(
             self,
-            "Sign out of NIKA",
+            tr("Sign out of NIKA"),
             f"Sign out of {identity.label} and revoke this computer's access?\n\n"
             "Maps you have already published stay online. You will need to "
             "sign in again through your browser to publish anything new.",
@@ -254,10 +261,12 @@ class AccountButton(QToolButton):
         """Say plainly that the transport is not in this build yet."""
         QMessageBox.information(
             self,
-            "Not in this version yet",
-            "Signing in to NIKA arrives with map hosting in a later release. "
-            "Everything this plugin exports today is a file you own and can "
-            "share yourself - nothing here needs an account.",
+            tr("Not in this version yet"),
+            tr(
+                "Signing in to NIKA arrives with map hosting in a later release. "
+                "Everything this plugin exports today is a file you own and can "
+                "share yourself - nothing here needs an account."
+            ),
         )
 
 

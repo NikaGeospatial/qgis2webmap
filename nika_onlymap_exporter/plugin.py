@@ -26,12 +26,15 @@ from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
+from .ui.i18n import N_
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface
 
 LOG_TAG = "QGIS2WebMap"
 MENU_TITLE = "&QGIS2WebMap by NIKA"
-ACTION_TEXT = "Create web map"
+# Marked for the catalogue here, translated in `initGui`.
+ACTION_TEXT = N_("Create web map")
 
 
 class Qgis2WebMapPlugin:
@@ -43,6 +46,20 @@ class Qgis2WebMapPlugin:
         self.action: QAction | None = None
         self.dialog = None
         self.provider = None
+        self.translator = None
+        # Before anything shows text: the menu entry is created in `initGui`.
+        # The plugin speaks whatever language QGIS does; see `ui.i18n`.
+        try:
+            from .ui.i18n import install_translator, qgis_locale
+
+            self.translator = install_translator(qgis_locale())
+        except Exception:
+            QgsMessageLog.logMessage(
+                f"Could not load a translation, staying in English:\n"
+                f"{traceback.format_exc()}",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Warning,
+            )
 
     # ---- QGIS lifecycle -------------------------------------------------
 
@@ -95,10 +112,12 @@ class Qgis2WebMapPlugin:
 
         self.initProcessing()
         icon = QIcon(os.path.join(self.plugin_dir, "icons", "qgis2webmap.svg"))
-        self.action = QAction(icon, ACTION_TEXT, self.iface.mainWindow())
+        from .ui.i18n import tr
+
+        self.action = QAction(icon, tr(ACTION_TEXT), self.iface.mainWindow())
         self.action.setObjectName("qgis2webmapCreateWebMap")
         self.action.setWhatsThis(
-            "Export the current QGIS project to a portable OnlyMap web map"
+            tr("Export the current QGIS project to a portable OnlyMap web map")
         )
         self.action.triggered.connect(self.run)
 
@@ -124,6 +143,12 @@ class Qgis2WebMapPlugin:
             self.dialog.close()
             self.dialog.deleteLater()
             self.dialog = None
+
+        if self.translator is not None:
+            from qgis.PyQt.QtCore import QCoreApplication
+
+            QCoreApplication.removeTranslator(self.translator)
+            self.translator = None
 
     # ---- Entry point ----------------------------------------------------
 

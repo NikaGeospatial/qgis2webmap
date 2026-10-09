@@ -45,6 +45,7 @@ from ..packaging.runtime_manager import (
     record_licence_acceptance,
     tarball_url,
 )
+from .i18n import tr
 
 # Shipped alongside the plugin so the terms are readable before any download.
 # Kept in sync with the published package by scripts/lock_runtime.py.
@@ -69,7 +70,7 @@ class RuntimeLicenceDialog(QDialog):
 
     def __init__(self, version: str, licence_text: str, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Install the OnlyMap runtime")
+        self.setWindowTitle(tr("Install the OnlyMap runtime"))
         self.setMinimumSize(640, 560)
 
         layout = QVBoxLayout(self)
@@ -89,7 +90,7 @@ class RuntimeLicenceDialog(QDialog):
         terms.setOpenExternalLinks(True)
         layout.addWidget(terms, stretch=1)
 
-        self.accepted_box = QCheckBox("I accept the OnlyMap licence")
+        self.accepted_box = QCheckBox(tr("I accept the OnlyMap licence"))
         layout.addWidget(self.accepted_box)
 
         buttons = QDialogButtonBox(
@@ -97,7 +98,7 @@ class RuntimeLicenceDialog(QDialog):
             parent=self,
         )
         self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        self.ok_button.setText("Download and install")
+        self.ok_button.setText(tr("Download and install"))
         # Enabled only by the checkbox: a dialog whose default button installs
         # a proprietary licence without a deliberate act is not consent.
         self.ok_button.setEnabled(False)
@@ -190,9 +191,11 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
     if not provider.version:
         QMessageBox.critical(
             parent,
-            "OnlyMap runtime",
-            "This installation does not pin a runtime version, so the runtime "
-            "cannot be downloaded. Please reinstall the plugin.",
+            tr("OnlyMap runtime"),
+            tr(
+                "This installation does not pin a runtime version, so the runtime "
+                "cannot be downloaded. Please reinstall the plugin."
+            ),
         )
         return None
 
@@ -232,7 +235,7 @@ def _download_with_progress(
         0,
         parent,
     )
-    progress.setWindowTitle("OnlyMap runtime")
+    progress.setWindowTitle(tr("OnlyMap runtime"))
     progress.setWindowModality(Qt.WindowModality.WindowModal)
     progress.setMinimumDuration(0)
 
@@ -247,7 +250,7 @@ def _download_with_progress(
         if not feedback.isCanceled():
             QMessageBox.critical(
                 parent,
-                "OnlyMap runtime",
+                tr("OnlyMap runtime"),
                 f"{exc}\n\nDownload URL:\n{tarball_url(provider.version)}",
             )
         return None

@@ -105,6 +105,7 @@ from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from . import theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
+from .i18n import N_, plural, tr
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
     COMMUNITY_URL,
@@ -131,12 +132,12 @@ LOG_TAG = "QGIS2WebMap"
 # Worded so the choice is readable without knowing the model: "with data" says
 # what happens, where qgis2web's "visible with data" needs its manual.
 POPUP_MODE_LABELS = {
-    PopupFieldMode.NO_LABEL: "Value only, no label",
-    PopupFieldMode.INLINE_ALWAYS: "Label beside value - always show",
-    PopupFieldMode.INLINE_WITH_DATA: "Label beside value - only if it has data",
-    PopupFieldMode.HEADER_ALWAYS: "Label above value - always show",
-    PopupFieldMode.HEADER_WITH_DATA: "Label above value - only if it has data",
-    PopupFieldMode.HIDDEN: "Do not show this field",
+    PopupFieldMode.NO_LABEL: N_("Value only, no label"),
+    PopupFieldMode.INLINE_ALWAYS: N_("Label beside value - always show"),
+    PopupFieldMode.INLINE_WITH_DATA: N_("Label beside value - only if it has data"),
+    PopupFieldMode.HEADER_ALWAYS: N_("Label above value - always show"),
+    PopupFieldMode.HEADER_WITH_DATA: N_("Label above value - only if it has data"),
+    PopupFieldMode.HIDDEN: N_("Do not show this field"),
 }
 
 # Long enough to say what happened, short enough that every row stays one line.
@@ -222,12 +223,12 @@ LAYER_OPTIONS_ROLE = "__layer_options__"
 # Centres first: they are the only positions not already holding map chrome, so
 # they are what most people should pick.
 CAPTION_CORNER_LABELS = {
-    OverlayCorner.TOP_CENTER: "Top centre - clear of the controls",
-    OverlayCorner.BOTTOM_CENTER: "Bottom centre - clear of the controls",
-    OverlayCorner.TOP_LEFT: "Top left - shared with the layer switcher",
-    OverlayCorner.TOP_RIGHT: "Top right - shared with the legend",
-    OverlayCorner.BOTTOM_LEFT: "Bottom left - shared with zoom and scale",
-    OverlayCorner.BOTTOM_RIGHT: "Bottom right - shared with the credit",
+    OverlayCorner.TOP_CENTER: N_("Top centre - clear of the controls"),
+    OverlayCorner.BOTTOM_CENTER: N_("Bottom centre - clear of the controls"),
+    OverlayCorner.TOP_LEFT: N_("Top left - shared with the layer switcher"),
+    OverlayCorner.TOP_RIGHT: N_("Top right - shared with the legend"),
+    OverlayCorner.BOTTOM_LEFT: N_("Bottom left - shared with zoom and scale"),
+    OverlayCorner.BOTTOM_RIGHT: N_("Bottom right - shared with the credit"),
 }
 
 # "None" first and default: it is the only choice that keeps the export working
@@ -235,36 +236,36 @@ CAPTION_CORNER_LABELS = {
 # minus the MapTiler ones, which need an API key the file would have to carry in
 # plain text for every recipient to read.
 BASEMAP_LABELS = {
-    "none": "None - the export stays offline and contacts nobody",
-    "osm": "OpenStreetMap",
-    "positron": "Positron - pale, for data on top",
-    "dark-matter": "Dark Matter - dark background",
-    "voyager": "Voyager - general purpose",
-    "liberty": "Liberty - detailed street map",
-    "bright": "Bright - high contrast",
+    "none": N_("None - the export stays offline and contacts nobody"),
+    "osm": N_("OpenStreetMap"),
+    "positron": N_("Positron - pale, for data on top"),
+    "dark-matter": N_("Dark Matter - dark background"),
+    "voyager": N_("Voyager - general purpose"),
+    "liberty": N_("Liberty - detailed street map"),
+    "bright": N_("Bright - high contrast"),
 }
 
 # Relief, not a backdrop, so it sits in the same group as the basemap but on its
 # own row. One entry beyond "off": the runtime's other preset needs a MapTiler
 # key, which an exported file would have to carry where anyone can read it.
 TERRAIN_LABELS = {
-    "none": "Flat - no elevation",
-    "terrarium": "Global relief - tilts the map so it shows",
+    "none": N_("Flat - no elevation"),
+    "terrarium": N_("Global relief - tilts the map so it shows"),
 }
 
 # A short list rather than a spinner: the useful range is narrow, and naming the
 # sizes means nobody has to reason about what 1.35 looks like.
 CHROME_SCALE_LABELS = {
-    1.0: "Normal",
-    0.85: "Small",
-    1.25: "Large",
-    1.5: "Extra large",
-    2.0: "Largest - for presentations and big screens",
+    1.0: N_("Normal"),
+    0.85: N_("Small"),
+    1.25: N_("Large"),
+    1.5: N_("Extra large"),
+    2.0: N_("Largest - for presentations and big screens"),
 }
 
 EXTENT_LABELS = {
-    ExtentSource.DATA: "The data - every feature is visible",
-    ExtentSource.CANVAS: "The current QGIS view",
+    ExtentSource.DATA: N_("The data - every feature is visible"),
+    ExtentSource.CANVAS: N_("The current QGIS view"),
 }
 
 
@@ -311,12 +312,15 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
     # and ampersands. Unescaped, Qt would silently swallow them as tags.
     box.setText(
         f"<p>{escape_html(message).replace(chr(10), '<br>')}</p>"
-        f"<p>Details are in the QGIS message log, under "
-        f"<b>{escape_html(LOG_TAG)}</b>.</p>"
-        f"<p>Tell us about it in the QGIS2WebMap channel on "
-        f'<a href="{DISCORD_URL}">our Discord</a>, or '
-        f'<a href="{REPO_URL}/issues">open a GitHub issue</a>. '
-        f"Please include the log.</p>"
+        + tr(
+            "<p>Details are in the QGIS message log, under <b>{tag}</b>.</p>"
+            "<p>Tell us about it in the QGIS2WebMap channel on "
+            '<a href="{discord}">our Discord</a>, or '
+            '<a href="{issues}">open a GitHub issue</a>. '
+            "Please include the log.</p>"
+        ).format(
+            tag=escape_html(LOG_TAG), discord=DISCORD_URL, issues=f"{REPO_URL}/issues"
+        )
     )
     box.exec()
 
@@ -347,10 +351,10 @@ def _reveal_label() -> str:
     rather than the same one worded oddly.
     """
     if sys.platform == "darwin":
-        return "Reveal in Finder"
+        return tr("Reveal in Finder")
     if sys.platform.startswith("win"):
-        return "Show in Explorer"
-    return "Show in file manager"
+        return tr("Show in Explorer")
+    return tr("Show in file manager")
 
 
 def _ago(when: float) -> str:
@@ -366,16 +370,16 @@ def _ago(when: float) -> str:
     """
     seconds = max(0.0, time.time() - when)
     if seconds < 10:
-        return "just now"
+        return tr("just now")
     if seconds < 90:
-        return f"{int(seconds)} s ago"
+        return tr("{n} s ago").format(n=int(seconds))
     minutes = seconds / 60
     if minutes < 90:
-        return f"{int(minutes)} min ago"
+        return tr("{n} min ago").format(n=int(minutes))
     hours = minutes / 60
     if hours < 36:
-        return f"{int(hours)} hour{'s' if int(hours) != 1 else ''} ago"
-    return f"{int(hours / 24)} days ago"
+        return plural(int(hours), "{n} hour ago", "{n} hours ago")
+    return plural(int(hours / 24), "{n} day ago", "{n} days ago")
 
 
 def _help_label(text: str, parent: QWidget) -> QLabel:
@@ -439,11 +443,11 @@ def _summarise(detail: str) -> str:
 
 
 STATUS_LABELS = {
-    FidelityStatus.PRESERVED: "Kept",
-    FidelityStatus.APPROXIMATED: "Changed",
-    FidelityStatus.RASTER_FALLBACK: "Rasterised",
-    FidelityStatus.UNSUPPORTED: "Not exported",
-    FidelityStatus.BLOCKED: "Blocked",
+    FidelityStatus.PRESERVED: N_("Kept"),
+    FidelityStatus.APPROXIMATED: N_("Changed"),
+    FidelityStatus.RASTER_FALLBACK: N_("Rasterised"),
+    FidelityStatus.UNSUPPORTED: N_("Not exported"),
+    FidelityStatus.BLOCKED: N_("Blocked"),
 }
 
 # Problems first. A report opening on a wall of "Kept" buries what matters.
@@ -470,15 +474,15 @@ def help_directory() -> Path | None:
 # Order shown in the Help tab. The same files are served on GitHub Pages, so the
 # in-plugin help and the website can never drift apart.
 HELP_PAGES = (
-    ("Overview", "index.md"),
-    ("Your first export", "first-export.md"),
-    ("The dialog, tab by tab", "the-dialog.md"),
-    ("Sharing a map", "sharing.md"),
-    ("Enhance a map with AI", "enhance-with-ai.md"),
-    ("Putting a map online", "hosting.md"),
-    ("What gets exported", "supported-features.md"),
-    ("Troubleshooting", "troubleshooting.md"),
-    ("Privacy", "privacy.md"),
+    (N_("Overview"), "index.md"),
+    (N_("Your first export"), "first-export.md"),
+    (N_("The dialog, tab by tab"), "the-dialog.md"),
+    (N_("Sharing a map"), "sharing.md"),
+    (N_("Enhance a map with AI"), "enhance-with-ai.md"),
+    (N_("Putting a map online"), "hosting.md"),
+    (N_("What gets exported"), "supported-features.md"),
+    (N_("Troubleshooting"), "troubleshooting.md"),
+    (N_("Privacy"), "privacy.md"),
 )
 
 HELP_UNAVAILABLE = (
@@ -548,7 +552,7 @@ def load_help_markdown() -> str:
         # "The dialog, tab by tab" - for every guide that has one. The title is
         # only needed for a guide that does not carry its own.
         if not _OPENS_WITH_H1.match(text):
-            text = f"# {title}\n\n{text}"
+            text = f"# {tr(title)}\n\n{text}"
         sections.append(text)
 
     if not sections:
@@ -591,7 +595,7 @@ class MainDialog(QDialog):
         self.project = QgsProject.instance()
         self.state: DialogState = load_state(self.project)
 
-        self.setWindowTitle("QGIS2WebMap by NIKA")
+        self.setWindowTitle(tr("QGIS2WebMap by NIKA"))
         self.setObjectName("qgis2webmapMainDialog")
         self.setMinimumSize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
         self._resize_to_fit_screen()
@@ -622,11 +626,13 @@ class MainDialog(QDialog):
 
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
-        self.tabs.addTab(_scrollable(self._build_map_tab()), "Map")
-        self.tabs.addTab(self._build_layers_tab(), "Layers")
-        self.tabs.addTab(_scrollable(self._build_appearance_tab()), "Appearance")
-        self.tabs.addTab(self._build_fidelity_tab(), "Fidelity")
-        self.tabs.addTab(self._build_help_tab(), "Help")
+        self.tabs.addTab(_scrollable(self._build_map_tab()), tr("Map"))
+        self.tabs.addTab(self._build_layers_tab(), tr("Layers"))
+        self.tabs.addTab(_scrollable(self._build_appearance_tab()), tr("Appearance"))
+        # Held, not found by title: the title is translated.
+        self._fidelity_page = self._build_fidelity_tab()
+        self.tabs.addTab(self._fidelity_page, tr("Fidelity"))
+        self.tabs.addTab(self._build_help_tab(), tr("Help"))
         self.tabs.setCornerWidget(self._build_tab_corner(), Qt.Corner.TopRightCorner)
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -711,13 +717,15 @@ class MainDialog(QDialog):
 
         QMessageBox.information(
             self,
-            "The map is now a file you keep",
-            "This version replaces the Export button with a Map file.\n\n"
-            "Set where the map lives on the Map tab, and Share does the rest - "
-            "a ZIP, a folder for a web host, or just opening it in a browser.\n\n"
-            "While Live preview is on, that file is kept up to date as you work. "
-            "Switch Live preview off in the Preview menu if you would rather it "
-            "were written only when you share it.",
+            tr("The map is now a file you keep"),
+            tr(
+                "This version replaces the Export button with a Map file.\n\n"
+                "Set where the map lives on the Map tab, and Share does the rest - "
+                "a ZIP, a folder for a web host, or just opening it in a browser.\n\n"
+                "While Live preview is on, that file is kept up to date as you work. "
+                "Switch Live preview off in the Preview menu if you would rather it "
+                "were written only when you share it."
+            ),
         )
 
     def _warn_style(self) -> str:
@@ -767,9 +775,11 @@ class MainDialog(QDialog):
         # look identical to someone opening the dialog for the first time, and
         # testing had people hunting the tabs for a file chooser.
         source_note = QLabel(
-            "<b>Source:</b> the layers already open in this QGIS project. There "
-            "is nothing to browse for - choose which of them to include on the "
-            "Layers tab.",
+            tr(
+                "<b>Source:</b> the layers already open in this QGIS project. There "
+                "is nothing to browse for - choose which of them to include on the "
+                "Layers tab."
+            ),
             page,
         )
         source_note.setWordWrap(True)
@@ -783,15 +793,20 @@ class MainDialog(QDialog):
         self.name_edit = QLineEdit(self.state.map_name, page)
         self.name_edit.setPlaceholderText(resolve_title(self.project, None))
         self.name_edit.setToolTip(
-            "The title shown on the exported map. Leave blank to use the project title."
+            tr(
+                "The title shown on the exported map. Leave blank to use the "
+                "project title."
+            )
         )
         self.name_edit.textChanged.connect(self._on_name_changed)
-        form.addRow("Map name", self.name_edit)
+        form.addRow(tr("Map name"), self.name_edit)
         form.addRow(
             "",
             _help_label(
-                "Shown on the map and in the browser tab. Leave blank to use "
-                "the project title.",
+                tr(
+                    "Shown on the map and in the browser tab. Leave blank to use "
+                    "the project title."
+                ),
                 page,
             ),
         )
@@ -804,16 +819,16 @@ class MainDialog(QDialog):
         # they are sending it to, and they decide that afterwards. The map is
         # now one HTML document, and the zip and folder tiers are produced from
         # the Share menu at the point of sharing.
-        destination_box = QGroupBox("Map file", page)
+        destination_box = QGroupBox(tr("Map file"), page)
         destination_layout = QVBoxLayout(destination_box)
 
         path_row = QHBoxLayout()
         self.path_edit = QLineEdit(destination_box)
-        self.path_edit.setPlaceholderText("Choose where the map file is written")
+        self.path_edit.setPlaceholderText(tr("Choose where the map file is written"))
         self.path_edit.textChanged.connect(self._on_path_edited)
         path_row.addWidget(self.path_edit, 1)
 
-        browse = QPushButton("Choose...", destination_box)
+        browse = QPushButton(tr("Choose..."), destination_box)
         browse.clicked.connect(self._on_choose_map_file)
         path_row.addWidget(browse)
         destination_layout.addLayout(path_row)
@@ -844,16 +859,16 @@ class MainDialog(QDialog):
         # project's data, it is the backdrop behind it - and it is the only
         # setting whose consequence lands on the recipient, so it should be
         # found rather than come across.
-        basemap_box = QGroupBox("Basemap", page)
+        basemap_box = QGroupBox(tr("Basemap"), page)
         basemap_form = QFormLayout(basemap_box)
 
         self.basemap_combo = QComboBox(basemap_box)
         for value, label in BASEMAP_LABELS.items():
-            self.basemap_combo.addItem(label, value)
+            self.basemap_combo.addItem(tr(label), value)
         basemap_index = self.basemap_combo.findData(self.state.basemap)
         self.basemap_combo.setCurrentIndex(basemap_index if basemap_index >= 0 else 0)
         self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
-        basemap_form.addRow("Show behind the map", self.basemap_combo)
+        basemap_form.addRow(tr("Show behind the map"), self.basemap_combo)
 
         # Warning rather than help: this is the only setting that changes what
         # the *recipient's* machine does, and it cannot be undone after sending.
@@ -867,11 +882,11 @@ class MainDialog(QDialog):
         # would mean explaining that cost twice.
         self.terrain_combo = QComboBox(basemap_box)
         for value, label in TERRAIN_LABELS.items():
-            self.terrain_combo.addItem(label, value)
+            self.terrain_combo.addItem(tr(label), value)
         terrain_index = self.terrain_combo.findData(self.state.terrain)
         self.terrain_combo.setCurrentIndex(terrain_index if terrain_index >= 0 else 0)
         self.terrain_combo.currentIndexChanged.connect(self._on_terrain_changed)
-        basemap_form.addRow("Ground surface", self.terrain_combo)
+        basemap_form.addRow(tr("Ground surface"), self.terrain_combo)
 
         self.terrain_warning = QLabel("", basemap_box)
         self.terrain_warning.setWordWrap(True)
@@ -879,21 +894,23 @@ class MainDialog(QDialog):
         self._update_terrain_warning()
         layout.addWidget(basemap_box)
 
-        data_box = QGroupBox("Data", page)
+        data_box = QGroupBox(tr("Data"), page)
         data_form = QFormLayout(data_box)
 
         self.extent_combo = QComboBox(data_box)
         for source, label in EXTENT_LABELS.items():
-            self.extent_combo.addItem(label, source.value)
+            self.extent_combo.addItem(tr(label), source.value)
         extent_index = self.extent_combo.findData(self.state.extent_source.value)
         self.extent_combo.setCurrentIndex(extent_index if extent_index >= 0 else 0)
         self.extent_combo.currentIndexChanged.connect(self._on_extent_changed)
-        data_form.addRow("Open the map on", self.extent_combo)
+        data_form.addRow(tr("Open the map on"), self.extent_combo)
         data_form.addRow(
             "",
             _help_label(
-                "Where the map is positioned when someone opens it. They can "
-                "still pan and zoom anywhere afterwards.",
+                tr(
+                    "Where the map is positioned when someone opens it. They can "
+                    "still pan and zoom anywhere afterwards."
+                ),
                 data_box,
             ),
         )
@@ -902,17 +919,21 @@ class MainDialog(QDialog):
         # decisions: that one frames the map, this one decides what is in it.
         # Folding them together would mean a user who wanted to open on their
         # working view silently shipped a map missing everything outside it.
-        self.clip_check = QCheckBox("Export only the features in this view", data_box)
+        self.clip_check = QCheckBox(
+            tr("Export only the features in this view"), data_box
+        )
         self.clip_check.setChecked(self.state.clip_to_extent)
         self.clip_check.toggled.connect(self._on_clip_toggled)
         data_form.addRow("", self.clip_check)
         data_form.addRow(
             "",
             _help_label(
-                "Leaves out everything outside the current QGIS view. This is "
-                "the practical way to bring a very large layer under the free "
-                "plan's 25,000-feature limit. The Fidelity tab reports how many "
-                "features each layer loses.",
+                tr(
+                    "Leaves out everything outside the current QGIS view. This is "
+                    "the practical way to bring a very large layer under the free "
+                    "plan's 25,000-feature limit. The Fidelity tab reports how many "
+                    "features each layer loses."
+                ),
                 data_box,
             ),
         )
@@ -921,26 +942,32 @@ class MainDialog(QDialog):
         # setting in this dialog that throws data away, so it is opt-in and
         # says so in the fidelity report when chosen.
         self.precision_combo = QComboBox(data_box)
-        self.precision_combo.addItem("Maintain full precision", None)
+        self.precision_combo.addItem(tr("Maintain full precision"), None)
         for places in range(MIN_PRECISION, MAX_PRECISION + 1):
-            self.precision_combo.addItem(f"{places} decimal place(s)", places)
+            self.precision_combo.addItem(
+                plural(places, "{n} decimal place", "{n} decimal places"), places
+            )
         precision_index = self.precision_combo.findData(self.state.quantize_precision)
         self.precision_combo.setCurrentIndex(
             precision_index if precision_index >= 0 else 0
         )
         self.precision_combo.setToolTip(
-            "Rounding coordinates makes the file smaller and is irreversible. "
-            "Around 6 decimal places is roughly 0.1 m at the equator."
+            tr(
+                "Rounding coordinates makes the file smaller and is irreversible. "
+                "Around 6 decimal places is roughly 0.1 m at the equator."
+            )
         )
         self.precision_combo.currentIndexChanged.connect(self._on_precision_changed)
-        data_form.addRow("Coordinate precision", self.precision_combo)
+        data_form.addRow(tr("Coordinate precision"), self.precision_combo)
         # The only setting in this dialog that discards data, so it says so on
         # screen rather than only on hover.
         data_form.addRow(
             "",
             _help_label(
-                "Rounding makes the file smaller and cannot be undone. "
-                "6 places is about 0.1 m at the equator.",
+                tr(
+                    "Rounding makes the file smaller and cannot be undone. "
+                    "6 places is about 0.1 m at the equator."
+                ),
                 data_box,
             ),
         )
@@ -1008,10 +1035,12 @@ class MainDialog(QDialog):
             self.export_summary.setText("")
             return
 
-        layers = f"{selected_count} layer{'s' if selected_count != 1 else ''}"
-        sentence = (
-            f"The map file is one HTML file that opens by double-click, "
-            f"carrying {layers}."
+        sentence = plural(
+            selected_count,
+            "The map file is one HTML file that opens by double-click, "
+            "carrying {n} layer.",
+            "The map file is one HTML file that opens by double-click, "
+            "carrying {n} layers.",
         )
 
         # Naming the destination here is what makes the path field's effect
@@ -1019,7 +1048,7 @@ class MainDialog(QDialog):
         destination = getattr(self, "path_edit", None)
         chosen = destination.text().strip() if destination is not None else ""
         if chosen:
-            sentence += f"\nTo: {chosen}"
+            sentence += "\n" + tr("To: {path}").format(path=chosen)
         self.export_summary.setText(sentence)
 
     def _on_extent_changed(self) -> None:
@@ -1173,7 +1202,7 @@ class MainDialog(QDialog):
             Path(self._picker_start_directory()) / f"{self._default_basename()}.html"
         )
         chosen, _ = QFileDialog.getSaveFileName(
-            self, "Map file", start, "Web page (*.html)"
+            self, tr("Map file"), start, tr("Web page (*.html)")
         )
         if not chosen:
             return
@@ -1197,11 +1226,13 @@ class MainDialog(QDialog):
 
         destination = self._map_file()
         if destination is None:
-            self.save_status.setText("Choose a map file to enable Preview and Share.")
+            self.save_status.setText(
+                tr("Choose a map file to enable Preview and Share.")
+            )
             return
 
         if not destination.exists():
-            self.save_status.setText("Not written yet.")
+            self.save_status.setText(tr("Not written yet."))
             return
 
         try:
@@ -1210,12 +1241,17 @@ class MainDialog(QDialog):
             # The path is real enough to have been chosen but cannot be read -
             # a disconnected network share, most likely. Saying so beats a
             # traceback in a slot.
-            self.save_status.setText("The map file cannot be read from here.")
+            self.save_status.setText(tr("The map file cannot be read from here."))
             return
 
         megabytes = stat.st_size / 1024 / 1024
         layers = len(self.state.selected_layer_ids(self._available_layer_ids()))
-        detail = f"{megabytes:.1f} MB - {layers} layer{'s' if layers != 1 else ''}"
+        detail = plural(
+            layers,
+            "{size} MB - {n} layer",
+            "{size} MB - {n} layers",
+            size=f"{megabytes:.1f}",
+        )
 
         # The two states read differently because they promise different things.
         # While a session is live the file tracks the dialog, so "Saved" is a
@@ -1223,14 +1259,24 @@ class MainDialog(QDialog):
         # sentence has to say what will close the gap - otherwise a file written
         # twenty minutes ago looks current simply because it exists.
         if self._autosave_is_running():
-            self.save_status.setText(f"Saved {_ago(stat.st_mtime)} - {detail}")
+            self.save_status.setText(
+                tr("Saved {ago} - {detail}").format(
+                    ago=_ago(stat.st_mtime), detail=detail
+                )
+            )
         elif self._map_file_is_stale():
             self.save_status.setText(
-                f"Last written {_ago(stat.st_mtime)} - {detail}. "
-                "The project has changed since; Share rebuilds it."
+                tr(
+                    "Last written {ago} - {detail}. "
+                    "The project has changed since; Share rebuilds it."
+                ).format(ago=_ago(stat.st_mtime), detail=detail)
             )
         else:
-            self.save_status.setText(f"Last written {_ago(stat.st_mtime)} - {detail}")
+            self.save_status.setText(
+                tr("Last written {ago} - {detail}").format(
+                    ago=_ago(stat.st_mtime), detail=detail
+                )
+            )
 
     def _autosave_is_running(self) -> bool:
         """Whether the map file is currently being kept up to date.
@@ -1267,7 +1313,7 @@ class MainDialog(QDialog):
             action.setToolTip(
                 self._share_tooltips[key]
                 if ready
-                else "Choose a map file on the Map tab first"
+                else tr("Choose a map file on the Map tab first")
             )
 
     def _remember_destination(self, path: Path) -> None:
@@ -1296,11 +1342,11 @@ class MainDialog(QDialog):
             return
 
         limit_mb = SINGLE_FILE_WARN_BYTES // 1024 // 1024
-        base = (
-            f"The map file inlines every feature, so it carries all the data "
-            f"itself. Past about {limit_mb} MB it gets slow to open and awkward "
-            f"to move around."
-        )
+        base = tr(
+            "The map file inlines every feature, so it carries all the data "
+            "itself. Past about {limit} MB it gets slow to open and awkward "
+            "to move around."
+        ).format(limit=limit_mb)
 
         export = self._cached_export
         if export is None:
@@ -1312,14 +1358,20 @@ class MainDialog(QDialog):
         megabytes = data_bytes / 1024 / 1024
         if data_bytes > SINGLE_FILE_WARN_BYTES:
             self.size_note.setText(
-                f"This map's data is {megabytes:.0f} MB, past the {limit_mb} MB "
-                "where a single file starts to be unwieldy. The map file is "
-                "still written - Share > Export share ZIP is the practical way "
-                "to send something this size."
+                tr(
+                    "This map's data is {size} MB, past the {limit} MB "
+                    "where a single file starts to be unwieldy. The map file is "
+                    "still written - Share > Export share ZIP is the practical way "
+                    "to send something this size."
+                ).format(size=f"{megabytes:.0f}", limit=limit_mb)
             )
             self.size_note.setStyleSheet(self._warn_style())
         else:
-            self.size_note.setText(f"{base}\nThis map's data is {megabytes:.1f} MB.")
+            self.size_note.setText(
+                base
+                + "\n"
+                + tr("This map's data is {size} MB.").format(size=f"{megabytes:.1f}")
+            )
             self.size_note.setStyleSheet("")
 
     # ---- Layers tab -----------------------------------------------------
@@ -1329,16 +1381,20 @@ class MainDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.addWidget(
             QLabel(
-                "Layers come from the QGIS Layers panel and follow it live - "
-                "reorder or rename them there and this list updates. Expand a "
-                "layer to choose how each of its fields appears in popups.",
+                tr(
+                    "Layers come from the QGIS Layers panel and follow it live - "
+                    "reorder or rename them there and this list updates. Expand a "
+                    "layer to choose how each of its fields appears in popups."
+                ),
                 page,
             )
         )
 
         self.layer_tree = QTreeWidget(page)
         self.layer_tree.setColumnCount(4)
-        self.layer_tree.setHeaderLabels(["Layer", "Include", "Popups", "Labels"])
+        self.layer_tree.setHeaderLabels(
+            [tr("Layer"), tr("Include"), tr("Popups"), tr("Labels")]
+        )
         self.layer_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         layout.addWidget(self.layer_tree)
@@ -1350,18 +1406,20 @@ class MainDialog(QDialog):
         # a tooltip is only read by someone who already suspects it is there.
         layout.addWidget(
             _help_label(
-                "<b>Include</b> - untick to leave the layer out of the map "
-                "entirely. Its data is not written, so the file gets smaller.<br>"
-                "<b>Popups</b> - untick and clicking a feature does nothing. "
-                "The attribute values are left out of the file entirely, so "
-                "this is also how you keep data out of a map you are sending "
-                "someone.<br>"
-                "<b>Labels</b> - untick to drop the text QGIS draws beside "
-                "features. The features themselves still appear.<br>"
-                "Unticking Popups or Labels only affects that layer; the map "
-                "still works, with less on it. Expand a layer to hide single "
-                "fields instead - those values leave the file too, unless the "
-                "map draws with them.",
+                tr(
+                    "<b>Include</b> - untick to leave the layer out of the map "
+                    "entirely. Its data is not written, so the file gets smaller.<br>"
+                    "<b>Popups</b> - untick and clicking a feature does nothing. "
+                    "The attribute values are left out of the file entirely, so "
+                    "this is also how you keep data out of a map you are sending "
+                    "someone.<br>"
+                    "<b>Labels</b> - untick to drop the text QGIS draws beside "
+                    "features. The features themselves still appear.<br>"
+                    "Unticking Popups or Labels only affects that layer; the map "
+                    "still works, with less on it. Expand a layer to hide single "
+                    "fields instead - those values leave the file too, unless the "
+                    "map draws with them."
+                ),
                 page,
             )
         )
@@ -1371,19 +1429,21 @@ class MainDialog(QDialog):
         # too - but as a button, because it is the one control on this tab that
         # overwrites every layer at once and should not fire on a stray scroll.
         bulk = QHBoxLayout()
-        bulk.addWidget(QLabel("Set every field to", page))
+        bulk.addWidget(QLabel(tr("Set every field to"), page))
         self.bulk_mode_combo = QComboBox(page)
         for mode, label in POPUP_MODE_LABELS.items():
-            self.bulk_mode_combo.addItem(label, mode.value)
+            self.bulk_mode_combo.addItem(tr(label), mode.value)
         self.bulk_mode_combo.setCurrentIndex(
             self.bulk_mode_combo.findData(PopupFieldMode.INLINE_WITH_DATA.value)
         )
         bulk.addWidget(self.bulk_mode_combo)
 
-        apply_all = QPushButton("Apply to all layers", page)
+        apply_all = QPushButton(tr("Apply to all layers"), page)
         apply_all.setToolTip(
-            "Give every popup field in every layer this setting, replacing the "
-            "choices below."
+            tr(
+                "Give every popup field in every layer this setting, replacing the "
+                "choices below."
+            )
         )
         apply_all.clicked.connect(self._on_apply_mode_to_all)
         bulk.addWidget(apply_all)
@@ -1490,7 +1550,7 @@ class MainDialog(QDialog):
 
             combo = QComboBox(row)
             for mode, label in POPUP_MODE_LABELS.items():
-                combo.addItem(label, mode.value)
+                combo.addItem(tr(label), mode.value)
 
             # With no explicit choice the combo must show what the export will
             # actually do, which for a column hidden in the QGIS attribute table
@@ -1535,7 +1595,7 @@ class MainDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        label = QLabel("This layer only", row)
+        label = QLabel(tr("This layer only"), row)
         label.setMinimumWidth(FIELD_NAME_COLUMN_WIDTH)
         layout.addWidget(label)
 
@@ -1553,8 +1613,8 @@ class MainDialog(QDialog):
         layout.addWidget(hover)
 
         precision = QComboBox(row)
-        precision.addItem("Precision: same as map", None)
-        precision.addItem("Precision: keep it all", PRECISION_FULL)
+        precision.addItem(tr("Precision: same as map"), None)
+        precision.addItem(tr("Precision: keep it all"), PRECISION_FULL)
         for places in range(MIN_PRECISION, MAX_PRECISION + 1):
             precision.addItem(f"Precision: {places} decimal place(s)", places)
         precision.setCurrentIndex(
@@ -1569,8 +1629,8 @@ class MainDialog(QDialog):
 
         highlight = QgsColorButton(row)
         highlight.setAllowOpacity(True)
-        highlight.setShowNull(True, "Highlight: same as map")
-        highlight.setToolTip("Highlight colour for this layer only.")
+        highlight.setShowNull(True, tr("Highlight: same as map"))
+        highlight.setToolTip(tr("Highlight colour for this layer only."))
         _apply_saved_color(highlight, settings.highlight_color or "")
         highlight.colorChanged.connect(
             lambda _c, lid=layer_id, button=highlight: self._on_layer_highlight_changed(
@@ -1649,20 +1709,22 @@ class MainDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.addWidget(
             QLabel(
-                "These are on by default - an exported map should be useful "
-                "without configuring anything.",
+                tr(
+                    "These are on by default - an exported map should be useful "
+                    "without configuring anything."
+                ),
                 page,
             )
         )
 
-        chrome = QGroupBox("Map controls", page)
+        chrome = QGroupBox(tr("Map controls"), page)
         chrome_layout = QVBoxLayout(chrome)
         self.widget_checks: dict[str, QCheckBox] = {}
         for key, label, current in (
-            ("legend", "Legend", self.state.show_legend),
-            ("layerSwitcher", "Layer switcher", self.state.show_layer_switcher),
-            ("zoomControls", "Zoom controls", self.state.show_zoom_controls),
-            ("scaleBar", "Scale bar", self.state.show_scale_bar),
+            ("legend", tr("Legend"), self.state.show_legend),
+            ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
+            ("zoomControls", tr("Zoom controls"), self.state.show_zoom_controls),
+            ("scaleBar", tr("Scale bar"), self.state.show_scale_bar),
         ):
             check = QCheckBox(label, page)
             check.setChecked(current)
@@ -1686,48 +1748,54 @@ class MainDialog(QDialog):
         Properties. Both are off by default because an unwanted caption over
         someone's map is worse than a missing one.
         """
-        box = QGroupBox("Caption", page)
+        box = QGroupBox(tr("Caption"), page)
         form = QFormLayout(box)
 
-        self.title_check = QCheckBox("Map title", box)
+        self.title_check = QCheckBox(tr("Map title"), box)
         self.title_check.setChecked(self.state.show_title)
         self.title_check.toggled.connect(self._on_title_toggled)
         form.addRow(self.title_check)
         form.addRow(
             "",
             _help_label(
-                "Draws the map name over the map. The legend drops its own "
-                "heading while this is on, so the title is not shown twice.",
+                tr(
+                    "Draws the map name over the map. The legend drops its own "
+                    "heading while this is on, so the title is not shown twice."
+                ),
                 box,
             ),
         )
 
-        self.abstract_check = QCheckBox("Project description", box)
+        self.abstract_check = QCheckBox(tr("Project description"), box)
         self.abstract_check.setChecked(self.state.show_abstract)
         self.abstract_check.toggled.connect(self._on_abstract_toggled)
         form.addRow(self.abstract_check)
         form.addRow(
             "",
             _help_label(
-                "The abstract from Project Properties > Metadata. Nothing "
-                "appears if the project has none.",
+                tr(
+                    "The abstract from Project Properties > Metadata. Nothing "
+                    "appears if the project has none."
+                ),
                 box,
             ),
         )
 
         self.corner_combo = QComboBox(box)
         for corner, label in CAPTION_CORNER_LABELS.items():
-            self.corner_combo.addItem(label, corner.value)
+            self.corner_combo.addItem(tr(label), corner.value)
         index = self.corner_combo.findData(self.state.title_corner.value)
         self.corner_combo.setCurrentIndex(index if index >= 0 else 0)
         self.corner_combo.currentIndexChanged.connect(self._on_corner_changed)
-        form.addRow("Position", self.corner_combo)
+        form.addRow(tr("Position"), self.corner_combo)
         form.addRow(
             "",
             _help_label(
-                "All four corners already hold map controls - switcher top "
-                "left, legend top right, zoom and scale bottom left, credit "
-                "bottom right. The centres are the only clear space.",
+                tr(
+                    "All four corners already hold map controls - switcher top "
+                    "left, legend top right, zoom and scale bottom left, credit "
+                    "bottom right. The centres are the only clear space."
+                ),
                 box,
             ),
         )
@@ -1735,67 +1803,73 @@ class MainDialog(QDialog):
 
     def _build_colors_group(self, page: QWidget) -> QWidget:
         """Widget colours, as CSS custom properties the runtime already reads."""
-        box = QGroupBox("Control colours", page)
+        box = QGroupBox(tr("Control colours"), page)
         form = QFormLayout(box)
 
         self.background_button = QgsColorButton(box)
         self.background_button.setAllowOpacity(False)
-        self.background_button.setShowNull(True, "Default")
+        self.background_button.setShowNull(True, tr("Default"))
         self.background_button.colorChanged.connect(
             lambda color: self._on_widget_color("widget_background", color)
         )
         _apply_saved_color(self.background_button, self.state.widget_background)
-        form.addRow("Background", self.background_button)
+        form.addRow(tr("Background"), self.background_button)
 
         self.foreground_button = QgsColorButton(box)
         self.foreground_button.setAllowOpacity(False)
-        self.foreground_button.setShowNull(True, "Default")
+        self.foreground_button.setShowNull(True, tr("Default"))
         self.foreground_button.colorChanged.connect(
             lambda color: self._on_widget_color("widget_foreground", color)
         )
         _apply_saved_color(self.foreground_button, self.state.widget_foreground)
-        form.addRow("Text and icons", self.foreground_button)
+        form.addRow(tr("Text and icons"), self.foreground_button)
         self.scale_combo = QComboBox(box)
         for value, label in CHROME_SCALE_LABELS.items():
-            self.scale_combo.addItem(label, value)
+            self.scale_combo.addItem(tr(label), value)
         scale_index = self.scale_combo.findData(self.state.chrome_scale)
         self.scale_combo.setCurrentIndex(scale_index if scale_index >= 0 else 0)
         self.scale_combo.currentIndexChanged.connect(self._on_chrome_scale_changed)
-        form.addRow("Size", self.scale_combo)
+        form.addRow(tr("Size"), self.scale_combo)
         form.addRow(
             "",
             _help_label(
-                "Scales the legend, layer switcher, zoom controls, scale bar "
-                "and title together. The credit stays fixed so attribution "
-                "cannot be shrunk out of legibility.",
+                tr(
+                    "Scales the legend, layer switcher, zoom controls, scale bar "
+                    "and title together. The credit stays fixed so attribution "
+                    "cannot be shrunk out of legibility."
+                ),
                 box,
             ),
         )
         form.addRow(
             "",
             _help_label(
-                "Applies to the legend, layer switcher, zoom controls and "
-                "scale bar. Leave both unset to keep the map's own styling.",
+                tr(
+                    "Applies to the legend, layer switcher, zoom controls and "
+                    "scale bar. Leave both unset to keep the map's own styling."
+                ),
                 box,
             ),
         )
         return box
 
     def _build_behaviour_group(self, page: QWidget) -> QWidget:
-        box = QGroupBox("Behaviour", page)
+        box = QGroupBox(tr("Behaviour"), page)
         layout = QVBoxLayout(box)
 
-        self.hover_check = QCheckBox("Open popups on hover instead of click", box)
+        self.hover_check = QCheckBox(tr("Open popups on hover instead of click"), box)
         self.hover_check.setChecked(self.state.popup_on_hover)
         self.hover_check.setToolTip(
-            "Hover replaces click rather than adding to it: bound together, a "
-            "click on an already-open popup appears to do nothing."
+            tr(
+                "Hover replaces click rather than adding to it: bound together, a "
+                "click on an already-open popup appears to do nothing."
+            )
         )
         self.hover_check.toggled.connect(self._on_hover_toggled)
         layout.addWidget(self.hover_check)
         layout.addWidget(
             _help_label(
-                "Hover replaces click rather than adding to it.",
+                tr("Hover replaces click rather than adding to it."),
                 box,
             )
         )
@@ -1805,13 +1879,15 @@ class MainDialog(QDialog):
         # the only way to change it is Project Properties - outside the plugin.
         # Reported as far back as 2015 (qgis2web#132) and still open.
         highlight_row = QHBoxLayout()
-        highlight_row.addWidget(QLabel("Highlight under the cursor", box))
+        highlight_row.addWidget(QLabel(tr("Highlight under the cursor"), box))
         self.highlight_button = QgsColorButton(box)
         self.highlight_button.setAllowOpacity(True)
-        self.highlight_button.setShowNull(True, "Default (white, see-through)")
+        self.highlight_button.setShowNull(True, tr("Default (white, see-through)"))
         self.highlight_button.setToolTip(
-            "Shown when the cursor is over a feature. Keep some transparency: a "
-            "solid colour hides whatever the feature is drawn on top of."
+            tr(
+                "Shown when the cursor is over a feature. Keep some transparency: a "
+                "solid colour hides whatever the feature is drawn on top of."
+            )
         )
         self.highlight_button.colorChanged.connect(self._on_highlight_color)
         _apply_saved_color(self.highlight_button, self.state.highlight_color)
@@ -1873,14 +1949,16 @@ class MainDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.addWidget(
             QLabel(
-                "What survives the export, and what does not - checked before "
-                "you export, so nothing is left to discover later.",
+                tr(
+                    "What survives the export, and what does not - checked before "
+                    "you export, so nothing is left to discover later."
+                ),
                 page,
             )
         )
         self.fidelity_tree = QTreeWidget(page)
         self.fidelity_tree.setColumnCount(3)
-        self.fidelity_tree.setHeaderLabels(["Item", "Result", "Detail"])
+        self.fidelity_tree.setHeaderLabels([tr("Item"), tr("Result"), tr("Detail")])
         # The item names identify *which* layer a note is about, so eliding them
         # to "Data of 'al..." makes the report unreadable on a project with
         # several similarly-named layers. They size to their content; the detail
@@ -1900,7 +1978,7 @@ class MainDialog(QDialog):
         for entry in sorted(report.items, key=lambda i: STATUS_ORDER[i.status]):
             item = QTreeWidgetItem(self.fidelity_tree)
             item.setText(0, entry.subject)
-            item.setText(1, STATUS_LABELS[entry.status])
+            item.setText(1, tr(STATUS_LABELS[entry.status]))
             item.setText(2, _summarise(entry.detail))
             item.setToolTip(2, entry.detail)
 
@@ -1917,9 +1995,11 @@ class MainDialog(QDialog):
         """Leave the tab saying why it is empty, never just empty."""
         self.fidelity_tree.clear()
         item = QTreeWidgetItem(self.fidelity_tree)
-        item.setText(0, "Report unavailable")
-        item.setText(1, STATUS_LABELS[FidelityStatus.BLOCKED])
-        item.setText(2, f"The project could not be read: {message}")
+        item.setText(0, tr("Report unavailable"))
+        item.setText(1, tr(STATUS_LABELS[FidelityStatus.BLOCKED]))
+        item.setText(
+            2, tr("The project could not be read: {message}").format(message=message)
+        )
 
     def _on_tab_changed(self, index: int) -> None:
         """Fill the Fidelity tab when the user opens it.
@@ -1938,17 +2018,22 @@ class MainDialog(QDialog):
         hung. The tab now fills when the read lands, with the bar showing which
         layer it is on.
         """
-        if self.tabs.tabText(index) != "Fidelity" or not self._fidelity_is_stale:
+        if (
+            self.tabs.widget(index) is not self._fidelity_page
+            or not self._fidelity_is_stale
+        ):
             return
 
         # A placeholder rather than an empty table: the whole reason this tab
         # computes on open is that "empty" reads as "nothing to report".
         self.fidelity_tree.clear()
         pending = QTreeWidgetItem(self.fidelity_tree)
-        pending.setText(0, "Checking...")
-        pending.setText(2, "Reading the project to see what the export changes.")
+        pending.setText(0, tr("Checking..."))
+        pending.setText(2, tr("Reading the project to see what the export changes."))
 
-        self._ensure_export(lambda _export, _report: None, "Checking the project...")
+        self._ensure_export(
+            lambda _export, _report: None, tr("Checking the project...")
+        )
 
     # ---- Help tab -------------------------------------------------------
 
@@ -1975,7 +2060,7 @@ class MainDialog(QDialog):
         layout.setSpacing(6)
 
         self.preview_button = QToolButton(corner)
-        self.preview_button.setText("Preview")
+        self.preview_button.setText(tr("Preview"))
         self.preview_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.MenuButtonPopup
         )
@@ -1988,7 +2073,7 @@ class MainDialog(QDialog):
         layout.addWidget(self.preview_button)
 
         self.share_button = QToolButton(corner)
-        self.share_button.setText("Share")
+        self.share_button.setText(tr("Share"))
         self.share_button.setProperty("role", "secondary")
         self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.share_button.setToolButtonStyle(
@@ -2013,14 +2098,16 @@ class MainDialog(QDialog):
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
 
-        self.live_action = QAction("Live preview", self)
+        self.live_action = QAction(tr("Live preview"), self)
         self.live_action.setCheckable(True)
         self.live_action.setChecked(
             QSettings().value(LIVE_PREVIEW_KEY, True, type=bool)
         )
         self.live_action.setToolTip(
-            "Serve the preview from this machine and reload the open tab as you "
-            "change settings. Switch off to open the preview as a file instead."
+            tr(
+                "Serve the preview from this machine and reload the open tab as you "
+                "change settings. Switch off to open the preview as a file instead."
+            )
         )
         self.live_action.toggled.connect(self._on_live_toggled)
         menu.addAction(self.live_action)
@@ -2059,30 +2146,32 @@ class MainDialog(QDialog):
 
         add(
             "copy_path",
-            "Copy file path",
-            "Copies the map file's path to the clipboard",
+            tr("Copy file path"),
+            tr("Copies the map file's path to the clipboard"),
             self.on_copy_map_path,
         )
         add(
             "reveal",
             _reveal_label(),
-            "Shows the map file in your file manager",
+            tr("Shows the map file in your file manager"),
             self.on_reveal_map_file,
         )
         add(
             "open",
-            "Open in browser",
-            "Opens the map in your browser",
+            tr("Open in browser"),
+            tr("Opens the map in your browser"),
             self.on_open_in_browser,
             "Ctrl+O",
         )
 
-        menu.addSection("Publish")
+        menu.addSection(tr("Publish"))
         add(
             "publish",
-            "Publish with NIKA hosting... (waitlist)",
-            "Hosting is not live yet. This opens a short form so we can see how "
-            "many people want it.",
+            tr("Publish with NIKA hosting... (waitlist)"),
+            tr(
+                "Hosting is not live yet. This opens a short form so we can see how "
+                "many people want it."
+            ),
             self.on_publish,
         )
 
@@ -2090,39 +2179,41 @@ class MainDialog(QDialog):
         # being reviewed, and a row that is missing reads as a decision not to
         # have it - so these say what they will do and admit they do not do it
         # yet, rather than being silently absent or silently inert.
-        menu.addSection("NIKA")
+        menu.addSection(tr("NIKA"))
         add(
             "enhance",
-            "Enhance with NIKA AI...",
-            "Opens a hand-off dialog with a prompt to paste into NIKA",
-            lambda: self._not_wired_yet("Enhance with NIKA AI"),
+            tr("Enhance with NIKA AI..."),
+            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
+            lambda: self._not_wired_yet(tr("Enhance with NIKA AI")),
         )
         add(
             "critique",
-            "Ask NIKA for a critique...",
-            "Opens a hand-off dialog asking NIKA to review the map as a "
-            "cartographer would",
-            lambda: self._not_wired_yet("Ask NIKA for a critique"),
+            tr("Ask NIKA for a critique..."),
+            tr(
+                "Opens a hand-off dialog asking NIKA to review the map as a "
+                "cartographer would"
+            ),
+            lambda: self._not_wired_yet(tr("Ask NIKA for a critique")),
         )
 
-        menu.addSection("Export")
+        menu.addSection(tr("Export"))
         add(
             "zip",
-            "Export share ZIP...",
-            "A zip to email or upload - passes mail filters that quarantine .html",
+            tr("Export share ZIP..."),
+            tr("A zip to email or upload - passes mail filters that quarantine .html"),
             self.on_export_share_zip,
         )
         add(
             "folder",
-            "Export folder for hosting...",
-            "A folder to copy to any static web host",
+            tr("Export folder for hosting..."),
+            tr("A folder to copy to any static web host"),
             self.on_export_folder,
         )
         add(
             "cartograph",
-            "Make a cartograph with QGIS2Carto...",
-            "Opens QGIS2Carto with this map as a live frame",
-            lambda: self._not_wired_yet("Make a cartograph with QGIS2Carto"),
+            tr("Make a cartograph with QGIS2Carto..."),
+            tr("Opens QGIS2Carto with this map as a live frame"),
+            lambda: self._not_wired_yet(tr("Make a cartograph with QGIS2Carto")),
         )
         return menu
 
@@ -2136,10 +2227,12 @@ class MainDialog(QDialog):
         """
         QMessageBox.information(
             self,
-            f"{what} is not built yet",
-            f"{what} is coming in a later release.\n\nThe menu entry is here so "
-            "the shape of the Share menu can be reviewed; pressing it does "
-            "nothing else yet.",
+            tr("{what} is not built yet").format(what=what),
+            tr(
+                "{what} is coming in a later release.\n\nThe menu entry is here so "
+                "the shape of the Share menu can be reviewed; pressing it does "
+                "nothing else yet."
+            ).format(what=what),
         )
 
     def _build_help_tab(self) -> QWidget:
@@ -2160,15 +2253,17 @@ class MainDialog(QDialog):
         # Stacked rather than side by side: they are not alternatives to choose
         # between, they are two things to do next, and a full-width target is
         # the easier one to hit on the small dialog this has to survive at.
-        docs_button = QPushButton("Open the full documentation", page)
+        docs_button = QPushButton(tr("Open the full documentation"), page)
         docs_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
         layout.addWidget(docs_button)
 
-        community_button = QPushButton("Join the community", page)
+        community_button = QPushButton(tr("Join the community"), page)
         community_button.setToolTip(
-            "Open the NIKA Discord in your browser. Problems, suggestions and "
-            "bug reports all go to the QGIS2WebMap channel - no GitHub account "
-            "needed."
+            tr(
+                "Open the NIKA Discord in your browser. Problems, suggestions and "
+                "bug reports all go to the QGIS2WebMap channel - no GitHub account "
+                "needed."
+            )
         )
         community_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(COMMUNITY_URL))
@@ -2198,13 +2293,15 @@ class MainDialog(QDialog):
         # opens a chat with people, which is a different answer to a different
         # question. The arrow marks that it leaves for a browser, the way every
         # outward link in this dialog does.
-        discord = QPushButton("Discord ↗", self)
+        discord = QPushButton(tr("Discord ↗"), self)
         discord.setProperty("role", "chip")
         discord.setCursor(Qt.CursorShape.PointingHandCursor)
         discord.setToolTip(
-            "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
-            "Ask a question, suggest something, or report a bug - no GitHub "
-            "account needed."
+            tr(
+                "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
+                "Ask a question, suggest something, or report a bug - no GitHub "
+                "account needed."
+            )
         )
         discord.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
         row.addWidget(discord)
@@ -2213,7 +2310,7 @@ class MainDialog(QDialog):
         self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, 1)
 
-        close = QPushButton("Close", self)
+        close = QPushButton(tr("Close"), self)
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row
@@ -2236,7 +2333,7 @@ class MainDialog(QDialog):
         self.progress_bar.setTextVisible(True)
         layout.addWidget(self.progress_bar, 1)
 
-        self.cancel_button = QPushButton("Cancel", row)
+        self.cancel_button = QPushButton(tr("Cancel"), row)
         self.cancel_button.clicked.connect(self._on_cancel_job)
         layout.addWidget(self.cancel_button)
 
@@ -2264,7 +2361,7 @@ class MainDialog(QDialog):
         may well fix it.
         """
         if self._job is not None:
-            self.status_label.setText("Still working on the last request.")
+            self.status_label.setText(tr("Still working on the last request."))
             return False
 
         job = BackgroundJob(work, self)
@@ -2315,7 +2412,7 @@ class MainDialog(QDialog):
             return
         self._job.cancel()
         self.cancel_button.setEnabled(False)
-        self.progress_bar.setFormat("Stopping...")
+        self.progress_bar.setFormat(tr("Stopping..."))
 
     def _on_job_succeeded(self, result, on_success) -> None:
         # Cleared *before* the callback, so a callback that starts the next
@@ -2326,13 +2423,13 @@ class MainDialog(QDialog):
         try:
             on_success(result)
         except Exception as exc:
-            self._report_failure("Export failed", exc)
+            self._report_failure(tr("Export failed"), exc)
 
     def _on_job_cancelled(self) -> None:
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
-        self.status_label.setText("Stopped. Nothing was written.")
+        self.status_label.setText(tr("Stopped. Nothing was written."))
 
     def _on_job_failed_quietly(self, message: str, details: str) -> None:
         """A background failure the user did not ask about. Log and say so once."""
@@ -2341,7 +2438,9 @@ class MainDialog(QDialog):
         self.cancel_button.setEnabled(True)
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Warning)
         self.status_label.setText(
-            f"Live preview could not be updated ({message}) - see the QGIS log."
+            tr(
+                "Live preview could not be updated ({message}) - see the QGIS log."
+            ).format(message=message)
         )
 
     def _on_job_failed(self, message: str, details: str) -> None:
@@ -2351,7 +2450,7 @@ class MainDialog(QDialog):
         QgsMessageLog.logMessage(details, LOG_TAG, level=Qgis.MessageLevel.Critical)
         if self._fidelity_is_stale:
             self._show_fidelity_error(message)
-        show_failure(self, "Something went wrong", message)
+        show_failure(self, tr("Something went wrong"), message)
 
     # ---- Fidelity strip -------------------------------------------------
 
@@ -2374,7 +2473,7 @@ class MainDialog(QDialog):
         self.fidelity_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         row.addWidget(self.fidelity_summary, 1)
 
-        self.fidelity_link = QPushButton("What changes?", strip)
+        self.fidelity_link = QPushButton(tr("What changes?"), strip)
         self.fidelity_link.setProperty("role", "link")
         self.fidelity_link.setCursor(Qt.CursorShape.PointingHandCursor)
         self.fidelity_link.clicked.connect(self._show_fidelity_tab)
@@ -2382,10 +2481,7 @@ class MainDialog(QDialog):
         return strip
 
     def _show_fidelity_tab(self) -> None:
-        for index in range(self.tabs.count()):
-            if self.tabs.tabText(index) == "Fidelity":
-                self.tabs.setCurrentIndex(index)
-                return
+        self.tabs.setCurrentWidget(self._fidelity_page)
 
     def _update_fidelity_strip(self, report) -> None:
         """Summarise the report in one line, problems first.
@@ -2410,12 +2506,20 @@ class MainDialog(QDialog):
 
         if blocked:
             self.fidelity_summary.setText(
-                f"{blocked} layer{'s' if blocked != 1 else ''} cannot be exported."
+                plural(
+                    blocked,
+                    "{n} layer cannot be exported.",
+                    "{n} layers cannot be exported.",
+                )
             )
         elif notable:
             count = len(notable)
             self.fidelity_summary.setText(
-                f"{count} thing{'s' if count != 1 else ''} change on export."
+                plural(
+                    count,
+                    "{n} thing changes on export.",
+                    "{n} things change on export.",
+                )
             )
         else:
             self.fidelity_summary.setText("")
@@ -2437,8 +2541,10 @@ class MainDialog(QDialog):
         if self._preview_tab_was_closed():
             self._stop_live_preview()
             self.status_label.setText(
-                "Preview tab closed, so the preview server stopped. "
-                "Press Preview to start it again."
+                tr(
+                    "Preview tab closed, so the preview server stopped. "
+                    "Press Preview to start it again."
+                )
             )
             self._update_save_status()
             return
@@ -2509,7 +2615,7 @@ class MainDialog(QDialog):
             signature = self.state.snapshot()
 
             def work(progress: Progress):
-                progress.step(READ_SHARE, "Updating the preview...")
+                progress.step(READ_SHARE, tr("Updating the preview..."))
                 write_preview(
                     export, self._project_identity(), writer=writer, live=True
                 )
@@ -2521,18 +2627,20 @@ class MainDialog(QDialog):
                 self._server.notify_reload()
                 if isinstance(result, Exception):
                     self.status_label.setText(
-                        f"Preview updated. The map file was not written: {result}"
+                        tr(
+                            "Preview updated. The map file was not written: {error}"
+                        ).format(error=result)
                     )
                     return
                 if map_file is not None:
                     self._written_signature = signature
                     self._last_export_path = map_file
                 self._update_save_status()
-                self.status_label.setText("Live preview updated.")
+                self.status_label.setText(tr("Live preview updated."))
 
-            self._start_job(work, on_written, "Updating the preview...", quiet=True)
+            self._start_job(work, on_written, tr("Updating the preview..."), quiet=True)
 
-        self._ensure_export(then, "Updating the preview...", quiet=True)
+        self._ensure_export(then, tr("Updating the preview..."), quiet=True)
 
     def _preview_tab_was_closed(self) -> bool:
         """Whether the browser has gone away and is not coming back.
@@ -2579,13 +2687,16 @@ class MainDialog(QDialog):
         selected = self.state.selected_layer_ids(available)
 
         if not available:
-            self._set_ready(False, "Add a vector layer to the project to export.")
+            self._set_ready(False, tr("Add a vector layer to the project to export."))
         elif not selected:
-            self._set_ready(False, "Tick at least one layer to include.")
+            self._set_ready(False, tr("Tick at least one layer to include."))
         else:
             count = len(selected)
             self._set_ready(
-                True, f"{count} layer{'s' if count != 1 else ''} will be exported."
+                True,
+                plural(
+                    count, "{n} layer will be exported.", "{n} layers will be exported."
+                ),
             )
 
         self._update_export_summary(len(selected))
@@ -2639,7 +2750,12 @@ class MainDialog(QDialog):
             # Reading is most of the wait, so it owns most of the bar and the
             # writing stages continue from where it stops.
             percent = int(READ_SHARE * done / total) if total else 0
-            progress.step(percent, f"Reading '{name}' ({done + 1} of {total})")
+            progress.step(
+                percent,
+                tr("Reading '{name}' ({done} of {total})").format(
+                    name=name, done=done + 1, total=total
+                ),
+            )
 
         export = read_project(
             self.project,
@@ -2686,7 +2802,7 @@ class MainDialog(QDialog):
         self._pending_license_key = self._license_key()
 
         def work(progress: Progress):
-            progress.step(0, "Reading the project...")
+            progress.step(0, tr("Reading the project..."))
             return self._read_current_project(progress)
 
         def on_success(result) -> None:
@@ -2718,7 +2834,7 @@ class MainDialog(QDialog):
         if ensure_runtime(self) is not None:
             return True
         self.status_label.setText(
-            "The OnlyMap runtime is needed to build a map. Nothing was written."
+            tr("The OnlyMap runtime is needed to build a map. Nothing was written.")
         )
         return False
 
@@ -2752,7 +2868,7 @@ class MainDialog(QDialog):
         signature = self.state.snapshot()
 
         def work(progress: Progress):
-            progress.step(READ_SHARE, "Building the preview...")
+            progress.step(READ_SHARE, tr("Building the preview..."))
             result = write_preview(export, identity, writer=writer, live=live)
             return result, self._autosave_map_file(export, writer, map_file)
 
@@ -2767,8 +2883,10 @@ class MainDialog(QDialog):
                 self._stop_live_preview()
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
                 self.status_label.setText(
-                    "Preview opened. Reload the browser tab after making changes - "
-                    "your position on the map is kept."
+                    tr(
+                        "Preview opened. Reload the browser tab after making changes - "
+                        "your position on the map is kept."
+                    )
                 )
                 return
 
@@ -2790,19 +2908,23 @@ class MainDialog(QDialog):
             self._update_save_status()
             if autosave_error is not None:
                 self.status_label.setText(
-                    f"Live preview open. The map file was not written: {autosave_error}"
+                    tr(
+                        "Live preview open. The map file was not written: {error}"
+                    ).format(error=autosave_error)
                 )
             elif map_file is not None:
                 self.status_label.setText(
-                    "Live preview open. Changes here update the tab and the map "
-                    "file automatically."
+                    tr(
+                        "Live preview open. Changes here update the tab and the map "
+                        "file automatically."
+                    )
                 )
             else:
                 self.status_label.setText(
-                    "Live preview open. Changes here update the tab automatically."
+                    tr("Live preview open. Changes here update the tab automatically.")
                 )
 
-        self._start_job(work, on_written, "Building the preview...")
+        self._start_job(work, on_written, tr("Building the preview..."))
 
     def _fall_back_to_file_preview(self, entry_path: Path) -> None:
         """Open the preview as a file, and say why it is not live.
@@ -2826,8 +2948,10 @@ class MainDialog(QDialog):
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
         self.status_label.setText(
-            "Live preview could not start on this machine, so the preview opened "
-            "as a file. Reload the tab after making changes."
+            tr(
+                "Live preview could not start on this machine, so the preview opened "
+                "as a file. Reload the tab after making changes."
+            )
         )
 
     def _ensure_server(self, root: Path) -> str:
@@ -2888,7 +3012,7 @@ class MainDialog(QDialog):
             self._warn_no_map_file()
             return
         QGuiApplication.clipboard().setText(str(destination))
-        self.status_label.setText(f"Copied {destination}")
+        self.status_label.setText(tr("Copied {path}").format(path=destination))
 
     def on_reveal_map_file(self) -> None:
         """Open the file manager at the folder holding the map file.
@@ -2907,7 +3031,9 @@ class MainDialog(QDialog):
         self._with_current_map_file(
             lambda destination: (
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination.parent))),
-                self.status_label.setText(f"Opened {destination.parent}"),
+                self.status_label.setText(
+                    tr("Opened {path}").format(path=destination.parent)
+                ),
             )
         )
 
@@ -2922,7 +3048,7 @@ class MainDialog(QDialog):
             lambda destination: (
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination))),
                 self.status_label.setText(
-                    f"Opened {destination.name} in your browser."
+                    tr("Opened {name} in your browser.").format(name=destination.name)
                 ),
             )
         )
@@ -2937,7 +3063,7 @@ class MainDialog(QDialog):
         """
         QDesktopServices.openUrl(QUrl(FEATURE_REQUEST_URL))
         self.status_label.setText(
-            "Hosting is not live yet - the waitlist form opened in your browser."
+            tr("Hosting is not live yet - the waitlist form opened in your browser.")
         )
 
     def on_export_share_zip(self) -> None:
@@ -2954,13 +3080,13 @@ class MainDialog(QDialog):
         left it, which is exactly what 0.1.x could not say.
         """
         self._pending_mode = mode
-        self._ensure_export(self._export_with, "Reading the project...")
+        self._ensure_export(self._export_with, tr("Reading the project..."))
 
     def on_export(self) -> None:
         """Write the map file itself."""
         self._pending_mode = OutputMode.STANDALONE_HTML
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
-        self._ensure_export(self._export_with, "Reading the project...")
+        self._ensure_export(self._export_with, tr("Reading the project..."))
 
     def _export_with(self, export, _report) -> None:
         """Everything after the read: the checks, the location, the write."""
@@ -3004,7 +3130,7 @@ class MainDialog(QDialog):
         writer = self._writer()
 
         def work(progress: Progress):
-            progress.step(READ_SHARE, "Writing the map...")
+            progress.step(READ_SHARE, tr("Writing the map..."))
             try:
                 result, outcome = build_artifact(
                     export, destination, mode=mode, writer=writer
@@ -3021,8 +3147,9 @@ class MainDialog(QDialog):
             if isinstance(built, ExportBlockedError):
                 QMessageBox.warning(
                     self,
-                    "Cannot export",
-                    "This map cannot be exported yet:\n\n"
+                    tr("Cannot export"),
+                    tr("This map cannot be exported yet:")
+                    + "\n\n"
                     + "\n".join(f"- {reason}" for reason in built.reasons),
                 )
                 self._export_then = None
@@ -3050,11 +3177,14 @@ class MainDialog(QDialog):
             if result.warnings:
                 QMessageBox.warning(
                     self,
-                    "Exported, with warnings",
+                    tr("Exported, with warnings"),
                     summary
-                    + "\n\nThe exported map has known limitations:\n\n"
+                    + "\n\n"
+                    + tr("The exported map has known limitations:")
+                    + "\n\n"
                     + "\n".join(f"- {warning}" for warning in result.warnings)
-                    + "\n\nThe Fidelity tab lists the detail.",
+                    + "\n\n"
+                    + tr("The Fidelity tab lists the detail."),
                 )
 
             # A Share action asked for this write as a step on the way to
@@ -3064,9 +3194,9 @@ class MainDialog(QDialog):
             if then is not None:
                 then(Path(outcome.path))
             elif not result.warnings:
-                QMessageBox.information(self, "Export complete", summary)
+                QMessageBox.information(self, tr("Export complete"), summary)
 
-        self._start_job(work, on_written, "Writing the map...")
+        self._start_job(work, on_written, tr("Writing the map..."))
 
     def _confirm_oversized_single_file(self, reason: str) -> bool:
         """Warn about an unwieldy single file, and let them have it anyway.
@@ -3077,15 +3207,17 @@ class MainDialog(QDialog):
         """
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle("This will be a large single file")
+        box.setWindowTitle(tr("This will be a large single file"))
         box.setText(reason)
         box.setInformativeText(
-            "The map file inlines all the data into the one HTML file, which is "
-            "why it is this big. Share > Export share ZIP packages the same map "
-            "to send more easily."
+            tr(
+                "The map file inlines all the data into the one HTML file, which is "
+                "why it is this big. Share > Export share ZIP packages the same map "
+                "to send more easily."
+            )
         )
         write_anyway = box.addButton(
-            "Write it anyway", QMessageBox.ButtonRole.AcceptRole
+            tr("Write it anyway"), QMessageBox.ButtonRole.AcceptRole
         )
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(write_anyway)
@@ -3119,9 +3251,11 @@ class MainDialog(QDialog):
             if not destination.parent.exists():
                 QMessageBox.warning(
                     self,
-                    "Folder not found",
-                    f"There is no folder at {destination.parent}.\n\nPick "
-                    "somewhere that exists, or create it first.",
+                    tr("Folder not found"),
+                    tr(
+                        "There is no folder at {path}.\n\nPick "
+                        "somewhere that exists, or create it first."
+                    ).format(path=destination.parent),
                 )
                 return None
             return destination
@@ -3135,16 +3269,16 @@ class MainDialog(QDialog):
 
         if mode is OutputMode.FOLDER:
             chosen = QFileDialog.getExistingDirectory(
-                self, "Export folder for hosting", start_dir
+                self, tr("Export folder for hosting"), start_dir
             )
             return Path(chosen) if chosen else None
 
         # The picker asks about overwriting on every platform, so this does not.
         chosen, _ = QFileDialog.getSaveFileName(
             self,
-            "Export share ZIP",
+            tr("Export share ZIP"),
             str(Path(start_dir) / f"{stem}{suffix}"),
-            "Zip archive (*.zip)",
+            tr("Zip archive (*.zip)"),
         )
         return Path(chosen) if chosen else None
 
@@ -3152,23 +3286,29 @@ class MainDialog(QDialog):
         """The one thing standing between the user and every Share action."""
         QMessageBox.information(
             self,
-            "Choose a map file first",
-            "This map has no file yet.\n\nSet one in the Map file field on the "
-            "Map tab, and Preview and Share will do the rest.",
+            tr("Choose a map file first"),
+            tr(
+                "This map has no file yet.\n\nSet one in the Map file field on the "
+                "Map tab, and Preview and Share will do the rest."
+            ),
         )
 
     def _warn_not_exportable(self, export) -> None:
         """Explain a refusal in terms of what the user has to fix in QGIS."""
         reasons = [item.detail for item in export.blocking_items] or [
-            "No layer in the selection could be read."
+            tr("No layer in the selection could be read.")
         ]
         QMessageBox.warning(
             self,
-            "Cannot export",
-            "This map cannot be exported yet:\n\n"
+            tr("Cannot export"),
+            tr("This map cannot be exported yet:")
+            + "\n\n"
             + "\n".join(f"- {reason}" for reason in reasons)
-            + "\n\nFix these in QGIS, then export again. The Fidelity tab lists "
-            "everything that was checked.",
+            + "\n\n"
+            + tr(
+                "Fix these in QGIS, then export again. The Fidelity tab lists "
+                "everything that was checked."
+            ),
         )
 
     def _report_failure(self, title: str, exc: Exception) -> None:

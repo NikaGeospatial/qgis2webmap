@@ -36,7 +36,8 @@ ZIP_BASENAME = "qgis2webmap"
 
 # Anything matching these is development detritus, not plugin payload.
 EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
-EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".orig", ".rej"}
+# `.ts` is the translators' source; the plugin loads the compiled `.qm`.
+EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".orig", ".rej", ".ts"}
 EXCLUDE_NAMES = {".DS_Store", ".gitkeep"}
 
 # User guides live in docs/ so GitHub Pages can serve them, and are copied into
