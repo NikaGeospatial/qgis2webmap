@@ -35,6 +35,7 @@ from nika_onlymap_exporter.packaging.asset_embedder import (
     should_compress_data,
 )
 from nika_onlymap_exporter.packaging.dependency_scanner import (
+    data_bytes_by_layer,
     measure_data_bytes,
     scan,
     standalone_ineligible_reason,
@@ -146,6 +147,12 @@ class TestCompression:
 class TestDependencyScanner:
     def test_measures_serialised_data(self) -> None:
         assert measure_data_bytes(make_project()) > 0
+
+    def test_the_per_layer_sizes_add_up_to_the_whole(self) -> None:
+        project = make_project()
+        sizes = data_bytes_by_layer(project)
+        assert set(sizes) == {layer.layer_id for layer in project.exportable_layers}
+        assert sum(sizes.values()) == measure_data_bytes(project)
 
     def test_empty_project_is_blocking(self) -> None:
         result = scan(make_project(layers=[]), FidelityReportBuilder())

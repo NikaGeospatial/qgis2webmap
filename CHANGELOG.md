@@ -7,6 +7,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **The Fidelity tab is rebuilt for reading.** Grouped by layer with problems
+  first and the whole-map settings on top; every row carries its whole
+  sentence, wrapped, instead of being cut at 110 characters; each layer's line
+  says what it is (geometry, features, styling, labels, popups, data size).
+  Checkboxes per verdict and per topic, and a search box, narrow the list;
+  Kept is hidden by default. Selecting a row shows where it applies, with a
+  button to the setting that fixes it. The report is marked **Out of date** the
+  moment settings change or a layer is restyled in QGIS, rather than looking
+  current.
+- **Blocked warns instead of refusing.** A layer QGIS could not read no longer
+  stops the rest of the map from exporting: Export names what will be missing
+  and asks. An empty map is still refused.
 - **Save to, beside Export as.** The place is chosen once on the Map tab and
   saved with the project, as the type already was; switching the type keeps the
   name (`peaks.html` becomes `peaks.zip`). Export is the filled button in the

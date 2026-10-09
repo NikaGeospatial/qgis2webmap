@@ -242,24 +242,57 @@ The reason this plugin exists. It answers one question — *what does my recipie
 not get?* — **before** you export, not after.
 
 The report builds when you open the tab, reading every feature of every layer, so
-it takes a moment on a large project and shows a progress bar while it does. It
-rebuilds when the project changes.
+it takes a moment on a large project and shows a progress bar while it does.
+Preview and Export read the project too, and refresh the report as they go.
 
-Three columns: the item, its verdict, and the detail. Long details open onto
-their own row when clicked. Problems are sorted to the top, because a report
-opening on a wall of *Kept* buries what matters.
+One line at the top sums it up — `5 layers · 1 needs attention · 10 things
+change`. A layer *needs attention* when something about it is Blocked or Not
+exported. Under it, one line describes the whole map: how many layers and
+features, roughly how much data, the output, the project's CRS, where the map
+opens and its basemap. Below that the report is grouped, problems first:
+
+- **Whole map** — settings that belong to no one layer: the basemap, relief,
+  where the map opens, its title.
+- **One group per layer**, the layers that lose something before the layers that
+  are only changed. A layer that comes through exactly is a single `✓ exact`
+  line. Each layer's own line says what it is: its geometry and feature count,
+  how it is styled and on which field, its labels, how many fields its popups
+  show and how many go into the file, the zooms it shows at, and how much data
+  it adds.
+- Every row has its whole sentence in the **Detail** column.
+- Rows saying the same thing about several classes of one layer are merged into
+  one, with the number of classes. Expand it to see each class.
+
+Select a row to see it in the pane below the list, with the classes it applies
+to. Where the fix is in this dialog, the pane has a button that goes there:
+**Show in Layers** for a layer, **Go to Map tab** for the basemap and the other
+map settings.
+
+Above the list, checkboxes choose what it shows — one per verdict, each with
+how many rows it has, and one per topic: **Symbology**, **Labels**, **Popups &
+fields**, **Data** and **Map settings**. The search box finds rows by any word
+in them, or a layer by its name or by what it is ("polygons", "labels from").
+**Kept** rows are hidden by default so the changes stand out; tick **Kept** to
+bring them back. Your choices are remembered. Filtering only folds rows away:
+the counts at the top and in the strip are always about the whole report.
+
+When something changes after a check — a layer ticked or unticked, the map
+renamed, a layer added, restyled or edited and saved in QGIS — the report is
+marked **Out of date** rather than going on looking current. **Check again**
+refreshes it.
 
 | Verdict | Meaning |
 |---|---|
-| **Blocked** | The export must not proceed. Preview and Share stay disabled while this is present |
+| **Blocked** | Cannot be carried into the map at all — usually a layer QGIS could not load. Export still works, but asks first and names what will be missing |
 | **Not exported** | Cannot be represented, and was left out. The map is still produced |
 | **Changed** | Exported, but approximated — the detail says how |
-| **Rasterised** | Drawn as an image because the style has no live equivalent |
+| **Rasterised** | Drawn into the map as an image: markers QGIS draws itself, or a raster's colours baked into its pixels. It looks as it does in QGIS, but it is a picture now |
 | **Kept** | Survives exactly as set in QGIS |
 
-Worth reading before you send a map on, and **essential before you host one**:
-this tab is what names every layer over the free plan's
-[size limits](supported-features.md#size-limits-on-the-free-plan).
+If the check itself fails, the tab says so and why. That is not a verdict: it
+says nothing about your map, only that the check did not finish.
+
+Worth reading before you send a map on.
 
 ---
 

@@ -52,15 +52,26 @@ class ScanResult:
         }
 
 
+def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
+    """Each exported layer's serialised data size, by layer id.
+
+    The same measurement as `measure_data_bytes`, split per layer, so the
+    Fidelity tab can say which layer the megabytes are in without a second
+    serialisation of its own.
+    """
+    return {
+        layer.layer_id: (
+            len(json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8"))
+            if layer.geojson is not None
+            else 0
+        )
+        for layer in project.exportable_layers
+    }
+
+
 def measure_data_bytes(project: ExportProject) -> int:
     """Serialised size of all layer data, as it will appear in the artifact."""
-    total = 0
-    for layer in project.exportable_layers:
-        if layer.geojson is not None:
-            total += len(
-                json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8")
-            )
-    return total
+    return sum(data_bytes_by_layer(project).values())
 
 
 def standalone_ineligible_reason(project: ExportProject) -> str | None:

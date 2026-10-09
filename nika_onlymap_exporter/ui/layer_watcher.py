@@ -118,3 +118,96 @@ class LayerTreeWatcher(QObject):
             with contextlib.suppress(TypeError, RuntimeError):
                 signal.disconnect(slot)
         self._connections.clear()
+
+
+class LayerContentWatcher(QObject):
+    """Emits `changed` once per event-loop turn when a layer is restyled or its
+    edits are committed.
+
+    The tree watcher above sees where layers ARE; nothing saw what they LOOK
+    like. Restyling a layer in QGIS moved nothing in the tree, so the Fidelity
+    report went on describing the old symbology as current, and the dialog's
+    cached read - keyed on the dialog's own settings, which a restyle does not
+    touch - went on being handed to Export and Host.
+
+    | Signal | Fires on |
+    |---|---|
+    | `styleChanged` | Apply in Layer Properties or the Styling panel |
+    | `rendererChanged` | a renderer replaced in code, with no Apply |
+    | `afterCommitChanges` | edits saved on a vector layer (not on rasters) |
+
+    `styleChanged` covers symbology, labels, opacity and scale range alike.
+
+    Unlike the tree, these are signals on each LAYER, so the set of connections
+    follows the project: layers added later are connected when they arrive and
+    disconnected when they go, and `disconnect_all` undoes every one of them.
+    """
+
+    changed = pyqtSignal()
+
+    LAYER_SIGNALS = ("styleChanged", "rendererChanged", "afterCommitChanges")
+
+    def __init__(self, project: QgsProject | None = None, parent=None) -> None:
+        super().__init__(parent)
+        self._project = project or QgsProject.instance()
+        # Layer id -> (layer, signal names connected on it).
+        self._layers: dict[str, tuple[object, list[str]]] = {}
+
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(0)
+        self._timer.timeout.connect(self.changed.emit)
+
+        self._project.layersAdded.connect(self._on_layers_added)
+        self._project.layersWillBeRemoved.connect(self._on_layers_removed)
+        self._on_layers_added(list(self._project.mapLayers().values()))
+
+    def watched_layer_ids(self) -> list[str]:
+        """The layers currently connected. For tests and for nothing else."""
+        return list(self._layers)
+
+    def _on_layers_added(self, layers) -> None:
+        for layer in layers:
+            layer_id = layer.id()
+            if layer_id in self._layers:
+                continue
+            connected: list[str] = []
+            for name in self.LAYER_SIGNALS:
+                signal = getattr(layer, name, None)
+                if signal is None:
+                    continue
+                try:
+                    signal.connect(self._schedule)
+                except (TypeError, AttributeError):  # pragma: no cover - defensive
+                    continue
+                connected.append(name)
+            self._layers[layer_id] = (layer, connected)
+
+    def _on_layers_removed(self, layer_ids) -> None:
+        for layer_id in layer_ids:
+            self._release(layer_id)
+
+    def _release(self, layer_id: str) -> None:
+        entry = self._layers.pop(layer_id, None)
+        if entry is None:
+            return
+        layer, names = entry
+        for name in names:
+            # A layer QGIS already deleted takes its connections with it.
+            with contextlib.suppress(TypeError, RuntimeError, AttributeError):
+                getattr(layer, name).disconnect(self._schedule)
+
+    def _schedule(self, *_args) -> None:
+        self._timer.start()
+
+    def disconnect_all(self) -> None:
+        """Undo every connection. Must be called when the dialog closes."""
+        self._timer.stop()
+        for layer_id in list(self._layers):
+            self._release(layer_id)
+        for signal, slot in (
+            (self._project.layersAdded, self._on_layers_added),
+            (self._project.layersWillBeRemoved, self._on_layers_removed),
+        ):
+            with contextlib.suppress(TypeError, RuntimeError):
+                signal.disconnect(slot)
