@@ -27,7 +27,7 @@ import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QEvent, QObject, QPoint, Qt
 from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
@@ -39,7 +39,15 @@ from qgis.PyQt.QtGui import (
     QTextDocument,
     QTextTable,
 )
-from qgis.PyQt.QtWidgets import QApplication, QFormLayout, QGroupBox, QWidget
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QMenu,
+    QToolButton,
+    QWidget,
+)
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 FONT_DIR = PACKAGE_DIR / "fonts"
@@ -200,6 +208,7 @@ def apply(dialog: QWidget) -> Palette:
         )
         form.setVerticalSpacing(8)
         form.setHorizontalSpacing(14)
+    attach_menus(dialog)
     # Sections are cards: their contents sit inset from the card's edge, with
     # the title outside and above it.
     for box in dialog.findChildren(QGroupBox):
@@ -207,6 +216,98 @@ def apply(dialog: QWidget) -> Palette:
         if layout is not None:
             layout.setContentsMargins(14, 12, 14, 12)
     return palette
+
+
+class _MenuAttacher(QObject):
+    """Opens a menu flush under its button, and tells the button it is open.
+
+    Qt places a button's menu wherever fits and draws it as a separate box,
+    so it reads as something that spawned out of nowhere. Here the menu takes
+    the button's left edge (right edge, right to left), overlaps its bottom
+    border by a pixel and is at least as wide; the button squares off its
+    bottom corners while the menu is open, so the two read as one shape.
+    """
+
+    def __init__(
+        self, menu: QWidget, button: QWidget, match_width: bool = False
+    ) -> None:
+        super().__init__(menu)
+        self._menu = menu
+        self._button = button
+        self._match_width = match_width
+
+    def _set_open(self, is_open: bool) -> None:
+        self._button.setProperty("menuOpen", is_open)
+        self._button.style().unpolish(self._button)
+        self._button.style().polish(self._button)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if watched is self._menu:
+            if event.type() == QEvent.Type.Show:
+                button = self._button
+                if self._match_width:
+                    self._menu.setFixedWidth(button.width())
+                else:
+                    self._menu.setMinimumWidth(button.width())
+                # Hang from the edge nearer the outside of the window: a menu
+                # wider than a button at the right edge must grow leftwards,
+                # or it runs off the dialog. Right to left mirrors this.
+                window = button.window()
+                centre = button.mapTo(window, QPoint(button.width() // 2, 0)).x()
+                from_right = centre > window.width() // 2
+                if button.layoutDirection() == Qt.LayoutDirection.RightToLeft:
+                    from_right = not from_right
+                corner = QPoint(
+                    button.width() if from_right else 0, button.height() - 1
+                )
+                anchor = button.mapToGlobal(corner)
+                if from_right:
+                    anchor.setX(anchor.x() - self._menu.width())
+                self._menu.move(anchor)
+                self._set_open(True)
+            elif event.type() == QEvent.Type.Hide:
+                self._set_open(False)
+        return False
+
+
+def attach_menu(menu: QMenu, button: QWidget) -> None:
+    """Make `menu` open as part of `button`. Safe to call more than once."""
+    if menu.property("attached"):
+        return
+    menu.setProperty("attached", True)
+    menu.setProperty("anchorRole", button.property("role") or "")
+    # Rounded corners on a top-level menu need a see-through window behind
+    # them, or the corners fill with black.
+    menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    menu.setWindowFlags(
+        menu.windowFlags()
+        | Qt.WindowType.FramelessWindowHint
+        | Qt.WindowType.NoDropShadowWindowHint
+    )
+    menu.installEventFilter(_MenuAttacher(menu, button))
+    button.setProperty("menuOpen", False)
+
+
+def attach_list(combo: QComboBox) -> None:
+    """Pin a combo box's drop-down list under the box, at the box's width."""
+    popup = combo.view().window()
+    if popup is combo.window() or popup.property("attached"):
+        return
+    popup.setProperty("attached", True)
+    popup.installEventFilter(_MenuAttacher(popup, combo, match_width=True))
+
+
+def attach_menus(dialog: QWidget) -> None:
+    """Attach every button menu and drop-down list in `dialog`."""
+    for combo in dialog.findChildren(QComboBox):
+        attach_list(combo)
+    for button in dialog.findChildren(QToolButton):
+        if button.menu() is not None:
+            attach_menu(button.menu(), button)
+        for menu in button.findChildren(
+            QMenu, options=Qt.FindChildOption.FindDirectChildrenOnly
+        ):
+            attach_menu(menu, button)
 
 
 def recolour_document(document: QTextDocument, palette: Palette) -> None:
@@ -312,6 +413,14 @@ def stylesheet(p: Palette, object_name: str) -> str:
 }}
 
 /* ---- Fields --------------------------------------------------------- */
+{d} QComboBox {{
+    /* Drop the list below the box, as part of it, rather than over it. */
+    combobox-popup: 0;
+}}
+{d} QComboBox:on {{
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}}
 {d} QLineEdit, {d} QComboBox {{
     background: {p.field};
     border: 1px solid {p.rule};
@@ -339,9 +448,18 @@ def stylesheet(p: Palette, object_name: str) -> str:
     width: 10px;
     height: 10px;
 }}
+{d} QComboBoxPrivateContainer {{
+    background: {p.paper};
+    border: none;
+}}
+{d} QComboBox QAbstractItemView::item {{
+    min-height: 24px;
+    padding: 0 6px;
+}}
 {d} QComboBox QAbstractItemView {{
     background: {p.paper};
-    border: 1px solid {p.rule};
+    border: 1px solid {p.accent};
+    border-top: none;
     padding: 4px;
     outline: none;
     selection-background-color: {p.accent_soft};
@@ -595,6 +713,26 @@ def stylesheet(p: Palette, object_name: str) -> str:
     background: {p.paper};
     border: 1px solid {p.rule};
     padding: 4px;
+}}
+/* A button's own menu: continues the button's outline, rounded only below. */
+{d} QMenu[attached="true"] {{
+    border: 1px solid {p.muted};
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}}
+{d} QMenu[anchorRole="primary"] {{
+    border-color: {p.accent};
+}}
+{d} QToolButton[menuOpen="true"] {{
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}}
+{d} QToolButton[role="secondary"][menuOpen="true"],
+{d} QToolButton[role="chip"][menuOpen="true"] {{
+    background: {p.hover};
+    border-color: {p.muted};
 }}
 {d} QMenu::item {{
     padding: 6px 22px 6px 12px;

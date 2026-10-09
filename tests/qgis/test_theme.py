@@ -166,3 +166,40 @@ class TestHelpPane:
             assert colours == {dialog.theme.link}
         finally:
             dialog.close()
+
+
+class TestAttachedMenus:
+    """A dropdown opens as part of its button, not as a box from nowhere."""
+
+    def _dialog(self, project, make_memory_layer):
+        return TestScope()._dialog(project, make_memory_layer)
+
+    def test_the_share_menu_opens_flush_under_its_button(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.show()
+            button = dialog.share_button
+            menu = button.menu()
+            menu.popup(QPoint(0, 0))
+            for _ in range(3):
+                qgis_app.processEvents()
+            anchor = button.mapToGlobal(QPoint(0, button.height()))
+            assert menu.geometry().top() == anchor.y() - 1
+            assert menu.width() >= button.width()
+            assert button.property("menuOpen") is True
+            menu.hide()
+            qgis_app.processEvents()
+            assert button.property("menuOpen") is False
+        finally:
+            dialog.close()
+
+    def test_lists_drop_below_their_box(self, qgis_app, project, make_memory_layer):
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert "combobox-popup: 0" in dialog.styleSheet()
+        finally:
+            dialog.close()
