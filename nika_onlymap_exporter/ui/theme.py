@@ -184,6 +184,9 @@ def apply(dialog: QWidget) -> Palette:
         qpalette.setColor(QPalette.ColorGroup.Disabled, role, QColor(palette.quiet))
     dialog.setPalette(qpalette)
 
+    dialog.setProperty(
+        "rtl", dialog.layoutDirection() == Qt.LayoutDirection.RightToLeft
+    )
     dialog.setStyleSheet(stylesheet(palette, dialog.objectName()))
 
     # Rounded fields are taller than a bare label, and a form aligns labels to
@@ -474,6 +477,18 @@ def stylesheet(p: Palette, object_name: str) -> str:
     padding-right: 26px;
 }}
 
+/* Right to left (Arabic): Qt mirrors the layout and subcontrol positions,
+   but not stylesheet padding, so the room kept for each chevron is moved
+   to the other side by hand. */
+{d}[rtl="true"] QToolButton[role="primary"],
+{d}[rtl="true"] QToolButton[role="secondary"] {{
+    padding: 5px 16px 5px 34px;
+}}
+{d}[rtl="true"] QToolButton[role="chip"][hasMenu="true"] {{
+    padding-right: 12px;
+    padding-left: 26px;
+}}
+
 /* Links that act inside the dialog. */
 {d} QPushButton[role="link"] {{
     background: transparent;
@@ -484,6 +499,13 @@ def stylesheet(p: Palette, object_name: str) -> str:
 }}
 {d} QPushButton[role="link"]:hover {{
     text-decoration: underline;
+}}
+
+/* A one-line notice across the top: the language offer. */
+{d} QFrame[role="notice"] {{
+    background: {p.accent_soft};
+    border: 1px solid {p.accent};
+    border-radius: 6px;
 }}
 
 /* ---- Tables and the help pane: square, they are for reading ----------- */

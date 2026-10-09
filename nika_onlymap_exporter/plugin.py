@@ -46,13 +46,17 @@ class Qgis2WebMapPlugin:
         self.action: QAction | None = None
         self.dialog = None
         self.provider = None
-        self.translator = None
         # Before anything shows text: the menu entry is created in `initGui`.
-        # The plugin speaks whatever language QGIS does; see `ui.i18n`.
+        # English unless a language pack is chosen, or QGIS speaks one that is
+        # installed; see `ui.languages`.
         try:
-            from .ui.i18n import install_translator, qgis_locale
+            from qgis.PyQt.QtCore import QSettings
 
-            self.translator = install_translator(qgis_locale())
+            from .ui import languages
+            from .ui.i18n import qgis_locale, use_language
+
+            setting = QSettings().value(languages.SETTING_KEY, languages.AUTO, type=str)
+            use_language(languages.effective(setting, qgis_locale()))
         except Exception:
             QgsMessageLog.logMessage(
                 f"Could not load a translation, staying in English:\n"
@@ -144,11 +148,9 @@ class Qgis2WebMapPlugin:
             self.dialog.deleteLater()
             self.dialog = None
 
-        if self.translator is not None:
-            from qgis.PyQt.QtCore import QCoreApplication
+        from .ui.i18n import use_language
 
-            QCoreApplication.removeTranslator(self.translator)
-            self.translator = None
+        use_language("en")
 
     # ---- Entry point ----------------------------------------------------
 
@@ -166,6 +168,7 @@ class Qgis2WebMapPlugin:
                 # Non-modal: QGIS stays usable behind the dialog, so a user can
                 # reorder layers or restyle while it is open.
                 self.dialog.finished.connect(self._on_dialog_finished)
+                self.dialog.languageChanged.connect(self._reopen_dialog)
 
             self.dialog.show()
             self.dialog.raise_()
@@ -185,6 +188,19 @@ class Qgis2WebMapPlugin:
                 f'"{LOG_TAG}". Please report this at '
                 "https://github.com/NikaGeospatial/qgis2webmap/issues",
             )
+
+    def _reopen_dialog(self) -> None:
+        """Rebuild the dialog in the language just chosen.
+
+        Every label is set once, when the dialog is built, so a new language
+        needs a new dialog. Closing saves the settings, and the next one reads
+        them back, so the user loses nothing but a blink.
+        """
+        from qgis.PyQt.QtCore import QTimer
+
+        if self.dialog is not None:
+            self.dialog.close()
+        QTimer.singleShot(0, self.run)
 
     def _on_dialog_finished(self, _result: int) -> None:
         """Drop the reference so the next run rebuilds against a fresh project."""

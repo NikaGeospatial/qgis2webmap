@@ -1,6 +1,10 @@
-"""The plugin follows QGIS's language: catalogues, fallbacks, and the dialog.
+"""Languages: which one is shown, downloading packs, and the dialog in them.
 
 Needs PyQGIS and a Qt application; runs headless with QT_QPA_PLATFORM=offscreen.
+
+Nothing here touches the network. Downloads go through a fake fetcher that
+serves the repository's own compiled packs, which are the same bytes jsDelivr
+serves from a release tag.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -24,40 +28,140 @@ I18N_DIR = REPO_ROOT / "nika_onlymap_exporter" / "i18n"
 
 @pytest.fixture
 def portuguese(qgis_app):
-    from qgis.PyQt.QtCore import QCoreApplication
+    from nika_onlymap_exporter.ui.i18n import use_language
 
-    from nika_onlymap_exporter.ui.i18n import install_translator
-
-    translator = install_translator("pt_BR")
-    assert translator is not None
+    assert use_language("pt_BR") == "pt_BR"
     yield
-    QCoreApplication.removeTranslator(translator)
+    use_language("en")
 
 
-class TestCatalogueLookup:
-    def test_brazilian_portuguese_is_found(self, qgis_app):
-        from nika_onlymap_exporter.ui.i18n import catalogue_for
+@pytest.fixture
+def installed_plugin(monkeypatch, tmp_path):
+    """A plugin as a user has it: no packs beside the code, an empty cache.
 
-        assert catalogue_for("pt_BR").name == "qgis2webmap_pt_BR.qm"
+    The repository carries every compiled pack in `i18n/`, which is what
+    lets a contributor see each language without downloading - so to test
+    the download path, that folder is swapped for an empty one.
+    """
+    from nika_onlymap_exporter.ui import languages
 
-    def test_any_portuguese_reads_the_brazilian_text(self, qgis_app):
-        from nika_onlymap_exporter.ui.i18n import catalogue_for
+    empty = tmp_path / "plugin-i18n"
+    empty.mkdir()
+    monkeypatch.setattr(languages, "I18N_DIR", empty)
+    monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path / "cache" / "runtime"))
+    return languages
 
-        assert catalogue_for("pt_PT").name == "qgis2webmap_pt_BR.qm"
-        assert catalogue_for("pt").name == "qgis2webmap_pt_BR.qm"
 
-    def test_a_language_without_a_catalogue_stays_english(self, qgis_app):
-        from nika_onlymap_exporter.ui.i18n import catalogue_for, install_translator
+def serve_repo_packs(calls: list[str]):
+    """A fetcher that answers with the repository's own pack for the URL."""
 
-        assert catalogue_for("de_DE") is None
-        assert catalogue_for("") is None
-        assert install_translator("de_DE") is None
+    def fetch(url: str) -> bytes:
+        calls.append(url)
+        return (I18N_DIR / url.rsplit("/", 1)[1]).read_bytes()
+
+    return fetch
+
+
+class TestWhichLanguage:
+    def test_the_six_packs_and_english_are_offered(self, qgis_app):
+        from nika_onlymap_exporter.ui import languages
+
+        assert languages.available() == ["en", "pt_BR", "zh_CN", "hi", "es", "ar", "fr"]
+
+    def test_a_qgis_locale_finds_its_pack_by_language(self, qgis_app):
+        from nika_onlymap_exporter.ui.languages import match_locale
+
+        assert match_locale("pt_BR") == "pt_BR"
+        assert match_locale("pt_PT") == "pt_BR"
+        assert match_locale("es_MX") == "es"
+        assert match_locale("zh_CN") == "zh_CN"
+        assert match_locale("en_US") is None
+        assert match_locale("de_DE") is None
+        assert match_locale("") is None
+
+    def test_english_when_qgis_has_no_language_set(self, installed_plugin):
+        assert installed_plugin.effective("auto", "") == "en"
+
+    def test_following_qgis_needs_the_pack_installed(self, installed_plugin):
+        assert installed_plugin.effective("auto", "pt_BR") == "en"
+        installed_plugin.download("pt_BR", serve_repo_packs([]))
+        assert installed_plugin.effective("auto", "pt_BR") == "pt_BR"
+
+    def test_english_chosen_beats_qgis(self, installed_plugin):
+        installed_plugin.download("pt_BR", serve_repo_packs([]))
+        assert installed_plugin.effective("en", "pt_BR") == "en"
+
+    def test_a_chosen_language_whose_pack_is_gone_falls_back_to_english(
+        self, installed_plugin
+    ):
+        assert installed_plugin.effective("es", "pt_BR") == "en"
+
+
+class TestTheOffer:
+    def test_offered_when_qgis_speaks_it_and_it_is_missing(self, installed_plugin):
+        assert installed_plugin.offer("auto", "pt_BR") == "pt_BR"
+
+    def test_not_offered_once_installed(self, installed_plugin):
+        installed_plugin.download("pt_BR", serve_repo_packs([]))
+        assert installed_plugin.offer("auto", "pt_BR") is None
+
+    def test_not_offered_to_someone_who_chose_english(self, installed_plugin):
+        assert installed_plugin.offer("en", "pt_BR") is None
+
+    def test_not_offered_again_once_dismissed(self, installed_plugin):
+        assert installed_plugin.offer("auto", "pt_BR", dismissed="pt_BR") is None
+
+    def test_never_for_english_or_an_unknown_language(self, installed_plugin):
+        assert installed_plugin.offer("auto", "en_GB") is None
+        assert installed_plugin.offer("auto", "de_DE") is None
+
+
+class TestDownloading:
+    def test_the_url_is_the_release_tag_on_jsdelivr(self, qgis_app, monkeypatch):
+        from nika_onlymap_exporter.ui import languages
+
+        monkeypatch.delenv(languages.BASE_URL_ENV, raising=False)
+        assert languages.pack_url("pt_BR", "0.2.0") == (
+            "https://cdn.jsdelivr.net/gh/NikaGeospatial/qgis2webmap@v0.2.0"
+            "/nika_onlymap_exporter/i18n/qgis2webmap_pt_BR.qm"
+        )
+
+    def test_a_good_pack_is_installed(self, installed_plugin):
+        calls: list[str] = []
+        path = installed_plugin.download("es", serve_repo_packs(calls))
+        assert path.is_file() and path.parent == installed_plugin.install_dir()
+        assert len(calls) == 1
+        assert installed_plugin.installed_pack("es") == path
+
+    def test_a_pack_that_differs_from_the_release_is_refused(self, installed_plugin):
+        with pytest.raises(installed_plugin.LanguageDownloadError):
+            installed_plugin.download("es", lambda url: b"not the released pack")
+        assert installed_plugin.installed_pack("es") is None
+        folder = installed_plugin.install_dir()
+        assert not folder.exists() or not any(folder.iterdir())
+
+    def test_a_tampered_file_on_disk_is_not_trusted(self, installed_plugin):
+        path = installed_plugin.download("fr", serve_repo_packs([]))
+        path.write_bytes(path.read_bytes() + b"x")
+        assert installed_plugin.installed_pack("fr") is None
+
+    def test_plain_http_is_refused(self, installed_plugin, monkeypatch):
+        monkeypatch.setenv(installed_plugin.BASE_URL_ENV, "http://example.org/i18n")
+        with pytest.raises(installed_plugin.LanguageDownloadError):
+            installed_plugin.download("es", serve_repo_packs([]))
+
+    def test_an_unknown_language_is_refused_before_any_request(self, installed_plugin):
+        calls: list[str] = []
+        with pytest.raises(installed_plugin.LanguageDownloadError):
+            installed_plugin.download("de", serve_repo_packs(calls))
+        assert calls == []
 
 
 class TestTranslating:
-    def test_without_a_translator_the_text_is_english(self, qgis_app):
-        from nika_onlymap_exporter.ui.i18n import plural, tr
+    def test_without_a_pack_the_text_is_english(self, qgis_app):
+        from nika_onlymap_exporter.ui.i18n import plural, tr, use_language
 
+        use_language("en")
         assert tr("Map") == "Map"
         assert plural(
             1, "{n} layer will be exported.", "{n} layers will be exported."
@@ -71,23 +175,142 @@ class TestTranslating:
             3, "{n} layer will be exported.", "{n} layers will be exported."
         ) == ("3 camadas serão exportadas.")
 
-    def test_the_dialog_opens_in_portuguese(
-        self, portuguese, project, make_memory_layer
-    ):
-        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+    @pytest.mark.parametrize(
+        ("code", "map_tab"),
+        [
+            ("zh_CN", "地图"),
+            ("hi", "मानचित्र"),
+            ("es", "Mapa"),
+            ("ar", "الخريطة"),
+            ("fr", "Carte"),
+        ],
+    )
+    def test_every_pack_loads(self, qgis_app, code, map_tab):
+        from nika_onlymap_exporter.ui.i18n import tr, use_language
 
-        class FakeIface:
-            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
-                return None
+        try:
+            assert use_language(code) == code
+            assert tr("Map") == map_tab
+        finally:
+            use_language("en")
 
-        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
-        dialog = MainDialog(FakeIface(), None)
+    def test_switching_back_to_english_removes_the_pack(self, portuguese):
+        from nika_onlymap_exporter.ui.i18n import active_language, tr, use_language
+
+        use_language("en")
+        assert active_language() == "en"
+        assert tr("Map") == "Map"
+
+
+def _dialog(project, make_memory_layer):
+    from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+    class FakeIface:
+        def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+            return None
+
+    project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+    return MainDialog(FakeIface(), None)
+
+
+class TestTheDialog:
+    def test_it_opens_in_portuguese(self, portuguese, project, make_memory_layer):
+        dialog = _dialog(project, make_memory_layer)
         try:
             titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
             assert titles == ["Mapa", "Camadas", "Aparência", "Fidelidade", "Ajuda"]
             # Found by the page, not the title, so it still works translated.
             dialog._show_fidelity_tab()
             assert dialog.tabs.currentWidget() is dialog._fidelity_page
+            assert dialog.language_button.text() == "Português (Brasil)"
+        finally:
+            dialog.close()
+
+    def test_arabic_is_laid_out_right_to_left(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import Qt
+
+        from nika_onlymap_exporter.ui.i18n import use_language
+
+        use_language("ar")
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            assert dialog.layoutDirection() == Qt.LayoutDirection.RightToLeft
+        finally:
+            dialog.close()
+            use_language("en")
+
+    def test_the_menu_marks_what_needs_downloading(
+        self, installed_plugin, project, make_memory_layer
+    ):
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            actions = dialog.language_button.actions_by_choice
+            assert set(actions) == {
+                "auto",
+                "en",
+                "pt_BR",
+                "zh_CN",
+                "hi",
+                "es",
+                "ar",
+                "fr",
+            }
+            assert actions["es"].text() == "Español - download"
+            assert actions["en"].text() == "English"
+            assert actions["auto"].isChecked()
+        finally:
+            dialog.close()
+
+    def test_choosing_a_language_downloads_it_and_asks_to_reopen(
+        self, installed_plugin, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.language_button import LanguageButton
+
+        calls: list[str] = []
+        button = LanguageButton(None, fetch=serve_repo_packs(calls))
+        fired: list[bool] = []
+        button.changed.connect(lambda: fired.append(True))
+        button.choose("es")
+        assert len(calls) == 1
+        assert installed_plugin.installed_pack("es") is not None
+        assert QSettings().value(installed_plugin.SETTING_KEY) == "es"
+        assert fired == [True]
+
+    def test_choosing_english_while_in_english_changes_nothing(
+        self, installed_plugin, project, make_memory_layer
+    ):
+        from nika_onlymap_exporter.ui.language_button import LanguageButton
+
+        calls: list[str] = []
+        button = LanguageButton(None, fetch=serve_repo_packs(calls))
+        fired: list[bool] = []
+        button.changed.connect(lambda: fired.append(True))
+        button.choose("en")
+        assert calls == [] and fired == []
+
+    def test_the_offer_appears_for_a_portuguese_qgis(
+        self, installed_plugin, project, make_memory_layer, monkeypatch
+    ):
+        from nika_onlymap_exporter.ui import language_button
+
+        monkeypatch.setattr(language_button, "qgis_locale", lambda: "pt_BR")
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            assert dialog.language_offer is not None
+            assert dialog.language_offer.code == "pt_BR"
+        finally:
+            dialog.close()
+
+    def test_no_offer_for_an_english_qgis(
+        self, installed_plugin, project, make_memory_layer
+    ):
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            assert dialog.language_offer is None
         finally:
             dialog.close()
 
@@ -175,3 +398,30 @@ def test_every_call_supplies_its_placeholders():
                 if not set(re.findall(r"\{(\w+)", text)) <= given:
                     bad.append(f"{path.name}:{node.lineno}")
     assert not bad
+
+
+def test_the_plugin_reopens_the_dialog_in_the_new_language(
+    qgis_app, project, make_memory_layer
+):
+    """Labels are set when the dialog is built, so a new language is a new dialog."""
+    from nika_onlymap_exporter.plugin import Qgis2WebMapPlugin
+
+    class FakeIface:
+        def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+            return None
+
+    project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+    plugin = Qgis2WebMapPlugin(FakeIface())
+    try:
+        plugin.run()
+        first = plugin.dialog
+        assert first is not None
+        first.languageChanged.emit()
+        for _ in range(5):
+            qgis_app.processEvents()
+        assert plugin.dialog is not None
+        assert plugin.dialog is not first
+        assert plugin.dialog.isVisible()
+    finally:
+        if plugin.dialog is not None:
+            plugin.dialog.close()

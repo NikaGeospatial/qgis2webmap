@@ -27,6 +27,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -97,6 +99,31 @@ def render(language: str, sources: dict[str, list[str]], known: dict[str, str]) 
     )
 
 
+PACKS_FILE = I18N_DIR / "packs.json"
+
+
+def pack_hashes(ts_files: list[Path]) -> dict[str, str]:
+    """Language code -> SHA-256 of its compiled pack.
+
+    Shipped in the plugin as `i18n/packs.json`: a downloaded pack is installed
+    only if it matches, so this is the list of exactly what was released.
+    """
+    hashes = {}
+    for ts in ts_files:
+        qm = ts.with_suffix(".qm")
+        if qm.is_file():
+            hashes[ts.stem.split("_", 1)[1]] = hashlib.sha256(
+                qm.read_bytes()
+            ).hexdigest()
+    return dict(sorted(hashes.items()))
+
+
+def write_packs(ts_files: list[Path]) -> None:
+    PACKS_FILE.write_text(
+        json.dumps({"packs": pack_hashes(ts_files)}, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def compile_qm(ts_files: list[Path]) -> bool:
     lrelease = os.environ.get("LRELEASE") or shutil.which("lrelease")
     if not lrelease:
@@ -148,10 +175,18 @@ def main(argv: list[str]) -> int:
         print(f"{ts.name}: {len(sources)} strings, {missing} untranslated")
 
     if check:
+        pinned = (
+            json.loads(PACKS_FILE.read_text()).get("packs")
+            if PACKS_FILE.is_file()
+            else {}
+        )
+        if pinned != pack_hashes(ts_files):
+            stale.append("packs.json does not match the compiled packs")
         for line in stale:
             print(line)
         return 1 if stale else 0
-    compile_qm(ts_files)
+    if compile_qm(ts_files):
+        write_packs(ts_files)
     return 0
 
 

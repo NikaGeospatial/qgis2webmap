@@ -7,6 +7,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **The dialog speaks seven languages**: English, Português (Brasil), 中文（简体）,
+  हिन्दी, Español, العربية and Français. English is built in; the others are
+  small downloads (about 14 KB each) fetched the first time you pick one, and
+  checked against the copy released with this version before they are used.
+  Choose from the language button at the foot of the dialog. *Follow QGIS*, the
+  default, uses QGIS's own language when its pack is installed, and offers the
+  download - never starting it - when it is not. Arabic is laid out right to
+  left. Switching reopens the dialog in the new language; QGIS does not need a
+  restart, and no setting is lost.
 - **The dialog wears NIKA's colours, and follows QGIS between light and dark.**
   A light QGIS gets Plum-Light with a brass accent; Night Mapping and other dark
   themes get Plum-Dark with a lime accent. Preview and Share are pills at the top

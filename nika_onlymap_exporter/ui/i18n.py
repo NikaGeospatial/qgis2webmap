@@ -1,9 +1,8 @@
 """The plugin's own text in the language QGIS is running in.
 
-**Follows QGIS, with no picker of its own.** QGIS already has a language
-setting (Settings > Options > General > Override system locale), and a second
-one inside a plugin would let the two disagree. Whatever QGIS shows its menus
-in, this dialog shows itself in, if a translation exists; otherwise English.
+**English is built in; other languages are downloaded packs.** Which one is
+shown, and how a pack is fetched and verified, is `languages`' business. This
+module only translates, and swaps the active catalogue.
 
 **Qt's own mechanism.** Strings go through `QCoreApplication.translate`, and the
 catalogues are Qt `.ts` files compiled to `.qm` - the format QGIS's translators
@@ -23,12 +22,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from qgis.PyQt.QtCore import QCoreApplication, QTranslator
 
 CONTEXT = "qgis2webmap"
-I18N_DIR = Path(__file__).resolve().parent.parent / "i18n"
 
 
 def tr(text: str) -> str:
@@ -52,36 +48,40 @@ def plural(count: int, singular: str, many: str, **fields: object) -> str:
     return tr(singular if count == 1 else many).format(n=count, **fields)
 
 
-def catalogue_for(locale: str) -> Path | None:
-    """The compiled catalogue for a QGIS locale such as `pt_BR`, if we have one.
+_active: QTranslator | None = None
+_active_code = "en"
 
-    Exact match first, then any catalogue for the same language: a QGIS set to
-    Portuguese (Portugal) still reads the Brazilian text rather than English.
+
+def active_language() -> str:
+    """The language `tr()` is answering in right now."""
+    return _active_code
+
+
+def use_language(code: str) -> str:
+    """Make `code` the language `tr()` answers in. Returns what was applied.
+
+    Anything without an installed pack - English included - removes the
+    current catalogue, which leaves the source text: English. Only this
+    plugin's catalogue is touched; QGIS's own translators are left alone.
     """
-    if not locale:
-        return None
-    exact = I18N_DIR / f"qgis2webmap_{locale}.qm"
-    if exact.is_file():
-        return exact
-    language = locale.split("_", 1)[0].lower()
-    return next(iter(sorted(I18N_DIR.glob(f"qgis2webmap_{language}*.qm"))), None)
+    global _active, _active_code
+    from . import languages
 
+    if _active is not None:
+        QCoreApplication.removeTranslator(_active)
+        _active = None
 
-def install_translator(locale: str) -> QTranslator | None:
-    """Load the catalogue for `locale` into the application.
-
-    Returns the translator, which the caller must keep a reference to and
-    remove on unload: Qt does not own it, and a collected translator silently
-    stops translating.
-    """
-    path = catalogue_for(locale)
+    _active_code = languages.ENGLISH
+    path = languages.installed_pack(code) if code != languages.ENGLISH else None
     if path is None:
-        return None
+        return _active_code
     translator = QTranslator()
     if not translator.load(str(path)):
-        return None
+        return _active_code
     QCoreApplication.installTranslator(translator)
-    return translator
+    _active = translator
+    _active_code = code
+    return code
 
 
 def qgis_locale() -> str:

@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl
+from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
@@ -102,10 +102,11 @@ from ..packaging.dependency_scanner import (
     standalone_ineligible_reason,
 )
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
-from . import theme
+from . import languages, theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
-from .i18n import N_, plural, tr
+from .i18n import N_, active_language, plural, tr
+from .language_button import LanguageButton, make_offer
 from .layer_watcher import LayerTreeWatcher
 from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
     COMMUNITY_URL,
@@ -589,6 +590,10 @@ def render_help_document() -> QTextDocument:
 class MainDialog(QDialog):
     """Export dialog. Non-modal, so QGIS stays usable behind it."""
 
+    # The user picked a language that differs from the one on screen. The
+    # plugin reopens the dialog in it; every label is set at build time.
+    languageChanged = pyqtSignal()  # noqa: N815 - Qt signal naming
+
     def __init__(self, iface: QgisInterface, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.iface = iface
@@ -625,6 +630,13 @@ class MainDialog(QDialog):
         self._last_export_path: Path | None = None
 
         layout = QVBoxLayout(self)
+        if active_language() in languages.RIGHT_TO_LEFT:
+            self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        # Only when QGIS speaks a language we have and its pack is not here.
+        self.language_offer = make_offer(self)
+        if self.language_offer is not None:
+            self.language_offer.changed.connect(self.languageChanged)
+            layout.addWidget(self.language_offer)
         self.tabs = QTabWidget(self)
         self.tabs.addTab(_scrollable(self._build_map_tab()), tr("Map"))
         self.tabs.addTab(self._build_layers_tab(), tr("Layers"))
@@ -2305,6 +2317,10 @@ class MainDialog(QDialog):
         )
         discord.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
         row.addWidget(discord)
+
+        self.language_button = LanguageButton(self)
+        self.language_button.changed.connect(self.languageChanged)
+        row.addWidget(self.language_button)
 
         self.status_label = QLabel("", self)
         self.status_label.setWordWrap(True)
