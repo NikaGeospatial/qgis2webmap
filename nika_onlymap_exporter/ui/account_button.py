@@ -30,8 +30,8 @@ from __future__ import annotations
 import contextlib
 from typing import Protocol
 
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtCore import QRectF, Qt
+from qgis.PyQt.QtGui import QFont, QIcon, QPainter, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
 from ..core.account import AccountIdentity, load_identity
@@ -109,6 +109,10 @@ class AccountButton(QToolButton):
         super().__init__(parent)
         self._backend = backend
         self.setAutoRaise(True)
+        # An outlined chip in the dialog's theme. Bare text with a person
+        # glyph did not read as something to press.
+        self.setProperty("role", "chip")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setIcon(_theme_icon(ICON_ACCOUNT))
         # Text beside the icon, not under it: this sits in a row of ordinary
         # push buttons and a two-line control would set the row's height.
@@ -135,6 +139,8 @@ class AccountButton(QToolButton):
 
     def _show_signed_in(self, identity: AccountIdentity) -> None:
         self.setText(identity.label)
+        self.setIcon(_initials_icon(initials(identity), self.palette(), self.font()))
+        self._set_has_menu(True)
         self.setToolTip(_signed_in_tooltip(identity))
         self._build_menu(identity)
         self.setMenu(self._menu)
@@ -142,6 +148,8 @@ class AccountButton(QToolButton):
 
     def _show_signed_out(self) -> None:
         self.setText(SIGN_IN_TEXT)
+        self.setIcon(_theme_icon(ICON_ACCOUNT))
+        self._set_has_menu(False)
         self.setToolTip(
             "Pair this QGIS profile with your NIKA account so you can publish "
             "maps to it. Your browser opens NIKA's sign-in page; the plugin "
@@ -151,6 +159,15 @@ class AccountButton(QToolButton):
         # somebody has to make to discover there was no choice to make.
         self.setMenu(None)
         self.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
+
+    def _set_has_menu(self, has_menu: bool) -> None:
+        """Flag whether the chip opens a menu, for the stylesheet's chevron.
+
+        A dynamic property only restyles after a repolish.
+        """
+        self.setProperty("hasMenu", has_menu)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def _build_menu(self, identity: AccountIdentity) -> None:
         self._menu.clear()
@@ -250,6 +267,42 @@ def _signed_in_tooltip(identity: AccountIdentity) -> str:
         lines.append(identity.plan_line)
     lines.append("Click to switch account or sign out.")
     return "\n".join(lines)
+
+
+def initials(identity: AccountIdentity) -> str:
+    """One or two letters for the avatar: "Ada Lovelace" or ada.lovelace@ -> AL."""
+    source = identity.display_name or identity.email.split("@", 1)[0]
+    words = [
+        w
+        for w in source.replace(".", " ").replace("_", " ").replace("-", " ").split()
+        if w
+    ]
+    return "".join(w[0] for w in words[:2]).upper() or "?"
+
+
+def _initials_icon(
+    letters: str, palette: QPalette, base_font: QFont, size: int = 20
+) -> QIcon:
+    """The letters on a disc in the palette's accent, drawn at 2x for HiDPI."""
+    scale = 2
+    pixmap = QPixmap(size * scale, size * scale)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(palette.color(QPalette.ColorRole.Highlight))
+    painter.drawEllipse(QRectF(0, 0, size * scale, size * scale))
+    font = QFont(base_font)
+    font.setPixelSize(int(size * scale * (0.42 if len(letters) > 1 else 0.5)))
+    font.setWeight(QFont.Weight.DemiBold)
+    painter.setFont(font)
+    painter.setPen(palette.color(QPalette.ColorRole.HighlightedText))
+    painter.drawText(
+        QRectF(0, 0, size * scale, size * scale), Qt.AlignmentFlag.AlignCenter, letters
+    )
+    painter.end()
+    pixmap.setDevicePixelRatio(scale)
+    return QIcon(pixmap)
 
 
 def _theme_icon(name: str) -> QIcon:

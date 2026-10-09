@@ -345,3 +345,26 @@ class TestTheDialogSeatsIt:
             assert corner.findChild(AccountButton) is None
         finally:
             dialog.close()
+
+
+class TestItLooksPressable:
+    """It sits in the footer as an outlined chip, not as bare text."""
+
+    def test_it_is_a_chip_signed_out_and_in(self, qgis_app):
+        out = _button(FakeBackend())
+        assert out.property("role") == "chip"
+        assert out.property("hasMenu") is False
+
+        known = _button(FakeBackend(AccountIdentity(email="ada@example.org")))
+        assert known.property("role") == "chip"
+        assert known.property("hasMenu") is True
+
+    def test_signed_in_shows_initials(self, qgis_app):
+        from nika_onlymap_exporter.ui.account_button import initials
+
+        assert initials(AccountIdentity(display_name="Ada Lovelace")) == "AL"
+        assert initials(AccountIdentity(email="ada.lovelace@example.org")) == "AL"
+        assert initials(AccountIdentity(email="mapper@example.org")) == "M"
+
+        known = _button(FakeBackend(AccountIdentity(email="ada@example.org")))
+        assert not known.icon().isNull()
