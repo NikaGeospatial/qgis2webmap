@@ -18,13 +18,14 @@ The dialog is **non-modal**: QGIS stays usable behind it. Reorder, rename or
 restyle layers in the Layers panel and the plugin follows immediately. There is
 no refresh button because there is nothing to refresh.
 
-Five tabs, and two things that stay on screen whichever tab you are on: the
+Six tabs, and two things that stay on screen whichever tab you are on: the
 [fidelity strip](#the-fidelity-strip) and the [button row](#the-button-row).
 
 Settings are remembered **per project**, stored in the `.qgz` alongside it, so
 they travel with the project rather than following you between projects. Two
 exceptions are remembered per machine instead, because they are habits rather
 than properties of a map: **Live preview** and the last folder you exported to.
+The [Settings tab](#settings) gathers the per-machine ones you can change.
 
 ---
 
@@ -259,6 +260,26 @@ this tab is what names every layer over the free plan's
 
 ---
 
+## Settings
+
+Things that are true of every project, rather than of one map:
+
+- **NIKA account** — who this copy of QGIS is signed in as. Publishing to NIKA
+  needs an account; exporting a file never does.
+- **Language** — *Follow QGIS* (the default), English, or one of Português
+  (Brasil), 中文（简体）, हिन्दी, Español, العربية and Français. English is built
+  in; the others are a small download the first time you pick one, checked
+  against the copy released with this version. *Follow QGIS* uses the language
+  QGIS is set to when it is one of these, and otherwise English. When QGIS is
+  in one of them and its pack is not downloaded yet, a bar at the top of the
+  dialog offers it — nothing is downloaded until you press it. Switching
+  reopens the dialog in the new language; QGIS does not need a restart.
+- **Live preview** — the same switch as in the Preview menu, described
+  [below](#live-preview).
+- **About** — the plugin version and the OnlyMap runtime it is pinned to.
+
+---
+
 ## Help
 
 The same guides you are reading now, bundled into the plugin and rendered
@@ -306,8 +327,8 @@ whichever tab you are reading.
 in the plugin ever opens a browser.** The small arrow beside it holds the
 **Live preview** switch described above.
 
-**Share** is everything you might do with the finished map. Its own face opens
-the map in a browser; the arrow beside it opens the menu:
+**Share** is everything you might do with the finished map. Pressing it opens
+the menu:
 
 | Row | What it does |
 |---|---|
@@ -319,9 +340,11 @@ the map in a browser; the arrow beside it opens the menu:
 | **Export share ZIP** | A `.zip` to email or upload, for when a mail filter blocks `.html` |
 | **Export folder for hosting** | `index.html`, `onlymap.js` and a README side by side, to copy to a web host |
 | **Make a cartograph with QGIS2Carto** | Coming in a later release |
+| **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
-**Every row needs a map file first.** Until you have set one on the Map tab they
-are all greyed out, and each says so if you hover it.
+**Every row that acts on the map needs a map file first.** Until you have set
+one on the Map tab they are greyed out, and each says so if you hover it.
+**Ask on Discord** always works.
 
 **You never have to produce the file yourself.** Any row that needs the map
 writes it first, and skips the write when the file is already up to date. There
@@ -331,7 +354,7 @@ A folder does not open by double-clicking: browsers refuse to load the runtime
 from a `file://` page when it sits in a separate file, so a folder has to be
 served. That is what the map file is for.
 
-Preview and Share are both greyed out when the map cannot be produced correctly,
+Preview, and Share's map rows, are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent
 refusal:
 
