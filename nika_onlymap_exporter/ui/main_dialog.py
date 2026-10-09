@@ -102,6 +102,7 @@ from ..packaging.dependency_scanner import (
     standalone_ineligible_reason,
 )
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
+from . import theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
 from .layer_watcher import LayerTreeWatcher
@@ -388,7 +389,27 @@ def _help_label(text: str, parent: QWidget) -> QLabel:
     label = QLabel(text, parent)
     label.setWordWrap(True)
     label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+    # Pinned to the top of its row. A form can hand a wrapped label more
+    # height than it needs, and centred text then floats away from the
+    # control it explains.
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
     return label
+
+
+def _set_form_row_shown(field: QWidget, shown: bool) -> None:
+    """Show or hide a form row, label included.
+
+    An empty warning label still took a row's height plus the form's spacing,
+    which left a visible hole under a setting with nothing to warn about.
+    `QFormLayout` skips a row only once both of its widgets are hidden.
+    """
+    field.setVisible(shown)
+    parent = field.parentWidget()
+    form = parent.layout() if parent is not None else None
+    if isinstance(form, QFormLayout):
+        label = form.labelForField(field)
+        if label is not None:
+            label.setVisible(shown)
 
 
 def _scrollable(page: QWidget) -> QScrollArea:
@@ -614,6 +635,14 @@ class MainDialog(QDialog):
         layout.addWidget(self._build_progress_row())
         layout.addLayout(self._build_button_row())
 
+        # Last, so the stylesheet meets every widget the tabs built. See
+        # `theme` for why it is scoped to this dialog and never to QGIS.
+        self.theme = theme.apply(self)
+        theme.recolour_document(self.help_browser.document(), self.theme)
+        self.account_button.refresh()
+        self._update_basemap_warning()
+        self._update_terrain_warning()
+
         # The list tracks QGIS live; there is no refresh button because there is
         # nothing to refresh.
         self.watcher = LayerTreeWatcher(self.project, self)
@@ -690,6 +719,16 @@ class MainDialog(QDialog):
             "Switch Live preview off in the Preview menu if you would rather it "
             "were written only when you share it.",
         )
+
+    def _warn_style(self) -> str:
+        """Warning text in the theme's warn colour.
+
+        Warnings can be set while the tabs are still being built, before the
+        theme exists; those fall back to the old fixed red and are redrawn once
+        `theme.apply` has run.
+        """
+        palette = getattr(self, "theme", None)
+        return f"color: {palette.warn if palette else '#c0392b'};"
 
     def _resize_to_fit_screen(self) -> None:
         """Open at a comfortable size, but never taller than the screen allows.
@@ -1015,13 +1054,16 @@ class MainDialog(QDialog):
         if note is None:
             self.basemap_warning.setText("")
             self.basemap_warning.setStyleSheet("")
+            _set_form_row_shown(self.basemap_warning, False)
             return
+
+        _set_form_row_shown(self.basemap_warning, True)
 
         self.basemap_warning.setText(note)
         # The one place a fixed colour is right: this is a warning, and warning
         # red has to read as red in both light and dark themes rather than
         # following the palette into something quiet.
-        self.basemap_warning.setStyleSheet("color: #c0392b;")
+        self.basemap_warning.setStyleSheet(self._warn_style())
 
     def _on_terrain_changed(self) -> None:
         value = self.terrain_combo.currentData()
@@ -1035,10 +1077,13 @@ class MainDialog(QDialog):
         if note is None:
             self.terrain_warning.setText("")
             self.terrain_warning.setStyleSheet("")
+            _set_form_row_shown(self.terrain_warning, False)
             return
 
+        _set_form_row_shown(self.terrain_warning, True)
+
         self.terrain_warning.setText(note)
-        self.terrain_warning.setStyleSheet("color: #c0392b;")
+        self.terrain_warning.setStyleSheet(self._warn_style())
 
     def _on_clip_toggled(self, value: bool) -> None:
         self.state.clip_to_extent = value
@@ -1272,7 +1317,7 @@ class MainDialog(QDialog):
                 "still written - Share > Export share ZIP is the practical way "
                 "to send something this size."
             )
-            self.size_note.setStyleSheet("color: #c0392b;")
+            self.size_note.setStyleSheet(self._warn_style())
         else:
             self.size_note.setText(f"{base}\nThis map's data is {megabytes:.1f} MB.")
             self.size_note.setStyleSheet("")
@@ -1937,12 +1982,14 @@ class MainDialog(QDialog):
         self.preview_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
+        self.preview_button.setProperty("role", "primary")
         self.preview_button.clicked.connect(self.on_preview)
         self.preview_button.setMenu(self._build_preview_menu())
         layout.addWidget(self.preview_button)
 
         self.share_button = QToolButton(corner)
         self.share_button.setText("Share")
+        self.share_button.setProperty("role", "secondary")
         self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.share_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
@@ -2099,6 +2146,7 @@ class MainDialog(QDialog):
         page = QWidget(self)
         layout = QVBoxLayout(page)
         browser = QTextBrowser(page)
+        self.help_browser = browser
         # Markdown keeps one source of truth: the same files the website serves.
         browser.setDocument(render_help_document())
         browser.setOpenLinks(False)
@@ -2151,7 +2199,8 @@ class MainDialog(QDialog):
         # question. The arrow marks that it leaves for a browser, the way every
         # outward link in this dialog does.
         discord = QPushButton("Discord ↗", self)
-        discord.setFlat(True)
+        discord.setProperty("role", "chip")
+        discord.setCursor(Qt.CursorShape.PointingHandCursor)
         discord.setToolTip(
             "Open the QGIS2WebMap channel on the NIKA Discord in your browser. "
             "Ask a question, suggest something, or report a bug - no GitHub "
@@ -2326,7 +2375,8 @@ class MainDialog(QDialog):
         row.addWidget(self.fidelity_summary, 1)
 
         self.fidelity_link = QPushButton("What changes?", strip)
-        self.fidelity_link.setFlat(True)
+        self.fidelity_link.setProperty("role", "link")
+        self.fidelity_link.setCursor(Qt.CursorShape.PointingHandCursor)
         self.fidelity_link.clicked.connect(self._show_fidelity_tab)
         row.addWidget(self.fidelity_link)
         return strip
