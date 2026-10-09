@@ -108,22 +108,24 @@ and the incumbent gives no indication of it until the export is on disk. Showing
 it while the user configures is what makes the size a decision rather than a
 discovery.
 
-## The map is a document
+## Export as, then Save to, then Export
 
-The Map tab carries a **Map file** path, and that one `.html` file is the map.
-There is no "how to share it" choice before the user has shared anything: a zip
-or a folder is derived from the file at the moment one is needed, from the Share
-menu, because which of them is wanted depends on the recipient.
+The Map tab asks for the type first — Standalone HTML, Share ZIP or Folder —
+then where it goes, and the Export button writes it there without a picker.
+This is 0.1.4's flow, kept on purpose: a later attempt replaced it with a single
+"map file" and moved the zip and folder into the Share menu, and testers found
+the plugin's main act had disappeared. Exporting is what the plugin is for, so
+it is the one filled button.
 
-The field starts empty and is never guessed at. Earlier versions remembered only
-the *folder* of the last export, so any reconstructed file name would have named
-a file the user never wrote — and with the file being kept up to date, that would
-have quietly sat a second map beside their real one.
+Switching the type keeps the chosen name (`peaks.html` becomes `peaks.zip` or a
+`peaks` folder). The Save to field starts empty and is never guessed at:
+earlier versions remembered only the *folder* of the last export, so a
+reconstructed file name would name a file the user never wrote.
 
-## Preview and Share, in the tab corner
+## Preview, Export and Share, in the tab corner
 
-Both live in the tab bar's top-right corner, reachable from whichever tab is
-open. They are the two things a user does *to* the map, and the tab they happen
+All three live in the tab bar's top-right corner, reachable from whichever tab
+is open. They are the things a user does *to* the map, and the tab they happen
 to be reading when they decide to do one is not the dialog's business.
 
 This reverses an earlier call. The corner previously held a help link, placed
@@ -133,13 +135,13 @@ behind the Windows taskbar with no way to reach it. That reasoning still holds
 and this does not break it: the two controls moved *up* out of the bottom row,
 which emptied rather than grew. The dialog is no taller than it was.
 
-Every Share row is disabled until a map file is set, and each says why on hover.
-A row that needs the file writes it first, so there is nothing to press
-beforehand — which is what let the Export button go.
+Every Share row is disabled until Save to is set, and each says why on hover.
+A row that needs the file writes it first, so Copy file path or Open in browser
+never point at something stale.
 
 ## Disabled with a reason, never silent
 
-Preview and Share are disabled when the map cannot be produced correctly, with
+Preview, Export and Share's map rows are disabled when the map cannot be produced correctly, with
 the reason in the status bar — over a licence cap, a required asset missing, no
 exportable layers. This is [`docs/architecture.md`](architecture.md)
 non-negotiable 5 surfaced in the UI.
