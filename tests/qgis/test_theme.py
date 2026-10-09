@@ -68,6 +68,10 @@ class TestContrast:
         p = getattr(theme, name)
         pairs = {
             "ink on paper": (p.ink, p.paper),
+            "ink on canvas": (p.ink, p.canvas),
+            "muted on canvas": (p.muted, p.canvas),
+            "link on canvas": (p.link, p.canvas),
+            "warn on canvas": (p.warn, p.canvas),
             "ink on field": (p.ink, p.field),
             "muted on paper": (p.muted, p.paper),
             "muted on field": (p.muted, p.field),

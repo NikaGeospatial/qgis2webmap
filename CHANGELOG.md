@@ -7,6 +7,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Sections read as separate cards.** Each sits on a near-white card with a
+  hairline border against a slightly darker window, in both light and dark,
+  so it is clear where one group of settings ends and the next begins.
+
+### Fixed
+- **No more blank gaps under help text and warnings.** Wrapped text was sized
+  for a narrower width than it got and the surplus showed as empty space - the
+  basemap warning sat in three times its height. The Map tab is about a quarter
+  shorter, so there is less to scroll.
 - **A Settings tab, before Help**, for what is true of every project rather
   than of one map: the NIKA account, the dialog's language, Live preview (still
   also in the Preview menu) and the plugin and runtime versions. The account and

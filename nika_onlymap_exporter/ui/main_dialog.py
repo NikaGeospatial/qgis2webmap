@@ -106,6 +106,7 @@ from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 from . import languages, theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
+from .fitted_label import FittedLabel
 from .i18n import N_, active_language, plural, tr
 from .language_picker import LanguagePicker, make_offer
 from .layer_watcher import LayerTreeWatcher
@@ -392,7 +393,7 @@ def _help_label(text: str, parent: QWidget) -> QLabel:
     in need of explaining, coordinate precision, is the one that throws data
     away. Colour comes from the palette so it stays legible in a dark theme.
     """
-    label = QLabel(text, parent)
+    label = FittedLabel(text, parent)
     label.setWordWrap(True)
     label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
     # Pinned to the top of its row. A form can hand a wrapped label more
@@ -795,7 +796,7 @@ class MainDialog(QDialog):
         # project already open - but "no control" and "the control is missing"
         # look identical to someone opening the dialog for the first time, and
         # testing had people hunting the tabs for a file chooser.
-        source_note = QLabel(
+        source_note = FittedLabel(
             tr(
                 "<b>Source:</b> the layers already open in this QGIS project. There "
                 "is nothing to browse for - choose which of them to include on the "
@@ -858,7 +859,7 @@ class MainDialog(QDialog):
         # that names it. Separate from the status line in the bottom bar, which
         # reports work in progress: this one reports the file, and the two must
         # never describe the same thing.
-        self.save_status = QLabel("", destination_box)
+        self.save_status = FittedLabel("", destination_box)
         self.save_status.setWordWrap(True)
         self.save_status.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         destination_layout.addWidget(self.save_status)
@@ -869,7 +870,7 @@ class MainDialog(QDialog):
         # the radio buttons following - left the dialog claiming Standalone
         # HTML while it built a zip. There is no selection to disagree with any
         # more, but the number is still worth saying before anyone emails it.
-        self.size_note = QLabel("", destination_box)
+        self.size_note = FittedLabel("", destination_box)
         self.size_note.setWordWrap(True)
         self.size_note.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         destination_layout.addWidget(self.size_note)
@@ -893,7 +894,7 @@ class MainDialog(QDialog):
 
         # Warning rather than help: this is the only setting that changes what
         # the *recipient's* machine does, and it cannot be undone after sending.
-        self.basemap_warning = QLabel("", basemap_box)
+        self.basemap_warning = FittedLabel("", basemap_box)
         self.basemap_warning.setWordWrap(True)
         basemap_form.addRow("", self.basemap_warning)
         self._update_basemap_warning()
@@ -909,7 +910,7 @@ class MainDialog(QDialog):
         self.terrain_combo.currentIndexChanged.connect(self._on_terrain_changed)
         basemap_form.addRow(tr("Ground surface"), self.terrain_combo)
 
-        self.terrain_warning = QLabel("", basemap_box)
+        self.terrain_warning = FittedLabel("", basemap_box)
         self.terrain_warning.setWordWrap(True)
         basemap_form.addRow("", self.terrain_warning)
         self._update_terrain_warning()
@@ -999,7 +1000,7 @@ class MainDialog(QDialog):
         # The tab's dead space, spent saying what pressing Export will produce.
         # Kept at the bottom so it reads as a consequence of the choices above
         # rather than another setting.
-        self.export_summary = QLabel("", page)
+        self.export_summary = FittedLabel("", page)
         self.export_summary.setWordWrap(True)
         self.export_summary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(self.export_summary)

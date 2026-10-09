@@ -52,7 +52,8 @@ class Palette:
     """One NIKA theme, as the hex colours the stylesheet needs."""
 
     name: str
-    paper: str  # the dialog's ground
+    canvas: str  # the window behind everything, a step darker than a card
+    paper: str  # cards: sections, tables, menus - where content sits
     field: str  # inputs, table headers, the inset behind quiet controls
     hover: str  # a pressable thing under the pointer
     rule: str  # hairlines and outlines
@@ -78,10 +79,11 @@ class Palette:
 
 PLUM_LIGHT = Palette(
     name="plum-light",
-    paper="#fbf9fc",
-    field="#f4f0f5",
+    canvas="#efeaf1",
+    paper="#fdfcfe",
+    field="#f5f1f6",
     hover="#ece6ee",
-    rule="#d3cad5",
+    rule="#d9cfdc",
     ink="#170d19",
     muted="#6b606e",
     quiet="#807683",
@@ -95,9 +97,10 @@ PLUM_LIGHT = Palette(
 
 PLUM_DARK = Palette(
     name="plum-dark",
-    paper="#0e0511",
-    field="#1e1021",
-    hover="#2a1a2e",
+    canvas="#0b030e",
+    paper="#170b1a",
+    field="#22132a",
+    hover="#2e1d33",
     rule="#3a2b3e",
     ink="#f5f2e7",
     muted="#a39aa5",
@@ -157,7 +160,7 @@ def apply(dialog: QWidget) -> Palette:
     # in the Help tab's links read these, not the stylesheet.
     qpalette = QPalette(dialog.palette())
     roles = {
-        QPalette.ColorRole.Window: palette.paper,
+        QPalette.ColorRole.Window: palette.canvas,
         QPalette.ColorRole.WindowText: palette.ink,
         QPalette.ColorRole.Base: palette.paper,
         QPalette.ColorRole.AlternateBase: palette.field,
@@ -197,12 +200,12 @@ def apply(dialog: QWidget) -> Palette:
         )
         form.setVerticalSpacing(8)
         form.setHorizontalSpacing(14)
-    # Sections are a title and a hairline now, not a box, so their contents
-    # line up with the title instead of sitting inset inside a frame.
+    # Sections are cards: their contents sit inset from the card's edge, with
+    # the title outside and above it.
     for box in dialog.findChildren(QGroupBox):
         layout = box.layout()
         if layout is not None:
-            layout.setContentsMargins(0, 2, 0, 2)
+            layout.setContentsMargins(14, 12, 14, 12)
     return palette
 
 
@@ -246,7 +249,7 @@ def stylesheet(p: Palette, object_name: str) -> str:
     d = f"#{object_name}"
     return f"""
 {d} {{
-    background: {p.paper};
+    background: {p.canvas};
     color: {p.ink};
 }}
 {d} QWidget {{
@@ -264,6 +267,7 @@ def stylesheet(p: Palette, object_name: str) -> str:
 {d} QTabWidget::pane {{
     border: none;
     border-top: 1px solid {p.rule};
+    border-bottom: 1px solid {p.rule};
     top: -1px;
 }}
 {d} QTabBar {{
@@ -286,19 +290,20 @@ def stylesheet(p: Palette, object_name: str) -> str:
     border-bottom: 3px solid {p.accent};
 }}
 
-/* ---- Sections: a title and a hairline, not a sunken box ---------------- */
+/* ---- Sections: a card a step lighter than the window, title above ------- */
 {d} QGroupBox {{
-    border: none;
-    border-top: 1px solid {p.rule};
-    margin-top: 26px;
-    padding: 12px 0 0 0;
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 8px;
+    margin-top: 28px;
+    padding: 0;
     font-weight: 600;
 }}
 {d} QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    left: 0;
-    top: 4px;
+    left: 2px;
+    top: 6px;
     padding: 0;
     color: {p.ink};
 }}

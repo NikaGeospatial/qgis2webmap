@@ -1867,3 +1867,43 @@ class TestLicenseKeyResolution:
         dialog = self._dialog(project, make_memory_layer)
         assert isinstance(dialog._writer().license_policy, FreeTierPolicy)
         dialog.close()
+
+
+class TestNoWastedHeight:
+    """Wrapped text takes the height it needs and no more.
+
+    Qt sizes a word-wrapped label in a form for a narrower width than it ends
+    up with, then spreads the surplus as blank space: the basemap warning sat in
+    84 px for 28 px of text, and the Map tab scrolled for nothing.
+    """
+
+    def test_wrapped_labels_fit_their_text(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QLabel
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        dialog = MainDialog(FakeIface(), None)
+        try:
+            dialog.resize(1000, 720)
+            dialog.show()
+            dialog.basemap_combo.setCurrentIndex(dialog.basemap_combo.findData("osm"))
+            for _ in range(5):
+                qgis_app.processEvents()
+            loose = [
+                (label.text()[:40], label.height(), label.heightForWidth(label.width()))
+                for label in dialog.tabs.widget(0).findChildren(QLabel)
+                if label.wordWrap()
+                and label.isVisible()
+                and label.text()
+                and label.height() > label.heightForWidth(label.width()) + 2
+            ]
+            assert not loose
+        finally:
+            dialog.close()
