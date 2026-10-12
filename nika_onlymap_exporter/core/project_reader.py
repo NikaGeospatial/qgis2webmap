@@ -53,7 +53,7 @@ from .manifest_builder import (
     OSM_FILE_NOTE,
     TERRAIN_PRESETS,
     basemap_note,
-    file_safe_basemap,
+    osm_from_file,
     terrain_note,
 )
 from .settings import LayerSettings
@@ -368,7 +368,7 @@ def read_project(
     # cannot be undone once the file is sent - so it belongs in the report the
     # user reads before exporting, not only in the dialog they already left.
     note = basemap_note(settings.basemap)
-    if file_safe_basemap(settings.basemap, settings.output_mode) != settings.basemap:
+    if osm_from_file(settings.basemap, settings.output_mode):
         report.approximated("Basemap", OSM_FILE_NOTE)
     elif note is not None:
         report.approximated("Basemap", note)

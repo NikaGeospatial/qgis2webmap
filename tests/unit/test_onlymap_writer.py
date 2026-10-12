@@ -427,9 +427,8 @@ class TestOsmFromAFile:
 
     Their policy wants a `Referer`, a page opened by double-click sends none,
     and a page cannot set its own `User-Agent` - so a recipient sees "Access
-    blocked" tiles. The tiers a recipient opens from disk swap the OSM basemap
-    for OpenFreeMap's Liberty, drawn from the same OpenStreetMap data, which
-    serves a file. A folder goes on a website, sends a `Referer`, and keeps OSM.
+    blocked" tiles. The basemap is kept as chosen - the author is warned
+    instead, on the Map tab and in the Fidelity tab.
     """
 
     @staticmethod
@@ -443,13 +442,13 @@ class TestOsmFromAFile:
         )
         return result.entry_path.read_text()
 
-    def test_a_single_file_swaps_osm_for_liberty(self, tmp_path) -> None:
+    def test_a_single_file_keeps_the_chosen_basemap(self, tmp_path) -> None:
         page = self._page(tmp_path, "STANDALONE_HTML")
-        assert 'basemap="liberty"' in page
-        assert 'basemap="osm"' not in page
+        assert 'basemap="osm"' in page
+        assert 'basemap="liberty"' not in page
 
-    def test_a_share_zip_swaps_it_too(self, tmp_path) -> None:
-        assert 'basemap="liberty"' in self._page(tmp_path, "SHARE_ZIP")
+    def test_a_share_zip_keeps_it_too(self, tmp_path) -> None:
+        assert 'basemap="osm"' in self._page(tmp_path, "SHARE_ZIP")
 
     def test_a_folder_keeps_osm(self, tmp_path) -> None:
         assert 'basemap="osm"' in self._page(tmp_path, "FOLDER")

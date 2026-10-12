@@ -263,8 +263,8 @@ def scan(
                     "map needs an internet connection to draw this layer.",
                     layer.layer_id,
                 )
-                # Those tiles were chosen, so unlike the basemap they cannot be
-                # swapped - see `manifest_builder.OSM_FILE_NOTE` for why.
+                # The same refusal as the basemap's - see
+                # `manifest_builder.OSM_FILE_NOTE` for why.
                 if (
                     "tile.openstreetmap.org" in dependency.identifier
                     and mode in FILE_OPENED_MODES

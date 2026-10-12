@@ -95,7 +95,7 @@ from ..core.license_policy import (
 from ..core.manifest_builder import (
     OSM_FILE_NOTE,
     basemap_note,
-    file_safe_basemap,
+    osm_from_file,
     terrain_note,
 )
 from ..core.popup_translator import hidden_field_names, popup_field_names
@@ -1119,10 +1119,7 @@ class MainDialog(QDialog):
         the recipient rather than on the person choosing it.
         """
         note = basemap_note(self.state.basemap)
-        if (
-            file_safe_basemap(self.state.basemap, self.state.output_mode)
-            != self.state.basemap
-        ):
+        if osm_from_file(self.state.basemap, self.state.output_mode):
             # Said here, where the basemap is chosen, not only after export.
             note = OSM_FILE_NOTE
         if note is None:

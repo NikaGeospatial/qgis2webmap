@@ -95,10 +95,10 @@ identifier travels with the file, the anonymous usage report is the same either
 way, and the file is no larger.
 
 **OpenStreetMap only works for maps on a website.** Its tile servers refuse a map
-opened straight from a file - the recipient sees "Access blocked" tiles - so a
-Standalone HTML or Share ZIP export uses **Liberty** instead: the same
-OpenStreetMap data, drawn a little differently. The dialog says so under the
-basemap. A Folder export keeps OpenStreetMap.
+opened straight from a file, so a recipient who double-clicks a Standalone HTML
+or Share ZIP export may see "Access blocked" tiles. The dialog warns under the
+basemap when you pick it for those types; choose **Liberty** instead - the same
+OpenStreetMap data, drawn a little differently - or export as a Folder.
 
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation

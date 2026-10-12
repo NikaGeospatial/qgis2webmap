@@ -2105,7 +2105,7 @@ class TestExportIsBack:
             dialog.close()
 
 
-def test_the_map_tab_says_osm_is_swapped_for_a_single_file(
+def test_the_map_tab_warns_against_osm_for_a_single_file(
     qgis_app, project, make_memory_layer
 ) -> None:
     """Said where the basemap is chosen, and only for the types opened from disk."""
@@ -2115,8 +2115,8 @@ def test_the_map_tab_says_osm_is_swapped_for_a_single_file(
     try:
         dialog.basemap_combo.setCurrentIndex(dialog.basemap_combo.findData("osm"))
         dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
-        assert "Liberty" in dialog.basemap_warning.text()
+        assert "Access blocked" in dialog.basemap_warning.text()
         dialog.mode_buttons[OutputMode.FOLDER].click()
-        assert "Liberty" not in dialog.basemap_warning.text()
+        assert "Access blocked" not in dialog.basemap_warning.text()
     finally:
         dialog.close()

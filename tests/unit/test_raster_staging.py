@@ -664,9 +664,9 @@ class TestPreviewMode:
 
 
 class TestOsmTileLayerFromAFile:
-    """An OSM XYZ layer cannot be swapped - those tiles were chosen - so a
-    file-type export warns that a recipient opening it directly may see
-    "Access blocked" tiles, and a folder does not."""
+    """Like the OSM basemap, an OSM XYZ layer in a file-type export warns that
+    a recipient opening it directly may see "Access blocked" tiles, and a
+    folder does not."""
 
     @staticmethod
     def _osm_layer():

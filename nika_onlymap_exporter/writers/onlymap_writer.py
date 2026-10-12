@@ -15,7 +15,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,7 +32,6 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
-    file_safe_basemap,
     texture_credit,
 )
 from ..packaging.asset_embedder import (
@@ -305,14 +304,6 @@ class OnlyMapWriter:
         """
         runtime = self.runtime_provider.load()
         verdict = self.license_policy.evaluate(project)
-
-        # A map its recipient opens from disk cannot use OpenStreetMap's own
-        # tiles; see `manifest_builder.OSM_FILE_NOTE`.
-        basemap = file_safe_basemap(project.settings.basemap, mode)
-        if basemap != project.settings.basemap:
-            project = replace(
-                project, settings=replace(project.settings, basemap=basemap)
-            )
 
         scan_report = FidelityReportBuilder()
         scan_result: ScanResult = scan(project, scan_report, mode)

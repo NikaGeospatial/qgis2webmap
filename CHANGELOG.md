@@ -87,13 +87,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   it in the other corner.
 
 ### Fixed
-- **OpenStreetMap basemaps showed "Access blocked" for recipients.** Its tile
-  servers require a `Referer`, which a map opened straight from a file never
-  sends, and a page cannot set its own `User-Agent`. Standalone HTML and Share
-  ZIP exports now use OpenFreeMap's Liberty basemap - the same OpenStreetMap
-  data - and say so on the Map tab and in the Fidelity tab. Folder exports,
-  which go on a website, keep OpenStreetMap. An OpenStreetMap XYZ layer cannot
-  be swapped, so a file-type export warns about it instead.
+- **OpenStreetMap basemaps showed "Access blocked" for recipients, with no
+  warning.** Its tile servers require a `Referer`, which a map opened straight
+  from a file never sends, and a page cannot set its own `User-Agent`. Picking
+  OpenStreetMap for a Standalone HTML or Share ZIP export now warns on the Map
+  tab and in the Fidelity tab and suggests Liberty - the same OpenStreetMap
+  data - or a Folder export. An OpenStreetMap XYZ layer warns the same way.
 - **Map labels were unreadable over imagery.** Two causes. Label sizes were
   copied from QGIS without their unit, so a 9 pt label drew at 9 px instead
   of 12 - buffers too. And the web map draws outlined (haloed) text with its

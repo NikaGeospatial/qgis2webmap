@@ -332,26 +332,22 @@ def terrain_note(terrain: str, basemap: str = "none") -> str | None:
 # servers refuse those maps: their policy wants a `Referer`, a page opened by
 # double-click sends none, and a page cannot set its own `User-Agent` - so the
 # tiles come back as "Access blocked", sporadically and more often over time.
-# OpenFreeMap's Liberty is drawn from the same OpenStreetMap data, needs no
-# key, and serves a page opened from a file (measured: the Grand Canyon demo,
-# Standalone HTML, opened by double-click). A folder goes on a website, whose
-# pages send a `Referer`, so it keeps OSM.
+# The basemap is kept as chosen and the author is warned, pointed at Liberty:
+# OpenFreeMap's style of the same OpenStreetMap data, which serves a page
+# opened from a file (measured: the Grand Canyon demo, Standalone HTML, opened
+# by double-click). A folder goes on a website, whose pages send a `Referer`.
 FILE_OPENED_MODES = frozenset({OutputMode.STANDALONE_HTML, OutputMode.SHARE_ZIP})
-OSM_FILE_STAND_IN = "liberty"
 OSM_FILE_NOTE = (
-    "OpenStreetMap's own tile servers refuse maps opened straight from a file - "
-    "recipients would see 'Access blocked' tiles - so this export uses "
-    "OpenFreeMap's Liberty basemap instead: the same OpenStreetMap data, drawn "
-    "a little differently. Export as a Folder for a website to keep the "
-    "OpenStreetMap basemap."
+    "OpenStreetMap's tile servers refuse maps opened straight from a file, so "
+    "recipients who double-click this map may see 'Access blocked' tiles. "
+    "Choose Liberty - the same OpenStreetMap data - or another basemap, or "
+    "export as a Folder for a website."
 )
 
 
-def file_safe_basemap(basemap: str, mode: OutputMode) -> str:
-    """The basemap a map of this output type should carry. See `OSM_FILE_NOTE`."""
-    if basemap == "osm" and mode in FILE_OPENED_MODES:
-        return OSM_FILE_STAND_IN
-    return basemap
+def osm_from_file(basemap: str, mode: OutputMode) -> bool:
+    """Whether this basemap and output type earn `OSM_FILE_NOTE`."""
+    return basemap == "osm" and mode in FILE_OPENED_MODES
 
 
 def basemap_note(basemap: str) -> str | None:
