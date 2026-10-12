@@ -53,6 +53,7 @@ from .manifest_builder import (
     OSM_FILE_NOTE,
     TERRAIN_PRESETS,
     basemap_note,
+    labels_never_fit,
     osm_from_file,
     terrain_note,
 )
@@ -529,7 +530,16 @@ def _declutter(
                 "its points.",
                 layer.layer_id,
             )
-        if layer.label_min_zoom is not None:
+        if labels_never_fit(layer):
+            report.unsupported(
+                f"Labels on '{layer.name}'",
+                "QGIS hides labels that would overlap; the web map cannot, and "
+                "these labels only have room past the last zoom this layer "
+                "shows at, so they are left out. A larger scale range in QGIS, "
+                "or shorter or fewer labels, would bring them back.",
+                layer.layer_id,
+            )
+        elif layer.label_min_zoom is not None:
             report.approximated(
                 f"Labels on '{layer.name}'",
                 "QGIS hides labels that would overlap; the web map cannot, so "

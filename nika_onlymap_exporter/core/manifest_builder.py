@@ -551,6 +551,18 @@ def _zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
     return ("visible-zoom-range", f"[{_number(low)}, {_number(high)}]")
 
 
+def labels_never_fit(layer: ExportLayer) -> bool:
+    """Whether a layer's labels only have room past the last zoom it shows at.
+
+    Drawn anyway they would pile up across the whole range - what waiting for
+    `label_min_zoom` is there to prevent - so they are left out instead.
+    """
+    if layer.label_min_zoom is None:
+        return False
+    high = layer.visible_zoom_range[1] if layer.visible_zoom_range else ZOOM_CEILING
+    return layer.label_min_zoom >= high
+
+
 def _label_zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
     """The layer's zoom range, starting no earlier than its labels have room.
 
@@ -563,7 +575,8 @@ def _label_zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
     low = max(low, float(layer.label_min_zoom))
     if low >= high:
         # Never reached: `declutter_layer` drops a limit at or past the floor,
-        # and no range ends below its own floor.
+        # and `build_label_element` leaves out labels that fit only past the
+        # ceiling.
         return _zoom_range_attribute(layer)
     return ("visible-zoom-range", f"[{_number(low)}, {_number(high)}]")
 
@@ -1132,7 +1145,7 @@ def build_label_element(
     cared enough about to label.
     """
     labeling = layer.labeling
-    if not (labeling.enabled and labeling.field_name):
+    if not (labeling.enabled and labeling.field_name) or labels_never_fit(layer):
         return ""
 
     collection = build_label_collection(

@@ -2295,6 +2295,15 @@ class TestDeclutter:
         )
         assert 'visible-zoom-range="[11, 15]"' in build_label_element(layer)
 
+    def test_labels_that_only_fit_past_the_layers_range_are_left_out(
+        self,
+    ) -> None:
+        """Drawn across [0, 12] they would pile up - what waiting prevents."""
+        layer = replace(
+            self.LABELLED, label_min_zoom=15, visible_zoom_range=(0.0, 12.0)
+        )
+        assert build_label_element(layer) == ""
+
     def test_the_layer_itself_ignores_the_label_limit(self) -> None:
         layer = replace(self.LABELLED, label_min_zoom=11)
         assert "visible-zoom-range" not in build_layer_element(layer)
