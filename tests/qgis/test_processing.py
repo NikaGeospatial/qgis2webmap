@@ -274,3 +274,85 @@ class TestRuntimePreflight:
         from nika_onlymap_exporter.packaging.runtime_manager import LocalRuntime
 
         LocalRuntime(tmp_path).preflight()
+
+
+def _labelled_z_layer(kind: str, name: str, wkts: list[str]):
+    """A labelled `kind`Z memory layer: what Z-on digitising, a DEM drape or a
+    CityGML import gives QGIS."""
+    layer = qgis_core.QgsVectorLayer(
+        f"{kind}Z?crs=EPSG:4326&field=name:string", name, "memory"
+    )
+    features = []
+    for index, wkt in enumerate(wkts):
+        feature = qgis_core.QgsFeature(layer.fields())
+        feature.setAttribute(0, f"{name} {index}")
+        feature.setGeometry(qgis_core.QgsGeometry.fromWkt(wkt))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+    settings = qgis_core.QgsPalLayerSettings()
+    settings.fieldName = "name"
+    layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+    layer.setLabelsEnabled(True)
+    return layer
+
+
+@pytest.mark.parametrize("mode", [0, 1, 2], ids=["standalone", "zip", "folder"])
+def test_labelled_3d_layers_export_end_to_end(project, tmp_path, mode) -> None:
+    """The 0.1.4 'too many values to unpack' crash, through the whole export.
+
+    A labelled PolygonZ layer aborted the export at the label step. Run here
+    through the real reader and writer, in every output type, alongside Z
+    lines and a dense Z point layer - which also reaches this release's
+    declutter and clustering, both of which read coordinates.
+    """
+    if discover_runtime_dir() is None:
+        pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+
+    project.addMapLayer(
+        _labelled_z_layer(
+            "Polygon",
+            "Peaks",
+            [
+                "POLYGON Z ((86.9 27.9 8849,87.0 27.9 8849,87.0 28.0 8849,"
+                "86.9 28.0 8849,86.9 27.9 8849))",
+                "MULTIPOLYGON Z (((86.5 27.5 1,86.6 27.5 1,86.6 27.6 1,"
+                "86.5 27.6 1,86.5 27.5 1)))",
+            ],
+        )
+    )
+    project.addMapLayer(
+        _labelled_z_layer(
+            "LineString", "Trails", ["LINESTRING Z (86.9 27.9 5000,87.0 28.0 6000)"]
+        )
+    )
+    project.addMapLayer(
+        _labelled_z_layer(
+            "Point",
+            "Camps",
+            [f"POINT Z ({86.9 + i * 0.0001} 27.9 {5000 + i})" for i in range(150)],
+        )
+    )
+
+    destination = tmp_path / ("map.html", "map.zip", "map")[mode]
+    context = qgis_core.QgsProcessingContext()
+    context.setProject(project)
+    feedback = _RecordingFeedback()
+    algorithm = ExportProjectAlgorithm()
+    algorithm.initAlgorithm()
+
+    results = algorithm.processAlgorithm(
+        {"OUTPUT": str(destination), "MODE": mode, "TITLE": "Everest"},
+        context,
+        feedback,
+    )
+
+    written = Path(results["OUTPUT"])
+    assert written.exists()
+    logged = " ".join(feedback.warnings)
+    assert "too many values" not in logged
+    if mode == 0:
+        html = written.read_text(encoding="utf-8")
+        # Each layer's labels made it, and the dense Z points clustered.
+        assert html.count('type="TextLayer"') == 3
+        assert 'cluster="true"' in html
