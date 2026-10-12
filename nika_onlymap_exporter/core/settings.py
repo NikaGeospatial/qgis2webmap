@@ -474,12 +474,12 @@ def load_state(project: QgsProject) -> DialogState:
     map_file, ok = project.readEntry(SCOPE, KEY_MAP_FILE, "")
     if ok and map_file:
         state.map_file = map_file
-        # The relative form wins when it lands somewhere real: the project
-        # folder was moved or shared. Save As keeps custom entries as they
-        # were, so a relative path can also point beside a copy that has no
-        # such folder - then the absolute one is still right.
+        # The absolute path wins while its folder is still there: Save As keeps
+        # custom entries as they were, so after one the relative form points
+        # beside the copy. Only when that folder is gone - the project moved,
+        # or opened on another machine - does the relative form take over.
         relative, ok = project.readEntry(SCOPE, KEY_MAP_FILE_RELATIVE, "")
-        if ok and relative:
+        if ok and relative and not Path(map_file).parent.is_dir():
             candidate = project.readPath(relative)
             if candidate and Path(candidate).parent.is_dir():
                 state.map_file = candidate

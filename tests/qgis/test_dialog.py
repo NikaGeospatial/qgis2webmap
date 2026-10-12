@@ -130,7 +130,10 @@ class TestSettingsPersistence:
         save_state(project, DialogState(map_file=str(target)))
         assert load_state(project).map_file == str(target)
 
-        (tmp_path / "moved" / "out").mkdir(parents=True)
+        # Moved: the old folder is gone, the copy carries its own.
+        import shutil
+
+        shutil.move(str(tmp_path / "work"), str(tmp_path / "moved"))
         project.setFileName(str(tmp_path / "moved" / "survey.qgz"))
         assert load_state(project).map_file == str(
             tmp_path / "moved" / "out" / "peaks.html"
@@ -142,6 +145,20 @@ class TestSettingsPersistence:
         project.setFileName(str(tmp_path / "work" / "survey.qgz"))
         (tmp_path / "work" / "out").mkdir(parents=True)
         target = tmp_path / "work" / "out" / "peaks.html"
+        save_state(project, DialogState(map_file=str(target)))
+
+        project.setFileName(str(tmp_path / "share" / "copy.qgz"))
+        assert load_state(project).map_file == str(target)
+
+    def test_save_as_beside_a_map_saved_next_to_the_project(
+        self, project, tmp_path
+    ) -> None:
+        """The picker's default: the map beside the project. After Save As the
+        relative form names a file beside the copy that was never written."""
+        (tmp_path / "work").mkdir()
+        (tmp_path / "share").mkdir()
+        project.setFileName(str(tmp_path / "work" / "survey.qgz"))
+        target = tmp_path / "work" / "peaks.html"
         save_state(project, DialogState(map_file=str(target)))
 
         project.setFileName(str(tmp_path / "share" / "copy.qgz"))
