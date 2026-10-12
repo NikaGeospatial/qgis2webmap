@@ -98,7 +98,12 @@ from ..core.manifest_builder import (
     terrain_note,
 )
 from ..core.popup_translator import hidden_field_names, popup_field_names
-from ..core.project_reader import extent_from_canvas, read_project, resolve_title
+from ..core.project_reader import (
+    extent_from_canvas,
+    read_project,
+    resolve_title,
+    with_output_notes,
+)
 from ..core.report_facts import ReportFacts, report_facts
 from ..core.settings import (
     MAX_PRECISION,
@@ -1264,15 +1269,13 @@ class MainDialog(QDialog):
         self.state.output_mode = mode
         self._update_basemap_warning()
         # The report states the output type, and with OpenStreetMap the type
-        # decides whether it warns: restate or mark it out of date.
-        self._refresh_fidelity_freshness()
+        # decides whether it warns: redrawn from the same read, not re-read.
         if (
             self._fidelity_state is ReportState.CURRENT
-            and self._fidelity_summary is not None
+            and self._cached_report is not None
+            and self._fidelity_signature == self._cached_signature
         ):
-            self.fidelity_panel.show_summary(
-                self._fidelity_summary, self._fidelity_facts(self._fidelity_signature)
-            )
+            self._show_fidelity(self._cached_report, self._cached_signature)
         typed = self.path_edit.text().strip()
         if typed:
             path = Path(typed)
@@ -2110,6 +2113,7 @@ class MainDialog(QDialog):
     ) -> None:
         """Show a report. `signature` is the data snapshot it was read against;
         `None` means the settings as they are now."""
+        report = with_output_notes(report, self.state.to_export_settings())
         self._fidelity_signature = (
             signature if signature is not None else self.state.data_snapshot()
         )

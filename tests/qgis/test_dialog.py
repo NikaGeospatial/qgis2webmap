@@ -1968,34 +1968,42 @@ class TestChromeChangesSkipTheRead:
         state.for_layer("roads").popup = False
         assert state.data_snapshot() != before
 
-    def test_the_output_type_invalidates_the_cache_only_under_osm(self) -> None:
-        """The read warns about OpenStreetMap opened from a file; that warning
-        is the one thing the output type changes in it."""
+    def test_the_output_type_never_invalidates_the_cache(self) -> None:
+        """Even under OpenStreetMap, whose one report row the type changes:
+        that row is redrawn from the same read."""
         from nika_onlymap_exporter.core.settings import DialogState
 
-        state = DialogState(basemap="liberty", output_mode=OutputMode.FOLDER)
+        state = DialogState(basemap="osm", output_mode=OutputMode.FOLDER)
         before = state.data_snapshot()
         state.output_mode = OutputMode.STANDALONE_HTML
         assert state.data_snapshot() == before
 
-        state.basemap = "osm"
-        before = state.data_snapshot()
-        state.output_mode = OutputMode.FOLDER
-        assert state.data_snapshot() != before
-
-    def test_switching_type_under_osm_marks_the_report_out_of_date(
+    def test_switching_type_under_osm_redraws_the_warning_without_a_read(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.core.manifest_builder import OSM_FILE_NOTE
 
         dialog = TestFidelityStrip()._dialog(project, make_memory_layer)
         try:
             dialog.basemap_combo.setCurrentIndex(dialog.basemap_combo.findData("osm"))
             dialog.mode_buttons[OutputMode.FOLDER].click()
-            dialog._show_fidelity(FidelityReportBuilder())
-            assert not dialog._fidelity_is_stale
+            export, report = dialog._read_current_project(None)
+            signature = dialog.state.data_snapshot()
+            dialog._cached_export, dialog._cached_report = export, report
+            dialog._cached_signature = signature
+            dialog._show_fidelity(report, signature)
+
+            def details() -> list[str]:
+                summary = dialog._fidelity_summary
+                return [row.detail for g in summary.groups for row in g.rows]
+
+            assert OSM_FILE_NOTE not in details()
+            reads: list[str] = []
+            dialog._start_job = lambda *a, **k: reads.append("read")
             dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
-            assert dialog._fidelity_is_stale
+            assert not dialog._fidelity_is_stale
+            assert OSM_FILE_NOTE in details()
+            assert reads == []
         finally:
             dialog.close()
 

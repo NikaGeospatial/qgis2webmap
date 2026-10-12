@@ -228,6 +228,35 @@ def _report_terrain(
         )
 
 
+def with_output_notes(
+    report: FidelityReportBuilder, settings: ExportSettings
+) -> FidelityReportBuilder:
+    """`report` with its Basemap row as it reads for `settings`' output type.
+
+    The one row the type changes: OpenStreetMap refuses maps opened from a
+    file. Kept out of what a cached read depends on, so switching type is a
+    redraw rather than a re-read of every feature.
+    """
+    if settings.basemap != "osm":
+        return report
+    general = basemap_note(settings.basemap)
+    wanted = (
+        OSM_FILE_NOTE
+        if osm_from_file(settings.basemap, settings.output_mode)
+        else general
+    )
+    updated = FidelityReportBuilder()
+    updated.extend(
+        tuple(
+            dataclasses.replace(item, detail=wanted)
+            if item.subject == "Basemap" and item.detail in (OSM_FILE_NOTE, general)
+            else item
+            for item in report.items
+        )
+    )
+    return updated
+
+
 def read_project(
     project: QgsProject,
     report: FidelityReportBuilder,
