@@ -792,14 +792,14 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     margin: 0;
 }}
 {d} QToolButton[role="cornerPart"][position="left"] {{
-    padding-right: 2px;
+    padding-right: 0px;
     border-top-left-radius: 5px;
     border-bottom-left-radius: 5px;
 }}
 {d} QToolButton[role="cornerPart"][position="right"] {{
-    padding: 3px 7px 3px 3px;
-    min-width: 12px;
-    max-width: 12px;
+    padding: 3px 7px 3px 0px;
+    min-width: 10px;
+    max-width: 10px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
 }}
