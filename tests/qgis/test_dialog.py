@@ -1098,11 +1098,26 @@ class TestShareBuildsWhatItNeeds:
         try:
             folder = tmp_path / "peaks"
             (folder / "data").mkdir(parents=True)
+            (folder / "index.html").write_text("<p>map</p>", encoding="utf-8")
             (folder / "data" / "big.bin").write_bytes(b"x" * 3 * 1024 * 1024)
             dialog.mode_buttons[OutputMode.FOLDER].click()
             dialog.path_edit.setText(str(folder))
             dialog._update_save_status()
             assert "3.0 MB" in dialog.save_status.text()
+
+            # A folder that is not an export - typing "/" on the way to a
+            # path - is never walked.
+            walked: list[object] = []
+            import pathlib
+
+            real_rglob = pathlib.Path.rglob
+            pathlib.Path.rglob = lambda self, *a: walked.append(self) or iter(())
+            try:
+                dialog.path_edit.setText(str(tmp_path))
+                dialog._update_save_status()
+            finally:
+                pathlib.Path.rglob = real_rglob
+            assert walked == []
         finally:
             dialog.close()
 

@@ -1360,8 +1360,13 @@ class MainDialog(QDialog):
             return
 
         size = stat.st_size
-        if destination.is_dir():
-            # A Folder export: its files, not the directory entry's 4 KB.
+        if (
+            self.state.output_mode is OutputMode.FOLDER
+            and (destination / "index.html").is_file()
+        ):
+            # A Folder export: its files, not the directory entry's 4 KB. Only
+            # one this plugin wrote - this runs on every keystroke in Save to,
+            # and walking "/" or a drive root on the way to a path would freeze QGIS.
             with contextlib.suppress(OSError):
                 size = sum(
                     f.stat().st_size for f in destination.rglob("*") if f.is_file()
