@@ -1406,8 +1406,10 @@ class TestDialogConstruction:
                 1, Qt.CheckState.Unchecked
             )
         assert dialog.preview_button.isEnabled() is False
-        for action in dialog.share_actions.values():
-            assert action.isEnabled() is False
+        from nika_onlymap_exporter.ui.main_dialog import SHARE_ACTIONS_ON_THE_FILE
+
+        for key in SHARE_ACTIONS_ON_THE_FILE:
+            assert dialog.share_actions[key].isEnabled() is False
         assert "at least one layer" in dialog.status_label.text()
         dialog.close()
 
