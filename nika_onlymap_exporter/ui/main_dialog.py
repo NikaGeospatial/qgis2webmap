@@ -1346,12 +1346,17 @@ class MainDialog(QDialog):
             self.save_status.setText(tr("Choose where to save, then press Export."))
             return
 
-        if not destination.exists():
+        # What an export leaves there: the file, or a Folder export's page. A
+        # folder that merely exists - the Folder picker only offers existing
+        # ones - has not been written to by anyone.
+        folder = self.state.output_mode is OutputMode.FOLDER
+        written = destination / "index.html" if folder else destination
+        if not written.is_file():
             self.save_status.setText(tr("Not written yet."))
             return
 
         try:
-            stat = destination.stat()
+            stat = written.stat()
         except OSError:
             # The path is real enough to have been chosen but cannot be read -
             # a disconnected network share, most likely. Saying so beats a
@@ -1360,10 +1365,7 @@ class MainDialog(QDialog):
             return
 
         size = stat.st_size
-        if (
-            self.state.output_mode is OutputMode.FOLDER
-            and (destination / "index.html").is_file()
-        ):
+        if folder:
             # A Folder export: its files, not the directory entry's 4 KB. Only
             # one this plugin wrote - this runs on every keystroke in Save to,
             # and walking "/" or a drive root on the way to a path would freeze QGIS.

@@ -1145,6 +1145,7 @@ class TestShareBuildsWhatItNeeds:
             finally:
                 pathlib.Path.rglob = real_rglob
             assert walked == []
+            assert dialog.save_status.text() == "Not written yet."
         finally:
             dialog.close()
 
