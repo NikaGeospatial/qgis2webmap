@@ -153,7 +153,7 @@ The reason is printed beside the button. The three you will meet:
 
 | The reason says | What to do |
 |---|---|
-| *Add a vector layer to the project to export.* | The project has no vector layer. Raster-only projects have nothing to export |
+| *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only WMS services or attribute tables |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
 | Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
 

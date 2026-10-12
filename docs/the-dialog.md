@@ -394,7 +394,7 @@ refusal:
 
 | The reason says | Fix |
 |---|---|
-| *Add a vector layer to the project to export.* | The project has no exportable layer |
+| *Add a vector or raster layer to the project to export.* | The project has no exportable layer |
 | *Tick at least one layer to include.* | Everything is unticked on the Layers tab |
 | A blocked item | Open the Fidelity tab; it names the layer and why |
 

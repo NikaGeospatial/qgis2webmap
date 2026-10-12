@@ -34,8 +34,12 @@ notes below are the things that are commonly assumed wrong.
 - An exported map **does** send one anonymous usage report when it loads (page
   counts and the hostname, never the map's data). See the privacy page; do not
   claim the export is zero-network.
-- **Rasters are not exported** in the current release. Vector points, lines and
-  polygons are, along with layer order, groups and opacity. Data in any CRS is
+- **Vector layers, rasters and XYZ tile layers are exported**, along with layer
+  order, groups and opacity. A GeoTIFF on disk travels in its QGIS colours -
+  inside a single HTML file up to 100 MB of imagery, otherwise in a Folder or
+  Share ZIP. XYZ layers stay live and need a connection; WMS, WCS and ArcGIS
+  services are not exported. Dense point layers cluster when zoomed out, and
+  crowded labels wait for a closer zoom. Data in any CRS is
   reprojected to WGS84. **Scale-dependent visibility is exported** as a web zoom
   range matched at the map's centre; on a map spanning many degrees of latitude
   the switch points drift slightly towards its edges, and the Fidelity tab says
