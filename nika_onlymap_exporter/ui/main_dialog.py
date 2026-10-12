@@ -647,6 +647,7 @@ class MainDialog(QDialog):
         # rather than trusting a file it has never seen written.
         self._written_signature: str | None = None
         self._pending_signature: str | None = None
+        self._pending_destination: Path | None = None
 
         # What the Fidelity tab and strip are showing. See `_fidelity_is_stale`.
         self._fidelity_dirty = True
@@ -3313,6 +3314,9 @@ class MainDialog(QDialog):
     def on_export(self) -> None:
         """Write the export in the type and place chosen on the Map tab."""
         self._pending_mode = self.state.output_mode
+        # With it, the place: switching the type renames the field, and a write
+        # landing after that would put one type's output at the other's path.
+        self._pending_destination = self._map_file()
         # Taken before the read, not after the write: a setting changed while
         # this runs is not in the file, so the file must not claim it.
         self._pending_signature = self.state.snapshot()
@@ -3368,7 +3372,7 @@ class MainDialog(QDialog):
             self._export_then = None
             return
 
-        destination = self._resolve_destination(mode)
+        destination = self._resolve_destination(mode, self._pending_destination)
         if destination is None:
             self._export_then = None
             return
@@ -3472,13 +3476,15 @@ class MainDialog(QDialog):
         # would be worse than saying nothing.
         return box.clickedButton() is write_anyway
 
-    def _resolve_destination(self, mode: OutputMode) -> Path | None:
-        """Where to write: the Save to field, whichever type is chosen.
+    def _resolve_destination(
+        self, mode: OutputMode, chosen: Path | None = None
+    ) -> Path | None:
+        """Where to write: `chosen`, or the Save to field as it is now.
 
         No picker at Export time. The type and the place were both chosen on
         the Map tab, so pressing Export does exactly what it says.
         """
-        destination = self._map_file()
+        destination = chosen or self._map_file()
         if destination is None:
             self._warn_no_map_file()
             return None

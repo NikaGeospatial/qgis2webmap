@@ -2170,6 +2170,28 @@ class TestExportIsBack:
         finally:
             dialog.close()
 
+    def test_switching_type_mid_read_keeps_the_pressed_destination(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """The type is taken at the press, so the place must be too: otherwise
+        a Folder export lands in a folder called peaks.html."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.mode_buttons[OutputMode.FOLDER].setChecked(True)
+            dialog.path_edit.setText(str(tmp_path / "peaks"))
+            dialog._ensure_export = lambda then, label, quiet=False: None
+            dialog.on_export()
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].setChecked(True)
+            assert dialog.path_edit.text().endswith("peaks.html")
+            assert (
+                dialog._resolve_destination(
+                    dialog._pending_mode, dialog._pending_destination
+                )
+                == tmp_path / "peaks"
+            )
+        finally:
+            dialog.close()
+
     def test_the_corner_is_separate_buttons_with_export_last(
         self, qgis_app, project, make_memory_layer
     ) -> None:
