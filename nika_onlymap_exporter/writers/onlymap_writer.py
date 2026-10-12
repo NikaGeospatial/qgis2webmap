@@ -32,10 +32,13 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import build_manifest, collect_attributions
 from ..packaging.asset_embedder import (
     build_bootstrap,
+    build_data_inflater,
     gzip_base64,
     should_compress_data,
 )
 from ..packaging.dependency_scanner import ScanResult, scan
+from ..packaging.raster_cog import CancelCheck, ProgressCallback
+from ..packaging.raster_staging import RasterStagingResult, stage_rasters
 from ..packaging.runtime_manager import (
     RuntimeBundle,
     RuntimeProvider,
@@ -191,7 +194,18 @@ class OnlyMapWriter:
             # An import rather than a `src=` attribute, so the template's single
             # script block serves both shapes. The inline module resolves it
             # against the document URL, which is the sibling file we wrote.
-            script_body = f'      import "./{runtime_file}";'
+            #
+            # Compressed data needs its inflater in the SAME block, ahead of the
+            # import. This branch used to emit the bare import and nothing else,
+            # so a folder export large enough to gzip its data shipped base64 no
+            # runtime could read - a map with rasters, legend and layer switcher
+            # and not one feature, with no error anywhere. See the note on
+            # `DATA_INFLATE_TEMPLATE`.
+            script_body = (
+                build_data_inflater(runtime_file)
+                if compress_data
+                else f'      import "./{runtime_file}";'
+            )
         elif compress:
             # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
             # of the raw size, and nobody edits minified runtime code anyway.
@@ -222,6 +236,30 @@ class OnlyMapWriter:
         pattern = re.compile("|".join(re.escape(t) for t in replacements))
         return pattern.sub(lambda m: replacements[m.group(0)], template)
 
+    def _stage_rasters(
+        self,
+        project: ExportProject,
+        destination: Path,
+        mode: OutputMode,
+        report: FidelityReportBuilder,
+        on_progress: ProgressCallback | None,
+        should_cancel: CancelCheck | None,
+    ) -> RasterStagingResult:
+        """Convert this project's rasters into the artifact directory.
+
+        A one-line wrapper on purpose: it exists so `write` reads as a sequence
+        of steps rather than a paragraph of arguments, and so a test can drive
+        the raster pass without reproducing the writer.
+        """
+        return stage_rasters(
+            project,
+            destination,
+            mode,
+            report,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
+        )
+
     def write(
         self,
         project: ExportProject,
@@ -231,6 +269,8 @@ class OnlyMapWriter:
         compress: bool = True,
         preview_hook: str = "",
         unbundle: bool = False,
+        on_progress: ProgressCallback | None = None,
+        should_cancel: CancelCheck | None = None,
     ) -> ArtifactResult:
         """Write the artifact and describe what was produced.
 
@@ -246,6 +286,14 @@ class OnlyMapWriter:
 
         Scanning happens first: an export that cannot work for its recipient
         should fail before anything is written, not after.
+
+        `on_progress` and `should_cancel` exist for the raster pass and only for
+        it. Everything else here is milliseconds; converting an orthophoto to a
+        Cloud-Optimized GeoTIFF is the one part of an export that can run for
+        minutes, so it is the one part with a progress line and a way out. They
+        take the shape the rest of the plugin already uses -- see
+        `raster_cog.ProgressCallback` -- so an existing progress widget can be
+        handed straight in.
         """
         runtime = self.runtime_provider.load()
         verdict = self.license_policy.evaluate(project)
@@ -260,6 +308,22 @@ class OnlyMapWriter:
 
         destination.mkdir(parents=True, exist_ok=True)
         written: list[ArtifactFile] = []
+
+        # Rasters before the page, because the page has to name them. Staging
+        # is what turns `RasterSpec.path` -- a file on this machine -- into a
+        # `src` the recipient can fetch, and it is also the last point at which
+        # a raster that cannot be carried can stop the export instead of
+        # producing a map with a blank layer in it. `staging.project` carries
+        # the filled-in specs; nothing downstream may use `project` again.
+        staging = self._stage_rasters(
+            project, destination, mode, scan_report, on_progress, should_cancel
+        )
+        if not staging.can_export:
+            raise ExportBlockedError(staging.blocking_reasons)
+        project = staging.project
+        written.extend(
+            ArtifactFile(path, path.stat().st_size) for path in staging.files
+        )
 
         runtime_file = None
         if unbundle:

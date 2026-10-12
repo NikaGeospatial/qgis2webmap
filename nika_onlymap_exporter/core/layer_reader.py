@@ -1,4 +1,4 @@
-"""One QGIS vector layer to one `ExportLayer`.
+"""One QGIS layer - vector or raster - to one `ExportLayer`.
 
 Imports PyQGIS; exercised in `tests/qgis/`.
 
@@ -19,8 +19,10 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsJsonExporter,
     QgsMapLayerType,
+    QgsReadWriteContext,
     QgsWkbTypes,
 )
+from qgis.PyQt.QtXml import QDomDocument
 
 from .elevation_translator import translate_elevation
 from .export_ir import (
@@ -29,9 +31,12 @@ from .export_ir import (
     Color,
     ElevationSpec,
     ExportLayer,
+    Extent,
     GeometryKind,
     LabelingSpec,
     PopupSpec,
+    RasterSpec,
+    RendererKind,
     RendererSpec,
     ScaleRange,
     SourceKind,
@@ -39,13 +44,19 @@ from .export_ir import (
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
+from .raster_style import composite_bands, should_bake
 from .renderer_translator import translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
 
-    from qgis.core import QgsProject, QgsVectorLayer
+    from qgis.core import (
+        QgsMapLayer,
+        QgsProject,
+        QgsRasterLayer,
+        QgsVectorLayer,
+    )
 
 WGS84 = "EPSG:4326"
 
@@ -332,8 +343,346 @@ def keep_only_fields(
     return {**collection, "features": stripped}
 
 
+# Raster providers whose pixels are a file on this machine, which is the only
+# case packaging can turn into a Cloud Optimized GeoTIFF. Everything else - wms,
+# wcs, xyz, arcgismapserver - is a live service: there is no file to convert,
+# and embedding a snapshot of somebody else's tile server is a licensing
+# decision this plugin does not get to make on the user's behalf.
+_RASTER_FILE_PROVIDERS = frozenset({"gdal"})
+
+
+def raster_source_path(layer: QgsRasterLayer) -> str:
+    """The plain filesystem path behind a GDAL raster layer.
+
+    `QgsMapLayer.source()` can carry provider options after a `|` (a subdataset
+    selector, a band index) and GDAL subdataset URIs put the path in the middle
+    of a colon-separated string. Only the simple case is handled here, because
+    only the simple case is a file `to_cog` can open; anything else fails the
+    existence check below and is reported rather than half-converted.
+    """
+    return (layer.source() or "").split("|", 1)[0].strip()
+
+
+def raster_extent(layer: QgsRasterLayer) -> Extent | None:
+    """The layer's extent in WGS84 degrees, or `None` if it cannot be had.
+
+    Reprojected here rather than left in the source CRS so it can join the
+    project extent union without a second, differently-implemented transform.
+    Antimeridian handling is deliberately not attempted: a raster in a
+    projected CRS has no meaningful wrap, and claiming one would produce a
+    box `Extent` cannot describe.
+    """
+    from qgis.core import QgsCoordinateTransform, QgsProject
+
+    rect = layer.extent()
+    if rect.isEmpty():
+        return None
+
+    crs = layer.crs()
+    if crs.isValid() and crs.authid() != WGS84:
+        try:
+            transform = QgsCoordinateTransform(
+                crs, QgsCoordinateReferenceSystem(WGS84), QgsProject.instance()
+            )
+            rect = transform.transformBoundingBox(rect)
+        except Exception:  # pragma: no cover - QGIS raises its own CRS errors
+            return None
+
+    return Extent(
+        west=float(rect.xMinimum()),
+        south=float(rect.yMinimum()),
+        east=float(rect.xMaximum()),
+        north=float(rect.yMaximum()),
+    )
+
+
+def raster_style(layer: QgsRasterLayer) -> tuple[tuple[int, ...] | None, str | None]:
+    """How this raster's colours reach the map: as bands, or as baked pixels.
+
+    Returns the RGB band triple for a composite - whose pixels are already the
+    colours the author sees - and otherwise the layer's style as a QML document
+    for `packaging.raster_bake` to render into the pixels. Never both: the whole
+    point of the split is in `core.raster_style`, which imports no QGIS and
+    therefore holds the decision where a unit test can reach it.
+
+    A style that cannot be serialised returns `(None, None)`, which carries the
+    raster as unstyled data. That is a visible loss and `read_raster` reports
+    it; it is not a crash and not a guess.
+    """
+    renderer_fn = getattr(layer, "renderer", None)
+    renderer = renderer_fn() if callable(renderer_fn) else None
+
+    if not should_bake(renderer):
+        return (composite_bands(renderer), None)
+
+    document = QDomDocument()
+    # `exportNamedStyle` returns a non-empty string on failure and writes
+    # nothing, so both halves are checked: an empty document would apply
+    # cleanly later and silently render the raster with no styling at all.
+    message = layer.exportNamedStyle(document, QgsReadWriteContext())
+    qml = document.toString()
+    if message or not qml:
+        return (None, None)
+    return (None, qml)
+
+
+def raster_rescale(layer: QgsRasterLayer) -> tuple[float | None, float | None]:
+    """The contrast stretch the author was actually looking at.
+
+    Read from the *renderer*, not from band statistics: QGIS applies a stretch
+    (often "min/max of the current extent" or a 2%-98% cumulative cut) and the
+    picture on screen is that stretch, not the raw range. Handing deck.gl the
+    raw range would produce a visibly flatter image than QGIS showed and
+    nothing would say why.
+
+    Only the single-band renderers are read. A multi-band colour renderer has
+    one stretch per band and `COGLayer` takes a single `rescaleMin`/`rescaleMax`
+    pair, so collapsing three into one would be an invention - `read_raster`
+    reports that instead.
+    """
+    renderer = layer.renderer()
+    if renderer is None:
+        return (None, None)
+
+    # Pseudocolour keeps its range on the renderer itself.
+    lower = getattr(renderer, "classificationMin", None)
+    upper = getattr(renderer, "classificationMax", None)
+    if callable(lower) and callable(upper):
+        low, high = float(lower()), float(upper())
+        if low == low and high == high and high > low:  # NaN-safe
+            return (low, high)
+
+    # Grey renderers keep it on a contrast enhancement.
+    enhancement = getattr(renderer, "contrastEnhancement", None)
+    if callable(enhancement):
+        current = enhancement()
+        if current is not None:
+            low = float(current.minimumValue())
+            high = float(current.maximumValue())
+            if low == low and high == high and high > low:
+                return (low, high)
+
+    return (None, None)
+
+
+def raster_nodata(layer: QgsRasterLayer) -> float | None:
+    """The value QGIS is masking out on band 1, if there is one.
+
+    Restated on the layer element because a conversion can lose the header
+    field that carried it, and an unmasked nodata block draws as a hard slab of
+    the extreme colour - which reads as data.
+    """
+    provider = layer.dataProvider()
+    if provider is None or not provider.sourceHasNoDataValue(1):
+        return None
+    value = float(provider.sourceNoDataValue(1))
+    if value != value or value in (float("inf"), float("-inf")):  # NaN / infinite
+        return None
+    return value
+
+
+def read_raster(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read one raster layer into the normalized model.
+
+    Returns `None` for a raster there is no file to carry - a WMS or XYZ layer,
+    or a source that has gone missing - after recording why. That is the same
+    contract `read_layer` has always had; what changed is that a plain GeoTIFF
+    on disk no longer falls into it.
+
+    Everything the model gets is metadata: the pixels stay in the file and
+    reach the artifact through packaging, which converts the source to a Cloud
+    Optimized GeoTIFF (`packaging/raster_cog`) and fills in `RasterSpec.src`.
+    This function must not do that work itself - it would mean importing GDAL
+    into the reader, and it would mean converting a file the user may yet
+    cancel out of exporting.
+
+    Colour takes one of two routes, decided in `core.raster_style`:
+
+    * **A multiband composite** is carried as data, with its R/G/B band numbers
+      on the layer element. Those pixels are already the colours the author
+      sees. Per-band contrast stretch is the one thing lost, and is reported.
+    * **Everything else** - pseudocolour, paletted, singleband grey, hillshade,
+      contour - has its style captured as QML here and rendered into the pixels
+      by `packaging.raster_bake` during the export. QGIS invents those colours
+      at draw time from an arbitrary stop list, and `COGLayer` has no way to
+      express one, so reproducing them means letting QGIS draw.
+
+    Still not translated, and reported rather than guessed: resampling method
+    and blend mode, neither of which the runtime's schema has an attribute for.
+    """
+    layer_id = layer.id()
+    name = layer.name()
+    provider = layer.dataProvider()
+    provider_key = (layer.providerType() or "").lower()
+
+    if provider_key not in _RASTER_FILE_PROVIDERS or provider is None:
+        report.unsupported(
+            f"Layer '{name}'",
+            "This is a live raster service rather than a file on disk, so there "
+            "is nothing to embed in a self-contained map. Save it to a GeoTIFF "
+            "and add that instead, or use it as a basemap. The layer is omitted "
+            "from the map.",
+            layer_id,
+        )
+        return None
+
+    path = raster_source_path(layer)
+    if not path:
+        report.unsupported(
+            f"Layer '{name}'",
+            "The layer's data source is not a plain file path, so it cannot be "
+            "converted for the web. Export it to a GeoTIFF from QGIS and add "
+            "that instead. The layer is omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    band_count = int(provider.bandCount())
+    rescale_min, rescale_max = raster_rescale(layer)
+    bands, style_qml = raster_style(layer)
+    extent = raster_extent(layer)
+    crs = layer.crs()
+
+    raster = RasterSpec(
+        path=path,
+        band_count=band_count,
+        source_crs=crs.authid() if crs.isValid() else None,
+        extent=extent,
+        pixel_width=int(provider.xSize()),
+        pixel_height=int(provider.ySize()),
+        resolution_x=float(layer.rasterUnitsPerPixelX()),
+        resolution_y=float(layer.rasterUnitsPerPixelY()),
+        nodata=raster_nodata(layer),
+        rescale_min=rescale_min,
+        rescale_max=rescale_max,
+        bands=bands,
+        style_qml=style_qml,
+        # Left `None` on purpose: answering it needs GDAL. See `RasterSpec`.
+        is_cog=None,
+    )
+
+    # A missing file is a blocker rather than an omission: the user pointed at
+    # something, QGIS drew it from a cache or is drawing nothing, and quietly
+    # shipping a map without it is exactly the silent gap this project rejects.
+    missing = not _file_exists(path)
+    dependency = AssetDependency(
+        identifier=path,
+        disposition=(
+            AssetDisposition.BLOCKING if missing else AssetDisposition.EMBEDDABLE
+        ),
+        size_bytes=_file_size(path),
+        note=(
+            f"The raster file '{path}' is missing, so its pixels cannot be put "
+            "into the map. Repair the layer's data source in QGIS, or remove "
+            "the layer."
+            if missing
+            else "The raster is converted to a Cloud Optimized GeoTIFF and "
+            "carried inside the map, so the recipient needs no access to the "
+            "original file."
+        ),
+    )
+
+    report.preserved(
+        f"Layer '{name}'",
+        f"The raster is exported as a Cloud Optimized GeoTIFF "
+        f"({raster.pixel_width} x {raster.pixel_height} pixels, "
+        f"{band_count} band{'s' if band_count != 1 else ''}) and drawn in "
+        "place, keeping its position, opacity and place in the layer order.",
+        layer_id,
+    )
+
+    # Colour, which is the single biggest thing a raster can lose. Three
+    # outcomes, and which one applies is decided by `core.raster_style`:
+    if style_qml is not None:
+        # Rasterised: the colours become pixels, which is exactly the trade the
+        # detail spells out.
+        report.raster_fallback(
+            f"Colours of '{name}'",
+            "The colour ramp, classes and contrast stretch you set in QGIS are "
+            "rendered into the exported image, so the map shows exactly the "
+            "colours QGIS shows. The trade is that the exported file carries "
+            "those colours rather than the underlying values, so the map "
+            "cannot be restretched or read for measurements afterwards.",
+            layer_id,
+        )
+    elif bands is not None:
+        report.preserved(
+            f"Colours of '{name}'",
+            f"The layer is a {band_count}-band colour composite, so its own "
+            f"pixels are the colours you see. Bands {', '.join(str(b) for b in bands)} "
+            "are drawn in red, green and blue order as they are in QGIS.",
+            layer_id,
+        )
+        if not raster.has_rescale:
+            report.approximated(
+                f"Contrast of '{name}'",
+                "A composite has one contrast stretch per band and the map "
+                "takes a single pair, so the per-band stretch you set in QGIS "
+                "is not carried and the map stretches each band across its own "
+                "range. The image may look lighter or darker than it does in "
+                "QGIS.",
+                layer_id,
+            )
+    else:
+        # `raster_style` could not serialise the layer's styling. Rare, and it
+        # means the map draws the values rather than the picture - which is the
+        # old behaviour, so it is reported the way the old behaviour was.
+        report.unsupported(
+            f"Colours of '{name}'",
+            "This layer's styling could not be read out of QGIS, so the map "
+            "draws the raster from its values in greyscale rather than in the "
+            "colours you set. Re-applying the style in the layer's Symbology "
+            "tab and exporting again usually fixes it.",
+            layer_id,
+        )
+
+    return ExportLayer(
+        layer_id=layer_id,
+        name=name,
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.FILE,
+        visible=visible,
+        opacity=float(layer.opacity()),
+        scale_range=scale_range(layer),
+        # Everything vector stays at its default, which `raster is not None`
+        # marks as inapplicable rather than empty - see `RasterSpec`.
+        renderer=RendererSpec(
+            kind=RendererKind.UNSUPPORTED,
+            unsupported_reason="Raster layers carry no vector symbology.",
+        ),
+        popup=PopupSpec(enabled=False),
+        raster=raster,
+        attribution=read_attribution(layer),
+        group_path=group_path,
+        dependencies=(dependency,),
+    )
+
+
+def _file_exists(path: str) -> bool:
+    from pathlib import Path
+
+    try:
+        return Path(path).is_file()
+    except OSError:  # pragma: no cover - an unreadable path is a missing one
+        return False
+
+
+def _file_size(path: str) -> int | None:
+    from pathlib import Path
+
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return None
+
+
 def read_layer(
-    layer: QgsVectorLayer,
+    layer: QgsMapLayer,
     report: FidelityReportBuilder,
     group_path: tuple[str, ...] = (),
     visible: bool = True,
@@ -346,10 +695,12 @@ def read_layer(
     project: QgsProject | None = None,
     clip_extent: Any | None = None,
 ) -> ExportLayer | None:
-    """Read one vector layer into the normalized model.
+    """Read one layer into the normalized model.
 
-    Returns `None` for layers 0.1.0 cannot handle at all - rasters, and vector
-    layers with no geometry - after recording why.
+    Raster layers are handed straight to `read_raster`; everything below is the
+    vector path. Returns `None` for layers with no web equivalent at all - a
+    mesh or point cloud, a vector layer with no geometry, a raster that is a
+    live service rather than a file - after recording why.
 
     `project` is needed only to read a 2.5D renderer's height, which QGIS keeps
     as a project variable rather than on the layer. Passed in rather than taken
@@ -365,11 +716,18 @@ def read_layer(
     layer_id = layer.id()
     name = layer.name()
 
+    if layer.type() == QgsMapLayerType.RasterLayer:
+        # Rasters take none of the vector arguments above: they have no fields
+        # to hide, no popup to build, no labels and no geometry to quantise.
+        # Passing them along would only make the seam look wider than it is.
+        return read_raster(layer, report, group_path=group_path, visible=visible)
+
     if layer.type() != QgsMapLayerType.VectorLayer:
         report.unsupported(
             f"Layer '{name}'",
-            "Raster layers are not exported in 0.1.0. The layer is omitted from "
-            "the map.",
+            "Only vector and raster layers are exported. Mesh, point-cloud and "
+            "annotation layers have no equivalent in the map runtime, so this "
+            "layer is omitted from the map.",
             layer_id,
         )
         return None

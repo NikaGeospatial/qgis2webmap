@@ -132,6 +132,7 @@ from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
 from .live_server import PreviewServer
 from .preview import (
     preview_directory,
+    preview_mode,
     prune_stale_previews,
     remove_preview,
     write_preview,
@@ -2242,7 +2243,7 @@ class MainDialog(QDialog):
 
     def _show_preview_state(self) -> None:
         """Make the switch and the Preview button say what is happening."""
-        running = getattr(self, "_server", None) is not None
+        running = self._live_running()
         live = self.live_switch.isChecked()
 
         self.live_switch.setProperty("lineIcon", "live" if live else "live-off")
@@ -2736,16 +2737,30 @@ class MainDialog(QDialog):
 
     # ---- Live preview ---------------------------------------------------
 
+    def _live_running(self) -> bool:
+        """Whether a preview is open and following the dialog.
+
+        Both halves, because a raster map's one-off preview is served too - a
+        browser will not read the raster from a page opened off the disk - and
+        that preview is not live: nothing rebuilds it.
+        """
+        timer = getattr(self, "_watch_timer", None)
+        return (
+            getattr(self, "_server", None) is not None
+            and timer is not None
+            and timer.isActive()
+        )
+
     def _on_live_toggled(self, live: bool) -> None:
         QSettings().setValue(LIVE_PREVIEW_KEY, live)
-        if not live and self._server is not None:
+        if not live and self._live_running():
             self._stop_live_preview()
             self.status_label.setText(tr("Live preview stopped."))
         self._show_preview_state()
 
     def _on_preview_pressed(self) -> None:
         """Preview, or stop the live preview that is running."""
-        if self._server is None:
+        if not self._live_running():
             self.on_preview()
             return
         self._stop_live_preview()
@@ -3047,13 +3062,17 @@ class MainDialog(QDialog):
         identity = self._project_identity()
         writer = self._writer()
         live = self.live_switch.isChecked()
+        # A raster map is previewed as a folder, which only works served - so
+        # even a one-off preview of one goes through the local server. It is
+        # not live for that: nothing watches for changes.
+        served = live or preview_mode(export) is OutputMode.FOLDER
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Building the preview..."))
             return write_preview(export, identity, writer=writer, live=live)
 
         def on_written(result) -> None:
-            if not live:
+            if not served:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
                 self.status_label.setText(
                     tr(
@@ -3074,6 +3093,14 @@ class MainDialog(QDialog):
                 return
 
             QDesktopServices.openUrl(QUrl(url))
+            if not live:
+                self.status_label.setText(
+                    tr(
+                        "Preview opened. Press Preview again after making changes - "
+                        "your position on the map is kept."
+                    )
+                )
+                return
             self._watch_timer.start()
             self._show_preview_state()
             self.status_label.setText(

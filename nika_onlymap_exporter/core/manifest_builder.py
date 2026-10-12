@@ -38,6 +38,7 @@ from .export_ir import (
     GeometryKind,
     PopupFieldMode,
     PopupFieldSpec,
+    RasterSpec,
     RendererKind,
     RendererSpec,
     SymbolSpec,
@@ -61,6 +62,35 @@ MAX_WEB_ZOOM = 24
 # geometry in one file. Using a different class per geometry kind would fragment
 # the styling attributes for no benefit.
 LAYER_CLASS = "GeoJsonLayer"
+
+# Georeferenced rasters. Four runtime classes could plausibly draw pixels and
+# only one of them is right here; the schema settles it (`onlymapjs.html-data.
+# json`, attribute `type`, and each attribute's own "Valid on:" list):
+#
+# * **`COGLayer`** takes `src` - a single URL to a Cloud Optimized GeoTIFF -
+#   and reads the georeferencing out of the file's own header. Nothing about
+#   the placement has to be restated, so there is no way for our idea of the
+#   extent and the file's to disagree. It also exposes `min`/`max`
+#   (`rescaleMin`/`rescaleMax`) and `nodata` (`nodataOverride`), which is
+#   exactly what a QGIS contrast stretch and a source nodata value are.
+# * **`BitmapLayer`** takes `image` plus `bounds`. It is a picture pinned to a
+#   rectangle: no CRS, no overviews, and the whole thing decoded at once, so a
+#   large DEM becomes a browser-sized memory problem. It is also the class that
+#   makes the extent restatable, and therefore wrong.
+# * **`ImageOverlay`** is `BitmapLayer` plus `georeference`, `focal-length-mm`,
+#   `sensor-width-mm` and `metadata` - a photograph projected from a camera
+#   pose. That is drone/oblique imagery, not a map-projected raster.
+# * **`TerrainLayer`** takes `elevation-data` and an `elevation-decoder`: it
+#   turns a raster into a *surface*, not into imagery. QGIS terrain is a
+#   separate concern and `ExportSettings.terrain` already covers it.
+#
+# `TileLayer` is a fifth possibility and needs a pre-cut `{z}/{x}/{y}` pyramid
+# on a server, which is the opposite of a self-contained artifact.
+#
+# Note what COGLayer does NOT offer: no band selection, and no documented set
+# of `colormap` names. Neither is guessed at - see `layer_reader`, which
+# reports both as untranslated.
+RASTER_LAYER_CLASS = "COGLayer"
 
 # Labels are a second layer, not a property of the first: `GeoJsonLayer` cannot
 # draw text, so QGIS labelling becomes a companion `TextLayer` fed by computed
@@ -592,6 +622,110 @@ def dash_attribute(symbol: SymbolSpec) -> str | None:
     return f"[{_number(on)}, {_number(off)}]"
 
 
+def build_raster_layer_element(
+    layer: ExportLayer, raster: RasterSpec, indent: str = "    "
+) -> str:
+    """One `<om-layer type="COGLayer">`.
+
+    See `RASTER_LAYER_CLASS` for why that class and not one of the other four
+    the runtime offers.
+
+    Unlike a vector layer this element has **no child** at all: a COG is
+    referenced by `src`, not fed a JSON payload, so the pixels reach the
+    artifact through packaging (a `data:` URI for a standalone file) and this
+    function only has to name them. That is also why `src` falls back to the
+    layer's own path - a manifest built before packaging has resolved the
+    reference should point somewhere obviously wrong rather than nowhere.
+
+    Only the attributes the schema marks valid on `COGLayer` are emitted:
+    `src`, `bands`, `min`, `max`, `nodata`, plus the universal `id`, `type`,
+    `label`, `opacity` and `visible`. In particular there is no `color`
+    shorthand - a raster has no single colour to put in a legend swatch - and
+    no `pickable`, because a raster has no attributes to show in a popup.
+
+    **`colormap` is deliberately never emitted.** It was, briefly, and it never
+    fired: the runtime takes a colormap from a fixed vocabulary of fourteen
+    names, and QGIS does not record which named ramp a user picked - choosing
+    "Viridis" copies its stops into an anonymous gradient. Single-band colour
+    now reaches the map baked into the pixels instead, and a colormap on top of
+    already-coloured pixels would recolour them. See `RasterSpec.style_qml`.
+
+    A baked raster also emits no `min`/`max`: a stretch is a statement about
+    measured values, and after baking the bands are red, green, blue and alpha.
+    Applying the elevation range of a DEM to its own colour channels would
+    restretch the picture into something nobody chose.
+
+    `raster` is passed alongside the layer rather than read off it, so this
+    element cannot be built for a layer that has none: the signature states
+    what the dispatcher in `build_layer_element` already guarantees.
+    """
+    inner = indent + "  "
+
+    attributes: list[tuple[str, str | None]] = [
+        ("id", layer.layer_id),
+        ("type", RASTER_LAYER_CLASS),
+        ("label", layer.name),
+        ("src", raster.reference),
+    ]
+
+    # Baked pixels are red, green, blue and alpha, whatever the source held.
+    # Everything below describes the SOURCE's bands and its measured range, so
+    # none of it survives the bake - and each attribute would actively break the
+    # picture rather than merely be ignored.
+    baked = raster.style_qml is not None
+
+    # Band selection, 1-based as GDAL and `COGLayer` both count. Only ever an
+    # RGB composite: a single-band raster is baked instead, so it has no band
+    # to select by the time the runtime sees it.
+    if raster.bands and not baked:
+        attributes.append(
+            (
+                "bands",
+                str(raster.bands[0])
+                if len(raster.bands) == 1
+                else "[" + ",".join(str(band) for band in raster.bands) + "]",
+            )
+        )
+
+    # deck.gl's rescaleMin/rescaleMax, carrying whatever contrast stretch the
+    # QGIS renderer was showing. Emitted as a pair or not at all: supplying one
+    # end leaves the other at a default unrelated to this raster's range, which
+    # would restretch the image to something the author never saw.
+    low, high = raster.rescale_min, raster.rescale_max
+    if low is not None and high is not None and not baked:
+        attributes.append(("min", _number(low)))
+        attributes.append(("max", _number(high)))
+
+    # nodataOverride. The COG usually declares its own nodata and the runtime
+    # honours it; this restates the value QGIS was masking with, which matters
+    # when the file's header lost it in translation.
+    #
+    # Dropped for a baked raster, and this one is not merely redundant: QGIS
+    # renders its nodata pixels transparent, so the bake carries the mask in
+    # the alpha channel already. Restating a source value here - -9999 on a
+    # DEM, say - would tell the runtime to treat the colour -9999 as nodata,
+    # which matches nothing in an RGBA file.
+    if raster.nodata is not None and not baked:
+        attributes.append(("nodata", _number(raster.nodata)))
+
+    # Same two attributes, in the same order and with the same meaning, as the
+    # vector path below - layer opacity and the QGIS tree's checkbox are
+    # universal in the schema rather than per-class.
+    if layer.opacity < 1.0:
+        attributes.append(("opacity", _number(layer.opacity)))
+
+    if not layer.visible:
+        attributes.append(("visible", "false"))
+
+    return "\n".join(
+        [
+            f"{indent}<om-layer",
+            _attrs_to_string(attributes, inner),
+            f"{indent}></om-layer>",
+        ]
+    )
+
+
 def build_layer_element(
     layer: ExportLayer,
     indent: str = "    ",
@@ -609,6 +743,13 @@ def build_layer_element(
     defines the custom elements. Off by default: readable data is what lets a
     person or an agent edit the map afterwards.
     """
+    # A raster carries no geometry, no symbology and no popup, so none of what
+    # follows applies to it. Dispatching here rather than at every call site
+    # keeps every caller - the manifest, the tests, the preview - able to hand
+    # over any layer and get the right element back.
+    if layer.raster is not None:
+        return build_raster_layer_element(layer, layer.raster, indent)
+
     renderer = layer.renderer
     # Not `renderer.symbol`: categorized and graduated renderers have none, and
     # reading it directly silently drops stroke width and marker radius.
@@ -1258,6 +1399,22 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
   font-size: 11px;
 }
 .omni-legend-entry .omni-swatch { width: 10px; height: 10px; }
+/* A raster's swatch is a checkerboard rather than a colour chip - see
+   `_swatch_markup` for why it must not be either a colour or nothing. Drawn in
+   CSS rather than as an image so it costs no bytes and needs no `data:` grant
+   in the Content Security Policy. */
+.omni-swatch-raster {
+  background-color: var(--om-widget-bg, #fff);
+  background-image:
+    linear-gradient(45deg, var(--om-widget-muted, #6b7280) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--om-widget-muted, #6b7280) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--om-widget-muted, #6b7280) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--om-widget-muted, #6b7280) 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0;
+  border: 1px solid var(--om-widget-muted, #6b7280);
+  box-sizing: border-box;
+}
 /* An image swatch keeps its own shape, so it must not be squared off by the
    colour swatch's border-radius, and it must not be stretched: a star squashed
    into a 10x10 box is a different marker from the one on the map. */
@@ -1290,6 +1447,22 @@ def needs_image_legend(project: ExportProject) -> bool:
     return any(layer.icon_atlas is not None for layer in project.exportable_layers)
 
 
+def needs_static_legend(project: ExportProject) -> bool:
+    """Whether the built-in legend widget has to be replaced by our own.
+
+    Two reasons, and a raster is the second one. The built-in widget derives
+    every swatch from the styling accessors on `<om-layer>`, and a `COGLayer`
+    has none - no `color`, no `get-fill-color`, because a raster genuinely has
+    no single colour. The widget's answer to that is its grey `#999` fallback,
+    which is indistinguishable from the bug it exists to cover: a layer whose
+    colour we failed to read. So a project containing a raster gets the static
+    legend, where the swatch can say "image data" instead of guessing a colour.
+    """
+    return needs_image_legend(project) or any(
+        layer.is_raster for layer in project.exportable_layers
+    )
+
+
 def _swatch_markup(
     symbol: SymbolSpec, layer: ExportLayer, fallback: Color | None
 ) -> str:
@@ -1298,7 +1471,26 @@ def _swatch_markup(
     The picture comes from the same rasterisation the map draws from, so the
     legend and the map cannot disagree about what a class looks like - which is
     the entire reason this widget exists rather than a hand-drawn approximation.
+
+    A raster gets a checkerboard chip, and the alternatives are all worse:
+
+    * **A colour chip.** There is no colour to put in it. Whatever is chosen -
+      grey, the fallback, an average - claims the layer draws in that colour,
+      which is the very reading the built-in widget's grey `#999` produces and
+      the reason this branch exists.
+    * **A gradient chip.** It would imply a colour ramp, and the ramp is the one
+      thing `read_raster` deliberately does *not* translate (see its docstring),
+      so the legend would advertise colours the map may not draw.
+    * **No swatch at all.** The row loses its 12px indent and sits out of line
+      with every other entry, which reads as a swatch that failed to render
+      rather than as a deliberate absence.
+
+    The checkerboard is the established "image data" idiom, carries no colour
+    claim, and keeps the row aligned.
     """
+    if layer.raster is not None:
+        return '<span class="omni-swatch omni-swatch-raster"></span>'
+
     if layer.icon_atlas is not None and symbol.icon_name:
         source = layer.icon_atlas.swatches.get(symbol.icon_name)
         if source:
@@ -1359,7 +1551,8 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
 
     What it gives up against the built-in widget is reactivity: it cannot grey
     a layer out when the layer switcher hides it. That is why it is used only
-    when a layer needs image swatches - see `needs_image_legend`.
+    when a layer needs a swatch the built-in widget cannot produce - an image
+    swatch, or a raster's checkerboard. See `needs_static_legend`.
     """
     title = "" if project.settings.show_title else project.title
     lines = [f'{indent}<om-widget position="{WIDGET_POSITIONS["legend"]}">']
@@ -1416,7 +1609,7 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     widgets: list[str] = []
 
     if settings.show_legend:
-        if needs_image_legend(project):
+        if needs_static_legend(project):
             widgets.append(build_legend_widget(project, indent))
         else:
             # The legend carries the map title only when nothing else is showing

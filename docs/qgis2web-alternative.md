@@ -83,7 +83,9 @@ reads a saved project and writes a map. If you need viewers to edit features, or
 the map to reflect a database that changes hourly, one of the other routes above
 is the honest answer.
 
-Rasters are not exported in the current release.
+Raster layers from a file on disk are exported in a Folder or Share ZIP, in
+the colours QGIS draws them. A single HTML file cannot carry a raster, and live
+raster services (WMS, XYZ) are left out.
 
 ## Trying it
 

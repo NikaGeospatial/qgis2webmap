@@ -25,7 +25,8 @@ Where that line falls differently from the established plugin's is set out in
 | Layer order and groups, including nested groups | Yes |
 | Layer visibility and opacity | Yes |
 | Scale-dependent visibility | No - the layer shows at every zoom, and the Fidelity tab says so |
-| Rasters | Not yet |
+| Rasters from a file on disk (GeoTIFF) | Yes, in Folder and Share ZIP - not in a single HTML file. Colours are drawn in as QGIS shows them |
+| Live raster services (WMS, XYZ, WCS) | Not exported - use a basemap instead |
 | Attribute-only tables | Not exported - nothing to draw |
 
 Data in any CRS is reprojected to WGS84 on the way out.

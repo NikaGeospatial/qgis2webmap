@@ -25,7 +25,7 @@ it to double-clicks it and gets your map — panning, zooming, layer switching,
 popups — with no QGIS, no account and no internet connection.
 
 Installing takes about a minute from inside QGIS. The first export downloads the
-map runtime once — about 4.8 MB, once per computer, ever — and everything works
+map runtime once — about 5.4 MB, once per computer, ever — and everything works
 offline after that.
 
 The [first export walkthrough](first-export.md) does this properly, with
@@ -72,8 +72,10 @@ They cannot edit your data, and they do not get your project file.
 Not everything QGIS can draw has an equivalent in a browser, and the honest part
 of this is knowing which parts before you send the map rather than after.
 
-Rasters are not exported in the current release. Vector points, lines and
-polygons are, along with layer order, groups and opacity. Data in any CRS is
+Vector points, lines and polygons are exported, along with layer order,
+groups and opacity. So are raster layers from a file on disk - a GeoTIFF
+travels as a Cloud-Optimized GeoTIFF in a Folder or Share ZIP export, in the
+colours QGIS draws it; a single HTML file cannot carry one. Data in any CRS is
 reprojected to WGS84 on the way out. Scale-dependent visibility does not
 survive - a layer set to show only between two scales shows at every zoom
 instead, and the Fidelity tab flags it before you export.

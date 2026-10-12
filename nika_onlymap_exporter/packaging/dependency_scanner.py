@@ -11,11 +11,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import Any
 
 from ..core.export_ir import (
     AssetDisposition,
+    ExportLayer,
     ExportProject,
     OutputMode,
 )
@@ -24,6 +26,39 @@ from ..core.fidelity_report import FidelityReportBuilder
 # Past this, a single HTML file stops being a practical thing to email: Gmail
 # rejects attachments over 25 MB, and many corporate filters are stricter.
 SINGLE_FILE_WARN_BYTES = 20 * 1024 * 1024
+
+# The single-file tier cannot carry a raster at any size. This was measured on
+# the pinned runtime rather than assumed, and the finding is worse than the
+# size problem it was expected to be:
+#
+# * `COGLayer`'s `src` is handed to the bundled cogeotiff reader's `fromUrl`,
+#   which opens the file as a *chunked* source -- 64 KiB header chunks, and tile
+#   reads issued as `Range: bytes=N-M` straight to `fetch`.
+# * Its HTTP source checks only `response.ok` and returns `arrayBuffer()`. There
+#   is no `allowFullFile` guard anywhere in the bundle and no check for a 206.
+# * A `data:` URI answers every request with **200 and the entire body**;
+#   browsers ignore `Range` on it (measured in Chromium 151). The reader
+#   therefore slices a full-file buffer at an offset meant for a chunk.
+#
+# So a `data:`-embedded COG larger than the first 64 KiB chunk does not fail --
+# it reads the wrong bytes, which is the silent breakage `CONTRIBUTING.md` puts
+# above every other consideration. The same measurement rules out the obvious
+# fallback: a `file://` sibling cannot be fetched at all from a page opened by
+# double-click, and with the browser flag that permits it the response is again
+# a 200 full file. Hence a refusal rather than a threshold. If the runtime grows
+# an in-memory entry point for `src` (its reader already has `fromArrayBuffer`,
+# just not reachable from an attribute), this becomes a size limit instead.
+STANDALONE_CARRIES_RASTERS = False
+
+# Past this, a zip stops being a thing you can hand someone. It is ten times
+# `SINGLE_FILE_WARN_BYTES` and not the same number, because the zip tier is
+# already the answer to "the single file was too big" -- warning at 20 MB would
+# fire on every raster export and mean nothing. 200 MB is roughly where the
+# free file-transfer services and the patience of a recipient on a hotel
+# connection both run out. Note that zipping does not help here: a COG is
+# already DEFLATE-compressed internally, so the archive is about the size of the
+# raster inside it.
+SHARE_ZIP_WARN_BYTES = 200 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -52,26 +87,121 @@ class ScanResult:
         }
 
 
-def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
-    """Each exported layer's serialised data size, by layer id.
+def format_megabytes(count: int) -> str:
+    """How this module talks about sizes. One spelling, so two messages about
+    the same file cannot round it two different ways."""
+    return f"{count / 1024 / 1024:.0f} MB"
 
-    The same measurement as `measure_data_bytes`, split per layer, so the
-    Fidelity tab can say which layer the megabytes are in without a second
-    serialisation of its own.
+
+def raster_bytes(project: ExportProject) -> int:
+    """Bytes of raster the artifact has to carry, measured on the source files.
+
+    An estimate, and knowingly the wrong one in both directions: the artifact
+    carries the *converted* COG, which is usually smaller than an uncompressed
+    source and can be larger than a JPEG-compressed one. The real number only
+    exists after GDAL has run, which is minutes of work on a big orthophoto and
+    cannot happen on every keystroke in a dialog. The source size is the only
+    figure available before then and it is the right order of magnitude, which
+    is all an eligibility check needs -- `raster_staging` re-decides on the
+    measured size once the conversion is done, and that one is authoritative.
+
+    Read from the layer's own `AssetDependency` where the reader recorded it, so
+    the common path touches no disk at all; `os.path.getsize` is the fallback
+    for a project assembled without one.
     """
-    return {
-        layer.layer_id: (
-            len(json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8"))
-            if layer.geojson is not None
-            else 0
-        )
+    return sum(
+        _raster_layer_bytes(layer)
         for layer in project.exportable_layers
-    }
+        if layer.raster is not None
+    )
+
+
+def _raster_layer_bytes(layer: ExportLayer) -> int:
+    """One raster's source size; see `raster_bytes`. 0 when it cannot be read."""
+    raster = layer.raster
+    if raster is None:
+        return 0
+    recorded = next(
+        (
+            dependency.size_bytes
+            for dependency in layer.dependencies
+            if dependency.identifier == raster.path
+            and dependency.size_bytes is not None
+        ),
+        None,
+    )
+    if recorded is not None:
+        return recorded
+    try:
+        return os.path.getsize(raster.path)
+    except OSError:
+        # A missing raster is already a blocking dependency; adding a guess
+        # for it here would only make the size message wrong as well.
+        return 0
+
+
+def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
+    """Each exported layer's share of `measure_data_bytes`, by layer id.
+
+    The same measurement split per layer, so the Fidelity tab can say which
+    layer the megabytes are in without a second serialisation of its own.
+    """
+    sizes: dict[str, int] = {}
+    for layer in project.exportable_layers:
+        size = _raster_layer_bytes(layer)
+        if layer.geojson is not None:
+            size += len(
+                json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8")
+            )
+        sizes[layer.layer_id] = size
+    return sizes
 
 
 def measure_data_bytes(project: ExportProject) -> int:
-    """Serialised size of all layer data, as it will appear in the artifact."""
+    """Serialised size of all layer data, as it will appear in the artifact.
+
+    Rasters are counted alongside GeoJSON, because to every consumer of this
+    number -- the eligibility check, the compression decision, the size warning
+    -- a megabyte of pixels weighs exactly as much as a megabyte of
+    coordinates. While this counted GeoJSON only, a 400 MB orthophoto was
+    invisible: `standalone_ineligible_reason` cheerfully approved a project
+    that could not be written into an openable file.
+    """
     return sum(data_bytes_by_layer(project).values())
+
+
+def standalone_raster_reason(project: ExportProject) -> str | None:
+    """Why a raster stops this project shipping as one HTML file, or `None`.
+
+    One function, two callers, on purpose: `standalone_ineligible_reason` uses
+    it to steer the dialog away from the tier before the user commits, and
+    `scan` uses it to refuse the export if they got there anyway. A second copy
+    of the rule is how a dialog and an exporter start disagreeing.
+
+    See `STANDALONE_CARRIES_RASTERS` for the measurement behind the refusal.
+    The message names the raster because a project can hold twenty layers and
+    "there is a raster somewhere" is not something a user can act on.
+    """
+    if STANDALONE_CARRIES_RASTERS:  # pragma: no cover - a flag, not a branch
+        return None
+
+    names = [
+        layer.name for layer in project.exportable_layers if layer.raster is not None
+    ]
+    if not names:
+        return None
+
+    listed = " and ".join(
+        [", ".join(f"'{name}'" for name in names[:-1]), f"'{names[-1]}'"]
+        if len(names) > 1
+        else [f"'{names[0]}'"]
+    )
+    noun = "raster layers" if len(names) > 1 else "a raster layer"
+    return (
+        f"{listed} {'are' if len(names) > 1 else 'is'} {noun}, which cannot "
+        "be packed into a single HTML file. Choose Folder or Share ZIP as the "
+        "export format instead."
+    )
 
 
 def standalone_ineligible_reason(project: ExportProject) -> str | None:
@@ -81,11 +211,21 @@ def standalone_ineligible_reason(project: ExportProject) -> str | None:
     when it is not the user is told exactly why rather than handed a file that
     is impractical to send. Pure, so the dialog can call it on every change
     without touching disk.
+
+    The raster clause is a separate rule rather than a bigger number in the
+    size one, because it is a different failure at a different threshold --
+    namely none. Too much GeoJSON makes a file that works and is annoying to
+    send; *any* raster makes a file that draws the wrong image. It is checked
+    first so the message names the real problem.
     """
+    raster = standalone_raster_reason(project)
+    if raster is not None:
+        return raster
+
     data_bytes = measure_data_bytes(project)
     if data_bytes > SINGLE_FILE_WARN_BYTES:
         return (
-            f"The layer data is {data_bytes / 1024 / 1024:.0f} MB. A single HTML "
+            f"The layer data is {format_megabytes(data_bytes)}. A single HTML "
             f"file over {SINGLE_FILE_WARN_BYTES // 1024 // 1024} MB is slow to "
             "open and awkward to move around, so Share ZIP is the practical "
             "choice."
@@ -134,18 +274,55 @@ def scan(
 
     if not project.exportable_layers:
         blocking.append(
-            "There are no layers to export. Add a vector layer with features."
+            "There are no layers to export. Add a vector or raster layer with data."
         )
+
+    if mode is OutputMode.STANDALONE_HTML:
+        # Blocking, not warning. The failure it prevents is a map that draws
+        # the wrong pixels without reporting anything, which no amount of
+        # warning text at export time makes acceptable -- and the remedy is one
+        # change of output mode, which the message names.
+        raster_reason = standalone_raster_reason(project)
+        if raster_reason is not None:
+            blocking.append(raster_reason)
+            for layer in project.exportable_layers:
+                if layer.raster is not None:
+                    report.blocked(
+                        f"Layer '{layer.name}'", raster_reason, layer.layer_id
+                    )
 
     data_bytes = measure_data_bytes(project)
 
-    if mode is OutputMode.STANDALONE_HTML and data_bytes > SINGLE_FILE_WARN_BYTES:
-        megabytes = data_bytes / 1024 / 1024
+    if mode is OutputMode.SHARE_ZIP and data_bytes > SHARE_ZIP_WARN_BYTES:
+        # A raster changed what "large" means here. Before rasters, layer data
+        # was GeoJSON and a project big enough to trip this would have been an
+        # extraordinary vector export; one orthophoto passes it on its own. The
+        # remedy is a different one too -- there is no larger tier to move up
+        # to, so the advice is about how to deliver it rather than how to build
+        # it.
         report.approximated(
             "Artifact size",
-            f"The layer data alone is {megabytes:.0f} MB, so a single HTML file "
-            "will be slow to open and awkward to move around. Share ZIP is a "
-            "better fit for a map this size.",
+            f"The map data is {format_megabytes(data_bytes)}, most of it raster "
+            "imagery, and zipping does not shrink it further -- a "
+            "Cloud-Optimized GeoTIFF is already compressed. Expect a download "
+            "rather than an email attachment, and consider exporting a smaller "
+            "area or a coarser raster if the recipient's connection is a "
+            "concern.",
+        )
+
+    if mode is OutputMode.STANDALONE_HTML and data_bytes > SINGLE_FILE_WARN_BYTES:
+        # Deliberately a warning and not a blocker, even for a raster over
+        # `STANDALONE_RASTER_MAX_BYTES`. The number here is measured on the
+        # *source* files, and a source that compresses well converts to a COG
+        # that fits comfortably -- refusing on the estimate would turn a
+        # perfectly exportable map away. `raster_staging` refuses on the
+        # measured size of the converted file instead, which is the only figure
+        # that can be right, and it does so before anything is written.
+        report.approximated(
+            "Artifact size",
+            f"The map data is {format_megabytes(data_bytes)}, so a single HTML "
+            "file will be slow to open and awkward to move around. Share ZIP is "
+            "a better fit for a map this size.",
         )
 
     return ScanResult(

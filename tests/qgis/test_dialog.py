@@ -379,6 +379,7 @@ class TestTabCorner:
 
             (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
             dialog._server = PreviewServer(tmp_path)
+            dialog._watch_timer.start()  # a live preview, not a one-off served one
             dialog._show_preview_state()
             assert button.text() == "Live"
             assert button.property("live") is True
@@ -503,6 +504,7 @@ class TestLiveSwitch:
             dialog.live_switch.setChecked(True)
             (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
             dialog._server = PreviewServer(tmp_path)
+            dialog._watch_timer.start()  # a live preview, not a one-off served one
             dialog._show_preview_state()
             assert dialog.preview_button.text() == "Live"
 
@@ -528,6 +530,7 @@ class TestLiveSwitch:
             (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
             dialog._server = PreviewServer(tmp_path)
             dialog._server.start()
+            dialog._watch_timer.start()
 
             dialog.live_switch.click()
             assert dialog._server is None
@@ -1170,6 +1173,7 @@ class TestLivePreviewLifecycle:
         (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
         dialog._server = PreviewServer(tmp_path)
         dialog._server.start()
+        dialog._watch_timer.start()
 
         dialog.preview_button.click()
 
