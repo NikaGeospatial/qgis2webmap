@@ -63,6 +63,7 @@ from qgis.PyQt.QtWidgets import (
 from ..core.export_ir import FidelityItem, FidelityStatus
 from ..core.fidelity_summary import (
     VERDICT_LABELS,
+    VERDICT_ORDER,
     ReportFilter,
     ReportGroup,
     ReportRow,
@@ -146,6 +147,42 @@ VERDICT_TIPS = {
 
 ROW_ROLE = Qt.ItemDataRole.UserRole
 DETAIL_COLUMN = 2
+
+
+# The core's verdict and topic names, for the catalogue: core has no Qt, so
+# they are translated here, where they are shown. A test keeps this in step.
+_CORE_WORDS = (
+    N_("Kept"),
+    N_("Changed"),
+    N_("Rasterised"),
+    N_("Not exported"),
+    N_("Blocked"),
+    N_("Symbology"),
+    N_("Labels"),
+    N_("Popups & fields"),
+    N_("Data"),
+    N_("Map settings"),
+    N_("Other"),
+)
+
+
+def _verdict(status: FidelityStatus) -> str:
+    return tr(VERDICT_LABELS[status])
+
+
+def _topic(topic: Topic) -> str:
+    return tr(topic.value)
+
+
+def _tally(group: ReportGroup) -> str:
+    """ "1 not exported · 3 changed", worst first, in the dialog's language."""
+    counts: dict[FidelityStatus, int] = {}
+    for row in group.changes:
+        counts[row.status] = counts.get(row.status, 0) + 1
+    return " · ".join(
+        f"{count} {_verdict(status).lower()}"
+        for status, count in sorted(counts.items(), key=lambda p: VERDICT_ORDER[p[0]])
+    )
 
 
 def jump_for(group: ReportGroup, row: ReportRow | None) -> tuple[str, str] | None:
@@ -315,7 +352,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         menu.addSection(tr("Show"))
         self.verdict_checks: dict[FidelityStatus, QAction] = {}
         for status in FILTER_VERDICTS:
-            action = menu.addAction(VERDICT_LABELS[status])
+            action = menu.addAction(_verdict(status))
             action.setCheckable(True)
             action.setChecked(
                 _setting_bool(
@@ -336,7 +373,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.topic_checks: dict[Topic, QAction] = {}
         for topic in Topic:
             key = FILTER_KEY + "topic-" + topic.name.lower()
-            action = menu.addAction(_button_text(topic.value))
+            action = menu.addAction(_button_text(_topic(topic)))
             action.setCheckable(True)
             action.setChecked(_setting_bool(settings, key, True))
             action.toggled.connect(lambda on, key=key: self._on_filter(key, on))
@@ -503,17 +540,17 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         summary = self._summary
         if summary is None:
             for status, check in self.verdict_checks.items():
-                check.setText(VERDICT_LABELS[status])
+                check.setText(_verdict(status))
             for topic, check in self.topic_checks.items():
-                check.setText(_button_text(topic.value))
+                check.setText(_button_text(_topic(topic)))
             return
         verdicts = summary.verdict_counts()
         for status, check in self.verdict_checks.items():
-            check.setText(f"{VERDICT_LABELS[status]} ({verdicts[status]})")
+            check.setText(f"{_verdict(status)} ({verdicts[status]})")
         topics = summary.topic_counts(self.report_filter().verdicts)
         everything = summary.topic_counts()
         for topic, check in self.topic_checks.items():
-            check.setText(_button_text(f"{topic.value} ({topics[topic]})"))
+            check.setText(_button_text(f"{_topic(topic)} ({topics[topic]})"))
         # Other is a fallback for a subject nobody sorted; a box for nothing
         # only raises the question of what it might be.
         self.topic_checks[Topic.OTHER].setVisible(bool(everything[Topic.OTHER]))
@@ -568,7 +605,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             shown = {id(row) for row in rows}
             parent = QTreeWidgetItem(self.tree)
             parent.setText(0, group.title)
-            parent.setText(1, tr(EXACT_TEXT) if group.is_exact else group.tally())
+            parent.setText(1, tr(EXACT_TEXT) if group.is_exact else _tally(group))
             parent.setText(2, facts_line(facts))
             parent.setForeground(2, quiet)
             parent.setIcon(0, qgis_icon(VERDICT_ICONS[group.worst]))
@@ -678,7 +715,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             if facts:
                 text += "\n\n" + facts_lines(facts)
             tone = Tone.QUIET if group.is_exact else _tone_of(group.worst)
-            verdict = tr(EXACT_TEXT) if group.is_exact else group.tally()
+            verdict = tr(EXACT_TEXT) if group.is_exact else _tally(group)
             self._show_detail(
                 group.title, tone, text, jump_for(group, None), verdict_text=verdict
             )

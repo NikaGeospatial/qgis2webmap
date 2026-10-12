@@ -14,62 +14,62 @@
       <translation>मौजूदा QGIS प्रोजेक्ट को पोर्टेबल OnlyMap वेब मानचित्र के रूप में निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="48" />
+      <location filename="../ui/account_button.py" line="47" />
       <source>Sign in to NIKA</source>
       <translation>NIKA में साइन इन करें</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="309" />
+      <location filename="../ui/account_button.py" line="308" />
       <source>Click to switch account or sign out.</source>
       <translation>खाता बदलने या साइन आउट करने के लिए क्लिक करें।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="156" />
+      <location filename="../ui/account_button.py" line="155" />
       <source>Pair this QGIS profile with your NIKA account so you can publish maps to it. Your browser opens NIKA's sign-in page; the plugin never sees your password.</source>
       <translation>मानचित्र प्रकाशित करने के लिए इस QGIS प्रोफ़ाइल को अपने NIKA खाते से जोड़ें। ब्राउज़र NIKA का साइन-इन पेज खोलता है; प्लगइन को आपका पासवर्ड कभी नहीं दिखता।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="214" />
+      <location filename="../ui/account_button.py" line="213" />
       <source>Switch account…</source>
       <translation>खाता बदलें…</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="217" />
+      <location filename="../ui/account_button.py" line="216" />
       <source>Sign in as somebody else. Your browser opens NIKA's sign-in page; this account stays paired until the new one is approved.</source>
       <translation>किसी दूसरे खाते से साइन इन करें। ब्राउज़र NIKA का साइन-इन पेज खोलता है; नया खाता स्वीकृत होने तक यह खाता जुड़ा रहता है।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="224" />
+      <location filename="../ui/account_button.py" line="223" />
       <source>Sign out</source>
       <translation>साइन आउट</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="227" />
+      <location filename="../ui/account_button.py" line="226" />
       <source>Unpair this QGIS profile and revoke its access to your NIKA account. Maps you have already published stay online.</source>
       <translation>इस QGIS प्रोफ़ाइल को अलग करें और आपके NIKA खाते तक इसकी पहुँच रद्द करें। आपके पहले से प्रकाशित मानचित्र ऑनलाइन रहेंगे।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="274" />
+      <location filename="../ui/account_button.py" line="273" />
       <source>Sign out of NIKA</source>
       <translation>NIKA से साइन आउट करें</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="292" />
+      <location filename="../ui/account_button.py" line="291" />
       <source>Not in this version yet</source>
       <translation>इस संस्करण में अभी उपलब्ध नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="293" />
+      <location filename="../ui/account_button.py" line="292" />
       <source>Signing in to NIKA arrives with map hosting in a later release. Everything this plugin exports today is a file you own and can share yourself - nothing here needs an account.</source>
       <translation>NIKA में साइन इन, मानचित्र होस्टिंग के साथ आगे के किसी संस्करण में आएगा। यह प्लगइन आज जो कुछ भी निर्यात करता है वह आपकी अपनी फ़ाइल है जिसे आप खुद साझा करते हैं - यहाँ किसी चीज़ के लिए खाते की ज़रूरत नहीं है।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="303" />
+      <location filename="../ui/account_button.py" line="302" />
       <source>Signed in to NIKA as {account}.</source>
       <translation>NIKA में {account} के रूप में साइन इन है।</translation>
     </message>
     <message>
-      <location filename="../ui/account_button.py" line="275" />
+      <location filename="../ui/account_button.py" line="274" />
       <source>Sign out of {account} and revoke this computer's access?
 
 Maps you have already published stay online. You will need to sign in again through your browser to publish anything new.</source>
@@ -78,247 +78,304 @@ Maps you have already published stay online. You will need to sign in again thro
 आपके पहले से प्रकाशित मानचित्र ऑनलाइन रहेंगे। कुछ नया प्रकाशित करने के लिए आपको ब्राउज़र से फिर से साइन इन करना होगा।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="117" />
+      <location filename="../ui/fidelity_panel.py" line="119" />
       <source>✓ exact</source>
       <translation>✓ बिल्कुल वैसा</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="118" />
+      <location filename="../ui/fidelity_panel.py" line="120" />
       <source>Select a row to see where it applies and where to change it.</source>
       <translation>पंक्ति चुनें ताकि दिखे कि यह कहाँ लागू होती है और इसे कहाँ बदलें।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="119" />
+      <location filename="../ui/fidelity_panel.py" line="121" />
       <source>Tick more of the boxes above, or clear the search.</source>
       <translation>ऊपर और बॉक्स चुनें, या खोज साफ़ करें।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="120" />
+      <location filename="../ui/fidelity_panel.py" line="122" />
       <source>As above.</source>
       <translation>ऊपर जैसा।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="134" />
+      <location filename="../ui/fidelity_panel.py" line="136" />
       <source>Cannot be carried into the map at all.</source>
       <translation>मानचित्र में बिल्कुल नहीं ले जाया जा सकता।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="135" />
+      <location filename="../ui/fidelity_panel.py" line="137" />
       <source>Cannot be represented, and was left out.</source>
       <translation>दर्शाया नहीं जा सकता, इसलिए छोड़ दिया गया।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="136" />
+      <location filename="../ui/fidelity_panel.py" line="138" />
       <source>Exported, but approximated - the detail says how.</source>
       <translation>निर्यात हुआ, पर अनुमानित - विवरण बताता है कैसे।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="139" />
+      <location filename="../ui/fidelity_panel.py" line="141" />
       <source>Drawn into the map as an image.</source>
       <translation>मानचित्र में छवि के रूप में बनाया गया।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="140" />
+      <location filename="../ui/fidelity_panel.py" line="142" />
       <source>Survives exactly as set in QGIS. Hidden by default so the changes stand out; nothing is left out of the report.</source>
       <translation>QGIS में जैसा सेट है बिल्कुल वैसा रहता है। बदलाव उभरें इसलिए डिफ़ॉल्ट रूप से छिपा है; रिपोर्ट से कुछ नहीं छूटता।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="181" />
+      <location filename="../ui/fidelity_panel.py" line="155" />
+      <source>Kept</source>
+      <translation>बरकरार</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="156" />
+      <source>Changed</source>
+      <translation>बदला गया</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="157" />
+      <source>Rasterised</source>
+      <translation>रास्टर में बदला</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="158" />
+      <source>Not exported</source>
+      <translation>निर्यात नहीं हुआ</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="159" />
+      <source>Blocked</source>
+      <translation>अवरुद्ध</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="160" />
+      <source>Symbology</source>
+      <translation>प्रतीक-विधान</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="161" />
+      <location filename="../ui/main_dialog.py" line="1495" />
+      <source>Labels</source>
+      <translation>लेबल</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="162" />
+      <source>Popups &amp; fields</source>
+      <translation>पॉपअप और फ़ील्ड</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="163" />
+      <location filename="../ui/main_dialog.py" line="933" />
+      <source>Data</source>
+      <translation>डेटा</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="164" />
+      <source>Map settings</source>
+      <translation>मानचित्र सेटिंग्स</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="165" />
+      <source>Other</source>
+      <translation>अन्य</translation>
+    </message>
+    <message>
+      <location filename="../ui/fidelity_panel.py" line="210" />
       <source>Show in Layers</source>
       <translation>परतें में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="829" />
+      <location filename="../ui/fidelity_panel.py" line="858" />
       <source>Export anyway</source>
       <translation>फिर भी निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="830" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>आप फिर भी निर्यात कर सकते हैं और मानचित्र इसके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="834" />
+      <location filename="../ui/fidelity_panel.py" line="863" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>आप फिर भी निर्यात कर सकते हैं और मानचित्र इनके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="840" />
+      <location filename="../ui/fidelity_panel.py" line="869" />
       <source>Publish anyway</source>
       <translation>फिर भी प्रकाशित करें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="841" />
+      <location filename="../ui/fidelity_panel.py" line="870" />
       <source>You can publish anyway and the map is made without it, or review the report first.</source>
       <translation>आप फिर भी प्रकाशित कर सकते हैं और मानचित्र इसके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="845" />
+      <location filename="../ui/fidelity_panel.py" line="874" />
       <source>You can publish anyway and the map is made without them, or review the report first.</source>
       <translation>आप फिर भी प्रकाशित कर सकते हैं और मानचित्र इनके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="892" />
       <source>Part of this map will not work</source>
       <translation>इस मानचित्र का कुछ हिस्सा काम नहीं करेगा</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="878" />
+      <location filename="../ui/fidelity_panel.py" line="907" />
       <source>Review on the Fidelity tab</source>
       <translation>विश्वसनीयता टैब पर देखें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="182" />
+      <location filename="../ui/fidelity_panel.py" line="211" />
       <source>Go to {tab} tab</source>
       <translation>{tab} टैब पर जाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="208" />
+      <location filename="../ui/fidelity_panel.py" line="237" />
       <source>What survives the export, and what does not - checked before you export, so nothing is left to discover later.</source>
       <translation>निर्यात में क्या बचता है और क्या नहीं - निर्यात से पहले ही जाँचा गया, ताकि बाद में कुछ पता न चले।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="222" />
-      <location filename="../ui/fidelity_panel.py" line="413" />
+      <location filename="../ui/fidelity_panel.py" line="251" />
+      <location filename="../ui/fidelity_panel.py" line="442" />
       <source>Not checked yet.</source>
       <translation>अभी जाँच नहीं हुई।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="228" />
-      <location filename="../ui/fidelity_panel.py" line="414" />
+      <location filename="../ui/fidelity_panel.py" line="257" />
+      <location filename="../ui/fidelity_panel.py" line="443" />
       <source>Check now</source>
       <translation>अभी जाँचें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="257" />
+      <location filename="../ui/fidelity_panel.py" line="286" />
       <source>Out of date - something changed since this check, so the rows below describe the map as it was.</source>
       <translation>पुराना - इस जाँच के बाद कुछ बदला है, इसलिए नीचे की पंक्तियाँ मानचित्र को पहले जैसा बताती हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="314" />
-      <location filename="../ui/fidelity_panel.py" line="533" />
-      <location filename="../ui/fidelity_panel.py" line="553" />
+      <location filename="../ui/fidelity_panel.py" line="343" />
+      <location filename="../ui/fidelity_panel.py" line="562" />
+      <location filename="../ui/fidelity_panel.py" line="582" />
       <source>Filter</source>
       <translation>फ़िल्टर</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="323" />
+      <location filename="../ui/fidelity_panel.py" line="352" />
       <source>Show</source>
       <translation>दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="343" />
-      <location filename="../ui/main_dialog.py" line="2548" />
+      <location filename="../ui/fidelity_panel.py" line="372" />
+      <location filename="../ui/main_dialog.py" line="2531" />
       <source>About</source>
       <translation>परिचय</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="355" />
+      <location filename="../ui/fidelity_panel.py" line="384" />
       <source>Search the report</source>
       <translation>रिपोर्ट में खोजें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="420" />
+      <location filename="../ui/fidelity_panel.py" line="449" />
       <source>Not checked yet</source>
       <translation>अभी जाँच नहीं हुई</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="420" />
+      <location filename="../ui/fidelity_panel.py" line="449" />
       <source>Opening this tab reads the project to check.</source>
       <translation>यह टैब खोलने पर जाँच के लिए प्रोजेक्ट पढ़ा जाता है।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="427" />
+      <location filename="../ui/fidelity_panel.py" line="456" />
       <source>Checking what the export changes...</source>
       <translation>जाँच हो रही है कि निर्यात क्या बदलता है...</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="440" />
+      <location filename="../ui/fidelity_panel.py" line="469" />
       <source>The check could not finish.</source>
       <translation>जाँच पूरी नहीं हो सकी।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="441" />
+      <location filename="../ui/fidelity_panel.py" line="470" />
       <source>Try again</source>
       <translation>फिर कोशिश करें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="446" />
+      <location filename="../ui/fidelity_panel.py" line="475" />
       <source>Check failed</source>
       <translation>जाँच विफल</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="446" />
+      <location filename="../ui/fidelity_panel.py" line="475" />
       <source>See the detail for why.</source>
       <translation>कारण के लिए विवरण देखें।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="448" />
+      <location filename="../ui/fidelity_panel.py" line="477" />
       <source>The check could not finish</source>
       <translation>जाँच पूरी नहीं हो सकी</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="273" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>What</source>
       <translation>क्या</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="273" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>Result</source>
       <translation>परिणाम</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="273" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>Detail</source>
       <translation>विवरण</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="432" />
+      <location filename="../ui/fidelity_panel.py" line="461" />
       <source>Checking...</source>
       <translation>जाँच हो रही है...</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="433" />
+      <location filename="../ui/fidelity_panel.py" line="462" />
       <source>Reading the project to see what the export changes.</source>
       <translation>यह देखने के लिए प्रोजेक्ट पढ़ा जा रहा है कि निर्यात क्या बदलता है।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="456" />
+      <location filename="../ui/fidelity_panel.py" line="485" />
       <source>Not a verdict on the map</source>
       <translation>मानचित्र पर कोई निर्णय नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="481" />
+      <location filename="../ui/fidelity_panel.py" line="510" />
       <source>Check again</source>
       <translation>फिर से जाँचें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="607" />
+      <location filename="../ui/fidelity_panel.py" line="636" />
       <source>Nothing matches these filters</source>
       <translation>इन फ़िल्टरों से कुछ मेल नहीं खाता</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="608" />
+      <location filename="../ui/fidelity_panel.py" line="637" />
       <source>The report has rows the filters above hide. Tick more of them, or clear the search.</source>
       <translation>रिपोर्ट में ऐसी पंक्तियाँ हैं जिन्हें ऊपर के फ़िल्टर छिपाते हैं। और चुनें, या खोज साफ़ करें।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="682" />
+      <location filename="../ui/fidelity_panel.py" line="711" />
       <source>Nothing about this layer changes on the way out.</source>
       <translation>निर्यात में इस परत में कुछ नहीं बदलता।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="866" />
+      <location filename="../ui/fidelity_panel.py" line="895" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} चीज़ को QGIS में जैसी सेट है वैसे मानचित्र में नहीं ले जाया जा सकता:</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="866" />
+      <location filename="../ui/fidelity_panel.py" line="895" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} चीज़ों को QGIS में जैसी सेट हैं वैसे मानचित्र में नहीं ले जाया जा सकता:</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="450" />
+      <location filename="../ui/fidelity_panel.py" line="479" />
       <source>The project could not be read: {message}
 
 The full error is in the QGIS message log. Nothing about the map is known until a check finishes, so none of it is shown as a verdict.</source>
@@ -327,38 +384,38 @@ The full error is in the QGIS message log. Nothing about the map is known until 
 पूरी त्रुटि QGIS संदेश लॉग में है। जाँच पूरी होने तक मानचित्र के बारे में कुछ पता नहीं, इसलिए कुछ भी निर्णय के रूप में नहीं दिखाया गया।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="548" />
+      <location filename="../ui/fidelity_panel.py" line="577" />
       <source>Filter - {n} row hidden</source>
       <translation>फ़िल्टर - {n} पंक्ति छिपी</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="548" />
+      <location filename="../ui/fidelity_panel.py" line="577" />
       <source>Filter - {n} rows hidden</source>
       <translation>फ़िल्टर - {n} पंक्तियाँ छिपी</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="550" />
+      <location filename="../ui/fidelity_panel.py" line="579" />
       <source>Filter - some rows hidden</source>
       <translation>फ़िल्टर - कुछ पंक्तियाँ छिपी</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="470" />
+      <location filename="../ui/fidelity_panel.py" line="499" />
       <source>Map: {facts}</source>
       <translation>मानचित्र: {facts}</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="616" />
+      <location filename="../ui/fidelity_panel.py" line="645" />
       <source>Nothing matches these filters.</source>
       <translation>इन फ़िल्टरों से कुछ मेल नहीं खाता।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="702" />
+      <location filename="../ui/fidelity_panel.py" line="731" />
       <source>Applies to: {subjects}.</source>
       <translation>इन पर लागू: {subjects}।</translation>
     </message>
     <message>
       <location filename="../ui/language_picker.py" line="83" />
-      <location filename="../ui/main_dialog.py" line="2536" />
+      <location filename="../ui/main_dialog.py" line="2519" />
       <source>Follow QGIS</source>
       <translation>QGIS के अनुसार</translation>
     </message>
@@ -398,7 +455,7 @@ The full error is in the QGIS message log. Nothing about the map is known until 
       <translation>{language} डाउनलोड नहीं हो सकी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="527" />
+      <location filename="../ui/main_dialog.py" line="503" />
       <source># Help
 
 The bundled guides could not be found in this installation.
@@ -413,657 +470,652 @@ They are also online at &lt;{url}&gt;.
 </translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="161" />
+      <location filename="../ui/main_dialog.py" line="159" />
       <source>Standalone HTML - one file, opens by double-click</source>
       <translation>स्टैंडअलोन HTML - एक फ़ाइल, डबल-क्लिक से खुलती है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="162" />
+      <location filename="../ui/main_dialog.py" line="160" />
       <source>Share ZIP - a zip to email or upload</source>
       <translation>साझा करने के लिए ZIP - ईमेल या अपलोड के लिए ZIP</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="163" />
+      <location filename="../ui/main_dialog.py" line="161" />
       <source>Folder - for publishing to a web server</source>
       <translation>फ़ोल्डर - वेब सर्वर पर प्रकाशित करने के लिए</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="169" />
+      <location filename="../ui/main_dialog.py" line="167" />
       <source>Value only, no label</source>
       <translation>केवल मान, कोई लेबल नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="170" />
+      <location filename="../ui/main_dialog.py" line="168" />
       <source>Label beside value - always show</source>
       <translation>मान के बगल में लेबल - हमेशा दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="171" />
+      <location filename="../ui/main_dialog.py" line="169" />
       <source>Label beside value - only if it has data</source>
       <translation>मान के बगल में लेबल - केवल डेटा होने पर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="172" />
+      <location filename="../ui/main_dialog.py" line="170" />
       <source>Label above value - always show</source>
       <translation>मान के ऊपर लेबल - हमेशा दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="173" />
+      <location filename="../ui/main_dialog.py" line="171" />
       <source>Label above value - only if it has data</source>
       <translation>मान के ऊपर लेबल - केवल डेटा होने पर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="174" />
+      <location filename="../ui/main_dialog.py" line="172" />
       <source>Do not show this field</source>
       <translation>यह फ़ील्ड न दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="256" />
+      <location filename="../ui/main_dialog.py" line="250" />
       <source>Top centre - clear of the controls</source>
       <translation>ऊपर बीच में - नियंत्रणों से हटकर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="257" />
+      <location filename="../ui/main_dialog.py" line="251" />
       <source>Bottom centre - clear of the controls</source>
       <translation>नीचे बीच में - नियंत्रणों से हटकर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="258" />
+      <location filename="../ui/main_dialog.py" line="252" />
       <source>Top left - shared with the layer switcher</source>
       <translation>ऊपर बाएँ - परत स्विचर के साथ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="259" />
+      <location filename="../ui/main_dialog.py" line="253" />
       <source>Top right - shared with the legend</source>
       <translation>ऊपर दाएँ - लेजेंड के साथ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="260" />
+      <location filename="../ui/main_dialog.py" line="254" />
       <source>Bottom left - shared with zoom and scale</source>
       <translation>नीचे बाएँ - ज़ूम और स्केल के साथ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="261" />
+      <location filename="../ui/main_dialog.py" line="255" />
       <source>Bottom right - shared with the credit</source>
       <translation>नीचे दाएँ - क्रेडिट के साथ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="269" />
+      <location filename="../ui/main_dialog.py" line="263" />
       <source>None - the export stays offline and contacts nobody</source>
       <translation>कोई नहीं - मानचित्र ऑफ़लाइन चलता है और किसी से संपर्क नहीं करता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="270" />
+      <location filename="../ui/main_dialog.py" line="264" />
       <source>OpenStreetMap</source>
       <translation>OpenStreetMap</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="271" />
+      <location filename="../ui/main_dialog.py" line="265" />
       <source>Positron - pale, for data on top</source>
       <translation>Positron - हल्का, ऊपर दिखने वाले डेटा के लिए</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="272" />
+      <location filename="../ui/main_dialog.py" line="266" />
       <source>Dark Matter - dark background</source>
       <translation>Dark Matter - गहरी पृष्ठभूमि</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="273" />
+      <location filename="../ui/main_dialog.py" line="267" />
       <source>Voyager - general purpose</source>
       <translation>Voyager - सामान्य उपयोग</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="274" />
+      <location filename="../ui/main_dialog.py" line="268" />
       <source>Liberty - detailed street map</source>
       <translation>Liberty - विस्तृत सड़क मानचित्र</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="275" />
+      <location filename="../ui/main_dialog.py" line="269" />
       <source>Bright - high contrast</source>
       <translation>Bright - उच्च कंट्रास्ट</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="282" />
+      <location filename="../ui/main_dialog.py" line="276" />
       <source>Flat - no elevation</source>
       <translation>समतल - कोई ऊँचाई नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="283" />
+      <location filename="../ui/main_dialog.py" line="277" />
       <source>Global relief - tilts the map so it shows</source>
       <translation>वैश्विक उभार - मानचित्र को झुकाता है ताकि उभार दिखे</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="289" />
+      <location filename="../ui/main_dialog.py" line="283" />
       <source>Normal</source>
       <translation>सामान्य</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="290" />
+      <location filename="../ui/main_dialog.py" line="284" />
       <source>Small</source>
       <translation>छोटा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="291" />
+      <location filename="../ui/main_dialog.py" line="285" />
       <source>Large</source>
       <translation>बड़ा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="292" />
+      <location filename="../ui/main_dialog.py" line="286" />
       <source>Extra large</source>
       <translation>बहुत बड़ा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="293" />
+      <location filename="../ui/main_dialog.py" line="287" />
       <source>Largest - for presentations and big screens</source>
       <translation>सबसे बड़ा - प्रस्तुतियों और बड़ी स्क्रीन के लिए</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="297" />
+      <location filename="../ui/main_dialog.py" line="291" />
       <source>The data - every feature is visible</source>
       <translation>डेटा - हर फ़ीचर दिखे</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="298" />
+      <location filename="../ui/main_dialog.py" line="292" />
       <source>The current QGIS view</source>
       <translation>मौजूदा QGIS दृश्य</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="387" />
+      <location filename="../ui/main_dialog.py" line="363" />
       <source>Show in file manager</source>
       <translation>फ़ाइल मैनेजर में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="412" />
+      <location filename="../ui/main_dialog.py" line="388" />
       <source>{n} day ago</source>
       <translation>{n} दिन पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="412" />
+      <location filename="../ui/main_dialog.py" line="388" />
       <source>{n} days ago</source>
       <translation>{n} दिन पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="384" />
+      <location filename="../ui/main_dialog.py" line="360" />
       <source>Reveal in Finder</source>
       <translation>Finder में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="386" />
+      <location filename="../ui/main_dialog.py" line="362" />
       <source>Show in Explorer</source>
       <translation>Explorer में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="403" />
+      <location filename="../ui/main_dialog.py" line="379" />
       <source>just now</source>
       <translation>अभी-अभी</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="411" />
+      <location filename="../ui/main_dialog.py" line="387" />
       <source>{n} hour ago</source>
       <translation>{n} घंटा पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="411" />
+      <location filename="../ui/main_dialog.py" line="387" />
       <source>{n} hours ago</source>
       <translation>{n} घंटे पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="440" />
+      <location filename="../ui/main_dialog.py" line="416" />
       <source>What these columns do</source>
       <translation>ये कॉलम क्या करते हैं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="516" />
+      <location filename="../ui/main_dialog.py" line="492" />
       <source>Overview</source>
       <translation>अवलोकन</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="517" />
+      <location filename="../ui/main_dialog.py" line="493" />
       <source>Your first export</source>
       <translation>आपका पहला निर्यात</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="518" />
+      <location filename="../ui/main_dialog.py" line="494" />
       <source>The dialog, tab by tab</source>
       <translation>डायलॉग, टैब दर टैब</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="519" />
+      <location filename="../ui/main_dialog.py" line="495" />
       <source>Sharing a map</source>
       <translation>मानचित्र साझा करना</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="520" />
+      <location filename="../ui/main_dialog.py" line="496" />
       <source>Enhance a map with AI</source>
       <translation>AI से मानचित्र बेहतर बनाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="521" />
+      <location filename="../ui/main_dialog.py" line="497" />
       <source>Putting a map online</source>
       <translation>मानचित्र को ऑनलाइन रखना</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="522" />
+      <location filename="../ui/main_dialog.py" line="498" />
       <source>What gets exported</source>
       <translation>क्या निर्यात होता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="523" />
+      <location filename="../ui/main_dialog.py" line="499" />
       <source>Troubleshooting</source>
       <translation>समस्या निवारण</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="524" />
+      <location filename="../ui/main_dialog.py" line="500" />
       <source>Privacy</source>
       <translation>गोपनीयता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1372" />
+      <location filename="../ui/main_dialog.py" line="1352" />
       <source>{size} MB - {n} layer</source>
       <translation>{size} MB - {n} परत</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1372" />
+      <location filename="../ui/main_dialog.py" line="1352" />
       <source>{size} MB - {n} layers</source>
       <translation>{size} MB - {n} परतें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="646" />
+      <location filename="../ui/main_dialog.py" line="622" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="693" />
+      <location filename="../ui/main_dialog.py" line="671" />
       <source>Map</source>
       <translation>मानचित्र</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="694" />
+      <location filename="../ui/main_dialog.py" line="672" />
       <source>Layers</source>
       <translation>परतें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="695" />
-      <location filename="../ui/main_dialog.py" line="2532" />
+      <location filename="../ui/main_dialog.py" line="673" />
+      <location filename="../ui/main_dialog.py" line="2515" />
       <source>Appearance</source>
       <translation>रूप-रंग</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="698" />
+      <location filename="../ui/main_dialog.py" line="676" />
       <source>Fidelity</source>
       <translation>विश्वसनीयता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="700" />
+      <location filename="../ui/main_dialog.py" line="678" />
       <source>Help</source>
       <translation>सहायता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="714" />
+      <location filename="../ui/main_dialog.py" line="692" />
       <source>Settings</source>
       <translation>सेटिंग्स</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="824" />
+      <location filename="../ui/main_dialog.py" line="802" />
       <source>&lt;b&gt;Source:&lt;/b&gt; the layers already open in this QGIS project. There is nothing to browse for - choose which of them to include on the Layers tab.</source>
       <translation>&lt;b&gt;स्रोत:&lt;/b&gt; इस QGIS प्रोजेक्ट में पहले से खुली परतें। कुछ ढूँढने की ज़रूरत नहीं - परतें टैब में चुनें कि किन्हें शामिल करना है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="842" />
+      <location filename="../ui/main_dialog.py" line="820" />
       <source>The title shown on the exported map. Leave blank to use the project title.</source>
       <translation>निर्यात किए गए मानचित्र पर दिखने वाला शीर्षक। प्रोजेक्ट का शीर्षक इस्तेमाल करने के लिए खाली छोड़ें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="848" />
+      <location filename="../ui/main_dialog.py" line="826" />
       <source>Map name</source>
       <translation>मानचित्र का नाम</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="868" />
-      <location filename="../ui/main_dialog.py" line="2313" />
+      <location filename="../ui/main_dialog.py" line="842" />
+      <location filename="../ui/main_dialog.py" line="2296" />
       <source>Export</source>
       <translation>निर्यात</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="889" />
+      <location filename="../ui/main_dialog.py" line="863" />
       <source>Choose where the export is written</source>
       <translation>चुनें कि निर्यात कहाँ लिखा जाए</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="893" />
+      <location filename="../ui/main_dialog.py" line="867" />
       <source>Choose...</source>
       <translation>चुनें...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="924" />
+      <location filename="../ui/main_dialog.py" line="898" />
       <source>Basemap</source>
       <translation>आधार मानचित्र</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="933" />
+      <location filename="../ui/main_dialog.py" line="907" />
       <source>Show behind the map</source>
       <translation>मानचित्र के पीछे दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="951" />
+      <location filename="../ui/main_dialog.py" line="925" />
       <source>Ground surface</source>
       <translation>भू-सतह</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="959" />
-      <source>Data</source>
-      <translation>डेटा</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="968" />
+      <location filename="../ui/main_dialog.py" line="942" />
       <source>Open the map on</source>
       <translation>मानचित्र यहाँ खोलें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="985" />
+      <location filename="../ui/main_dialog.py" line="959" />
       <source>Export only the features in this view</source>
       <translation>केवल इस दृश्य के फ़ीचर निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1007" />
+      <location filename="../ui/main_dialog.py" line="981" />
       <source>Maintain full precision</source>
       <translation>पूरी सटीकता रखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1017" />
+      <location filename="../ui/main_dialog.py" line="991" />
       <source>Rounding coordinates makes the file smaller and is irreversible. Around 6 decimal places is roughly 0.1 m at the equator.</source>
       <translation>निर्देशांकों को पूर्णांकित करने से फ़ाइल छोटी होती है और यह बदला नहीं जा सकता। लगभग 6 दशमलव स्थान भूमध्य रेखा पर करीब 0.1 मीटर होते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1023" />
+      <location filename="../ui/main_dialog.py" line="997" />
       <source>Coordinate precision</source>
       <translation>निर्देशांक सटीकता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1103" />
+      <location filename="../ui/main_dialog.py" line="1077" />
       <source>Export makes a zip to email or upload, carrying {n} layer.</source>
       <translation>निर्यात ईमेल या अपलोड के लिए एक ZIP बनाता है, जिसमें {n} परत है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1103" />
+      <location filename="../ui/main_dialog.py" line="1077" />
       <source>Export makes a zip to email or upload, carrying {n} layers.</source>
       <translation>निर्यात ईमेल या अपलोड के लिए एक ZIP बनाता है, जिसमें {n} परतें हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1328" />
+      <location filename="../ui/main_dialog.py" line="1301" />
       <source>Web page (*.html)</source>
       <translation>वेब पेज (*.html)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1330" />
+      <location filename="../ui/main_dialog.py" line="1303" />
       <source>Zip archive (*.zip)</source>
       <translation>ZIP संग्रह (*.zip)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1332" />
-      <location filename="../ui/main_dialog.py" line="886" />
+      <location filename="../ui/main_dialog.py" line="1305" />
+      <location filename="../ui/main_dialog.py" line="860" />
       <source>Save to</source>
       <translation>यहाँ सहेजें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1501" />
+      <location filename="../ui/main_dialog.py" line="1481" />
       <source>Layers come from the QGIS Layers panel and follow it live - reorder or rename them there and this list updates. Expand a layer to choose how each of its fields appears in popups.</source>
       <translation>परतें QGIS के परत पैनल से आती हैं और उसके साथ लाइव चलती हैं - वहाँ क्रम बदलें या नाम बदलें, यह सूची अपडेट हो जाएगी। पॉपअप में हर फ़ील्ड कैसे दिखे, यह चुनने के लिए परत खोलें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1528" />
+      <location filename="../ui/main_dialog.py" line="1508" />
       <source>&lt;b&gt;Include&lt;/b&gt; - untick to leave the layer out of the map entirely. Its data is not written, so the file gets smaller.&lt;br&gt;&lt;b&gt;Popups&lt;/b&gt; - untick and clicking a feature does nothing. The attribute values are left out of the file entirely, so this is also how you keep data out of a map you are sending someone.&lt;br&gt;&lt;b&gt;Labels&lt;/b&gt; - untick to drop the text QGIS draws beside features. The features themselves still appear.&lt;br&gt;Unticking Popups or Labels only affects that layer; the map still works, with less on it. Expand a layer to hide single fields instead - those values leave the file too, unless the map draws with them.</source>
       <translation>&lt;b&gt;शामिल&lt;/b&gt; - परत को मानचित्र से पूरी तरह बाहर रखने के लिए अनचेक करें। उसका डेटा नहीं लिखा जाता, इसलिए फ़ाइल छोटी होती है।&lt;br&gt;&lt;b&gt;पॉपअप&lt;/b&gt; - अनचेक करने पर किसी फ़ीचर पर क्लिक कुछ नहीं करता। विशेषता मान फ़ाइल से पूरी तरह बाहर रहते हैं, इसलिए भेजे जाने वाले मानचित्र से डेटा बाहर रखने का यही तरीका भी है।&lt;br&gt;&lt;b&gt;लेबल&lt;/b&gt; - QGIS फ़ीचर के बगल में जो पाठ बनाता है उसे हटाने के लिए अनचेक करें। फ़ीचर खुद दिखते रहते हैं।&lt;br&gt;पॉपअप या लेबल अनचेक करना केवल उस परत पर असर डालता है; मानचित्र काम करता रहता है, बस उस पर कम होता है। अलग-अलग फ़ील्ड छिपाने के लिए परत खोलें - वे मान भी फ़ाइल से निकल जाते हैं, जब तक मानचित्र उनसे चित्र न बनाता हो।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1559" />
+      <location filename="../ui/main_dialog.py" line="1539" />
       <source>Apply to all layers</source>
       <translation>सभी परतों पर लागू करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1561" />
+      <location filename="../ui/main_dialog.py" line="1541" />
       <source>Give every popup field in every layer this setting, replacing the choices below.</source>
       <translation>हर परत के हर पॉपअप फ़ील्ड को यह सेटिंग दें, नीचे के विकल्पों की जगह।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1729" />
+      <location filename="../ui/main_dialog.py" line="1712" />
       <source>This layer only</source>
       <translation>केवल यह परत</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1747" />
+      <location filename="../ui/main_dialog.py" line="1730" />
       <source>Precision: same as map</source>
       <translation>सटीकता: मानचित्र जैसी</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1748" />
+      <location filename="../ui/main_dialog.py" line="1731" />
       <source>Precision: keep it all</source>
       <translation>सटीकता: पूरी रखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1770" />
+      <location filename="../ui/main_dialog.py" line="1753" />
       <source>Highlight: same as map</source>
       <translation>हाइलाइट: मानचित्र जैसा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1771" />
+      <location filename="../ui/main_dialog.py" line="1754" />
       <source>Highlight colour for this layer only.</source>
       <translation>केवल इस परत के लिए हाइलाइट रंग।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1859" />
+      <location filename="../ui/main_dialog.py" line="1842" />
       <source>Map controls</source>
       <translation>मानचित्र नियंत्रण</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1890" />
+      <location filename="../ui/main_dialog.py" line="1873" />
       <source>Caption</source>
       <translation>शीर्ष भाग</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1893" />
+      <location filename="../ui/main_dialog.py" line="1876" />
       <source>Map title</source>
       <translation>मानचित्र का शीर्षक</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1908" />
+      <location filename="../ui/main_dialog.py" line="1891" />
       <source>Project description</source>
       <translation>प्रोजेक्ट विवरण</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1929" />
+      <location filename="../ui/main_dialog.py" line="1912" />
       <source>Position</source>
       <translation>स्थिति</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1945" />
+      <location filename="../ui/main_dialog.py" line="1928" />
       <source>Control colours</source>
       <translation>नियंत्रणों के रंग</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1950" />
-      <location filename="../ui/main_dialog.py" line="1959" />
+      <location filename="../ui/main_dialog.py" line="1933" />
+      <location filename="../ui/main_dialog.py" line="1942" />
       <source>Default</source>
       <translation>डिफ़ॉल्ट</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1955" />
+      <location filename="../ui/main_dialog.py" line="1938" />
       <source>Background</source>
       <translation>पृष्ठभूमि</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1964" />
+      <location filename="../ui/main_dialog.py" line="1947" />
       <source>Text and icons</source>
       <translation>पाठ और आइकन</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1971" />
+      <location filename="../ui/main_dialog.py" line="1954" />
       <source>Size</source>
       <translation>आकार</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1996" />
+      <location filename="../ui/main_dialog.py" line="1979" />
       <source>Behaviour</source>
       <translation>व्यवहार</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1999" />
+      <location filename="../ui/main_dialog.py" line="1982" />
       <source>Open popups on hover instead of click</source>
       <translation>क्लिक के बजाय होवर पर पॉपअप खोलें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2002" />
+      <location filename="../ui/main_dialog.py" line="1985" />
       <source>Hover replaces click rather than adding to it: bound together, a click on an already-open popup appears to do nothing.</source>
       <translation>होवर क्लिक की जगह लेता है, उसके साथ नहीं जुड़ता: दोनों साथ होने पर, पहले से खुले पॉपअप पर क्लिक कुछ करता हुआ नहीं लगता।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2024" />
+      <location filename="../ui/main_dialog.py" line="2007" />
       <source>Default (white, see-through)</source>
       <translation>डिफ़ॉल्ट (सफ़ेद, पारदर्शी)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2026" />
+      <location filename="../ui/main_dialog.py" line="2009" />
       <source>Shown when the cursor is over a feature. Keep some transparency: a solid colour hides whatever the feature is drawn on top of.</source>
       <translation>कर्सर किसी फ़ीचर पर होने पर दिखता है। कुछ पारदर्शिता रखें: ठोस रंग नीचे बनी चीज़ को छिपा देता है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2204" />
+      <location filename="../ui/main_dialog.py" line="2187" />
       <source>Checking the project...</source>
       <translation>प्रोजेक्ट की जाँच हो रही है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2233" />
+      <location filename="../ui/main_dialog.py" line="2216" />
       <source>That layer is no longer in the project.</source>
       <translation>वह परत अब प्रोजेक्ट में नहीं है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2281" />
-      <location filename="../ui/main_dialog.py" line="2356" />
+      <location filename="../ui/main_dialog.py" line="2264" />
+      <location filename="../ui/main_dialog.py" line="2339" />
       <source>Preview</source>
       <translation>पूर्वावलोकन</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2300" />
+      <location filename="../ui/main_dialog.py" line="2283" />
       <source>Share</source>
       <translation>साझा करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2316" />
+      <location filename="../ui/main_dialog.py" line="2299" />
       <source>Write the map in the type and place chosen on the Map tab</source>
       <translation>मानचित्र टैब में चुने गए प्रकार और जगह पर मानचित्र लिखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2402" />
+      <location filename="../ui/main_dialog.py" line="2385" />
       <source>Copy file path</source>
       <translation>फ़ाइल पथ कॉपी करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2403" />
+      <location filename="../ui/main_dialog.py" line="2386" />
       <source>Copies the map file's path to the clipboard</source>
       <translation>मानचित्र फ़ाइल का पथ क्लिपबोर्ड पर कॉपी करता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2409" />
+      <location filename="../ui/main_dialog.py" line="2392" />
       <source>Shows the map file in your file manager</source>
       <translation>मानचित्र फ़ाइल को फ़ाइल मैनेजर में दिखाता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2413" />
+      <location filename="../ui/main_dialog.py" line="2396" />
       <source>Publish</source>
       <translation>प्रकाशित करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2416" />
+      <location filename="../ui/main_dialog.py" line="2399" />
       <source>Publish with NIKA hosting... (waitlist)</source>
       <translation>NIKA होस्टिंग से प्रकाशित करें... (प्रतीक्षा सूची)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2417" />
+      <location filename="../ui/main_dialog.py" line="2400" />
       <source>Hosting is not live yet. This opens a short form so we can see how many people want it.</source>
       <translation>होस्टिंग अभी शुरू नहीं हुई है। इससे एक छोटा फ़ॉर्म खुलता है ताकि हम जान सकें कि कितने लोग इसे चाहते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2428" />
+      <location filename="../ui/main_dialog.py" line="2411" />
       <source>NIKA</source>
       <translation>NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2431" />
+      <location filename="../ui/main_dialog.py" line="2414" />
       <source>Enhance with NIKA AI...</source>
       <translation>NIKA AI से बेहतर बनाएँ...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2432" />
+      <location filename="../ui/main_dialog.py" line="2415" />
       <source>Opens a hand-off dialog with a prompt to paste into NIKA</source>
       <translation>NIKA में चिपकाने के लिए एक प्रॉम्प्ट के साथ हैंड-ऑफ़ डायलॉग खोलता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2437" />
+      <location filename="../ui/main_dialog.py" line="2420" />
       <source>Ask NIKA for a critique...</source>
       <translation>NIKA से समीक्षा माँगें...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2438" />
+      <location filename="../ui/main_dialog.py" line="2421" />
       <source>Opens a hand-off dialog asking NIKA to review the map as a cartographer would</source>
       <translation>एक हैंड-ऑफ़ डायलॉग खोलता है जो NIKA से मानचित्र की समीक्षा एक मानचित्रकार की तरह करने को कहता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2447" />
+      <location filename="../ui/main_dialog.py" line="2430" />
       <source>Make a cartograph with QGIS2Carto...</source>
       <translation>QGIS2Carto से कार्टोग्राफ़ बनाएँ...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2448" />
+      <location filename="../ui/main_dialog.py" line="2431" />
       <source>Opens QGIS2Carto with this map as a live frame</source>
       <translation>इस मानचित्र को लाइव फ़्रेम के रूप में QGIS2Carto में खोलता है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2453" />
+      <location filename="../ui/main_dialog.py" line="2436" />
       <source>Ask on Discord ↗</source>
       <translation>Discord पर पूछें ↗</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2455" />
+      <location filename="../ui/main_dialog.py" line="2438" />
       <source>Open the QGIS2WebMap channel on the NIKA Discord in your browser. Ask a question, suggest something, or report a bug - no GitHub account needed.</source>
       <translation>अपने ब्राउज़र में NIKA Discord पर QGIS2WebMap चैनल खोलें। सवाल पूछें, सुझाव दें या बग बताएँ - GitHub खाते की ज़रूरत नहीं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2462" />
+      <location filename="../ui/main_dialog.py" line="2445" />
       <source>More ways to share are coming soon</source>
       <translation>साझा करने के और तरीके जल्द आ रहे हैं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2496" />
+      <location filename="../ui/main_dialog.py" line="2479" />
       <source>NIKA account</source>
       <translation>NIKA खाता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2501" />
+      <location filename="../ui/main_dialog.py" line="2484" />
       <source>Account</source>
       <translation>खाता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2514" />
+      <location filename="../ui/main_dialog.py" line="2497" />
       <source>Language</source>
       <translation>भाषा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2518" />
+      <location filename="../ui/main_dialog.py" line="2501" />
       <source>Show this dialog in</source>
       <translation>यह डायलॉग इस भाषा में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2545" />
+      <location filename="../ui/main_dialog.py" line="2528" />
       <source>Theme</source>
       <translation>थीम</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2551" />
+      <location filename="../ui/main_dialog.py" line="2534" />
       <source>Plugin version</source>
       <translation>प्लगइन संस्करण</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2554" />
+      <location filename="../ui/main_dialog.py" line="2537" />
       <location filename="../ui/runtime_setup.py" line="248" />
       <location filename="../ui/runtime_setup.py" line="202" />
       <location filename="../ui/runtime_setup.py" line="263" />
@@ -1071,90 +1123,90 @@ They are also online at &lt;{url}&gt;.
       <translation>OnlyMap रनटाइम</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2590" />
+      <location filename="../ui/main_dialog.py" line="2573" />
       <source>Open the full documentation</source>
       <translation>पूरा दस्तावेज़ खोलें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2594" />
+      <location filename="../ui/main_dialog.py" line="2577" />
       <source>Join the community</source>
       <translation>समुदाय से जुड़ें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2596" />
+      <location filename="../ui/main_dialog.py" line="2579" />
       <source>Open the NIKA Discord in your browser. Problems, suggestions and bug reports all go to the QGIS2WebMap channel - no GitHub account needed.</source>
       <translation>अपने ब्राउज़र में NIKA Discord खोलें। समस्याएँ, सुझाव और बग रिपोर्ट सब QGIS2WebMap चैनल में जाते हैं - GitHub खाते की ज़रूरत नहीं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2622" />
+      <location filename="../ui/main_dialog.py" line="2605" />
       <source>Close</source>
       <translation>बंद करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2645" />
+      <location filename="../ui/main_dialog.py" line="2628" />
       <location filename="../ui/runtime_setup.py" line="243" />
       <source>Cancel</source>
       <translation>रद्द करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2726" />
+      <location filename="../ui/main_dialog.py" line="2712" />
       <source>Stopping...</source>
       <translation>रोका जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2744" />
+      <location filename="../ui/main_dialog.py" line="2730" />
       <source>Stopped. Nothing was written.</source>
       <translation>रुक गया। कुछ नहीं लिखा गया।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2769" />
+      <location filename="../ui/main_dialog.py" line="2755" />
       <source>Something went wrong</source>
       <translation>कुछ गलत हो गया</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2860" />
-      <location filename="../ui/main_dialog.py" line="2851" />
+      <location filename="../ui/main_dialog.py" line="2846" />
+      <location filename="../ui/main_dialog.py" line="2837" />
       <source>Live preview stopped.</source>
       <translation>लाइव पूर्वावलोकन रुक गया।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2926" />
-      <location filename="../ui/main_dialog.py" line="2924" />
-      <location filename="../ui/main_dialog.py" line="2913" />
+      <location filename="../ui/main_dialog.py" line="2912" />
+      <location filename="../ui/main_dialog.py" line="2910" />
+      <location filename="../ui/main_dialog.py" line="2899" />
       <source>Updating the preview...</source>
       <translation>पूर्वावलोकन अपडेट हो रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3140" />
+      <location filename="../ui/main_dialog.py" line="3138" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>मानचित्र बनाने के लिए OnlyMap रनटाइम ज़रूरी है। कुछ नहीं लिखा गया।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3156" />
-      <location filename="../ui/main_dialog.py" line="3344" />
-      <location filename="../ui/main_dialog.py" line="3099" />
+      <location filename="../ui/main_dialog.py" line="3154" />
+      <location filename="../ui/main_dialog.py" line="3346" />
+      <location filename="../ui/main_dialog.py" line="3085" />
       <source>Reading the project...</source>
       <translation>प्रोजेक्ट पढ़ा जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3216" />
-      <location filename="../ui/main_dialog.py" line="3177" />
+      <location filename="../ui/main_dialog.py" line="3214" />
+      <location filename="../ui/main_dialog.py" line="3175" />
       <source>Building the preview...</source>
       <translation>पूर्वावलोकन बन रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3235" />
+      <location filename="../ui/main_dialog.py" line="3233" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>इस कंप्यूटर पर लाइव पूर्वावलोकन शुरू नहीं हो सका, इसलिए पूर्वावलोकन फ़ाइल के रूप में खुला। बदलाव करने के बाद टैब फिर से लोड करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3334" />
+      <location filename="../ui/main_dialog.py" line="3332" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>होस्टिंग अभी शुरू नहीं हुई है - प्रतीक्षा सूची का फ़ॉर्म आपके ब्राउज़र में खुल गया है।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3469" />
-      <location filename="../ui/main_dialog.py" line="3404" />
+      <location filename="../ui/main_dialog.py" line="3405" />
       <source>Writing the map...</source>
       <translation>मानचित्र लिखा जा रहा है...</translation>
     </message>
@@ -1174,12 +1226,12 @@ They are also online at &lt;{url}&gt;.
       <translation>फिर भी लिखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3530" />
       <source>Choose where to save first</source>
       <translation>पहले चुनें कि कहाँ सहेजना है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3529" />
+      <location filename="../ui/main_dialog.py" line="3531" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1188,328 +1240,323 @@ Fill in Save to on the Map tab, then try again.</source>
 मानचित्र टैब में 'यहाँ सहेजें' भरें, फिर दोबारा कोशिश करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3553" />
-      <location filename="../ui/main_dialog.py" line="3421" />
+      <location filename="../ui/main_dialog.py" line="3555" />
+      <location filename="../ui/main_dialog.py" line="3422" />
       <source>Cannot export</source>
       <translation>निर्यात नहीं किया जा सकता</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="405" />
+      <location filename="../ui/main_dialog.py" line="381" />
       <source>{n} s ago</source>
       <translation>{n} सेकंड पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="408" />
+      <location filename="../ui/main_dialog.py" line="384" />
       <source>{n} min ago</source>
       <translation>{n} मिनट पहले</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="852" />
+      <location filename="../ui/main_dialog.py" line="830" />
       <source>Shown on the map and in the browser tab. Leave blank to use the project title.</source>
       <translation>मानचित्र पर और ब्राउज़र टैब में दिखता है। प्रोजेक्ट का शीर्षक इस्तेमाल करने के लिए खाली छोड़ें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="874" />
+      <location filename="../ui/main_dialog.py" line="848" />
       <source>Export as</source>
       <translation>इस रूप में निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="972" />
+      <location filename="../ui/main_dialog.py" line="946" />
       <source>Where the map is positioned when someone opens it. They can still pan and zoom anywhere afterwards.</source>
       <translation>कोई मानचित्र खोले तो वह कहाँ दिखे। उसके बाद भी कहीं भी पैन और ज़ूम किया जा सकता है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="993" />
+      <location filename="../ui/main_dialog.py" line="967" />
       <source>Leaves out everything outside the current QGIS view. This is the practical way to bring a very large layer under the free plan's 25,000-feature limit. The Fidelity tab reports how many features each layer loses.</source>
       <translation>मौजूदा QGIS दृश्य के बाहर की हर चीज़ छोड़ देता है। बहुत बड़ी परत को मुफ़्त प्लान की 25,000 फ़ीचर सीमा में लाने का यह व्यावहारिक तरीका है। विश्वसनीयता टैब बताता है कि हर परत कितने फ़ीचर खोती है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1010" />
+      <location filename="../ui/main_dialog.py" line="984" />
       <source>{n} decimal place</source>
       <translation>{n} दशमलव स्थान</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1010" />
+      <location filename="../ui/main_dialog.py" line="984" />
       <source>{n} decimal places</source>
       <translation>{n} दशमलव स्थान</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1029" />
+      <location filename="../ui/main_dialog.py" line="1003" />
       <source>Rounding makes the file smaller and cannot be undone. 6 places is about 0.1 m at the equator.</source>
       <translation>पूर्णांकन से फ़ाइल छोटी होती है और इसे पलटा नहीं जा सकता। 6 स्थान भूमध्य रेखा पर लगभग 0.1 मीटर हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1109" />
+      <location filename="../ui/main_dialog.py" line="1083" />
       <source>Export makes a folder for a web server, carrying {n} layer.</source>
       <translation>निर्यात वेब सर्वर के लिए एक फ़ोल्डर बनाता है, जिसमें {n} परत है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1109" />
+      <location filename="../ui/main_dialog.py" line="1083" />
       <source>Export makes a folder for a web server, carrying {n} layers.</source>
       <translation>निर्यात वेब सर्वर के लिए एक फ़ोल्डर बनाता है, जिसमें {n} परतें हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1115" />
+      <location filename="../ui/main_dialog.py" line="1089" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layer.</source>
       <translation>निर्यात एक HTML फ़ाइल बनाता है जो डबल-क्लिक से खुलती है, जिसमें {n} परत है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1115" />
+      <location filename="../ui/main_dialog.py" line="1089" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layers.</source>
       <translation>निर्यात एक HTML फ़ाइल बनाता है जो डबल-क्लिक से खुलती है, जिसमें {n} परतें हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1322" />
+      <location filename="../ui/main_dialog.py" line="1295" />
       <source>Export folder for hosting</source>
       <translation>होस्टिंग के लिए फ़ोल्डर निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1354" />
+      <location filename="../ui/main_dialog.py" line="1327" />
       <source>Choose where to save, then press Export.</source>
       <translation>चुनें कि कहाँ सहेजना है, फिर निर्यात दबाएँ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1358" />
+      <location filename="../ui/main_dialog.py" line="1331" />
       <source>Not written yet.</source>
       <translation>अभी लिखी नहीं गई।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1463" />
+      <location filename="../ui/main_dialog.py" line="1443" />
       <source>The map file inlines every feature, so it carries all the data itself. Past about {limit} MB it gets slow to open and awkward to move around.</source>
       <translation>मानचित्र फ़ाइल हर फ़ीचर अपने अंदर रखती है, इसलिए सारा डेटा उसी में होता है। लगभग {limit} MB के बाद यह धीरे खुलती है और इधर-उधर ले जाना मुश्किल होता है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1515" />
+      <location filename="../ui/main_dialog.py" line="1495" />
       <source>Layer</source>
       <translation>परत</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1515" />
+      <location filename="../ui/main_dialog.py" line="1495" />
       <source>Include</source>
       <translation>शामिल</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1515" />
+      <location filename="../ui/main_dialog.py" line="1495" />
       <source>Popups</source>
       <translation>पॉपअप</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1515" />
-      <source>Labels</source>
-      <translation>लेबल</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1550" />
+      <location filename="../ui/main_dialog.py" line="1530" />
       <source>Set every field to</source>
       <translation>हर फ़ील्ड को सेट करें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1735" />
+      <location filename="../ui/main_dialog.py" line="1718" />
       <source>Popups: same as map</source>
       <translation>पॉपअप: मानचित्र जैसे</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1736" />
+      <location filename="../ui/main_dialog.py" line="1719" />
       <source>Popups: on hover</source>
       <translation>पॉपअप: होवर करने पर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1737" />
+      <location filename="../ui/main_dialog.py" line="1720" />
       <source>Popups: on click</source>
       <translation>पॉपअप: क्लिक करने पर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1751" />
+      <location filename="../ui/main_dialog.py" line="1734" />
       <source>Precision: {n} decimal place</source>
       <translation>सटीकता: {n} दशमलव स्थान</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1751" />
+      <location filename="../ui/main_dialog.py" line="1734" />
       <source>Precision: {n} decimal places</source>
       <translation>सटीकता: {n} दशमलव स्थान</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1851" />
+      <location filename="../ui/main_dialog.py" line="1834" />
       <source>These are on by default - an exported map should be useful without configuring anything.</source>
       <translation>ये डिफ़ॉल्ट रूप से चालू हैं - निर्यात किया गया मानचित्र बिना कुछ सेट किए उपयोगी होना चाहिए।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1863" />
+      <location filename="../ui/main_dialog.py" line="1846" />
       <source>Legend</source>
       <translation>लेजेंड</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1864" />
+      <location filename="../ui/main_dialog.py" line="1847" />
       <source>Layer switcher</source>
       <translation>परत स्विचर</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1865" />
+      <location filename="../ui/main_dialog.py" line="1848" />
       <source>Zoom controls</source>
       <translation>ज़ूम नियंत्रण</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1866" />
+      <location filename="../ui/main_dialog.py" line="1849" />
       <source>Scale bar</source>
       <translation>स्केल बार</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1900" />
+      <location filename="../ui/main_dialog.py" line="1883" />
       <source>Draws the map name over the map. The legend drops its own heading while this is on, so the title is not shown twice.</source>
       <translation>मानचित्र के ऊपर मानचित्र का नाम बनाता है। यह चालू रहने पर लेजेंड अपना शीर्षक हटा देता है, ताकि शीर्षक दो बार न दिखे।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1915" />
+      <location filename="../ui/main_dialog.py" line="1898" />
       <source>The abstract from Project Properties &gt; Metadata. Nothing appears if the project has none.</source>
       <translation>प्रोजेक्ट गुण &gt; मेटाडेटा का सार। प्रोजेक्ट में न हो तो कुछ नहीं दिखता।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1933" />
+      <location filename="../ui/main_dialog.py" line="1916" />
       <source>All four corners already hold map controls - switcher top left, legend top right, zoom and scale bottom left, credit bottom right. The centres are the only clear space.</source>
       <translation>चारों कोनों में पहले से मानचित्र नियंत्रण हैं - ऊपर बाएँ स्विचर, ऊपर दाएँ लेजेंड, नीचे बाएँ ज़ूम और स्केल, नीचे दाएँ क्रेडिट। केवल बीच की जगह खाली है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1975" />
+      <location filename="../ui/main_dialog.py" line="1958" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
       <translation>लेजेंड, परत स्विचर, ज़ूम नियंत्रण, स्केल बार और शीर्षक को एक साथ छोटा-बड़ा करता है। क्रेडिट स्थिर रहता है ताकि श्रेय पढ़ने लायक बना रहे।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1986" />
+      <location filename="../ui/main_dialog.py" line="1969" />
       <source>Applies to the legend, layer switcher, zoom controls and scale bar. Leave both unset to keep the map's own styling.</source>
       <translation>लेजेंड, परत स्विचर, ज़ूम नियंत्रण और स्केल बार पर लागू होता है। मानचित्र की अपनी शैली रखने के लिए दोनों खाली छोड़ें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2011" />
+      <location filename="../ui/main_dialog.py" line="1994" />
       <source>Hover replaces click rather than adding to it.</source>
       <translation>होवर क्लिक की जगह लेता है, उसके साथ नहीं जुड़ता।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2021" />
+      <location filename="../ui/main_dialog.py" line="2004" />
       <source>Highlight under the cursor</source>
       <translation>कर्सर के नीचे हाइलाइट</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2343" />
+      <location filename="../ui/main_dialog.py" line="2326" />
       <source>Live preview is on: Preview keeps the browser tab updating as you change settings. Click to turn it off.</source>
       <translation>लाइव पूर्वावलोकन चालू है: सेटिंग बदलने पर पूर्वावलोकन ब्राउज़र टैब को अपडेट करता रहता है। बंद करने के लिए क्लिक करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2348" />
+      <location filename="../ui/main_dialog.py" line="2331" />
       <source>Live preview is off: Preview opens the map as it is now. Click to keep the tab updating as you change settings.</source>
       <translation>लाइव पूर्वावलोकन बंद है: पूर्वावलोकन मानचित्र को अभी की स्थिति में खोलता है। सेटिंग बदलने पर टैब को अपडेट करते रहने के लिए क्लिक करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2356" />
+      <location filename="../ui/main_dialog.py" line="2339" />
       <source>Live</source>
       <translation>लाइव</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2358" />
+      <location filename="../ui/main_dialog.py" line="2341" />
       <source>Live preview is running. Press to stop it.</source>
       <translation>लाइव पूर्वावलोकन चल रहा है। रोकने के लिए दबाएँ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2360" />
+      <location filename="../ui/main_dialog.py" line="2343" />
       <source>Open the map in your browser.</source>
       <translation>मानचित्र को अपने ब्राउज़र में खोलें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2505" />
+      <location filename="../ui/main_dialog.py" line="2488" />
       <source>Publishing maps to NIKA needs an account. Exporting a file never does.</source>
       <translation>NIKA पर मानचित्र प्रकाशित करने के लिए खाता चाहिए। फ़ाइल निर्यात करने के लिए कभी नहीं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2522" />
+      <location filename="../ui/main_dialog.py" line="2505" />
       <source>English is built in. Other languages are a small download the first time you pick one. Follow QGIS uses the language QGIS is set to, when it is one of these.</source>
       <translation>अंग्रेज़ी पहले से शामिल है। दूसरी भाषाएँ पहली बार चुनने पर एक छोटा डाउनलोड हैं। QGIS के अनुसार विकल्प QGIS में सेट भाषा इस्तेमाल करता है, अगर वह इनमें से एक हो।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2537" />
+      <location filename="../ui/main_dialog.py" line="2520" />
       <source>Light</source>
       <translation>हल्का</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2538" />
+      <location filename="../ui/main_dialog.py" line="2521" />
       <source>Dark</source>
       <translation>गहरा</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2673" />
+      <location filename="../ui/main_dialog.py" line="2656" />
       <source>Still working on the last request.</source>
       <translation>अभी भी पिछले अनुरोध पर काम चल रहा है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2870" />
+      <location filename="../ui/main_dialog.py" line="2856" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>पूर्वावलोकन टैब बंद हो गया, इसलिए पूर्वावलोकन सर्वर रुक गया। इसे फिर शुरू करने के लिए पूर्वावलोकन दबाएँ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2976" />
+      <location filename="../ui/main_dialog.py" line="2962" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>निर्यात करने के लिए प्रोजेक्ट में एक वेक्टर या रास्टर परत जोड़ें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3213" />
+      <location filename="../ui/main_dialog.py" line="3211" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>लाइव पूर्वावलोकन खुला। यहाँ के बदलाव टैब को अपने-आप अपडेट करते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3414" />
+      <location filename="../ui/main_dialog.py" line="3415" />
       <source>Finishing...</source>
       <translation>पूरा किया जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3515" />
+      <location filename="../ui/main_dialog.py" line="3517" />
       <source>Folder not found</source>
       <translation>फ़ोल्डर नहीं मिला</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3549" />
+      <location filename="../ui/main_dialog.py" line="3551" />
       <source>No layer in the selection could be read.</source>
       <translation>चयन की कोई भी परत पढ़ी नहीं जा सकी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3558" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>इन्हें QGIS में ठीक करें, फिर दोबारा निर्यात करें। विश्वसनीयता टैब में जाँची गई हर चीज़ की सूची है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="345" />
+      <location filename="../ui/main_dialog.py" line="339" />
       <source>&lt;p&gt;Details are in the QGIS message log, under &lt;b&gt;{tag}&lt;/b&gt;.&lt;/p&gt;&lt;p&gt;Tell us about it in the QGIS2WebMap channel on &lt;a href="{discord}"&gt;our Discord&lt;/a&gt;, or &lt;a href="{issues}"&gt;open a GitHub issue&lt;/a&gt;. Please include the log.&lt;/p&gt;</source>
       <translation>&lt;p&gt;विवरण QGIS संदेश लॉग में &lt;b&gt;{tag}&lt;/b&gt; के अंतर्गत हैं।&lt;/p&gt;&lt;p&gt;हमें &lt;a href="{discord}"&gt;हमारे Discord&lt;/a&gt; के QGIS2WebMap चैनल पर बताएँ, या &lt;a href="{issues}"&gt;GitHub issue खोलें&lt;/a&gt;। कृपया लॉग साथ में दें।&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1367" />
+      <location filename="../ui/main_dialog.py" line="1340" />
       <source>The map file cannot be read from here.</source>
       <translation>मानचित्र फ़ाइल यहाँ से पढ़ी नहीं जा सकती।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1428" />
+      <location filename="../ui/main_dialog.py" line="1408" />
       <source>Choose where to save on the Map tab first</source>
       <translation>पहले मानचित्र टैब में चुनें कि कहाँ सहेजना है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2433" />
+      <location filename="../ui/main_dialog.py" line="2416" />
       <source>Enhance with NIKA AI</source>
       <translation>NIKA AI से बेहतर बनाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2442" />
+      <location filename="../ui/main_dialog.py" line="2425" />
       <source>Ask NIKA for a critique</source>
       <translation>NIKA से समीक्षा माँगें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2449" />
+      <location filename="../ui/main_dialog.py" line="2432" />
       <source>Make a cartograph with QGIS2Carto</source>
       <translation>QGIS2Carto से कार्टोग्राफ़ बनाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2476" />
+      <location filename="../ui/main_dialog.py" line="2459" />
       <source>{what} is not built yet</source>
       <translation>{what} अभी बना नहीं है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2477" />
+      <location filename="../ui/main_dialog.py" line="2460" />
       <source>{what} is coming in a later release.
 
 The menu entry is here so the shape of the Share menu can be reviewed; pressing it does nothing else yet.</source>
@@ -1518,48 +1565,48 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
 यह मेनू आइटम यहाँ इसलिए है ताकि साझा करें मेनू का ढाँचा परखा जा सके; इसे दबाने से अभी और कुछ नहीं होता।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2737" />
+      <location filename="../ui/main_dialog.py" line="2723" />
       <source>Export failed</source>
       <translation>निर्यात विफल</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2755" />
+      <location filename="../ui/main_dialog.py" line="2741" />
       <source>Live preview could not be updated ({message}) - see the QGIS log.</source>
       <translation>लाइव पूर्वावलोकन अपडेट नहीं हो सका ({message}) - QGIS लॉग देखें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2922" />
+      <location filename="../ui/main_dialog.py" line="2908" />
       <source>Live preview updated.</source>
       <translation>लाइव पूर्वावलोकन अपडेट हुआ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2979" />
+      <location filename="../ui/main_dialog.py" line="2965" />
       <source>Tick at least one layer to include.</source>
       <translation>शामिल करने के लिए कम से कम एक परत चुनें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2970" />
       <source>{n} layer will be exported.</source>
       <translation>{n} परत निर्यात होगी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2970" />
       <source>{n} layers will be exported.</source>
       <translation>{n} परतें निर्यात होंगी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3184" />
-      <location filename="../ui/main_dialog.py" line="3204" />
+      <location filename="../ui/main_dialog.py" line="3182" />
+      <location filename="../ui/main_dialog.py" line="3202" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>पूर्वावलोकन खुल गया। बदलाव करने के बाद फिर से पूर्वावलोकन दबाएँ - मानचित्र पर आपकी स्थिति बनी रहती है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3299" />
+      <location filename="../ui/main_dialog.py" line="3297" />
       <source>Copied {path}</source>
       <translation>कॉपी किया: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3382" />
+      <location filename="../ui/main_dialog.py" line="3383" />
       <source>Choose Folder or Share ZIP</source>
       <translation>फ़ोल्डर या साझा करने के लिए ZIP चुनें</translation>
     </message>
@@ -1569,32 +1616,32 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
       <translation>चेतावनियों के साथ निर्यात हुआ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1128" />
+      <location filename="../ui/main_dialog.py" line="1102" />
       <source>To: {path}</source>
       <translation>यहाँ: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1386" />
+      <location filename="../ui/main_dialog.py" line="1366" />
       <source>Last written {ago} - {detail}. The project has changed since; Export writes it again.</source>
       <translation>पिछली बार लिखा गया {ago} - {detail}। तब से प्रोजेक्ट बदल गया है; निर्यात इसे फिर से लिखता है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1393" />
+      <location filename="../ui/main_dialog.py" line="1373" />
       <source>Last written {ago} - {detail}</source>
       <translation>पिछली बार लिखा गया {ago} - {detail}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1479" />
+      <location filename="../ui/main_dialog.py" line="1459" />
       <source>This map's data is {size} MB, past the {limit} MB where a single file starts to be unwieldy. The map file is still written - exporting as Share ZIP is the practical way to send something this size.</source>
       <translation>इस मानचित्र का डेटा {size} MB है, {limit} MB से ज़्यादा, जहाँ से एक अकेली फ़ाइल संभालना मुश्किल होने लगता है। मानचित्र फ़ाइल फिर भी लिखी जाती है - इतने बड़े आकार को भेजने का व्यावहारिक तरीका साझा करने के लिए ZIP के रूप में निर्यात करना है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2555" />
+      <location filename="../ui/main_dialog.py" line="2538" />
       <source>not pinned</source>
       <translation>तय नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3043" />
+      <location filename="../ui/main_dialog.py" line="3029" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>'{name}' पढ़ा जा रहा है ({total} में से {done})</translation>
     </message>
@@ -1609,7 +1656,7 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
       <translation>निर्यात पूरा हुआ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3516" />
+      <location filename="../ui/main_dialog.py" line="3518" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1618,18 +1665,18 @@ Pick somewhere that exists, or create it first.</source>
 कोई मौजूदा जगह चुनें, या पहले उसे बनाएँ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1491" />
+      <location filename="../ui/main_dialog.py" line="1471" />
       <source>This map's data is {size} MB.</source>
       <translation>इस मानचित्र का डेटा {size} MB है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3422" />
-      <location filename="../ui/main_dialog.py" line="3554" />
+      <location filename="../ui/main_dialog.py" line="3423" />
+      <location filename="../ui/main_dialog.py" line="3556" />
       <source>This map cannot be exported yet:</source>
       <translation>यह मानचित्र अभी निर्यात नहीं हो सकता:</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3319" />
+      <location filename="../ui/main_dialog.py" line="3317" />
       <source>Opened {path}</source>
       <translation>खोला गया: {path}</translation>
     </message>

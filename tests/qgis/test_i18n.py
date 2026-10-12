@@ -513,3 +513,12 @@ def test_picking_a_language_reopens_the_dialog_in_it(
         use_language("en")
         if plugin.dialog is not None:
             plugin.dialog.close()
+
+
+def test_the_fidelity_words_from_core_are_in_the_catalogue(qgis_app) -> None:
+    """Core has no Qt, so its verdict and topic names are registered in the
+    panel; a word added in core must be added there too."""
+    from nika_onlymap_exporter.core.fidelity_summary import VERDICT_LABELS, Topic
+    from nika_onlymap_exporter.ui.fidelity_panel import _CORE_WORDS
+
+    assert set(VERDICT_LABELS.values()) | {t.value for t in Topic} <= set(_CORE_WORDS)
