@@ -1121,6 +1121,25 @@ class TestShareBuildsWhatItNeeds:
         finally:
             dialog.close()
 
+    def test_a_qgis_change_during_a_fidelity_check_leaves_it_out_of_date(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        import time
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._check_fidelity()
+            dialog._project_content_changed()
+            deadline = time.monotonic() + 60
+            while dialog._job is not None and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            for _ in range(5):
+                qgis_app.processEvents()
+            assert dialog._fidelity_is_stale
+        finally:
+            dialog.close()
+
     def test_a_file_this_session_never_wrote_is_not_trusted(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

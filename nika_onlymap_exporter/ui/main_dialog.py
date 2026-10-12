@@ -2205,8 +2205,10 @@ class MainDialog(QDialog):
         """Read the project for a fresh report, or show a cached one."""
 
         def then(_export, report: FidelityReportBuilder) -> None:
-            # A cached read skips `_ensure_export`'s own display.
-            if self._fidelity_is_stale:
+            # A cached read skips `_ensure_export`'s own display. Only that one:
+            # a fresh read has been shown already, and one QGIS overtook while
+            # it ran must stay out of date rather than be shown as current.
+            if self._fidelity_is_stale and report is self._cached_report:
                 self._show_fidelity(report, self._cached_signature)
 
         self._ensure_export(then, tr("Checking the project..."))
