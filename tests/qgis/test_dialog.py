@@ -1419,16 +1419,29 @@ class TestLivePreviewLifecycle:
         dialog = self._dialog(project, make_memory_layer)
         try:
             assert dialog._map_file() is None
-            for key in ("publish", "enhance", "critique", "cartograph"):
-                assert dialog.share_actions[key].isEnabled(), key
+            assert dialog.share_actions["publish"].isEnabled()
             for key in ("copy_path", "reveal"):
                 assert not dialog.share_actions[key].isEnabled(), key
 
             # A job greys out the file rows only, and the rest survive it.
             dialog._set_busy(True, "working")
             dialog._set_busy(False)
-            for key in ("publish", "enhance", "critique", "cartograph"):
-                assert dialog.share_actions[key].isEnabled(), key
+            assert dialog.share_actions["publish"].isEnabled()
+        finally:
+            dialog.close()
+
+    def test_rows_not_built_yet_are_greyed_out_and_stay_so(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            dialog._set_busy(True, "working")
+            dialog._set_busy(False)
+            for key in ("enhance", "critique", "cartograph"):
+                action = dialog.share_actions[key]
+                assert not action.isEnabled(), key
+                assert action.toolTip().startswith("Coming soon"), key
         finally:
             dialog.close()
 

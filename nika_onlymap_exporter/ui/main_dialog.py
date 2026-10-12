@@ -2424,33 +2424,29 @@ class MainDialog(QDialog):
             self.on_publish,
         )
 
-        # Not wired yet, and present anyway. The menu's shape is part of what is
-        # being reviewed, and a row that is missing reads as a decision not to
-        # have it - so these say what they will do and admit they do not do it
-        # yet, rather than being silently absent or silently inert.
+        # Not available yet, and present anyway, greyed out: a row that is
+        # missing reads as a decision not to have it. Each says what it will do
+        # and that it is coming soon.
         menu.addSection(tr("NIKA"))
         add(
             "enhance",
             tr("Enhance with NIKA AI..."),
-            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
-            lambda: self._not_wired_yet(tr("Enhance with NIKA AI")),
-        )
+            tr("Coming soon: a hand-off with a prompt to paste into NIKA"),
+            lambda: None,
+        ).setEnabled(False)
         add(
             "critique",
             tr("Ask NIKA for a critique..."),
-            tr(
-                "Opens a hand-off dialog asking NIKA to review the map as a "
-                "cartographer would"
-            ),
-            lambda: self._not_wired_yet(tr("Ask NIKA for a critique")),
-        )
+            tr("Coming soon: NIKA reviews the map as a cartographer would"),
+            lambda: None,
+        ).setEnabled(False)
 
         add(
             "cartograph",
             tr("Make a cartograph with QGIS2Carto..."),
-            tr("Opens QGIS2Carto with this map as a live frame"),
-            lambda: self._not_wired_yet(tr("Make a cartograph with QGIS2Carto")),
-        )
+            tr("Coming soon: QGIS2Carto with this map as a live frame"),
+            lambda: None,
+        ).setEnabled(False)
 
         menu.addSeparator()
         discord = menu.addAction(tr("Ask on Discord ↗"))
@@ -2465,24 +2461,6 @@ class MainDialog(QDialog):
         coming = menu.addAction(tr("More ways to share are coming soon"))
         coming.setEnabled(False)
         return menu
-
-    def _not_wired_yet(self, what: str) -> None:
-        """Say plainly that a menu row is not built, rather than doing nothing.
-
-        A row that silently does nothing is the worst of the three options - the
-        user cannot tell a broken feature from an unfinished one. Naming the
-        release it belongs to would be a promise this branch cannot keep, so it
-        says only that it is coming.
-        """
-        QMessageBox.information(
-            self,
-            tr("{what} is not built yet").format(what=what),
-            tr(
-                "{what} is coming in a later release.\n\nThe menu entry is here so "
-                "the shape of the Share menu can be reviewed; pressing it does "
-                "nothing else yet."
-            ).format(what=what),
-        )
 
     def _build_settings_tab(self) -> QWidget:
         """The person's own preferences, apart from the map's.

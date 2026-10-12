@@ -378,13 +378,14 @@ opens the menu:
 | **Copy file path** | Puts the map file's path on the clipboard |
 | **Show in file manager** | Opens the folder the map file is in |
 | **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
-| **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming in a later release |
-| **Make a cartograph with QGIS2Carto** | Coming in a later release |
+| **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming soon; greyed out for now |
+| **Make a cartograph with QGIS2Carto** | Coming soon; greyed out for now |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
 **Copy file path and Show in file manager need a Save to path first.** Until
 you have set one on the Map tab they are greyed out, and each says so if you
-hover it. The other rows always work.
+hover it. Publish with NIKA hosting and Ask on Discord always work; the
+rows marked coming soon are greyed out.
 
 **Show in file manager writes the map first** when it is missing or out of
 date, so it never points at something stale. Copy file path only copies the
