@@ -7,9 +7,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
-- **View, Export and Share are one joined control** in the top-right corner,
-  with Export filled. View's menu holds **Preview** and **Live preview**;
-  Share's holds everything else. Neither needs an arrow - one press opens it.
+- **Raster layers export.** A GeoTIFF on disk is converted to a
+  Cloud-Optimized GeoTIFF and carried in a **Folder** or **Share ZIP** export,
+  in its place in the layer order. A single-band raster's QGIS colour ramp,
+  classes and stretch are drawn into its pixels, so the map shows the colours
+  QGIS shows; an RGB composite keeps its own bands. Standalone HTML cannot
+  carry a raster and says so, naming the layers and the format to pick
+  instead. A raster map's Preview is served from this machine, because a
+  browser will not read the raster from a page opened off the disk. Live
+  services (WMS, XYZ) are still left out, and the Fidelity tab says why.
+- **Preview, Share and Export are separate buttons** in the top-right corner,
+  with Export filled and last. Each has a small icon; only Share has a menu.
+- **A live switch beside Preview.** The dot on Preview's left turns red when
+  live preview is on: Preview then keeps the browser tab updating as you
+  change settings, reads **Live** while it does, and stops on a second press -
+  the switch stays on for next time. Off, Preview opens the map as it is now.
+  A preview never writes your map file; only Export does.
+- **Ctrl+Alt+W opens the dialog** (Cmd+Alt+W on macOS). Change or clear it in
+  Settings > Keyboard Shortcuts, under *Create web map*.
 - **The Fidelity tab's filters are one Filter menu** beside the summary rather
   than two rows of checkboxes, and the whole-map facts sit on the Whole map
   row, so the list starts higher with nothing taken out.
@@ -37,7 +52,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   hairline border against a slightly darker window, in both light and dark,
   so it is clear where one group of settings ends and the next begins.
 
+### Changed
+- **The pinned OnlyMap runtime moved from 0.6.20 to 0.12.0.** The one-time
+  download is now about 5.4 MB. The runtime's own "Built with OnlyMap" badge
+  replaces the plugin's footer credit on unlicensed maps rather than repeating
+  it in the other corner.
+
 ### Fixed
+- **Message boxes were unreadable in dark mode** - light text on a light
+  background. They now take the dialog's theme.
+- **A short window crushed the Settings tab** into overlapping rows. It
+  scrolls instead, like the Map and Appearance tabs.
+- **A folder export with more than 2 MB of vector data drew no features.** Its
+  data was compressed but the page carried nothing to decompress it, so the
+  legend and layer switcher appeared over an empty map.
 - **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
   whose geometry carries Z — digitised with Z switched on, draped over a DEM,
   or imported from CityGML, IFC or a `PolygonZ` GeoPackage — exports every
@@ -62,7 +90,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   shorter, so there is less to scroll.
 - **A Settings tab, before Help**, for what is true of every project rather
   than of one map: the NIKA account, the dialog's language and theme, and the
-  plugin and runtime versions. Live preview stays on the Preview button's menu. The account and
+  plugin and runtime versions. The account and
   Discord no longer sit in the footer, which is now just the status line and
   Close.
 - **Share is a dropdown.** Pressing it opens the menu; Discord is at the foot of
