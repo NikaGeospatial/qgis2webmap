@@ -21,6 +21,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .export_ir import (
@@ -45,6 +46,7 @@ KEY_LAYERS = "layers"
 # document: the path lives with the project so reopening the plugin reopens the
 # same file, rather than the user re-answering a picker every session.
 KEY_MAP_FILE = "mapFile"
+KEY_MAP_FILE_RELATIVE = "mapFileRelative"
 
 # The Map tab's "Export as" choice: standalone HTML, share ZIP or folder. The
 # key 0.1.x wrote, so an upgrading project reopens on the type it last used.
@@ -471,8 +473,16 @@ def load_state(project: QgsProject) -> DialogState:
 
     map_file, ok = project.readEntry(SCOPE, KEY_MAP_FILE, "")
     if ok and map_file:
-        # Stored the way the project stores its layer paths (see `save_state`).
-        state.map_file = project.readPath(map_file)
+        state.map_file = map_file
+        # The relative form wins when it lands somewhere real: the project
+        # folder was moved or shared. Save As keeps custom entries as they
+        # were, so a relative path can also point beside a copy that has no
+        # such folder - then the absolute one is still right.
+        relative, ok = project.readEntry(SCOPE, KEY_MAP_FILE_RELATIVE, "")
+        if ok and relative:
+            candidate = project.readPath(relative)
+            if candidate and Path(candidate).parent.is_dir():
+                state.map_file = candidate
 
     mode, ok = project.readEntry(SCOPE, KEY_OUTPUT_MODE, "")
     if ok and mode:
@@ -522,12 +532,13 @@ def load_state(project: QgsProject) -> DialogState:
 def save_state(project: QgsProject, state: DialogState) -> None:
     """Write settings into the project. Marks it dirty, as any change should."""
     project.writeEntry(SCOPE, KEY_MAP_NAME, state.map_name)
-    # Relative to the project file when the project saves relative paths, as
-    # it does by default: an absolute path in a shared .qgz names a folder on
-    # the sender's machine, and breaks when the project folder is moved.
+    # Both forms. Relative to the project file, as QGIS stores layer paths by
+    # default, so a moved or shared project folder finds its map; absolute for
+    # when the relative one leads nowhere (see `load_state`).
+    project.writeEntry(SCOPE, KEY_MAP_FILE, state.map_file)
     project.writeEntry(
         SCOPE,
-        KEY_MAP_FILE,
+        KEY_MAP_FILE_RELATIVE,
         project.writePath(state.map_file) if state.map_file else "",
     )
     project.writeEntry(SCOPE, KEY_OUTPUT_MODE, state.output_mode.value)
