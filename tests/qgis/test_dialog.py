@@ -2271,3 +2271,28 @@ class TestLayersTabControls:
             assert not button.icon().isNull()
         finally:
             dialog.close()
+
+
+def test_text_that_points_into_share_names_a_row_it_has(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """The overhaul moved packaging out of Share, but the size note and the
+    large-file prompt still sent people to "Share > Export share ZIP"."""
+    import importlib.util
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "update_translations.py"
+    spec = importlib.util.spec_from_file_location("update_translations", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    dialog = TestTabCorner()._dialog(project, make_memory_layer)
+    try:
+        rows = [a.text().replace("&", "") for a in dialog.share_actions.values()]
+    finally:
+        dialog.close()
+    pointers = [s for s in module.collect() if "Share > " in s]
+    for source in pointers:
+        after = source.split("Share > ", 1)[1]
+        assert any(after.startswith(row) for row in rows), source

@@ -1382,7 +1382,7 @@ class MainDialog(QDialog):
             self.save_status.setText(
                 tr(
                     "Last written {ago} - {detail}. "
-                    "The project has changed since; Share rebuilds it."
+                    "The project has changed since; Export writes it again."
                 ).format(ago=_ago(stat.st_mtime), detail=detail)
             )
         else:
@@ -1470,7 +1470,7 @@ class MainDialog(QDialog):
                 tr(
                     "This map's data is {size} MB, past the {limit} MB "
                     "where a single file starts to be unwieldy. The map file is "
-                    "still written - Share > Export share ZIP is the practical way "
+                    "still written - exporting as Share ZIP is the practical way "
                     "to send something this size."
                 ).format(size=f"{megabytes:.0f}", limit=limit_mb)
             )
@@ -2356,7 +2356,7 @@ class MainDialog(QDialog):
         Tooltips rather than descriptions in the labels: one line per action
         keeps the menu scannable, and a style that drops section titles must
         still leave every label readable on its own - which is why each one
-        names its object ("Export share ZIP", not "ZIP").
+        names its object ("Copy file path", not "Copy").
         """
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
@@ -3466,8 +3466,8 @@ class MainDialog(QDialog):
         box.setInformativeText(
             tr(
                 "The map file inlines all the data into the one HTML file, which is "
-                "why it is this big. Share > Export share ZIP packages the same map "
-                "to send more easily."
+                "why it is this big. Exporting as Share ZIP on the Map tab packages "
+                "the same map to send more easily."
             )
         )
         write_anyway = box.addButton(
