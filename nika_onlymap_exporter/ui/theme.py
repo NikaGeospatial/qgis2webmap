@@ -27,6 +27,7 @@ import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QByteArray, QEvent, QObject, QPoint, Qt
 from qgis.PyQt.QtGui import (
     QBrush,
@@ -321,6 +322,14 @@ class _MenuAttacher(QObject):
         self._button.style().unpolish(self._button)
         self._button.style().polish(self._button)
 
+    def _grow_to_button(self) -> None:
+        if sip.isdeleted(self._menu) or sip.isdeleted(self._button):
+            return
+        width = self._button.width()
+        if self._menu.isVisible() and self._menu.width() < width:
+            self._menu.setMinimumWidth(width)
+            self._menu.resize(width, self._menu.height())
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
         if watched is self._menu:
             if event.type() == QEvent.Type.Show:
@@ -330,6 +339,9 @@ class _MenuAttacher(QObject):
                     self._menu.setFixedWidth(button.width())
                 else:
                     self._menu.setMinimumWidth(button.width())
+                    # Qt5 has sized the window by the time it shows, and a new
+                    # minimum alone does not grow it.
+                    self._grow_to_button()
                 # Hang from the edge nearer the outside of the window: a menu
                 # wider than a button at the right edge must grow leftwards,
                 # or it runs off the dialog. Right to left mirrors this.
@@ -347,6 +359,10 @@ class _MenuAttacher(QObject):
                 self._menu.move(anchor)
             elif event.type() == QEvent.Type.Hide:
                 self._set_open(False)
+        elif watched is self._button and event.type() == QEvent.Type.Resize:
+            # A button laid out after its menu opened - or restyled wider for
+            # its open state, as Qt5 does - takes the open menu with it.
+            self._grow_to_button()
         return False
 
 
@@ -427,7 +443,9 @@ def attach_menu(menu: QMenu, button: QWidget) -> None:
         | Qt.WindowType.FramelessWindowHint
         | Qt.WindowType.NoDropShadowWindowHint
     )
-    menu.installEventFilter(_MenuAttacher(menu, button))
+    attacher = _MenuAttacher(menu, button)
+    menu.installEventFilter(attacher)
+    button.installEventFilter(attacher)
     button.setProperty("menuOpen", False)
 
 
