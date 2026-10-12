@@ -431,8 +431,18 @@ def _fit_row_to_widget(item: QTreeWidgetItem, widget: QWidget) -> None:
     widget.ensurePolished()
     for child in widget.findChildren(QWidget):
         child.ensurePolished()
+    # Qt5 keeps the layout's hint from before the polish, which left the row
+    # 6 px shorter than the themed combos in it; the tallest control is the
+    # floor whatever the layout remembers.
+    layout = widget.layout()
+    if layout is not None:
+        layout.invalidate()
     hint = widget.sizeHint()
-    item.setSizeHint(0, QSize(hint.width(), hint.height() + 8))
+    tallest = max(
+        (child.sizeHint().height() for child in widget.findChildren(QWidget)),
+        default=0,
+    )
+    item.setSizeHint(0, QSize(hint.width(), max(hint.height(), tallest) + 8))
 
 
 def _info_button(text: str, parent: QWidget) -> QToolButton:
