@@ -72,6 +72,17 @@ class TestClusterMaxZoom:
         assert cluster_max_zoom(points, radius_px=3) is None
 
 
+def test_points_at_one_spot_count_as_one_pile() -> None:
+    """Repeat samples at a few well-spaced sites must not hold the labels and
+    bubbles until the last zoom: points at one spot never separate."""
+    sites = [(-150.0 + 30 * i, 0.0) for i in range(10)]
+    points = [site for site in sites for _ in range(20)]
+    assert cluster_max_zoom(points, radius_px=4) is None
+    labels = [(lon, lat, "Site") for lon, lat in points]
+    zoom = label_min_zoom(labels, font_px=12)
+    assert zoom is not None and zoom <= 2  # where the sites themselves part
+
+
 def test_a_wrapped_label_is_as_wide_as_its_longest_line() -> None:
     one_line = label_min_zoom(_grid(50, 0.01, "Long label text here"), font_px=12)
     wrapped = label_min_zoom(_grid(50, 0.01, "Long label\ntext here"), font_px=12)

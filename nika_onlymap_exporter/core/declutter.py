@@ -84,6 +84,23 @@ def _share_that_fits(
     return kept / len(boxes)
 
 
+def _distinct(
+    points: Sequence[tuple[float, float]], sizes: Sequence[tuple[float, float]]
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """One box per position, as large as the largest there.
+
+    Points at the same spot never separate at any zoom, so counting each one
+    let a layer of repeat samples at a few sites hold its labels and bubbles
+    until the last zoom. They are one pile on screen, and counted as one.
+    """
+    boxes: dict[tuple[float, float], tuple[float, float]] = {}
+    for (lon, lat), (w, h) in zip(points, sizes):
+        key = (round(lon, 7), round(lat, 7))
+        kept = boxes.get(key)
+        boxes[key] = (w, h) if kept is None else (max(kept[0], w), max(kept[1], h))
+    return list(boxes), list(boxes.values())
+
+
 def _first_zoom_that_fits(
     points: Sequence[tuple[float, float]], sizes: Sequence[tuple[float, float]]
 ) -> int | None:
@@ -93,6 +110,8 @@ def _first_zoom_that_fits(
     keep fitting. Five placements instead of up to nineteen, which is what keeps
     a 25,000-point layer under a second on a live-preview rebuild.
     """
+
+    points, sizes = _distinct(points, sizes)
 
     def fits(zoom: int) -> bool:
         boxes = [
