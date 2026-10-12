@@ -218,7 +218,7 @@ def apply(dialog: QWidget) -> Palette:
     dialog.setProperty(
         "rtl", dialog.layoutDirection() == Qt.LayoutDirection.RightToLeft
     )
-    dialog.setStyleSheet(stylesheet(palette, dialog.objectName()))
+    dialog.setStyleSheet(stylesheet(palette, dialog.objectName(), family))
 
     # Rounded fields are taller than a bare label, and a form aligns labels to
     # the top of the row by default, so each label sat above its field's line.
@@ -365,9 +365,17 @@ def recolour_document(document: QTextDocument, palette: Palette) -> None:
             frame.setFormat(table_format)
 
 
-def stylesheet(p: Palette, object_name: str) -> str:
-    """The dialog's stylesheet, every rule anchored on `#object_name`."""
+def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
+    """The dialog's stylesheet, every rule anchored on `#object_name`.
+
+    `family` is named here as well as set on the dialog: a widget whose rule
+    sets `font-weight` gets its font rebuilt on every repolish, from the
+    application font rather than the dialog's, so without it a button
+    reverted to the system font - and changed width - the first time it
+    opened a menu.
+    """
     d = f"#{object_name}"
+    font_family = f'font-family: "{family}";' if family else ""
     return f"""
 {d} {{
     background: {p.canvas};
@@ -375,6 +383,7 @@ def stylesheet(p: Palette, object_name: str) -> str:
 }}
 {d} QWidget {{
     color: {p.ink};
+    {font_family}
 }}
 {d} QScrollArea, {d} QScrollArea > QWidget > QWidget {{
     background: transparent;

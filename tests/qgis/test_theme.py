@@ -197,6 +197,33 @@ class TestAttachedMenus:
         finally:
             dialog.close()
 
+    def test_opening_a_menu_keeps_the_buttons_font_and_width(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QPoint
+
+        from nika_onlymap_exporter.ui import theme
+
+        if theme.load_fonts() is None:
+            pytest.skip("bundled Inter not loadable here")
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.show()
+            dialog.tabs.setCurrentWidget(dialog._fidelity_page)
+            for _ in range(3):
+                qgis_app.processEvents()
+            button = dialog.fidelity_panel.filter_button
+            width = button.width()
+            menu = button.menu()
+            menu.popup(QPoint(0, 0))
+            for _ in range(3):
+                qgis_app.processEvents()
+            assert button.font().family() == theme.FONT_FAMILY
+            assert button.width() == width
+            menu.hide()
+        finally:
+            dialog.close()
+
     def test_lists_drop_below_their_box(self, qgis_app, project, make_memory_layer):
         dialog = self._dialog(project, make_memory_layer)
         try:
