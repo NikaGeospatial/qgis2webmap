@@ -68,6 +68,7 @@ from qgis.PyQt.QtWidgets import (
     QTabWidget,
     QTextBrowser,
     QToolButton,
+    QToolTip,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -94,7 +95,6 @@ from ..core.license_policy import (
 )
 from ..core.manifest_builder import (
     OSM_FILE_NOTE,
-    basemap_note,
     osm_from_file,
     terrain_note,
 )
@@ -407,6 +407,40 @@ def _ago(when: float) -> str:
     if hours < 36:
         return plural(int(hours), "{n} hour ago", "{n} hours ago")
     return plural(int(hours / 24), "{n} day ago", "{n} days ago")
+
+
+def _fit_row_to_widget(item: QTreeWidgetItem, widget: QWidget) -> None:
+    """Make a tree row as tall as the controls placed in it.
+
+    A tree sizes a row for its text, and an item widget is squeezed into that
+    rect: the themed combo boxes are taller than a line of text, so their
+    bottom edge was cut off. Polished first, so the height is the themed one.
+
+    The width is real because Qt drops a size hint with a negative width. The
+    extra height is the theme's `QTreeView::item` padding (3 px above and
+    below), which the tree takes out of the widget's rect.
+    """
+    widget.ensurePolished()
+    for child in widget.findChildren(QWidget):
+        child.ensurePolished()
+    hint = widget.sizeHint()
+    item.setSizeHint(0, QSize(hint.width(), hint.height() + 8))
+
+
+def _info_button(text: str, parent: QWidget) -> QToolButton:
+    """An "i" that shows `text` on hover, and on click for touch and keyboard."""
+    button = QToolButton(parent)
+    button.setProperty("lineIcon", "info")
+    button.setAutoRaise(True)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setToolTip(text)
+    button.setAccessibleName(tr("What these columns do"))
+    button.clicked.connect(
+        lambda: QToolTip.showText(
+            button.mapToGlobal(button.rect().bottomLeft()), text, button
+        )
+    )
+    return button
 
 
 def _help_label(text: str, parent: QWidget) -> QLabel:
@@ -1111,17 +1145,17 @@ class MainDialog(QDialog):
         self._fidelity_is_stale = True
 
     def _update_basemap_warning(self) -> None:
-        """Say what a basemap costs, in the terms it actually costs them.
+        """Warn under the basemap when OpenStreetMap will fail its recipients.
 
-        Not file size: tiles are streamed, so the export does not grow by a byte.
-        What it costs is the offline guarantee and the promise that opening the
-        map contacts nobody - and unlike every other setting here, that lands on
-        the recipient rather than on the person choosing it.
+        Only that case: what every basemap costs - tiles from a third party,
+        no offline use - is in the Fidelity tab, and repeating it here read as
+        noise under every choice.
         """
-        note = basemap_note(self.state.basemap)
-        if osm_from_file(self.state.basemap, self.state.output_mode):
-            # Said here, where the basemap is chosen, not only after export.
-            note = OSM_FILE_NOTE
+        note = (
+            OSM_FILE_NOTE
+            if osm_from_file(self.state.basemap, self.state.output_mode)
+            else None
+        )
         if note is None:
             self.basemap_warning.setText("")
             self.basemap_warning.setStyleSheet("")
@@ -1443,16 +1477,17 @@ class MainDialog(QDialog):
     def _build_layers_tab(self) -> QWidget:
         page = QWidget(self)
         layout = QVBoxLayout(page)
-        layout.addWidget(
-            QLabel(
-                tr(
-                    "Layers come from the QGIS Layers panel and follow it live - "
-                    "reorder or rename them there and this list updates. Expand a "
-                    "layer to choose how each of its fields appears in popups."
-                ),
-                page,
-            )
+        intro = FittedLabel(
+            tr(
+                "Layers come from the QGIS Layers panel and follow it live - "
+                "reorder or rename them there and this list updates. Expand a "
+                "layer to choose how each of its fields appears in popups."
+            ),
+            page,
         )
+        # Wrapped: on one line it ran off the edge of a normal-sized dialog.
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
 
         self.layer_tree = QTreeWidget(page)
         self.layer_tree.setColumnCount(4)
@@ -1466,26 +1501,25 @@ class MainDialog(QDialog):
         # What the three columns do, in terms of what the *recipient* loses.
         # The headers name them but not their consequence, and testing found
         # nobody could say what unticking one would produce - so the boxes went
-        # untouched rather than used. Stated on screen rather than in tooltips:
-        # a tooltip is only read by someone who already suspects it is there.
-        layout.addWidget(
-            _help_label(
-                tr(
-                    "<b>Include</b> - untick to leave the layer out of the map "
-                    "entirely. Its data is not written, so the file gets smaller.<br>"
-                    "<b>Popups</b> - untick and clicking a feature does nothing. "
-                    "The attribute values are left out of the file entirely, so "
-                    "this is also how you keep data out of a map you are sending "
-                    "someone.<br>"
-                    "<b>Labels</b> - untick to drop the text QGIS draws beside "
-                    "features. The features themselves still appear.<br>"
-                    "Unticking Popups or Labels only affects that layer; the map "
-                    "still works, with less on it. Expand a layer to hide single "
-                    "fields instead - those values leave the file too, unless the "
-                    "map draws with them."
-                ),
-                page,
-            )
+        # untouched rather than used. Behind a visible "i" button rather than
+        # spelled out below the list, where six lines of it crowded the tab;
+        # the button is there to be noticed, unlike a bare tooltip.
+        self.layers_info_button = _info_button(
+            tr(
+                "<b>Include</b> - untick to leave the layer out of the map "
+                "entirely. Its data is not written, so the file gets smaller.<br>"
+                "<b>Popups</b> - untick and clicking a feature does nothing. "
+                "The attribute values are left out of the file entirely, so "
+                "this is also how you keep data out of a map you are sending "
+                "someone.<br>"
+                "<b>Labels</b> - untick to drop the text QGIS draws beside "
+                "features. The features themselves still appear.<br>"
+                "Unticking Popups or Labels only affects that layer; the map "
+                "still works, with less on it. Expand a layer to hide single "
+                "fields instead - those values leave the file too, unless the "
+                "map draws with them."
+            ),
+            page,
         )
 
         # Bulk action. Setting a mode field-by-field across a dozen layers is
@@ -1512,6 +1546,7 @@ class MainDialog(QDialog):
         apply_all.clicked.connect(self._on_apply_mode_to_all)
         bulk.addWidget(apply_all)
         bulk.addStretch(1)
+        bulk.addWidget(self.layers_info_button)
         layout.addLayout(bulk)
         return page
 
@@ -1648,6 +1683,7 @@ class MainDialog(QDialog):
             row_layout.addWidget(combo, 1)
             row_layout.addStretch(1)
             self.layer_tree.setItemWidget(child, 0, row)
+            _fit_row_to_widget(child, row)
 
     def _add_layer_options_row(
         self, parent: QTreeWidgetItem, layer_id: str, settings: LayerSettings
@@ -1716,6 +1752,7 @@ class MainDialog(QDialog):
 
         layout.addStretch(1)
         self.layer_tree.setItemWidget(item, 0, row)
+        _fit_row_to_widget(item, row)
 
     def _on_layer_hover_changed(self, layer_id: str, combo: QComboBox) -> None:
         self.state.for_layer(layer_id).popup_on_hover = combo.currentData()

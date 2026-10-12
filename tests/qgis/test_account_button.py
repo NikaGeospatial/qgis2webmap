@@ -110,6 +110,43 @@ class TestSignedOut:
         assert button.menu() is not None
 
 
+def _ink_pixels(icon, size: int = 32) -> set[str]:
+    """The colours an icon draws in, ignoring transparent and antialiased edges."""
+    image = icon.pixmap(size, size).toImage()
+    colours = set()
+    for x in range(image.width()):
+        for y in range(image.height()):
+            pixel = image.pixelColor(x, y)
+            if pixel.alpha() == 255:
+                colours.add(pixel.name())
+    return colours
+
+
+class TestTheSignInIcon:
+    """QGIS's `user.svg` was a dark glyph, invisible on the dark theme's chip."""
+
+    def test_it_is_drawn_in_the_chips_text_colour(self, qgis_app):
+        from qgis.PyQt.QtGui import QColor, QPalette
+
+        button = _button(FakeBackend())
+        palette = button.palette()
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#f5f2e7"))
+        button.setPalette(palette)  # a theme switch, as the dialog does it
+
+        assert _ink_pixels(button.icon()) == {"#f5f2e7"}
+
+    def test_signed_in_keeps_the_initials(self, qgis_app):
+        from qgis.PyQt.QtGui import QColor, QPalette
+
+        button = _button(FakeBackend(SIGNED_IN))
+        before = button.icon().cacheKey()
+        palette = button.palette()
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#f5f2e7"))
+        button.setPalette(palette)
+
+        assert button.icon().cacheKey() == before
+
+
 class TestSignedIn:
     def test_the_address_is_on_the_face_not_buried_in_the_menu(self, qgis_app):
         """The whole point is noticing the wrong account before pressing Share."""

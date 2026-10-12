@@ -68,6 +68,14 @@ LINE_ICONS = {
     "live-off": '<circle cx="8" cy="8" r="3.5"/>',
     "share": '<path d="M8 10V2.5M5 5.2 8 2.2l3 3M3.5 8.5v4.5h9V8.5"/>',
     "export": '<path d="M8 2.5V10M5 7.2l3 3 3-3M3.5 13.2h9"/>',
+    "account": (
+        '<circle cx="8" cy="5.5" r="2.5"/>'
+        '<path d="M3 13.5c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>'
+    ),
+    "info": (
+        '<circle cx="8" cy="8" r="6"/>'
+        '<path d="M8 7.2v3.8"/><circle cx="8" cy="4.9" r="0.4" fill="{c}"/>'
+    ),
 }
 
 

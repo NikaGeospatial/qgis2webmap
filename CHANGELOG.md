@@ -81,12 +81,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   so it is clear where one group of settings ends and the next begins.
 
 ### Changed
+- **Quieter Map and Layers tabs.** The note under every basemap is gone - the
+  Fidelity tab still names the provider - and only OpenStreetMap in a file
+  export still warns there. The Layers tab's column guide moved behind an
+  **i** button at the bottom right.
 - **The pinned OnlyMap runtime moved from 0.6.20 to 0.12.0.** The one-time
   download is now about 5.4 MB. The runtime's own "Built with OnlyMap" badge
   replaces the plugin's footer credit on unlicensed maps rather than repeating
   it in the other corner.
 
 ### Fixed
+- **Drop-downs in an expanded layer were cut off** at the bottom edge on the
+  Layers tab, in both themes.
+- **The Sign in to NIKA icon was invisible in dark mode.** It now follows the
+  theme's text colour.
 - **OpenStreetMap basemaps showed "Access blocked" for recipients, with no
   warning.** Its tile servers require a `Referer`, which a map opened straight
   from a file never sends, and a page cannot set its own `User-Agent`. Picking

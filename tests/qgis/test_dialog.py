@@ -2120,3 +2120,66 @@ def test_the_map_tab_warns_against_osm_for_a_single_file(
         assert "Access blocked" not in dialog.basemap_warning.text()
     finally:
         dialog.close()
+
+
+def test_the_map_tab_says_nothing_under_a_basemap_that_works(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """Only OpenStreetMap from a file earns a note; the cost every basemap has
+    is in the Fidelity tab, and repeating it under each choice was noise."""
+    from nika_onlymap_exporter.core.export_ir import OutputMode
+
+    dialog = TestTabCorner()._dialog(project, make_memory_layer)
+    try:
+        dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
+        dialog.basemap_combo.setCurrentIndex(dialog.basemap_combo.findData("liberty"))
+        assert dialog.basemap_warning.text() == ""
+        assert not dialog.basemap_warning.isVisibleTo(dialog)
+    finally:
+        dialog.close()
+
+
+class TestLayersTabControls:
+    def _expanded(self, project, make_memory_layer):
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        dialog.show()
+        dialog.tabs.setCurrentIndex(1)  # laid out only once its tab is shown
+        tree = dialog.layer_tree
+        for index in range(tree.topLevelItemCount()):
+            tree.expandItem(tree.topLevelItem(index))
+        for _ in range(3):
+            qgis_core.QgsApplication.processEvents()
+        return dialog
+
+    def test_no_control_in_a_row_is_cut_off(self, project, make_memory_layer) -> None:
+        """The tree sized rows for text and squeezed the combos into them."""
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        dialog = self._expanded(project, make_memory_layer)
+        try:
+            tree = dialog.layer_tree
+            checked = 0
+            for index in range(tree.topLevelItemCount()):
+                layer = tree.topLevelItem(index)
+                for child_index in range(layer.childCount()):
+                    row = tree.itemWidget(layer.child(child_index), 0)
+                    if row is None:
+                        continue
+                    for combo in row.findChildren(QComboBox):
+                        checked += 1
+                        assert row.height() >= combo.sizeHint().height()
+            assert checked
+        finally:
+            dialog.close()
+
+    def test_the_column_guide_sits_behind_an_info_button(
+        self, project, make_memory_layer
+    ) -> None:
+        dialog = self._expanded(project, make_memory_layer)
+        try:
+            button = dialog.layers_info_button
+            assert "Include" in button.toolTip()
+            assert button.isVisibleTo(dialog)
+            assert not button.icon().isNull()
+        finally:
+            dialog.close()

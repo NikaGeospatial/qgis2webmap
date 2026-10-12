@@ -89,8 +89,7 @@ Matter, Voyager, Liberty or Bright.
 **None is the default, and it is the only choice that keeps the export offline.**
 Every other option means the recipient's browser fetches tiles from that provider
 every time they open the map — so the provider sees those requests, including
-roughly where the reader is looking. The dialog warns in red when a basemap is
-set, and the Fidelity tab names the provider. Nothing else changes: no
+roughly where the reader is looking. The Fidelity tab names the provider. Nothing else changes: no
 identifier travels with the file, the anonymous usage report is the same either
 way, and the file is no larger.
 
@@ -141,6 +140,8 @@ One list, driven by the QGIS Layers panel, bottom layer first — the same order
 the map draws in.
 
 ### The three columns
+
+The **i** at the bottom right of the tab sums these up.
 
 | Column | Ticked | Unticked |
 |---|---|---|

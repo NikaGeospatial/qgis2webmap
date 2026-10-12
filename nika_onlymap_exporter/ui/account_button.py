@@ -30,18 +30,18 @@ from __future__ import annotations
 import contextlib
 from typing import Protocol
 
-from qgis.PyQt.QtCore import QRectF, Qt
+from qgis.PyQt.QtCore import QEvent, QRectF, Qt
 from qgis.PyQt.QtGui import QFont, QIcon, QPainter, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
 from ..core.account import AccountIdentity, load_identity
 from .i18n import tr
+from .theme import line_icon
 
 # Icon names verified present in QGIS 4.2's compiled theme. As with
 # `main_dialog.SHARE_MENU_ICONS` these are resource paths rather than files, and
 # a name that has gone yields a null icon rather than raising - the row keeps
 # its text and loses its picture.
-ICON_ACCOUNT = "user.svg"
 ICON_SWITCH = "mActionRefresh.svg"
 ICON_SIGN_OUT = "mActionRemove.svg"
 
@@ -114,7 +114,6 @@ class AccountButton(QToolButton):
         # glyph did not read as something to press.
         self.setProperty("role", "chip")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setIcon(_theme_icon(ICON_ACCOUNT))
         # Text beside the icon, not under it: this sits in a row of ordinary
         # push buttons and a two-line control would set the row's height.
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -149,7 +148,7 @@ class AccountButton(QToolButton):
 
     def _show_signed_out(self) -> None:
         self.setText(SIGN_IN_TEXT)
-        self.setIcon(_theme_icon(ICON_ACCOUNT))
+        self.setIcon(self._person_icon())
         self._set_has_menu(False)
         self.setToolTip(
             tr(
@@ -162,6 +161,31 @@ class AccountButton(QToolButton):
         # somebody has to make to discover there was no choice to make.
         self.setMenu(None)
         self.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
+
+    def _person_icon(self) -> QIcon:
+        """A person outline in the chip's own text colour.
+
+        QGIS's `user.svg` is a dark glyph, invisible on the dark theme's chip.
+        The palette is the theme's - the dialog stylesheet sets it - so this
+        follows a theme switch through `changeEvent`.
+        """
+        palette = self.palette()
+        return line_icon(
+            "account",
+            palette.color(QPalette.ColorRole.ButtonText).name(),
+            palette.color(
+                QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText
+            ).name(),
+        )
+
+    def changeEvent(self, event: QEvent | None) -> None:  # noqa: N802 - Qt API
+        super().changeEvent(event)
+        if (
+            event is not None
+            and event.type() == QEvent.Type.PaletteChange
+            and self.menu() is None  # signed out: the person icon, not initials
+        ):
+            self.setIcon(self._person_icon())
 
     def _set_has_menu(self, has_menu: bool) -> None:
         """Flag whether the chip opens a menu, for the stylesheet's chevron.
