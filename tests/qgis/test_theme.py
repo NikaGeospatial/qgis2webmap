@@ -128,7 +128,11 @@ class TestFonts:
         from nika_onlymap_exporter.ui import theme
 
         assert theme.load_fonts() == "Inter"
-        styles = set(QFontDatabase.styles("Inter"))
+        # Static from Qt6; Qt5 wants an instance, and Qt6 has no constructor.
+        try:
+            styles = set(QFontDatabase.styles("Inter"))
+        except TypeError:
+            styles = set(QFontDatabase().styles("Inter"))
         assert {"Regular", "SemiBold"} <= styles
 
     def test_the_fonts_add_under_120_kb_to_the_zip(self):
