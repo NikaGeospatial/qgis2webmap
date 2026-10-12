@@ -1359,6 +1359,26 @@ class TestHelpTab:
         for title, _filename in HELP_PAGES:
             assert title in rendered, f"the {title!r} guide did not render"
 
+    def test_the_browser_owns_its_document(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Regression: the Help document was freed under its browser.
+
+        `setDocument` does not take ownership, so a parentless document went
+        with its last Python reference and the dialog crashed on the next font
+        change.
+        """
+        import gc
+
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            gc.collect()
+            document = dialog.help_browser.document()
+            assert document.parent() is dialog.help_browser
+            assert "Do not edit the runtime" in document.toPlainText()
+        finally:
+            dialog.close()
+
     def test_falls_back_to_docs_in_a_git_checkout(self, qgis_app) -> None:
         """An installed plugin has help/; a clone has only docs/."""
         from nika_onlymap_exporter.ui.main_dialog import help_directory

@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import QSettings, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QObject, QSettings, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
@@ -569,9 +569,14 @@ def markdown_features():
     )
 
 
-def render_help_document() -> QTextDocument:
-    """The bundled guides as a rendered document."""
-    document = QTextDocument()
+def render_help_document(parent: QObject | None = None) -> QTextDocument:
+    """The bundled guides as a rendered document.
+
+    Pass the browser as `parent`: `setDocument` does not take ownership, so a
+    parentless document is freed with its last Python reference and the
+    browser crashes on the next thing that touches it - a font change.
+    """
+    document = QTextDocument(parent)
     document.setMarkdown(load_help_markdown(), markdown_features())
     return document
 
@@ -2480,7 +2485,7 @@ class MainDialog(QDialog):
         browser = QTextBrowser(page)
         self.help_browser = browser
         # Markdown keeps one source of truth: the same files the website serves.
-        browser.setDocument(render_help_document())
+        browser.setDocument(render_help_document(browser))
         browser.setOpenLinks(False)
         browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
         layout.addWidget(browser)
