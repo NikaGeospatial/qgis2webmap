@@ -592,6 +592,61 @@ class TestDeclutter:
         rows = [i for i in report.items if i.subject == "Labels on 'towns'"]
         assert [row.status for row in rows] == [FidelityStatus.UNSUPPORTED]
 
+    def _towns(self, project, make_memory_layer):
+        layer = make_memory_layer(
+            "towns",
+            features=[(f"Town {i}", [i * 0.001, 0.0]) for i in range(300)],
+        )
+        project.addMapLayer(layer)
+        return layer
+
+    def test_clustering_can_be_switched_off_per_layer(
+        self, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        layer = self._towns(project, make_memory_layer)
+        read = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(cluster=False)},
+        ).layers[0]
+        assert read.cluster_max_zoom is None
+        assert read_project(project, FidelityReportBuilder()).layers[0].cluster_max_zoom
+
+    def test_names_show_beside_every_point_with_a_halo(
+        self, project, make_memory_layer
+    ) -> None:
+        """The point names without clicking for a popup."""
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        layer = self._towns(project, make_memory_layer)
+        report = FidelityReportBuilder()
+        read = read_project(
+            project,
+            report,
+            layer_settings={layer.id(): LayerSettings(name_field="name")},
+        ).layers[0]
+        assert read.labeling.enabled
+        assert read.labeling.field_name == "name"
+        assert read.labeling.halo_color is not None
+        assert read.labeling.halo_width > 0
+        subjects = {i.subject for i in report.items}
+        assert "Names on 'towns'" in subjects
+
+    def test_names_ignore_a_field_the_layer_does_not_have(
+        self, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        layer = self._towns(project, make_memory_layer)
+        read = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(name_field="gone")},
+        ).layers[0]
+        assert not read.labeling.enabled
+
     def test_a_handful_of_points_is_left_alone(
         self, project, make_memory_layer
     ) -> None:

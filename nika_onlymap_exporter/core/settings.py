@@ -149,6 +149,11 @@ class LayerSettings:
     # precision for this layer" even when the map-wide setting rounds. 0 is free
     # to use as that marker because 1 is the smallest precision anyone can pick.
     quantize_precision: int | None = None
+    # Point layers only. Clustering is automatic for a dense layer; this is
+    # the way out of it. `name_field` shows each point's value of that field
+    # beside it, always, with a halo - the names without clicking for a popup.
+    cluster: bool = True
+    name_field: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -165,6 +170,10 @@ class LayerSettings:
             data["highlightColor"] = self.highlight_color
         if self.quantize_precision is not None:
             data["quantizePrecision"] = self.quantize_precision
+        if not self.cluster:
+            data["cluster"] = False
+        if self.name_field:
+            data["nameField"] = self.name_field
         return data
 
     @classmethod
@@ -179,6 +188,8 @@ class LayerSettings:
             popup_on_hover=None if hover is None else bool(hover),
             highlight_color=None if highlight is None else str(highlight),
             quantize_precision=_read_layer_precision(data.get("quantizePrecision")),
+            cluster=bool(data.get("cluster", True)),
+            name_field=str(data["nameField"]) if data.get("nameField") else None,
         )
 
     def resolved_hover(self, map_wide: bool) -> bool:

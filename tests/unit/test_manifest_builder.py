@@ -2282,6 +2282,17 @@ class TestDeclutter:
         element = build_layer_element(make_layer(cluster_max_zoom=9, renderer=renderer))
         assert "get-cluster-fill-color=\"'#475569'\"" in element
 
+    def test_bubbles_grow_on_a_log_scale_of_their_count(self) -> None:
+        """A 5,000-point bubble a step bigger than a 500-point one, not ten
+        times the area, and the same size at every zoom."""
+        element = build_layer_element(
+            make_layer(cluster_max_zoom=9, feature_count=5000)
+        )
+        assert (
+            'get-cluster-radius="scale($count, log, [8, 22], domain=[2, 5000])"'
+            in element
+        )
+
     def test_an_unclustered_layer_has_no_cluster_attributes(self) -> None:
         assert "cluster" not in build_layer_element(make_layer())
 

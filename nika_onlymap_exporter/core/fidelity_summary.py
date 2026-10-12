@@ -114,6 +114,7 @@ TOPIC_BY_HEAD = {
     "Height": Topic.SYMBOLOGY,
     "Scale visibility": Topic.SYMBOLOGY,
     "Labels": Topic.LABELS,
+    "Names": Topic.LABELS,
     "Popup fields": Topic.POPUPS,
     "Data": Topic.DATA,
     "Data source": Topic.DATA,

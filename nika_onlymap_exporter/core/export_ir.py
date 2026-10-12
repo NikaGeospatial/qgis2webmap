@@ -874,6 +874,9 @@ class ExportLayer:
     # count bubbles. `None` - the common case - means no limit and no clusters.
     label_min_zoom: int | None = None
     cluster_max_zoom: int | None = None
+    # The dialog's per-layer "Cluster dense points". Off, `declutter` leaves the
+    # layer's points as they are however crowded.
+    cluster_allowed: bool = True
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )

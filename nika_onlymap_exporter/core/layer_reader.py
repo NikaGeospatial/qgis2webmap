@@ -12,6 +12,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -788,6 +789,25 @@ def _file_size(path: str) -> int | None:
         return None
 
 
+# A white halo: names stay readable over imagery, fills and other names.
+NAME_HALO = Color(255, 255, 255, 0.9)
+
+
+def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
+    """`labeling` showing `field_name`, always, with a halo.
+
+    Built on the layer's own labelling when it has one, so its font and size
+    carry over; a halo is added only where QGIS set none.
+    """
+    return dataclasses.replace(
+        labeling,
+        enabled=True,
+        field_name=field_name,
+        halo_color=labeling.halo_color or NAME_HALO,
+        halo_width=labeling.halo_width or 1.0,
+    )
+
+
 def read_layer(
     layer: QgsMapLayer,
     report: FidelityReportBuilder,
@@ -801,6 +821,8 @@ def read_layer(
     highlight_color: Color | None = None,
     project: QgsProject | None = None,
     clip_extent: Any | None = None,
+    name_field: str | None = None,
+    cluster: bool = True,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model.
 
@@ -873,6 +895,19 @@ def read_layer(
     )
 
     labeling = translate_labeling(layer, report) if with_labels else LabelingSpec()
+    if (
+        name_field
+        and kind is GeometryKind.POINT
+        and layer.fields().indexOf(name_field) >= 0
+    ):
+        labeling = point_names(labeling, name_field)
+        report.preserved(
+            f"Names on '{name}'",
+            f"Each point's '{name_field}' shows beside it with a halo, without "
+            "a click. Like labels, the names appear from the zoom where most of "
+            "them have room.",
+            layer_id,
+        )
     elevation = translate_elevation(layer, report, kind, project)
     # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
     popup = (
@@ -928,4 +963,5 @@ def read_layer(
         geojson=geojson,
         group_path=group_path,
         dependencies=(describe_source(layer),),
+        cluster_allowed=cluster,
     )

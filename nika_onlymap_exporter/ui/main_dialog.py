@@ -35,7 +35,14 @@ from html import escape as escape_html
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
+from qgis.core import (
+    Qgis,
+    QgsMapLayer,
+    QgsMessageLog,
+    QgsProject,
+    QgsVectorLayer,
+    QgsWkbTypes,
+)
 from qgis.gui import QgsColorButton
 from qgis.PyQt.QtCore import QObject, QSettings, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
@@ -362,6 +369,13 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
         )
     )
     box.exec()
+
+
+def _name_fields_first(fields: list[str]) -> list[str]:
+    """Field names, the ones that look like a name first, otherwise in order."""
+    hints = ("name", "title", "label", "nom", "nombre", "nome")
+    named = [f for f in fields if any(h in f.lower() for h in hints)]
+    return named + [f for f in fields if f not in named]
 
 
 def _reveal_label() -> str:
@@ -1662,6 +1676,11 @@ class MainDialog(QDialog):
         layer_id = layer.id()
 
         self._add_layer_options_row(parent, layer_id, settings)
+        if (
+            isinstance(layer, QgsVectorLayer)
+            and layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry
+        ):
+            self._add_point_options_row(parent, layer, settings)
 
         for field_name in popup_field_names(layer):
             child = QTreeWidgetItem(parent)
@@ -1789,6 +1808,67 @@ class MainDialog(QDialog):
         layout.addStretch(1)
         self.layer_tree.setItemWidget(item, 0, row)
         _fit_row_to_widget(item, row)
+
+    def _add_point_options_row(
+        self, parent: QTreeWidgetItem, layer: QgsVectorLayer, settings: LayerSettings
+    ) -> None:
+        """Point layers only: names beside every point, and the way out of
+        clustering, which is otherwise automatic for a dense layer."""
+        item = QTreeWidgetItem(parent)
+        item.setFirstColumnSpanned(True)
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setData(0, Qt.ItemDataRole.UserRole, LAYER_OPTIONS_ROLE)
+
+        row = QWidget(self.layer_tree)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        layer_id = layer.id()
+        label = QLabel(tr("Points"), row)
+        label.setMinimumWidth(FIELD_NAME_COLUMN_WIDTH)
+        layout.addWidget(label)
+
+        names = QComboBox(row)
+        names.setToolTip(
+            tr(
+                "Show each point's value of this field beside it, with a halo, "
+                "without clicking. Replaces the layer's QGIS labels."
+            )
+        )
+        names.addItem(tr("Names: off"), None)
+        for field_name in _name_fields_first(layer.fields().names()):
+            names.addItem(tr("Names: {field}").format(field=field_name), field_name)
+        names.setCurrentIndex(max(0, names.findData(settings.name_field)))
+        names.currentIndexChanged.connect(
+            lambda _i, lid=layer_id, box=names: self._on_layer_names_changed(lid, box)
+        )
+        layout.addWidget(names)
+
+        cluster = QCheckBox(tr("Cluster dense points"), row)
+        cluster.setToolTip(
+            tr(
+                "Points that would pile up when zoomed out merge into count "
+                "bubbles that split as you zoom in. Untick to show every point."
+            )
+        )
+        cluster.setChecked(settings.cluster)
+        cluster.toggled.connect(
+            lambda on, lid=layer_id: self._on_layer_cluster_toggled(lid, on)
+        )
+        layout.addWidget(cluster)
+
+        layout.addStretch(1)
+        self.layer_tree.setItemWidget(item, 0, row)
+        _fit_row_to_widget(item, row)
+
+    def _on_layer_names_changed(self, layer_id: str, combo: QComboBox) -> None:
+        self.state.for_layer(layer_id).name_field = combo.currentData()
+        self._fidelity_is_stale = True
+
+    def _on_layer_cluster_toggled(self, layer_id: str, on: bool) -> None:
+        self.state.for_layer(layer_id).cluster = on
+        self._fidelity_is_stale = True
 
     def _on_layer_hover_changed(self, layer_id: str, combo: QComboBox) -> None:
         self.state.for_layer(layer_id).popup_on_hover = combo.currentData()

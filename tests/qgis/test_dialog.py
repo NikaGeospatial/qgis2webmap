@@ -2585,3 +2585,49 @@ def test_the_export_buttons_label_is_centred(
         assert abs(left - right) <= 2, (left, right)
     finally:
         dialog.close()
+
+
+def test_a_point_layer_offers_names_and_a_clustering_switch(
+    qgis_app, project, make_memory_layer
+) -> None:
+    from qgis.PyQt.QtWidgets import QCheckBox, QComboBox
+
+    dialog = TestTabCorner()._dialog(project, make_memory_layer)
+    try:
+        layer_id = next(iter(project.mapLayers()))
+        boxes = [
+            box
+            for box in dialog.layer_tree.findChildren(QCheckBox)
+            if box.text() == "Cluster dense points"
+        ]
+        assert len(boxes) == 1 and boxes[0].isChecked()
+        boxes[0].setChecked(False)
+        assert dialog.state.for_layer(layer_id).cluster is False
+
+        names = next(
+            combo
+            for combo in dialog.layer_tree.findChildren(QComboBox)
+            if combo.itemText(0) == "Names: off"
+        )
+        # The name-like field is offered first.
+        assert names.itemText(1) == "Names: name"
+        names.setCurrentIndex(1)
+        assert dialog.state.for_layer(layer_id).name_field == "name"
+    finally:
+        dialog.close()
+
+
+def test_the_point_options_survive_a_round_trip(project) -> None:
+    from nika_onlymap_exporter.core.settings import (
+        DialogState,
+        LayerSettings,
+        load_state,
+        save_state,
+    )
+
+    state = DialogState()
+    state.layers["pts"] = LayerSettings(cluster=False, name_field="name")
+    save_state(project, state)
+    loaded = load_state(project).layers["pts"]
+    assert loaded.cluster is False
+    assert loaded.name_field == "name"

@@ -49,7 +49,8 @@ changelog=0.2.0
     right unit and readable over imagery. Relief drapes moved to NASA GIBS.
     Ctrl+Alt+W opens the dialog. The OnlyMap runtime moves to 0.12.0.
     Crowded labels wait for the zoom where they have room, and dense point
-    layers merge into count bubbles that split as you zoom in.
+    layers merge into count bubbles that split as you zoom in (switchable per
+    layer). Point layers can show a field as names beside every point.
     Fixes: a labelled 3D polygon layer aborted the export ("too many values to
     unpack"); large Folder exports drew no features; dark-mode message boxes
     were unreadable; OpenStreetMap basemaps show "Access blocked" in a map

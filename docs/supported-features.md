@@ -279,9 +279,19 @@ weight only; that is reported.
 
 **Dense point layers cluster.** A point layer of 100 or more points that would
 overlap when zoomed out merges them into count bubbles, which split as you zoom
-in; clicking one zooms to its points. Its labels appear once the bubbles have
-split, and its popups open on points, not bubbles. The Fidelity tab gives the
-zoom at which the points show one by one.
+in; clicking one zooms to its points. A bubble's size follows the log of how
+many points it holds, so a bubble of 5,000 is a step bigger than one of 500
+rather than swallowing the map. Its labels appear once separate places have
+stopped merging, and its popups open on points, not bubbles. Points at exactly
+the same spot stay one bubble showing how many there are. The Fidelity tab
+gives the zoom at which the points show one by one. Untick **Cluster dense
+points** on the layer's **Points** row in the **Layers** tab to show every
+point instead.
+
+**Names beside every point.** On a point layer's **Points** row, **Names**
+picks a field whose value shows beside each point with a halo, without clicking
+for a popup. It replaces the layer's QGIS labels, and like them the names
+appear from the zoom where most have room.
 
 Labels using an expression rather than a single field are not translated yet.
 
@@ -328,6 +338,10 @@ settings can be overridden for that layer alone:
 - its highlight colour,
 - its coordinate precision — including keeping full precision for one layer
   while the rest of the map is rounded.
+
+A point layer also has a **Points** row: **Names** shows a field's value beside
+every point, with a halo, and **Cluster dense points** (on by default) can be
+unticked to show every point rather than count bubbles.
 
 Each starts on *"same as map"*, so a layer you never touch follows the map-wide
 choice. This is deliberately something qgis2web has never offered: the same

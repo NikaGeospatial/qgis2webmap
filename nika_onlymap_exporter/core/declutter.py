@@ -233,7 +233,7 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
 
     clusters: int | None = None
     sites: int | None = None
-    if layer.geometry_kind is GeometryKind.POINT:
+    if layer.geometry_kind is GeometryKind.POINT and layer.cluster_allowed:
         positions = _point_positions(layer.geojson)
         if positions is not None:
             symbol = layer.renderer.representative_symbol

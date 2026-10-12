@@ -100,6 +100,24 @@ TEXT_LAYER_CLASS = "TextLayer"
 # The count bubbles of a clustered layer whose points are coloured by class.
 CLUSTER_MIXED_COLOR = Color(r=71, g=85, b=105)
 
+# Bubble radius in pixels, smallest cluster to the whole layer. Narrower than
+# the runtime's [12, 36]: its default sizes by share of the largest bubble on
+# screen, so zoomed out one bubble swallowed the map.
+CLUSTER_RADIUS_PX = (8, 22)
+
+
+def cluster_radius_expression(layer: ExportLayer) -> str:
+    """Bubble size on a log scale of how many points it holds.
+
+    Fixed to the layer's own count rather than to the largest bubble on
+    screen, so a bubble of 500 is the same size at every zoom, and one of
+    5,000 only a step bigger instead of ten times the area.
+    """
+    smallest, largest = CLUSTER_RADIUS_PX
+    most = max(layer.feature_count, 3)
+    return f"scale($count, log, [{smallest}, {largest}], domain=[2, {most}])"
+
+
 # Fallbacks for a QGIS label whose text format carried no explicit value.
 DEFAULT_LABEL_COLOR = Color(r=0, g=0, b=0, a=1.0)
 DEFAULT_LABEL_SIZE = 12.0
@@ -1073,6 +1091,7 @@ def build_layer_element(
         attributes.append(
             ("get-cluster-fill-color", color_literal(bubble or CLUSTER_MIXED_COLOR))
         )
+        attributes.append(("get-cluster-radius", cluster_radius_expression(layer)))
 
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))

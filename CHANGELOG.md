@@ -79,6 +79,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Sections read as separate cards.** Each sits on a near-white card with a
   hairline border against a slightly darker window, in both light and dark,
   so it is clear where one group of settings ends and the next begins.
+- **Point names without clicking, and a clustering switch.** A point layer's
+  new **Points** row in the Layers tab offers **Names**: a field whose value
+  shows beside every point with a halo, from the zoom where most have room.
+  **Cluster dense points** turns clustering off for that layer. Bubble sizes
+  now follow the log of their count, so large clusters no longer dominate.
 
 ### Changed
 - **Quieter Map and Layers tabs.** The note under every basemap is gone - the

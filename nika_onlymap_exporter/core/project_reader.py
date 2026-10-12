@@ -365,6 +365,8 @@ def read_project(
             ),
             project=project,
             clip_extent=clip_extent,
+            name_field=per_layer.name_field,
+            cluster=per_layer.cluster,
         )
         if export_layer is not None:
             layers.append(export_layer)
