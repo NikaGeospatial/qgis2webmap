@@ -283,6 +283,9 @@ class TestMessageBoxes:
         try:
             picker = dialog.theme_picker
             picker.setCurrentIndex(picker.findData(choice))
+            # A person never raises a box in the same instant they switch the
+            # theme; Qt5 restyles children on the next turn of the loop.
+            qgis_app.processEvents()
             box = QMessageBox(dialog)
             box.setText("Publishing is not in this version yet.")
             box.show()

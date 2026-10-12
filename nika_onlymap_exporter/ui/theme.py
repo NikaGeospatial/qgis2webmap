@@ -44,6 +44,7 @@ from qgis.PyQt.QtGui import (
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QFormLayout,
     QGroupBox,
     QMenu,
@@ -263,7 +264,38 @@ def apply(dialog: QWidget) -> Palette:
         layout = box.layout()
         if layout is not None:
             layout.setContentsMargins(14, 12, 14, 12)
+    _dress_child_dialogs(dialog, palette)
     return palette
+
+
+class _ChildDialogDresser(QObject):
+    """Gives every dialog opened from ours - message boxes above all - the
+    theme's background on the box itself.
+
+    The scoped `QDialog` rule reaches them through the cascade, and Qt5 lets
+    that go stale: after switching from Follow QGIS to Dark, every message box
+    opened kept the light background under the new light text. Set on the box
+    as it appears, the background cannot go stale.
+    """
+
+    def __init__(self, dialog: QWidget, paper: str) -> None:
+        super().__init__(dialog)
+        self.paper = paper
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if event.type() == QEvent.Type.ChildPolished:
+            child = event.child()  # type: ignore[attr-defined]
+            if isinstance(child, QDialog):
+                child.setStyleSheet(f"QDialog {{ background: {self.paper}; }}")
+        return False
+
+
+def _dress_child_dialogs(dialog: QWidget, palette: Palette) -> None:
+    dresser = dialog.findChild(_ChildDialogDresser)
+    if dresser is None:
+        dresser = _ChildDialogDresser(dialog, palette.paper)
+        dialog.installEventFilter(dresser)
+    dresser.paper = palette.paper
 
 
 class _MenuAttacher(QObject):
