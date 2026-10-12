@@ -562,3 +562,19 @@ class TestQgisScaleFactor:
 
         project.setCrs(qgis_core.QgsCoordinateReferenceSystem())
         assert _qgis_scale_factor(project, 0.0, 0.0) == 1.0
+
+
+def test_an_exported_tile_layer_is_not_reported_as_a_missing_basemap(
+    qgis_app, project
+) -> None:
+    """The backdrop travels as its own layer now, so nothing is missing."""
+    from urllib.parse import quote
+
+    source = "type=xyz&url=" + quote(
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png", safe=":/"
+    )
+    project.addMapLayer(qgis_core.QgsRasterLayer(source, "OSM", "wms"))
+    report = FidelityReportBuilder()
+    export = read_project(project, report)
+    assert any(layer.tiles for layer in export.layers)
+    assert not any(item.subject == "Basemap" for item in report.items)

@@ -26,7 +26,8 @@ Where that line falls differently from the established plugin's is set out in
 | Layer visibility and opacity | Yes |
 | Scale-dependent visibility | Yes - converted to the matching web zoom levels; the Fidelity tab shows the zooms, and how far they drift towards the edges of a tall map |
 | Rasters from a file on disk (GeoTIFF) | Yes - inside a single HTML file up to 100 MB of imagery, or in Folder and Share ZIP. Colours are drawn in as QGIS shows them |
-| Live raster services (WMS, XYZ, WCS) | Not exported - use a basemap instead |
+| XYZ / WMTS tile layers (`{z}/{x}/{y}`) | Yes - as live layers that need an internet connection. An address carrying an access key is refused rather than published |
+| WMS, WCS and ArcGIS map services | Not exported - the web map cannot request images by extent. Use the service's XYZ address if it has one |
 | Attribute-only tables | Not exported - nothing to draw |
 
 Data in any CRS is reprojected to WGS84 on the way out.

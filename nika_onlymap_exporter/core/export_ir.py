@@ -715,6 +715,24 @@ class RasterSpec:
         }
 
 
+@dataclass(frozen=True)
+class TileSpec:
+    """A live XYZ tile service, drawn from the same server on the web map.
+
+    Kept as a reference, never embedded: the tiles are somebody else's and
+    there are millions of them. `url` is the `{z}/{x}/{y}` template exactly as
+    the runtime's `TileLayer` takes it, already free of any access key -
+    `layer_reader` refuses a keyed URL rather than shipping it.
+    """
+
+    url: str
+    min_zoom: int = 0
+    max_zoom: int = 19
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"url": self.url, "minZoom": self.min_zoom, "maxZoom": self.max_zoom}
+
+
 # --------------------------------------------------------------------------
 # Popups
 # --------------------------------------------------------------------------
@@ -864,6 +882,8 @@ class ExportLayer:
     # it means the vector fields are inapplicable rather than merely empty. See
     # `RasterSpec` for why this is a field here instead of a second layer class.
     raster: RasterSpec | None = None
+    # A live tile service in place of pixels or features; see `TileSpec`.
+    tiles: TileSpec | None = None
     attribution: str | None = None
     feature_count: int = 0
     geojson: dict[str, Any] | None = None
@@ -903,6 +923,7 @@ class ExportLayer:
             "iconAtlas": self.icon_atlas.snapshot() if self.icon_atlas else None,
             "popup": self.popup.snapshot(),
             "raster": self.raster.snapshot() if self.raster else None,
+            "tiles": self.tiles.snapshot() if self.tiles else None,
             "attribution": self.attribution,
             "featureCount": self.feature_count,
             "groupPath": list(self.group_path),
@@ -1033,8 +1054,9 @@ class ExportProject:
     def exportable_layers(self) -> tuple[ExportLayer, ...]:
         """Every layer that will produce an `<om-layer>`, in draw order.
 
-        Two ways a layer qualifies, because there are two kinds of payload: a
-        vector layer carries `geojson`, a raster carries a `RasterSpec`. It has
+        Three ways a layer qualifies, because there are three kinds of payload:
+        a vector layer carries `geojson`, a raster carries a `RasterSpec`, and a
+        live tile service a `TileSpec`. It has
         to stay one list rather than two, because **document order is draw
         order** - splitting rasters into their own pass would silently move
         every one of them above or below the vectors regardless of where the
@@ -1046,7 +1068,9 @@ class ExportProject:
         return tuple(
             layer
             for layer in self.layers
-            if layer.geojson is not None or layer.raster is not None
+            if layer.geojson is not None
+            or layer.raster is not None
+            or layer.tiles is not None
         )
 
     @property

@@ -293,20 +293,30 @@ class TestReadRaster:
         assert dependency.disposition is AssetDisposition.EMBEDDABLE
         assert dependency.size_bytes is not None and dependency.size_bytes > 0
 
-    def test_a_live_service_raster_is_refused_with_a_reason(self, qgis_app) -> None:
-        """A `wms`/`xyz` layer has no file to convert, and snapshotting
-        somebody else's tile server is a licensing decision this plugin does
-        not get to make for the user."""
+    def test_an_xyz_service_is_a_live_layer_not_a_snapshot(self, qgis_app) -> None:
+        """Nothing of somebody else's tile server is copied: the map asks the
+        server itself, the way a basemap does. See `TestTileServices`."""
         layer = qgis_core.QgsRasterLayer(
             "type=xyz&url=https://example.invalid/%7Bz%7D/%7Bx%7D/%7By%7D.png",
             "tiles",
             "wms",
         )
-        report = FidelityReportBuilder()
+        exported = read_raster(layer, FidelityReportBuilder())
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.raster is None
 
+    def test_a_wms_service_is_refused_with_a_reason(self, qgis_app) -> None:
+        """A WMS asks for each image by map extent; the runtime cannot."""
+        layer = qgis_core.QgsRasterLayer(
+            "crs=EPSG:4326&format=image/png&layers=x&styles&url=https://example.invalid/wms",
+            "wms service",
+            "wms",
+        )
+        report = FidelityReportBuilder()
         assert read_raster(layer, report) is None
         details = " ".join(item.detail for item in report.items)
-        assert "live raster service" in details
+        assert "WMS" in details
 
     def test_a_raster_reaches_read_raster_through_read_layer(
         self, qgis_app, make_raster_layer
@@ -502,3 +512,46 @@ class TestZGeometryReachesLabelling:
         assert labels is not None
         # The larger part, as for a flat multipolygon.
         assert labels["features"][0]["geometry"]["coordinates"] == [1.0, 1.0]
+
+
+class TestTileServices:
+    """An XYZ layer travels as a live reference, the way a basemap does.
+
+    Nothing to convert and nothing to embed: the web map asks the same server
+    for the same tiles. What must never travel is a key in the URL - a file
+    handed around is a key published.
+    """
+
+    @staticmethod
+    def _xyz(url: str, name: str = "Tiles", zmin: int = 0, zmax: int = 19):
+        from urllib.parse import quote
+
+        source = f"type=xyz&url={quote(url, safe=':/?=&')}&zmax={zmax}&zmin={zmin}"
+        layer = qgis_core.QgsRasterLayer(source, name, "wms")
+        assert layer.isValid()
+        return layer
+
+    def test_an_xyz_layer_becomes_a_live_tile_layer(self, qgis_app) -> None:
+        layer = self._xyz("https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+        exported = read_layer(layer, FidelityReportBuilder())
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url == "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        assert (exported.tiles.min_zoom, exported.tiles.max_zoom) == (0, 19)
+        (dependency,) = exported.dependencies
+        assert dependency.disposition is AssetDisposition.REMOTE
+
+    def test_a_key_in_the_url_blocks_rather_than_ships(self, qgis_app) -> None:
+        layer = self._xyz("https://tiles.example.com/{z}/{x}/{y}.png?api_key=SECRET")
+        exported = read_layer(layer, FidelityReportBuilder())
+        assert exported is not None
+        (dependency,) = exported.dependencies
+        assert dependency.disposition is AssetDisposition.BLOCKING
+        assert "key" in (dependency.note or "")
+        assert "SECRET" not in repr(exported.snapshot())
+
+    def test_a_template_the_web_map_cannot_fill_is_reported(self, qgis_app) -> None:
+        layer = self._xyz("https://tiles.example.com/{q}.png")
+        report = FidelityReportBuilder()
+        assert read_layer(layer, report) is None
+        assert any(i.status is FidelityStatus.UNSUPPORTED for i in report.items)

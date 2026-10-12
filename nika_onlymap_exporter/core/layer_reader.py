@@ -40,6 +40,7 @@ from .export_ir import (
     RendererSpec,
     ScaleRange,
     SourceKind,
+    TileSpec,
 )
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
@@ -481,6 +482,108 @@ def raster_nodata(layer: QgsRasterLayer) -> float | None:
     return value
 
 
+# Query parameters that carry an access key. A tile URL travels in the map as
+# written, so a key in it is a key handed to everyone the file reaches.
+_KEY_PARAMETERS = frozenset(
+    {"key", "apikey", "api_key", "access_token", "token", "accesstoken", "secret"}
+)
+
+
+def _xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
+    """The parameters of an XYZ source, or `None` for any other `wms` layer.
+
+    QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
+    URL-encoded source string; a real WMS has no `type`.
+    """
+    from urllib.parse import parse_qsl
+
+    fields = dict(parse_qsl(layer.source() or "", keep_blank_values=True))
+    return fields if fields.get("type") == "xyz" and fields.get("url") else None
+
+
+def read_tile_service(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read an XYZ tile layer as a live reference the web map fetches itself.
+
+    Nothing is embedded - the tiles are the server's - so the map needs a
+    connection to draw this layer, and the scanner says so. Two refusals: a
+    template the runtime cannot fill (it takes `{z}`, `{x}`, `{y}` and `{-y}`;
+    QGIS also allows `{q}` quadkeys), and a URL carrying an access key, which
+    would be published to everyone the file reaches.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    layer_id = layer.id()
+    name = layer.name()
+    fields = _xyz_template(layer) or {}
+    url = fields.get("url", "")
+
+    if not ("{z}" in url and "{x}" in url and ("{y}" in url or "{-y}" in url)):
+        report.unsupported(
+            f"Layer '{name}'",
+            "This tile layer's address uses a pattern the web map cannot fill "
+            "(it understands {z}, {x}, {y} and {-y} only). The layer is omitted "
+            "from the map.",
+            layer_id,
+        )
+        return None
+
+    parts = urlsplit(url)
+    pairs = parse_qsl(parts.query, keep_blank_values=True)
+    keyless = [
+        (key, value) for key, value in pairs if key.lower() not in _KEY_PARAMETERS
+    ]
+    keyed = len(keyless) != len(pairs)
+    if keyed:
+        # Never kept, not even in the model: the export is blocked below, but a
+        # snapshot or a report must not be able to carry the key either.
+        url = urlunsplit(parts._replace(query=urlencode(keyless, safe="{}")))
+    host = parts.netloc
+    dependency = AssetDependency(
+        # The host only when keyed: the full URL would carry the key into the
+        # snapshot and the report.
+        identifier=host if keyed else url,
+        disposition=AssetDisposition.BLOCKING if keyed else AssetDisposition.REMOTE,
+        note=(
+            f"The tile address for '{name}' on {host} carries an access key, and "
+            "a live layer travels with its address - so the key would be written "
+            "into the map for anyone who receives it to copy. Use a keyless "
+            "address, or untick the layer on the Layers tab."
+            if keyed
+            else None
+        ),
+    )
+
+    def _zoom(field: str, default: int) -> int:
+        try:
+            return int(float(fields.get(field, default)))
+        except ValueError:
+            return default
+
+    return ExportLayer(
+        layer_id=layer_id,
+        name=name,
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.FILE,
+        visible=visible,
+        opacity=float(layer.opacity()),
+        scale_range=scale_range(layer),
+        renderer=RendererSpec(
+            kind=RendererKind.UNSUPPORTED,
+            unsupported_reason="Tile layers carry no vector symbology.",
+        ),
+        popup=PopupSpec(enabled=False),
+        tiles=TileSpec(url, _zoom("zmin", 0), _zoom("zmax", 19)),
+        attribution=read_attribution(layer),
+        group_path=group_path,
+        dependencies=(dependency,),
+    )
+
+
 def read_raster(
     layer: QgsRasterLayer,
     report: FidelityReportBuilder,
@@ -520,13 +623,17 @@ def read_raster(
     provider = layer.dataProvider()
     provider_key = (layer.providerType() or "").lower()
 
+    if provider_key == "wms" and _xyz_template(layer) is not None:
+        return read_tile_service(layer, report, group_path=group_path, visible=visible)
+
     if provider_key not in _RASTER_FILE_PROVIDERS or provider is None:
         report.unsupported(
             f"Layer '{name}'",
-            "This is a live raster service rather than a file on disk, so there "
-            "is nothing to embed in a self-contained map. Save it to a GeoTIFF "
-            "and add that instead, or use it as a basemap. The layer is omitted "
-            "from the map.",
+            "This is a live map service the web map cannot request: it draws "
+            "XYZ tiles, but a WMS, WCS or ArcGIS service asks for each image by "
+            "its map extent, which it has no way to do. Use the service's XYZ "
+            "or WMTS tile address instead if it has one, or save the layer to a "
+            "GeoTIFF. The layer is omitted from the map.",
             layer_id,
         )
         return None

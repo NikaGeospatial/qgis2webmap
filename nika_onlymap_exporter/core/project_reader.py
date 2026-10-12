@@ -362,7 +362,7 @@ def read_project(
     note = basemap_note(settings.basemap)
     if note is not None:
         report.approximated("Basemap", note)
-    elif _has_tile_layer(project):
+    elif _has_tile_layer(project) and not any(layer.tiles for layer in layers):
         # The project has a backdrop and the export will not. Silence here is
         # how someone ships a map of bare shapes floating on white and only
         # finds out when the recipient asks what they are looking at.

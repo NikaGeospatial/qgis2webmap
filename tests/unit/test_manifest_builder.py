@@ -2219,3 +2219,39 @@ class TestDashedLines:
             ),
         )
         assert 'dash="[4, 2]"' in build_layer_element(layer)
+
+
+class TestTileLayer:
+    """`<om-layer type="TileLayer">` for a live XYZ service."""
+
+    @staticmethod
+    def tile_layer(**overrides):
+        from nika_onlymap_exporter.core.export_ir import TileSpec
+
+        defaults = dict(
+            layer_id="osm",
+            name="OpenStreetMap",
+            geometry_kind=GeometryKind.RASTER,
+            source_kind=SourceKind.FILE,
+            tiles=TileSpec(
+                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                min_zoom=0,
+                max_zoom=19,
+            ),
+        )
+        defaults.update(overrides)
+        return ExportLayer(**defaults)
+
+    def test_it_is_a_tile_layer_on_the_same_template(self) -> None:
+        markup = build_layer_element(self.tile_layer())
+        assert 'type="TileLayer"' in markup
+        assert 'data="https://tile.openstreetmap.org/{z}/{x}/{y}.png"' in markup
+        assert 'min-zoom="0"' in markup
+        assert 'max-zoom="19"' in markup
+        assert "<script" not in markup
+
+    def test_it_is_exported_and_has_an_image_swatch(self) -> None:
+        project = make_project(layers=(self.tile_layer(),))
+        assert len(project.exportable_layers) == 1
+        legend = build_legend_widget(project)
+        assert "omni-swatch-raster" in legend

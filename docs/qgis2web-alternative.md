@@ -85,7 +85,7 @@ is the honest answer.
 
 Raster layers from a file on disk are exported in the colours QGIS draws them -
 inside a single HTML file up to 100 MB of imagery, or in a Folder or Share ZIP
-for larger ones. Live raster services (WMS, XYZ) are left out.
+for larger ones. XYZ tile layers export as live layers; WMS services are left out.
 
 ## Trying it
 

@@ -23,8 +23,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   composite keeps its own bands. **Standalone HTML carries the raster inside
   the page**, so the one file still opens by double-click with no server, up
   to 100 MB of imagery; past that it says so and names Folder or Share ZIP,
-  which stream the raster in pieces and have to be served over HTTP. Live
-  services (WMS, XYZ) are still left out, and the Fidelity tab says why.
+  which stream the raster in pieces and have to be served over HTTP.
+- **XYZ tile layers export as live layers.** An XYZ (or WMTS-style
+  `{z}/{x}/{y}`) layer in QGIS becomes the same tiles on the web map, in its
+  place in the layer order, fetched from the same server - so it needs an
+  internet connection, and the Fidelity tab says so. A tile address carrying an
+  access key (`key=`, `token=` and similar) is refused rather than published in
+  the file. WMS, WCS and ArcGIS services are still left out: they ask for each
+  image by map extent, which the web map cannot do, and the Fidelity tab says
+  so.
 - **Preview, Share and Export are separate buttons** in the top-right corner,
   with Export filled and last. Each has a small icon; only Share has a menu.
 - **A live switch inside Preview.** The dot at Preview's right end turns red when

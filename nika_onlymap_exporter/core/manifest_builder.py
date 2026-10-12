@@ -43,6 +43,7 @@ from .export_ir import (
     RendererKind,
     RendererSpec,
     SymbolSpec,
+    TileSpec,
 )
 from .label_points import (
     LABEL_PROPERTY,
@@ -823,6 +824,40 @@ def build_raster_layer_element(
     )
 
 
+def build_tile_layer_element(
+    layer: ExportLayer, tiles: TileSpec, indent: str = "    "
+) -> str:
+    """One `<om-layer type="TileLayer">` on a live XYZ template.
+
+    The runtime draws image tiles from a `{z}/{x}/{y}` `data` template itself,
+    so the element is all attributes: where to ask, between which zooms, and
+    the universal opacity, visibility and zoom range.
+    """
+    inner = indent + "  "
+    attributes: list[tuple[str, str | None]] = [
+        ("id", layer.layer_id),
+        ("type", "TileLayer"),
+        ("label", layer.name),
+        ("data", tiles.url),
+        ("min-zoom", str(tiles.min_zoom)),
+        ("max-zoom", str(tiles.max_zoom)),
+    ]
+    if layer.opacity < 1.0:
+        attributes.append(("opacity", _number(layer.opacity)))
+    if not layer.visible:
+        attributes.append(("visible", "false"))
+    zoom_range = _zoom_range_attribute(layer)
+    if zoom_range is not None:
+        attributes.append(zoom_range)
+    return "\n".join(
+        [
+            f"{indent}<om-layer",
+            _attrs_to_string(attributes, inner),
+            f"{indent}></om-layer>",
+        ]
+    )
+
+
 def build_layer_element(
     layer: ExportLayer,
     indent: str = "    ",
@@ -846,6 +881,8 @@ def build_layer_element(
     # over any layer and get the right element back.
     if layer.raster is not None:
         return build_raster_layer_element(layer, layer.raster, indent)
+    if layer.tiles is not None:
+        return build_tile_layer_element(layer, layer.tiles, indent)
 
     renderer = layer.renderer
     # Not `renderer.symbol`: categorized and graduated renderers have none, and
@@ -1568,7 +1605,8 @@ def needs_static_legend(project: ExportProject) -> bool:
     legend, where the swatch can say "image data" instead of guessing a colour.
     """
     return needs_image_legend(project) or any(
-        layer.is_raster for layer in project.exportable_layers
+        layer.is_raster or layer.tiles is not None
+        for layer in project.exportable_layers
     )
 
 
@@ -1597,7 +1635,7 @@ def _swatch_markup(
     The checkerboard is the established "image data" idiom, carries no colour
     claim, and keeps the row aligned.
     """
-    if layer.raster is not None:
+    if layer.raster is not None or layer.tiles is not None:
         return '<span class="omni-swatch omni-swatch-raster"></span>'
 
     if layer.icon_atlas is not None and symbol.icon_name:
