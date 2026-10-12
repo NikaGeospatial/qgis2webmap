@@ -529,3 +529,17 @@ def test_the_osm_warning_is_in_the_catalogue(qgis_app) -> None:
     from nika_onlymap_exporter.ui.main_dialog import _OSM_FILE_NOTE_FOR_CATALOGUE
 
     assert OSM_FILE_NOTE == _OSM_FILE_NOTE_FOR_CATALOGUE
+
+
+def test_the_processing_tool_speaks_the_language(portuguese) -> None:
+    """Its options and help were plain strings the catalogue never saw."""
+    from nika_onlymap_exporter.processing.export_project import (
+        ExportProjectAlgorithm,
+    )
+
+    algorithm = ExportProjectAlgorithm()
+    algorithm.initAlgorithm()
+    assert algorithm.displayName() == "Exportar para mapa web do OnlyMap"
+    blocked = algorithm.parameterDefinition(ExportProjectAlgorithm.EXPORT_BLOCKED)
+    assert blocked.description() == "Exportar mesmo que alguns itens estejam bloqueados"
+    assert "Exportar mesmo que alguns itens" in algorithm.shortHelpString()
