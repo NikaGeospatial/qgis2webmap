@@ -22,6 +22,27 @@ from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
 from .fidelity_report import FidelityReportBuilder
 from .label_points import apply_capitalization
 
+# Screen pixels per unit, at the 96 dpi CSS assumes. `Qgis.RenderUnit` by
+# value, as `_CAPITALIZATION_BY_VALUE` below does, so PyQt5 and PyQt6 agree:
+# 0 millimetres, 2 pixels, 4 points, 5 inches. Map units (1) and percentages
+# (3) have no fixed size on screen and are left out on purpose.
+_PIXELS_PER_UNIT = {0: MM_TO_PIXELS, 2: 1.0, 4: 96.0 / 72.0, 5: 96.0}
+
+
+def to_pixels(value: float, unit: Any) -> float | None:
+    """`value` in QGIS `unit`, as screen pixels; `None` when it has no fixed size.
+
+    QGIS sizes label text in points by default and the web map in pixels, so
+    copying the number across drew a 9 pt label at 9 px.
+    """
+    key = getattr(unit, "value", unit)
+    try:
+        factor = _PIXELS_PER_UNIT.get(int(key))
+    except (TypeError, ValueError):
+        return None
+    return None if factor is None else float(value) * factor
+
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
 
@@ -121,8 +142,18 @@ def translate_labeling(
     halo_width = 0.0
     halo_color = None
     if buffer_settings is not None and buffer_settings.enabled():
-        halo_width = float(buffer_settings.size())
+        halo_width = to_pixels(buffer_settings.size(), buffer_settings.sizeUnit()) or 0
         halo_color = _color_from_qcolor(buffer_settings.color())
+
+    font_size = to_pixels(text_format.size(), text_format.sizeUnit())
+    if font_size is None:
+        report.approximated(
+            subject,
+            "The label size is set in map units, so it grows and shrinks with "
+            "the zoom in QGIS. The web map draws labels at a fixed size on "
+            "screen, so they use its default size instead.",
+            layer_id,
+        )
 
     # **Before the character set, because it changes which glyphs are drawn.**
     # Uppercasing "Zurich" gives "ZURICH" - a codepoint the raw values never
@@ -167,10 +198,13 @@ def translate_labeling(
 
     report.approximated(
         subject,
-        "Label text, font, colour, halo, background, offset, rotation and the "
-        "placement quadrant are translated. QGIS collision handling, callouts "
-        "and curved placement are not - the web renderer resolves overlaps "
-        "with its own logic.",
+        "Label text, font, size, colour, background, offset, rotation and the "
+        "placement quadrant are translated. A halo becomes a soft box in its "
+        "colour behind the text, because the web map's outlined text is hard "
+        "to read at label sizes; on a point layer, a boxed label centred on its "
+        "point sits just above the marker so the box does not hide it. QGIS "
+        "collision handling, callouts and curved placement are not - the web "
+        "renderer resolves overlaps with its own logic.",
         layer_id,
     )
 
@@ -178,7 +212,7 @@ def translate_labeling(
         enabled=True,
         field_name=field_name,
         font_family=font.family() if font else None,
-        font_size=float(text_format.size()),
+        font_size=font_size,
         color=_color_from_qcolor(text_format.color()),
         halo_color=halo_color,
         halo_width=halo_width,

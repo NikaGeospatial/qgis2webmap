@@ -72,6 +72,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   it in the other corner.
 
 ### Fixed
+- **Map labels were unreadable over imagery.** Two causes. Label sizes were
+  copied from QGIS without their unit, so a 9 pt label drew at 9 px instead
+  of 12 - buffers too. And the web map draws outlined (haloed) text with its
+  colours swapped inside the letters at label sizes: pale glyphs with a dark
+  fringe. Sizes are now converted from points, millimetres or inches, and a
+  QGIS buffer becomes a soft box in its colour behind the text. On a point
+  layer a boxed label centred on its point sits just above the marker, so the
+  box does not hide it. The Fidelity tab says so.
 - **Relief maps drew an "API KEY REQUIRED" watermark instead of a basemap.**
   CARTO began requiring a key on their raster tiles in late August 2026 and are
   retiring the product. The endpoints still answer `200`; what changed is the

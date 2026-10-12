@@ -138,6 +138,66 @@ class TestRealQgisSettings:
         assert spec.bold is True
 
 
+def _with_format(size: float, unit, buffer_size: float = 0.0, buffer_unit=None):
+    """A labelled layer whose text format has a size, in a unit, and a buffer."""
+    layer = labelled_layer()
+    settings = layer.labeling().settings()
+    text_format = settings.format()
+    text_format.setSize(size)
+    text_format.setSizeUnit(unit)
+    if buffer_size:
+        buffer = text_format.buffer()
+        buffer.setEnabled(True)
+        buffer.setSize(buffer_size)
+        buffer.setSizeUnit(buffer_unit if buffer_unit is not None else unit)
+        buffer.setColor(QtGui.QColor("#ffffff"))
+        text_format.setBuffer(buffer)
+    settings.setFormat(text_format)
+    layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+    return layer
+
+
+class TestSizeUnits:
+    """QGIS sizes text in points by default; the web map sizes it in pixels.
+
+    Copying the number across drew a 9 pt label at 9 px - three quarters of
+    the size QGIS shows - and a 0.9 mm buffer as 0.9 of whatever the web map
+    measures in.
+    """
+
+    def test_points_become_pixels(self, qgis_app) -> None:
+        layer = _with_format(9.0, qgis_core.Qgis.RenderUnit.Points)
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.font_size == pytest.approx(12.0)
+
+    def test_millimetres_become_pixels(self, qgis_app) -> None:
+        layer = _with_format(4.0, qgis_core.Qgis.RenderUnit.Millimeters)
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.font_size == pytest.approx(4.0 * MM_TO_PIXELS)
+
+    def test_pixels_stay_pixels(self, qgis_app) -> None:
+        layer = _with_format(14.0, qgis_core.Qgis.RenderUnit.Pixels)
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.font_size == pytest.approx(14.0)
+
+    def test_the_buffer_is_measured_in_its_own_unit(self, qgis_app) -> None:
+        layer = _with_format(
+            9.0,
+            qgis_core.Qgis.RenderUnit.Points,
+            buffer_size=0.9,
+            buffer_unit=qgis_core.Qgis.RenderUnit.Millimeters,
+        )
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.halo_width == pytest.approx(0.9 * MM_TO_PIXELS)
+
+    def test_a_map_unit_size_is_reported_not_guessed(self, qgis_app) -> None:
+        layer = _with_format(50.0, qgis_core.Qgis.RenderUnit.MapUnits)
+        report = FidelityReportBuilder()
+        spec = translate_labeling(layer, report)
+        assert spec.font_size is None  # the web map's default size
+        assert any("map units" in item.detail for item in report.items)
+
+
 class TestCapitalizationAndWrapping:
     """QGIS text case and line breaking, read from the label settings."""
 

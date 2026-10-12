@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
@@ -1297,8 +1298,6 @@ class TestLabelLayer:
             'size-units="pixels"',
             'font-family="Inter"',
             'font-weight="bold"',
-            'outline-color="',
-            'outline-width="',
             'background="true"',
             'get-background-color="',
         ):
@@ -1329,12 +1328,49 @@ class TestLabelLayer:
         assert 'get-size="18"' in markup
         assert 'size-units="pixels"' in markup
 
-    def test_a_qgis_buffer_becomes_a_deck_outline(self) -> None:
+    def test_a_qgis_buffer_becomes_a_box_behind_the_text(self) -> None:
+        """Not deck.gl's outline: at label sizes the runtime draws outlined
+        text with the colours swapped inside the glyphs - pale letters with a
+        dark fringe, unreadable on imagery. A soft box in the buffer colour
+        keeps the text legible on anything."""
         markup = build_label_element(
             self.labelled_layer(halo_width=2.0, halo_color=BLUE)
         )
-        assert 'outline-width="2"' in markup
-        assert "outline-color" in markup
+        assert 'background="true"' in markup
+        assert "get-background-color=\"'#0000ffcc'\"" in markup
+        assert "outline-width" not in markup
+        assert "font-settings" not in markup
+
+    def test_a_boxed_label_on_a_point_sits_above_its_marker(self) -> None:
+        """A box centred on the point would hide the marker it names."""
+        layer = self.labelled_layer(halo_width=2.0, halo_color=BLUE)
+        layer = replace(
+            layer,
+            geometry_kind=GeometryKind.POINT,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE, symbol=SymbolSpec(radius=5.0)
+            ),
+        )
+        markup = build_label_element(layer)
+        assert "get-alignment-baseline=\"'bottom'\"" in markup
+        assert 'get-pixel-offset="[0, -7]"' in markup
+
+    def test_an_unboxed_centred_label_stays_on_its_point(self) -> None:
+        layer = replace(self.labelled_layer(), geometry_kind=GeometryKind.POINT)
+        markup = build_label_element(layer)
+        assert "get-alignment-baseline" not in markup
+        assert "get-pixel-offset" not in markup
+
+    def test_a_qgis_background_wins_over_its_buffer(self) -> None:
+        markup = build_label_element(
+            self.labelled_layer(
+                halo_width=2.0,
+                halo_color=BLUE,
+                background_color=Color(r=0, g=0, b=0),
+            )
+        )
+        assert markup.count('background="true"') == 1
+        assert "#0000ff" not in markup
 
     def test_the_readers_character_set_wins(self) -> None:
         markup = build_label_element(self.labelled_layer(character_set="Zü"))

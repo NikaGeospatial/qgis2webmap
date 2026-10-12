@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from typing import TYPE_CHECKING, Callable
 
 from .export_ir import (
@@ -96,6 +97,10 @@ TEXT_LAYER_CLASS = "TextLayer"
 # Fallbacks for a QGIS label whose text format carried no explicit value.
 DEFAULT_LABEL_COLOR = Color(r=0, g=0, b=0, a=1.0)
 DEFAULT_LABEL_SIZE = 12.0
+
+# How opaque a label's halo box is. Solid would hide the map under every
+# label; much less and dark imagery shows through enough to lose the text.
+HALO_BOX_ALPHA = 0.8
 
 # The narrowest a line may be drawn, in screen pixels. deck.gl has no separate
 # hit width - it picks against the rendered geometry - so this is simultaneously
@@ -1101,37 +1106,39 @@ def build_label_element(
     if labeling.bold:
         attributes.append(("font-weight", "bold"))
 
-    # A QGIS label buffer is a halo; deck.gl calls the same thing an outline.
-    #
-    # `color_hex`, not `color_literal`: `outline-color` is a plain scalar
-    # attribute, and a scalar takes bare hex. The quoted form belongs to the
-    # expression language, so `'#ffffff'` here is not a colour at all - the
-    # runtime warns that it "is not a recognizable CSS color" and falls back.
-    # `get-color` above is an accessor and does want the quotes.
-    #
-    # `font-settings` is not optional decoration: deck.gl renders an outline
-    # only from a signed-distance-field atlas, and warns "fontSettings.sdf is
-    # required to render outline" while drawing the text with no halo at all.
-    # Emitted with the outline rather than always, because an SDF atlas is
-    # slower to build and there is nothing to gain when no halo was asked for.
-    if labeling.halo_width and labeling.halo_color:
-        attributes.append(("font-settings", '{"sdf": true}'))
-        attributes.append(("outline-color", color_hex(labeling.halo_color)))
-        attributes.append(("outline-width", _number(labeling.halo_width)))
+    # Decided before the placement, which it can move - see below.
+    halo_box = (
+        labeling.background_color is None
+        and bool(labeling.halo_width)
+        and labeling.halo_color is not None
+    )
+    baseline = labeling.baseline
+    offset_x, offset_y = labeling.offset_x, labeling.offset_y
+    # A box centred on a point hides the marker it names, where QGIS's halo
+    # only covered it letter by letter. So a boxed label QGIS centres on its
+    # point sits just above the marker instead.
+    if (
+        halo_box
+        and layer.geometry_kind is GeometryKind.POINT
+        and labeling.anchor == "middle"
+        and baseline == "center"
+        and not (offset_x or offset_y)
+    ):
+        radius = layer.renderer.representative_symbol
+        radius = (radius.radius if radius is not None else None) or 4.0
+        baseline = "bottom"
+        offset_y = -(radius + 2.0)
 
     # QGIS's placement quadrant. Emitted only when it differs from the neutral
     # centre, so an ordinary over-point label stays free of noise.
     if labeling.anchor != "middle":
         attributes.append(("get-text-anchor", f"'{labeling.anchor}'"))
-    if labeling.baseline != "center":
-        attributes.append(("get-alignment-baseline", f"'{labeling.baseline}'"))
+    if baseline != "center":
+        attributes.append(("get-alignment-baseline", f"'{baseline}'"))
 
-    if labeling.offset_x or labeling.offset_y:
+    if offset_x or offset_y:
         attributes.append(
-            (
-                "get-pixel-offset",
-                f"[{_number(labeling.offset_x)}, {_number(labeling.offset_y)}]",
-            )
+            ("get-pixel-offset", f"[{_number(offset_x)}, {_number(offset_y)}]")
         )
 
     if labeling.rotation:
@@ -1139,12 +1146,23 @@ def build_label_element(
 
     # A QGIS label background is deck.gl's text background: a filled box behind
     # the glyphs. Without the flag the colour and padding are ignored silently.
-    if labeling.background_color is not None:
+    #
+    # A QGIS buffer (halo) becomes the same box, in the buffer's colour and a
+    # little see-through, when there is no background to use. deck.gl's own
+    # halo - `outline-width` on an SDF atlas - is what this used to emit, and
+    # at label sizes the runtime draws it with the colours swapped inside the
+    # glyphs: pale letters with a dark fringe, unreadable on imagery. The box
+    # is not the same shape as a halo, but it is legible on anything, and the
+    # Fidelity tab says which one the map got.
+    box_color = labeling.background_color
+    pad_x, pad_y = labeling.background_padding
+    if halo_box and labeling.halo_color is not None:
+        box_color = replace(labeling.halo_color, a=HALO_BOX_ALPHA)
+        pad_x = max(3.0, labeling.halo_width)
+        pad_y = max(1.0, labeling.halo_width / 2)
+    if box_color is not None:
         attributes.append(("background", "true"))
-        attributes.append(
-            ("get-background-color", color_literal(labeling.background_color))
-        )
-        pad_x, pad_y = labeling.background_padding
+        attributes.append(("get-background-color", color_literal(box_color)))
         if pad_x or pad_y:
             attributes.append(
                 ("background-padding", f"[{_number(pad_x)}, {_number(pad_y)}]")
