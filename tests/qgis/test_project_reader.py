@@ -589,8 +589,8 @@ class TestDeclutter:
 
         assert read.labeling.enabled is False
         assert read.label_min_zoom is None
-        labels = {i.subject: i for i in report.items}["Labels on 'towns'"]
-        assert labels.status is FidelityStatus.UNSUPPORTED
+        rows = [i for i in report.items if i.subject == "Labels on 'towns'"]
+        assert [row.status for row in rows] == [FidelityStatus.UNSUPPORTED]
 
     def test_a_handful_of_points_is_left_alone(
         self, project, make_memory_layer

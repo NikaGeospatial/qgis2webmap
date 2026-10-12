@@ -121,6 +121,15 @@ class FidelityReportBuilder:
             "total": len(self._items),
         }
 
+    def discard(self, subject: str, layer_id: str | None = None) -> None:
+        """Drop what was recorded about `subject` for this layer, once a later
+        step made it untrue."""
+        self._items = [
+            item
+            for item in self._items
+            if not (item.subject == subject and item.layer_id == layer_id)
+        ]
+
     def extend(self, items: tuple[FidelityItem, ...]) -> None:
         self._items.extend(items)
 

@@ -414,6 +414,12 @@ def read_project(
             "load tiles from the internet each time it is opened.",
         )
 
+    # Before the terrain notes: they name labelled layers, and a layer whose
+    # labels never have room is unlabelled from `_declutter` on.
+    extent = _resolve_extent(layers, report, settings, canvas_extent)
+    layers = _translate_scale_visibility(project, layers, extent, report)
+    layers = _declutter(layers, report)
+
     _report_terrain(project, settings, report)
 
     # Extrusion and relief cannot coexist: columns would rise from sea level
@@ -476,9 +482,6 @@ def read_project(
                 + ". Turn relief off if the outlines matter more.",
             )
 
-    extent = _resolve_extent(layers, report, settings, canvas_extent)
-    layers = _translate_scale_visibility(project, layers, extent, report)
-    layers = _declutter(layers, report)
     title = resolve_title(project, title_override)
 
     _report_project_metadata(project, title, title_override, report)
@@ -566,6 +569,8 @@ def _declutter(
                 layer.layer_id,
             )
         if labels_never_fit(layer):
+            # What the labelling translator said about them no longer holds.
+            report.discard(f"Labels on '{layer.name}'", layer.layer_id)
             report.unsupported(
                 f"Labels on '{layer.name}'",
                 "QGIS hides labels that would overlap; the web map cannot, and "
