@@ -47,7 +47,13 @@ from .export_ir import (
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
-from .manifest_builder import TERRAIN_PRESETS, basemap_note, terrain_note
+from .manifest_builder import (
+    OSM_FILE_NOTE,
+    TERRAIN_PRESETS,
+    basemap_note,
+    file_safe_basemap,
+    terrain_note,
+)
 from .settings import LayerSettings
 from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
 
@@ -360,7 +366,9 @@ def read_project(
     # cannot be undone once the file is sent - so it belongs in the report the
     # user reads before exporting, not only in the dialog they already left.
     note = basemap_note(settings.basemap)
-    if note is not None:
+    if file_safe_basemap(settings.basemap, settings.output_mode) != settings.basemap:
+        report.approximated("Basemap", OSM_FILE_NOTE)
+    elif note is not None:
         report.approximated("Basemap", note)
     elif _has_tile_layer(project) and not any(layer.tiles for layer in layers):
         # The project has a backdrop and the export will not. Silence here is

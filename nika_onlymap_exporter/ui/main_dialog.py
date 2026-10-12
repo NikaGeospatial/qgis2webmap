@@ -92,7 +92,12 @@ from ..core.license_policy import (
     default_policy,
     report_verdict,
 )
-from ..core.manifest_builder import basemap_note, terrain_note
+from ..core.manifest_builder import (
+    OSM_FILE_NOTE,
+    basemap_note,
+    file_safe_basemap,
+    terrain_note,
+)
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import extent_from_canvas, read_project, resolve_title
 from ..core.report_facts import ReportFacts, report_facts
@@ -1114,6 +1119,12 @@ class MainDialog(QDialog):
         the recipient rather than on the person choosing it.
         """
         note = basemap_note(self.state.basemap)
+        if (
+            file_safe_basemap(self.state.basemap, self.state.output_mode)
+            != self.state.basemap
+        ):
+            # Said here, where the basemap is chosen, not only after export.
+            note = OSM_FILE_NOTE
         if note is None:
             self.basemap_warning.setText("")
             self.basemap_warning.setStyleSheet("")
@@ -1233,6 +1244,7 @@ class MainDialog(QDialog):
         picked.
         """
         self.state.output_mode = mode
+        self._update_basemap_warning()
         typed = self.path_edit.text().strip()
         if typed:
             path = Path(typed)

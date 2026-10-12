@@ -420,3 +420,36 @@ class TestRuntimeLock:
     def test_a_test_double_trips_nothing(self) -> None:
         """Providers own the check, so a fake bundle carries no warnings."""
         assert FakeRuntime().load().lock_warnings == ()
+
+
+class TestOsmFromAFile:
+    """OpenStreetMap's tile servers refuse a map opened straight from a file.
+
+    Their policy wants a `Referer`, a page opened by double-click sends none,
+    and a page cannot set its own `User-Agent` - so a recipient sees "Access
+    blocked" tiles. The tiers a recipient opens from disk swap the OSM basemap
+    for OpenFreeMap's Liberty, drawn from the same OpenStreetMap data, which
+    serves a file. A folder goes on a website, sends a `Referer`, and keeps OSM.
+    """
+
+    @staticmethod
+    def _page(tmp_path, mode) -> str:
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+
+        result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            make_project(settings=ExportSettings(basemap="osm")),
+            tmp_path / mode,
+            mode=getattr(OutputMode, mode),
+        )
+        return result.entry_path.read_text()
+
+    def test_a_single_file_swaps_osm_for_liberty(self, tmp_path) -> None:
+        page = self._page(tmp_path, "STANDALONE_HTML")
+        assert 'basemap="liberty"' in page
+        assert 'basemap="osm"' not in page
+
+    def test_a_share_zip_swaps_it_too(self, tmp_path) -> None:
+        assert 'basemap="liberty"' in self._page(tmp_path, "SHARE_ZIP")
+
+    def test_a_folder_keeps_osm(self, tmp_path) -> None:
+        assert 'basemap="osm"' in self._page(tmp_path, "FOLDER")

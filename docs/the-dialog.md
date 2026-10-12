@@ -94,6 +94,12 @@ set, and the Fidelity tab names the provider. Nothing else changes: no
 identifier travels with the file, the anonymous usage report is the same either
 way, and the file is no larger.
 
+**OpenStreetMap only works for maps on a website.** Its tile servers refuse a map
+opened straight from a file - the recipient sees "Access blocked" tiles - so a
+Standalone HTML or Share ZIP export uses **Liberty** instead: the same
+OpenStreetMap data, drawn a little differently. The dialog says so under the
+basemap. A Folder export keeps OpenStreetMap.
+
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation
 shows, and fetches terrain tiles to do it. With a basemap chosen too, the

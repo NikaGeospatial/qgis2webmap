@@ -661,3 +661,40 @@ class TestPreviewMode:
         raster = project_with(vector_layer(), raster_layer(Path("/nowhere/a.tif")))
         assert preview_mode(raster) is OutputMode.STANDALONE_HTML
         assert preview_mode(project_with(vector_layer())) is OutputMode.STANDALONE_HTML
+
+
+class TestOsmTileLayerFromAFile:
+    """An OSM XYZ layer cannot be swapped - those tiles were chosen - so a
+    file-type export warns that a recipient opening it directly may see
+    "Access blocked" tiles, and a folder does not."""
+
+    @staticmethod
+    def _osm_layer():
+        from nika_onlymap_exporter.core.export_ir import (
+            AssetDependency,
+            AssetDisposition,
+            ExportLayer,
+            GeometryKind,
+            SourceKind,
+            TileSpec,
+        )
+
+        url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        return ExportLayer(
+            layer_id="osm",
+            name="OSM",
+            geometry_kind=GeometryKind.RASTER,
+            source_kind=SourceKind.FILE,
+            tiles=TileSpec(url),
+            dependencies=(AssetDependency(url, AssetDisposition.REMOTE),),
+        )
+
+    def test_a_single_file_warns(self) -> None:
+        report = FidelityReportBuilder()
+        scan(project_with(self._osm_layer()), report, OutputMode.STANDALONE_HTML)
+        assert any("Access blocked" in item.detail for item in report.items)
+
+    def test_a_folder_does_not(self) -> None:
+        report = FidelityReportBuilder()
+        scan(project_with(self._osm_layer()), report, OutputMode.FOLDER)
+        assert not any("Access blocked" in item.detail for item in report.items)

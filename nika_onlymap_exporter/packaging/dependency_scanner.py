@@ -22,6 +22,7 @@ from ..core.export_ir import (
     OutputMode,
 )
 from ..core.fidelity_report import FidelityReportBuilder
+from ..core.manifest_builder import FILE_OPENED_MODES
 
 # Past this, a single HTML file stops being a practical thing to email: Gmail
 # rejects attachments over 25 MB, and many corporate filters are stricter.
@@ -262,6 +263,21 @@ def scan(
                     "map needs an internet connection to draw this layer.",
                     layer.layer_id,
                 )
+                # Those tiles were chosen, so unlike the basemap they cannot be
+                # swapped - see `manifest_builder.OSM_FILE_NOTE` for why.
+                if (
+                    "tile.openstreetmap.org" in dependency.identifier
+                    and mode in FILE_OPENED_MODES
+                ):
+                    report.approximated(
+                        f"Data source of '{layer.name}'",
+                        "OpenStreetMap's tile servers refuse maps opened "
+                        "straight from a file, so recipients who double-click "
+                        "this map may see 'Access blocked' tiles in this layer. "
+                        "Export as a Folder for a website, or use another tile "
+                        "source, to avoid it.",
+                        layer.layer_id,
+                    )
 
             if dependency.disposition is AssetDisposition.BLOCKING:
                 reason = dependency.note or f"'{dependency.identifier}' is missing."
