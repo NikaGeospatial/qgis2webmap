@@ -1073,6 +1073,21 @@ class TestShareBuildsWhatItNeeds:
         finally:
             dialog.close()
 
+    def test_a_folders_size_is_its_contents(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            folder = tmp_path / "peaks"
+            (folder / "data").mkdir(parents=True)
+            (folder / "data" / "big.bin").write_bytes(b"x" * 3 * 1024 * 1024)
+            dialog.mode_buttons[OutputMode.FOLDER].click()
+            dialog.path_edit.setText(str(folder))
+            dialog._update_save_status()
+            assert "3.0 MB" in dialog.save_status.text()
+        finally:
+            dialog.close()
+
     def test_a_file_this_session_never_wrote_is_not_trusted(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

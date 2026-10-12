@@ -1340,7 +1340,14 @@ class MainDialog(QDialog):
             self.save_status.setText(tr("The map file cannot be read from here."))
             return
 
-        megabytes = stat.st_size / 1024 / 1024
+        size = stat.st_size
+        if destination.is_dir():
+            # A Folder export: its files, not the directory entry's 4 KB.
+            with contextlib.suppress(OSError):
+                size = sum(
+                    f.stat().st_size for f in destination.rglob("*") if f.is_file()
+                )
+        megabytes = size / 1024 / 1024
         layers = len(self.state.selected_layer_ids(self._available_layer_ids()))
         detail = plural(
             layers,
