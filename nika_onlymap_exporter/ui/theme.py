@@ -27,13 +27,15 @@ import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QEvent, QObject, QPoint, Qt
+from qgis.PyQt.QtCore import QByteArray, QEvent, QObject, QPoint, Qt
 from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
     QFont,
     QFontDatabase,
+    QIcon,
     QPalette,
+    QPixmap,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
@@ -53,6 +55,19 @@ PACKAGE_DIR = Path(__file__).resolve().parent.parent
 FONT_DIR = PACKAGE_DIR / "fonts"
 ICON_DIR = PACKAGE_DIR / "icons" / "theme"
 FONT_FAMILY = "Inter"
+
+# The corner's 16 px line icons, drawn for this plugin. `{c}` is the colour.
+# Made at runtime rather than shipped as files: each needs a colour per theme
+# and per state, which would be a dozen files for four shapes.
+LINE_ICONS = {
+    "preview": (
+        '<path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 '
+        '1.5 8z"/><circle cx="8" cy="8" r="2"/>'
+    ),
+    "live": '<circle cx="8" cy="8" r="3.5" fill="{c}" stroke="none"/>',
+    "share": '<path d="M8 10V2.5M5 5.2 8 2.2l3 3M3.5 8.5v4.5h9V8.5"/>',
+    "export": '<path d="M8 2.5V10M5 7.2l3 3 3-3M3.5 13.2h9"/>',
+}
 
 
 @dataclass(frozen=True)
@@ -229,6 +244,7 @@ def apply(dialog: QWidget) -> Palette:
         form.setVerticalSpacing(8)
         form.setHorizontalSpacing(14)
     attach_menus(dialog)
+    paint_line_icons(dialog, palette)
     # Sections are cards: their contents sit inset from the card's edge, with
     # the title outside and above it.
     for box in dialog.findChildren(QGroupBox):
@@ -265,11 +281,6 @@ class _MenuAttacher(QObject):
         if watched is self._menu:
             if event.type() == QEvent.Type.Show:
                 button = self._button
-                if button.property("role") == "segment":
-                    # No open-state restyle here: repolishing one segment
-                    # resizes it and shifts the whole control under the menu.
-                    self._place_under_segments(button)
-                    return False
                 self._set_open(True)
                 if self._match_width:
                     self._menu.setFixedWidth(button.width())
@@ -290,34 +301,52 @@ class _MenuAttacher(QObject):
                 if from_right:
                     anchor.setX(anchor.x() - self._menu.width())
                 self._menu.move(anchor)
-            elif (
-                event.type() == QEvent.Type.Hide
-                and self._button.property("role") != "segment"
-            ):
+            elif event.type() == QEvent.Type.Hide:
                 self._set_open(False)
         return False
 
-    def _place_under_segments(self, button: QWidget) -> None:
-        """Hang the menu from the whole joined control, not the one segment.
 
-        The first segment's menu starts at the control's left edge and grows
-        right; the last one's ends at the control's right edge. Either way it
-        is at least as wide as the control, so it reads as opening from it.
-        """
-        segments = [
-            w
-            for w in button.parentWidget().findChildren(QToolButton)
-            if w.property("role") == "segment" and w.isVisible()
-        ]
-        left = min(w.mapToGlobal(QPoint(0, 0)).x() for w in segments)
-        right = max(w.mapToGlobal(QPoint(w.width(), 0)).x() for w in segments)
-        self._menu.setMinimumWidth(right - left)
-        self._menu.adjustSize()
-        top = button.mapToGlobal(QPoint(0, button.height() - 1)).y()
-        rtl = button.layoutDirection() == Qt.LayoutDirection.RightToLeft
-        from_right = (button.property("position") == "last") != rtl
-        x = right - self._menu.width() if from_right else left
-        self._menu.move(QPoint(x, top))
+def _line_pixmap(name: str, colour: str, scale: float) -> QPixmap:
+    size = round(16 * scale)
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+        f'viewBox="0 0 16 16" fill="none" stroke="{colour}" stroke-width="1.5" '
+        f'stroke-linecap="round" stroke-linejoin="round">'
+        f"{LINE_ICONS[name].format(c=colour)}</svg>"
+    )
+    pixmap = QPixmap()
+    pixmap.loadFromData(QByteArray(svg.encode()), "SVG")
+    pixmap.setDevicePixelRatio(scale)
+    return pixmap
+
+
+def line_icon(name: str, colour: str, disabled: str) -> QIcon:
+    """One of `LINE_ICONS`, sharp at 1x and 2x, greyed when disabled."""
+    icon = QIcon()
+    for scale in (1.0, 2.0):
+        icon.addPixmap(_line_pixmap(name, colour, scale), QIcon.Mode.Normal)
+        icon.addPixmap(_line_pixmap(name, disabled, scale), QIcon.Mode.Disabled)
+    return icon
+
+
+def paint_line_icons(root: QWidget, palette: Palette) -> None:
+    """Colour every button that names a `lineIcon` for the current theme.
+
+    The live dot takes the link colour - the accent hue, deep enough by day
+    to read on paper, which the brass itself is not. Everything else matches
+    its button's text.
+    """
+    for button in root.findChildren(QToolButton):
+        name = button.property("lineIcon")
+        if not name:
+            continue
+        if name == "live":
+            colour = palette.link
+        elif button.property("accent"):
+            colour = palette.on_accent
+        else:
+            colour = palette.ink
+        button.setIcon(line_icon(name, colour, palette.quiet))
 
 
 def attach_menu(menu: QMenu, button: QWidget) -> None:
@@ -676,47 +705,55 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     right: 10px;
 }}
 
-/* The corner's View | Export | Share: one control, one outline, dividers
-   between, Export filled. No arrows: one press opens View's and Share's menus. */
-{d} QToolButton[role="segment"] {{
+/* The corner: Preview and Share quiet and outlined, Export filled and last -
+   separate buttons, because they are separate acts rather than a choice of
+   one. 20 + 2 x 3 padding + 2 x 1 border = 28 px, the tab bar's height. */
+{d} QToolButton[role="corner"] {{
     background: {p.paper};
     color: {p.ink};
-    border: 1px solid {p.muted};
-    border-radius: 0;
-    padding: 3px 16px;
-    min-height: 18px;
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+    padding: 3px 11px 3px 9px;
+    min-height: 20px;
     font-weight: 600;
     margin: 0;
 }}
-{d} QToolButton[role="segment"][position="first"] {{
-    border-top-left-radius: 6px;
-    border-bottom-left-radius: 6px;
-}}
-{d} QToolButton[role="segment"][position="middle"] {{
-    border-left: none;
-}}
-{d} QToolButton[role="segment"][position="last"] {{
-    border-left: none;
-    border-top-right-radius: 6px;
-    border-bottom-right-radius: 6px;
-}}
-{d} QToolButton[role="segment"]:hover {{
+{d} QToolButton[role="corner"]:hover,
+{d} QToolButton[role="corner"][menuOpen="true"] {{
     background: {p.hover};
+    border-color: {p.muted};
 }}
-{d} QToolButton[role="segment"][accent="true"] {{
+{d} QToolButton[role="corner"][hasMenu="true"] {{
+    padding-right: 22px;
+}}
+{d} QToolButton[role="corner"]::menu-indicator {{
+    image: url({p.icon("chevron")});
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 10px;
+    height: 10px;
+    right: 7px;
+}}
+/* A running live preview: the outline takes the dot's colour. */
+{d} QToolButton[role="corner"][live="true"] {{
+    border-color: {p.link};
+}}
+{d} QToolButton[role="corner"][accent="true"] {{
     background: {p.accent};
     color: {p.on_accent};
+    border-color: {p.accent};
+    padding-right: 13px;
 }}
-{d} QToolButton[role="segment"][accent="true"]:hover {{
+{d} QToolButton[role="corner"][accent="true"]:hover {{
     background: {p.accent_hover};
+    border-color: {p.accent_hover};
 }}
-{d} QToolButton[role="segment"]:disabled {{
-    background: {p.paper};
+{d} QToolButton[role="corner"]:disabled {{
     color: {p.quiet};
+    border-color: {p.rule};
 }}
-{d} QToolButton[role="segment"]::menu-indicator {{
-    image: none;
-    width: 0;
+{d} QToolButton[role="corner"][accent="true"]:disabled {{
+    background: {p.field};
 }}
 
 /* Footer chips: outlined, so they read as things to press. */

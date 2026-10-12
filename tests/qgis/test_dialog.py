@@ -360,23 +360,32 @@ class TestTabCorner:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            assert labels == ["View", "Export", "Share"]
+            assert labels == ["Preview", "Share", "Export"]
         finally:
             dialog.close()
 
-    def test_live_preview_is_the_preview_menu(
-        self, qgis_app, project, make_memory_layer
+    def test_preview_is_one_button_that_shows_a_running_preview(
+        self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
-        """The setting sits on the control it qualifies, not beside it."""
+        """No menu: one press starts a live preview, and the button says so."""
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
         dialog = self._dialog(project, make_memory_layer)
         try:
-            actions = dialog.preview_button.menu().actions()
-            assert [a.text() for a in actions if a.text()] == [
-                "Preview",
-                "Live preview",
-            ]
-            assert not actions[0].isCheckable()  # Preview: an action
-            assert actions[-1].isCheckable()  # Live preview: a switch
+            button = dialog.preview_button
+            assert button.menu() is None
+            assert button.text() == "Preview"
+
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            dialog._server = PreviewServer(tmp_path)
+            dialog._show_preview_state()
+            assert button.text() == "Live"
+            assert button.property("live") is True
+
+            button.click()  # the second press stops it
+            assert dialog._server is None
+            assert button.text() == "Preview"
+            assert button.property("live") is False
         finally:
             dialog.close()
 
@@ -647,9 +656,8 @@ class TestNothingOutlivesTheDialog:
 class TestAutosaveIsGatedOnALiveSession:
     """The plugin must not write to the user's disk uninvited.
 
-    Live preview already means "keep rebuilding as I work", so it is the consent
-    autosave needs. A ticked checkbox with no session is a stored preference
-    about what Preview will do - not a statement that anything is happening.
+    A live preview rebuilds the tab as the user works; it never writes their
+    map file. Only Export does that.
     """
 
     def _dialog(self, project, make_memory_layer):
@@ -662,33 +670,46 @@ class TestAutosaveIsGatedOnALiveSession:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_a_ticked_box_alone_is_not_a_running_autosave(
-        self, qgis_app, project, make_memory_layer
+    def test_a_live_preview_never_writes_the_map_file(
+        self,
+        qgis_app,
+        project,
+        make_memory_layer,
+        tmp_path,
+        monkeypatch,
+        runtime_required,
     ) -> None:
+        """Through the real press, the real job and a real edit."""
+        import time
+
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: True,
+        )
         dialog = self._dialog(project, make_memory_layer)
+        map_file = tmp_path / "peaks.html"
+
+        def wait_for(condition) -> None:
+            deadline = time.monotonic() + 60
+            while not condition() and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert condition()
+
         try:
-            dialog.live_action.setChecked(True)
-            assert dialog._server is None
-            assert dialog._autosave_is_running() is False
+            dialog.path_edit.setText(str(map_file))
+            dialog.preview_button.click()
+            wait_for(lambda: dialog._server is not None and dialog._job is None)
+            assert dialog.preview_button.text() == "Live"
+
+            dialog.state.map_name = "changed"
+            dialog._poll_for_changes()
+            wait_for(
+                lambda: not dialog._rebuild_timer.isActive() and dialog._job is None
+            )
+            assert dialog._server is not None
+            assert not map_file.exists()
         finally:
-            dialog.close()
-
-    def test_a_running_session_with_the_box_off_is_not_autosaving(
-        self, qgis_app, project, make_memory_layer, tmp_path
-    ) -> None:
-        from nika_onlymap_exporter.ui.live_server import PreviewServer
-
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
-            dialog._server = PreviewServer(tmp_path)
-            dialog.live_action.blockSignals(True)
-            dialog.live_action.setChecked(False)
-            dialog.live_action.blockSignals(False)
-
-            assert dialog._autosave_is_running() is False
-        finally:
-            dialog._server = None
             dialog.close()
 
     def test_polling_does_not_stop_a_server_mid_reload(
@@ -1037,23 +1058,20 @@ class TestLivePreviewLifecycle:
         assert not dialog._watch_timer.isActive()
         assert not dialog._rebuild_timer.isActive()
 
-    def test_turning_live_preview_off_stops_the_server(
+    def test_pressing_preview_again_stops_the_server(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
         from nika_onlymap_exporter.ui.live_server import PreviewServer
 
         dialog = self._dialog(project, make_memory_layer)
         (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
-        # Establish the starting state rather than inheriting it: `setChecked`
-        # emits nothing when the value already matches, so a box that was
-        # already unticked would make this pass for the wrong reason.
-        dialog.live_action.setChecked(True)
         dialog._server = PreviewServer(tmp_path)
         dialog._server.start()
 
-        dialog.live_action.setChecked(False)
+        dialog.preview_button.click()
 
         assert dialog._server is None
+        assert "stopped" in dialog.status_label.text()
         dialog.close()
 
     def test_polling_does_nothing_without_a_server(
@@ -1105,33 +1123,11 @@ class TestLivePreviewLifecycle:
         dialog._fall_back_to_file_preview(entry)
 
         assert opened, "the preview should still open"
-        assert dialog.live_action.isChecked() is False, (
-            "the menu item must match reality"
-        )
         assert dialog._server is None
+        assert dialog.preview_button.text() == "Preview", (
+            "the button must not claim a live preview that is not running"
+        )
         assert "could not start" in dialog.status_label.text()
-        dialog.close()
-
-    def test_the_fallback_does_not_re_enter_teardown(
-        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
-    ) -> None:
-        """Clearing the checkbox must not fire `_on_live_toggled` recursively."""
-        dialog = self._dialog(project, make_memory_layer)
-        entry = tmp_path / "index.html"
-        entry.write_text("<p>x</p>", encoding="utf-8")
-        monkeypatch.setattr(
-            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
-            lambda url: None,
-        )
-
-        calls: list[bool] = []
-        original = dialog._on_live_toggled
-        monkeypatch.setattr(
-            dialog, "_on_live_toggled", lambda value: calls.append(value) or original
-        )
-
-        dialog._fall_back_to_file_preview(entry)
-        assert calls == [], "the signal should be blocked while correcting the box"
         dialog.close()
 
 
@@ -1900,25 +1896,23 @@ class TestExportIsBack:
         finally:
             dialog.close()
 
-    def test_the_corner_is_one_joined_control_without_arrows(
+    def test_the_corner_is_separate_buttons_with_export_last(
         self, qgis_app, project, make_memory_layer
     ) -> None:
+        from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtWidgets import QToolButton
 
         dialog = self._dialog(project, make_memory_layer)
         try:
-            buttons = [dialog.preview_button, dialog.export_button, dialog.share_button]
-            assert [b.property("position") for b in buttons] == [
-                "first",
-                "middle",
-                "last",
-            ]
-            assert all(b.property("role") == "segment" for b in buttons)
-            for button in (dialog.preview_button, dialog.share_button):
-                assert (
-                    button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
-                )
-            assert "::menu-indicator" in dialog.styleSheet()
+            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            buttons = corner.findChildren(QToolButton)
+            assert buttons[-1] is dialog.export_button
+            assert all(b.property("role") == "corner" for b in buttons)
+            assert corner.layout().spacing() > 0
+            # Share alone keeps a menu, and shows its arrow.
+            assert dialog.share_button.property("hasMenu") is True
+            assert dialog.preview_button.property("hasMenu") is False
+            assert all(not b.icon().isNull() for b in buttons)
         finally:
             dialog.close()
 

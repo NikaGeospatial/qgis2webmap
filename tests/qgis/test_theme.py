@@ -298,7 +298,7 @@ class TestMessageBoxes:
 
 
 class TestCornerMenus:
-    """The corner's menus hang from the whole View | Export | Share control."""
+    """Share's menu hangs from Share, growing left so it stays on the dialog."""
 
     def _open(self, qgis_app, button):
         from qgis.PyQt.QtCore import QPoint
@@ -309,29 +309,7 @@ class TestCornerMenus:
             qgis_app.processEvents()
         return menu
 
-    def test_view_opens_rightwards_under_the_control(
-        self, qgis_app, project, make_memory_layer
-    ):
-        from qgis.PyQt.QtCore import QPoint
-
-        dialog = TestScope()._dialog(project, make_memory_layer)
-        try:
-            dialog.resize(720, 500)
-            dialog.move(0, 0)
-            dialog.show()
-            first, last = dialog.preview_button, dialog.share_button
-            menu = self._open(qgis_app, first)
-            left = first.mapToGlobal(QPoint(0, 0)).x()
-            right = last.mapToGlobal(QPoint(last.width(), 0)).x()
-            assert menu.geometry().left() == left
-            assert menu.width() >= right - left
-            menu.hide()
-        finally:
-            dialog.close()
-
-    def test_share_ends_at_the_controls_right_edge(
-        self, qgis_app, project, make_memory_layer
-    ):
+    def test_share_ends_at_its_right_edge(self, qgis_app, project, make_memory_layer):
         from qgis.PyQt.QtCore import QPoint
 
         dialog = TestScope()._dialog(project, make_memory_layer)

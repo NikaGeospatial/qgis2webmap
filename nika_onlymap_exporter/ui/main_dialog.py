@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMapLayer, QgsMessageLog, QgsProject
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtCore import QObject, QSettings, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QObject, QSettings, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
@@ -190,7 +190,6 @@ PREVIEW_IDLE_STOP_SECONDS = 20.0
 # Where the live-preview preference lives. QSettings, not the project file: it
 # describes how someone likes to work, not what the map is, so it should follow
 # the person between projects rather than travel inside one.
-LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 
 # The folder the last export was written to. QSettings for the same reason as
 # the live-preview flag: "where I keep my maps" is a property of the person, not
@@ -657,8 +656,7 @@ class MainDialog(QDialog):
             "Help": self._help_page,
         }
         self.tabs.setCornerWidget(self._build_tab_corner(), Qt.Corner.TopRightCorner)
-        # After the corner: its Preview menu owns the Live preview action that
-        # this tab mirrors. Before Help, where people look for settings.
+        # Before Help, where people look for settings.
         self.tabs.insertTab(
             self.tabs.indexOf(self._help_page),
             _scrollable(self._build_settings_tab()),
@@ -1318,13 +1316,7 @@ class MainDialog(QDialog):
         # fact about now. With no session it is a fact about the past, and the
         # sentence has to say what will close the gap - otherwise a file written
         # twenty minutes ago looks current simply because it exists.
-        if self._autosave_is_running():
-            self.save_status.setText(
-                tr("Saved {ago} - {detail}").format(
-                    ago=_ago(stat.st_mtime), detail=detail
-                )
-            )
-        elif self._map_file_is_stale():
+        if self._map_file_is_stale():
             self.save_status.setText(
                 tr(
                     "Last written {ago} - {detail}. "
@@ -1337,16 +1329,6 @@ class MainDialog(QDialog):
                     ago=_ago(stat.st_mtime), detail=detail
                 )
             )
-
-    def _autosave_is_running(self) -> bool:
-        """Whether the map file is currently being kept up to date.
-
-        Both halves are required, and that is the point. The checkbox alone is a
-        stored preference - it says what Preview will do when pressed, not that
-        anything is happening - so a ticked box with no server must not produce
-        a status line claiming the file is being saved.
-        """
-        return self._server is not None and self.live_action.isChecked()
 
     def _update_share_enabled(self) -> None:
         """Share needs somewhere to write before any of it means anything.
@@ -2195,30 +2177,31 @@ class MainDialog(QDialog):
         corner = QWidget(self)
         layout = QHBoxLayout(corner)
         layout.setContentsMargins(0, 0, 6, 0)
-        # One joined control - View | Export | Share - with one outline and
-        # dividers, rather than two outlined buttons around a borderless one.
-        layout.setSpacing(0)
+        # Separate buttons, not one joined control: joined, the filled middle
+        # read as the selected one of three choices. These are three acts.
+        layout.setSpacing(6)
 
-        # "View", not "Preview": pressing it opens a short menu whose first
-        # item is Preview, the way a View menu works in other programs.
-        self.preview_button = QToolButton(corner)
-        self.preview_button.setText(tr("View"))
-        self.preview_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.preview_button.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
-        self.preview_button.setProperty("role", "segment")
-        self.preview_button.setProperty("position", "first")
-        self.preview_button.setProperty("accent", False)
-        self.preview_button.setMenu(self._build_preview_menu())
+        # One press opens the preview and keeps it live; the button then shows
+        # that, and a second press stops it. No menu: a menu of one action and
+        # one switch was a click spent on choosing nothing.
+        self.preview_button = self._corner_button(corner, tr("Preview"), "preview")
+        self.preview_button.clicked.connect(self._on_preview_pressed)
         layout.addWidget(self.preview_button)
 
-        # The plugin's main act, so the one filled button: writes the export in
-        # the type and place chosen on the Map tab.
-        self.export_button = QToolButton(corner)
-        self.export_button.setText(tr("Export"))
-        self.export_button.setProperty("role", "segment")
-        self.export_button.setProperty("position", "middle")
+        self.share_button = self._corner_button(corner, tr("Share"), "share")
+        # A plain dropdown for now: pressing it opens the menu. It also holds
+        # Discord, which needs no map file, so the button is never disabled;
+        # the rows that do need one are.
+        self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.share_button.setProperty("hasMenu", True)
+        self.share_button.setMenu(self._build_share_menu())
+        layout.addWidget(self.share_button)
+
+        # The plugin's main act, so the one filled button, and last - where a
+        # dialog's confirming button sits: writes the export in the type and
+        # place chosen on the Map tab.
+        layout.addSpacing(4)
+        self.export_button = self._corner_button(corner, tr("Export"), "export")
         self.export_button.setProperty("accent", True)
         self.export_button.setToolTip(
             tr("Write the map in the type and place chosen on the Map tab")
@@ -2226,55 +2209,45 @@ class MainDialog(QDialog):
         self.export_button.clicked.connect(self.on_export)
         layout.addWidget(self.export_button)
 
-        self.share_button = QToolButton(corner)
-        self.share_button.setText(tr("Share"))
-        self.share_button.setProperty("role", "segment")
-        self.share_button.setProperty("position", "last")
-        self.share_button.setProperty("accent", False)
-        # A plain dropdown for now: pressing it opens the menu. It also holds
-        # Discord, which needs no map file, so the button is never disabled;
-        # the rows that do need one are.
-        self.share_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.share_button.setProperty("hasMenu", True)
-        self.share_button.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
-        self.share_button.setMenu(self._build_share_menu())
-        layout.addWidget(self.share_button)
-
+        self._show_preview_state()
         return corner
 
-    def _build_preview_menu(self) -> QMenu:
-        """One item, and room for more when somebody asks for a second.
+    @staticmethod
+    def _corner_button(parent: QWidget, text: str, icon: str) -> QToolButton:
+        button = QToolButton(parent)
+        button.setText(text)
+        button.setProperty("role", "corner")
+        button.setProperty("accent", False)
+        button.setProperty("hasMenu", False)
+        button.setProperty("lineIcon", icon)
+        button.setIconSize(QSize(15, 15))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        return button
 
-        `Live preview` was a checkbox in the bottom row. It is the only setting
-        in this dialog that changes what *another* control does rather than what
-        the map contains, so it belongs on that control rather than beside it.
-        """
-        menu = QMenu(self)
-        menu.setToolTipsVisible(True)
-
-        preview = menu.addAction(tr("Preview"))
-        preview.setToolTip(
-            tr("Build the map and open it in your browser, without writing an export")
-        )
-        preview.triggered.connect(self.on_preview)
-        menu.addSeparator()
-
-        self.live_action = QAction(tr("Live preview"), self)
-        self.live_action.setCheckable(True)
-        self.live_action.setChecked(
-            QSettings().value(LIVE_PREVIEW_KEY, True, type=bool)
-        )
-        self.live_action.setToolTip(
+    def _show_preview_state(self) -> None:
+        """Make the Preview button say whether a live preview is running."""
+        live = getattr(self, "_server", None) is not None
+        button = self.preview_button
+        if button.property("live") is live:
+            return
+        button.setProperty("live", live)
+        button.setProperty("lineIcon", "live" if live else "preview")
+        button.setText(tr("Live") if live else tr("Preview"))
+        button.setToolTip(
             tr(
-                "Serve the preview from this machine and reload the open tab as you "
-                "change settings. Switch off to open the preview as a file instead."
+                "Live preview is on: changes here update the browser tab. "
+                "Press to stop."
+            )
+            if live
+            else tr(
+                "Open the map in your browser. It updates as you change settings "
+                "here, until you press again or close the tab."
             )
         )
-        self.live_action.toggled.connect(self._on_live_toggled)
-        menu.addAction(self.live_action)
-        return menu
+        button.style().unpolish(button)
+        button.style().polish(button)
+        if hasattr(self, "theme"):
+            theme.paint_line_icons(button.parentWidget(), self.theme)
 
     def _build_share_menu(self) -> QMenu:
         """Everything that sends the map somewhere, in one list.
@@ -2740,10 +2713,13 @@ class MainDialog(QDialog):
 
     # ---- Live preview ---------------------------------------------------
 
-    def _on_live_toggled(self, enabled: bool) -> None:
-        QSettings().setValue(LIVE_PREVIEW_KEY, enabled)
-        if not enabled:
-            self._stop_live_preview()
+    def _on_preview_pressed(self) -> None:
+        """Start a live preview, or stop the one that is running."""
+        if self._server is None:
+            self.on_preview()
+            return
+        self._stop_live_preview()
+        self.status_label.setText(tr("Live preview stopped."))
 
     def _poll_for_changes(self) -> None:
         """Restart the debounce whenever any setting differs from last build."""
@@ -2766,46 +2742,6 @@ class MainDialog(QDialog):
             return
         self._last_snapshot = current
         self._rebuild_timer.start()
-
-    def _autosave_target(self) -> Path | None:
-        """The file Live preview keeps current: only ever a single HTML file.
-
-        A zip or a folder is a package to hand over, rebuilt when Export is
-        pressed; rewriting one on every edit would be slow and surprising.
-        """
-        if self.state.output_mode is not OutputMode.STANDALONE_HTML:
-            return None
-        return self._map_file()
-
-    def _autosave_map_file(self, export, writer, map_file: Path | None):
-        """Write the user's map file from a read already in hand.
-
-        Runs on a worker thread, so it takes everything it needs as arguments
-        and touches no widget.
-
-        **Not `write_preview`.** The served copy carries an injected EventSource
-        listener so the tab can be told to reload; the user's map file must
-        never contain it, or every recipient's browser would sit reconnecting to
-        a server on somebody else's machine. Same read, same writer, different
-        artifact.
-
-        `build_artifact` stages through a temporary directory and moves the
-        result into place, so a failure part-way leaves the previous map intact
-        rather than a half-written one where the user keeps theirs.
-
-        Returns the exception on failure rather than raising: a refusal here is
-        not worth a modal, because the user is typing in a dialog rather than
-        asking for a file.
-        """
-        if map_file is None:
-            return None
-        try:
-            build_artifact(
-                export, map_file, mode=OutputMode.STANDALONE_HTML, writer=writer
-            )
-        except (ExportBlockedError, OSError) as exc:
-            return exc
-        return None
 
     def _rebuild_live_preview(self) -> None:
         """Rewrite the artifact and tell the open tab to reload.
@@ -2832,32 +2768,17 @@ class MainDialog(QDialog):
         def then(export, _report) -> None:
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
-            # Read on this thread too: the worker must not touch a widget.
-            map_file = self._autosave_target()
-            signature = self.state.snapshot()
 
             def work(progress: Progress):
                 progress.step(READ_SHARE, tr("Updating the preview..."))
                 write_preview(
                     export, self._project_identity(), writer=writer, live=True
                 )
-                return self._autosave_map_file(export, writer, map_file)
 
-            def on_written(result) -> None:
+            def on_written(_result) -> None:
                 if self._shut_down or self._server is None:
                     return
                 self._server.notify_reload()
-                if isinstance(result, Exception):
-                    self.status_label.setText(
-                        tr(
-                            "Preview updated. The map file was not written: {error}"
-                        ).format(error=result)
-                    )
-                    return
-                if map_file is not None:
-                    self._written_signature = signature
-                    self._last_export_path = map_file
-                self._update_save_status()
                 self.status_label.setText(tr("Live preview updated."))
 
             self._start_job(work, on_written, tr("Updating the preview..."), quiet=True)
@@ -2892,6 +2813,8 @@ class MainDialog(QDialog):
         if server is not None:
             with contextlib.suppress(Exception):
                 server.stop()
+        if hasattr(self, "preview_button"):
+            self._show_preview_state()
 
     def _project_identity(self) -> str:
         return self.project.fileName() or self.project.baseName() or "untitled"
@@ -3082,43 +3005,23 @@ class MainDialog(QDialog):
         self._ensure_export(self._preview_with, "Reading the project...")
 
     def _preview_with(self, export, _report) -> None:
-        """Write and open the preview. Called once a read is in hand."""
+        """Write and open the preview, live. Called once a read is in hand.
+
+        Live means the tab follows the dialog; it never means the export file
+        does. Only Export writes the user's map - a preview that rewrote it on
+        every edit changed their file without their asking.
+        """
         if not self._runtime_ready():
             return
 
         identity = self._project_identity()
-        live = self.live_action.isChecked()
         writer = self._writer()
-        # Starting a live session is the moment autosave begins, so the map file
-        # is written here rather than waiting for the first edit. Without this
-        # the status line claimed the file was being saved while no file existed
-        # - true only until something changed, which is not what "saved" means.
-        map_file = self._autosave_target() if live else None
-        signature = self.state.snapshot()
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Building the preview..."))
-            result = write_preview(export, identity, writer=writer, live=live)
-            return result, self._autosave_map_file(export, writer, map_file)
+            return write_preview(export, identity, writer=writer, live=True)
 
-        def on_written(built) -> None:
-            result, autosave_error = built
-            if map_file is not None and autosave_error is None:
-                self._written_signature = signature
-                self._last_export_path = map_file
-            self._update_save_status()
-
-            if not live:
-                self._stop_live_preview()
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
-                self.status_label.setText(
-                    tr(
-                        "Preview opened. Reload the browser tab after making changes - "
-                        "your position on the map is kept."
-                    )
-                )
-                return
-
+        def on_written(result) -> None:
             self._last_snapshot = self.state.snapshot()
             try:
                 url = self._ensure_server(preview_directory(identity))
@@ -3131,27 +3034,10 @@ class MainDialog(QDialog):
 
             QDesktopServices.openUrl(QUrl(url))
             self._watch_timer.start()
-            # Again, now the server exists. The line computed above ran before
-            # `_ensure_server`, so `_autosave_is_running` was still false and it
-            # read "Last written" for a file that is now being kept current.
-            self._update_save_status()
-            if autosave_error is not None:
-                self.status_label.setText(
-                    tr(
-                        "Live preview open. The map file was not written: {error}"
-                    ).format(error=autosave_error)
-                )
-            elif map_file is not None:
-                self.status_label.setText(
-                    tr(
-                        "Live preview open. Changes here update the tab and the map "
-                        "file automatically."
-                    )
-                )
-            else:
-                self.status_label.setText(
-                    tr("Live preview open. Changes here update the tab automatically.")
-                )
+            self._show_preview_state()
+            self.status_label.setText(
+                tr("Live preview open. Changes here update the tab automatically.")
+            )
 
         self._start_job(work, on_written, tr("Building the preview..."))
 
@@ -3160,8 +3046,8 @@ class MainDialog(QDialog):
 
         Deliberately not a modal: the user asked for a preview and there is one,
         so interrupting them to explain a downgrade they did not choose would be
-        worse than the downgrade. The checkbox is cleared so the state on screen
-        matches what is actually happening.
+        worse than the downgrade. No server runs, so the Preview button stays as
+        it was rather than claiming to be live.
         """
         QgsMessageLog.logMessage(
             f"Could not start the live preview server:\n{traceback.format_exc()}",
@@ -3169,11 +3055,6 @@ class MainDialog(QDialog):
             level=Qgis.MessageLevel.Warning,
         )
         self._stop_live_preview()
-        with contextlib.suppress(Exception):
-            # Reflect reality without re-entering `_on_live_toggled`'s teardown.
-            self.live_action.blockSignals(True)
-            self.live_action.setChecked(False)
-            self.live_action.blockSignals(False)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(entry_path)))
         self.status_label.setText(

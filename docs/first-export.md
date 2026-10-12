@@ -37,8 +37,8 @@ howto:
     - name: Preview
       anchor: 5-preview
       text: >-
-        Press Preview to build the map and open it in your browser. With Live
-        preview ticked the tab updates by itself as you change settings.
+        Press Preview to build the map and open it in your browser. The tab
+        updates by itself as you change settings, until you press it again.
     - name: Share it
       anchor: 6-share-it
       text: >-
@@ -52,7 +52,7 @@ howto:
 
 lead_image:
   src: /images/export-05-live-preview.png
-  alt: The export dialog's button row - Live preview ticked, with Preview and Export beside it.
+  alt: The export dialog's corner - Preview reading Live while a preview runs, with Share and Export beside it.
 ---
 
 # Your first export
@@ -124,14 +124,11 @@ break the drawing.
 **Preview** builds the map and opens it in your default browser. Nothing opens a
 browser on its own - only this button does.
 
-With **Live preview** ticked, the map is served from your own machine and the tab
-updates by itself as you change settings, keeping your position on the map. Change
-a colour or switch a layer off and watch it happen; there is no need to press
-Preview again.
-
-Untick **Live preview** to open the map as a file instead. The tab then only
-changes when you press Preview again or reload it. The setting is remembered
-between projects.
+The map is served from your own machine and the tab updates by itself as you
+change settings, keeping your position on the map. Change a colour or switch a
+layer off and watch it happen; there is no need to press Preview again. While it
+runs the button reads **● Live** - press it again, or close the tab, to stop.
+A preview never writes your map file; Export does that.
 
 If the preview cannot be served - a firewall or a locked-down machine - it opens
 as a file automatically and tells you so. Nothing is lost.

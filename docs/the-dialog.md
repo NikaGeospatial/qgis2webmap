@@ -22,9 +22,10 @@ Six tabs, and two things that stay on screen whichever tab you are on: the
 [fidelity strip](#the-fidelity-strip) and the [button row](#the-button-row).
 
 Settings are remembered **per project**, stored in the `.qgz` alongside it, so
-they travel with the project rather than following you between projects. Two
+they travel with the project rather than following you between projects. The
 exceptions are remembered per machine instead, because they are habits rather
-than properties of a map: **Live preview** and the last folder you exported to.
+than properties of a map: the last folder you exported to, and the Settings tab's
+choices.
 The [Settings tab](#settings) gathers the per-machine ones you can change.
 
 ---
@@ -75,7 +76,6 @@ A second line says what is on disk:
 |---|---|
 | *Choose where to save, then press Export.* | No path set yet. Nothing has been written |
 | *Not written yet.* | The path is set; nothing is there until you export |
-| *Saved just now — 2.9 MB — 5 layers* | Live preview is running and the HTML file is being kept up to date |
 | *Last written 20 min ago* | Written earlier. Export again if the project has moved on |
 
 Both the type and the place are saved with the project.
@@ -339,32 +339,24 @@ message. **What changes?** jumps to the Fidelity tab.
 
 ## The button row
 
-### Live preview
+### Preview, Share and Export
 
-A per-machine habit, remembered between projects. Ticking it opens nothing on its
-own — it only decides what **Preview** does when you press it.
+All three sit in the **top-right corner of the tab bar**, so they are within
+reach whichever tab you are reading.
 
-With it **on**, the map is served from your own machine and the open browser tab
-updates by itself as you change settings, keeping your position on the map.
-Change a colour or switch a layer off and watch it happen.
+**Preview** builds the map and opens it in your default browser, served from
+your own machine. The tab then updates by itself as you change settings, keeping
+your position on the map - change a colour or switch a layer off and watch it
+happen. While it runs the button reads **● Live**; press it again, or close the
+tab, to stop. Nothing else in the plugin opens a browser, and a preview never
+writes your map file - only Export does.
 
-With it **off**, Preview writes a file and opens that. The tab only changes when
-you press Preview again.
-
-If the preview cannot be served — a firewall, a locked-down machine — it falls
-back to a file automatically and tells you so.
-
-### View, Export and Share
-
-All three sit in the **top-right corner of the tab bar**, joined into one
-control, so they are within reach whichever tab you are reading.
-
-**View** opens a short menu: **Preview** builds the map and opens it in your
-default browser, and **Live preview** is the switch described above. Nothing
-else in the plugin opens a browser.
+If the preview cannot be served — a firewall, a locked-down machine — it opens
+as a file instead and tells you so. That tab only changes when you press
+Preview again.
 
 **Export** writes the map in the type and place chosen on the Map tab. It is
-the filled button, because it is what the plugin is for.
+the filled button, last in the row, because it is what the plugin is for.
 
 **Share** is everything else you might do with the finished map. Pressing it
 opens the menu:
@@ -385,7 +377,7 @@ set one on the Map tab they are greyed out, and each says so if you hover it.
 **Rows that need the map write it first** when it is missing or out of date,
 so Copy file path or Show in file manager never point at something stale.
 
-View's Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
+Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent
 refusal:
 

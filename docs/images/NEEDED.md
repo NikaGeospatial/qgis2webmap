@@ -154,10 +154,10 @@ tab bar's top-right corner, and the bottom row is Discord and Close only.
 | File | Referenced by | What it has to show now |
 | --- | --- | --- |
 | `export-02-formats.png` | `first-export.md`, `sharing.md` (lead image) | The **Map file** field with **Choose** beside it, and the save-status line under it. The alt text and caption in both guides already describe this; only the picture is behind |
-| `dialog-tabs.png` | `the-dialog.md` | The tab strip with **Preview ▾** and **Share ▾** in the corner, where `Get help ↗` used to be |
+| `dialog-tabs.png` | `the-dialog.md` | The tab strip with **Preview**, **Share ▾** and a filled **Export** in the corner, where `Get help ↗` used to be |
 | `export-01-map-name.png` | `first-export.md` | Map name at the top of the Map tab — recheck, the fields below it have changed |
 | `export-03-summary-line.png` | unreferenced | The summary now says what the map file contains, not what Export will produce |
-| `export-05-live-preview.png` | `first-export.md` | Live preview is a checkbox **inside the Preview ▾ menu**, no longer a checkbox in the bottom row |
+| `export-05-live-preview.png` | `first-export.md` | No Live preview checkbox any more: the **Preview** button reads **● Live** while a preview runs |
 | `dialog-map-tab.png` | unreferenced | Whole Map tab; retake if it is ever used |
 
 **Also worth one new shot:** the **Share menu open**, showing the sections
