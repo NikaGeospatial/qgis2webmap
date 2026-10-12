@@ -172,3 +172,26 @@ class TestDeclutterLayer:
         )
         assert layer.cluster_max_zoom is not None
         assert layer.label_min_zoom == layer.cluster_max_zoom + 1
+
+
+def test_stacked_samples_cluster_but_do_not_hold_their_labels_back() -> None:
+    """Ten well-spaced sites, twenty samples each: the stacks stay counted
+    bubbles at every zoom, and the labels show once the sites have room."""
+    sites = [(-150.0 + 30 * i, 0.0) for i in range(10)]
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [x, y]},
+            "properties": {"name": f"Site {n}"},
+        }
+        for n, (x, y) in enumerate(sites)
+        for _ in range(20)
+    ]
+    layer = _layer(
+        200,
+        0.001,
+        geojson={"type": "FeatureCollection", "features": features},
+    )
+    result = declutter_layer(layer, default_font_px=12)
+    assert result.cluster_max_zoom is not None
+    assert result.label_min_zoom is None or result.label_min_zoom <= 3

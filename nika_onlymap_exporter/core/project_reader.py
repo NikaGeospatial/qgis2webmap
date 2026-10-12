@@ -35,7 +35,7 @@ from qgis.core import (
     QgsScaleCalculator,
 )
 
-from .declutter import declutter_layer
+from .declutter import declutter_layer, has_stacks
 from .export_ir import (
     Color,
     ExportLayer,
@@ -556,7 +556,13 @@ def _declutter(
                 "merge into count bubbles until zoom "
                 f"{layer.cluster_max_zoom} and show one by one from zoom "
                 f"{layer.cluster_max_zoom + 1}. Clicking a bubble zooms in to "
-                "its points.",
+                "its points."
+                + (
+                    " Points at exactly the same spot stay one bubble at every "
+                    "zoom, showing how many there are."
+                    if has_stacks(layer)
+                    else ""
+                ),
                 layer.layer_id,
             )
         if labels_never_fit(layer):

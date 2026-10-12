@@ -172,6 +172,32 @@ def cluster_max_zoom(
     return None if zoom is None else max(0, zoom - 1)
 
 
+def sites_part_zoom(
+    points: Sequence[tuple[float, float]], radius_px: float
+) -> int | None:
+    """The last zoom at which separate sites still merge, stacks counted once.
+
+    What labels wait for. A stack of samples at one spot stays a single bubble
+    at every zoom, so waiting for it to split held a layer's labels back to the
+    last zoom; a bubble at one spot wearing that spot's name is not the mix-up
+    the wait exists to prevent.
+    """
+    if len(points) < CLUSTER_MIN_POINTS:
+        return None
+    side = 2 * radius_px + _PADDING_PX
+    sites, sizes = _distinct(points, [(side, side)] * len(points))
+    zoom = _first_zoom_that_fits(sites, sizes)
+    return None if zoom is None else max(0, zoom - 1)
+
+
+def has_stacks(layer: ExportLayer) -> bool:
+    """Whether some of a point layer's points share one spot exactly."""
+    positions = _point_positions(layer.geojson)
+    if not positions:
+        return False
+    return len({(round(x, 7), round(y, 7)) for x, y in positions}) < len(positions)
+
+
 def _point_positions(
     geojson: dict[str, object] | None,
 ) -> list[tuple[float, float]] | None:
@@ -195,8 +221,9 @@ def _point_positions(
 def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
     """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in.
 
-    Labels of a clustered layer wait until its bubbles have split: a count
-    bubble with a single point's name over it would be wrong.
+    Labels of a clustered layer wait until bubbles stop merging separate
+    sites: a count bubble over several places wearing one place's name would
+    be wrong. A stack at one spot never splits, and does not hold them back.
 
     A label limit at or below the layer's own minimum zoom changes nothing on
     the map, so it is left out rather than reported.
@@ -205,6 +232,7 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
         return layer
 
     clusters: int | None = None
+    sites: int | None = None
     if layer.geometry_kind is GeometryKind.POINT:
         positions = _point_positions(layer.geojson)
         if positions is not None:
@@ -214,6 +242,8 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
             else:
                 radius = (symbol.radius if symbol is not None else 0.0) or 4.0
             clusters = cluster_max_zoom(positions, radius)
+            if clusters is not None:
+                sites = sites_part_zoom(positions, radius)
 
     labels: int | None = None
     labeling = layer.labeling
@@ -237,8 +267,8 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
                 ],
                 labeling.font_size or default_font_px,
             )
-            if clusters is not None:
-                labels = max(labels or 0, clusters + 1)
+            if sites is not None:
+                labels = max(labels or 0, sites + 1)
             floor = layer.visible_zoom_range[0] if layer.visible_zoom_range else 0.0
             if labels is not None and labels <= floor:
                 labels = None
