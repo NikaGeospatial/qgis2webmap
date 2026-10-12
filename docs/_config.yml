@@ -63,7 +63,7 @@ plugins:
   - jekyll-relative-links
 
 # Used in the footer. Bump alongside `nika_onlymap_exporter/metadata.txt`.
-plugin_version: 0.2.0
+plugin_version: 0.2.1
 
 # The link-card image for pages that do not set their own `image`. Before this,
 # thirteen of sixteen pages shared to Discord, Slack or X as a bare text row: the

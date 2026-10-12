@@ -4,6 +4,26 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-12
+
+### Fixed
+- **QGIS 3 could close while the Fidelity tab resized its rows.** On QGIS 3
+  (Qt5) an error inside Qt's row sizing ends the whole application, and the
+  Fidelity tab's sizing could raise one while the tab was being closed, and
+  again from inside itself. It now never raises.
+- **Message boxes were unreadable on QGIS 3 after switching to the dark
+  theme** - light text on a light background. Each box now takes the theme's
+  background directly.
+- **The Layers tab's drop-downs were cut off at the bottom on QGIS 3.** Rows
+  now fit their tallest control.
+- **Menus opened narrower than their button on QGIS 3.** They now match it.
+
+### Changed
+- **Release announcements reach Discord sooner.** The check now runs every 30
+  minutes and reads the plugin's own page on plugins.qgis.org, about 170 KB,
+  instead of the full plugin index, about 9 MB - less load on the site than the
+  old six-hourly check.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added
