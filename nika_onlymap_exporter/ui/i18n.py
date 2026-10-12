@@ -40,10 +40,10 @@ def N_(text: str) -> str:  # noqa: N802 - the conventional gettext marker name
 def plural(count: int, singular: str, many: str, **fields: object) -> str:
     """`singular` or `many` by `count`, translated, with `{n}` and `fields` filled in.
 
-    Both forms go into the catalogue as separate entries. English and
-    Portuguese both use the singular for exactly one, which covers every
-    language this plugin ships; a language with more forms would move this to
-    Qt's numerus entries.
+    Both forms go into the catalogue as separate entries, and the singular
+    is chosen for exactly one. That is English's rule, not every shipped
+    language's: French and Hindi also use the singular for zero, and Arabic
+    has more forms. Moving to Qt's numerus entries would fix both.
     """
     return tr(singular if count == 1 else many).format(n=count, **fields)
 
