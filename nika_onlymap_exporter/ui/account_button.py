@@ -35,7 +35,7 @@ from qgis.PyQt.QtGui import QFont, QIcon, QPainter, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
 from ..core.account import AccountIdentity
-from .i18n import tr
+from .i18n import N_, tr
 from .theme import line_icon
 
 # Icon names verified present in QGIS 4.2's compiled theme. As with
@@ -45,7 +45,7 @@ from .theme import line_icon
 ICON_SWITCH = "mActionRefresh.svg"
 ICON_SIGN_OUT = "mActionRemove.svg"
 
-SIGN_IN_TEXT = "Sign in to NIKA"
+SIGN_IN_TEXT = N_("Sign in to NIKA")
 
 
 class AccountBackend(Protocol):
@@ -149,7 +149,7 @@ class AccountButton(QToolButton):
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
     def _show_signed_out(self) -> None:
-        self.setText(SIGN_IN_TEXT)
+        self.setText(tr(SIGN_IN_TEXT))
         self.setIcon(self._person_icon())
         self._set_has_menu(False)
         self.setToolTip(
@@ -272,9 +272,11 @@ class AccountButton(QToolButton):
         confirmed = QMessageBox.question(
             self,
             tr("Sign out of NIKA"),
-            f"Sign out of {identity.label} and revoke this computer's access?\n\n"
-            "Maps you have already published stay online. You will need to "
-            "sign in again through your browser to publish anything new.",
+            tr(
+                "Sign out of {account} and revoke this computer's access?\n\n"
+                "Maps you have already published stay online. You will need to "
+                "sign in again through your browser to publish anything new."
+            ).format(account=identity.label),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
@@ -297,10 +299,14 @@ class AccountButton(QToolButton):
 
 
 def _signed_in_tooltip(identity: AccountIdentity) -> str:
-    lines = [f"Signed in to NIKA as {identity.email or identity.display_name}."]
+    lines = [
+        tr("Signed in to NIKA as {account}.").format(
+            account=identity.email or identity.display_name
+        )
+    ]
     if identity.plan_line:
         lines.append(identity.plan_line)
-    lines.append("Click to switch account or sign out.")
+    lines.append(tr("Click to switch account or sign out."))
     return "\n".join(lines)
 
 

@@ -524,10 +524,10 @@ HELP_PAGES = (
     (N_("Privacy"), "privacy.md"),
 )
 
-HELP_UNAVAILABLE = (
+HELP_UNAVAILABLE = N_(
     "# Help\n\n"
     "The bundled guides could not be found in this installation.\n\n"
-    f"They are also online at <{DOCS_URL}>.\n"
+    "They are also online at <{url}>.\n"
 )
 
 
@@ -573,7 +573,7 @@ def load_help_markdown() -> str:
     """
     directory = help_directory()
     if directory is None:
-        return HELP_UNAVAILABLE
+        return tr(HELP_UNAVAILABLE).format(url=DOCS_URL)
 
     sections: list[str] = []
     for title, filename in HELP_PAGES:
@@ -595,7 +595,7 @@ def load_help_markdown() -> str:
         sections.append(text)
 
     if not sections:
-        return HELP_UNAVAILABLE
+        return tr(HELP_UNAVAILABLE).format(url=DOCS_URL)
     return "\n\n---\n\n".join(sections)
 
 
@@ -1732,9 +1732,9 @@ class MainDialog(QDialog):
 
         hover = QComboBox(row)
         for text, value in (
-            ("Popups: same as map", None),
-            ("Popups: on hover", True),
-            ("Popups: on click", False),
+            (tr("Popups: same as map"), None),
+            (tr("Popups: on hover"), True),
+            (tr("Popups: on click"), False),
         ):
             hover.addItem(text, value)
         hover.setCurrentIndex(max(0, hover.findData(settings.popup_on_hover)))
@@ -1747,7 +1747,14 @@ class MainDialog(QDialog):
         precision.addItem(tr("Precision: same as map"), None)
         precision.addItem(tr("Precision: keep it all"), PRECISION_FULL)
         for places in range(MIN_PRECISION, MAX_PRECISION + 1):
-            precision.addItem(f"Precision: {places} decimal place(s)", places)
+            precision.addItem(
+                plural(
+                    places,
+                    "Precision: {n} decimal place",
+                    "Precision: {n} decimal places",
+                ),
+                places,
+            )
         precision.setCurrentIndex(
             max(0, precision.findData(settings.quantize_precision))
         )
@@ -3146,7 +3153,7 @@ class MainDialog(QDialog):
         # behind the download left the tab blank whenever the runtime was
         # missing or the user declined, hiding the one thing that would have
         # told them what their map was going to lose.
-        self._ensure_export(self._preview_with, "Reading the project...")
+        self._ensure_export(self._preview_with, tr("Reading the project..."))
 
     def _preview_with(self, export, _report) -> None:
         """Write and open the preview. Called once a read is in hand.
@@ -3404,7 +3411,7 @@ class MainDialog(QDialog):
                 # fix, and raising would route it to the crash reporter with a
                 # "please report this" that has nothing to report.
                 return exc
-            progress.step(100, "Finishing...")
+            progress.step(100, tr("Finishing..."))
             return result, outcome
 
         def on_written(built) -> None:

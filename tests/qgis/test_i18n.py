@@ -233,6 +233,37 @@ class TestTheDialog:
         finally:
             dialog.close()
 
+    def test_text_built_after_the_tabs_is_translated_too(
+        self, portuguese, project, make_memory_layer
+    ) -> None:
+        """The layer rows, the sign-in chip and the problems warning were
+        written as plain or f-strings, which the catalogue never saw."""
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        from nika_onlymap_exporter.core.fidelity_report import (
+            FidelityItem,
+            FidelityStatus,
+        )
+        from nika_onlymap_exporter.ui.fidelity_panel import problems_box
+
+        dialog = _dialog(project, make_memory_layer)
+        try:
+            texts = {
+                combo.itemText(i)
+                for combo in dialog.layer_tree.findChildren(QComboBox)
+                for i in range(combo.count())
+            }
+            assert "Pop-ups: ao passar o mouse" in texts
+            assert "Precisão: 3 casas decimais" in texts
+            assert dialog.account_button.text() == "Entrar na NIKA"
+        finally:
+            dialog.close()
+
+        item = FidelityItem("Camada 'x'", FidelityStatus.BLOCKED, "Ilegível.", "x")
+        box, choices = problems_box(None, [item, item], "Export")
+        assert box.text().startswith("2 itens")
+        assert "Exportar mesmo assim" in {button.text() for button in choices}
+
     def test_arabic_is_laid_out_right_to_left(
         self, qgis_app, project, make_memory_layer
     ):

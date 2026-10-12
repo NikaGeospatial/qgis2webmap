@@ -821,6 +821,35 @@ class Proceed(Enum):
     CANCEL = "cancel"
 
 
+# What the warning offers for each action: the button, then the explanation
+# for one item and for several. Whole sentences per verb, because a translator
+# cannot conjugate a verb spliced into a sentence.
+ANYWAY_WORDS = {
+    "Export": (
+        N_("Export anyway"),
+        N_(
+            "You can export anyway and the map is made without it, or review "
+            "the report first."
+        ),
+        N_(
+            "You can export anyway and the map is made without them, or review "
+            "the report first."
+        ),
+    ),
+    "Publish": (
+        N_("Publish anyway"),
+        N_(
+            "You can publish anyway and the map is made without it, or review "
+            "the report first."
+        ),
+        N_(
+            "You can publish anyway and the map is made without them, or review "
+            "the report first."
+        ),
+    ),
+}
+
+
 def problems_box(
     parent: QWidget | None, items: Sequence[FidelityItem], action: str
 ) -> tuple[QMessageBox, dict[QAbstractButton, Proceed]]:
@@ -834,15 +863,17 @@ def problems_box(
     box.setWindowTitle(tr("Part of this map will not work"))
     count = len(items)
     box.setText(
-        f"{count} thing{'' if count == 1 else 's'} cannot be carried into the "
-        "map as set up in QGIS:\n\n"
+        plural(
+            count,
+            "{n} thing cannot be carried into the map as set up in QGIS:",
+            "{n} things cannot be carried into the map as set up in QGIS:",
+        )
+        + "\n\n"
         + "\n".join(f"- {item.subject}: {item.detail}" for item in items)
     )
-    box.setInformativeText(
-        f"You can {action.lower()} anyway and the map is made without "
-        f"{'it' if count == 1 else 'them'}, or review the report first."
-    )
-    anyway = box.addButton(f"{action} anyway", QMessageBox.ButtonRole.AcceptRole)
+    button, without_it, without_them = ANYWAY_WORDS[action]
+    box.setInformativeText(plural(count, without_it, without_them))
+    anyway = box.addButton(tr(button), QMessageBox.ButtonRole.AcceptRole)
     review = box.addButton(
         tr("Review on the Fidelity tab"), QMessageBox.ButtonRole.ActionRole
     )

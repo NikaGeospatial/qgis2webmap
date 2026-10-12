@@ -45,7 +45,7 @@ from ..packaging.runtime_manager import (
     record_licence_acceptance,
     tarball_url,
 )
-from .i18n import tr
+from .i18n import N_, tr
 
 # Shipped alongside the plugin so the terms are readable before any download.
 # Kept in sync with the published package by scripts/lock_runtime.py.
@@ -53,13 +53,13 @@ BUNDLED_LICENCE = (
     Path(__file__).resolve().parent.parent / "runtime" / "ONLYMAP-LICENSE.md"
 )
 
-INTRO = (
+INTRO = N_(
     "<p><b>QGIS2WebMap needs the OnlyMap runtime to build a map.</b></p>"
     "<p>The runtime is the code that draws the map in a browser. It is embedded "
     "in every map you export, which is what lets someone open your map with no "
     "internet connection and no software installed.</p>"
-    f"<p>It is downloaded <b>once on this computer</b> "
-    f"({RUNTIME_DOWNLOAD_SIZE}). Every export after that works offline.</p>"
+    "<p>It is downloaded <b>once on this computer</b> "
+    "({size}). Every export after that works offline.</p>"
     "<p>QGIS2WebMap is free and open source. The OnlyMap runtime is a separate "
     "commercial product by NIKA with its own licence, shown below.</p>"
 )
@@ -75,12 +75,18 @@ class RuntimeLicenceDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        intro = QLabel(INTRO)
+        intro = QLabel(tr(INTRO).format(size=RUNTIME_DOWNLOAD_SIZE))
         intro.setWordWrap(True)
         intro.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(intro)
 
-        source = QLabel(f"<p>Source: <code>{NPM_PACKAGE} {version}</code></p>")
+        source = QLabel(
+            "<p>"
+            + tr("Source: {package}").format(
+                package=f"<code>{NPM_PACKAGE} {version}</code>"
+            )
+            + "</p>"
+        )
         source.setWordWrap(True)
         source.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(source)
@@ -138,14 +144,16 @@ def make_qgis_downloader(feedback=None):
         code = fetcher.get(request, False, feedback)
 
         if feedback is not None and feedback.isCanceled():
-            raise RuntimeDownloadError("The download was cancelled.")
+            raise RuntimeDownloadError(tr("The download was cancelled."))
 
         if code != QgsBlockingNetworkRequest.ErrorCode.NoError:
             raise RuntimeDownloadError(
-                f"Could not download the OnlyMap runtime.\n\n"
-                f"{fetcher.errorMessage()}\n\n"
-                "If this computer reaches the internet through a proxy, check "
-                "Settings -> Options -> Network in QGIS."
+                tr("Could not download the OnlyMap runtime.")
+                + f"\n\n{fetcher.errorMessage()}\n\n"
+                + tr(
+                    "If this computer reaches the internet through a proxy, check "
+                    "Settings -> Options -> Network in QGIS."
+                )
             )
 
         return bytes(fetcher.reply().content())
@@ -229,8 +237,10 @@ def _download_with_progress(
     from qgis.core import QgsFeedback
 
     progress = QProgressDialog(
-        f"Downloading the OnlyMap runtime ({RUNTIME_DOWNLOAD_SIZE})…",
-        "Cancel",
+        tr("Downloading the OnlyMap runtime ({size})…").format(
+            size=RUNTIME_DOWNLOAD_SIZE
+        ),
+        tr("Cancel"),
         0,
         0,
         parent,
