@@ -64,6 +64,11 @@ _STAND_IN = """      <script>
         start = Math.max(size - +range[2], 0);
       }
       status = 206;
+      if (start >= size || start > end) {
+        return Promise.resolve(new Response(null, { status: 416, headers: {
+          "Content-Range": `bytes */${size}`,
+        } }));
+      }
     }
     const body = bytes.slice(start, end + 1);
     return Promise.resolve(new Response(body, { status, headers: {
