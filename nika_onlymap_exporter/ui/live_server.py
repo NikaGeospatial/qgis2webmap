@@ -21,11 +21,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import queue
+import re
 import sys
 import threading
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import BinaryIO
 
 # The path the injected script opens an EventSource against. Underscored so it
 # cannot collide with a file in the preview directory, which is served from the
@@ -40,6 +42,36 @@ HEARTBEAT_SECONDS = 15.0
 # Bound to loopback only. Binding 0.0.0.0 would publish the user's map data to
 # their whole network, which is the opposite of what this plugin promises.
 BIND_HOST = "127.0.0.1"
+
+
+# `bytes=N-M`, `bytes=N-` or `bytes=-K`: one range, which is all a COG reader
+# sends. A comma means several, and those fall back to the whole file.
+_SINGLE_RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+class _BoundedReader:
+    """A file that ends `length` bytes after where it was opened.
+
+    `SimpleHTTPRequestHandler.do_GET` copies whatever `send_head` returns to
+    the socket until it reads empty, then closes it. Handing it the open file
+    would send everything after the range as well.
+    """
+
+    def __init__(self, handle: BinaryIO, length: int) -> None:
+        self._handle = handle
+        self._remaining = length
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining <= 0:
+            return b""
+        if size < 0 or size > self._remaining:
+            size = self._remaining
+        chunk = self._handle.read(size)
+        self._remaining -= len(chunk)
+        return chunk
+
+    def close(self) -> None:
+        self._handle.close()
 
 
 class _PreviewHandler(SimpleHTTPRequestHandler):
@@ -74,6 +106,55 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
             self._serve_events()
             return
         super().do_GET()
+
+    def send_head(self):  # type: ignore[no-untyped-def]  # stdlib signature
+        """Answer a single byte range with 206, the way a raster needs.
+
+        A raster preview is a Cloud-Optimized GeoTIFF, and the runtime reads one
+        in pieces: `Range: bytes=N-M` for the header, then for each tile. The
+        stock handler ignores `Range` and returns 200 with the whole file, which
+        the reader then slices at the offset it asked for - wrong bytes, a
+        "Failed to decode deflate" in the console, and a map with no rasters.
+
+        Only the single-range forms are handled (`N-M`, `N-`, `-K`); a
+        multi-range request gets the whole file, which is what the stock
+        handler did for every request. Path handling is the stock handler's,
+        so a range can no more leave the preview directory than a plain GET.
+        """
+        byte_range = self.headers.get("Range", "")
+        match = _SINGLE_RANGE.fullmatch(byte_range.strip())
+        path = self.translate_path(self.path)
+        if match is None or not Path(path).is_file():
+            return super().send_head()
+
+        size = Path(path).stat().st_size
+        first, last = match.group(1), match.group(2)
+        if first:
+            start = int(first)
+            end = min(int(last), size - 1) if last else size - 1
+        elif last:
+            start = max(size - int(last), 0)
+            end = size - 1
+        else:
+            return super().send_head()
+
+        if start >= size or start > end:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+
+        handle = open(path, "rb")  # noqa: SIM115 - closed by do_GET after copy
+        handle.seek(start)
+        length = end - start + 1
+        self.send_response(206)
+        self.send_header("Content-Type", self.guess_type(path))
+        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        return _BoundedReader(handle, length)
 
     def do_POST(self) -> None:
         """Read-only by construction.

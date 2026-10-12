@@ -70,6 +70,74 @@ class TestServing:
             second.stop()
 
 
+def _get_range(server: PreviewServer, path: str, byte_range: str):
+    connection = http.client.HTTPConnection("127.0.0.1", server.port, timeout=5.0)
+    try:
+        connection.request("GET", path, headers={"Range": byte_range})
+        response = connection.getresponse()
+        return response.status, dict(response.getheaders()), response.read()
+    finally:
+        connection.close()
+
+
+class TestByteRanges:
+    """A raster preview is a COG, and a COG is read in byte ranges.
+
+    The runtime's reader asks for `Range: bytes=N-M` and slices what comes back
+    at the offset it asked for. Answer with 200 and the whole file and it
+    slices the wrong bytes: the map draws the vectors, the legend lists the
+    rasters, and the browser console says "Failed to decode deflate".
+    """
+
+    @pytest.fixture
+    def tif(self, served):
+        server, root = served
+        payload = bytes(range(256)) * 400  # 102,400 bytes, every offset distinct
+        (root / "layer.tif").write_bytes(payload)
+        return server, payload
+
+    def test_a_range_gets_exactly_those_bytes(self, tif) -> None:
+        server, payload = tif
+        status, headers, body = _get_range(server, "/layer.tif", "bytes=1000-1099")
+        assert status == 206
+        assert body == payload[1000:1100]
+        assert headers["Content-Range"] == f"bytes 1000-1099/{len(payload)}"
+        assert headers["Content-Length"] == "100"
+
+    def test_an_open_ended_range_runs_to_the_end(self, tif) -> None:
+        server, payload = tif
+        status, _, body = _get_range(server, "/layer.tif", "bytes=102000-")
+        assert status == 206
+        assert body == payload[102000:]
+
+    def test_a_suffix_range_is_the_last_bytes(self, tif) -> None:
+        server, payload = tif
+        status, _, body = _get_range(server, "/layer.tif", "bytes=-64")
+        assert status == 206
+        assert body == payload[-64:]
+
+    def test_a_range_past_the_end_is_clamped(self, tif) -> None:
+        server, payload = tif
+        status, _, body = _get_range(server, "/layer.tif", "bytes=102300-999999")
+        assert status == 206
+        assert body == payload[102300:]
+
+    def test_a_range_starting_past_the_end_is_refused(self, tif) -> None:
+        server, payload = tif
+        status, headers, _ = _get_range(server, "/layer.tif", "bytes=999999-")
+        assert status == 416
+        assert headers["Content-Range"] == f"bytes */{len(payload)}"
+
+    def test_without_a_range_the_whole_file_comes_back(self, tif) -> None:
+        server, payload = tif
+        assert _get(server, "/layer.tif") == (200, payload)
+
+    def test_a_range_cannot_escape_the_preview_directory(self, served) -> None:
+        server, _ = served
+        status, _, _ = _get_range(server, "/../../etc/passwd", "bytes=0-10")
+        assert status == 404
+
+
 class TestRefusals:
     def test_it_refuses_writes(self, served) -> None:
         """The plugin writes the preview; a served page must not be able to."""
