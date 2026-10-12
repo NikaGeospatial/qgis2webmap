@@ -1404,6 +1404,37 @@ class TestLivePreviewLifecycle:
         finally:
             dialog.close()
 
+    def test_a_live_session_starts_on_a_fresh_server(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """A one-off tab still connected to the old server would count as a
+        viewer of the live session and keep it rebuilding after its own tab
+        closed."""
+        import nika_onlymap_exporter.ui.main_dialog as module
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        monkeypatch.setattr(module.QDesktopServices, "openUrl", lambda *_: True)
+        monkeypatch.setattr(module, "preview_directory", lambda _id: tmp_path)
+        dialog = self._dialog(project, make_memory_layer)
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        old = PreviewServer(tmp_path)
+        old.start()
+        dialog._server = old
+        try:
+            dialog.live_switch.setChecked(True)
+            monkeypatch.setattr(dialog, "_runtime_ready", lambda: True)
+            monkeypatch.setattr(
+                dialog,
+                "_start_job",
+                lambda work, done, *a, **k: done(type("R", (), {})()),
+            )
+            dialog._preview_with(object(), None)
+            assert dialog._server is not None
+            assert dialog._server is not old
+            assert dialog._live_running()
+        finally:
+            dialog.close()
+
     def test_a_one_off_served_preview_stops_once_its_tab_closes(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

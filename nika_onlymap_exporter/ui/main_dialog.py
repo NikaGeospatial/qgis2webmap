@@ -3213,6 +3213,11 @@ class MainDialog(QDialog):
                 return
 
             self._last_snapshot = self.state.snapshot()
+            if live and self._server is not None and not self._live_running():
+                # A fresh server for a live session: an old one-off tab still
+                # connected to this one would count as a viewer, and keep the
+                # session rebuilding after its own tab had closed.
+                self._stop_live_preview()
             try:
                 url = self._ensure_server(preview_directory(identity))
             except OSError:
