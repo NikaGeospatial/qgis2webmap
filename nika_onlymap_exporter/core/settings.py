@@ -31,6 +31,7 @@ from .export_ir import (
     OverlayCorner,
     PopupFieldMode,
 )
+from .manifest_builder import osm_from_file
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsProject
@@ -401,11 +402,19 @@ class DialogState:
         what a fresh read would produce, so it can be reused. That is what keeps
         a chrome checkbox from re-reading half a million features.
         """
-        return self._snapshot_of(DATA_FIELDS)
+        # The output type is chrome, except that it decides whether the read
+        # reports OpenStreetMap refusing a file-opened map. Watching that one
+        # outcome, not the type itself, keeps a Folder/ZIP switch on any other
+        # basemap from costing a re-read.
+        return self._snapshot_of(
+            DATA_FIELDS,
+            osm_from_file=osm_from_file(self.basemap, self.output_mode),
+        )
 
-    def _snapshot_of(self, names: tuple[str, ...]) -> str:
+    def _snapshot_of(self, names: tuple[str, ...], **derived: object) -> str:
         return json.dumps(
             {
+                **derived,
                 **{
                     name: getattr(self, name).value
                     if isinstance(getattr(self, name), Enum)

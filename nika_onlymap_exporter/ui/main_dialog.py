@@ -1276,6 +1276,16 @@ class MainDialog(QDialog):
         """
         self.state.output_mode = mode
         self._update_basemap_warning()
+        # The report states the output type, and with OpenStreetMap the type
+        # decides whether it warns: restate or mark it out of date.
+        self._refresh_fidelity_freshness()
+        if (
+            self._fidelity_state is ReportState.CURRENT
+            and self._fidelity_summary is not None
+        ):
+            self.fidelity_panel.show_summary(
+                self._fidelity_summary, self._fidelity_facts(self._fidelity_signature)
+            )
         typed = self.path_edit.text().strip()
         if typed:
             path = Path(typed)
@@ -2112,8 +2122,11 @@ class MainDialog(QDialog):
         export = self._cached_export
         if not isinstance(export, ExportProject) or signature != self._cached_signature:
             return None
+        # The read's own settings are the ones it was taken with; the output
+        # type stated beside it is today's.
+        current = replace(export, settings=self.state.to_export_settings())
         try:
-            return report_facts(export, self._layer_data_bytes(export))
+            return report_facts(current, self._layer_data_bytes(export))
         except Exception:
             # Facts are a courtesy beside the report; never lose the report
             # over one.

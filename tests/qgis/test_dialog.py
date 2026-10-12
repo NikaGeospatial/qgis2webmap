@@ -1839,6 +1839,37 @@ class TestChromeChangesSkipTheRead:
         state.for_layer("roads").popup = False
         assert state.data_snapshot() != before
 
+    def test_the_output_type_invalidates_the_cache_only_under_osm(self) -> None:
+        """The read warns about OpenStreetMap opened from a file; that warning
+        is the one thing the output type changes in it."""
+        from nika_onlymap_exporter.core.settings import DialogState
+
+        state = DialogState(basemap="liberty", output_mode=OutputMode.FOLDER)
+        before = state.data_snapshot()
+        state.output_mode = OutputMode.STANDALONE_HTML
+        assert state.data_snapshot() == before
+
+        state.basemap = "osm"
+        before = state.data_snapshot()
+        state.output_mode = OutputMode.FOLDER
+        assert state.data_snapshot() != before
+
+    def test_switching_type_under_osm_marks_the_report_out_of_date(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        dialog = TestFidelityStrip()._dialog(project, make_memory_layer)
+        try:
+            dialog.basemap_combo.setCurrentIndex(dialog.basemap_combo.findData("osm"))
+            dialog.mode_buttons[OutputMode.FOLDER].click()
+            dialog._show_fidelity(FidelityReportBuilder())
+            assert not dialog._fidelity_is_stale
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
+            assert dialog._fidelity_is_stale
+        finally:
+            dialog.close()
+
 
 class TestOversizedSingleFileIsAWarningNotASwitch:
     """The dialog must never say one thing and write another.
