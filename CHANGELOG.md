@@ -17,13 +17,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   that the runtime had nowhere to put it; it has had one since 0.6.22.
 
 - **Raster layers export.** A GeoTIFF on disk is converted to a
-  Cloud-Optimized GeoTIFF and carried in a **Folder** or **Share ZIP** export,
-  in its place in the layer order. A single-band raster's QGIS colour ramp,
-  classes and stretch are drawn into its pixels, so the map shows the colours
-  QGIS shows; an RGB composite keeps its own bands. Standalone HTML cannot
-  carry a raster and says so, naming the layers and the format to pick
-  instead. A raster map's Preview is served from this machine, because a
-  browser will not read the raster from a page opened off the disk. Live
+  Cloud-Optimized GeoTIFF and carried in every export type, in its place in the
+  layer order. A single-band raster's QGIS colour ramp, classes and stretch are
+  drawn into its pixels, so the map shows the colours QGIS shows; an RGB
+  composite keeps its own bands. **Standalone HTML carries the raster inside
+  the page**, so the one file still opens by double-click with no server, up
+  to 100 MB of imagery; past that it says so and names Folder or Share ZIP,
+  which stream the raster in pieces and have to be served over HTTP. Live
   services (WMS, XYZ) are still left out, and the Fidelity tab says why.
 - **Preview, Share and Export are separate buttons** in the top-right corner,
   with Export filled and last. Each has a small icon; only Share has a menu.

@@ -27,28 +27,22 @@ from ..core.fidelity_report import FidelityReportBuilder
 # rejects attachments over 25 MB, and many corporate filters are stricter.
 SINGLE_FILE_WARN_BYTES = 20 * 1024 * 1024
 
-# The single-file tier cannot carry a raster at any size. This was measured on
-# the pinned runtime rather than assumed, and the finding is worse than the
-# size problem it was expected to be:
+# The single-file tier carries its rasters inside the page. Not as a `data:`
+# URI in `src`, which was measured and does not work: the runtime's COG reader
+# issues `Range: bytes=N-M` requests through `fetch` and slices what comes back
+# at the offset it asked for, and a `data:` URI answers every request with 200
+# and the whole body, so the reader would draw the wrong bytes without an error.
+# A `file://` sibling cannot be fetched from a page opened by double-click at
+# all. So the page carries the converted file and answers the reader's range
+# requests from it itself - `packaging.raster_embed` has the mechanism.
 #
-# * `COGLayer`'s `src` is handed to the bundled cogeotiff reader's `fromUrl`,
-#   which opens the file as a *chunked* source -- 64 KiB header chunks, and tile
-#   reads issued as `Range: bytes=N-M` straight to `fetch`.
-# * Its HTTP source checks only `response.ok` and returns `arrayBuffer()`. There
-#   is no `allowFullFile` guard anywhere in the bundle and no check for a 206.
-# * A `data:` URI answers every request with **200 and the entire body**;
-#   browsers ignore `Range` on it (measured in Chromium 151). The reader
-#   therefore slices a full-file buffer at an offset meant for a chunk.
-#
-# So a `data:`-embedded COG larger than the first 64 KiB chunk does not fail --
-# it reads the wrong bytes, which is the silent breakage `CONTRIBUTING.md` puts
-# above every other consideration. The same measurement rules out the obvious
-# fallback: a `file://` sibling cannot be fetched at all from a page opened by
-# double-click, and with the browser flag that permits it the response is again
-# a 200 full file. Hence a refusal rather than a threshold. If the runtime grows
-# an in-memory entry point for `src` (its reader already has `fromArrayBuffer`,
-# just not reachable from an attribute), this becomes a size limit instead.
-STANDALONE_CARRIES_RASTERS = False
+# What is left is a size limit, measured on the converted file. The page holds
+# the raster as base64, a third larger, and the browser decodes all of it on
+# open; past this a single file is slow to open and heavy to hold in memory,
+# and Folder or Share ZIP - which stream the raster in pieces - are the
+# practical tiers. The scanner tests the source size as an estimate before
+# anything is converted; `raster_staging` decides on the real one.
+STANDALONE_RASTER_MAX_BYTES = 100 * 1024 * 1024
 
 # Past this, a zip stops being a thing you can hand someone. It is ten times
 # `SINGLE_FILE_WARN_BYTES` and not the same number, because the zip tier is
@@ -178,11 +172,12 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
     `scan` uses it to refuse the export if they got there anyway. A second copy
     of the rule is how a dialog and an exporter start disagreeing.
 
-    See `STANDALONE_CARRIES_RASTERS` for the measurement behind the refusal.
-    The message names the raster because a project can hold twenty layers and
-    "there is a raster somewhere" is not something a user can act on.
+    See `STANDALONE_RASTER_MAX_BYTES`: rasters travel inside the page up to a
+    size, and only past it does this return a reason. The message names the
+    rasters because a project can hold twenty layers and "there is a raster
+    somewhere" is not something a user can act on.
     """
-    if STANDALONE_CARRIES_RASTERS:  # pragma: no cover - a flag, not a branch
+    if raster_bytes(project) <= STANDALONE_RASTER_MAX_BYTES:
         return None
 
     names = [
@@ -196,11 +191,12 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
         if len(names) > 1
         else [f"'{names[0]}'"]
     )
-    noun = "raster layers" if len(names) > 1 else "a raster layer"
     return (
-        f"{listed} {'are' if len(names) > 1 else 'is'} {noun}, which cannot "
-        "be packed into a single HTML file. Choose Folder or Share ZIP as the "
-        "export format instead."
+        f"The raster imagery in {listed} is about "
+        f"{format_megabytes(raster_bytes(project))}, too large to pack into a "
+        "single HTML file (the limit is "
+        f"{format_megabytes(STANDALONE_RASTER_MAX_BYTES)}). Choose Folder or "
+        "Share ZIP as the export format instead."
     )
 
 

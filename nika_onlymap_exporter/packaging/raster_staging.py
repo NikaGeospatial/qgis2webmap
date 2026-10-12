@@ -19,14 +19,11 @@ raster comfortably:
   `SIBLING_FETCH_NOTE`: the recipient has to serve the extracted folder rather
   than double-click into it, and that is said out loud in the fidelity report
   rather than discovered as a blank map.
-* **Standalone HTML** has no sibling to write, and the obvious alternative --
-  a base64 `data:` URI in the page -- was measured against the pinned runtime
-  and does not work at any size worth having: the reader asks for byte ranges,
-  a `data:` URI ignores them and returns the whole file with a 200, and the
-  reader has no guard for that, so it slices the wrong offsets and draws the
-  wrong image without an error. This tier therefore refuses a raster outright
-  and names the tier that works. The rule and the evidence live in
-  `dependency_scanner.STANDALONE_CARRIES_RASTERS`, because what a tier can
+* **Standalone HTML** has no sibling to write, so the converted file travels
+  inside the page and the page answers the reader's byte-range requests from
+  it - `packaging.raster_embed`. Converted in a temporary directory, handed to
+  the writer as bytes, and refused past a size: the rule and the evidence live
+  in `dependency_scanner.STANDALONE_RASTER_MAX_BYTES`, because what a tier can
   carry is one subject and belongs in one file.
 
 **Nothing is ever dropped quietly.** `CONTRIBUTING.md` is explicit that a
@@ -59,7 +56,11 @@ from typing import Any, Callable
 
 from ..core.export_ir import ExportLayer, ExportProject, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
-from .dependency_scanner import standalone_raster_reason
+from .dependency_scanner import (
+    STANDALONE_RASTER_MAX_BYTES,
+    format_megabytes,
+    standalone_raster_reason,
+)
 from .raster_bake import StyleBakeError
 from .raster_cog import (
     CancelCheck,
@@ -152,6 +153,9 @@ class RasterStagingResult:
     files: tuple[Path, ...] = ()
     staged: tuple[StagedRaster, ...] = ()
     blocking_reasons: tuple[str, ...] = ()
+    # The single-file tier's rasters: `(src, bytes)` for the writer to put in
+    # the page, where `files` holds the other tiers' siblings.
+    embedded: tuple[tuple[str, bytes], ...] = ()
 
     @property
     def can_export(self) -> bool:
@@ -224,6 +228,37 @@ def stage_rasters(
     rasters = [layer for layer in project.layers if layer.raster is not None]
     if not rasters:
         return RasterStagingResult(project=project)
+
+    if mode is OutputMode.STANDALONE_HTML:
+        # Converted beside nothing: the bytes go into the page. Staged in a
+        # directory of our own so a failure leaves nothing in the user's.
+        with tempfile.TemporaryDirectory(prefix="qgis2webmap-embed-") as work:
+            staged_here = stage_rasters(
+                project,
+                Path(work),
+                OutputMode.FOLDER,
+                report,
+                on_progress=on_progress,
+                should_cancel=should_cancel,
+                converter=converter,
+                baker=baker,
+            )
+            if not staged_here.can_export:
+                return staged_here
+            total = sum(path.stat().st_size for path in staged_here.files)
+            if total > STANDALONE_RASTER_MAX_BYTES:
+                return _too_large_for_one_page(project, rasters, report, total)
+            embedded = tuple(
+                (path.name, path.read_bytes()) for path in staged_here.files
+            )
+        for layer in rasters:
+            report.preserved(
+                f"Raster '{layer.name}'",
+                "Carried inside the page, so the single file opens by "
+                "double-click with its imagery and needs no server.",
+                layer.layer_id,
+            )
+        return dataclasses.replace(staged_here, files=(), embedded=embedded)
 
     if mode not in SIBLING_MODES:
         return _tier_cannot_carry(project, rasters, report)
@@ -419,6 +454,29 @@ def _tier_cannot_carry(
     """
     reason = standalone_raster_reason(project) or (
         "This output mode cannot carry a raster layer."
+    )
+    for layer in rasters:
+        report.blocked(f"Raster '{layer.name}'", reason, layer.layer_id)
+    return RasterStagingResult(project=project, blocking_reasons=(reason,))
+
+
+def _too_large_for_one_page(
+    project: ExportProject,
+    rasters: list[ExportLayer],
+    report: FidelityReportBuilder,
+    total: int,
+) -> RasterStagingResult:
+    """Refuse a single file whose converted rasters are past the limit.
+
+    Measured, so this can disagree with the scanner's estimate in the safe
+    direction only: a source that compressed well passes here after the
+    estimate let it through, and one that did not is caught.
+    """
+    reason = (
+        f"The raster imagery comes to {format_megabytes(total)} once converted, "
+        "too large to pack into a single HTML file (the limit is "
+        f"{format_megabytes(STANDALONE_RASTER_MAX_BYTES)}). Choose Folder or "
+        "Share ZIP as the export format instead."
     )
     for layer in rasters:
         report.blocked(f"Raster '{layer.name}'", reason, layer.layer_id)

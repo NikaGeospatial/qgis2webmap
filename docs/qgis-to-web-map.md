@@ -74,8 +74,9 @@ of this is knowing which parts before you send the map rather than after.
 
 Vector points, lines and polygons are exported, along with layer order,
 groups and opacity. So are raster layers from a file on disk - a GeoTIFF
-travels as a Cloud-Optimized GeoTIFF in a Folder or Share ZIP export, in the
-colours QGIS draws it; a single HTML file cannot carry one. Data in any CRS is
+travels as a Cloud-Optimized GeoTIFF, in the colours QGIS draws it - inside the
+single HTML file up to 100 MB of imagery, or beside the page in a Folder or
+Share ZIP export. Data in any CRS is
 reprojected to WGS84 on the way out. Scale-dependent visibility survives as the
 matching web zoom levels, and the Fidelity tab shows which zooms it became.
 

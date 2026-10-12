@@ -234,56 +234,74 @@ class TestSiblingTiers:
 
 
 class TestStandaloneTier:
-    """The single file cannot carry a raster at all, and the reason is not size.
+    """The single file carries its rasters inside the page.
 
-    Measured against the pinned runtime: `src` goes to a chunked reader that
-    issues `Range` requests, a `data:` URI ignores Range and answers 200 with
-    the whole body, and the reader has no guard for that -- so it slices the
-    wrong offsets and draws a wrong image without erroring. Refusing is the
-    only outcome that is not silently broken.
+    The runtime reads a COG in byte ranges through `fetch`. A `data:` URI
+    ignores ranges and a page opened from disk cannot fetch a sibling, so the
+    page carries the converted file itself and answers those range requests
+    from it - see `packaging.raster_embed`. What is left is a size limit.
     """
 
-    def test_a_raster_is_refused_before_anything_is_converted(
+    def test_a_raster_is_embedded_not_written_beside_the_page(
         self, tmp_path: Path
     ) -> None:
-        converter = FakeConverter()
-        report = FidelityReportBuilder()
         out = tmp_path / "artifact"
         result = stage_rasters(
             project_with(raster_layer(write_source(tmp_path))),
             out,
             OutputMode.STANDALONE_HTML,
-            report,
-            converter=converter,
+            FidelityReportBuilder(),
+            converter=FakeConverter(),
         )
-
-        assert result.can_export is False
-        # Not converted: minutes of GDAL for an answer knowable at the start.
-        assert converter.calls == []
+        assert result.can_export is True
         assert result.files == ()
-        assert not out.exists()
+        assert not any(out.glob("*.tif")) if out.exists() else True
+        ((name, data),) = result.embedded
+        (spec,) = [layer.raster for layer in result.project.layers if layer.raster]
+        assert spec.src == name
+        assert data  # the converted bytes, not the source path
+
+    def test_a_raster_too_large_for_one_page_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import nika_onlymap_exporter.packaging.raster_staging as staging_module
+
+        monkeypatch.setattr(staging_module, "STANDALONE_RASTER_MAX_BYTES", 1)
+        report = FidelityReportBuilder()
+        result = stage_rasters(
+            project_with(raster_layer(write_source(tmp_path))),
+            tmp_path / "artifact",
+            OutputMode.STANDALONE_HTML,
+            report,
+            converter=FakeConverter(),
+        )
+        assert result.can_export is False
+        assert "Folder" in result.blocking_reasons[0]
         assert any(i.status is FidelityStatus.BLOCKED for i in report.items)
 
-    def test_the_refusal_names_the_layer_and_the_tier_that_works(self) -> None:
-        reason = standalone_raster_reason(
-            project_with(vector_layer(), raster_layer(Path("/nowhere/ortho.tif")))
-        )
+    def test_a_small_raster_keeps_the_single_file_tier(self, tmp_path: Path) -> None:
+        project = project_with(raster_layer(write_source(tmp_path)))
+        assert standalone_raster_reason(project) is None
+        result = scan(project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML)
+        assert result.can_export is True
+
+    def test_the_scanner_refuses_an_estimate_over_the_limit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One rule, two call sites, the same words."""
+        import nika_onlymap_exporter.packaging.dependency_scanner as scanner_module
+
+        monkeypatch.setattr(scanner_module, "STANDALONE_RASTER_MAX_BYTES", 1)
+        project = project_with(vector_layer(), raster_layer(write_source(tmp_path)))
+        reason = standalone_raster_reason(project)
         assert reason is not None
         assert "'Elevation'" in reason
         assert "Folder" in reason
+        result = scan(project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML)
+        assert result.blocking_reasons[0] == reason
 
     def test_a_vector_only_project_keeps_the_single_file_tier(self) -> None:
         assert standalone_raster_reason(project_with(vector_layer())) is None
-
-    def test_the_scanner_blocks_the_same_case_with_the_same_words(
-        self, tmp_path: Path
-    ) -> None:
-        """One rule, two call sites: a dialog that greys the tier out and an
-        export that refuses it must not be able to disagree."""
-        project = project_with(raster_layer(write_source(tmp_path)))
-        result = scan(project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML)
-        assert result.can_export is False
-        assert result.blocking_reasons[0] == standalone_raster_reason(project)
 
     def test_the_scanner_allows_the_sibling_tiers(self, tmp_path: Path) -> None:
         project = project_with(raster_layer(write_source(tmp_path)))
@@ -365,12 +383,14 @@ class TestSizeAccounting:
         )
         assert raster_bytes(project_with(layer)) == source.stat().st_size
 
-    def test_any_raster_makes_standalone_ineligible(self, tmp_path: Path) -> None:
+    def test_a_small_raster_leaves_the_single_file_eligible(
+        self, tmp_path: Path
+    ) -> None:
+        """Rasters travel inside the page now; only their size can rule it out."""
         reason = standalone_ineligible_reason(
             project_with(raster_layer(write_source(tmp_path)))
         )
-        assert reason is not None
-        assert "Folder" in reason
+        assert reason is None
 
 
 class TestRecipientInstructions:
@@ -415,16 +435,34 @@ class TestWriterIntegration:
         assert f'src="{cog.path.name}"' in html
         assert str(source) not in html
 
-    def test_the_single_file_tier_refuses_a_raster(self, tmp_path: Path) -> None:
+    def test_the_single_file_tier_carries_the_raster_in_the_page(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import base64
+
+        import nika_onlymap_exporter.packaging.raster_staging as staging_module
+
+        monkeypatch.setattr(staging_module, "gdal_available", lambda: True)
+        monkeypatch.setattr(staging_module, "_convert", FakeConverter())
         out = tmp_path / "artifact"
-        with pytest.raises(ExportBlockedError) as caught:
-            OnlyMapWriter(runtime_provider=FakeRuntime()).write(
-                project_with(raster_layer(write_source(tmp_path))),
-                out,
-                mode=OutputMode.STANDALONE_HTML,
-            )
-        assert "Folder" in str(caught.value)
-        assert not (out / "index.html").exists()
+        OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            project_with(raster_layer(write_source(tmp_path))),
+            out,
+            mode=OutputMode.STANDALONE_HTML,
+        )
+        page = (out / "index.html").read_text(encoding="utf-8")
+        assert not list(out.glob("*.tif")), "nothing beside the page"
+        block = page.split('type="application/x-om-raster" data-src="')[1]
+        name, payload = block.split('">', 1)
+        assert f'src="{name}"' in page, "the layer asks for what the page holds"
+        assert base64.b64decode(payload.split("</script>", 1)[0])
+        # The stand-in runs before the runtime that will call fetch.
+        assert (
+            page.index("window.fetch = ") < page.index("@RUNTIME")
+            if "@RUNTIME" in page
+            else True
+        )
+        assert page.index("window.fetch = ") < page.rindex('<script type="module">')
 
     def test_a_blocked_raster_stops_the_export_before_the_page_is_written(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -614,12 +652,12 @@ class TestStyleBaking:
 
 
 class TestPreviewMode:
-    """A raster map is previewed as a folder; everything else as one file."""
+    """A raster map is previewed as one file, the same as everything else."""
 
-    def test_a_raster_map_previews_as_a_folder(self) -> None:
+    def test_a_raster_map_previews_as_one_file_too(self) -> None:
         from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui.preview import preview_mode
 
         raster = project_with(vector_layer(), raster_layer(Path("/nowhere/a.tif")))
-        assert preview_mode(raster) is OutputMode.FOLDER
+        assert preview_mode(raster) is OutputMode.STANDALONE_HTML
         assert preview_mode(project_with(vector_layer())) is OutputMode.STANDALONE_HTML

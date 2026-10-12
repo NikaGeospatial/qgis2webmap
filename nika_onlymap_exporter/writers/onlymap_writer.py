@@ -42,6 +42,7 @@ from ..packaging.asset_embedder import (
 )
 from ..packaging.dependency_scanner import ScanResult, scan
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
+from ..packaging.raster_embed import build_raster_embed
 from ..packaging.raster_staging import RasterStagingResult, stage_rasters
 from ..packaging.runtime_manager import (
     RuntimeBundle,
@@ -189,6 +190,7 @@ class OnlyMapWriter:
         compress_data: bool = False,
         preview_hook: str = "",
         runtime_file: str | None = None,
+        embedded_rasters: tuple[tuple[str, bytes], ...] = (),
     ) -> str:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -230,6 +232,7 @@ class OnlyMapWriter:
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
             "@RUNTIME_JS@": script_body,
             "@PREVIEW_HOOK@": preview_hook,
+            "@RASTER_EMBED@": build_raster_embed(embedded_rasters),
         }
 
         # One pass, not a loop of replaces. Substituting sequentially would let
@@ -347,6 +350,7 @@ class OnlyMapWriter:
                 compress_data,
                 preview_hook,
                 runtime_file,
+                staging.embedded,
             ),
             encoding="utf-8",
         )

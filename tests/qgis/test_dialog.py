@@ -541,12 +541,18 @@ class TestLiveSwitch:
 
 
 class TestRasterExports:
-    """A raster cannot travel in one HTML file, so that is a refusal, not a warning."""
+    """Rasters too large for one HTML file are a refusal, not a warning."""
 
     def test_standalone_with_a_raster_is_refused_without_a_write_anyway(
         self, qgis_app, project, make_memory_layer, make_raster_layer, monkeypatch
     ) -> None:
         import time
+
+        import nika_onlymap_exporter.packaging.dependency_scanner as scanner
+
+        # Past the size a single page can carry: "write it anyway" would only
+        # end in the writer's refusal.
+        monkeypatch.setattr(scanner, "STANDALONE_RASTER_MAX_BYTES", 1)
 
         from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui.main_dialog import MainDialog
