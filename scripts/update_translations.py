@@ -118,9 +118,20 @@ def pack_hashes(ts_files: list[Path]) -> dict[str, str]:
     return dict(sorted(hashes.items()))
 
 
+# Secret scanners cannot tell a checksum from a key by looking, and the
+# plugin repository's scan flags every digest here. Like runtime-lock.json, each
+# digest line carries detect-secrets' own allowlist pragma, on the same line -
+# the only place it is read.
+CHECKSUM_NOTE = "checksum of a released pack # pragma: allowlist secret"
+
+
 def write_packs(ts_files: list[Path]) -> None:
+    lines = [
+        f'    "{code}": {{"sha256": "{digest}", "_": "{CHECKSUM_NOTE}"}}'
+        for code, digest in pack_hashes(ts_files).items()
+    ]
     PACKS_FILE.write_text(
-        json.dumps({"packs": pack_hashes(ts_files)}, indent=2) + "\n", encoding="utf-8"
+        '{\n  "packs": {\n' + ",\n".join(lines) + "\n  }\n}\n", encoding="utf-8"
     )
 
 
@@ -175,11 +186,12 @@ def main(argv: list[str]) -> int:
         print(f"{ts.name}: {len(sources)} strings, {missing} untranslated")
 
     if check:
-        pinned = (
+        entries = (
             json.loads(PACKS_FILE.read_text()).get("packs")
             if PACKS_FILE.is_file()
             else {}
         )
+        pinned = {code: entry.get("sha256") for code, entry in entries.items()}
         if pinned != pack_hashes(ts_files):
             stale.append("packs.json does not match the compiled packs")
         for line in stale:

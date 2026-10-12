@@ -80,7 +80,12 @@ def pinned_packs() -> dict[str, str]:
         data = json.loads(PACKS_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return {str(k): str(v) for k, v in data.get("packs", {}).items()}
+    packs: dict[str, str] = {}
+    for code, entry in data.get("packs", {}).items():
+        digest = entry.get("sha256") if isinstance(entry, dict) else entry
+        if isinstance(digest, str) and digest:
+            packs[str(code)] = digest
+    return packs
 
 
 def plugin_version() -> str:
