@@ -129,9 +129,8 @@ from .fitted_label import FittedLabel
 from .i18n import N_, active_language, plural, tr
 from .language_picker import LanguagePicker, make_offer
 from .layer_watcher import LayerContentWatcher, LayerTreeWatcher
-from .links import (  # noqa: F401  - re-exported; imported by name elsewhere
+from .links import (
     COMMUNITY_URL,
-    COMPANY_URL,
     DISCORD_URL,
     DOCS_URL,
     FEATURE_REQUEST_URL,
@@ -202,10 +201,6 @@ LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
 # idle loopback socket, while the cost of being too eager is the server dying
 # under a user who is still working.
 PREVIEW_IDLE_STOP_SECONDS = 20.0
-
-# Where the live-preview preference lives. QSettings, not the project file: it
-# describes how someone likes to work, not what the map is, so it should follow
-# the person between projects rather than travel inside one.
 
 # The folder the last export was written to. QSettings for the same reason as
 # the live-preview flag: "where I keep my maps" is a property of the person, not
@@ -662,8 +657,8 @@ class MainDialog(QDialog):
         self._pending_license_key: str | None = None
 
         # Which tier the write in flight is producing, and what to do once it
-        # lands. Both belong to one press rather than to the dialog: packaging
-        # stopped being a remembered setting when the mode radio group went.
+        # lands. Both belong to one press rather than to the dialog: the type
+        # can be changed on the Map tab while a write is still running.
         self._pending_mode: OutputMode = OutputMode.STANDALONE_HTML
         self._export_then = None
         # The state the map file on disk was last written from. `None` means
@@ -671,7 +666,6 @@ class MainDialog(QDialog):
         # rather than trusting a file it has never seen written.
         self._written_signature: str | None = None
         self._pending_signature: str | None = None
-        self._last_export_path: Path | None = None
 
         # What the Fidelity tab and strip are showing. See `_fidelity_is_stale`.
         self._fidelity_dirty = True
@@ -859,12 +853,8 @@ class MainDialog(QDialog):
         layout.addLayout(form)
 
         # ---- The map file ------------------------------------------------
-        # There is no packaging choice here any more. 0.1.x asked "how to share
-        # it" - standalone HTML, zip or folder - before the user had shared
-        # anything, which is the wrong moment to ask: the answer depends on who
-        # they are sending it to, and they decide that afterwards. The map is
-        # now one HTML document, and the zip and folder tiers are produced from
-        # the Share menu at the point of sharing.
+        # Where the map is written and in which form: Standalone HTML, Share
+        # ZIP or Folder, chosen here and produced by Export.
         destination_box = QGroupBox(tr("Export"), page)
         destination_layout = QVBoxLayout(destination_box)
 
@@ -1211,9 +1201,8 @@ class MainDialog(QDialog):
     def _mode_suffix(self, mode: OutputMode) -> str:
         """The extension a packaging tier produces. A folder has none.
 
-        Still needed although the dialog no longer offers the choice: the Share
-        menu names a tier per action, and the picker it opens has to propose a
-        matching extension.
+        The file picker proposes it, and switching the type swaps it on the
+        name already typed.
         """
         return {
             OutputMode.STANDALONE_HTML: ".html",
@@ -1308,8 +1297,8 @@ class MainDialog(QDialog):
     def _on_choose_map_file(self) -> None:
         """Pick where the map file is written.
 
-        Always `.html`: the map file is the document, and the other packaging
-        tiers are produced from the Share menu into destinations of their own.
+        Proposes a name with the chosen type's extension, or asks for a folder
+        when the type is Folder.
         """
         mode = self.state.output_mode
         suffix = self._mode_suffix(mode)
@@ -1342,9 +1331,9 @@ class MainDialog(QDialog):
         """Say what the file on disk is, in one line under the field.
 
         Three states, and the first is the one that matters: with no map file
-        chosen, every Share action is disabled, and this is where that is
-        explained. A disabled menu with no reason beside it is the failure this
-        label exists to prevent.
+        chosen, the Share rows that act on the file are disabled, and this is
+        where that is explained. A disabled row with no reason beside it is the
+        failure this label exists to prevent.
         """
         if not hasattr(self, "save_status"):
             return
@@ -2489,8 +2478,8 @@ class MainDialog(QDialog):
 
         Everything here is true of every project - who is signed in, the
         language, the theme - so it lives in one familiar place rather than in
-        the footer. Live preview stays on the Preview button's menu, beside
-        the thing it changes. The map's own options stay on the Map, Layers and
+        the footer. Live preview stays as the switch beside the Preview button,
+        next to the thing it changes. The map's own options stay on the Map, Layers and
         Appearance tabs.
         """
         page = QWidget(self)
@@ -3366,8 +3355,7 @@ class MainDialog(QDialog):
             return
 
         # Set by whichever action started this, rather than read off the state:
-        # packaging is no longer something the dialog holds between presses, it
-        # is an argument to the one press.
+        # the Map tab's type can change while the read is still running.
         mode = self._pending_mode
 
         # Issue #29: never quietly hand over a single file that will not travel.
@@ -3433,8 +3421,6 @@ class MainDialog(QDialog):
             save_state(self.project, self.state)
             self._remember_destination(destination)
 
-            # The file:// check happens here, against the bytes that ship.
-            self._last_export_path = Path(outcome.path)
             # What the map file was written from, so a later Share action
             # can tell "already current" from "the project has moved on".
             self._written_signature = self._pending_signature
