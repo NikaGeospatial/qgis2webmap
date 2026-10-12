@@ -95,6 +95,33 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Layers tab, in both themes.
 - **The Sign in to NIKA icon was invisible in dark mode.** It now follows the
   theme's text colour.
+- **The Fidelity tab and the save status kept up with the export type and
+  with QGIS.** Switching between Standalone HTML, Share ZIP and Folder now
+  updates the OpenStreetMap warning without re-reading the project; a Share ZIP
+  or Folder export no longer looks out of date straight after it is written;
+  and a layer restyled in QGIS while an export runs leaves the result marked
+  out of date rather than current. A Folder export's size is its files' size.
+- **Switching the export type during a long export wrote the wrong thing**, such
+  as a folder named `peaks.html`. The export now writes to the place set when
+  Export was pressed.
+- **A one-off raster preview turned live when a layer changed in QGIS**, and
+  its server ran until the dialog closed. It now stays a one-off and stops
+  when its tab closes.
+- **Share rows that never use the map file are always available.** The hosting
+  waitlist, NIKA and QGIS2Carto rows were greyed out until a save path was set.
+- **Advice pointed at a Share row that no longer exists.** The large-map notes
+  now say to export as Share ZIP.
+- **Labels that only had room past their layer's last zoom piled up** across
+  its whole range. They are now left out, and the Fidelity tab says why.
+  Points at the same spot count as one when choosing where labels and bubbles
+  start, so repeat samples at a few sites no longer hold them back to zoom 18.
+- **Untranslated text.** The layer rows, sign-in chip, problems warning,
+  runtime download, Fidelity filters, OpenStreetMap warning and the Processing
+  tool now follow the chosen language.
+- **The save path is stored relative to the project file**, as QGIS stores
+  layer paths, instead of naming a folder on the sender's machine.
+- **The sign-in chip showed an account from another build** that this build
+  could not sign out of. It now always offers to sign in.
 - **OpenStreetMap basemaps showed "Access blocked" for recipients, with no
   warning.** Its tile servers require a `Referer`, which a map opened straight
   from a file never sends, and a page cannot set its own `User-Agent`. Picking
