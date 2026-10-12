@@ -72,12 +72,13 @@ class TestClusterMaxZoom:
         assert cluster_max_zoom(points, radius_px=3) is None
 
 
-def test_points_at_one_spot_count_as_one_pile() -> None:
-    """Repeat samples at a few well-spaced sites must not hold the labels and
-    bubbles until the last zoom: points at one spot never separate."""
+def test_points_at_one_spot_count_as_one_pile_for_labels() -> None:
+    """Repeat samples at a few well-spaced sites must not hold the labels until
+    the last zoom: points at one spot never separate. They still cluster, so
+    each site shows how many samples it has."""
     sites = [(-150.0 + 30 * i, 0.0) for i in range(10)]
     points = [site for site in sites for _ in range(20)]
-    assert cluster_max_zoom(points, radius_px=4) is None
+    assert cluster_max_zoom(points, radius_px=4) is not None
     labels = [(lon, lat, "Site") for lon, lat in points]
     zoom = label_min_zoom(labels, font_px=12)
     assert zoom is not None and zoom <= 2  # where the sites themselves part

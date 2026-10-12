@@ -89,9 +89,12 @@ def _distinct(
 ) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """One box per position, as large as the largest there.
 
-    Points at the same spot never separate at any zoom, so counting each one
-    let a layer of repeat samples at a few sites hold its labels and bubbles
-    until the last zoom. They are one pile on screen, and counted as one.
+    For labels only. Points at the same spot never separate at any zoom, so
+    counting each one let a layer of repeat samples at a few sites hold its
+    labels back to the last zoom; they are one pile on screen, counted as one.
+    Clustering counts every point: a stack is exactly what a count bubble is
+    for, and collapsing it would draw thousands of markers on top of each
+    other with nothing saying how many.
     """
     boxes: dict[tuple[float, float], tuple[float, float]] = {}
     for (lon, lat), (w, h) in zip(points, sizes):
@@ -110,8 +113,6 @@ def _first_zoom_that_fits(
     keep fitting. Five placements instead of up to nineteen, which is what keeps
     a 25,000-point layer under a second on a live-preview rebuild.
     """
-
-    points, sizes = _distinct(points, sizes)
 
     def fits(zoom: int) -> bool:
         boxes = [
@@ -153,7 +154,7 @@ def label_min_zoom(
                 len(lines) * _LINE_HEIGHT * font_px + _PADDING_PX,
             )
         )
-    return _first_zoom_that_fits(points, sizes)
+    return _first_zoom_that_fits(*_distinct(points, sizes))
 
 
 def cluster_max_zoom(
