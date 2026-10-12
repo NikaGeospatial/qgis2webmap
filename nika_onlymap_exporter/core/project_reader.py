@@ -568,6 +568,13 @@ def _declutter(
                 "or shorter or fewer labels, would bring them back.",
                 layer.layer_id,
             )
+            # Unlabelled from here on, so the switcher, the facts and the
+            # terrain note agree with the map rather than with QGIS.
+            layer = dataclasses.replace(
+                layer,
+                labeling=dataclasses.replace(layer.labeling, enabled=False),
+                label_min_zoom=None,
+            )
         elif layer.label_min_zoom is not None:
             report.approximated(
                 f"Labels on '{layer.name}'",

@@ -564,6 +564,34 @@ class TestDeclutter:
         assert subjects["Markers of 'towns'"].status is FidelityStatus.APPROXIMATED
         assert subjects["Labels on 'towns'"].layer_id == layer.id()
 
+    def test_labels_with_no_room_inside_the_layers_range_count_as_off(
+        self, project, make_memory_layer
+    ) -> None:
+        """Left out of the map, so left out everywhere: switcher, facts and the
+        terrain note must not treat the layer as labelled."""
+        layer = make_memory_layer(
+            "towns",
+            features=[(f"Town {i}", [i * 0.001, 0.0]) for i in range(50)],
+        )
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        # Hidden once zoomed in past about 1:1,000,000 - long before 50 labels
+        # 110 m apart have room.
+        layer.setScaleBasedVisibility(True)
+        layer.setMinimumScale(0)
+        layer.setMaximumScale(1_000_000)
+        project.addMapLayer(layer)
+        report = FidelityReportBuilder()
+
+        read = read_project(project, report).layers[0]
+
+        assert read.labeling.enabled is False
+        assert read.label_min_zoom is None
+        labels = {i.subject: i for i in report.items}["Labels on 'towns'"]
+        assert labels.status is FidelityStatus.UNSUPPORTED
+
     def test_a_handful_of_points_is_left_alone(
         self, project, make_memory_layer
     ) -> None:
