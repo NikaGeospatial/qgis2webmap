@@ -35,6 +35,10 @@ LOG_TAG = "QGIS2WebMap"
 MENU_TITLE = "&QGIS2WebMap by NIKA"
 # Marked for the catalogue here, translated in `initGui`.
 ACTION_TEXT = N_("Create web map")
+# Opens the dialog. Cmd+Alt+W on macOS, where Qt maps Ctrl to Cmd. Not Ctrl+M:
+# QGIS binds that to New Map View (and macOS to Minimize), Ctrl+Shift+M to
+# Measure Line and Ctrl+Alt+M to New 3D Map View.
+DEFAULT_SHORTCUT = "Ctrl+Alt+W"
 
 
 class Qgis2WebMapPlugin:
@@ -128,6 +132,10 @@ class Qgis2WebMapPlugin:
         # One Web-menu entry and one toolbar button -- nothing else.
         self.iface.addPluginToWebMenu(MENU_TITLE, self.action)
         self.iface.addToolBarIcon(self.action)
+        # Through QGIS's shortcut manager rather than `setShortcut`, so it is
+        # listed in Settings > Keyboard Shortcuts, where it can be changed or
+        # cleared - and a change made there wins over this default.
+        self.iface.registerMainWindowAction(self.action, DEFAULT_SHORTCUT)
 
     def unload(self) -> None:
         """Remove everything `initGui` added. Must be idempotent-safe."""
@@ -138,6 +146,7 @@ class Qgis2WebMapPlugin:
             self.provider = None
 
         if self.action is not None:
+            self.iface.unregisterMainWindowAction(self.action)
             self.iface.removePluginWebMenu(MENU_TITLE, self.action)
             self.iface.removeToolBarIcon(self.action)
             self.action.deleteLater()
