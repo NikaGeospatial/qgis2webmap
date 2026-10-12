@@ -295,16 +295,17 @@ class TestABuildWithoutHosting:
 
         assert not PendingHostingBackend().available
 
-    def test_the_placeholder_reads_the_cache_rather_than_inventing_an_answer(
-        self, qgis_app
-    ):
-        """So the merged build paints the right name before fetching anything."""
+    def test_the_placeholder_ignores_an_account_another_build_cached(self, qgis_app):
+        """A hosting build's sign-in is in the shared cache. Showing it here
+        offered a Sign out that could only say "not in this version yet"."""
         from nika_onlymap_exporter.core.account import save_identity
         from nika_onlymap_exporter.ui.account_button import PendingHostingBackend
 
         save_identity(AccountIdentity(email="cached@example.org"))
         try:
-            assert PendingHostingBackend().identity().email == "cached@example.org"
+            assert not PendingHostingBackend().identity().is_known
+            button = _button(PendingHostingBackend())
+            assert "cached@example.org" not in button.text()
         finally:
             save_identity(AccountIdentity())
 

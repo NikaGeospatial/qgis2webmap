@@ -34,7 +34,7 @@ from qgis.PyQt.QtCore import QEvent, QRectF, Qt
 from qgis.PyQt.QtGui import QFont, QIcon, QPainter, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
-from ..core.account import AccountIdentity, load_identity
+from ..core.account import AccountIdentity
 from .i18n import tr
 from .theme import line_icon
 
@@ -84,9 +84,11 @@ class PendingHostingBackend:
     nothing - the same treatment the NIKA and QGIS2Carto rows get in the Share
     menu.
 
-    It still reads the cached identity rather than hardcoding an empty one, so
-    that on the merged build the button is correct from the first paint, before
-    anything has been fetched.
+    It reports nobody signed in, whatever the cache holds. The cache is
+    profile-wide and a hosting build writes it, so reading it here showed that
+    build's account with a Sign out that could only answer "not in this version
+    yet". The merged build replaces this class, and its real backend reads the
+    cache.
     """
 
     @property
@@ -94,7 +96,7 @@ class PendingHostingBackend:
         return False
 
     def identity(self) -> AccountIdentity:
-        return load_identity()
+        return AccountIdentity()
 
     def sign_in(self) -> None:
         raise NotImplementedError
