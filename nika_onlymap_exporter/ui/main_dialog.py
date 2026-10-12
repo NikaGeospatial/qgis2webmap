@@ -178,6 +178,10 @@ FIDELITY_POLL_MS = 500
 # a change per pixel, and each rebuild re-runs the production writer.
 LIVE_DEBOUNCE_MS = 400
 
+# Whether Preview stays live. Per machine, like the theme: a working habit,
+# not a property of the map.
+LIVE_PREVIEW_KEY = "qgis2webmap/livePreview"
+
 # How long every preview page must be gone before the server shuts itself down.
 #
 # Generous on purpose. A reload drops the page's `EventSource` and opens a new
@@ -2181,9 +2185,21 @@ class MainDialog(QDialog):
         # read as the selected one of three choices. These are three acts.
         layout.setSpacing(6)
 
-        # One press opens the preview and keeps it live; the button then shows
-        # that, and a second press stops it. No menu: a menu of one action and
-        # one switch was a click spent on choosing nothing.
+        # The live switch sits on Preview's left: a dot, red while on. Off,
+        # Preview opens the map once. On, it keeps the tab updating, reads
+        # "Live" while it does, and a second press stops it - the switch stays
+        # on, because the habit outlives one session. Not a menu: a menu of one
+        # action and one switch was a click spent on choosing nothing.
+        self.live_switch = self._corner_button(corner, "", "live-off")
+        self.live_switch.setProperty("liveSwitch", True)
+        self.live_switch.setCheckable(True)
+        self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.live_switch.setChecked(
+            QSettings().value(LIVE_PREVIEW_KEY, False, type=bool)
+        )
+        self.live_switch.toggled.connect(self._on_live_toggled)
+        layout.addWidget(self.live_switch)
+
         self.preview_button = self._corner_button(corner, tr("Preview"), "preview")
         self.preview_button.clicked.connect(self._on_preview_pressed)
         layout.addWidget(self.preview_button)
@@ -2225,27 +2241,34 @@ class MainDialog(QDialog):
         return button
 
     def _show_preview_state(self) -> None:
-        """Make the Preview button say whether a live preview is running."""
-        live = getattr(self, "_server", None) is not None
-        button = self.preview_button
-        if button.property("live") is live:
-            return
-        button.setProperty("live", live)
-        button.setProperty("lineIcon", "live" if live else "preview")
-        button.setText(tr("Live") if live else tr("Preview"))
-        button.setToolTip(
+        """Make the switch and the Preview button say what is happening."""
+        running = getattr(self, "_server", None) is not None
+        live = self.live_switch.isChecked()
+
+        self.live_switch.setProperty("lineIcon", "live" if live else "live-off")
+        self.live_switch.setToolTip(
             tr(
-                "Live preview is on: changes here update the browser tab. "
-                "Press to stop."
+                "Live preview is on: Preview keeps the browser tab updating as you "
+                "change settings. Click to turn it off."
             )
             if live
             else tr(
-                "Open the map in your browser. It updates as you change settings "
-                "here, until you press again or close the tab."
+                "Live preview is off: Preview opens the map as it is now. Click to "
+                "keep the tab updating as you change settings."
             )
         )
-        button.style().unpolish(button)
-        button.style().polish(button)
+
+        button = self.preview_button
+        button.setProperty("live", running)
+        button.setText(tr("Live") if running else tr("Preview"))
+        button.setToolTip(
+            tr("Live preview is running. Press to stop it.")
+            if running
+            else tr("Open the map in your browser.")
+        )
+        for widget in (button, self.live_switch):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
         if hasattr(self, "theme"):
             theme.paint_line_icons(button.parentWidget(), self.theme)
 
@@ -2713,8 +2736,15 @@ class MainDialog(QDialog):
 
     # ---- Live preview ---------------------------------------------------
 
+    def _on_live_toggled(self, live: bool) -> None:
+        QSettings().setValue(LIVE_PREVIEW_KEY, live)
+        if not live and self._server is not None:
+            self._stop_live_preview()
+            self.status_label.setText(tr("Live preview stopped."))
+        self._show_preview_state()
+
     def _on_preview_pressed(self) -> None:
-        """Start a live preview, or stop the one that is running."""
+        """Preview, or stop the live preview that is running."""
         if self._server is None:
             self.on_preview()
             return
@@ -3005,7 +3035,7 @@ class MainDialog(QDialog):
         self._ensure_export(self._preview_with, "Reading the project...")
 
     def _preview_with(self, export, _report) -> None:
-        """Write and open the preview, live. Called once a read is in hand.
+        """Write and open the preview. Called once a read is in hand.
 
         Live means the tab follows the dialog; it never means the export file
         does. Only Export writes the user's map - a preview that rewrote it on
@@ -3016,12 +3046,23 @@ class MainDialog(QDialog):
 
         identity = self._project_identity()
         writer = self._writer()
+        live = self.live_switch.isChecked()
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Building the preview..."))
-            return write_preview(export, identity, writer=writer, live=True)
+            return write_preview(export, identity, writer=writer, live=live)
 
         def on_written(result) -> None:
+            if not live:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(result.entry_path)))
+                self.status_label.setText(
+                    tr(
+                        "Preview opened. Press Preview again after making changes - "
+                        "your position on the map is kept."
+                    )
+                )
+                return
+
             self._last_snapshot = self.state.snapshot()
             try:
                 url = self._ensure_server(preview_directory(identity))

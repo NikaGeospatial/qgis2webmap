@@ -64,7 +64,8 @@ LINE_ICONS = {
         '<path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 '
         '1.5 8z"/><circle cx="8" cy="8" r="2"/>'
     ),
-    "live": '<circle cx="8" cy="8" r="3.5" fill="{c}" stroke="none"/>',
+    "live": '<circle cx="8" cy="8" r="4" fill="{c}" stroke="none"/>',
+    "live-off": '<circle cx="8" cy="8" r="3.5"/>',
     "share": '<path d="M8 10V2.5M5 5.2 8 2.2l3 3M3.5 8.5v4.5h9V8.5"/>',
     "export": '<path d="M8 2.5V10M5 7.2l3 3 3-3M3.5 13.2h9"/>',
 }
@@ -89,6 +90,7 @@ class Palette:
     accent_soft: str  # selection behind ink
     link: str  # accent hue, dark or light enough to read as text
     warn: str
+    live: str  # the live-preview switch while on: a recording red
 
     @property
     def is_dark(self) -> bool:
@@ -116,6 +118,7 @@ PLUM_LIGHT = Palette(
     accent_soft="#f5e1c8",
     link="#8a5200",
     warn="#a2540a",
+    live="#d92d20",
 )
 
 PLUM_DARK = Palette(
@@ -136,6 +139,7 @@ PLUM_DARK = Palette(
     accent_soft="#203501",
     link="#abf051",
     warn="#e78a45",
+    live="#ff6b6b",
 )
 
 
@@ -332,16 +336,17 @@ def line_icon(name: str, colour: str, disabled: str) -> QIcon:
 def paint_line_icons(root: QWidget, palette: Palette) -> None:
     """Colour every button that names a `lineIcon` for the current theme.
 
-    The live dot takes the link colour - the accent hue, deep enough by day
-    to read on paper, which the brass itself is not. Everything else matches
-    its button's text.
+    The live switch's dot is red while on, like a recording light, and a
+    muted ring while off. Everything else matches its button's text.
     """
     for button in root.findChildren(QToolButton):
         name = button.property("lineIcon")
         if not name:
             continue
         if name == "live":
-            colour = palette.link
+            colour = palette.live
+        elif name == "live-off":
+            colour = palette.muted
         elif button.property("accent"):
             colour = palette.on_accent
         else:
@@ -734,9 +739,21 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     height: 10px;
     right: 7px;
 }}
-/* A running live preview: the outline takes the dot's colour. */
+/* The live switch beside Preview: a round button holding only its dot.
+   28 px like its neighbours; the radius stays under half the height, which is
+   the most Qt will draw. */
+{d} QToolButton[role="corner"][liveSwitch="true"] {{
+    min-width: 20px;
+    max-width: 20px;
+    padding: 3px;
+    border-radius: 13px;
+}}
+{d} QToolButton[role="corner"][liveSwitch="true"]:checked {{
+    border-color: {p.live};
+}}
+/* A running live preview: Preview's outline joins the switch's red. */
 {d} QToolButton[role="corner"][live="true"] {{
-    border-color: {p.link};
+    border-color: {p.live};
 }}
 {d} QToolButton[role="corner"][accent="true"] {{
     background: {p.accent};

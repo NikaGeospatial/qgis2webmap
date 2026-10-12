@@ -360,7 +360,8 @@ class TestTabCorner:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            assert labels == ["Preview", "Share", "Export"]
+            # The live switch is a bare dot on Preview's left.
+            assert labels == ["", "Preview", "Share", "Export"]
         finally:
             dialog.close()
 
@@ -432,6 +433,107 @@ class TestTabCorner:
             for gone in ("Export", "Host ↗", "Open exported map", "Preview"):
                 assert gone not in labels
         finally:
+            dialog.close()
+
+
+class TestLiveSwitch:
+    """The dot beside Preview: off, Preview opens the map once; on, it stays live."""
+
+    def _dialog(self, project, make_memory_layer):
+        return TestTabCorner()._dialog(project, make_memory_layer)
+
+    def _wait(self, qgis_app, condition) -> None:
+        import time
+
+        deadline = time.monotonic() + 60
+        while not condition() and time.monotonic() < deadline:
+            qgis_app.processEvents()
+            time.sleep(0.02)
+        assert condition()
+
+    def test_it_starts_off_and_remembers_being_switched_on(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.main_dialog import LIVE_PREVIEW_KEY
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            switch = dialog.live_switch
+            assert switch.isChecked() is False
+            assert switch.property("lineIcon") == "live-off"
+            assert "off" in switch.toolTip()
+
+            switch.click()
+            assert switch.property("lineIcon") == "live"
+            assert QSettings().value(LIVE_PREVIEW_KEY, type=bool) is True
+        finally:
+            QSettings().remove(LIVE_PREVIEW_KEY)
+            dialog.close()
+
+    def test_off_preview_opens_the_map_once_with_no_server(
+        self, qgis_app, project, make_memory_layer, monkeypatch, runtime_required
+    ) -> None:
+        opened: list[str] = []
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()) or True,
+        )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.preview_button.click()
+            self._wait(qgis_app, lambda: bool(opened) and dialog._job is None)
+            assert opened[0].startswith("file://")
+            assert dialog._server is None
+            assert dialog.preview_button.text() == "Preview"
+        finally:
+            dialog.close()
+
+    def test_stopping_a_live_preview_leaves_the_switch_on(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+        from nika_onlymap_exporter.ui.main_dialog import LIVE_PREVIEW_KEY
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            dialog._server = PreviewServer(tmp_path)
+            dialog._show_preview_state()
+            assert dialog.preview_button.text() == "Live"
+
+            dialog.preview_button.click()
+            assert dialog._server is None
+            assert dialog.preview_button.text() == "Preview"
+            assert dialog.live_switch.isChecked() is True
+        finally:
+            QSettings().remove(LIVE_PREVIEW_KEY)
+            dialog.close()
+
+    def test_switching_off_stops_a_running_preview(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+        from nika_onlymap_exporter.ui.main_dialog import LIVE_PREVIEW_KEY
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+            dialog._server = PreviewServer(tmp_path)
+            dialog._server.start()
+
+            dialog.live_switch.click()
+            assert dialog._server is None
+            assert dialog.preview_button.text() == "Preview"
+        finally:
+            QSettings().remove(LIVE_PREVIEW_KEY)
             dialog.close()
 
 
@@ -698,6 +800,7 @@ class TestAutosaveIsGatedOnALiveSession:
 
         try:
             dialog.path_edit.setText(str(map_file))
+            dialog.live_switch.setChecked(True)
             dialog.preview_button.click()
             wait_for(lambda: dialog._server is not None and dialog._job is None)
             assert dialog.preview_button.text() == "Live"
