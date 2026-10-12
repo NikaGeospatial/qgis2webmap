@@ -48,9 +48,12 @@ changelog=0.2.0
     Scale-dependent visibility reaches the web map. Labels are sized in the
     right unit and readable over imagery. Relief drapes moved to NASA GIBS.
     Ctrl+Alt+W opens the dialog. The OnlyMap runtime moves to 0.12.0.
+    Crowded labels wait for the zoom where they have room, and dense point
+    layers merge into count bubbles that split as you zoom in.
     Fixes: a labelled 3D polygon layer aborted the export ("too many values to
     unpack"); large Folder exports drew no features; dark-mode message boxes
-    were unreadable.
+    were unreadable; OpenStreetMap basemaps show "Access blocked" in a map
+    opened from a file, and the dialog now warns about it.
     0.1.4
     Fixes: layer labels rendered nothing at all in every previous release -
     a map with labelling switched on exported without any text on it.

@@ -4,7 +4,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-12
 
 ### Added
 - **Crowded labels wait for room, and dense points cluster.** QGIS hides a
@@ -107,19 +107,22 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **A one-off raster preview turned live when a layer changed in QGIS**, and
   its server ran until the dialog closed. It now stays a one-off and stops
   when its tab closes.
-- **Share rows that never use the map file are always available.** The hosting
-  waitlist, NIKA and QGIS2Carto rows were greyed out until a save path was set.
+- **The hosting waitlist was greyed out until a save path was set.** It is
+  always available now. The NIKA and QGIS2Carto rows, which are not built yet,
+  are greyed out and marked coming soon rather than opening a notice.
 - **Advice pointed at a Share row that no longer exists.** The large-map notes
   now say to export as Share ZIP.
 - **Labels that only had room past their layer's last zoom piled up** across
   its whole range. They are now left out, and the Fidelity tab says why.
-  Points at the same spot count as one when choosing where labels and bubbles
-  start, so repeat samples at a few sites no longer hold them back to zoom 18.
+  Points at the same spot count as one when choosing where labels start, so
+  repeat samples at a few sites no longer hold them back to zoom 18; each
+  stack stays one bubble showing how many samples it holds.
 - **Untranslated text.** The layer rows, sign-in chip, problems warning,
-  runtime download, Fidelity filters, OpenStreetMap warning and the Processing
+  runtime download, Fidelity tab and strip, OpenStreetMap warning and the Processing
   tool now follow the chosen language.
-- **The save path is stored relative to the project file**, as QGIS stores
-  layer paths, instead of naming a folder on the sender's machine.
+- **The save path follows a moved or shared project.** It is stored relative
+  to the project file as well as in full, and the relative form is used when
+  the original folder is no longer there.
 - **The sign-in chip showed an account from another build** that this build
   could not sign out of. It now always offers to sign in.
 - **OpenStreetMap basemaps showed "Access blocked" for recipients, with no
