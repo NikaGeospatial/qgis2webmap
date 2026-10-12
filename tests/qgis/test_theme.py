@@ -267,6 +267,36 @@ class TestThemeChoice:
             dialog.close()
 
 
+class TestMessageBoxes:
+    """A box the dialog opens is its child, so it inherits the text colour."""
+
+    @pytest.mark.parametrize("choice", ["light", "dark"])
+    def test_a_message_box_text_is_readable_on_its_background(
+        self, qgis_app, project, make_memory_layer, choice
+    ):
+        from qgis.PyQt.QtCore import QSettings
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from nika_onlymap_exporter.ui import theme
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            picker = dialog.theme_picker
+            picker.setCurrentIndex(picker.findData(choice))
+            box = QMessageBox(dialog)
+            box.setText("Publishing is not in this version yet.")
+            box.show()
+            qgis_app.processEvents()
+            image = box.grab().toImage()
+            # Bottom-left corner: clear of the icon, the text and the button.
+            background = image.pixelColor(2, image.height() - 3).name()
+            assert _contrast(dialog.theme.ink, background) >= 4.5, background
+            box.close()
+        finally:
+            QSettings().remove(theme.THEME_KEY)
+            dialog.close()
+
+
 class TestCornerMenus:
     """The corner's menus hang from the whole View | Export | Share control."""
 

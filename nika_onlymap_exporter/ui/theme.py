@@ -422,6 +422,12 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QLabel {{
     background: transparent;
 }}
+/* A message box parented to the dialog takes the ink above, so it needs the
+   matching background - left alone it kept the light platform one, and dark
+   mode drew light text on it. */
+{d} QDialog {{
+    background: {p.paper};
+}}
 
 /* ---- Tabs: text, with a bar under the open one ----------------------- */
 {d} QTabWidget::pane {{
