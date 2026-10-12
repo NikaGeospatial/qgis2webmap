@@ -540,6 +540,54 @@ class TestLiveSwitch:
             dialog.close()
 
 
+class TestRasterExports:
+    """A raster cannot travel in one HTML file, so that is a refusal, not a warning."""
+
+    def test_standalone_with_a_raster_is_refused_without_a_write_anyway(
+        self, qgis_app, project, make_memory_layer, make_raster_layer, monkeypatch
+    ) -> None:
+        import time
+
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        project.addMapLayer(make_raster_layer(name="elevation"))
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QMessageBox.warning",
+            lambda parent, title, text, *a: warnings.append((title, text)),
+        )
+        dialog = MainDialog(FakeIface(), None)
+        offered: list[str] = []
+        # Recorded, not raised: an exception inside a Qt callback aborts the
+        # process rather than failing the test.
+        monkeypatch.setattr(
+            dialog,
+            "_confirm_oversized_single_file",
+            lambda reason: offered.append(reason) or False,
+        )
+        try:
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
+            dialog.on_export()
+            deadline = time.monotonic() + 30
+            while not (warnings or offered) and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert offered == [], "offered to write a file that cannot work"
+            assert warnings, "the refusal was never shown"
+            title, text = warnings[0]
+            assert "Folder or Share ZIP" in title
+            assert "'elevation'" in text
+            assert "Folder or Share ZIP" in text
+        finally:
+            dialog.close()
+
+
 class TestShareIsADropdown:
     """For now Share only opens its menu, which also points at Discord."""
 
