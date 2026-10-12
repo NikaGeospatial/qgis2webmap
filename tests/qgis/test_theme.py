@@ -174,15 +174,18 @@ class TestAttachedMenus:
     def _dialog(self, project, make_memory_layer):
         return TestScope()._dialog(project, make_memory_layer)
 
-    def test_the_share_menu_opens_flush_under_its_button(
+    def test_a_menu_opens_flush_under_its_button(
         self, qgis_app, project, make_memory_layer
     ):
         from qgis.PyQt.QtCore import QPoint
 
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.resize(720, 500)
+            dialog.move(0, 0)
             dialog.show()
-            button = dialog.share_button
+            dialog.tabs.setCurrentWidget(dialog._fidelity_page)
+            button = dialog.fidelity_panel.filter_button
             menu = button.menu()
             menu.popup(QPoint(0, 0))
             for _ in range(3):
@@ -261,4 +264,55 @@ class TestThemeChoice:
             assert dialog.theme is theme.PLUM_LIGHT
         finally:
             QSettings().remove(theme.THEME_KEY)
+            dialog.close()
+
+
+class TestCornerMenus:
+    """The corner's menus hang from the whole View | Export | Share control."""
+
+    def _open(self, qgis_app, button):
+        from qgis.PyQt.QtCore import QPoint
+
+        menu = button.menu()
+        menu.popup(QPoint(0, 0))
+        for _ in range(3):
+            qgis_app.processEvents()
+        return menu
+
+    def test_view_opens_rightwards_under_the_control(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            dialog.resize(720, 500)
+            dialog.move(0, 0)
+            dialog.show()
+            first, last = dialog.preview_button, dialog.share_button
+            menu = self._open(qgis_app, first)
+            left = first.mapToGlobal(QPoint(0, 0)).x()
+            right = last.mapToGlobal(QPoint(last.width(), 0)).x()
+            assert menu.geometry().left() == left
+            assert menu.width() >= right - left
+            menu.hide()
+        finally:
+            dialog.close()
+
+    def test_share_ends_at_the_controls_right_edge(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            dialog.resize(720, 500)
+            dialog.move(0, 0)
+            dialog.show()
+            last = dialog.share_button
+            menu = self._open(qgis_app, last)
+            right = last.mapToGlobal(QPoint(last.width(), 0)).x()
+            assert menu.geometry().left() + menu.width() == right
+            menu.hide()
+        finally:
             dialog.close()

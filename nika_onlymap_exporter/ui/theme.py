@@ -265,6 +265,12 @@ class _MenuAttacher(QObject):
         if watched is self._menu:
             if event.type() == QEvent.Type.Show:
                 button = self._button
+                if button.property("role") == "segment":
+                    # No open-state restyle here: repolishing one segment
+                    # resizes it and shifts the whole control under the menu.
+                    self._place_under_segments(button)
+                    return False
+                self._set_open(True)
                 if self._match_width:
                     self._menu.setFixedWidth(button.width())
                 else:
@@ -284,10 +290,34 @@ class _MenuAttacher(QObject):
                 if from_right:
                     anchor.setX(anchor.x() - self._menu.width())
                 self._menu.move(anchor)
-                self._set_open(True)
-            elif event.type() == QEvent.Type.Hide:
+            elif (
+                event.type() == QEvent.Type.Hide
+                and self._button.property("role") != "segment"
+            ):
                 self._set_open(False)
         return False
+
+    def _place_under_segments(self, button: QWidget) -> None:
+        """Hang the menu from the whole joined control, not the one segment.
+
+        The first segment's menu starts at the control's left edge and grows
+        right; the last one's ends at the control's right edge. Either way it
+        is at least as wide as the control, so it reads as opening from it.
+        """
+        segments = [
+            w
+            for w in button.parentWidget().findChildren(QToolButton)
+            if w.property("role") == "segment" and w.isVisible()
+        ]
+        left = min(w.mapToGlobal(QPoint(0, 0)).x() for w in segments)
+        right = max(w.mapToGlobal(QPoint(w.width(), 0)).x() for w in segments)
+        self._menu.setMinimumWidth(right - left)
+        self._menu.adjustSize()
+        top = button.mapToGlobal(QPoint(0, button.height() - 1)).y()
+        rtl = button.layoutDirection() == Qt.LayoutDirection.RightToLeft
+        from_right = (button.property("position") == "last") != rtl
+        x = right - self._menu.width() if from_right else left
+        self._menu.move(QPoint(x, top))
 
 
 def attach_menu(menu: QMenu, button: QWidget) -> None:
