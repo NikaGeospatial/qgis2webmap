@@ -1041,6 +1041,38 @@ class TestShareBuildsWhatItNeeds:
         finally:
             dialog.close()
 
+    def test_a_qgis_change_during_the_read_is_not_written_over(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """A restyle mid-export must leave the file, the cache and the report
+        out of date, not have the finished job mark them current again."""
+        import time
+
+        for box in ("warning", "information"):
+            monkeypatch.setattr(
+                f"nika_onlymap_exporter.ui.main_dialog.QMessageBox.{box}",
+                lambda *a, **k: None,
+            )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.mode_buttons[OutputMode.SHARE_ZIP].click()
+            dialog.path_edit.setText(str(tmp_path / "map.zip"))
+            dialog.on_export()
+            # The read is on a worker; QGIS changes the project meanwhile.
+            dialog._project_content_changed()
+            deadline = time.monotonic() + 60
+            while dialog._job is not None and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            for _ in range(5):
+                qgis_app.processEvents()
+            assert (tmp_path / "map.zip").exists()
+            assert dialog._map_file_is_stale()
+            assert dialog._cached_export is None
+            assert dialog._fidelity_is_stale
+        finally:
+            dialog.close()
+
     def test_a_file_this_session_never_wrote_is_not_trusted(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

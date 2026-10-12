@@ -648,6 +648,8 @@ class MainDialog(QDialog):
         self._written_signature: str | None = None
         self._pending_signature: str | None = None
         self._pending_destination: Path | None = None
+        self._project_generation = 0
+        self._pending_generation = 0
 
         # What the Fidelity tab and strip are showing. See `_fidelity_is_stale`.
         self._fidelity_dirty = True
@@ -3076,8 +3078,17 @@ class MainDialog(QDialog):
             progress.step(0, tr("Reading the project..."))
             return self._read_current_project(progress)
 
+        generation = self._project_generation
+
         def on_success(result) -> None:
             export, report = result
+            if generation != self._project_generation:
+                # QGIS changed the project during the read: use it for this
+                # press, but neither cache it nor call the report current.
+                self._show_fidelity(report, signature)
+                self._fidelity_is_stale = True
+                then(export, report)
+                return
             self._cached_export = export
             self._cached_report = report
             self._cached_signature = signature
@@ -3097,6 +3108,9 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature = None
+        # Tells a read or write already running that it started on the old
+        # project, so it must not record itself as current when it lands.
+        self._project_generation += 1
         # A file written from the old project is as out of date as the read.
         self._written_signature = None
         self._update_save_status()
@@ -3320,6 +3334,7 @@ class MainDialog(QDialog):
         # Taken before the read, not after the write: a setting changed while
         # this runs is not in the file, so the file must not claim it.
         self._pending_signature = self.state.snapshot()
+        self._pending_generation = self._project_generation
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
         self._ensure_export(self._export_with, tr("Reading the project..."))
 
@@ -3411,7 +3426,8 @@ class MainDialog(QDialog):
 
             # What the map file was written from, so a later Share action
             # can tell "already current" from "the project has moved on".
-            self._written_signature = self._pending_signature
+            if self._pending_generation == self._project_generation:
+                self._written_signature = self._pending_signature
             self._update_save_status()
 
             summary = outcome.summary()
