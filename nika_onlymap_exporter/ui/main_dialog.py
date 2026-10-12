@@ -3187,9 +3187,11 @@ class MainDialog(QDialog):
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Building the preview..."))
-            # Served one-offs carry the listener too: nothing ever tells them to
-            # reload, but it is how the server learns the tab has closed.
-            return write_preview(export, identity, writer=writer, live=served)
+            # Served one-offs carry a listener too, deaf to reloads: it is how
+            # the server learns the tab has closed.
+            return write_preview(
+                export, identity, writer=writer, live=live, served=served
+            )
 
         def on_written(result) -> None:
             if not served:

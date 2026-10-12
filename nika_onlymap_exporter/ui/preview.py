@@ -346,8 +346,19 @@ def prune_stale_previews(max_age_days: float = 7.0) -> None:
             continue
 
 
+# A served one-off preview's listener: connected, so the server can tell when
+# its tab closes, but deaf to "reload" - a live session started later on the
+# same server must not turn this tab live behind the user's back.
+PRESENCE_SCRIPT = RELOAD_SCRIPT.replace(
+    'if (event.data === "reload") location.reload();', "/* presence only */"
+)
+
+
 def compose_preview_hook(
-    project: ExportProject, live: bool = False, final: bool = False
+    project: ExportProject,
+    live: bool = False,
+    final: bool = False,
+    served: bool = False,
 ) -> str:
     """Everything injected at the template's `@PREVIEW_HOOK@`, for a preview.
 
@@ -361,6 +372,8 @@ def compose_preview_hook(
     hook = terrain_zoom_clamp(project) + CAMERA_SCRIPT
     if live:
         hook += RELOAD_SCRIPT
+    elif served:
+        hook += PRESENCE_SCRIPT
     # `final` promises byte-for-byte what ships, so the call to action stays
     # out of it. (`CAMERA_SCRIPT` already bends that promise and no caller
     # passes `final=True` today; not this change's problem to fix.)
@@ -387,6 +400,7 @@ def write_preview(
     writer: OnlyMapWriter | None = None,
     final: bool = False,
     live: bool = False,
+    served: bool = False,
 ) -> ArtifactResult:
     """Build a preview artifact through the production writer.
 
@@ -397,7 +411,8 @@ def write_preview(
 
     `live` adds the reload listener, for previews served by `PreviewServer`. It
     is off by default so that a preview written for any other reason carries
-    nothing that expects a server to exist.
+    nothing that expects a server to exist. `served` without `live` is a
+    one-off preview on that server: it says it is there, and never reloads.
     """
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
@@ -411,5 +426,7 @@ def write_preview(
         destination,
         mode=preview_mode(project),
         compress=final,
-        preview_hook=compose_preview_hook(project, live=live, final=final),
+        preview_hook=compose_preview_hook(
+            project, live=live, final=final, served=served
+        ),
     )

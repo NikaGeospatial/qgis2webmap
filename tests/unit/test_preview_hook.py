@@ -77,6 +77,14 @@ class TestTheRestOfTheHook:
         assert "EventSource" not in compose_preview_hook(project())
         assert "EventSource" in compose_preview_hook(project(), live=True)
 
+    def test_a_served_one_off_listens_but_never_reloads(self) -> None:
+        """It connects so its server knows when the tab closes; a live session
+        started later on that server must not reload it."""
+        hook = compose_preview_hook(project(), served=True)
+        assert "EventSource" in hook
+        assert "location.reload" not in hook
+        assert "location.reload" in compose_preview_hook(project(), live=True)
+
     def test_the_relief_clamp_rides_along(self) -> None:
         assert "setViewInternal" in compose_preview_hook(project(terrain="terrarium"))
         assert "setViewInternal" not in compose_preview_hook(project())
