@@ -518,10 +518,15 @@ def test_picking_a_language_reopens_the_dialog_in_it(
 def test_the_fidelity_words_from_core_are_in_the_catalogue(qgis_app) -> None:
     """Core has no Qt, so its verdict and topic names are registered in the
     panel; a word added in core must be added there too."""
-    from nika_onlymap_exporter.core.fidelity_summary import VERDICT_LABELS, Topic
+    from nika_onlymap_exporter.core.fidelity_summary import (
+        VERDICT_LABELS,
+        WHOLE_MAP,
+        Topic,
+    )
     from nika_onlymap_exporter.ui.fidelity_panel import _CORE_WORDS
 
-    assert set(VERDICT_LABELS.values()) | {t.value for t in Topic} <= set(_CORE_WORDS)
+    core = set(VERDICT_LABELS.values()) | {t.value for t in Topic} | {WHOLE_MAP}
+    assert core <= set(_CORE_WORDS)
 
 
 def test_the_osm_warning_is_in_the_catalogue(qgis_app) -> None:
@@ -543,3 +548,29 @@ def test_the_processing_tool_speaks_the_language(portuguese) -> None:
     blocked = algorithm.parameterDefinition(ExportProjectAlgorithm.EXPORT_BLOCKED)
     assert blocked.description() == "Exportar mesmo que alguns itens estejam bloqueados"
     assert "Exportar mesmo que alguns itens" in algorithm.shortHelpString()
+
+
+def test_every_fidelity_cell_speaks_the_language(
+    portuguese, project, make_memory_layer
+) -> None:
+    """The filters were translated but each row's verdict and the map-wide
+    group title were not, leaving one tree in two languages."""
+    from qgis.PyQt.QtWidgets import QTreeWidgetItemIterator
+
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    dialog = _dialog(project, make_memory_layer)
+    try:
+        report = FidelityReportBuilder()
+        report.approximated("Coordinate precision", "Rounded.")
+        dialog._show_fidelity(report)
+        texts = []
+        it = QTreeWidgetItemIterator(dialog.fidelity_panel.tree)
+        while it.value():
+            texts += [it.value().text(0), it.value().text(1)]
+            it += 1
+        assert "Mapa inteiro" in " ".join(texts)
+        assert "Alterado" in texts
+        assert "Changed" not in texts
+    finally:
+        dialog.close()

@@ -41,7 +41,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -209,15 +209,19 @@ class ReportGroup:
     def needs_attention(self) -> bool:
         return any(needs_attention(row.status) for row in self.rows)
 
-    def tally(self) -> str:
-        """ "1 not exported · 3 changed", worst first, or "exact"."""
+    def tally(self, label: Callable[[FidelityStatus], str] | None = None) -> str:
+        """ "1 not exported · 3 changed", worst first, or "exact".
+
+        `label` names a verdict; the dialog passes its translated names.
+        """
+        name = label or VERDICT_LABELS.__getitem__
         counts: dict[FidelityStatus, int] = {}
         for row in self.changes:
             counts[row.status] = counts.get(row.status, 0) + 1
         if not counts:
             return "exact"
         return " · ".join(
-            f"{count} {VERDICT_LABELS[status].lower()}"
+            f"{count} {name(status).lower()}"
             for status, count in sorted(
                 counts.items(), key=lambda pair: VERDICT_ORDER[pair[0]]
             )

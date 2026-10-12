@@ -63,7 +63,6 @@ from qgis.PyQt.QtWidgets import (
 from ..core.export_ir import FidelityItem, FidelityStatus
 from ..core.fidelity_summary import (
     VERDICT_LABELS,
-    VERDICT_ORDER,
     ReportFilter,
     ReportGroup,
     ReportRow,
@@ -163,6 +162,7 @@ _CORE_WORDS = (
     N_("Data"),
     N_("Map settings"),
     N_("Other"),
+    N_("Whole map"),
 )
 
 
@@ -174,15 +174,9 @@ def _topic(topic: Topic) -> str:
     return tr(topic.value)
 
 
-def _tally(group: ReportGroup) -> str:
-    """ "1 not exported · 3 changed", worst first, in the dialog's language."""
-    counts: dict[FidelityStatus, int] = {}
-    for row in group.changes:
-        counts[row.status] = counts.get(row.status, 0) + 1
-    return " · ".join(
-        f"{count} {_verdict(status).lower()}"
-        for status, count in sorted(counts.items(), key=lambda p: VERDICT_ORDER[p[0]])
-    )
+def _group_title(group: ReportGroup) -> str:
+    """A layer's name as it is; the map-wide group's title translated."""
+    return tr(group.title) if group.is_whole_map else group.title
 
 
 def jump_for(group: ReportGroup, row: ReportRow | None) -> tuple[str, str] | None:
@@ -598,19 +592,21 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
                 if group.is_whole_map
                 else self._facts.for_layer(group.layer_id)
             )
-            group_text = f"{group.title} {facts_line(facts)}"
+            group_text = f"{_group_title(group)} {facts_line(facts)}"
             if not report_filter.shows_group(group, group_text):
                 continue
             rows = report_filter.rows(group, group_text)
             shown = {id(row) for row in rows}
             parent = QTreeWidgetItem(self.tree)
-            parent.setText(0, group.title)
-            parent.setText(1, tr(EXACT_TEXT) if group.is_exact else _tally(group))
+            parent.setText(0, _group_title(group))
+            parent.setText(
+                1, tr(EXACT_TEXT) if group.is_exact else group.tally(_verdict)
+            )
             parent.setText(2, facts_line(facts))
             parent.setForeground(2, quiet)
             parent.setIcon(0, qgis_icon(VERDICT_ICONS[group.worst]))
             parent.setData(0, ROW_ROLE, (group_index, -1, -1))
-            parent.setToolTip(0, group.title)
+            parent.setToolTip(0, _group_title(group))
             if facts:
                 parent.setToolTip(2, facts_lines(facts))
             _align_top(parent)
@@ -619,7 +615,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
                     continue
                 child = QTreeWidgetItem(parent)
                 child.setText(0, row.label)
-                child.setText(1, row.verdict)
+                child.setText(1, _verdict(row.status))
                 child.setText(2, row.detail)
                 child.setIcon(0, qgis_icon(VERDICT_ICONS[row.status]))
                 child.setToolTip(0, row.label)
@@ -671,7 +667,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         for item_index, (label, subject) in enumerate(zip(labels, row.subjects)):
             item = QTreeWidgetItem(row_item)
             item.setText(0, label)
-            item.setText(1, row.verdict)
+            item.setText(1, _verdict(row.status))
             item.setText(2, tr(SAME_AS_ABOVE))
             item.setIcon(0, qgis_icon(VERDICT_ICONS[row.status]))
             item.setForeground(
@@ -715,9 +711,13 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             if facts:
                 text += "\n\n" + facts_lines(facts)
             tone = Tone.QUIET if group.is_exact else _tone_of(group.worst)
-            verdict = tr(EXACT_TEXT) if group.is_exact else _tally(group)
+            verdict = tr(EXACT_TEXT) if group.is_exact else group.tally(_verdict)
             self._show_detail(
-                group.title, tone, text, jump_for(group, None), verdict_text=verdict
+                _group_title(group),
+                tone,
+                text,
+                jump_for(group, None),
+                verdict_text=verdict,
             )
             return
         row = group.rows[row_index]
@@ -725,7 +725,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         if item_index >= 0 and item_index < len(row.subjects):
             labels = row.item_labels or row.subjects
             label = labels[item_index]
-        title = label if group.is_whole_map else f"{group.title}: {label}"
+        title = label if group.is_whole_map else f"{_group_title(group)}: {label}"
         text = row.detail
         if row.is_merged:
             text += "\n\n" + tr("Applies to: {subjects}.").format(
@@ -736,7 +736,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             _tone_of(row.status),
             text,
             jump_for(group, row),
-            verdict_text=row.verdict,
+            verdict_text=_verdict(row.status),
             icon=VERDICT_ICONS[row.status],
         )
 
