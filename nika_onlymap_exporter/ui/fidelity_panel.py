@@ -942,6 +942,7 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
     def __init__(self, tree: QTreeWidget) -> None:
         super().__init__(tree)
         self._tree = tree
+        self._measuring = False
 
     def initStyleOption(  # noqa: N802 - Qt override
         self, option: QStyleOptionViewItem, index: QModelIndex
@@ -955,12 +956,29 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
     def sizeHint(  # noqa: N802 - Qt override
         self, option: QStyleOptionViewItem, index: QModelIndex
     ) -> QSize:
+        # Never raises. An exception from a Qt override aborts all of QGIS
+        # under PyQt5 - measured on 3.44 - and this one is reached while the
+        # tree is torn down, and again from inside itself: asking the header
+        # for a width makes Qt size rows, which then get the plain size. A row
+        # that cannot be measured at all gets none rather than taking QGIS
+        # with it.
+        if self._measuring:
+            try:
+                return super().sizeHint(option, index)
+            except Exception:
+                return QSize()
+        self._measuring = True
+        try:
+            return self._wrapped_size(option, index)
+        except Exception:
+            return QSize()
+        finally:
+            self._measuring = False
+
+    def _wrapped_size(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         hint = super().sizeHint(option, index)
         if index.column() != DETAIL_COLUMN:
             return hint
-        # Qt asks for sizes while it tears the tree down, after the C++ tree is
-        # gone. Raising from a Qt override aborts QGIS under PyQt5 - measured on
-        # 3.44 - so a tree on its way out gets the plain size instead.
         if sip.isdeleted(self._tree):
             return hint
         width = self._tree.header().sectionSize(DETAIL_COLUMN)
