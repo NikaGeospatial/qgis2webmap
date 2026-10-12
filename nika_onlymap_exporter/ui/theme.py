@@ -796,7 +796,6 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-left-radius: 5px;
 }}
 {d} QToolButton[role="cornerPart"][position="right"] {{
-    border-left: 1px solid {p.rule};
     padding: 3px 5px;
     min-width: 16px;
     max-width: 16px;
