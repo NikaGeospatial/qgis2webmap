@@ -67,7 +67,8 @@ draws on top, exactly as on the QGIS canvas.
 
 ## 2. Open the plugin
 
-**Web → QGIS2WebMap by NIKA → Create web map**, or the toolbar button.
+**Web → QGIS2WebMap by NIKA → Create web map**, the toolbar button, or **Ctrl+Alt+W**
+(**Cmd+Alt+W** on macOS).
 
 The dialog is non-modal: QGIS stays usable behind it. Reorder or rename layers in
 the Layers panel and the plugin's list follows immediately - there is nothing to

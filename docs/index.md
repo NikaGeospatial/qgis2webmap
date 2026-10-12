@@ -154,7 +154,7 @@ sections:
 ## In short
 
 1. Build and style your map in QGIS as usual, and save the project.
-2. **Web → QGIS2WebMap by NIKA → Create web map**, or the toolbar button.
+2. **Web → QGIS2WebMap by NIKA → Create web map**, the toolbar button, or **Ctrl+Alt+W**.
 3. Give the map a name, tick the layers to include, and press **Export**.
 
 The plugin exports the project as it is, so there is no source to browse for and
