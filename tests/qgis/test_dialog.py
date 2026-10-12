@@ -2246,6 +2246,26 @@ def test_the_map_tab_says_nothing_under_a_basemap_that_works(
         dialog.close()
 
 
+def test_layer_row_drop_downs_open_attached(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """Built after the theme attached every other list, and again on each
+    layer change, so they used to open as free-floating popups."""
+    from qgis.PyQt.QtWidgets import QComboBox
+
+    dialog = TestTabCorner()._dialog(project, make_memory_layer)
+    try:
+        project.addMapLayer(make_memory_layer("rivers", features=[("b", [3.0, 4.0])]))
+        for _ in range(3):
+            qgis_app.processEvents()
+        combos = dialog.layer_tree.findChildren(QComboBox)
+        assert combos
+        for combo in combos:
+            assert combo.view().window().property("attached"), combo.currentText()
+    finally:
+        dialog.close()
+
+
 class TestLayersTabControls:
     def _expanded(self, project, make_memory_layer):
         dialog = TestTabCorner()._dialog(project, make_memory_layer)

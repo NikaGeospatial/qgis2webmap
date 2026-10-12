@@ -1635,6 +1635,9 @@ class MainDialog(QDialog):
             self._add_field_rows(item, layer, settings)
 
         self.layer_tree.blockSignals(False)
+        # These drop-downs are rebuilt on every layer change, long after
+        # `theme.apply` attached the rest, so they are attached here.
+        theme.attach_menus(self.layer_tree)
         self._update_export_readiness()
 
     def _add_field_rows(
