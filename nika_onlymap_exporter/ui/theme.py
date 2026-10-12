@@ -813,7 +813,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.accent};
     color: {p.on_accent};
     border-color: {p.accent};
-    padding-right: 13px;
+    /* Qt leaves about 6 px of its own after a text-beside-icon label, so a
+       smaller right padding is what centres the content. */
+    padding-right: 3px;
 }}
 {d} QToolButton[role="corner"][accent="true"]:hover {{
     background: {p.accent_hover};

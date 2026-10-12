@@ -2558,3 +2558,30 @@ def test_text_that_points_into_share_names_a_row_it_has(
     for source in pointers:
         after = source.split("Share > ", 1)[1]
         assert any(after.startswith(row) for row in rows), source
+
+
+def test_the_export_buttons_label_is_centred(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """Qt leaves its own space after a text-beside-icon label; padding that
+    ignored it pushed Export's icon and text visibly left."""
+    from qgis.PyQt.QtGui import QColor
+
+    dialog = TestTabCorner()._dialog(project, make_memory_layer)
+    try:
+        dialog.show()
+        for _ in range(5):
+            qgis_app.processEvents()
+        image = dialog.export_button.grab().toImage()
+        width, height = image.width(), image.height()
+        fill = QColor(image.pixel(width // 2, 2)).lightness()
+        ink = [
+            x
+            for x in range(width)
+            for y in range(height)
+            if abs(QColor(image.pixel(x, y)).lightness() - fill) > 60
+        ]
+        left, right = min(ink), width - 1 - max(ink)
+        assert abs(left - right) <= 2, (left, right)
+    finally:
+        dialog.close()
