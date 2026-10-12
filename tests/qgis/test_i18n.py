@@ -574,3 +574,22 @@ def test_every_fidelity_cell_speaks_the_language(
         assert "Changed" not in texts
     finally:
         dialog.close()
+
+
+def test_the_fidelity_strip_speaks_the_language(
+    portuguese, project, make_memory_layer
+) -> None:
+    """The line under the tabs is on screen from every tab."""
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    dialog = _dialog(project, make_memory_layer)
+    try:
+        report = FidelityReportBuilder()
+        report.approximated("Coordinate precision", "Rounded.")
+        report.approximated("Basemap", "Tiles.")
+        dialog._show_fidelity(report)
+        strip = dialog.fidelity_strip
+        assert strip.label.text() == "2 itens mudam na exportação."
+        assert strip.button.text() == "Ver o que muda"
+    finally:
+        dialog.close()

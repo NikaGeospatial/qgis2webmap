@@ -485,7 +485,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         """Show a report, with what the export knows about each layer if given."""
         self._summary = summary
         self._facts = facts or ReportFacts()
-        self._set_headline(summary.headline(), quiet=not summary.change_count)
+        self._set_headline(summary.headline(tr, plural), quiet=not summary.change_count)
         self._show_button(None)
         self.stale_banner.setVisible(False)
         map_line = facts_line(self._facts.map)

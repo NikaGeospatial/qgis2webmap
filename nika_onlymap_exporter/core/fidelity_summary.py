@@ -47,6 +47,20 @@ from enum import Enum
 
 from .export_ir import FidelityItem, FidelityStatus
 
+# The dialog's translators, passed in: core has no Qt. Named `tr` and `plural`
+# at every call so the catalogue extractor finds the English they are given.
+Text = Callable[[str], str]
+Plural = Callable[[int, str, str], str]
+
+
+def _same(text: str) -> str:
+    return text
+
+
+def _english(count: int, one: str, many: str) -> str:
+    return (one if count == 1 else many).format(n=count)
+
+
 VERDICT_LABELS = {
     FidelityStatus.PRESERVED: "Kept",
     FidelityStatus.APPROXIMATED: "Changed",
@@ -326,22 +340,27 @@ class ReportSummary:
                     counts[row.topic] += 1
         return counts
 
-    def headline(self) -> str:
-        """ "5 layers · 1 needs attention · 10 things change"."""
+    def headline(self, tr: Text = _same, plural: Plural = _english) -> str:
+        """ "5 layers · 1 needs attention · 10 things change".
+
+        `tr` and `plural` are the dialog's translators; English by default.
+        """
         if self.is_empty:
-            return "Nothing to report."
+            return tr("Nothing to report.")
         layers = len(self.layer_groups)
-        parts = [_plural(layers, "layer") if layers else "No layers"]
-        attention = self._attention_phrase()
+        parts = [
+            plural(layers, "{n} layer", "{n} layers") if layers else tr("No layers")
+        ]
+        attention = self._attention_phrase(tr, plural)
         if attention:
             parts.append(attention)
         if self.change_count:
-            parts.append(_changes(self.change_count))
+            parts.append(_changes(self.change_count, plural))
         else:
-            parts.append("everything is kept exactly")
+            parts.append(tr("everything is kept exactly"))
         return " · ".join(parts)
 
-    def strip_text(self) -> str:
+    def strip_text(self, tr: Text = _same, plural: Plural = _english) -> str:
         """The one line under the tabs. Empty when nothing changes.
 
         Empty rather than "0 things change": an always-present count trains
@@ -366,31 +385,51 @@ class ReportSummary:
         if map_blocked:
             # Not every whole-map blocker means an empty map, so it is counted
             # as a thing rather than dramatised as "nothing can be exported".
-            things = _plural(blocked_layers + map_blocked, "thing")
-            parts.append(f"{things} cannot be exported")
+            parts.append(
+                plural(
+                    blocked_layers + map_blocked,
+                    "{n} thing cannot be exported",
+                    "{n} things cannot be exported",
+                )
+            )
         elif blocked_layers:
-            parts.append(f"{_plural(blocked_layers, 'layer')} cannot be exported")
+            parts.append(
+                plural(
+                    blocked_layers,
+                    "{n} layer cannot be exported",
+                    "{n} layers cannot be exported",
+                )
+            )
         else:
             # Named here: without the headline's "5 layers" before it, a bare
             # "1 needs attention" does not say one of what.
-            attention = self._attention_phrase(name_layers=True)
+            attention = self._attention_phrase(tr, plural, name_layers=True)
             if attention:
                 parts.append(attention[0].upper() + attention[1:])
-        change = _changes(self.change_count)
+        change = _changes(self.change_count, plural)
         parts.append(change if parts else change[0].upper() + change[1:])
-        return " · ".join(parts) + " on export."
+        return tr("{parts} on export.").format(parts=" · ".join(parts))
 
-    def _attention_phrase(self, name_layers: bool = False) -> str:
+    def _attention_phrase(
+        self, tr: Text, plural: Plural, name_layers: bool = False
+    ) -> str:
         layers = sum(1 for group in self.layer_groups if group.needs_attention)
         whole_map = self.whole_map
         map_needs_it = whole_map is not None and whole_map.needs_attention
         if layers and map_needs_it:
-            return f"{_plural(layers, 'layer')} and the whole map need attention"
+            return plural(
+                layers,
+                "{n} layer and the whole map need attention",
+                "{n} layers and the whole map need attention",
+            )
+        if layers and name_layers:
+            return plural(
+                layers, "{n} layer needs attention", "{n} layers need attention"
+            )
         if layers:
-            counted = _plural(layers, "layer") if name_layers else str(layers)
-            return f"{counted} need{'s' if layers == 1 else ''} attention"
+            return plural(layers, "{n} needs attention", "{n} need attention")
         if map_needs_it:
-            return "the whole map needs attention"
+            return tr("the whole map needs attention")
         return ""
 
 
@@ -497,12 +536,8 @@ def _quoted_name(items: list[FidelityItem]) -> str | None:
     return None
 
 
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
-
-
-def _changes(count: int) -> str:
-    return f"{_plural(count, 'thing')} change{'s' if count == 1 else ''}"
+def _changes(count: int, plural: Plural) -> str:
+    return plural(count, "{n} thing changes", "{n} things change")
 
 
 class ReportState(Enum):
@@ -534,7 +569,11 @@ class StripMessage:
 
 
 def strip_message(
-    state: ReportState, summary: ReportSummary | None = None, error: str = ""
+    state: ReportState,
+    summary: ReportSummary | None = None,
+    error: str = "",
+    tr: Text = _same,
+    plural: Plural = _english,
 ) -> StripMessage:
     """What the always-visible strip says, for every state the report can be in.
 
@@ -544,26 +583,34 @@ def strip_message(
     went on showing the old count as if it were current.
     """
     if state is ReportState.NOT_CHECKED:
-        return StripMessage("Not checked yet.", Tone.QUIET, "Check now")
+        return StripMessage(tr("Not checked yet."), Tone.QUIET, tr("Check now"))
     if state is ReportState.CHECKING:
-        return StripMessage("Checking what the export changes...", Tone.QUIET, None)
+        return StripMessage(tr("Checking what the export changes..."), Tone.QUIET, None)
     if state is ReportState.FAILED:
         return StripMessage(
-            f"The check could not finish: {error}" if error else "The check failed.",
+            tr("The check could not finish: {error}").format(error=error)
+            if error
+            else tr("The check failed."),
             Tone.ERROR,
-            "See why",
+            tr("See why"),
         )
     if state is ReportState.OUT_OF_DATE:
         return StripMessage(
-            "Out of date - something changed since the last check.",
+            tr("Out of date - something changed since the last check."),
             Tone.WARNING,
-            "Check again",
+            tr("Check again"),
         )
 
     if summary is None or not summary.change_count:
         return StripMessage("", Tone.QUIET, None)
     if summary.blocked_rows:
-        return StripMessage(summary.strip_text(), Tone.ERROR, "Review problems")
+        return StripMessage(
+            summary.strip_text(tr, plural), Tone.ERROR, tr("Review problems")
+        )
     if any(group.needs_attention for group in summary.groups):
-        return StripMessage(summary.strip_text(), Tone.WARNING, "See what changes")
-    return StripMessage(summary.strip_text(), Tone.INFO, "See what changes")
+        return StripMessage(
+            summary.strip_text(tr, plural), Tone.WARNING, tr("See what changes")
+        )
+    return StripMessage(
+        summary.strip_text(tr, plural), Tone.INFO, tr("See what changes")
+    )

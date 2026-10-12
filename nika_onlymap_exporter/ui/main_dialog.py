@@ -2792,13 +2792,19 @@ class MainDialog(QDialog):
         """Summarise the report in one line, problems first."""
         self._fidelity_summary = self._fidelity_summary_of(report)
         self.fidelity_strip.show_message(
-            strip_message(ReportState.CURRENT, self._fidelity_summary)
+            strip_message(
+                ReportState.CURRENT, self._fidelity_summary, tr=tr, plural=plural
+            )
         )
 
     def _show_fidelity_strip(self) -> None:
         self.fidelity_strip.show_message(
             strip_message(
-                self._fidelity_state, self._fidelity_summary, self._fidelity_error
+                self._fidelity_state,
+                self._fidelity_summary,
+                self._fidelity_error,
+                tr=tr,
+                plural=plural,
             )
         )
 

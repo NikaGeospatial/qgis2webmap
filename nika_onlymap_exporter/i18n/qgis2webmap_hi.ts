@@ -4,6 +4,158 @@
   <context>
     <name>qgis2webmap</name>
     <message>
+      <location filename="../core/fidelity_summary.py" line="540" />
+      <source>{n} thing changes</source>
+      <translation>{n} चीज़ बदलती है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="540" />
+      <source>{n} things change</source>
+      <translation>{n} चीज़ें बदलती हैं</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="615" />
+      <location filename="../core/fidelity_summary.py" line="612" />
+      <source>See what changes</source>
+      <translation>देखें क्या बदलता है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="349" />
+      <source>Nothing to report.</source>
+      <translation>बताने को कुछ नहीं।</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="420" />
+      <source>{n} layer and the whole map need attention</source>
+      <translation>{n} परत और पूरे मानचित्र पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="420" />
+      <source>{n} layers and the whole map need attention</source>
+      <translation>{n} परतों और पूरे मानचित्र पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="426" />
+      <source>{n} layer needs attention</source>
+      <translation>{n} परत पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="426" />
+      <source>{n} layers need attention</source>
+      <translation>{n} परतों पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="430" />
+      <source>{n} needs attention</source>
+      <translation>{n} पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="430" />
+      <source>{n} need attention</source>
+      <translation>{n} पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="432" />
+      <source>the whole map needs attention</source>
+      <translation>पूरे मानचित्र पर ध्यान देना है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="586" />
+      <location filename="../ui/fidelity_panel.py" line="245" />
+      <location filename="../ui/fidelity_panel.py" line="436" />
+      <source>Not checked yet.</source>
+      <translation>अभी जाँच नहीं हुई।</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="586" />
+      <location filename="../ui/fidelity_panel.py" line="251" />
+      <location filename="../ui/fidelity_panel.py" line="437" />
+      <source>Check now</source>
+      <translation>अभी जाँचें</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="588" />
+      <location filename="../ui/fidelity_panel.py" line="450" />
+      <source>Checking what the export changes...</source>
+      <translation>जाँच हो रही है कि निर्यात क्या बदलता है...</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="595" />
+      <source>See why</source>
+      <translation>कारण देखें</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="599" />
+      <source>Out of date - something changed since the last check.</source>
+      <translation>पुराना - पिछली जाँच के बाद कुछ बदला है।</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="601" />
+      <location filename="../ui/fidelity_panel.py" line="504" />
+      <source>Check again</source>
+      <translation>फिर से जाँचें</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="608" />
+      <source>Review problems</source>
+      <translation>समस्याएँ देखें</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>{n} layer</source>
+      <translation>{n} परत</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>{n} layers</source>
+      <translation>{n} परतें</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>No layers</source>
+      <translation>कोई परत नहीं</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="360" />
+      <source>everything is kept exactly</source>
+      <translation>सब कुछ ठीक वैसा ही रखा गया है</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="389" />
+      <source>{n} thing cannot be exported</source>
+      <translation>{n} चीज़ निर्यात नहीं हो सकती</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="389" />
+      <source>{n} things cannot be exported</source>
+      <translation>{n} चीज़ें निर्यात नहीं हो सकतीं</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="411" />
+      <source>{parts} on export.</source>
+      <translation>निर्यात पर: {parts}।</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="593" />
+      <source>The check failed.</source>
+      <translation>जाँच विफल रही।</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="397" />
+      <source>{n} layer cannot be exported</source>
+      <translation>{n} परत निर्यात नहीं हो सकती</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="397" />
+      <source>{n} layers cannot be exported</source>
+      <translation>{n} परतें निर्यात नहीं हो सकतीं</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="591" />
+      <source>The check could not finish: {error}</source>
+      <translation>जाँच पूरी नहीं हो सकी: {error}</translation>
+    </message>
+    <message>
       <location filename="../plugin.py" line="37" />
       <source>Create web map</source>
       <translation>वेब मानचित्र बनाएँ</translation>
@@ -366,18 +518,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>निर्यात में क्या बचता है और क्या नहीं - निर्यात से पहले ही जाँचा गया, ताकि बाद में कुछ पता न चले।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="245" />
-      <location filename="../ui/fidelity_panel.py" line="436" />
-      <source>Not checked yet.</source>
-      <translation>अभी जाँच नहीं हुई।</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="251" />
-      <location filename="../ui/fidelity_panel.py" line="437" />
-      <source>Check now</source>
-      <translation>अभी जाँचें</translation>
-    </message>
-    <message>
       <location filename="../ui/fidelity_panel.py" line="280" />
       <source>Out of date - something changed since this check, so the rows below describe the map as it was.</source>
       <translation>पुराना - इस जाँच के बाद कुछ बदला है, इसलिए नीचे की पंक्तियाँ मानचित्र को पहले जैसा बताती हैं।</translation>
@@ -414,11 +554,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/fidelity_panel.py" line="443" />
       <source>Opening this tab reads the project to check.</source>
       <translation>यह टैब खोलने पर जाँच के लिए प्रोजेक्ट पढ़ा जाता है।</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="450" />
-      <source>Checking what the export changes...</source>
-      <translation>जाँच हो रही है कि निर्यात क्या बदलता है...</translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="463" />
@@ -474,11 +609,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/fidelity_panel.py" line="479" />
       <source>Not a verdict on the map</source>
       <translation>मानचित्र पर कोई निर्णय नहीं</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="504" />
-      <source>Check again</source>
-      <translation>फिर से जाँचें</translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="632" />
@@ -1270,74 +1400,74 @@ They are also online at &lt;{url}&gt;.
       <translation>कुछ गलत हो गया</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2851" />
-      <location filename="../ui/main_dialog.py" line="2842" />
+      <location filename="../ui/main_dialog.py" line="2857" />
+      <location filename="../ui/main_dialog.py" line="2848" />
       <source>Live preview stopped.</source>
       <translation>लाइव पूर्वावलोकन रुक गया।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2917" />
-      <location filename="../ui/main_dialog.py" line="2915" />
-      <location filename="../ui/main_dialog.py" line="2904" />
+      <location filename="../ui/main_dialog.py" line="2923" />
+      <location filename="../ui/main_dialog.py" line="2921" />
+      <location filename="../ui/main_dialog.py" line="2910" />
       <source>Updating the preview...</source>
       <translation>पूर्वावलोकन अपडेट हो रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3152" />
+      <location filename="../ui/main_dialog.py" line="3158" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>मानचित्र बनाने के लिए OnlyMap रनटाइम ज़रूरी है। कुछ नहीं लिखा गया।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3168" />
-      <location filename="../ui/main_dialog.py" line="3363" />
-      <location filename="../ui/main_dialog.py" line="3099" />
+      <location filename="../ui/main_dialog.py" line="3174" />
+      <location filename="../ui/main_dialog.py" line="3371" />
+      <location filename="../ui/main_dialog.py" line="3105" />
       <source>Reading the project...</source>
       <translation>प्रोजेक्ट पढ़ा जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3231" />
-      <location filename="../ui/main_dialog.py" line="3189" />
+      <location filename="../ui/main_dialog.py" line="3239" />
+      <location filename="../ui/main_dialog.py" line="3195" />
       <source>Building the preview...</source>
       <translation>पूर्वावलोकन बन रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3250" />
+      <location filename="../ui/main_dialog.py" line="3258" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>इस कंप्यूटर पर लाइव पूर्वावलोकन शुरू नहीं हो सका, इसलिए पूर्वावलोकन फ़ाइल के रूप में खुला। बदलाव करने के बाद टैब फिर से लोड करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3349" />
+      <location filename="../ui/main_dialog.py" line="3357" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>होस्टिंग अभी शुरू नहीं हुई है - प्रतीक्षा सूची का फ़ॉर्म आपके ब्राउज़र में खुल गया है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3486" />
-      <location filename="../ui/main_dialog.py" line="3422" />
+      <location filename="../ui/main_dialog.py" line="3494" />
+      <location filename="../ui/main_dialog.py" line="3430" />
       <source>Writing the map...</source>
       <translation>मानचित्र लिखा जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3497" />
+      <location filename="../ui/main_dialog.py" line="3505" />
       <source>This will be a large single file</source>
       <translation>यह एक बड़ी अकेली फ़ाइल होगी</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3500" />
+      <location filename="../ui/main_dialog.py" line="3508" />
       <source>The map file inlines all the data into the one HTML file, which is why it is this big. Exporting as Share ZIP on the Map tab packages the same map to send more easily.</source>
       <translation>मानचित्र फ़ाइल सारा डेटा एक ही HTML फ़ाइल में रखती है, इसीलिए यह इतनी बड़ी है। मानचित्र टैब पर साझा करने के लिए ZIP के रूप में निर्यात करना उसी मानचित्र को आसानी से भेजने के लिए पैक करता है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3507" />
+      <location filename="../ui/main_dialog.py" line="3515" />
       <source>Write it anyway</source>
       <translation>फिर भी लिखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3546" />
+      <location filename="../ui/main_dialog.py" line="3552" />
       <source>Choose where to save first</source>
       <translation>पहले चुनें कि कहाँ सहेजना है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3547" />
+      <location filename="../ui/main_dialog.py" line="3553" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1346,8 +1476,8 @@ Fill in Save to on the Map tab, then try again.</source>
 मानचित्र टैब में 'यहाँ सहेजें' भरें, फिर दोबारा कोशिश करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3571" />
-      <location filename="../ui/main_dialog.py" line="3439" />
+      <location filename="../ui/main_dialog.py" line="3577" />
+      <location filename="../ui/main_dialog.py" line="3447" />
       <source>Cannot export</source>
       <translation>निर्यात नहीं किया जा सकता</translation>
     </message>
@@ -1572,37 +1702,37 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>अभी भी पिछले अनुरोध पर काम चल रहा है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2861" />
+      <location filename="../ui/main_dialog.py" line="2867" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>पूर्वावलोकन टैब बंद हो गया, इसलिए पूर्वावलोकन सर्वर रुक गया। इसे फिर शुरू करने के लिए पूर्वावलोकन दबाएँ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2976" />
+      <location filename="../ui/main_dialog.py" line="2982" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>निर्यात करने के लिए प्रोजेक्ट में एक वेक्टर या रास्टर परत जोड़ें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3228" />
+      <location filename="../ui/main_dialog.py" line="3236" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>लाइव पूर्वावलोकन खुला। यहाँ के बदलाव टैब को अपने-आप अपडेट करते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3432" />
+      <location filename="../ui/main_dialog.py" line="3440" />
       <source>Finishing...</source>
       <translation>पूरा किया जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3533" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Folder not found</source>
       <translation>फ़ोल्डर नहीं मिला</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3567" />
+      <location filename="../ui/main_dialog.py" line="3573" />
       <source>No layer in the selection could be read.</source>
       <translation>चयन की कोई भी परत पढ़ी नहीं जा सकी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3576" />
+      <location filename="../ui/main_dialog.py" line="3582" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>इन्हें QGIS में ठीक करें, फिर दोबारा निर्यात करें। विश्वसनीयता टैब में जाँची गई हर चीज़ की सूची है।</translation>
     </message>
@@ -1662,43 +1792,43 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>लाइव पूर्वावलोकन अपडेट नहीं हो सका ({message}) - QGIS लॉग देखें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2913" />
+      <location filename="../ui/main_dialog.py" line="2919" />
       <source>Live preview updated.</source>
       <translation>लाइव पूर्वावलोकन अपडेट हुआ।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2979" />
+      <location filename="../ui/main_dialog.py" line="2985" />
       <source>Tick at least one layer to include.</source>
       <translation>शामिल करने के लिए कम से कम एक परत चुनें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2990" />
       <source>{n} layer will be exported.</source>
       <translation>{n} परत निर्यात होगी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2990" />
       <source>{n} layers will be exported.</source>
       <translation>{n} परतें निर्यात होंगी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3198" />
-      <location filename="../ui/main_dialog.py" line="3219" />
+      <location filename="../ui/main_dialog.py" line="3206" />
+      <location filename="../ui/main_dialog.py" line="3227" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>पूर्वावलोकन खुल गया। बदलाव करने के बाद फिर से पूर्वावलोकन दबाएँ - मानचित्र पर आपकी स्थिति बनी रहती है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3314" />
+      <location filename="../ui/main_dialog.py" line="3322" />
       <source>Copied {path}</source>
       <translation>कॉपी किया: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3400" />
+      <location filename="../ui/main_dialog.py" line="3408" />
       <source>Choose Folder or Share ZIP</source>
       <translation>फ़ोल्डर या साझा करने के लिए ZIP चुनें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3467" />
+      <location filename="../ui/main_dialog.py" line="3475" />
       <source>Exported, with warnings</source>
       <translation>चेतावनियों के साथ निर्यात हुआ</translation>
     </message>
@@ -1728,22 +1858,22 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>तय नहीं</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3043" />
+      <location filename="../ui/main_dialog.py" line="3049" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>'{name}' पढ़ा जा रहा है ({total} में से {done})</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3474" />
+      <location filename="../ui/main_dialog.py" line="3482" />
       <source>The Fidelity tab lists the detail.</source>
       <translation>विवरण विश्वसनीयता टैब में है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3484" />
+      <location filename="../ui/main_dialog.py" line="3492" />
       <source>Export complete</source>
       <translation>निर्यात पूरा हुआ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3534" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1757,18 +1887,18 @@ Pick somewhere that exists, or create it first.</source>
       <translation>इस मानचित्र का डेटा {size} MB है।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3440" />
-      <location filename="../ui/main_dialog.py" line="3572" />
+      <location filename="../ui/main_dialog.py" line="3448" />
+      <location filename="../ui/main_dialog.py" line="3578" />
       <source>This map cannot be exported yet:</source>
       <translation>यह मानचित्र अभी निर्यात नहीं हो सकता:</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3334" />
+      <location filename="../ui/main_dialog.py" line="3342" />
       <source>Opened {path}</source>
       <translation>खोला गया: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3470" />
+      <location filename="../ui/main_dialog.py" line="3478" />
       <source>The exported map has known limitations:</source>
       <translation>निर्यात किए गए मानचित्र की कुछ ज्ञात सीमाएँ हैं:</translation>
     </message>

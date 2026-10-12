@@ -4,6 +4,158 @@
   <context>
     <name>qgis2webmap</name>
     <message>
+      <location filename="../core/fidelity_summary.py" line="540" />
+      <source>{n} thing changes</source>
+      <translation>يتغيّر {n} عنصر</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="540" />
+      <source>{n} things change</source>
+      <translation>تتغيّر {n} عناصر</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="615" />
+      <location filename="../core/fidelity_summary.py" line="612" />
+      <source>See what changes</source>
+      <translation>عرض ما يتغيّر</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="349" />
+      <source>Nothing to report.</source>
+      <translation>لا شيء للإبلاغ عنه.</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="420" />
+      <source>{n} layer and the whole map need attention</source>
+      <translation>تحتاج {n} طبقة والخريطة كاملة إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="420" />
+      <source>{n} layers and the whole map need attention</source>
+      <translation>تحتاج {n} طبقات والخريطة كاملة إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="426" />
+      <source>{n} layer needs attention</source>
+      <translation>تحتاج {n} طبقة إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="426" />
+      <source>{n} layers need attention</source>
+      <translation>تحتاج {n} طبقات إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="430" />
+      <source>{n} needs attention</source>
+      <translation>{n} يحتاج إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="430" />
+      <source>{n} need attention</source>
+      <translation>{n} تحتاج إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="432" />
+      <source>the whole map needs attention</source>
+      <translation>الخريطة كاملة تحتاج إلى انتباه</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="586" />
+      <location filename="../ui/fidelity_panel.py" line="245" />
+      <location filename="../ui/fidelity_panel.py" line="436" />
+      <source>Not checked yet.</source>
+      <translation>لم يُفحص بعد.</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="586" />
+      <location filename="../ui/fidelity_panel.py" line="251" />
+      <location filename="../ui/fidelity_panel.py" line="437" />
+      <source>Check now</source>
+      <translation>افحص الآن</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="588" />
+      <location filename="../ui/fidelity_panel.py" line="450" />
+      <source>Checking what the export changes...</source>
+      <translation>جارٍ فحص ما يغيّره التصدير...</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="595" />
+      <source>See why</source>
+      <translation>عرض السبب</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="599" />
+      <source>Out of date - something changed since the last check.</source>
+      <translation>قديم - تغيّر شيء منذ آخر فحص.</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="601" />
+      <location filename="../ui/fidelity_panel.py" line="504" />
+      <source>Check again</source>
+      <translation>افحص مرة أخرى</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="608" />
+      <source>Review problems</source>
+      <translation>مراجعة المشكلات</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>{n} layer</source>
+      <translation>{n} طبقة</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>{n} layers</source>
+      <translation>{n} طبقات</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="352" />
+      <source>No layers</source>
+      <translation>لا طبقات</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="360" />
+      <source>everything is kept exactly</source>
+      <translation>كل شيء محفوظ كما هو تمامًا</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="389" />
+      <source>{n} thing cannot be exported</source>
+      <translation>لا يمكن تصدير {n} عنصر</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="389" />
+      <source>{n} things cannot be exported</source>
+      <translation>لا يمكن تصدير {n} عناصر</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="411" />
+      <source>{parts} on export.</source>
+      <translation>{parts} عند التصدير.</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="593" />
+      <source>The check failed.</source>
+      <translation>فشل الفحص.</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="397" />
+      <source>{n} layer cannot be exported</source>
+      <translation>لا يمكن تصدير {n} طبقة</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="397" />
+      <source>{n} layers cannot be exported</source>
+      <translation>لا يمكن تصدير {n} طبقات</translation>
+    </message>
+    <message>
+      <location filename="../core/fidelity_summary.py" line="591" />
+      <source>The check could not finish: {error}</source>
+      <translation>تعذّر إكمال الفحص: {error}</translation>
+    </message>
+    <message>
       <location filename="../plugin.py" line="37" />
       <source>Create web map</source>
       <translation>إنشاء خريطة ويب</translation>
@@ -366,18 +518,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>ما الذي ينجو من التصدير وما لا ينجو - يُفحص قبل التصدير كي لا تُفاجأ لاحقًا.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="245" />
-      <location filename="../ui/fidelity_panel.py" line="436" />
-      <source>Not checked yet.</source>
-      <translation>لم يُفحص بعد.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="251" />
-      <location filename="../ui/fidelity_panel.py" line="437" />
-      <source>Check now</source>
-      <translation>افحص الآن</translation>
-    </message>
-    <message>
       <location filename="../ui/fidelity_panel.py" line="280" />
       <source>Out of date - something changed since this check, so the rows below describe the map as it was.</source>
       <translation>قديم - تغيّر شيء منذ هذا الفحص، لذا تصف الصفوف أدناه الخريطة كما كانت.</translation>
@@ -414,11 +554,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/fidelity_panel.py" line="443" />
       <source>Opening this tab reads the project to check.</source>
       <translation>فتح هذا التبويب يقرأ المشروع لفحصه.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="450" />
-      <source>Checking what the export changes...</source>
-      <translation>جارٍ فحص ما يغيّره التصدير...</translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="463" />
@@ -474,11 +609,6 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/fidelity_panel.py" line="479" />
       <source>Not a verdict on the map</source>
       <translation>ليس حكمًا على الخريطة</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="504" />
-      <source>Check again</source>
-      <translation>افحص مرة أخرى</translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="632" />
@@ -1270,74 +1400,74 @@ They are also online at &lt;{url}&gt;.
       <translation>حدث خطأ ما</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2851" />
-      <location filename="../ui/main_dialog.py" line="2842" />
+      <location filename="../ui/main_dialog.py" line="2857" />
+      <location filename="../ui/main_dialog.py" line="2848" />
       <source>Live preview stopped.</source>
       <translation>توقفت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2917" />
-      <location filename="../ui/main_dialog.py" line="2915" />
-      <location filename="../ui/main_dialog.py" line="2904" />
+      <location filename="../ui/main_dialog.py" line="2923" />
+      <location filename="../ui/main_dialog.py" line="2921" />
+      <location filename="../ui/main_dialog.py" line="2910" />
       <source>Updating the preview...</source>
       <translation>جارٍ تحديث المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3152" />
+      <location filename="../ui/main_dialog.py" line="3158" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>بيئة تشغيل OnlyMap مطلوبة لبناء الخريطة. لم يُكتب شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3168" />
-      <location filename="../ui/main_dialog.py" line="3363" />
-      <location filename="../ui/main_dialog.py" line="3099" />
+      <location filename="../ui/main_dialog.py" line="3174" />
+      <location filename="../ui/main_dialog.py" line="3371" />
+      <location filename="../ui/main_dialog.py" line="3105" />
       <source>Reading the project...</source>
       <translation>جارٍ قراءة المشروع...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3231" />
-      <location filename="../ui/main_dialog.py" line="3189" />
+      <location filename="../ui/main_dialog.py" line="3239" />
+      <location filename="../ui/main_dialog.py" line="3195" />
       <source>Building the preview...</source>
       <translation>جارٍ بناء المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3250" />
+      <location filename="../ui/main_dialog.py" line="3258" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>تعذّر تشغيل المعاينة الحية على هذا الجهاز، لذا فُتحت المعاينة كملف. أعد تحميل التبويب بعد إجراء التغييرات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3349" />
+      <location filename="../ui/main_dialog.py" line="3357" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>الاستضافة لم تنطلق بعد - فُتح نموذج قائمة الانتظار في متصفحك.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3486" />
-      <location filename="../ui/main_dialog.py" line="3422" />
+      <location filename="../ui/main_dialog.py" line="3494" />
+      <location filename="../ui/main_dialog.py" line="3430" />
       <source>Writing the map...</source>
       <translation>جارٍ كتابة الخريطة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3497" />
+      <location filename="../ui/main_dialog.py" line="3505" />
       <source>This will be a large single file</source>
       <translation>سيكون هذا ملفًا واحدًا كبيرًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3500" />
+      <location filename="../ui/main_dialog.py" line="3508" />
       <source>The map file inlines all the data into the one HTML file, which is why it is this big. Exporting as Share ZIP on the Map tab packages the same map to send more easily.</source>
       <translation>يضمّن ملف الخريطة كل البيانات في ملف HTML واحد، ولهذا هو بهذا الحجم. التصدير بصيغة ZIP للمشاركة من تبويب الخريطة يحزم الخريطة نفسها لإرسالها بسهولة أكبر.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3507" />
+      <location filename="../ui/main_dialog.py" line="3515" />
       <source>Write it anyway</source>
       <translation>اكتبه على أي حال</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3546" />
+      <location filename="../ui/main_dialog.py" line="3552" />
       <source>Choose where to save first</source>
       <translation>اختر مكان الحفظ أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3547" />
+      <location filename="../ui/main_dialog.py" line="3553" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1346,8 +1476,8 @@ Fill in Save to on the Map tab, then try again.</source>
 املأ حقل الحفظ في تبويب الخريطة، ثم حاول مرة أخرى.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3571" />
-      <location filename="../ui/main_dialog.py" line="3439" />
+      <location filename="../ui/main_dialog.py" line="3577" />
+      <location filename="../ui/main_dialog.py" line="3447" />
       <source>Cannot export</source>
       <translation>تعذّر التصدير</translation>
     </message>
@@ -1572,37 +1702,37 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>ما زال العمل جاريًا على الطلب السابق.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2861" />
+      <location filename="../ui/main_dialog.py" line="2867" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>أُغلق تبويب المعاينة، فتوقف خادم المعاينة. اضغط معاينة لتشغيله من جديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2976" />
+      <location filename="../ui/main_dialog.py" line="2982" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>أضف طبقة متجهة أو نقطية إلى المشروع للتصدير.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3228" />
+      <location filename="../ui/main_dialog.py" line="3236" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>المعاينة الحية مفتوحة. التغييرات هنا تحدّث التبويب تلقائيًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3432" />
+      <location filename="../ui/main_dialog.py" line="3440" />
       <source>Finishing...</source>
       <translation>جارٍ الإنهاء...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3533" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Folder not found</source>
       <translation>المجلد غير موجود</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3567" />
+      <location filename="../ui/main_dialog.py" line="3573" />
       <source>No layer in the selection could be read.</source>
       <translation>تعذّرت قراءة أي طبقة في التحديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3576" />
+      <location filename="../ui/main_dialog.py" line="3582" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>أصلح هذه في QGIS ثم صدّر من جديد. يسرد تبويب الدقة كل ما جرى فحصه.</translation>
     </message>
@@ -1662,43 +1792,43 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>تعذّر تحديث المعاينة الحية ({message}) - راجع سجل QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2913" />
+      <location filename="../ui/main_dialog.py" line="2919" />
       <source>Live preview updated.</source>
       <translation>حُدّثت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2979" />
+      <location filename="../ui/main_dialog.py" line="2985" />
       <source>Tick at least one layer to include.</source>
       <translation>حدّد طبقة واحدة على الأقل لتضمينها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2990" />
       <source>{n} layer will be exported.</source>
       <translation>ستُصدَّر {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2984" />
+      <location filename="../ui/main_dialog.py" line="2990" />
       <source>{n} layers will be exported.</source>
       <translation>ستُصدَّر {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3198" />
-      <location filename="../ui/main_dialog.py" line="3219" />
+      <location filename="../ui/main_dialog.py" line="3206" />
+      <location filename="../ui/main_dialog.py" line="3227" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>فُتحت المعاينة. اضغط معاينة مرة أخرى بعد إجراء التغييرات - يُحفظ موضعك على الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3314" />
+      <location filename="../ui/main_dialog.py" line="3322" />
       <source>Copied {path}</source>
       <translation>نُسخ: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3400" />
+      <location filename="../ui/main_dialog.py" line="3408" />
       <source>Choose Folder or Share ZIP</source>
       <translation>اختر مجلد أو ZIP للمشاركة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3467" />
+      <location filename="../ui/main_dialog.py" line="3475" />
       <source>Exported, with warnings</source>
       <translation>صُدّرت، مع تحذيرات</translation>
     </message>
@@ -1728,22 +1858,22 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>غير محدد</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3043" />
+      <location filename="../ui/main_dialog.py" line="3049" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>جارٍ قراءة '{name}' ({done} من {total})</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3474" />
+      <location filename="../ui/main_dialog.py" line="3482" />
       <source>The Fidelity tab lists the detail.</source>
       <translation>يعرض تبويب الدقة التفاصيل.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3484" />
+      <location filename="../ui/main_dialog.py" line="3492" />
       <source>Export complete</source>
       <translation>اكتمل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3534" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1757,18 +1887,18 @@ Pick somewhere that exists, or create it first.</source>
       <translation>حجم بيانات هذه الخريطة {size} م.ب.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3440" />
-      <location filename="../ui/main_dialog.py" line="3572" />
+      <location filename="../ui/main_dialog.py" line="3448" />
+      <location filename="../ui/main_dialog.py" line="3578" />
       <source>This map cannot be exported yet:</source>
       <translation>لا يمكن تصدير هذه الخريطة بعد:</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3334" />
+      <location filename="../ui/main_dialog.py" line="3342" />
       <source>Opened {path}</source>
       <translation>فُتح: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3470" />
+      <location filename="../ui/main_dialog.py" line="3478" />
       <source>The exported map has known limitations:</source>
       <translation>للخريطة المُصدَّرة قيود معروفة:</translation>
     </message>
