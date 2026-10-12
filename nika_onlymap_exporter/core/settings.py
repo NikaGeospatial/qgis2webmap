@@ -471,7 +471,8 @@ def load_state(project: QgsProject) -> DialogState:
 
     map_file, ok = project.readEntry(SCOPE, KEY_MAP_FILE, "")
     if ok and map_file:
-        state.map_file = map_file
+        # Stored the way the project stores its layer paths (see `save_state`).
+        state.map_file = project.readPath(map_file)
 
     mode, ok = project.readEntry(SCOPE, KEY_OUTPUT_MODE, "")
     if ok and mode:
@@ -521,7 +522,14 @@ def load_state(project: QgsProject) -> DialogState:
 def save_state(project: QgsProject, state: DialogState) -> None:
     """Write settings into the project. Marks it dirty, as any change should."""
     project.writeEntry(SCOPE, KEY_MAP_NAME, state.map_name)
-    project.writeEntry(SCOPE, KEY_MAP_FILE, state.map_file)
+    # Relative to the project file when the project saves relative paths, as
+    # it does by default: an absolute path in a shared .qgz names a folder on
+    # the sender's machine, and breaks when the project folder is moved.
+    project.writeEntry(
+        SCOPE,
+        KEY_MAP_FILE,
+        project.writePath(state.map_file) if state.map_file else "",
+    )
     project.writeEntry(SCOPE, KEY_OUTPUT_MODE, state.output_mode.value)
     project.writeEntry(
         SCOPE,

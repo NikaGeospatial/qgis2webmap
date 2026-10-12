@@ -119,6 +119,24 @@ class TestSettingsPersistence:
         save_state(project, DialogState(map_file=awkward))
         assert load_state(project).map_file == awkward
 
+    def test_a_saved_project_stores_the_map_file_relative_to_itself(
+        self, project, tmp_path
+    ) -> None:
+        """An absolute path in a shared .qgz names a folder on the sender's
+        machine; relative, it follows the project folder wherever it goes."""
+        project.setFileName(str(tmp_path / "survey.qgz"))
+        target = tmp_path / "out" / "peaks.html"
+        save_state(project, DialogState(map_file=str(target)))
+
+        stored, _ok = project.readEntry("qgis2webmap", "mapFile", "")
+        assert str(tmp_path) not in stored
+        assert load_state(project).map_file == str(target)
+
+        # Moved with its project, the map file moves too.
+        moved = tmp_path / "elsewhere"
+        project.setFileName(str(moved / "survey.qgz"))
+        assert load_state(project).map_file == str(moved / "out" / "peaks.html")
+
     def test_field_modes_round_trip_through_the_project(self, project) -> None:
         state = DialogState()
         state.layers["abc"] = LayerSettings(
