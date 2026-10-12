@@ -661,7 +661,7 @@ class MainDialog(QDialog):
         # this tab mirrors. Before Help, where people look for settings.
         self.tabs.insertTab(
             self.tabs.indexOf(self._help_page),
-            self._build_settings_tab(),
+            _scrollable(self._build_settings_tab()),
             tr("Settings"),
         )
         self._fidelity_is_stale = True

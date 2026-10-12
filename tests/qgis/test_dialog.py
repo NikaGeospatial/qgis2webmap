@@ -293,6 +293,44 @@ class TestPreview:
         assert "om-view-changed" not in outcome.path.read_text()
 
 
+class TestShortWindows:
+    """A short window scrolls a tab of stacked cards; it never crushes them."""
+
+    @pytest.mark.parametrize("tab", ["Map", "Appearance", "Settings"])
+    def test_nothing_is_squeezed_below_its_minimum_height(
+        self, qgis_app, project, make_memory_layer, tab
+    ):
+        from qgis.PyQt.QtWidgets import (
+            QAbstractButton,
+            QComboBox,
+            QGroupBox,
+            QLabel,
+            QLineEdit,
+        )
+
+        from nika_onlymap_exporter.ui.main_dialog import MINIMUM_DIALOG_HEIGHT
+
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            dialog.show()
+            dialog.resize(960, MINIMUM_DIALOG_HEIGHT)
+            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+            dialog.tabs.setCurrentIndex(titles.index(tab))
+            qgis_app.processEvents()
+            crushed = [
+                f"{type(w).__name__} {w.height()} < {w.minimumSizeHint().height()}"
+                for w in dialog.tabs.currentWidget().findChildren(
+                    (QAbstractButton, QComboBox, QGroupBox, QLabel, QLineEdit)
+                )
+                if w.isVisibleTo(dialog)
+                and w.minimumSizeHint().isValid()
+                and w.height() < w.minimumSizeHint().height() - 1
+            ]
+            assert crushed == []
+        finally:
+            dialog.close()
+
+
 class TestTabCorner:
     """Preview and Share live on the tab bar, reachable from every tab.
 
