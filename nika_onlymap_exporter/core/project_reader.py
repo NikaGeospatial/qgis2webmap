@@ -237,9 +237,9 @@ def with_output_notes(
     file. Kept out of what a cached read depends on, so switching type is a
     redraw rather than a re-read of every feature.
     """
-    if settings.basemap != "osm":
-        return report
     general = basemap_note(settings.basemap)
+    if settings.basemap != "osm" or general is None:
+        return report
     wanted = (
         OSM_FILE_NOTE
         if osm_from_file(settings.basemap, settings.output_mode)
