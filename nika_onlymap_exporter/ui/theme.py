@@ -332,6 +332,25 @@ def _line_pixmap(name: str, colour: str, scale: float) -> QPixmap:
     return pixmap
 
 
+def qgis_icon(name: str) -> QIcon:
+    """A QGIS theme icon, or an empty one if this build has not got it.
+
+    Icon names are resource paths compiled into QGIS, not files on disk, and
+    they come and go between releases. `getThemeIcon` returns a null `QIcon` for
+    a name that has gone rather than raising, so a menu built against a newer
+    QGIS still opens on an older one - it just loses a picture.
+
+    Wrapped rather than called inline so that the failure is stated once, here,
+    instead of being invisible at every call site.
+    """
+    from qgis.core import QgsApplication
+
+    with contextlib.suppress(Exception):
+        icon: QIcon = QgsApplication.getThemeIcon(f"/{name}")
+        return icon
+    return QIcon()
+
+
 def line_icon(name: str, colour: str, disabled: str) -> QIcon:
     """One of `LINE_ICONS`, sharp at 1x and 2x, greyed when disabled."""
     icon = QIcon()

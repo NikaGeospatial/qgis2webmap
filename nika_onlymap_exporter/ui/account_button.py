@@ -27,7 +27,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import contextlib
 from typing import Protocol
 
 from qgis.PyQt.QtCore import QEvent, QRectF, Qt
@@ -36,7 +35,7 @@ from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QToolButton, QWidget
 
 from ..core.account import AccountIdentity
 from .i18n import N_, tr
-from .theme import line_icon
+from .theme import line_icon, qgis_icon
 
 # Icon names verified present in QGIS 4.2's compiled theme. As with
 # `main_dialog.SHARE_MENU_ICONS` these are resource paths rather than files, and
@@ -212,7 +211,7 @@ class AccountButton(QToolButton):
         self._menu.addSeparator()
 
         switch = self._menu.addAction(tr("Switch account…"))
-        switch.setIcon(_theme_icon(ICON_SWITCH))
+        switch.setIcon(qgis_icon(ICON_SWITCH))
         switch.setToolTip(
             tr(
                 "Sign in as somebody else. Your browser opens NIKA's sign-in page; "
@@ -222,7 +221,7 @@ class AccountButton(QToolButton):
         switch.triggered.connect(self._on_switch)
 
         sign_out = self._menu.addAction(tr("Sign out"))
-        sign_out.setIcon(_theme_icon(ICON_SIGN_OUT))
+        sign_out.setIcon(qgis_icon(ICON_SIGN_OUT))
         sign_out.setToolTip(
             tr(
                 "Unpair this QGIS profile and revoke its access to your NIKA "
@@ -344,17 +343,3 @@ def _initials_icon(
     painter.end()
     pixmap.setDevicePixelRatio(scale)
     return QIcon(pixmap)
-
-
-def _theme_icon(name: str) -> QIcon:
-    """A QGIS theme icon, or an empty one if this build has not got it.
-
-    The same wrapper `main_dialog` uses, repeated rather than imported to keep
-    this widget free of a dependency on the dialog that hosts it.
-    """
-    from qgis.core import QgsApplication
-
-    with contextlib.suppress(Exception):
-        icon: QIcon = QgsApplication.getThemeIcon(f"/{name}")
-        return icon
-    return QIcon()

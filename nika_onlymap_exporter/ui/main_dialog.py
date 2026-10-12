@@ -41,7 +41,6 @@ from qgis.PyQt.QtCore import QObject, QSettings, QSize, Qt, QTimer, QUrl, pyqtSi
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
-    QIcon,
     QPalette,
     QTextDocument,
 )
@@ -348,24 +347,6 @@ def show_failure(parent: QWidget, title: str, message: str) -> None:
         )
     )
     box.exec()
-
-
-def _theme_icon(name: str):
-    """A QGIS theme icon, or an empty one if this build has not got it.
-
-    Icon names are resource paths compiled into QGIS, not files on disk, and
-    they come and go between releases. `getThemeIcon` returns a null `QIcon` for
-    a name that has gone rather than raising, so a menu built against a newer
-    QGIS still opens on an older one - it just loses a picture.
-
-    Wrapped rather than called inline so that the failure is stated once, here,
-    instead of being invisible at nine call sites.
-    """
-    from qgis.core import QgsApplication
-
-    with contextlib.suppress(Exception):
-        return QgsApplication.getThemeIcon(f"/{name}")
-    return QIcon()
 
 
 def _reveal_label() -> str:
@@ -2380,7 +2361,7 @@ class MainDialog(QDialog):
             action.setToolTip(tip)
             name = SHARE_MENU_ICONS.get(key, "")
             if name:
-                action.setIcon(_theme_icon(name))
+                action.setIcon(theme.qgis_icon(name))
             if shortcut:
                 action.setShortcut(shortcut)
             action.triggered.connect(slot)

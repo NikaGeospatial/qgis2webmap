@@ -37,7 +37,7 @@ from collections.abc import Sequence
 from enum import Enum
 
 from qgis.PyQt.QtCore import QModelIndex, QRect, QSettings, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QBrush, QFont, QIcon, QPalette, QPixmap
+from qgis.PyQt.QtGui import QBrush, QFont, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import (
     QAbstractButton,
     QAction,
@@ -73,6 +73,7 @@ from ..core.fidelity_summary import (
 )
 from ..core.report_facts import ReportFacts, facts_line, facts_lines
 from .i18n import N_, plural, tr
+from .theme import qgis_icon
 
 # QGIS theme icons, by resource name. Verified present in QGIS 4.2's compiled
 # theme; a name that has gone yields a null icon rather than raising, so a row
@@ -145,15 +146,6 @@ VERDICT_TIPS = {
 
 ROW_ROLE = Qt.ItemDataRole.UserRole
 DETAIL_COLUMN = 2
-
-
-def theme_icon(name: str) -> QIcon:
-    """A QGIS theme icon, or an empty one if this build has not got it."""
-    from qgis.core import QgsApplication
-
-    with contextlib.suppress(Exception):
-        return QgsApplication.getThemeIcon(f"/{name}")
-    return QIcon()
 
 
 def jump_for(group: ReportGroup, row: ReportRow | None) -> tuple[str, str] | None:
@@ -250,7 +242,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         banner.setContentsMargins(0, 0, 0, 0)
         self.stale_icon = QLabel(self.stale_banner)
         self.stale_icon.setPixmap(
-            theme_icon(TONE_ICONS[Tone.WARNING]).pixmap(QSize(ICON_SIZE, ICON_SIZE))
+            qgis_icon(TONE_ICONS[Tone.WARNING]).pixmap(QSize(ICON_SIZE, ICON_SIZE))
         )
         banner.addWidget(self.stale_icon)
         self.stale_text = QLabel(
@@ -579,7 +571,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             parent.setText(1, tr(EXACT_TEXT) if group.is_exact else group.tally())
             parent.setText(2, facts_line(facts))
             parent.setForeground(2, quiet)
-            parent.setIcon(0, theme_icon(VERDICT_ICONS[group.worst]))
+            parent.setIcon(0, qgis_icon(VERDICT_ICONS[group.worst]))
             parent.setData(0, ROW_ROLE, (group_index, -1, -1))
             parent.setToolTip(0, group.title)
             if facts:
@@ -592,7 +584,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
                 child.setText(0, row.label)
                 child.setText(1, row.verdict)
                 child.setText(2, row.detail)
-                child.setIcon(0, theme_icon(VERDICT_ICONS[row.status]))
+                child.setIcon(0, qgis_icon(VERDICT_ICONS[row.status]))
                 child.setToolTip(0, row.label)
                 child.setData(0, ROW_ROLE, (group_index, row_index, -1))
                 _align_top(child)
@@ -644,7 +636,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             item.setText(0, label)
             item.setText(1, row.verdict)
             item.setText(2, tr(SAME_AS_ABOVE))
-            item.setIcon(0, theme_icon(VERDICT_ICONS[row.status]))
+            item.setIcon(0, qgis_icon(VERDICT_ICONS[row.status]))
             item.setForeground(
                 2, QBrush(self.palette().color(QPalette.ColorRole.PlaceholderText))
             )
@@ -726,7 +718,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.detail_title.setVisible(bool(title))
         name = icon or (TONE_ICONS.get(tone) if tone is not None else None)
         self.detail_icon.setPixmap(
-            theme_icon(name).pixmap(QSize(ICON_SIZE, ICON_SIZE)) if name else _empty()
+            qgis_icon(name).pixmap(QSize(ICON_SIZE, ICON_SIZE)) if name else _empty()
         )
         self.detail_icon.setVisible(bool(name))
         self.detail_verdict.setText(f"- {verdict_text}" if title else verdict_text)
@@ -805,7 +797,7 @@ class FidelityStrip(QWidget):  # type: ignore[misc, unused-ignore]
         )
         name = TONE_ICONS.get(message.tone)
         self.icon.setPixmap(
-            theme_icon(name).pixmap(QSize(ICON_SIZE, ICON_SIZE)) if name else _empty()
+            qgis_icon(name).pixmap(QSize(ICON_SIZE, ICON_SIZE)) if name else _empty()
         )
         self.icon.setVisible(name is not None)
         self.button.setVisible(message.button is not None)
