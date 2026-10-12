@@ -1334,6 +1334,12 @@ class TestLivePreviewLifecycle:
                 assert dialog.share_actions[key].isEnabled(), key
             for key in ("copy_path", "reveal"):
                 assert not dialog.share_actions[key].isEnabled(), key
+
+            # A job greys out the file rows only, and the rest survive it.
+            dialog._set_busy(True, "working")
+            dialog._set_busy(False)
+            for key in ("publish", "enhance", "critique", "cartograph"):
+                assert dialog.share_actions[key].isEnabled(), key
         finally:
             dialog.close()
 

@@ -2676,8 +2676,11 @@ class MainDialog(QDialog):
             self.status_label.setText(label)
             self.preview_button.setEnabled(False)
             self.export_button.setEnabled(False)
-            for action in getattr(self, "share_actions", {}).values():
-                action.setEnabled(False)
+            # Only the rows that write the map: the others start no job, and
+            # nothing but `_update_share_enabled` would turn them back on.
+            for key, action in getattr(self, "share_actions", {}).items():
+                if key in SHARE_ACTIONS_ON_THE_FILE:
+                    action.setEnabled(False)
         else:
             self.progress_bar.reset()
             self._update_export_readiness()
