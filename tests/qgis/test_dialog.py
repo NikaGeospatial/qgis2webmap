@@ -1324,6 +1324,30 @@ class TestLivePreviewLifecycle:
         finally:
             dialog.close()
 
+    def test_a_one_off_served_preview_stops_once_its_tab_closes(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """It used to run until the dialog closed: only a live session watched
+        for the tab going away."""
+        import time
+
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        dialog._server = PreviewServer(tmp_path)
+        dialog._server.start()
+        try:
+            # A page connected, then went away long enough ago.
+            dialog._server._ever_connected = True
+            dialog._server._empty_since = time.monotonic() - 3600
+            dialog._idle_timer.start()
+            dialog._stop_when_one_off_tab_closes()
+            assert dialog._server is None
+            assert not dialog._idle_timer.isActive()
+        finally:
+            dialog.close()
+
     def test_pressing_preview_again_stops_the_server(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

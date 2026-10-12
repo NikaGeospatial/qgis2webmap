@@ -765,6 +765,12 @@ class MainDialog(QDialog):
         self._rebuild_timer.setInterval(LIVE_DEBOUNCE_MS)
         self._rebuild_timer.timeout.connect(self._rebuild_live_preview)
 
+        # A served one-off preview has no live session to notice its tab
+        # closing, so this does that one job and nothing else.
+        self._idle_timer = QTimer(self)
+        self._idle_timer.setInterval(LIVE_POLL_MS)
+        self._idle_timer.timeout.connect(self._stop_when_one_off_tab_closes)
+
         self.refresh_layers()
 
     def _warn_style(self) -> str:
@@ -2946,7 +2952,16 @@ class MainDialog(QDialog):
         idle = self._server.idle_seconds if self._server is not None else None
         return idle is not None and idle > PREVIEW_IDLE_STOP_SECONDS
 
+    def _stop_when_one_off_tab_closes(self) -> None:
+        if self._shut_down or self._server is None or self._live_running():
+            self._idle_timer.stop()
+            return
+        if self._preview_tab_was_closed():
+            self._stop_live_preview()
+
     def _stop_live_preview(self) -> None:
+        if hasattr(self, "_idle_timer"):
+            self._idle_timer.stop()
         self._watch_timer.stop()
         self._rebuild_timer.stop()
         server, self._server = self._server, None
@@ -3187,7 +3202,9 @@ class MainDialog(QDialog):
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Building the preview..."))
-            return write_preview(export, identity, writer=writer, live=live)
+            # Served one-offs carry the listener too: nothing ever tells them to
+            # reload, but it is how the server learns the tab has closed.
+            return write_preview(export, identity, writer=writer, live=served)
 
         def on_written(result) -> None:
             if not served:
@@ -3212,6 +3229,7 @@ class MainDialog(QDialog):
 
             QDesktopServices.openUrl(QUrl(url))
             if not live:
+                self._idle_timer.start()
                 self.status_label.setText(
                     tr(
                         "Preview opened. Press Preview again after making changes - "
