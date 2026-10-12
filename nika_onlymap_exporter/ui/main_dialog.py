@@ -152,6 +152,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 LOG_TAG = "QGIS2WebMap"
 
+# The Share rows that act on the map file, so need one to have been chosen.
+SHARE_ACTIONS_ON_THE_FILE = frozenset({"copy_path", "reveal"})
+
 # The Map tab's "Export as" choice, worded as 0.1.4 had it: what each one is
 # for, not what it is called internally.
 MODE_LABELS = {
@@ -1393,7 +1396,11 @@ class MainDialog(QDialog):
             )
 
     def _update_share_enabled(self) -> None:
-        """Share needs somewhere to write before any of it means anything.
+        """The rows that act on the map file need somewhere to write it.
+
+        Only those: the waitlist and the hand-offs never touch the file, and
+        greying them out until a path was chosen hid them from exactly the
+        people who had not exported yet.
 
         Enablement hangs on the *path*, not on the file existing: an action that
         needs the map writes it first. Requiring the file to exist would leave
@@ -1408,6 +1415,8 @@ class MainDialog(QDialog):
             return
         ready = self._map_file() is not None and getattr(self, "_export_ready", True)
         for key, action in getattr(self, "share_actions", {}).items():
+            if key not in SHARE_ACTIONS_ON_THE_FILE:
+                continue
             action.setEnabled(ready)
             # Restored from the originals rather than remembered off the widget:
             # overwriting the tooltip on the way down would lose the real one

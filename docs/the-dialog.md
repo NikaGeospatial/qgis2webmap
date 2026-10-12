@@ -382,14 +382,15 @@ opens the menu:
 | **Make a cartograph with QGIS2Carto** | Coming in a later release |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
-**Every row that acts on the map needs a Save to path first.** Until you have
-set one on the Map tab they are greyed out, and each says so if you hover it.
-**Ask on Discord** always works.
+**Copy file path and Show in file manager need a Save to path first.** Until
+you have set one on the Map tab they are greyed out, and each says so if you
+hover it. The other rows always work.
 
-**Rows that need the map write it first** when it is missing or out of date,
-so Copy file path or Show in file manager never point at something stale.
+**Show in file manager writes the map first** when it is missing or out of
+date, so it never points at something stale. Copy file path only copies the
+path, so it never waits for a write.
 
-Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
+Preview, Export and Share's file rows are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent
 refusal:
 

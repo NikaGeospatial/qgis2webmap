@@ -406,13 +406,15 @@ class TestTabCorner:
             # The button itself stays usable: its menu also holds Discord,
             # which needs no map file.
             assert dialog.share_button.isEnabled() is True
-            assert dialog.share_actions, "the menu should have actions to disable"
-            for action in dialog.share_actions.values():
+            from nika_onlymap_exporter.ui.main_dialog import SHARE_ACTIONS_ON_THE_FILE
+
+            on_the_file = [dialog.share_actions[k] for k in SHARE_ACTIONS_ON_THE_FILE]
+            for action in on_the_file:
                 assert action.isEnabled() is False
                 assert "Map tab" in action.toolTip()
 
             dialog.path_edit.setText(str(tmp_path / "peaks.html"))
-            for action in dialog.share_actions.values():
+            for action in on_the_file:
                 assert action.isEnabled() is True
             # The real wording comes back rather than staying as the refusal.
             assert "clipboard" in dialog.share_actions["copy_path"].toolTip()
@@ -1317,6 +1319,21 @@ class TestLivePreviewLifecycle:
 
             dialog.path_edit.setText(str(tmp_path / "peaks.html"))
             assert copy.isEnabled() is True
+        finally:
+            dialog.close()
+
+    def test_rows_that_never_touch_the_file_are_always_available(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """The hosting waitlist is a demand test; hiding it until a path is
+        chosen hid it from everyone who had not exported yet."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert dialog._map_file() is None
+            for key in ("publish", "enhance", "critique", "cartograph"):
+                assert dialog.share_actions[key].isEnabled(), key
+            for key in ("copy_path", "reveal"):
+                assert not dialog.share_actions[key].isEnabled(), key
         finally:
             dialog.close()
 
