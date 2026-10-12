@@ -11,7 +11,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-COMPANY_URL = "https://nikaplanet.com"
 DOCS_URL = "https://docs.nikaplanet.com"
 REPO_URL = "https://github.com/NikaGeospatial/qgis2webmap"
 

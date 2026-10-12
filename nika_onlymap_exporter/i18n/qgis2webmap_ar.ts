@@ -185,42 +185,27 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>إظهار في الطبقات</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="858" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>Export anyway</source>
       <translation>التصدير على أي حال</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="859" />
+      <location filename="../ui/fidelity_panel.py" line="860" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>يمكنك التصدير على أي حال فتُنشأ الخريطة من دونه، أو مراجعة التقرير أولًا.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="864" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>يمكنك التصدير على أي حال فتُنشأ الخريطة من دونها، أو مراجعة التقرير أولًا.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="869" />
-      <source>Publish anyway</source>
-      <translation>النشر على أي حال</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="870" />
-      <source>You can publish anyway and the map is made without it, or review the report first.</source>
-      <translation>يمكنك النشر على أي حال فتُنشأ الخريطة من دونه، أو مراجعة التقرير أولًا.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="874" />
-      <source>You can publish anyway and the map is made without them, or review the report first.</source>
-      <translation>يمكنك النشر على أي حال فتُنشأ الخريطة من دونها، أو مراجعة التقرير أولًا.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="892" />
+      <location filename="../ui/fidelity_panel.py" line="882" />
       <source>Part of this map will not work</source>
       <translation>جزء من هذه الخريطة لن يعمل</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="907" />
+      <location filename="../ui/fidelity_panel.py" line="897" />
       <source>Review on the Fidelity tab</source>
       <translation>المراجعة في تبويب الدقة</translation>
     </message>
@@ -365,12 +350,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>لا شيء في هذه الطبقة يتغيّر عند التصدير.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>لا يمكن نقل {n} عنصر إلى الخريطة كما هو مُعدّ في QGIS:</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>لا يمكن نقل {n} عناصر إلى الخريطة كما هي مُعدّة في QGIS:</translation>
     </message>
@@ -1231,12 +1216,12 @@ They are also online at &lt;{url}&gt;.
       <translation>اكتبه على أي حال</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3540" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Choose where to save first</source>
       <translation>اختر مكان الحفظ أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3541" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1245,7 +1230,7 @@ Fill in Save to on the Map tab, then try again.</source>
 املأ حقل الحفظ في تبويب الخريطة، ثم حاول مرة أخرى.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3565" />
+      <location filename="../ui/main_dialog.py" line="3564" />
       <location filename="../ui/main_dialog.py" line="3432" />
       <source>Cannot export</source>
       <translation>تعذّر التصدير</translation>
@@ -1511,17 +1496,17 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>جارٍ الإنهاء...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3527" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Folder not found</source>
       <translation>المجلد غير موجود</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3561" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>No layer in the selection could be read.</source>
       <translation>تعذّرت قراءة أي طبقة في التحديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3570" />
+      <location filename="../ui/main_dialog.py" line="3569" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>أصلح هذه في QGIS ثم صدّر من جديد. يسرد تبويب الدقة كل ما جرى فحصه.</translation>
     </message>
@@ -1661,7 +1646,7 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
       <translation>اكتمل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3527" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1676,7 +1661,7 @@ Pick somewhere that exists, or create it first.</source>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3433" />
-      <location filename="../ui/main_dialog.py" line="3566" />
+      <location filename="../ui/main_dialog.py" line="3565" />
       <source>This map cannot be exported yet:</source>
       <translation>لا يمكن تصدير هذه الخريطة بعد:</translation>
     </message>

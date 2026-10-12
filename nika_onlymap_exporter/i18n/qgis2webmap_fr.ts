@@ -185,42 +185,27 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <translation>Afficher dans Couches</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="858" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>Export anyway</source>
       <translation>Exporter quand même</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="859" />
+      <location filename="../ui/fidelity_panel.py" line="860" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>Vous pouvez exporter quand même et la carte sera faite sans cet élément, ou vérifier d'abord le rapport.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="864" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>Vous pouvez exporter quand même et la carte sera faite sans ces éléments, ou vérifier d'abord le rapport.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="869" />
-      <source>Publish anyway</source>
-      <translation>Publier quand même</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="870" />
-      <source>You can publish anyway and the map is made without it, or review the report first.</source>
-      <translation>Vous pouvez publier quand même et la carte sera faite sans cet élément, ou vérifier d'abord le rapport.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="874" />
-      <source>You can publish anyway and the map is made without them, or review the report first.</source>
-      <translation>Vous pouvez publier quand même et la carte sera faite sans ces éléments, ou vérifier d'abord le rapport.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="892" />
+      <location filename="../ui/fidelity_panel.py" line="882" />
       <source>Part of this map will not work</source>
       <translation>Une partie de cette carte ne fonctionnera pas</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="907" />
+      <location filename="../ui/fidelity_panel.py" line="897" />
       <source>Review on the Fidelity tab</source>
       <translation>Vérifier dans l'onglet Fidélité</translation>
     </message>
@@ -365,12 +350,12 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <translation>Rien dans cette couche ne change à l'export.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} élément ne peut pas être repris dans la carte tel qu'il est configuré dans QGIS :</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} éléments ne peuvent pas être repris dans la carte tels qu'ils sont configurés dans QGIS :</translation>
     </message>
@@ -1231,12 +1216,12 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
       <translation>L'écrire quand même</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3540" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Choose where to save first</source>
       <translation>Choisissez d'abord où enregistrer</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3541" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1245,7 +1230,7 @@ Fill in Save to on the Map tab, then try again.</source>
 Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3565" />
+      <location filename="../ui/main_dialog.py" line="3564" />
       <location filename="../ui/main_dialog.py" line="3432" />
       <source>Cannot export</source>
       <translation>Impossible d'exporter</translation>
@@ -1511,17 +1496,17 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
       <translation>Finalisation...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3527" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Folder not found</source>
       <translation>Dossier introuvable</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3561" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>No layer in the selection could be read.</source>
       <translation>Aucune couche de la sélection n'a pu être lue.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3570" />
+      <location filename="../ui/main_dialog.py" line="3569" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>Corrigez ceci dans QGIS, puis exportez à nouveau. L'onglet Fidélité liste tout ce qui a été vérifié.</translation>
     </message>
@@ -1661,7 +1646,7 @@ L'entrée de menu est là pour qu'on puisse juger la forme du menu Partager ; cl
       <translation>Export terminé</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3527" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1676,7 +1661,7 @@ Choisissez un emplacement existant ou créez-le d'abord.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3433" />
-      <location filename="../ui/main_dialog.py" line="3566" />
+      <location filename="../ui/main_dialog.py" line="3565" />
       <source>This map cannot be exported yet:</source>
       <translation>Cette carte ne peut pas encore être exportée :</translation>
     </message>

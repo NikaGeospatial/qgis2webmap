@@ -851,8 +851,9 @@ class Proceed(Enum):
 
 
 # What the warning offers for each action: the button, then the explanation
-# for one item and for several. Whole sentences per verb, because a translator
-# cannot conjugate a verb spliced into a sentence.
+# for one item and for several. Only Export on this build; hosting adds
+# Publish. Whole sentences per verb, because a translator cannot conjugate a
+# verb spliced into a sentence.
 ANYWAY_WORDS = {
     "Export": (
         N_("Export anyway"),
@@ -862,17 +863,6 @@ ANYWAY_WORDS = {
         ),
         N_(
             "You can export anyway and the map is made without them, or review "
-            "the report first."
-        ),
-    ),
-    "Publish": (
-        N_("Publish anyway"),
-        N_(
-            "You can publish anyway and the map is made without it, or review "
-            "the report first."
-        ),
-        N_(
-            "You can publish anyway and the map is made without them, or review "
             "the report first."
         ),
     ),

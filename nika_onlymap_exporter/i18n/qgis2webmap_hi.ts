@@ -185,42 +185,27 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>परतें में दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="858" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>Export anyway</source>
       <translation>फिर भी निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="859" />
+      <location filename="../ui/fidelity_panel.py" line="860" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>आप फिर भी निर्यात कर सकते हैं और मानचित्र इसके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="864" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>आप फिर भी निर्यात कर सकते हैं और मानचित्र इनके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="869" />
-      <source>Publish anyway</source>
-      <translation>फिर भी प्रकाशित करें</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="870" />
-      <source>You can publish anyway and the map is made without it, or review the report first.</source>
-      <translation>आप फिर भी प्रकाशित कर सकते हैं और मानचित्र इसके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="874" />
-      <source>You can publish anyway and the map is made without them, or review the report first.</source>
-      <translation>आप फिर भी प्रकाशित कर सकते हैं और मानचित्र इनके बिना बनेगा, या पहले रिपोर्ट देख सकते हैं।</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="892" />
+      <location filename="../ui/fidelity_panel.py" line="882" />
       <source>Part of this map will not work</source>
       <translation>इस मानचित्र का कुछ हिस्सा काम नहीं करेगा</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="907" />
+      <location filename="../ui/fidelity_panel.py" line="897" />
       <source>Review on the Fidelity tab</source>
       <translation>विश्वसनीयता टैब पर देखें</translation>
     </message>
@@ -365,12 +350,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>निर्यात में इस परत में कुछ नहीं बदलता।</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} चीज़ को QGIS में जैसी सेट है वैसे मानचित्र में नहीं ले जाया जा सकता:</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} चीज़ों को QGIS में जैसी सेट हैं वैसे मानचित्र में नहीं ले जाया जा सकता:</translation>
     </message>
@@ -1231,12 +1216,12 @@ They are also online at &lt;{url}&gt;.
       <translation>फिर भी लिखें</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3540" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Choose where to save first</source>
       <translation>पहले चुनें कि कहाँ सहेजना है</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3541" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1245,7 +1230,7 @@ Fill in Save to on the Map tab, then try again.</source>
 मानचित्र टैब में 'यहाँ सहेजें' भरें, फिर दोबारा कोशिश करें।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3565" />
+      <location filename="../ui/main_dialog.py" line="3564" />
       <location filename="../ui/main_dialog.py" line="3432" />
       <source>Cannot export</source>
       <translation>निर्यात नहीं किया जा सकता</translation>
@@ -1511,17 +1496,17 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>पूरा किया जा रहा है...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3527" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Folder not found</source>
       <translation>फ़ोल्डर नहीं मिला</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3561" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>No layer in the selection could be read.</source>
       <translation>चयन की कोई भी परत पढ़ी नहीं जा सकी।</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3570" />
+      <location filename="../ui/main_dialog.py" line="3569" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>इन्हें QGIS में ठीक करें, फिर दोबारा निर्यात करें। विश्वसनीयता टैब में जाँची गई हर चीज़ की सूची है।</translation>
     </message>
@@ -1661,7 +1646,7 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
       <translation>निर्यात पूरा हुआ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3527" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1676,7 +1661,7 @@ Pick somewhere that exists, or create it first.</source>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3433" />
-      <location filename="../ui/main_dialog.py" line="3566" />
+      <location filename="../ui/main_dialog.py" line="3565" />
       <source>This map cannot be exported yet:</source>
       <translation>यह मानचित्र अभी निर्यात नहीं हो सकता:</translation>
     </message>

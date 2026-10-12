@@ -185,42 +185,27 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Mostrar en Capas</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="858" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>Export anyway</source>
       <translation>Exportar de todos modos</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="859" />
+      <location filename="../ui/fidelity_panel.py" line="860" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>Puedes exportar de todos modos y el mapa se hará sin ello, o revisar antes el informe.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="864" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>Puedes exportar de todos modos y el mapa se hará sin ellos, o revisar antes el informe.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="869" />
-      <source>Publish anyway</source>
-      <translation>Publicar de todos modos</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="870" />
-      <source>You can publish anyway and the map is made without it, or review the report first.</source>
-      <translation>Puedes publicar de todos modos y el mapa se hará sin ello, o revisar antes el informe.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="874" />
-      <source>You can publish anyway and the map is made without them, or review the report first.</source>
-      <translation>Puedes publicar de todos modos y el mapa se hará sin ellos, o revisar antes el informe.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="892" />
+      <location filename="../ui/fidelity_panel.py" line="882" />
       <source>Part of this map will not work</source>
       <translation>Parte de este mapa no funcionará</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="907" />
+      <location filename="../ui/fidelity_panel.py" line="897" />
       <source>Review on the Fidelity tab</source>
       <translation>Revisar en la pestaña Fidelidad</translation>
     </message>
@@ -365,12 +350,12 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Nada de esta capa cambia al exportar.</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} elemento no se puede llevar al mapa tal como está configurado en QGIS:</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>{n} elementos no se pueden llevar al mapa tal como están configurados en QGIS:</translation>
     </message>
@@ -1231,12 +1216,12 @@ También están en línea en &lt;{url}&gt;.
       <translation>Escribirlo de todos modos</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3540" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Choose where to save first</source>
       <translation>Primero elige dónde guardar</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3541" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1245,7 +1230,7 @@ Fill in Save to on the Map tab, then try again.</source>
 Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3565" />
+      <location filename="../ui/main_dialog.py" line="3564" />
       <location filename="../ui/main_dialog.py" line="3432" />
       <source>Cannot export</source>
       <translation>No se puede exportar</translation>
@@ -1511,17 +1496,17 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
       <translation>Terminando...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3527" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Folder not found</source>
       <translation>Carpeta no encontrada</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3561" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>No layer in the selection could be read.</source>
       <translation>No se pudo leer ninguna capa de la selección.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3570" />
+      <location filename="../ui/main_dialog.py" line="3569" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>Corrige esto en QGIS y vuelve a exportar. La pestaña Fidelidad enumera todo lo que se comprobó.</translation>
     </message>
@@ -1661,7 +1646,7 @@ La entrada del menú está aquí para poder revisar la forma del menú Compartir
       <translation>Exportación completada</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3527" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1676,7 +1661,7 @@ Elige un lugar que exista o créalo primero.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3433" />
-      <location filename="../ui/main_dialog.py" line="3566" />
+      <location filename="../ui/main_dialog.py" line="3565" />
       <source>This map cannot be exported yet:</source>
       <translation>Este mapa todavía no se puede exportar:</translation>
     </message>

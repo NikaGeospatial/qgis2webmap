@@ -185,42 +185,27 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>在“图层”中显示</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="858" />
+      <location filename="../ui/fidelity_panel.py" line="859" />
       <source>Export anyway</source>
       <translation>仍然导出</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="859" />
+      <location filename="../ui/fidelity_panel.py" line="860" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>你可以仍然导出，地图将不包含这一项；也可以先查看报告。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="864" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>你可以仍然导出，地图将不包含这些项；也可以先查看报告。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="869" />
-      <source>Publish anyway</source>
-      <translation>仍然发布</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="870" />
-      <source>You can publish anyway and the map is made without it, or review the report first.</source>
-      <translation>你可以仍然发布，地图将不包含这一项；也可以先查看报告。</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="874" />
-      <source>You can publish anyway and the map is made without them, or review the report first.</source>
-      <translation>你可以仍然发布，地图将不包含这些项；也可以先查看报告。</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="892" />
+      <location filename="../ui/fidelity_panel.py" line="882" />
       <source>Part of this map will not work</source>
       <translation>此地图的部分内容将无法正常工作</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="907" />
+      <location filename="../ui/fidelity_panel.py" line="897" />
       <source>Review on the Fidelity tab</source>
       <translation>在“保真度”标签页中查看</translation>
     </message>
@@ -365,12 +350,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>此图层导出后没有任何变化。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>有 {n} 项无法按 QGIS 中的设置带入地图：</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="895" />
+      <location filename="../ui/fidelity_panel.py" line="885" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>有 {n} 项无法按 QGIS 中的设置带入地图：</translation>
     </message>
@@ -1231,12 +1216,12 @@ They are also online at &lt;{url}&gt;.
       <translation>仍然写入</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3540" />
+      <location filename="../ui/main_dialog.py" line="3539" />
       <source>Choose where to save first</source>
       <translation>请先选择保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3541" />
+      <location filename="../ui/main_dialog.py" line="3540" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -1245,7 +1230,7 @@ Fill in Save to on the Map tab, then try again.</source>
 请在“地图”标签页填写“保存到”，然后重试。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3565" />
+      <location filename="../ui/main_dialog.py" line="3564" />
       <location filename="../ui/main_dialog.py" line="3432" />
       <source>Cannot export</source>
       <translation>无法导出</translation>
@@ -1511,17 +1496,17 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>正在完成...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3527" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Folder not found</source>
       <translation>未找到文件夹</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3561" />
+      <location filename="../ui/main_dialog.py" line="3560" />
       <source>No layer in the selection could be read.</source>
       <translation>所选图层均无法读取。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3570" />
+      <location filename="../ui/main_dialog.py" line="3569" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>请在 QGIS 中修正这些问题后再次导出。“保真度”标签页列出了所有检查项。</translation>
     </message>
@@ -1661,7 +1646,7 @@ The menu entry is here so the shape of the Share menu can be reviewed; pressing 
       <translation>导出完成</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3528" />
+      <location filename="../ui/main_dialog.py" line="3527" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -1676,7 +1661,7 @@ Pick somewhere that exists, or create it first.</source>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3433" />
-      <location filename="../ui/main_dialog.py" line="3566" />
+      <location filename="../ui/main_dialog.py" line="3565" />
       <source>This map cannot be exported yet:</source>
       <translation>此地图暂时无法导出：</translation>
     </message>

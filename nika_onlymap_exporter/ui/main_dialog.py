@@ -3503,10 +3503,9 @@ class MainDialog(QDialog):
         box.setDefaultButton(write_anyway)
         box.exec()
 
-        # No "switch to zip" button any more. Packaging is no longer a mode this
-        # dialog holds, so there is nothing to switch: the zip is one Share
-        # action away, and offering to change a setting that no longer exists
-        # would be worse than saying nothing.
+        # No "switch to zip" button: switching the type behind the user's back
+        # left the radios saying one thing while the dialog wrote another
+        # (issue #29). The Map tab's Export as is where the type is chosen.
         return box.clickedButton() is write_anyway
 
     def _resolve_destination(
