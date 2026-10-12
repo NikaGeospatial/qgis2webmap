@@ -38,7 +38,7 @@ howto:
       anchor: 5-preview
       text: >-
         Press Preview to build the map and open it in your browser. Switch on
-        the red dot beside it to keep the tab updating as you change settings.
+        the red dot at its right end to keep the tab updating as you change settings.
     - name: Share it
       anchor: 6-share-it
       text: >-
@@ -125,7 +125,7 @@ break the drawing.
 **Preview** builds the map and opens it in your default browser. Nothing opens a
 browser on its own - only this button does.
 
-Click the **dot** on Preview's left to switch live preview on; it turns red.
+Click the **dot** at Preview's right end to switch live preview on; it turns red.
 Preview then serves the map from your own machine and the tab updates by itself
 as you change settings, keeping your position on the map. Change a colour or
 switch a layer off and watch it happen. While it runs the button reads **Live** -

@@ -53,6 +53,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -2188,24 +2189,37 @@ class MainDialog(QDialog):
         # read as the selected one of three choices. These are three acts.
         layout.setSpacing(6)
 
-        # The live switch sits on Preview's left: a dot, red while on. Off,
-        # Preview opens the map once. On, it keeps the tab updating, reads
-        # "Live" while it does, and a second press stops it - the switch stays
-        # on, because the habit outlives one session. Not a menu: a menu of one
-        # action and one switch was a click spent on choosing nothing.
-        self.live_switch = self._corner_button(corner, "", "live-off")
-        self.live_switch.setProperty("liveSwitch", True)
+        # Preview is one pill in two parts, the live switch sitting where
+        # Share has its arrow: a dot, red while on. Off, Preview opens the map
+        # once. On, it keeps the tab updating, reads "Live" while it does, and
+        # a second press stops it - the switch stays on, because the habit
+        # outlives one session. Not a menu: a menu of one action and one switch
+        # was a click spent on choosing nothing.
+        self._preview_group = QFrame(corner)
+        self._preview_group.setProperty("role", "cornerGroup")
+        group = QHBoxLayout(self._preview_group)
+        group.setContentsMargins(0, 0, 0, 0)
+        group.setSpacing(0)
+
+        self.preview_button = self._corner_button(
+            self._preview_group, tr("Preview"), "preview"
+        )
+        self.preview_button.setProperty("role", "cornerPart")
+        self.preview_button.setProperty("position", "left")
+        self.preview_button.clicked.connect(self._on_preview_pressed)
+        group.addWidget(self.preview_button)
+
+        self.live_switch = self._corner_button(self._preview_group, "", "live-off")
+        self.live_switch.setProperty("role", "cornerPart")
+        self.live_switch.setProperty("position", "right")
         self.live_switch.setCheckable(True)
         self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.live_switch.setChecked(
             QSettings().value(LIVE_PREVIEW_KEY, False, type=bool)
         )
         self.live_switch.toggled.connect(self._on_live_toggled)
-        layout.addWidget(self.live_switch)
-
-        self.preview_button = self._corner_button(corner, tr("Preview"), "preview")
-        self.preview_button.clicked.connect(self._on_preview_pressed)
-        layout.addWidget(self.preview_button)
+        group.addWidget(self.live_switch)
+        layout.addWidget(self._preview_group)
 
         self.share_button = self._corner_button(corner, tr("Share"), "share")
         # A plain dropdown for now: pressing it opens the menu. It also holds
@@ -2269,7 +2283,8 @@ class MainDialog(QDialog):
             if running
             else tr("Open the map in your browser.")
         )
-        for widget in (button, self.live_switch):
+        self._preview_group.setProperty("live", running)
+        for widget in (self._preview_group, button, self.live_switch):
             widget.style().unpolish(widget)
             widget.style().polish(widget)
         if hasattr(self, "theme"):

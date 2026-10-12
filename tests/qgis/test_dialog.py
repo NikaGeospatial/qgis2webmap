@@ -360,8 +360,8 @@ class TestTabCorner:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            # The live switch is a bare dot on Preview's left.
-            assert labels == ["", "Preview", "Share", "Export"]
+            # The live switch is a bare dot inside Preview, where an arrow sits.
+            assert labels == ["Preview", "", "Share", "Export"]
         finally:
             dialog.close()
 
@@ -2062,7 +2062,10 @@ class TestExportIsBack:
             corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
             buttons = corner.findChildren(QToolButton)
             assert buttons[-1] is dialog.export_button
-            assert all(b.property("role") == "corner" for b in buttons)
+            assert all(b.property("role") in ("corner", "cornerPart") for b in buttons)
+            # Preview and its live switch are one pill: the same parent frame.
+            assert dialog.live_switch.parent() is dialog.preview_button.parent()
+            assert dialog.preview_button.parent().property("role") == "cornerGroup"
             assert corner.layout().spacing() > 0
             # Share alone keeps a menu, and shows its arrow.
             assert dialog.share_button.property("hasMenu") is True

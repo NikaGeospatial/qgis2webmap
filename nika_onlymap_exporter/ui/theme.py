@@ -739,21 +739,48 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     height: 10px;
     right: 7px;
 }}
-/* The live switch beside Preview: a round button holding only its dot.
-   28 px like its neighbours; the radius stays under half the height, which is
-   the most Qt will draw. */
-{d} QToolButton[role="corner"][liveSwitch="true"] {{
-    min-width: 20px;
-    max-width: 20px;
-    padding: 3px;
-    border-radius: 13px;
+/* Preview is one outlined pill in two parts: the button, and the live switch
+   where Share has its arrow. The pill draws the outline; the parts are flat
+   and only light up under the pointer, each on its own side. 26 px parts in a
+   1 px border make the same 28 px as the buttons beside it. */
+{d} QFrame[role="cornerGroup"] {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
 }}
-{d} QToolButton[role="corner"][liveSwitch="true"]:checked {{
+{d} QFrame[role="cornerGroup"]:hover {{
+    border-color: {p.muted};
+}}
+/* A running live preview: the pill's outline joins the switch's red. */
+{d} QFrame[role="cornerGroup"][live="true"] {{
     border-color: {p.live};
 }}
-/* A running live preview: Preview's outline joins the switch's red. */
-{d} QToolButton[role="corner"][live="true"] {{
-    border-color: {p.live};
+{d} QToolButton[role="cornerPart"] {{
+    background: transparent;
+    color: {p.ink};
+    border: none;
+    padding: 3px 9px 3px 9px;
+    min-height: 20px;
+    font-weight: 600;
+    margin: 0;
+}}
+{d} QToolButton[role="cornerPart"][position="left"] {{
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+{d} QToolButton[role="cornerPart"][position="right"] {{
+    border-left: 1px solid {p.rule};
+    padding: 3px 5px;
+    min-width: 16px;
+    max-width: 16px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d} QToolButton[role="cornerPart"]:hover {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="cornerPart"]:disabled {{
+    color: {p.quiet};
 }}
 {d} QToolButton[role="corner"][accent="true"] {{
     background: {p.accent};

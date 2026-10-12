@@ -27,7 +27,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   services (WMS, XYZ) are still left out, and the Fidelity tab says why.
 - **Preview, Share and Export are separate buttons** in the top-right corner,
   with Export filled and last. Each has a small icon; only Share has a menu.
-- **A live switch beside Preview.** The dot on Preview's left turns red when
+- **A live switch inside Preview.** The dot at Preview's right end turns red when
   live preview is on: Preview then keeps the browser tab updating as you
   change settings, reads **Live** while it does, and stops on a second press -
   the switch stays on for next time. Off, Preview opens the map as it is now.

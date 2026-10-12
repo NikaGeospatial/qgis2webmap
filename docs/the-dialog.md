@@ -349,7 +349,7 @@ reach whichever tab you are reading.
 in the plugin opens a browser, and a preview never writes your map file - only
 Export does.
 
-The **dot** on Preview's left is the live switch; hover it to see which way it
+The **dot** at Preview's right end is the live switch; hover it to see which way it
 is set. **Off** (a grey ring), Preview opens the map as it is now - press it
 again after changing something. **On** (red), Preview serves the map from your
 own machine and the tab updates by itself as you change settings, keeping your
