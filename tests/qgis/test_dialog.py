@@ -1004,6 +1004,41 @@ class TestShareBuildsWhatItNeeds:
         finally:
             dialog.close()
 
+    def test_a_fresh_share_zip_counts_as_current(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """Only Standalone HTML used to be recorded, so Show in file manager
+        after a ZIP or Folder export ran the whole export again."""
+        import time
+
+        for box in ("warning", "information"):
+            monkeypatch.setattr(
+                f"nika_onlymap_exporter.ui.main_dialog.QMessageBox.{box}",
+                lambda *a, **k: None,
+            )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.mode_buttons[OutputMode.SHARE_ZIP].click()
+            dialog.path_edit.setText(str(tmp_path / "map.zip"))
+            dialog.on_export()
+            deadline = time.monotonic() + 60
+            while dialog._written_signature is None and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert (tmp_path / "map.zip").exists()
+            assert not dialog._map_file_is_stale()
+            assert "changed since" not in dialog.save_status.text()
+
+            # A restyle in QGIS changes no dialog setting, yet leaves the file
+            # behind the project.
+            for layer in project.mapLayers().values():
+                layer.emitStyleChanged()
+            for _ in range(3):
+                qgis_app.processEvents()
+            assert dialog._map_file_is_stale()
+        finally:
+            dialog.close()
+
     def test_a_file_this_session_never_wrote_is_not_trusted(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:

@@ -667,6 +667,7 @@ class MainDialog(QDialog):
         # "not by us, not this session" - so the first Share action rebuilds
         # rather than trusting a file it has never seen written.
         self._written_signature: str | None = None
+        self._pending_signature: str | None = None
         self._last_export_path: Path | None = None
 
         # What the Fidelity tab and strip are showing. See `_fidelity_is_stale`.
@@ -3101,6 +3102,9 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature = None
+        # A file written from the old project is as out of date as the read.
+        self._written_signature = None
+        self._update_save_status()
         self._data_bytes_cache = None
 
     def _runtime_ready(self) -> bool:
@@ -3315,6 +3319,9 @@ class MainDialog(QDialog):
     def on_export(self) -> None:
         """Write the export in the type and place chosen on the Map tab."""
         self._pending_mode = self.state.output_mode
+        # Taken before the read, not after the write: a setting changed while
+        # this runs is not in the file, so the file must not claim it.
+        self._pending_signature = self.state.snapshot()
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
         self._ensure_export(self._export_with, tr("Reading the project..."))
 
@@ -3407,10 +3414,9 @@ class MainDialog(QDialog):
 
             # The file:// check happens here, against the bytes that ship.
             self._last_export_path = Path(outcome.path)
-            if mode is OutputMode.STANDALONE_HTML:
-                # What the map file was written from, so a later Share action
-                # can tell "already current" from "the project has moved on".
-                self._written_signature = self.state.snapshot()
+            # What the map file was written from, so a later Share action
+            # can tell "already current" from "the project has moved on".
+            self._written_signature = self._pending_signature
             self._update_save_status()
 
             summary = outcome.summary()
