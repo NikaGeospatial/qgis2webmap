@@ -1955,14 +1955,13 @@ class TestDestinationField:
     def test_a_missing_folder_is_refused_rather_than_written_to(
         self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
     ) -> None:
-        from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui import main_dialog as module
 
         dialog = self._dialog(project, make_memory_layer)
         dialog.path_edit.setText(str(tmp_path / "no" / "such" / "map.html"))
         monkeypatch.setattr(module.QMessageBox, "warning", lambda *a, **k: None)
 
-        assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
+        assert dialog._resolve_destination() is None
         dialog.close()
 
     def test_rewriting_the_map_file_is_never_confirmed(
@@ -1975,7 +1974,6 @@ class TestDestinationField:
         user is editing would be absurd - and with autosave it would be a modal
         every few seconds.
         """
-        from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui import main_dialog as module
 
         existing = tmp_path / "map.html"
@@ -1993,7 +1991,7 @@ class TestDestinationField:
                     asked.append(True) or module.QMessageBox.StandardButton.Cancel
                 ),
             )
-            assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) == existing
+            assert dialog._resolve_destination() == existing
             assert not asked, "the map file is rewritten, not re-confirmed"
         finally:
             dialog.close()
@@ -2002,7 +2000,6 @@ class TestDestinationField:
         self, qgis_app, project, make_memory_layer, monkeypatch
     ) -> None:
         """An empty field must not fall back to a guess or a silent default."""
-        from nika_onlymap_exporter.core.export_ir import OutputMode
         from nika_onlymap_exporter.ui import main_dialog as module
 
         dialog = self._dialog(project, make_memory_layer)
@@ -2013,7 +2010,7 @@ class TestDestinationField:
                 "information",
                 lambda *a, **k: told.append(True),
             )
-            assert dialog._resolve_destination(OutputMode.STANDALONE_HTML) is None
+            assert dialog._resolve_destination() is None
             assert told, "the user has to be told why nothing happened"
         finally:
             dialog.close()
@@ -2317,10 +2314,7 @@ class TestExportIsBack:
         try:
             dialog.mode_buttons[OutputMode.SHARE_ZIP].setChecked(True)
             dialog.path_edit.setText(str(tmp_path / "peaks.zip"))
-            assert (
-                dialog._resolve_destination(OutputMode.SHARE_ZIP)
-                == tmp_path / "peaks.zip"
-            )
+            assert dialog._resolve_destination() == tmp_path / "peaks.zip"
         finally:
             dialog.close()
 
@@ -2338,9 +2332,7 @@ class TestExportIsBack:
             dialog.mode_buttons[OutputMode.STANDALONE_HTML].setChecked(True)
             assert dialog.path_edit.text().endswith("peaks.html")
             assert (
-                dialog._resolve_destination(
-                    dialog._pending_mode, dialog._pending_destination
-                )
+                dialog._resolve_destination(dialog._pending_destination)
                 == tmp_path / "peaks"
             )
         finally:

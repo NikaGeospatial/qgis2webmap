@@ -3413,7 +3413,7 @@ class MainDialog(QDialog):
             self._export_then = None
             return
 
-        destination = self._resolve_destination(mode, self._pending_destination)
+        destination = self._resolve_destination(self._pending_destination)
         if destination is None:
             self._export_then = None
             return
@@ -3517,9 +3517,7 @@ class MainDialog(QDialog):
         # (issue #29). The Map tab's Export as is where the type is chosen.
         return box.clickedButton() is write_anyway
 
-    def _resolve_destination(
-        self, mode: OutputMode, chosen: Path | None = None
-    ) -> Path | None:
+    def _resolve_destination(self, chosen: Path | None = None) -> Path | None:
         """Where to write: `chosen`, or the Save to field as it is now.
 
         No picker at Export time. The type and the place were both chosen on
