@@ -358,3 +358,29 @@ def test_a_plausible_webhook_passes_the_shape_check() -> None:
 def test_post_refuses_a_malformed_url_instead_of_crashing() -> None:
     """It used to raise out of `post()` uncaught; now it returns False."""
     assert announce.post("***", {"content": "x"}) is False
+
+
+PLUGIN_PAGE_HTML = """
+<a href="/plugins/nika_onlymap_exporter/version/0.1.3/download/">0.1.3</a>
+<a href="/plugins/nika_onlymap_exporter/version/0.1.4/download/">0.1.4</a>
+"""
+
+
+def test_the_small_plugin_page_is_asked_first(monkeypatch) -> None:
+    """About 170 KB against about 9 MB, every 30 minutes."""
+    asked: list[str] = []
+
+    def fake_fetch(url: str) -> str:
+        asked.append(url)
+        return PLUGIN_PAGE_HTML
+
+    monkeypatch.setattr(announce, "fetch", fake_fetch)
+    assert announce.published_version() == "0.1.4"
+    assert asked == [announce.PLUGIN_PAGE]
+
+
+def test_the_index_is_the_fallback_when_the_page_says_nothing(monkeypatch) -> None:
+    pages = {announce.PLUGIN_PAGE: "<html>redesigned</html>"}
+    pages[announce.PLUGINS_XML] = PLUGINS_XML
+    monkeypatch.setattr(announce, "fetch", pages.__getitem__)
+    assert announce.published_version() == "0.1.3"

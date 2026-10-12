@@ -246,7 +246,8 @@ uploads in a review queue.
 
 The Discord announcement is **not** tied to the tag, for that reason: a tag can
 land days before approval, or on a version that is then withdrawn. Instead
-`.github/workflows/announce.yml` polls plugins.qgis.org every six hours, and
+`.github/workflows/announce.yml` checks the plugin's page on plugins.qgis.org
+every 30 minutes (falling back to the full plugin index), and
 when the version it is actually serving differs from `.github/last-announced-version`
 it posts that version's CHANGELOG.md section to Discord. Minor and major
 releases ping the announcements role; patch releases post quietly.

@@ -29,9 +29,11 @@ name: announce
 
 on:
   schedule:
-    # Every six hours. Approval is not something we get notified about, so the
-    # only cost of a miss is a few hours' delay in the announcement.
-    - cron: "17 */6 * * *"
+    # Every 30 minutes. Approval is not something we get notified about. Each
+    # check reads our plugin page (about 170 KB) rather than the whole index
+    # (about 9 MB), so this costs plugins.qgis.org less than the old six-hourly
+    # check did. Not more often: it is a volunteer-run site.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:

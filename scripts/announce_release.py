@@ -166,11 +166,14 @@ def published_version_from_xml(xml_text: str) -> str | None:
 
 
 def published_version_from_html(html: str) -> str | None:
-    """Fallback: the highest version offered for download on the plugin page.
+    """The highest version offered for download on the plugin page.
 
-    Used only when the index cannot be fetched. The page lists every version
-    ever approved, so this takes the highest rather than the first - the table's
-    ordering is presentation and not something we are promised.
+    Asked first: the page is about 170 KB where the index is about 9 MB, which
+    matters at a check every 30 minutes against a volunteer-run site. It lists
+    approved versions only - measured 2026-10-12 with 0.2.0 uploaded and
+    pending, absent from the page - so it is the same "live" signal as the
+    index. Takes the highest rather than the first: the table's ordering is
+    presentation and not something we are promised.
     """
     found = re.findall(r"version/(\d+(?:\.\d+)*)/download", html)
     if not found:
@@ -185,15 +188,19 @@ def fetch(url: str) -> str:
 
 
 def published_version() -> str | None:
-    """Ask the repository what is live, preferring the index over the page."""
+    """Ask the repository what is live: the small plugin page first, the full
+    index only when the page cannot be read or its layout has changed."""
+    try:
+        version = published_version_from_html(fetch(PLUGIN_PAGE))
+        if version is not None:
+            return version
+        print("note: no version found on the plugin page; trying the index")
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        print(f"note: plugin page unreachable ({error}); trying the index")
     try:
         return published_version_from_xml(fetch(PLUGINS_XML))
     except (urllib.error.URLError, OSError, ValueError) as error:
-        print(f"note: plugin index unreachable ({error}); trying the plugin page")
-    try:
-        return published_version_from_html(fetch(PLUGIN_PAGE))
-    except (urllib.error.URLError, OSError, ValueError) as error:
-        print(f"error: plugin page unreachable too ({error})")
+        print(f"error: plugin index unreachable too ({error})")
         return None
 
 
