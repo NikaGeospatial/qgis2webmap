@@ -260,7 +260,8 @@ def _describe_scales(zoomed_out: float | None, zoomed_in: float | None) -> str:
         return f"only between {_scale_text(zoomed_out)} and {_scale_text(zoomed_in)}"
     if zoomed_out is not None:
         return f"only when zoomed in closer than {_scale_text(zoomed_out)}"
-    assert zoomed_in is not None
+    if zoomed_in is None:
+        raise ValueError("a scale range needs at least one limit")
     return f"only when zoomed out further than {_scale_text(zoomed_in)}"
 
 
@@ -269,5 +270,6 @@ def _describe_zooms(low: float | None, high: float | None) -> str:
         return f"between zoom {_zoom_text(low)} and {_zoom_text(high)}"
     if low is not None:
         return f"from zoom {_zoom_text(low)} inwards"
-    assert high is not None
+    if high is None:
+        raise ValueError("a zoom range needs at least one limit")
     return f"below zoom {_zoom_text(high)}"

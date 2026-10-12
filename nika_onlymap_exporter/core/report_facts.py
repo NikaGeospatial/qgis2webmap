@@ -236,7 +236,8 @@ def _vector_facts(layer: ExportLayer) -> list[Fact]:
 
 def _raster_facts(layer: ExportLayer) -> list[Fact]:
     raster = getattr(layer, "raster", None)
-    assert raster is not None  # the caller checked; mypy cannot see it
+    if raster is None:  # the caller checked; this narrows the type
+        raise ValueError(f"layer {layer.layer_id!r} is not a raster")
     facts = [
         Fact("Type", "Raster"),
         Fact("Size", f"{raster.pixel_width} x {raster.pixel_height} pixels"),
@@ -304,7 +305,8 @@ def _fields_in_file(layer: ExportLayer) -> int | None:
 
 def _extent(project: ExportProject) -> str:
     extent = project.extent
-    assert extent is not None  # the caller checked; mypy cannot see it
+    if extent is None:  # the caller checked; this narrows the type
+        raise ValueError("the project has no extent")
     return (
         f"{_longitude(extent.west)} to {_longitude(extent.east)}, "
         f"{_latitude(extent.south)} to {_latitude(extent.north)}"

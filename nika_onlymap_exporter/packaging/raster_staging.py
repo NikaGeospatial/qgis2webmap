@@ -338,7 +338,8 @@ def _stage_one(
     should_cancel: CancelCheck | None,
 ) -> _Outcome:
     raster = layer.raster
-    assert raster is not None  # guarded by the caller; narrows for mypy
+    if raster is None:  # guarded by the caller; this narrows the type
+        raise ValueError(f"layer {layer.layer_id!r} is not a raster")
 
     file_name = raster_file_name(layer.layer_id, index)
     target = destination / file_name
