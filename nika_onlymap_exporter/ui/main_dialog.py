@@ -204,7 +204,6 @@ LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
 SHARE_MENU_ICONS = {
     "copy_path": "mActionEditCopy.svg",
     "reveal": "mIconFolderOpen.svg",
-    "open": "mIconHtml.svg",
     "publish": "mActionSharingExport.svg",
     "enhance": "mActionShowAllLayers.svg",
     "critique": "mActionShowAllLayers.svg",
@@ -1353,22 +1352,13 @@ class MainDialog(QDialog):
 
         **Every action, not just the button.** A disabled `QToolButton` still
         holds an enabled `QMenu`, and an enabled `QAction` keeps its shortcut
-        live on the dialog - so `Ctrl+O` would fire Open in browser with no map
-        file set, from a button the user can see is greyed out.
+        live on the dialog - so a shortcut would fire with no map file set, from
+        a button the user can see is greyed out.
         """
         if not hasattr(self, "share_button"):
             return
         ready = self._map_file() is not None and getattr(self, "_export_ready", True)
-        single_file = self.state.output_mode is OutputMode.STANDALONE_HTML
         for key, action in getattr(self, "share_actions", {}).items():
-            # Only a single HTML file opens from disk: a zip is unopened, and a
-            # folder's runtime will not load from a `file://` page.
-            if key == "open" and not single_file:
-                action.setEnabled(False)
-                action.setToolTip(
-                    tr("Only a Standalone HTML export opens straight in a browser")
-                )
-                continue
             action.setEnabled(ready)
             # Restored from the originals rather than remembered off the widget:
             # overwriting the tooltip on the way down would lose the real one
@@ -2324,13 +2314,6 @@ class MainDialog(QDialog):
             tr("Shows the map file in your file manager"),
             self.on_reveal_map_file,
         )
-        add(
-            "open",
-            tr("Open in browser"),
-            tr("Opens the map in your browser"),
-            self.on_open_in_browser,
-            "Ctrl+O",
-        )
 
         menu.addSection(tr("Publish"))
         add(
@@ -3274,22 +3257,6 @@ class MainDialog(QDialog):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination.parent))),
                 self.status_label.setText(
                     tr("Opened {path}").format(path=destination.parent)
-                ),
-            )
-        )
-
-    def on_open_in_browser(self) -> None:
-        """The map itself, in a real browser, from the real file.
-
-        The `file://` path is exercised here against the artifact that actually
-        ships, rather than against a preview copy of it - which is the whole
-        reason this is not just Preview.
-        """
-        self._with_current_map_file(
-            lambda destination: (
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination))),
-                self.status_label.setText(
-                    tr("Opened {name} in your browser.").format(name=destination.name)
                 ),
             )
         )

@@ -92,7 +92,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   there without a picker.
 
 - **Share collects what you might do with a finished map**: copy its path, show
-  it in your file manager, open the real file in a browser, or join the hosting
+  it in your file manager, or join the hosting
   waitlist. Every row is disabled until Save to is set, and says so on hover
   rather than being silently inert.
 

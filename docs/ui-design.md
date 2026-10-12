@@ -136,8 +136,8 @@ and this does not break it: the two controls moved *up* out of the bottom row,
 which emptied rather than grew. The dialog is no taller than it was.
 
 Every Share row is disabled until Save to is set, and each says why on hover.
-A row that needs the file writes it first, so Copy file path or Open in browser
-never point at something stale.
+A row that needs the file writes it first, so Copy file path or Show in file
+manager never point at something stale.
 
 ## Disabled with a reason, never silent
 

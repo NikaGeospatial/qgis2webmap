@@ -360,8 +360,8 @@ All three sit in the **top-right corner of the tab bar**, joined into one
 control, so they are within reach whichever tab you are reading.
 
 **View** opens a short menu: **Preview** builds the map and opens it in your
-default browser, and **Live preview** is the switch described above. Apart from
-Share's Open in browser, nothing else in the plugin opens a browser.
+default browser, and **Live preview** is the switch described above. Nothing
+else in the plugin opens a browser.
 
 **Export** writes the map in the type and place chosen on the Map tab. It is
 the filled button, because it is what the plugin is for.
@@ -373,7 +373,6 @@ opens the menu:
 |---|---|
 | **Copy file path** | Puts the map file's path on the clipboard |
 | **Show in file manager** | Opens the folder the map file is in |
-| **Open in browser** | Opens **the real file** — the one you would send someone — rather than a preview copy, so what you check is what they get |
 | **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
 | **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming in a later release |
 | **Make a cartograph with QGIS2Carto** | Coming in a later release |
@@ -381,11 +380,10 @@ opens the menu:
 
 **Every row that acts on the map needs a Save to path first.** Until you have
 set one on the Map tab they are greyed out, and each says so if you hover it.
-**Open in browser** works for a Standalone HTML export only. **Ask on Discord**
-always works.
+**Ask on Discord** always works.
 
 **Rows that need the map write it first** when it is missing or out of date,
-so Copy file path or Open in browser never point at something stale.
+so Copy file path or Show in file manager never point at something stale.
 
 View's Preview, Export and Share's map rows are greyed out when the map cannot be produced correctly,
 with the reason in the bar at the foot of the dialog rather than a silent

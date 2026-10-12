@@ -60,7 +60,7 @@ A Standalone HTML export is the one that opens straight off a disk.
 | Posting it in a chat app | **Standalone HTML** |
 | Attaching to a report or ticket | **Share ZIP** |
 | Publishing on your own site | **Folder** |
-| Checking it yourself before sending | **Share ▸ Open in browser** - the real file, not a preview copy |
+| Checking it yourself before sending | **View ▸ Preview** |
 
 ## What the recipient sees
 

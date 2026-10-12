@@ -148,8 +148,8 @@ On the Map tab, under **Export**:
 
 ![The Export section on the Map tab, with the three types and the Save to field.](images/export-02-formats.png)
 
-**Share**, beside it, has **Open in browser** to check the real file before you
-send it, and **Copy file path** to paste it anywhere.
+**Share**, beside it, has **Copy file path** to paste it anywhere and **Show in
+file manager** to find it.
 
 If Export is greyed out, the reason is in the bar at the foot of the dialog.
 
