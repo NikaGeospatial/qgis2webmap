@@ -150,6 +150,16 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 LOG_TAG = "QGIS2WebMap"
 
+# `manifest_builder.OSM_FILE_NOTE`, for the catalogue: core has no Qt, so the
+# warning is translated here, where the Map tab shows it. A test keeps the two
+# in step.
+_OSM_FILE_NOTE_FOR_CATALOGUE = N_(
+    "OpenStreetMap's tile servers refuse maps opened straight from a file, so "
+    "recipients who double-click this map may see 'Access blocked' tiles. "
+    "Choose Liberty - the same OpenStreetMap data - or another basemap, or "
+    "export as a Folder for a website."
+)
+
 # The Share rows that act on the map file, so need one to have been chosen.
 SHARE_ACTIONS_ON_THE_FILE = frozenset({"copy_path", "reveal"})
 
@@ -1130,7 +1140,7 @@ class MainDialog(QDialog):
         noise under every choice.
         """
         note = (
-            OSM_FILE_NOTE
+            tr(OSM_FILE_NOTE)
             if osm_from_file(self.state.basemap, self.state.output_mode)
             else None
         )

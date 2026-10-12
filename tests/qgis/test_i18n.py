@@ -522,3 +522,10 @@ def test_the_fidelity_words_from_core_are_in_the_catalogue(qgis_app) -> None:
     from nika_onlymap_exporter.ui.fidelity_panel import _CORE_WORDS
 
     assert set(VERDICT_LABELS.values()) | {t.value for t in Topic} <= set(_CORE_WORDS)
+
+
+def test_the_osm_warning_is_in_the_catalogue(qgis_app) -> None:
+    from nika_onlymap_exporter.core.manifest_builder import OSM_FILE_NOTE
+    from nika_onlymap_exporter.ui.main_dialog import _OSM_FILE_NOTE_FOR_CATALOGUE
+
+    assert OSM_FILE_NOTE == _OSM_FILE_NOTE_FOR_CATALOGUE
