@@ -1569,7 +1569,7 @@ class MainDialog(QDialog):
         # does not touch - so a restyled layer would otherwise be served from a
         # read taken before it happened.
         self._invalidate_export_cache()
-        if getattr(self, "_server", None) is not None:
+        if self._live_running():
             self._rebuild_timer.start()
 
     def refresh_layers(self) -> None:
@@ -1594,7 +1594,7 @@ class MainDialog(QDialog):
         # the snapshot the live preview watches stays identical and the preview
         # silently goes stale. The watcher already coalesces bursts, so this is
         # one rebuild per change rather than one per signal.
-        if getattr(self, "_server", None) is not None:
+        if self._live_running():
             self._rebuild_timer.start()
 
         if not hasattr(self, "layer_tree"):
@@ -2878,7 +2878,9 @@ class MainDialog(QDialog):
         Reentrancy still matters: a rebuild is slower than the debounce on a
         large project, so an in-flight one defers the next rather than stacking.
         """
-        if self._shut_down or self._server is None:
+        # Live, not merely served: a raster map's one-off preview is served
+        # too, and rewriting it would make it half-live behind the user's back.
+        if self._shut_down or not self._live_running():
             return
 
         if self._job is not None:

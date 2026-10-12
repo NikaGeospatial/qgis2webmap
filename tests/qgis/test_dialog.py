@@ -1253,6 +1253,28 @@ class TestLivePreviewLifecycle:
         assert not dialog._watch_timer.isActive()
         assert not dialog._rebuild_timer.isActive()
 
+    def test_a_one_off_served_preview_is_never_rebuilt_as_live(
+        self, qgis_app, project, make_memory_layer, tmp_path
+    ) -> None:
+        """A raster map's one-off preview is served but not live. A change in
+        QGIS used to rewrite it with the auto-reload script added."""
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        dialog = self._dialog(project, make_memory_layer)
+        (tmp_path / "index.html").write_text("<p>x</p>", encoding="utf-8")
+        dialog._server = PreviewServer(tmp_path)
+        dialog._server.start()
+        try:
+            reads: list[str] = []
+            dialog._ensure_export = lambda then, label, quiet=False: reads.append(label)
+            dialog._project_content_changed()
+            dialog.refresh_layers()
+            assert not dialog._rebuild_timer.isActive()
+            dialog._rebuild_live_preview()
+            assert reads == [], "a one-off preview was rewritten as a live one"
+        finally:
+            dialog.close()
+
     def test_pressing_preview_again_stops_the_server(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
