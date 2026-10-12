@@ -36,6 +36,7 @@ import contextlib
 from collections.abc import Sequence
 from enum import Enum
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QModelIndex, QRect, QSettings, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QBrush, QFont, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import (
@@ -956,6 +957,11 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
     ) -> QSize:
         hint = super().sizeHint(option, index)
         if index.column() != DETAIL_COLUMN:
+            return hint
+        # Qt asks for sizes while it tears the tree down, after the C++ tree is
+        # gone. Raising from a Qt override aborts QGIS under PyQt5 - measured on
+        # 3.44 - so a tree on its way out gets the plain size instead.
+        if sip.isdeleted(self._tree):
             return hint
         width = self._tree.header().sectionSize(DETAIL_COLUMN)
         if width <= 0:

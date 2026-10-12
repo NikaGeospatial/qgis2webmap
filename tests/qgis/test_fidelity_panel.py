@@ -611,3 +611,24 @@ def test_a_long_sentence_gets_a_row_tall_enough_to_read(qgis_app) -> None:
     line = panel.tree.fontMetrics().lineSpacing()
     assert panel.tree.visualItemRect(row).height() >= 3 * line
     panel.close()
+
+
+def test_sizing_a_row_of_a_tree_being_torn_down_never_raises(qgis_app) -> None:
+    """Qt asks for row sizes while it destroys the tree. An exception from that
+    override aborted the whole of QGIS 3.44 (PyQt5) in CI."""
+    from qgis.PyQt import sip
+    from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
+    from qgis.PyQt.QtWidgets import QStyleOptionViewItem, QTreeWidget
+
+    from nika_onlymap_exporter.ui.fidelity_panel import (
+        DETAIL_COLUMN,
+        _WrappingDelegate,
+    )
+
+    model = QStandardItemModel(1, DETAIL_COLUMN + 1)
+    model.setItem(0, DETAIL_COLUMN, QStandardItem("a long detail"))
+    tree = QTreeWidget()
+    delegate = _WrappingDelegate(tree)
+    delegate.setParent(None)  # outlives the tree, as it does mid-teardown
+    sip.delete(tree)
+    delegate.sizeHint(QStyleOptionViewItem(), model.index(0, DETAIL_COLUMN))
