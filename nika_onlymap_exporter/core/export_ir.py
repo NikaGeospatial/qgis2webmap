@@ -868,6 +868,12 @@ class ExportLayer:
     # knows the map's latitude and can ask QGIS what its scale readout means for
     # this project's CRS. `None` means the layer shows at every zoom.
     visible_zoom_range: tuple[float, float] | None = None
+    # Worked out by the reader through `core.declutter`, because the web map
+    # has no label collision step of its own. The zoom from which this layer's
+    # labels show, and the last zoom at which its points still merge into
+    # count bubbles. `None` - the common case - means no limit and no clusters.
+    label_min_zoom: int | None = None
+    cluster_max_zoom: int | None = None
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )

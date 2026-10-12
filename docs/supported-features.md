@@ -271,9 +271,17 @@ breaking** — both the wrap character you set and automatic wrapping at a
 character count — are applied to the label text itself, because that is what
 QGIS does too.
 
-Collision handling, callouts and curved placement are not - the web renderer
-resolves overlapping labels with its own logic. Italic is dropped, because the
-web renderer builds its font from a family and a weight only; that is reported.
+Collision handling, callouts and curved placement are not: the web map draws
+every label, so where a layer's labels would pile up they wait for a closer
+zoom - the one at which most of them have room - and the Fidelity tab names it.
+Italic is dropped, because the web renderer builds its font from a family and a
+weight only; that is reported.
+
+**Dense point layers cluster.** A point layer of 100 or more points that would
+overlap when zoomed out merges them into count bubbles, which split as you zoom
+in; clicking one zooms to its points. Its labels appear once the bubbles have
+split, and its popups open on points, not bubbles. The Fidelity tab gives the
+zoom at which the points show one by one.
 
 Labels using an expression rather than a single field are not translated yet.
 

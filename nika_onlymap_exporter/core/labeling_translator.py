@@ -203,8 +203,8 @@ def translate_labeling(
         "colour behind the text, because the web map's outlined text is hard "
         "to read at label sizes; on a point layer, a boxed label centred on its "
         "point sits just above the marker so the box does not hide it. QGIS "
-        "collision handling, callouts and curved placement are not - the web "
-        "renderer resolves overlaps with its own logic.",
+        "collision handling, callouts and curved placement are not; where "
+        "labels would crowd, the layer's labels wait for a closer zoom instead.",
         layer_id,
     )
 

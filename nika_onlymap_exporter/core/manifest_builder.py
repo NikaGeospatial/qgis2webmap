@@ -51,6 +51,7 @@ from .label_points import (
     build_label_collection,
     collect_character_set,
 )
+from .zoom_range import ZOOM_CEILING, ZOOM_FLOOR
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .license_policy import CapVerdict
@@ -95,6 +96,9 @@ RASTER_LAYER_CLASS = "COGLayer"
 # draw text, so QGIS labelling becomes a companion `TextLayer` fed by computed
 # label points. See `label_points.py` for why it carries its own reduced data.
 TEXT_LAYER_CLASS = "TextLayer"
+
+# The count bubbles of a clustered layer whose points are coloured by class.
+CLUSTER_MIXED_COLOR = Color(r=71, g=85, b=105)
 
 # Fallbacks for a QGIS label whose text format carried no explicit value.
 DEFAULT_LABEL_COLOR = Color(r=0, g=0, b=0, a=1.0)
@@ -548,6 +552,23 @@ def _zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
     if layer.visible_zoom_range is None:
         return None
     low, high = layer.visible_zoom_range
+    return ("visible-zoom-range", f"[{_number(low)}, {_number(high)}]")
+
+
+def _label_zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
+    """The layer's zoom range, starting no earlier than its labels have room.
+
+    Labels follow their layer's range, so a label can never outlive the
+    geometry it names, and wait for `label_min_zoom` on top of that.
+    """
+    if layer.label_min_zoom is None:
+        return _zoom_range_attribute(layer)
+    low, high = layer.visible_zoom_range or (ZOOM_FLOOR, ZOOM_CEILING)
+    low = max(low, float(layer.label_min_zoom))
+    if low >= high:
+        # Never reached: `declutter_layer` drops a limit at or past the floor,
+        # and no range ends below its own floor.
+        return _zoom_range_attribute(layer)
     return ("visible-zoom-range", f"[{_number(low)}, {_number(high)}]")
 
 
@@ -1024,6 +1045,26 @@ def build_layer_element(
         if layer.elevation.wireframe:
             attributes.append(("wireframe", "true"))
 
+    # Dense points merge into count bubbles until they have room; see
+    # `core.declutter`. The bubbles take the layer's colour by default, and a
+    # point standing alone keeps every `get-*` above.
+    #
+    # The bubble colour is set rather than left to the runtime, which falls
+    # back to its own blue when the fill is per class - while its legend shows
+    # the first class's colour for the bubble, so the two disagreed. A bubble
+    # holds points of every class, so it takes a neutral colour then.
+    if layer.cluster_max_zoom is not None:
+        attributes.append(("cluster", "true"))
+        attributes.append(("cluster-max-zoom", str(layer.cluster_max_zoom)))
+        bubble = (
+            symbol.fill_color or symbol.stroke_color
+            if renderer.kind is RendererKind.SINGLE
+            else None
+        )
+        attributes.append(
+            ("get-cluster-fill-color", color_literal(bubble or CLUSTER_MIXED_COLOR))
+        )
+
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
 
@@ -1243,7 +1284,7 @@ def build_label_element(
 
     # Labels follow their layer's zoom range, so a label can never outlive the
     # geometry it names.
-    zoom_range = _zoom_range_attribute(layer)
+    zoom_range = _label_zoom_range_attribute(layer)
     if zoom_range is not None:
         attributes.append(zoom_range)
 
@@ -1506,9 +1547,12 @@ def _popup_behavior(
     reason.
     """
     trigger = "hover" if hover else "click"
+    # A count bubble has none of a feature's fields, so on a clustered layer
+    # the popup is for points only; a click on a bubble zooms in instead.
+    pick = ' pick="point"' if layer.cluster_max_zoom is not None else ""
     return (
         f'{indent}<om-behavior on="{trigger}" '
-        f'layer="{escape_attr(layer.layer_id)}" '
+        f'layer="{escape_attr(layer.layer_id)}"{pick} '
         f'action="show-overlay" target="{escape_attr(overlay_id)}"></om-behavior>'
     )
 

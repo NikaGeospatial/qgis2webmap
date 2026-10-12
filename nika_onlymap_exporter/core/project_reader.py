@@ -35,6 +35,7 @@ from qgis.core import (
     QgsScaleCalculator,
 )
 
+from .declutter import declutter_layer
 from .export_ir import (
     Color,
     ExportLayer,
@@ -48,6 +49,7 @@ from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
 from .layer_reader import WGS84, read_layer
 from .manifest_builder import (
+    DEFAULT_LABEL_SIZE,
     OSM_FILE_NOTE,
     TERRAIN_PRESETS,
     basemap_note,
@@ -446,6 +448,7 @@ def read_project(
 
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     layers = _translate_scale_visibility(project, layers, extent, report)
+    layers = _declutter(layers, report)
     title = resolve_title(project, title_override)
 
     _report_project_metadata(project, title, title_override, report)
@@ -503,6 +506,39 @@ def _translate_scale_visibility(
             layer = dataclasses.replace(layer, visible_zoom_range=visibility.zoom_range)
         translated.append(layer)
     return translated
+
+
+def _declutter(
+    layers: list[ExportLayer], report: FidelityReportBuilder
+) -> list[ExportLayer]:
+    """Cluster dense points and hold back crowded labels, and say so.
+
+    After the zoom ranges, because a label limit inside the layer's own range
+    changes nothing and is dropped. The working-out is `core.declutter`.
+    """
+    decluttered: list[ExportLayer] = []
+    for layer in layers:
+        layer = declutter_layer(layer, DEFAULT_LABEL_SIZE)
+        if layer.cluster_max_zoom is not None:
+            report.approximated(
+                f"Markers of '{layer.name}'",
+                f"{layer.feature_count:,} points pile up when zoomed out, so they "
+                "merge into count bubbles until zoom "
+                f"{layer.cluster_max_zoom} and show one by one from zoom "
+                f"{layer.cluster_max_zoom + 1}. Clicking a bubble zooms in to "
+                "its points.",
+                layer.layer_id,
+            )
+        if layer.label_min_zoom is not None:
+            report.approximated(
+                f"Labels on '{layer.name}'",
+                "QGIS hides labels that would overlap; the web map cannot, so "
+                f"these labels show from zoom {layer.label_min_zoom}, where most "
+                "of them have room.",
+                layer.layer_id,
+            )
+        decluttered.append(layer)
+    return decluttered
 
 
 def _qgis_scale_factor(project: QgsProject, longitude: float, latitude: float) -> float:

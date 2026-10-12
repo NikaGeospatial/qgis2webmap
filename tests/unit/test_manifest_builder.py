@@ -2255,3 +2255,59 @@ class TestTileLayer:
         assert len(project.exportable_layers) == 1
         legend = build_legend_widget(project)
         assert "omni-swatch-raster" in legend
+
+
+class TestDeclutter:
+    """Clusters and held-back labels, as `core.declutter` decided them."""
+
+    LABELLED = make_layer(labeling=LabelingSpec(enabled=True, field_name="name"))
+
+    def test_a_clustered_layer_says_until_when(self) -> None:
+        element = build_layer_element(make_layer(cluster_max_zoom=9))
+        assert 'cluster="true"' in element
+        assert 'cluster-max-zoom="9"' in element
+
+    def test_single_symbol_bubbles_take_the_symbol_colour(self) -> None:
+        element = build_layer_element(make_layer(cluster_max_zoom=9))
+        assert "get-cluster-fill-color=\"'#ff0000'\"" in element
+
+    def test_bubbles_of_a_classed_layer_are_neutral(self) -> None:
+        renderer = RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="kind",
+            categories=(
+                CategorySpec(value="a", label="A", symbol=SymbolSpec(fill_color=RED)),
+            ),
+        )
+        element = build_layer_element(make_layer(cluster_max_zoom=9, renderer=renderer))
+        assert "get-cluster-fill-color=\"'#475569'\"" in element
+
+    def test_an_unclustered_layer_has_no_cluster_attributes(self) -> None:
+        assert "cluster" not in build_layer_element(make_layer())
+
+    def test_labels_wait_for_their_minimum_zoom(self) -> None:
+        layer = replace(self.LABELLED, label_min_zoom=11)
+        assert 'visible-zoom-range="[11, 30]"' in build_label_element(layer)
+
+    def test_the_label_limit_narrows_the_layers_own_range(self) -> None:
+        layer = replace(
+            self.LABELLED, label_min_zoom=11, visible_zoom_range=(5.0, 15.0)
+        )
+        assert 'visible-zoom-range="[11, 15]"' in build_label_element(layer)
+
+    def test_the_layer_itself_ignores_the_label_limit(self) -> None:
+        layer = replace(self.LABELLED, label_min_zoom=11)
+        assert "visible-zoom-range" not in build_layer_element(layer)
+
+    def test_a_clustered_layers_popup_opens_on_points_only(self) -> None:
+        layer = make_layer(
+            cluster_max_zoom=9,
+            popup=PopupSpec(enabled=True, fields=(PopupFieldSpec(name="name"),)),
+        )
+        assert 'pick="point"' in build_popup_elements(layer)
+
+    def test_an_unclustered_layers_popup_opens_on_anything(self) -> None:
+        layer = make_layer(
+            popup=PopupSpec(enabled=True, fields=(PopupFieldSpec(name="name"),)),
+        )
+        assert "pick=" not in build_popup_elements(layer)

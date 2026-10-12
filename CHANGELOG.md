@@ -7,6 +7,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Crowded labels wait for room, and dense points cluster.** QGIS hides a
+  label that would collide with another; the web map cannot, so a dense layer
+  zoomed out was a pile of text. Each labelled layer's labels now show from the
+  zoom at which most of them have room. A point layer of 100 or more points
+  that would overlap zoomed out merges them into count bubbles, which split as
+  you zoom in (click one to zoom to its points); its labels wait until the
+  bubbles have split, and its popups open on points only. Both zooms are worked
+  out from the data and stated in the Fidelity tab.
 - **Scale-dependent visibility reaches the web map.** A layer set to show only
   between two scales in QGIS now shows only between the matching zoom levels,
   through the runtime's `visible-zoom-range` - vector, raster and label layers

@@ -537,6 +537,42 @@ class TestScaleVisibility:
         assert result.layers[0].visible_zoom_range is None
 
 
+class TestDeclutter:
+    """Dense points cluster and crowded labels wait, and the report says so."""
+
+    def test_a_dense_labelled_point_layer_clusters_and_holds_its_labels(
+        self, project, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer(
+            "towns",
+            features=[(f"Town {i}", [i * 0.001, 0.0]) for i in range(300)],
+        )
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        project.addMapLayer(layer)
+        report = FidelityReportBuilder()
+
+        result = read_project(project, report)
+
+        read = result.layers[0]
+        assert read.cluster_max_zoom is not None
+        assert read.label_min_zoom is not None
+        assert read.label_min_zoom > read.cluster_max_zoom
+        subjects = {i.subject: i for i in report.items}
+        assert subjects["Markers of 'towns'"].status is FidelityStatus.APPROXIMATED
+        assert subjects["Labels on 'towns'"].layer_id == layer.id()
+
+    def test_a_handful_of_points_is_left_alone(
+        self, project, make_memory_layer
+    ) -> None:
+        project.addMapLayer(make_memory_layer("pts", features=[("a", [0.0, 0.0])]))
+        result = read_project(project, FidelityReportBuilder())
+        assert result.layers[0].cluster_max_zoom is None
+        assert result.layers[0].label_min_zoom is None
+
+
 class TestQgisScaleFactor:
     """What a QGIS scale readout means, measured by QGIS for the project CRS."""
 
