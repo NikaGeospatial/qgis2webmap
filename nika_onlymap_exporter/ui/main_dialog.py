@@ -30,6 +30,7 @@ import re
 import sys
 import time
 import traceback
+from dataclasses import replace
 from html import escape as escape_html
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -2984,7 +2985,13 @@ class MainDialog(QDialog):
         """
         signature = self.state.data_snapshot()
         if self._cached_export is not None and self._cached_signature == signature:
-            then(self._cached_export, self._cached_report)
+            # The read is reused, but the settings it carries are the ones it
+            # was taken with: a colour or control changed since would never
+            # reach the page. Today's settings replace them.
+            current = replace(
+                self._cached_export, settings=self.state.to_export_settings()
+            )
+            then(current, self._cached_report)
             return True
 
         # Read on the GUI thread, where the canvas lives, and hand the plain
