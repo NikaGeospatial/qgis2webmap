@@ -942,7 +942,15 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
     def __init__(self, tree: QTreeWidget) -> None:
         super().__init__(tree)
         self._tree = tree
-        self._measuring = False
+        # Followed rather than asked for: reading a section's size from inside
+        # `sizeHint` makes the header lay out, which sizes rows from inside
+        # this method - and on Qt5 those rows kept a one-line height.
+        self._detail_width = 0
+        tree.header().sectionResized.connect(self._on_section_resized)
+
+    def _on_section_resized(self, index: int, _old: int, new: int) -> None:
+        if index == DETAIL_COLUMN:
+            self._detail_width = new
 
     def initStyleOption(  # noqa: N802 - Qt override
         self, option: QStyleOptionViewItem, index: QModelIndex
@@ -958,22 +966,12 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
     ) -> QSize:
         # Never raises. An exception from a Qt override aborts all of QGIS
         # under PyQt5 - measured on 3.44 - and this one is reached while the
-        # tree is torn down, and again from inside itself: asking the header
-        # for a width makes Qt size rows, which then get the plain size. A row
-        # that cannot be measured at all gets none rather than taking QGIS
-        # with it.
-        if self._measuring:
-            try:
-                return super().sizeHint(option, index)
-            except Exception:
-                return QSize()
-        self._measuring = True
+        # tree is torn down. A row that cannot be measured gets no size rather
+        # than taking QGIS with it.
         try:
             return self._wrapped_size(option, index)
         except Exception:
             return QSize()
-        finally:
-            self._measuring = False
 
     def _wrapped_size(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         hint = super().sizeHint(option, index)
@@ -981,7 +979,7 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
             return hint
         if sip.isdeleted(self._tree):
             return hint
-        width = self._tree.header().sectionSize(DETAIL_COLUMN)
+        width = self._detail_width
         if width <= 0:
             return hint
         sized = QStyleOptionViewItem(option)

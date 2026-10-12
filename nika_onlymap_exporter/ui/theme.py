@@ -285,7 +285,7 @@ class _ChildDialogDresser(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
         if event.type() == QEvent.Type.ChildPolished:
-            child = event.child()  # type: ignore[attr-defined]
+            child = event.child()
             if isinstance(child, QDialog):
                 child.setStyleSheet(f"QDialog {{ background: {self.paper}; }}")
         return False

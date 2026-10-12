@@ -632,3 +632,37 @@ def test_sizing_a_row_of_a_tree_being_torn_down_never_raises(qgis_app) -> None:
     delegate.setParent(None)  # outlives the tree, as it does mid-teardown
     sip.delete(tree)
     delegate.sizeHint(QStyleOptionViewItem(), model.index(0, DETAIL_COLUMN))
+
+
+def test_row_sizing_never_asks_the_header_for_a_width(qgis_app) -> None:
+    """Asking from inside `sizeHint` lays the header out, which sizes rows from
+    inside `sizeHint`. On Qt5 those rows kept one line, and long details
+    overlapped the rows under them. The width is followed from the header's
+    resize signal instead."""
+    from qgis.PyQt.QtWidgets import QStyleOptionViewItem, QTreeWidget, QTreeWidgetItem
+
+    from nika_onlymap_exporter.ui.fidelity_panel import (
+        DETAIL_COLUMN,
+        _WrappingDelegate,
+    )
+
+    tree = QTreeWidget()
+    tree.setColumnCount(DETAIL_COLUMN + 1)
+    QTreeWidgetItem(tree, ["a", "b", "A sentence long enough to wrap. " * 12])
+    delegate = _WrappingDelegate(tree)
+    tree.setItemDelegate(delegate)
+    tree.header().resizeSection(DETAIL_COLUMN, 300)
+
+    header = tree.header()
+    asked: list[int] = []
+    real = header.sectionSize
+    header.sectionSize = lambda index: asked.append(index) or real(index)
+    try:
+        hint = delegate.sizeHint(
+            QStyleOptionViewItem(), tree.model().index(0, DETAIL_COLUMN)
+        )
+    finally:
+        del header.sectionSize
+    assert asked == []
+    assert hint.width() == 300
+    tree.deleteLater()
