@@ -384,3 +384,20 @@ def test_the_index_is_the_fallback_when_the_page_says_nothing(monkeypatch) -> No
     pages[announce.PLUGINS_XML] = PLUGINS_XML
     monkeypatch.setattr(announce, "fetch", pages.__getitem__)
     assert announce.published_version() == "0.1.3"
+
+
+def test_a_release_that_never_went_live_is_announced_with_the_next() -> None:
+    """0.2.0 sat in the review queue while 0.2.1 was uploaded; announcing only
+    0.2.1 would have left the whole of 0.2.0 unannounced."""
+    changelog = (
+        "## [Unreleased]\n\n- Not yet.\n\n"
+        "## [0.2.1] - 2026-10-13\n\n- **Fix.** A.\n\n"
+        "## [0.2.0] - 2026-10-12\n\n- **Feature.** B.\n\n"
+        "## [0.1.4] - 2026-08-26\n\n- **Old.** C.\n"
+    )
+    decision = announce.decide("0.1.4", "0.2.1", changelog)
+    assert decision.should_post
+    body = decision.section.body
+    assert "A." in body and "B." in body
+    assert "C." not in body and "Not yet." not in body
+    assert body.index("A.") < body.index("B.")

@@ -234,6 +234,31 @@ def changelog_section(text: str, version: str) -> Section | None:
 # --- fitting it into a Discord message -------------------------------------
 
 
+def with_skipped_releases(text: str, announced: str, section: Section) -> Section:
+    """`section`, followed by every release between the last one announced
+    and it.
+
+    A version can go live without the one before it ever doing so - 0.2.0 sat
+    in the review queue while 0.2.1 was uploaded - and announcing only the
+    newest would leave a whole release unannounced.
+    """
+    skipped = [
+        heading.group(1).strip()
+        for heading in _HEADING.finditer(text)
+        if heading.group(1).strip()[:1].isdigit()
+        and is_newer(announced, heading.group(1).strip())
+        and is_newer(heading.group(1).strip(), section.version)
+    ]
+    parts = [section.body]
+    for version in sorted(skipped, key=parse_version, reverse=True):
+        older = changelog_section(text, version)
+        if older is not None and older.body:
+            parts.append(
+                f"**Also new since {announced}, in {version}:**\n\n{older.body}"
+            )
+    return section._replace(body="\n\n".join(parts))
+
+
 def _split_into_blocks(body: str) -> list:
     """The body as bullets and headings, each kept whole.
 
@@ -394,7 +419,7 @@ def decide(announced: str, live: str | None, changelog_text: str) -> Decision:
         should_post=True,
         reason=f"{live} is live and was not announced",
         version=live,
-        section=section,
+        section=with_skipped_releases(changelog_text, announced, section),
         ping=should_ping(announced, live),
     )
 
