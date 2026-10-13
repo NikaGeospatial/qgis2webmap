@@ -4,301 +4,53 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-10-12
+## [0.2.1] - 2026-10-13
 
 ### Fixed
-- **QGIS 3 could close while the Fidelity tab resized its rows.** On QGIS 3
-  (Qt5) an error inside Qt's row sizing ends the whole application, and the
-  Fidelity tab's sizing could raise one while the tab was being closed, and
-  again from inside itself. It now never raises.
-- **Message boxes were unreadable on QGIS 3 after switching to the dark
-  theme** - light text on a light background. Each box now takes the theme's
-  background directly.
-- **The Layers tab's drop-downs were cut off at the bottom on QGIS 3.** Rows
-  now fit their tallest control.
-- **Menus opened narrower than their button on QGIS 3.** They now match it.
+- **QGIS 3 could close while the Fidelity tab sized its rows.**
+- **Message boxes were unreadable on QGIS 3** after switching to the dark theme.
+- **Layer-row drop-downs were cut off, and menus opened too narrow, on QGIS 3.**
 
 ### Changed
-- **Release announcements reach Discord sooner.** The check now runs every 30
-  minutes and reads the plugin's own page on plugins.qgis.org, about 170 KB,
-  instead of the full plugin index, about 9 MB - less load on the site than the
-  old six-hourly check.
+- **Release announcements check plugins.qgis.org every 30 minutes**, reading
+  the plugin's own page rather than the full index.
 
 ## [0.2.0] - 2026-10-12
 
 ### Added
-- **Crowded labels wait for room, and dense points cluster.** QGIS hides a
-  label that would collide with another; the web map cannot, so a dense layer
-  zoomed out was a pile of text. Each labelled layer's labels now show from the
-  zoom at which most of them have room. A point layer of 100 or more points
-  that would overlap zoomed out merges them into count bubbles, which split as
-  you zoom in (click one to zoom to its points); its labels wait until the
-  bubbles have split, and its popups open on points only. Both zooms are worked
-  out from the data and stated in the Fidelity tab.
-- **Scale-dependent visibility reaches the web map.** A layer set to show only
-  between two scales in QGIS now shows only between the matching zoom levels,
-  through the runtime's `visible-zoom-range` - vector, raster and label layers
-  alike. The conversion is measured at the map's centre and in the project's
-  own CRS, and the Fidelity tab states the zooms. On a map tall enough for the
-  web map's Mercator scale to drift from QGIS's, it says by how many zoom
-  levels at the edges. Until now the range was dropped with a note, on a claim
-  that the runtime had nowhere to put it; it has had one since 0.6.22.
-
-- **Raster layers export.** A GeoTIFF on disk is converted to a
-  Cloud-Optimized GeoTIFF and carried in every export type, in its place in the
-  layer order. A single-band raster's QGIS colour ramp, classes and stretch are
-  drawn into its pixels, so the map shows the colours QGIS shows; an RGB
-  composite keeps its own bands. **Standalone HTML carries the raster inside
-  the page**, so the one file still opens by double-click with no server, up
-  to 100 MB of imagery; past that it says so and names Folder or Share ZIP,
-  which stream the raster in pieces and have to be served over HTTP.
-- **XYZ tile layers export as live layers.** An XYZ (or WMTS-style
-  `{z}/{x}/{y}`) layer in QGIS becomes the same tiles on the web map, in its
-  place in the layer order, fetched from the same server - so it needs an
-  internet connection, and the Fidelity tab says so. A tile address carrying an
-  access key (`key=`, `token=` and similar) is refused rather than published in
-  the file. WMS, WCS and ArcGIS services are still left out: they ask for each
-  image by map extent, which the web map cannot do, and the Fidelity tab says
-  so.
-- **Preview, Share and Export are separate buttons** in the top-right corner,
-  with Export filled and last. Each has a small icon; only Share has a menu.
-- **A live switch inside Preview.** The dot at Preview's right end turns red when
-  live preview is on: Preview then keeps the browser tab updating as you
-  change settings, reads **Live** while it does, and stops on a second press -
-  the switch stays on for next time. Off, Preview opens the map as it is now.
-  A preview never writes your map file; only Export does.
-- **Ctrl+Alt+W opens the dialog** (Cmd+Alt+W on macOS). Change or clear it in
-  Settings > Keyboard Shortcuts, under *Create web map*.
-- **The Fidelity tab's filters are one Filter menu** beside the summary rather
-  than two rows of checkboxes, and the whole-map facts sit on the Whole map
-  row, so the list starts higher with nothing taken out.
-- **The Fidelity tab is rebuilt for reading.** Grouped by layer with problems
-  first and the whole-map settings on top; every row carries its whole
-  sentence, wrapped, instead of being cut at 110 characters; each layer's line
-  says what it is (geometry, features, styling, labels, popups, data size).
-  Checkboxes per verdict and per topic, and a search box, narrow the list;
-  Kept is hidden by default. Selecting a row shows where it applies, with a
-  button to the setting that fixes it. The report is marked **Out of date** the
-  moment settings change or a layer is restyled in QGIS, rather than looking
-  current.
-- **Blocked warns instead of refusing.** A layer QGIS could not read no longer
-  stops the rest of the map from exporting: Export names what will be missing
-  and asks. An empty map is still refused. The Processing algorithm still
-  refuses a Blocked item by default, because a batch run has nobody to ask. Its
-  new **Export even if some items are blocked** parameter (off by default) is
-  the batch run answering in advance: the map is written without them, and each
-  missing item is logged as a warning.
-- **Save to, beside Export as.** The place is chosen once on the Map tab and
-  saved with the project, as the type already was; switching the type keeps the
-  name (`peaks.html` becomes `peaks.zip`). Export is the filled button in the
-  top-right corner.
-- **Light or dark on purpose.** Settings > Appearance > Theme: Follow QGIS,
-  Light or Dark. It applies at once.
-- **Menus and drop-down lists open as part of their control**, flush under it
-  with the same outline, rather than as a separate box.
-- **Sections read as separate cards.** Each sits on a near-white card with a
-  hairline border against a slightly darker window, in both light and dark,
-  so it is clear where one group of settings ends and the next begins.
-- **Point names without clicking, and a clustering switch.** A point layer's
-  new **Points** row in the Layers tab offers **Names**: a field whose value
-  shows beside every point with a halo, from the zoom where most have room.
-  **Cluster dense points** turns clustering off for that layer. Bubble sizes
-  now follow the log of their count, so large clusters no longer dominate.
+- **Raster layers export.** A GeoTIFF goes inside a single HTML file (up to
+  100 MB of imagery, still opens by double-click) or beside the page in a
+  Folder or Share ZIP, in the colours QGIS draws it.
+- **XYZ tile layers export as live layers.** An address carrying an access key
+  is refused rather than published.
+- **A redesigned dialog**: separate Preview, Share and Export buttons, a
+  live-preview switch, a Settings tab, and light and dark themes.
+- **Seven languages**: English, Portuguese (Brazil), Chinese (Simplified),
+  Hindi, Spanish, Arabic and French.
+- **Crowded labels wait for the zoom where they have room.**
+- **Dense point layers merge into count bubbles** that split as you zoom in,
+  sized on a log scale of their count; clustering can be switched off per
+  layer.
+- **Point names beside every point**, from a chosen field, with a halo.
+- **Scale-dependent visibility carries to the web map.**
+- **Ctrl+Alt+W opens the dialog** (Cmd+Alt+W on macOS).
+- **The Processing tool can export even if some items are blocked.**
 
 ### Changed
-- **Quieter Map and Layers tabs.** The note under every basemap is gone - the
-  Fidelity tab still names the provider - and only OpenStreetMap in a file
-  export still warns there. The Layers tab's column guide moved behind an
-  **i** button at the bottom right.
-- **The pinned OnlyMap runtime moved from 0.6.20 to 0.12.0.** The one-time
-  download is now about 5.4 MB. The runtime's own "Built with OnlyMap" badge
-  replaces the plugin's footer credit on unlicensed maps rather than repeating
-  it in the other corner.
+- **Labels are sized in the right unit** and stay readable over imagery.
+- **Relief imagery moved from CARTO to NASA GIBS.**
+- **The OnlyMap runtime moves to 0.12.0.**
 
 ### Fixed
-- **Drop-downs in an expanded layer were cut off** at the bottom edge on the
-  Layers tab, in both themes.
-- **The Sign in to NIKA icon was invisible in dark mode.** It now follows the
-  theme's text colour.
-- **The Fidelity tab and the save status kept up with the export type and
-  with QGIS.** Switching between Standalone HTML, Share ZIP and Folder now
-  updates the OpenStreetMap warning without re-reading the project; a Share ZIP
-  or Folder export no longer looks out of date straight after it is written;
-  and a layer restyled in QGIS while an export runs leaves the result marked
-  out of date rather than current. A Folder export's size is its files' size.
-- **Switching the export type during a long export wrote the wrong thing**, such
-  as a folder named `peaks.html`. The export now writes to the place set when
-  Export was pressed.
-- **A one-off raster preview turned live when a layer changed in QGIS**, and
-  its server ran until the dialog closed. It now stays a one-off and stops
-  when its tab closes.
-- **The hosting waitlist was greyed out until a save path was set.** It is
-  always available now. The NIKA and QGIS2Carto rows, which are not built yet,
-  are greyed out and marked coming soon rather than opening a notice.
-- **Advice pointed at a Share row that no longer exists.** The large-map notes
-  now say to export as Share ZIP.
-- **Labels that only had room past their layer's last zoom piled up** across
-  its whole range. They are now left out, and the Fidelity tab says why.
-  Points at the same spot count as one when choosing where labels start, so
-  repeat samples at a few sites no longer hold them back to zoom 18; each
-  stack stays one bubble showing how many samples it holds.
-- **Untranslated text.** The layer rows, sign-in chip, problems warning,
-  runtime download, Fidelity tab and strip, OpenStreetMap warning and the Processing
-  tool now follow the chosen language.
-- **The save path follows a moved or shared project.** It is stored relative
-  to the project file as well as in full, and the relative form is used when
-  the original folder is no longer there.
-- **The sign-in chip showed an account from another build** that this build
-  could not sign out of. It now always offers to sign in.
-- **OpenStreetMap basemaps showed "Access blocked" for recipients, with no
-  warning.** Its tile servers require a `Referer`, which a map opened straight
-  from a file never sends, and a page cannot set its own `User-Agent`. Picking
-  OpenStreetMap for a Standalone HTML or Share ZIP export now warns on the Map
-  tab and in the Fidelity tab and suggests Liberty - the same OpenStreetMap
-  data - or a Folder export. An OpenStreetMap XYZ layer warns the same way.
-- **Map labels were unreadable over imagery.** Two causes. Label sizes were
-  copied from QGIS without their unit, so a 9 pt label drew at 9 px instead
-  of 12 - buffers too. And the web map draws outlined (haloed) text with its
-  colours swapped inside the letters at label sizes: pale glyphs with a dark
-  fringe. Sizes are now converted from points, millimetres or inches, and a
-  QGIS buffer becomes a soft box in its colour behind the text. On a point
-  layer a boxed label centred on its point sits just above the marker, so the
-  box does not hide it. The Fidelity tab says so.
-- **Relief maps drew an "API KEY REQUIRED" watermark instead of a basemap.**
-  CARTO began requiring a key on their raster tiles in late August 2026 and are
-  retiring the product. The endpoints still answer `200`; what changed is the
-  picture, which is why nothing that checks status codes or tile sizes noticed.
-  Nothing in this repository changed either — v0.1.4 shipped on 2026-08-26 and
-  the tiles went bad days later — so relief broke on maps that had already been
-  exported and could not be fixed by re-exporting them.
-
-  The Positron, Dark Matter and Voyager drapes now come from NASA's Global
-  Imagery Browse Services: keyless, and a work of the US government, so
-  commercial use carries no restriction. Of every free raster source tested it
-  was the only one that is all three of keyless, licence-clean and actually
-  serving. GIBS caps ASTER at zoom 12, which is exactly `TERRAIN_MAX_ZOOM`, so
-  the camera clamp relief artifacts already carry is what makes it viable.
-
-  A key was considered and rejected. An export is a self-contained file, so the
-  key would ship in plain text in every copy a user hands out and could never be
-  rotated — the same objection that keeps the MapTiler presets out of
-  `TERRAIN_PRESETS`. CARTO's free tier is also explicitly non-commercial, and
-  covers the raster product being retired.
-
-  The cost is visible: ASTER is coloured shaded relief, so a relief map now
-  carries no roads, borders or labels. Every source tested that had them was
-  either licence-restricted (OpenTopoMap and osm.de are non-commercial, EOX
-  needs a paid licence) or keyless-but-unsanctioned — Esri's `World_Topo_Map`
-  looks the best of the lot and is served from a legacy endpoint their terms say
-  requires an account, which is the same shape as the thing that just broke.
-
-  `osm` is unchanged. Its drape is the same provider as its basemap, it was
-  never affected, and moving a working preset would be a fidelity regression.
-- **Relief maps credited nobody for their imagery.** A drape reaches the runtime
-  as a bare URL, so unlike `basemap="osm"` there is nothing for the attribution
-  control to name — the exporter picks the imagery, so only the exporter can
-  credit it. Relief maps now carry NASA's acknowledgement in the credit chip,
-  including maps whose layers carry no metadata of their own, which previously
-  skipped the element entirely.
-- **Message boxes were unreadable in dark mode** - light text on a light
-  background. They now take the dialog's theme.
-- **A short window crushed the Settings tab** into overlapping rows. It
-  scrolls instead, like the Map and Appearance tabs.
-- **A folder export with more than 2 MB of vector data drew no features.** Its
-  data was compressed but the page carried nothing to decompress it, so the
-  legend and layer switcher appeared over an empty map.
-- **Labelling a 3D polygon layer aborted the whole export.** A polygon layer
-  whose geometry carries Z — digitised with Z switched on, draped over a DEM,
-  or imported from CityGML, IFC or a `PolygonZ` GeoPackage — exports every
-  vertex as `[x, y, z]`. The label-placement centroid read each vertex as
-  `(x, y)`, so it raised `ValueError: too many values to unpack (expected 2)`
-  and took every other layer down with it. Reported against 0.1.4; present ever
-  since labels were added.
-
-  Height lives in one of two places in QGIS, and only one of them was ever
-  tested. Extrusion driven by an attribute leaves the geometry flat, which is
-  what all three demo projects do and why they never caught this. Height stored
-  in the coordinates is a different route to the same-looking map, and every
-  fixture in this repository was flat.
-
-  The elevation is not a label coordinate, so it is dropped — the same thing
-  the point and line paths already did. The QGIS test tier now builds a real
-  `PolygonZ` layer and pins the fact that QGIS hands us three-element vertices,
-  so the guard cannot quietly stop being load-bearing.
-- **No more blank gaps under help text and warnings.** Wrapped text was sized
-  for a narrower width than it got and the surplus showed as empty space - the
-  basemap warning sat in three times its height. The Map tab is about a quarter
-  shorter, so there is less to scroll.
-- **A Settings tab, before Help**, for what is true of every project rather
-  than of one map: the NIKA account, the dialog's language and theme, and the
-  plugin and runtime versions. The account and
-  Discord no longer sit in the footer, which is now just the status line and
-  Close.
-- **Share is a dropdown.** Pressing it opens the menu; Discord is at the foot of
-  it, with a note that more ways to share are coming.
-- **The dialog speaks seven languages**: English, Português (Brasil), 中文（简体）,
-  हिन्दी, Español, العربية and Français. English is built in; the others are
-  small downloads (about 14 KB each) fetched the first time you pick one, and
-  checked against the copy released with this version before they are used.
-  Choose on the Settings tab. *Follow QGIS*, the
-  default, uses QGIS's own language when its pack is installed, and offers the
-  download - never starting it - when it is not. Arabic is laid out right to
-  left. Switching reopens the dialog in the new language; QGIS does not need a
-  restart, and no setting is lost.
-- **The dialog wears NIKA's colours, and follows QGIS between light and dark.**
-  A light QGIS gets Plum-Light with a brass accent; Night Mapping and other dark
-  themes get Plum-Dark with a lime accent. Preview and Share are pills at the top
-  right, the open tab is underlined, and sections are a title and a rule rather
-  than a sunken grey box. The account and Discord at the foot are outlined
-  chips, so they read as things to press. The look is the dialog's own: nothing
-  else in QGIS is restyled.
-- **The dialog uses Inter**, bundled with the plugin (about 95 KB, Latin
-  scripts including Portuguese and Vietnamese), so it looks the same on Windows,
-  macOS and Linux. QGIS's own font is unchanged.
-- **The bottom row names the NIKA account this QGIS profile is paired with**, so
-  you can see which one a map would be published to before publishing it, and
-  switch to another without hunting through settings files. Its menu offers
-  *Switch account* and *Sign out*; switching signs you in as somebody else
-  without signing you out first, so abandoning it halfway leaves you exactly
-  where you were.
-
-  Changing your plan is deliberately not offered here and happens on the web
-  instead. The plugin holds a token scoped to reading who you are and publishing
-  maps, and nothing else — it cannot reach billing, so a copy of it lifted off a
-  shared machine cannot spend money.
-
-  **The button is present but inert in this release.** Signing in arrives with
-  map hosting; until then it says so rather than appearing to work. Everything
-  this version exports is a file you own and share yourself, and none of it
-  needs an account.
-
-### Changed
-- **Preview, Export and Share moved to the top-right corner of the tab bar**, so
-  all three are within reach from whichever tab you are reading. The Map tab
-  keeps 0.1.4's *Export as* choice and gains a **Save to** field; Export writes
-  there without a picker.
-
-- **Share collects what you might do with a finished map**: copy its path, show
-  it in your file manager, or join the hosting
-  waitlist. Every row is disabled until Save to is set, and says so on hover
-  rather than being silently inert.
-
-- **Live preview also keeps a Standalone HTML export up to date** at its Save to
-  path. It already meant "keep rebuilding as I work", so it is the switch that
-  decides this too; a zip or a folder is only ever written by Export. A line
-  under Save to always says which is happening.
-
-### Fixed
-- **Closing the preview tab now stops the preview server.** It used to run until
-  the dialog was closed or Live preview was unticked, holding a loopback socket
-  with nothing on screen saying so. Reloading the page is not mistaken for
-  closing it: a reload drops the page's connection and opens a new one, so the
-  server waits out a grace period before deciding its audience has gone.
-
-- **A browser hanging up mid-download no longer prints a traceback** into the
-  QGIS Python console. A preview page is several megabytes, so navigating away
-  or reloading during the load severs the connection by definition — ordinary
-  browsing was being reported as a plugin fault.
+- **A labelled 3D polygon layer aborted the export** with "too many values to
+  unpack".
+- **Large Folder exports drew no features.**
+- **Dark-mode message boxes were unreadable.**
+- **OpenStreetMap basemaps show "Access blocked"** in a map opened from a file;
+  the dialog now warns about it.
+- **The Fidelity report stays accurate** when the export type changes or layers
+  change in QGIS.
+- **The save path follows a moved or shared project.**
 
 ## [0.1.4] - 2026-08-26
 
