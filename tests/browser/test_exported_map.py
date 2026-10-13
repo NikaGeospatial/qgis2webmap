@@ -366,11 +366,20 @@ class TestPopupFieldModes:
         open_map(page, popup_modes_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-
-        page.evaluate(
+        # The data layer, found by its fields rather than its position:
+        # `getLayers()` does not promise an order, and taking the first layer
+        # sometimes picked a companion with no attributes - the popup then
+        # showed every value empty and the "with data" rows hid, failing this
+        # test now and then with nothing wrong in the export. Waited for,
+        # because the canvas mounts before the data has loaded.
+        page.wait_for_function(
             """(index) => {
                 const map = document.querySelector('om-map');
-                const layer = map.getLayers()[0];
+                const layer = map.getLayers().find((candidate) => {
+                    const row = candidate?.data?.[index];
+                    return row?.properties && 'inline_with_data' in row.properties;
+                });
+                if (!layer) return false;
                 map.injectPickInternal({
                     layerId: layer.id,
                     object: layer.data[index],
@@ -379,8 +388,10 @@ class TestPopupFieldModes:
                     pixel: [100, 100],
                     type: 'click',
                 });
+                return true;
             }""",
-            feature,
+            arg=feature,
+            timeout=30_000,
         )
         # Wait for the interpolation, not merely for the rows: the overlay
         # renders the raw template first and substitutes values on the next
@@ -398,6 +409,19 @@ class TestPopupFieldModes:
             }""",
             timeout=10_000,
         )
+
+        if feature == self.WITH_DATA:
+            # Not just placeholders gone: the overlay can pass through a frame
+            # with every value empty before the picked feature's arrive, and
+            # measuring there hid the "with data" rows - an occasional failure
+            # in CI and locally with nothing wrong in the export.
+            page.wait_for_function(
+                """() => Array.from(
+                    document.querySelector('om-overlay').shadowRoot
+                        .querySelectorAll('.om-popup-value')
+                ).every((value) => value.textContent.trim() !== '')""",
+                timeout=10_000,
+            )
 
         # Geometry, not computed `display`, decides "above" versus "beside": a
         # span inside a flex row is blockified to `block` too, so the property
