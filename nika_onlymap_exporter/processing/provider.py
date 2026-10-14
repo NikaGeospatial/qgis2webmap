@@ -16,6 +16,7 @@ import os.path
 from qgis.core import QgsProcessingProvider
 from qgis.PyQt.QtGui import QIcon
 
+from .export_layout import ExportLayoutAlgorithm
 from .export_project import ExportProjectAlgorithm
 
 ICON_PATH = os.path.join(
@@ -40,3 +41,4 @@ class Qgis2WebMapProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self) -> None:  # noqa: N802
         self.addAlgorithm(ExportProjectAlgorithm())
+        self.addAlgorithm(ExportLayoutAlgorithm())
