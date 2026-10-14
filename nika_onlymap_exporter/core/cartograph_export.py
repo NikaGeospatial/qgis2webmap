@@ -271,6 +271,9 @@ def _static_frame_key(
     add(str(dpi))
     document = QDomDocument("cartograph-frame")
     element = document.createElement("frame")
+    # Attached first: `toString()` serialises only what is in the document,
+    # and an unattached element would make every item hash the same.
+    document.appendChild(element)
     map_item.writeXml(element, document, QgsReadWriteContext())
     add(document.toString())
     for layer in map_item.layersToRender():

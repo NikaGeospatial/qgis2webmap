@@ -225,3 +225,307 @@ class TestPrepareThenFinish:
             assert frame.dpi == dpi
             image = QImage.fromData(frame.image_bytes, "PNG")
             assert image.width() == round(frame.box.w / 25.4 * dpi)
+
+
+# --------------------------------------------------------------------------
+# Ids: brace-free, token-safe, unique
+# --------------------------------------------------------------------------
+
+#: What an id must look like to be usable everywhere it is used: an HTML id,
+#: a `#selector`, and inside `{{frame.<id>.scale}}`.
+_SAFE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+_ID_ATTR = re.compile(r'\sid="([^"]*)"')
+_REFERENCE_ATTR = re.compile(r'\s(?:for|overview-of)="([^"]*)"')
+
+
+def _two_live_frames_layout(project):
+    """Two EPSG:3857 maps over the same two layers, a legend on each, and a
+    scale label: the layout where `<om-layer id>`s would collide."""
+    from atlas_fixtures import add_map, build_parcels, build_roads
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsLayoutItemLabel,
+        QgsLayoutItemLegend,
+        QgsLayoutSize,
+        QgsPrintLayout,
+        QgsUnitTypes,
+    )
+
+    project.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
+    parcels, roads = build_parcels(), build_roads()
+    project.addMapLayers([parcels, roads])
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("two-live")
+    main = add_map(layout, [parcels, roads])
+    inset = add_map(layout, [parcels, roads], x=170, w=60, h=60)
+    layout.setReferenceMap(main)
+    for map_item in (main, inset):
+        legend = QgsLayoutItemLegend(layout)
+        layout.addLayoutItem(legend)
+        legend.setLinkedMap(map_item)
+        legend.attemptResize(QgsLayoutSize(30, 20, QgsUnitTypes.LayoutMillimeters))
+    label = QgsLayoutItemLabel(layout)
+    layout.addLayoutItem(label)
+    label.setText("1:[% @map_scale %]")
+    label.attemptResize(QgsLayoutSize(40, 10, QgsUnitTypes.LayoutMillimeters))
+    return layout, main, inset, parcels, roads
+
+
+class TestIds:
+    def test_every_id_in_the_survey_cartograph_is_brace_free_and_safe(
+        self, survey, fake_runtime
+    ) -> None:
+        html = export_layout_to_cartograph(
+            survey.layout, survey.project, fake_runtime, FidelityReportBuilder()
+        )
+        ids = _ID_ATTR.findall(html)
+        assert ids
+        assert [i for i in ids if not _SAFE_ID.match(i)] == []
+        assert "{" not in "".join(_REFERENCE_ATTR.findall(html))
+
+    def test_a_live_frame_scale_label_names_the_frame_by_its_id(
+        self, project, fake_runtime
+    ) -> None:
+        layout, main, *_ = _two_live_frames_layout(project)
+        html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        frame_id = element_id("frame", main.uuid())
+        assert f'<om-frame id="{frame_id}"' in html
+        assert f"1:{{{{frame.{frame_id}.scale}}}}" in html
+        # The runtime's token pattern, `{{\s*([\w.]+)\s*}}`, must match it.
+        assert re.search(r"\{\{\s*([\w.]+)\s*\}\}", f"{{{{frame.{frame_id}.scale}}}}")
+
+    def test_two_live_frames_on_the_same_layers_write_unique_ids(
+        self, project, fake_runtime
+    ) -> None:
+        layout, main, inset, parcels, _roads = _two_live_frames_layout(project)
+        html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        sheet = html[html.index('<template id="sheet">') : html.index("</template>")]
+        ids = _ID_ATTR.findall(sheet)
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        assert duplicates == []
+        main_id = element_id("frame", main.uuid())
+        inset_id = element_id("frame", inset.uuid())
+        assert f'id="{main_id}__{parcels.id()}"' in sheet
+        assert f'id="{inset_id}__{parcels.id()}"' in sheet
+        # Each legend's override rows name the layer as its own frame has it.
+        assert f'<om-legend-row layer="{main_id}__{parcels.id()}"' in sheet
+        assert f'<om-legend-row layer="{inset_id}__{parcels.id()}"' in sheet
+
+
+# --------------------------------------------------------------------------
+# The writer (licence policy) and the per-frame projects
+# --------------------------------------------------------------------------
+
+
+class TestWriterAndProjects:
+    def test_a_writer_with_a_licence_policy_is_the_one_used(
+        self, project, fake_runtime
+    ) -> None:
+        from nika_onlymap_exporter.core.license_policy import default_policy
+        from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
+
+        layout = _live_layout(project)
+        writer = OnlyMapWriter(license_policy=default_policy("test-key-123"))
+        html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder(), writer=writer
+        )
+        assert 'license-key="test-key-123"' in html
+        default_html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        assert "license-key" not in default_html
+
+    def test_one_project_per_live_frame(self, project, fake_runtime) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            finish_cartograph_full,
+        )
+
+        layout, _main, _inset, parcels, roads = _two_live_frames_layout(project)
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(layout, project, fake_runtime, report)
+        finished = finish_cartograph_full(prepared, project, report)
+        assert len(finished.projects) == 2
+        for export_project in finished.projects:
+            # As read: QGIS's own layer ids, not the frame-prefixed DOM ids.
+            assert {layer.layer_id for layer in export_project.layers} == {
+                parcels.id(),
+                roads.id(),
+            }
+        assert finished.html == finish_cartograph(prepared, project, report)
+
+    def test_no_projects_for_a_static_only_cartograph(
+        self, survey, fake_runtime
+    ) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            finish_cartograph_full,
+        )
+
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(
+            survey.layout, survey.project, fake_runtime, report, static_dpi=72
+        )
+        assert finish_cartograph_full(prepared, survey.project, report).projects == ()
+
+
+# --------------------------------------------------------------------------
+# The static-frame raster cache
+# --------------------------------------------------------------------------
+
+
+class TestStaticFrameCache:
+    """Autosave rebuilds the cartograph after every edit; a static frame is
+    re-rendered only when something that changes its pixels changed."""
+
+    @pytest.fixture
+    def cache(self):
+        from nika_onlymap_exporter.core.cartograph_export import StaticFrameCache
+
+        cache = StaticFrameCache()
+        yield cache
+        cache.clear()
+
+    def _prepare(self, survey, runtime, cache, **kwargs):
+        return prepare_cartograph(
+            survey.layout,
+            survey.project,
+            runtime,
+            FidelityReportBuilder(),
+            static_dpi=72,
+            raster_cache=cache,
+            **kwargs,
+        )
+
+    def test_an_unrelated_edit_reuses_both_rasters(
+        self, survey, fake_runtime, cache
+    ) -> None:
+        first = self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 2
+        survey.title_label.setText("A different title")
+        second = self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 2
+        frames = [i for i in second.items if getattr(i, "image_bytes", None)]
+        assert [f.image_bytes for f in frames] == [
+            f.image_bytes for f in first.items if getattr(f, "image_bytes", None)
+        ]
+
+    def test_a_restyle_rerenders(self, survey, fake_runtime, cache) -> None:
+        from qgis.core import QgsFillSymbol
+
+        self._prepare(survey, fake_runtime, cache)
+        survey.parcels.renderer().setSymbol(
+            QgsFillSymbol.createSimple({"color": "#0000ff"})
+        )
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 4  # both frames draw the parcels
+
+    def test_an_extent_change_rerenders_only_that_frame(
+        self, survey, fake_runtime, cache
+    ) -> None:
+        self._prepare(survey, fake_runtime, cache)
+        extent = survey.main_map.extent()
+        extent.grow(100)
+        survey.main_map.setExtent(extent)
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 3
+
+    def test_a_dpi_change_rerenders_only_that_frame(
+        self, survey, fake_runtime, cache
+    ) -> None:
+        self._prepare(survey, fake_runtime, cache)
+        self._prepare(
+            survey, fake_runtime, cache, frame_dpis={survey.inset_map.uuid(): 96}
+        )
+        assert cache.render_count == 3
+
+    def test_a_feature_edit_rerenders(self, survey, fake_runtime, cache) -> None:
+        from qgis.core import QgsGeometry, QgsRectangle
+
+        self._prepare(survey, fake_runtime, cache)
+        layer = survey.parcels
+        feature_id = next(layer.getFeatures()).id()
+        layer.startEditing()
+        layer.changeGeometry(
+            feature_id,
+            QgsGeometry.fromRect(QgsRectangle(365000, 145000, 365100, 145100)),
+        )
+        layer.commitChanges()
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 4
+
+    def test_an_edit_that_moves_no_extent_still_rerenders(
+        self, survey, fake_runtime, cache
+    ) -> None:
+        """Same feature count, same extent, same style: only the layer's own
+        change signal can say the data changed."""
+        from qgis.core import QgsField
+        from qgis.PyQt.QtCore import QVariant
+
+        layer = survey.parcels
+        layer.dataProvider().addAttributes([QgsField("note", QVariant.String)])
+        layer.updateFields()
+        self._prepare(survey, fake_runtime, cache)
+        layer.startEditing()
+        layer.changeAttributeValue(
+            next(layer.getFeatures()).id(), layer.fields().indexOf("note"), "x"
+        )
+        layer.commitChanges()
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 4
+
+    def test_clear_forces_a_fresh_render(self, survey, fake_runtime, cache) -> None:
+        self._prepare(survey, fake_runtime, cache)
+        cache.clear()
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 4
+
+    def test_no_cache_renders_every_time(self, survey, fake_runtime) -> None:
+        from unittest import mock
+
+        from nika_onlymap_exporter.core import cartograph_export
+
+        with mock.patch.object(
+            cartograph_export,
+            "render_static_frame",
+            wraps=cartograph_export.render_static_frame,
+        ) as render:
+            self._prepare(survey, fake_runtime, None)
+            self._prepare(survey, fake_runtime, None)
+        assert render.call_count == 4
+
+    def test_the_shared_cache_is_on_by_default_and_clearable(
+        self, survey, fake_runtime
+    ) -> None:
+        from unittest import mock
+
+        from nika_onlymap_exporter.core import cartograph_export
+
+        cartograph_export.clear_static_frame_cache()
+        with mock.patch.object(
+            cartograph_export,
+            "render_static_frame",
+            wraps=cartograph_export.render_static_frame,
+        ) as render:
+            for _ in range(2):
+                prepare_cartograph(
+                    survey.layout,
+                    survey.project,
+                    fake_runtime,
+                    FidelityReportBuilder(),
+                    static_dpi=72,
+                )
+            assert render.call_count == 2
+            cartograph_export.clear_static_frame_cache()
+            prepare_cartograph(
+                survey.layout,
+                survey.project,
+                fake_runtime,
+                FidelityReportBuilder(),
+                static_dpi=72,
+            )
+            assert render.call_count == 4
+        cartograph_export.clear_static_frame_cache()
