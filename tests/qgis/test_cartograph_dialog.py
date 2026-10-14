@@ -11,7 +11,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import sys
 import time
 import types
 
@@ -53,41 +52,56 @@ def _add_layout(project, name, maps):
 
 @pytest.fixture
 def fake_cartograph_export(monkeypatch):
-    """A fake `core.cartograph_export.export_layout_to_cartograph`.
+    """Fakes `core.cartograph_export`'s two halves.
 
-    That module belongs to a parallel branch (`specs/cartograph/plan.md`) and
-    does not exist here; the controller imports it lazily so this fixture can
-    stand in without the real thing ever needing to exist on this branch.
-    `calls` records one entry per invocation, each the `frame_modes` it was
-    given, so a test can tell a burst collapsed into one build.
+    `calls` records one entry per build: the options it was given and whether
+    each half ran on the GUI thread, so a test can tell a burst collapsed into
+    one build and that the layout was only touched where Qt allows it. Each
+    build also records one fidelity row, so the Fidelity tab has something
+    cartograph-shaped to show.
     """
+    from qgis.PyQt.QtCore import QThread
+    from qgis.PyQt.QtWidgets import QApplication
+
+    import nika_onlymap_exporter.core.cartograph_export as export_module
+    import nika_onlymap_exporter.ui.cartograph.controller as controller_module
+
     calls: list[dict] = []
     should_fail = {"value": False}
     html_text = {"value": "<html>cartograph</html>"}
 
-    def export_layout_to_cartograph(
+    def on_gui_thread() -> bool:
+        return QThread.currentThread() is QApplication.instance().thread()
+
+    def prepare_cartograph(
         layout,
         project,
         runtime,
         report,
         *,
         frame_modes,
-        static_dpi,
+        frame_dpis,
+        static_dpi=200,
         title_override=None,
     ):
-        calls.append({"frame_modes": dict(frame_modes), "static_dpi": static_dpi})
+        report.approximated("Map frame 'Overview'", "Rendered as a static raster.")
+        calls.append(
+            {
+                "frame_modes": dict(frame_modes),
+                "frame_dpis": dict(frame_dpis),
+                "prepare_on_gui_thread": on_gui_thread(),
+            }
+        )
+        return "prepared"
+
+    def finish_cartograph(prepared, project, report):
+        calls[-1]["finish_on_gui_thread"] = on_gui_thread()
         if should_fail["value"]:
             raise RuntimeError("synthetic export failure")
         return html_text["value"]
 
-    fake_module = types.ModuleType("nika_onlymap_exporter.core.cartograph_export")
-    fake_module.export_layout_to_cartograph = export_layout_to_cartograph
-    monkeypatch.setitem(
-        sys.modules, "nika_onlymap_exporter.core.cartograph_export", fake_module
-    )
-
-    import nika_onlymap_exporter.ui.cartograph.controller as controller_module
-
+    monkeypatch.setattr(export_module, "prepare_cartograph", prepare_cartograph)
+    monkeypatch.setattr(export_module, "finish_cartograph", finish_cartograph)
     monkeypatch.setattr(
         controller_module, "ensure_runtime", lambda parent=None: object()
     )
@@ -95,6 +109,18 @@ def fake_cartograph_export(monkeypatch):
     return types.SimpleNamespace(
         calls=calls, should_fail=should_fail, html_text=html_text
     )
+
+
+def _saved_once(qgis_app, project, fake, tmp_path):
+    """A dialog on Cartograph whose first autosave has landed."""
+    _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+    dialog = _dialog(project)
+    dialog.output_cartograph_button.setChecked(True)
+    target = tmp_path / "survey.html"
+    dialog._cartograph.file_edit.setText(str(target))
+    dialog._cartograph._on_file_edited(str(target))
+    assert _wait_for(qgis_app, lambda: target.exists())
+    return dialog
 
 
 def _wait_for(qgis_app, predicate, timeout=10.0) -> bool:
@@ -325,6 +351,139 @@ class TestAutosave:
             text = cartograph.cartograph_status_label.text()
             assert text.startswith("Saved")
             assert "B" in text
+        finally:
+            dialog.close()
+
+
+class TestBuildThreadsAndJobs:
+    def test_the_layout_is_read_on_the_gui_thread_and_layers_off_it(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            (call,) = fake_cartograph_export.calls
+            assert call["prepare_on_gui_thread"] is True
+            assert call["finish_on_gui_thread"] is False
+        finally:
+            dialog.close()
+
+    def test_each_frames_dpi_reaches_the_export(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        _add_layout(
+            project, "Survey", [("Main", "EPSG:32648"), ("Inset", "EPSG:32648")]
+        )
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            rows = list(cartograph._frame_rows.items())
+            rows[0][1]["dpi"].setCurrentIndex(rows[0][1]["dpi"].findData(150))
+            rows[1][1]["dpi"].setCurrentIndex(rows[1][1]["dpi"].findData(300))
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            cartograph._on_file_edited(str(target))
+            assert _wait_for(qgis_app, lambda: target.exists())
+
+            assert fake_cartograph_export.calls[-1]["frame_dpis"] == {
+                rows[0][0]: 150,
+                rows[1][0]: 300,
+            }
+        finally:
+            dialog.close()
+
+    def test_no_build_starts_while_a_web_map_job_runs(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        """Two jobs walking the same layers is what takes QGIS down."""
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            target = tmp_path / "survey.html"
+            dialog._job = object()  # a web-map job in flight
+            dialog._cartograph.file_edit.setText(str(target))
+            dialog._cartograph._on_file_edited(str(target))
+            _wait_for(qgis_app, lambda: False, timeout=1.5)
+            assert fake_cartograph_export.calls == []
+
+            dialog._job = None
+            assert _wait_for(qgis_app, lambda: target.exists())
+        finally:
+            dialog._job = None
+            dialog.close()
+
+    def test_a_web_map_job_waits_for_a_cartograph_build(
+        self, qgis_app, project
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            dialog._cartograph._job = object()  # a cartograph build in flight
+            assert dialog._start_job(lambda _p: None, lambda _r: None, "x") is False
+        finally:
+            dialog._cartograph._job = None
+            dialog.close()
+
+
+class TestFidelityFollowsTheOutput:
+    def test_switching_back_to_the_web_map_drops_the_cartographs_report(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph_summary = dialog.fidelity_panel._summary
+            cartograph_message = dialog.fidelity_strip.message
+            assert cartograph_summary is not None
+            assert "1" in cartograph_message.text  # one row changed
+
+            dialog.output_web_button.setChecked(True)
+            assert dialog.fidelity_panel._summary is not cartograph_summary
+            assert dialog.fidelity_strip.message != cartograph_message
+
+            dialog.output_cartograph_button.setChecked(True)
+            assert dialog.fidelity_panel._summary is cartograph_summary
+            assert dialog.fidelity_strip.message == cartograph_message
+        finally:
+            dialog.close()
+
+    def test_web_map_staleness_does_not_overwrite_the_cartographs_strip(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            shown = dialog.fidelity_strip.label.text()
+            dialog._fidelity_is_stale = True  # a layer changed in QGIS
+            assert dialog.fidelity_strip.label.text() == shown
+        finally:
+            dialog.close()
+
+    def test_a_web_map_check_starting_off_screen_leaves_the_strip_alone(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        """A live preview can still start a web-map read while Cartograph is
+        on screen; its "Checking..." must not replace the cartograph's line."""
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            shown = dialog.fidelity_strip.message
+            headline = dialog.fidelity_panel.headline.text()
+            dialog._begin_fidelity_check()
+            assert dialog.fidelity_strip.message == shown
+            assert dialog.fidelity_panel.headline.text() == headline
+        finally:
+            dialog.close()
+
+    def test_opening_fidelity_on_cartograph_never_reads_the_web_map(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            reads = []
+            monkeypatch.setattr(
+                dialog, "_ensure_export", lambda *a, **k: reads.append(a)
+            )
+            dialog.tabs.setCurrentWidget(dialog._fidelity_page)
+            assert reads == []
         finally:
             dialog.close()
 

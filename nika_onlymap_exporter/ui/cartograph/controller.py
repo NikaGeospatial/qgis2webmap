@@ -25,6 +25,7 @@ import re
 import sys
 import tempfile
 import time
+import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,9 +50,16 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ...core.fidelity_summary import ReportState, strip_message, summarise
+from ...core import cartograph_export
+from ...core.fidelity_summary import (
+    ReportState,
+    ReportSummary,
+    strip_message,
+    summarise,
+)
 from ...core.settings import (
     DEFAULT_STATIC_DPI,
+    DialogOutput,
     FrameChoice,
     default_frame_mode,
     save_state,
@@ -117,7 +125,7 @@ class CartographController:
         self._last_saved_at: float | None = None
         self._last_saved_bytes: int | None = None
         self._last_error = ""
-        self._last_report: FidelityReportBuilder | None = None
+        self._last_summary: ReportSummary | None = None
         self._preview_server: PreviewServer | None = None
 
         self._autosave_timer = QTimer(dialog)
@@ -141,6 +149,11 @@ class CartographController:
     def hiding(self) -> None:
         """The dialog just switched back to the web map."""
         self._status_timer.stop()
+
+    @property
+    def busy(self) -> bool:
+        """Whether a build is reading the project right now."""
+        return self._job is not None
 
     def shutdown(self) -> None:
         """Release everything that outlives a single widget - called once,
@@ -457,10 +470,10 @@ class CartographController:
         path_text = self.file_edit.text().strip()
         if not path_text:
             return
-        if self._job is not None:
-            # A build is already in flight. The edit that got us here already
-            # restarted the debounce timer below it, so nothing is lost - it
-            # fires again once this one finishes.
+        if self._job is not None or self.dialog._job is not None:
+            # A build, or a web-map job, is already reading the project - and
+            # two threads walking the same layers is what takes QGIS down.
+            # Try again after another debounce; nothing is lost.
             self._autosave_timer.start()
             return
 
@@ -478,24 +491,31 @@ class CartographController:
         project = self.project
         choices = dict(self.state.frame_choices(self.state.cartograph_layout))
         frame_modes = {item_id: choice.mode for item_id, choice in choices.items()}
-        static_dpis = [c.dpi for c in choices.values() if c.mode == "static"]
-        static_dpi = max(static_dpis) if static_dpis else DEFAULT_STATIC_DPI
+        frame_dpis = {item_id: choice.dpi for item_id, choice in choices.items()}
 
         from ...core.fidelity_report import FidelityReportBuilder
 
         report = FidelityReportBuilder()
 
-        def work(_progress: object) -> str:
-            from ...core.cartograph_export import export_layout_to_cartograph
-
-            return export_layout_to_cartograph(
+        # The layout half here, on the GUI thread: it hides and renders the
+        # layout's own items, and the layout may be open in its designer.
+        # Only the layer-reading half goes to the worker.
+        try:
+            prepared = cartograph_export.prepare_cartograph(
                 layout,
                 project,
                 runtime,
                 report,
                 frame_modes=frame_modes,
-                static_dpi=static_dpi,
+                frame_dpis=frame_dpis,
+                static_dpi=DEFAULT_STATIC_DPI,
             )
+        except Exception as exc:
+            self._on_build_failed(str(exc), traceback.format_exc())
+            return
+
+        def work(_progress: object) -> str:
+            return cartograph_export.finish_cartograph(prepared, project, report)
 
         job = BackgroundJob(work, self.dialog)
         self._job = job
@@ -519,10 +539,11 @@ class CartographController:
         self._last_error = ""
         self._last_saved_at = time.time()
         self._last_saved_bytes = path.stat().st_size
-        self._last_report = report
+        self._last_summary = summarise(report.items)
         self._update_status_label()
         self._update_share_enabled()
-        self._update_fidelity_tab()
+        if self.state.output is DialogOutput.CARTOGRAPH:
+            self.show_fidelity()
 
     def _on_build_failed(self, message: str, details: str) -> None:
         self._job = None
@@ -568,21 +589,27 @@ class CartographController:
             )
         )
 
-    def _update_fidelity_tab(self) -> None:
-        from ...core.settings import DialogOutput
+    @property
+    def has_report(self) -> bool:
+        return self._last_summary is not None
 
-        if (
-            self.state.output is not DialogOutput.CARTOGRAPH
-            or self._last_report is None
-        ):
+    def show_fidelity(self) -> None:
+        """Put the last saved cartograph's report on the Fidelity tab and
+        strip. Its own report, never the web map's: the dialog calls this
+        whenever Cartograph is the output on screen."""
+        panel = self.dialog.fidelity_panel
+        strip = self.dialog.fidelity_strip
+        if self._last_summary is None:
+            panel.show_not_checked()
+            strip.show_message(
+                strip_message(ReportState.NOT_CHECKED, tr=tr, plural=plural)
+            )
             return
-        dialog = self.dialog
-        summary = summarise(self._last_report.items)
-        dialog._fidelity_summary = summary
-        dialog.fidelity_strip.show_message(
-            strip_message(ReportState.CURRENT, summary, tr=tr, plural=plural)
+        panel.show_summary(self._last_summary)
+        panel.set_out_of_date(False)
+        strip.show_message(
+            strip_message(ReportState.CURRENT, self._last_summary, tr=tr, plural=plural)
         )
-        dialog.fidelity_panel.show_summary(summary)
 
     # ---- Corner: Accessibility, Preview, Share ----------------------------
 

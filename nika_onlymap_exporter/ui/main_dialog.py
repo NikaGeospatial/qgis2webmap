@@ -764,6 +764,7 @@ class MainDialog(QDialog):
         # changed - see `_apply_output`'s `persist` argument.
         self._apply_output(self.state.output, persist=False)
         layout.addWidget(self._build_fidelity_strip())
+        self._show_active_fidelity()
         layout.addWidget(self._build_progress_row())
         layout.addLayout(self._build_button_row())
 
@@ -2253,7 +2254,7 @@ class MainDialog(QDialog):
         self._fidelity_state = ReportState.CURRENT
         self._fidelity_dirty = False
         self._update_fidelity_strip(report)
-        if self._fidelity_summary is not None:
+        if self._fidelity_summary is not None and self._web_fidelity_on_screen():
             self.fidelity_panel.show_summary(
                 self._fidelity_summary, self._fidelity_facts(self._fidelity_signature)
             )
@@ -2298,7 +2299,8 @@ class MainDialog(QDialog):
         self._fidelity_state = ReportState.FAILED
         self._fidelity_error = message
         self._fidelity_summary = None
-        self.fidelity_panel.show_error(message)
+        if self._web_fidelity_on_screen():
+            self.fidelity_panel.show_error(message)
         self._show_fidelity_strip()
 
     def _fidelity_summary_of(self, report: FidelityReportBuilder) -> ReportSummary:
@@ -2319,6 +2321,8 @@ class MainDialog(QDialog):
         """
         if self.tabs.widget(index) is not self._fidelity_page:
             return
+        if not self._web_fidelity_on_screen():
+            return  # the cartograph's report is built by its autosave
         if not self._fidelity_is_stale or self._fidelity_state is ReportState.CHECKING:
             return
         self._check_fidelity()
@@ -2339,7 +2343,8 @@ class MainDialog(QDialog):
         # A placeholder rather than an empty table: "empty" reads as "nothing
         # to report".
         self._fidelity_state = ReportState.CHECKING
-        self.fidelity_panel.show_checking()
+        if self._web_fidelity_on_screen():
+            self.fidelity_panel.show_checking()
         self._show_fidelity_strip()
 
     def _end_fidelity_check_without_report(self) -> None:
@@ -2348,7 +2353,8 @@ class MainDialog(QDialog):
             return
         if self._fidelity_summary is None:
             self._fidelity_state = ReportState.NOT_CHECKED
-            self.fidelity_panel.show_not_checked()
+            if self._web_fidelity_on_screen():
+                self.fidelity_panel.show_not_checked()
         else:
             self._fidelity_state = ReportState.OUT_OF_DATE
         self._refresh_fidelity_freshness()
@@ -2477,9 +2483,41 @@ class MainDialog(QDialog):
             self._cartograph.hiding()
         else:
             self._cartograph.showing()
+        self._show_active_fidelity()
+        if web:
+            # The web map's report may have gone stale while it was off
+            # screen; check it now if its tab is the one open.
+            self._on_tab_changed(self.tabs.currentIndex())
 
         if persist:
             save_state(self.project, self.state)
+
+    def _web_fidelity_on_screen(self) -> bool:
+        """Whether the Fidelity tab and strip show the web map's report.
+
+        The web map's checks keep their own state whatever is on screen; only
+        their drawing waits, so switching back shows them as they stand.
+        """
+        return self.state.output is DialogOutput.WEB_MAP
+
+    def _show_active_fidelity(self) -> None:
+        """Draw the report of the output on screen, tab and strip both."""
+        if not hasattr(self, "fidelity_strip"):
+            return  # still building the dialog; drawn once the strip exists
+        if not self._web_fidelity_on_screen():
+            self._cartograph.show_fidelity()
+            return
+        if self._fidelity_state is ReportState.CHECKING:
+            self.fidelity_panel.show_checking()
+        elif self._fidelity_state is ReportState.FAILED:
+            self.fidelity_panel.show_error(self._fidelity_error)
+        elif self._fidelity_summary is None:
+            self.fidelity_panel.show_not_checked()
+        else:
+            self.fidelity_panel.show_summary(
+                self._fidelity_summary, self._fidelity_facts(self._fidelity_signature)
+            )
+        self._refresh_fidelity_freshness()
 
     def _build_tab_corner(self) -> QWidget:
         """Preview and Share, on screen from whichever tab is open.
@@ -2913,7 +2951,7 @@ class MainDialog(QDialog):
         dialog per keystroke for a user who is mid-edit and whose next change
         may well fix it.
         """
-        if self._job is not None:
+        if self._job is not None or self._cartograph.busy:
             self.status_label.setText(tr("Still working on the last request."))
             return False
 
@@ -3036,6 +3074,13 @@ class MainDialog(QDialog):
     def _on_fidelity_strip_clicked(self) -> None:
         # "Check now" and "Check again" check where the user is; everything
         # else the strip offers is reading, which happens on the Fidelity tab.
+        if not self._web_fidelity_on_screen():
+            # A cartograph is checked by saving it.
+            if self._cartograph.has_report:
+                self._show_fidelity_tab()
+            else:
+                self._cartograph.schedule_autosave()
+            return
         if self._fidelity_state in (ReportState.NOT_CHECKED, ReportState.OUT_OF_DATE):
             self._check_fidelity()
         else:
@@ -3047,6 +3092,8 @@ class MainDialog(QDialog):
     def _update_fidelity_strip(self, report) -> None:
         """Summarise the report in one line, problems first."""
         self._fidelity_summary = self._fidelity_summary_of(report)
+        if not self._web_fidelity_on_screen():
+            return
         self.fidelity_strip.show_message(
             strip_message(
                 ReportState.CURRENT, self._fidelity_summary, tr=tr, plural=plural
@@ -3054,6 +3101,8 @@ class MainDialog(QDialog):
         )
 
     def _show_fidelity_strip(self) -> None:
+        if not self._web_fidelity_on_screen():
+            return
         self.fidelity_strip.show_message(
             strip_message(
                 self._fidelity_state,
@@ -3076,6 +3125,8 @@ class MainDialog(QDialog):
                 if self._fidelity_is_stale
                 else ReportState.CURRENT
             )
+        if not self._web_fidelity_on_screen():
+            return
         self.fidelity_panel.set_out_of_date(
             self._fidelity_state is ReportState.OUT_OF_DATE
         )
