@@ -20,10 +20,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
-import os
 import re
 import sys
-import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -51,6 +49,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import cartograph_export
+from ...core.atomic_write import write_text_atomic
 from ...core.fidelity_summary import (
     ReportState,
     ReportSummary,
@@ -591,22 +590,7 @@ class CartographController:
 
     @staticmethod
     def _write_atomic(path: Path, content: str) -> None:
-        """Temp file in the same directory, then `os.replace` - never a
-        truncate-then-write of the real path, so a crash mid-write (or an
-        export that raises before this is even called) leaves whatever was
-        there before untouched."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(content)
-            os.replace(tmp_name, path)
-        except Exception:
-            with contextlib.suppress(OSError):
-                os.remove(tmp_name)
-            raise
+        write_text_atomic(path, content)
 
     def _update_status_label(self) -> None:
         if not hasattr(self, "cartograph_status_label"):
