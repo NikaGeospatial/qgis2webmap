@@ -928,7 +928,7 @@ def _read_grid(
     crs = grid.crs() if grid.crs().isValid() else map_item.crs()
     interval_x: float | None = grid.intervalX() or None
     interval_y: float | None = grid.intervalY() or None
-    if int(grid.units()) != int(QgsLayoutItemMapGrid.GridUnit.MapUnits):
+    if int(grid.units()) != _GRID_MAP_UNITS:
         # Page-unit and dynamic intervals are distances on paper, not in the
         # grid's CRS -- written as an interval they would be read as metres
         # or degrees. The runtime's automatic 1-2-5 choice is the honest
@@ -954,6 +954,10 @@ def _read_grid(
         z=round(map_item.zValue()),
     )
 
+
+#: `QgsLayoutItemMapGrid.GridUnit` "map units" -- 0 on every version, but
+#: spelled `MapUnit` on QGIS 3 and `MapUnits` on QGIS 4.
+_GRID_MAP_UNITS = 0
 
 #: `QgsLayoutItemMapGrid.AnnotationFormat` values printed as degrees and
 #: minutes (and seconds): DegreeMinute, DegreeMinuteSecond and their

@@ -449,7 +449,9 @@ class TestGraticule:
 
     def test_page_unit_intervals_are_left_to_the_runtime(self, project) -> None:
         def configure(grid):
-            grid.setUnits(QgsLayoutItemMapGrid.GridUnit.Millimeters)
+            units = QgsLayoutItemMapGrid.GridUnit
+            # `MM` on QGIS 3, `Millimeters` on QGIS 4.
+            grid.setUnits(getattr(units, "Millimeters", None) or units.MM)
             grid.setIntervalX(20)
             grid.setIntervalY(20)
 
