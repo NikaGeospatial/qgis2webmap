@@ -11,12 +11,18 @@ import re
 
 import pytest
 
-from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, TextSpec
+from nika_onlymap_exporter.core.cartograph_ir import (
+    PAGE_SIZE_NAMES,
+    Box,
+    CartographSpec,
+    TextSpec,
+)
 from nika_onlymap_exporter.core.print_settings import (
     CARTOGRAPH_COLOR_PROFILE,
     DEFAULT_SAFE_ZONE_MM,
     PAGE_CUSTOM,
     PAGE_FROM_LAYOUT,
+    PAGE_PRESETS_MM,
     PROFILE_CMYK,
     PROFILE_ICC,
     PROFILE_RGB,
@@ -48,6 +54,9 @@ def _spec() -> CartographSpec:
 
 
 class TestSizes:
+    def test_presets_cover_exactly_the_runtimes_sizes(self) -> None:
+        assert set(PAGE_PRESETS_MM) == set(PAGE_SIZE_NAMES)
+
     def test_a3_with_3mm_bleed_prints_303_by_426(self) -> None:
         settings = PrintSettings(page="A3", orientation="portrait", bleed="3mm")
         assert settings.sheet_size_mm(A4_LANDSCAPE) == (303.0, 426.0)

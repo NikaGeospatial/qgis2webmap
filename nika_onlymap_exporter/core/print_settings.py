@@ -35,7 +35,7 @@ import math
 from dataclasses import asdict, dataclass, fields, replace
 from typing import TYPE_CHECKING, TypeGuard
 
-from .cartograph_ir import ORIENTATIONS, PAGE_SIZE_NAMES
+from .cartograph_ir import ORIENTATIONS
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .cartograph_ir import CartographSpec
@@ -55,7 +55,6 @@ PAGE_PRESETS_MM: dict[str, tuple[float, float]] = {
     "Letter": (215.9, 279.4),
     "Legal": (215.9, 355.6),
 }
-assert set(PAGE_PRESETS_MM) == set(PAGE_SIZE_NAMES)
 
 #: `PrintSettings.page` values that are not a preset name.
 PAGE_FROM_LAYOUT = "layout"
