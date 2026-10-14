@@ -100,6 +100,7 @@ class Topic(Enum):
     POPUPS = "Popups & fields"
     DATA = "Data"
     MAP = "Map settings"
+    LAYOUT = "Layout items"
     OTHER = "Other"
 
 
@@ -133,6 +134,19 @@ TOPIC_BY_HEAD = {
     "Coordinate precision": Topic.MAP,
     "Layer count": Topic.MAP,
     "Project layers": Topic.MAP,
+    # A cartograph's print layout (`core/layout_reader.py`).
+    "Page count": Topic.LAYOUT,
+    "Layout item": Topic.LAYOUT,
+    "Map frame": Topic.LAYOUT,
+    "Locator inset": Topic.LAYOUT,
+    "Grid": Topic.LAYOUT,
+    "Group": Topic.LAYOUT,
+    "Opacity": Topic.LAYOUT,
+    "Legend": Topic.LAYOUT,
+    "Scale bar": Topic.LAYOUT,
+    "Picture": Topic.LAYOUT,
+    "Text": Topic.LAYOUT,
+    "Shape": Topic.LAYOUT,
 }
 
 

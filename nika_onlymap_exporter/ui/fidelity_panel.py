@@ -162,6 +162,7 @@ _CORE_WORDS = (
     N_("Popups & fields"),
     N_("Data"),
     N_("Map settings"),
+    N_("Layout items"),
     N_("Other"),
     N_("Whole map"),
 )
@@ -547,8 +548,10 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         for topic, check in self.topic_checks.items():
             check.setText(_button_text(f"{_topic(topic)} ({topics[topic]})"))
         # Other is a fallback for a subject nobody sorted; a box for nothing
-        # only raises the question of what it might be.
-        self.topic_checks[Topic.OTHER].setVisible(bool(everything[Topic.OTHER]))
+        # only raises the question of what it might be. Layout items only
+        # exist in a cartograph's report, so a web map never shows the box.
+        for topic in (Topic.OTHER, Topic.LAYOUT):
+            self.topic_checks[topic].setVisible(bool(everything[topic]))
         self._label_filter_button()
 
     def _label_filter_button(self) -> None:
