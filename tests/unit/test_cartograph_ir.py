@@ -27,7 +27,8 @@ from nika_onlymap_exporter.core.cartograph_ir import (
 def test_module_imports_no_qgis_or_qt() -> None:
     import nika_onlymap_exporter.core.cartograph_ir as mod
 
-    source = open(mod.__file__, encoding="utf-8").read()
+    with open(mod.__file__, encoding="utf-8") as handle:
+        source = handle.read()
     assert "import qgis" not in source
     assert "from qgis" not in source
     assert "PyQt" not in source
@@ -183,9 +184,7 @@ class TestFrameSpec:
 
     def test_negative_atlas_margin_rejected(self) -> None:
         with pytest.raises(ValueError):
-            FrameSpec(
-                id="main", box=Box(0, 0, 10, 10), mode="live", atlas_margin=-0.1
-            )
+            FrameSpec(id="main", box=Box(0, 0, 10, 10), mode="live", atlas_margin=-0.1)
 
 
 # --------------------------------------------------------------------------
@@ -195,7 +194,9 @@ class TestFrameSpec:
 
 class TestGraticuleSpec:
     def test_valid(self) -> None:
-        spec = GraticuleSpec(id="grid", box=Box(0, 0, 10, 10), for_="main", interval=500)
+        spec = GraticuleSpec(
+            id="grid", box=Box(0, 0, 10, 10), for_="main", interval=500
+        )
         assert spec.kind == "solid"
 
     def test_requires_for(self) -> None:
@@ -418,7 +419,9 @@ class TestCartographSpec:
 
     def test_full_spec_round_trips(self) -> None:
         main = _static_frame("main")
-        grid = GraticuleSpec(id="grid", box=Box(10, 24, 150, 150), for_="main", interval=500)
+        grid = GraticuleSpec(
+            id="grid", box=Box(10, 24, 150, 150), for_="main", interval=500
+        )
         legend = LegendSpec(
             id="lg",
             box=Box(165, 24, 35, 60),
@@ -426,11 +429,19 @@ class TestCartographSpec:
             derived=False,
             rows=(LegendRowSpec(label="Parcels", color="#eba941"),),
         )
-        bar = ScalebarSpec(id="bar", box=Box(10, 180, 70, 9), for_="main", kind="double")
+        bar = ScalebarSpec(
+            id="bar", box=Box(10, 180, 70, 9), for_="main", kind="double"
+        )
         north = NorthSpec(id="north", box=Box(186, 178, 14, 18), for_="main")
-        title = TextSpec(id="title", box=Box(10, 8, 150, 12), kind="title", body="{{title}}")
-        shape = ShapeSpec(id="frame-border", box=Box(9, 23, 192, 192), fill=None, stroke="#000")
-        image = ImageSpec(id="logo", box=Box(10, 2, 20, 5), src="data:image/png;base64,AA==")
+        title = TextSpec(
+            id="title", box=Box(10, 8, 150, 12), kind="title", body="{{title}}"
+        )
+        shape = ShapeSpec(
+            id="frame-border", box=Box(9, 23, 192, 192), fill=None, stroke="#000"
+        )
+        image = ImageSpec(
+            id="logo", box=Box(10, 2, 20, 5), src="data:image/png;base64,AA=="
+        )
         spec = CartographSpec(
             cartograph_id="cg-survey",
             title="Lot 12 survey",

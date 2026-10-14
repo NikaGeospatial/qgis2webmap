@@ -172,10 +172,8 @@ class TestAtlasTokens:
 
 class TestFreezing:
     def test_unrecognised_expression_is_frozen(self) -> None:
-        result = _translate("[% \"owner_name\" || ' — ' || \"lot_id\" %]")
-        assert result.frozen_expressions == (
-            '"owner_name" || \' — \' || "lot_id"',
-        )
+        result = _translate('[% "owner_name" || \' — \' || "lot_id" %]')
+        assert result.frozen_expressions == ('"owner_name" || \' — \' || "lot_id"',)
 
     def test_expression_is_stripped_of_surrounding_whitespace(self) -> None:
         result = _translate("[%   1 + 1   %]")
