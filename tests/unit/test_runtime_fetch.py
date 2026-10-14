@@ -51,6 +51,24 @@ def npm_tarball(js: bytes = b"// runtime", css: bytes = b"/* css */") -> bytes:
     )
 
 
+def npm_tarball_with_cartograph(
+    js: bytes = b"// runtime",
+    css: bytes = b"/* css */",
+    cartograph_js: bytes = b"// cartograph",
+    cartograph_css: bytes = b"/* cartograph css */",
+) -> bytes:
+    """A tarball shaped like the real 0.8.0+ package, with cartograph dist files."""
+    return build_tarball(
+        {
+            f"{rm.TARBALL_PREFIX}/dist/{rm.RUNTIME_JS}": js,
+            f"{rm.TARBALL_PREFIX}/dist/{rm.RUNTIME_CSS}": css,
+            f"{rm.TARBALL_PREFIX}/dist/{rm.RUNTIME_CARTOGRAPH_JS}": cartograph_js,
+            f"{rm.TARBALL_PREFIX}/dist/{rm.RUNTIME_CARTOGRAPH_CSS}": cartograph_css,
+            f"{rm.TARBALL_PREFIX}/{rm.RUNTIME_LICENCE}": b"# Licence",
+        }
+    )
+
+
 class TestTarballUrl:
     def test_it_builds_the_registry_url_for_a_scoped_package(self) -> None:
         url = rm.tarball_url("0.5.3")
@@ -282,6 +300,221 @@ class TestCacheLocation:
         assert rm.cached_runtime_dir("1.0.0", tmp_path) != rm.cached_runtime_dir(
             "1.0.1", tmp_path
         )
+
+
+class TestCartographLockEntries:
+    """The lock file also pins the cartograph dist files, same version."""
+
+    def test_the_real_lock_file_pins_both_cartograph_files(self) -> None:
+        lock = rm.read_lock()
+        files = lock["files"]
+        assert rm.RUNTIME_CARTOGRAPH_JS in files
+        assert rm.RUNTIME_CARTOGRAPH_CSS in files
+        for name in (rm.RUNTIME_CARTOGRAPH_JS, rm.RUNTIME_CARTOGRAPH_CSS):
+            assert len(files[name]["sha256"]) == 64
+            assert files[name]["bytes"] > 0
+
+    def test_the_pin_was_not_moved_to_a_new_version(self) -> None:
+        """Adding cartograph entries must not look like a runtime bump."""
+        assert rm.read_lock()["version"] == "0.12.0"
+
+
+class TestCartographExtraction:
+    """Extraction keeps the cartograph files alongside the core ones."""
+
+    def test_it_writes_the_cartograph_files(self, tmp_path) -> None:
+        rm.extract_runtime(npm_tarball_with_cartograph(), tmp_path)
+        assert (tmp_path / rm.RUNTIME_CARTOGRAPH_JS).read_bytes() == b"// cartograph"
+        assert (
+            tmp_path / rm.RUNTIME_CARTOGRAPH_CSS
+        ).read_bytes() == b"/* cartograph css */"
+        # and the core files are unaffected
+        assert (tmp_path / rm.RUNTIME_JS).read_bytes() == b"// runtime"
+
+    def test_a_package_without_cartograph_still_extracts(self, tmp_path) -> None:
+        """A pre-0.8.0 tarball has no cartograph dist files; that is not fatal."""
+        rm.extract_runtime(npm_tarball(), tmp_path)
+        assert (tmp_path / rm.RUNTIME_JS).is_file()
+        assert not (tmp_path / rm.RUNTIME_CARTOGRAPH_JS).exists()
+
+
+class TestCartographBundle:
+    """`RuntimeBundle` carries the cartograph files, optionally."""
+
+    def test_local_runtime_loads_cartograph_files_when_present(self, tmp_path) -> None:
+        (tmp_path / rm.RUNTIME_JS).write_bytes(b"// runtime")
+        (tmp_path / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+        (tmp_path / rm.RUNTIME_CARTOGRAPH_JS).write_bytes(b"// cartograph")
+        (tmp_path / rm.RUNTIME_CARTOGRAPH_CSS).write_bytes(b"/* cartograph css */")
+
+        bundle = rm.LocalRuntime(tmp_path).load()
+
+        assert bundle.cartograph_javascript == b"// cartograph"
+        assert bundle.cartograph_css == b"/* cartograph css */"
+
+    def test_local_runtime_leaves_cartograph_fields_none_when_absent(
+        self, tmp_path
+    ) -> None:
+        """An older vendored runtime has no opinion on cartograph, not an error.
+
+        Mutation check: dropping the new fields from `RuntimeBundle` (or always
+        defaulting them to `b""` instead of `None`) would make this assertion
+        meaningless, since the writer could no longer tell "not shipped" from
+        "shipped but empty".
+        """
+        (tmp_path / rm.RUNTIME_JS).write_bytes(b"// runtime")
+        (tmp_path / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+
+        bundle = rm.LocalRuntime(tmp_path).load()
+
+        assert bundle.cartograph_javascript is None
+        assert bundle.cartograph_css is None
+
+    def test_a_half_present_cartograph_pair_counts_as_absent(self, tmp_path) -> None:
+        (tmp_path / rm.RUNTIME_JS).write_bytes(b"// runtime")
+        (tmp_path / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+        (tmp_path / rm.RUNTIME_CARTOGRAPH_JS).write_bytes(b"// cartograph")
+        # no cartograph.css
+
+        bundle = rm.LocalRuntime(tmp_path).load()
+
+        assert bundle.cartograph_javascript is None
+        assert bundle.cartograph_css is None
+
+
+class TestCartographMismatchDetection:
+    """A tampered cartograph file must be caught, same as a tampered core file."""
+
+    def lock_with_cartograph(self, monkeypatch, js, css, cartograph_js, cartograph_css):
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.0",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(js)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(css)},
+                    rm.RUNTIME_CARTOGRAPH_JS: {"sha256": rm.sha256_of(cartograph_js)},
+                    rm.RUNTIME_CARTOGRAPH_CSS: {"sha256": rm.sha256_of(cartograph_css)},
+                },
+            },
+        )
+
+    def test_a_tampered_cartograph_file_is_reported(self, monkeypatch) -> None:
+        js, css = b"// runtime", b"/* css */"
+        pinned_cartograph_js = b"// cartograph"
+        self.lock_with_cartograph(
+            monkeypatch, js, css, pinned_cartograph_js, b"/* cartograph css */"
+        )
+
+        mismatches = rm.lock_mismatches(
+            js, css, b"// TAMPERED cartograph", b"/* cartograph css */"
+        )
+
+        assert any("cartograph.standalone.js" in m for m in mismatches)
+
+    def test_this_check_actually_depends_on_the_cartograph_bytes(
+        self, monkeypatch
+    ) -> None:
+        """Mutation check: prove the assertion above can fail.
+
+        If `lock_mismatches` dropped the cartograph file from the verified set
+        (e.g. by not checking the new parameters at all), this call with
+        matching bytes would also report a mismatch, or the tampered call above
+        would report none. Pinning both outcomes catches either regression.
+        """
+        js, css = b"// runtime", b"/* css */"
+        cartograph_js, cartograph_css = b"// cartograph", b"/* cartograph css */"
+        self.lock_with_cartograph(monkeypatch, js, css, cartograph_js, cartograph_css)
+
+        assert rm.lock_mismatches(js, css, cartograph_js, cartograph_css) == ()
+
+    def test_a_missing_cartograph_file_is_reported_not_silently_ignored(
+        self, monkeypatch
+    ) -> None:
+        js, css = b"// runtime", b"/* css */"
+        self.lock_with_cartograph(
+            monkeypatch, js, css, b"// cartograph", b"/* cartograph css */"
+        )
+
+        mismatches = rm.lock_mismatches(js, css, None, None)
+
+        assert any("cartograph.standalone.js" in m for m in mismatches)
+        assert any("cartograph.css" in m for m in mismatches)
+
+
+class TestStaleCacheIsRefetched:
+    """A cache written before the cartograph lock entries existed is not usable.
+
+    `is_cached()` must say so, so `load()` fetches and re-verifies rather than
+    crashing the first time a cartograph writer asks for files that were never
+    downloaded.
+    """
+
+    def test_a_cache_missing_cartograph_files_is_not_considered_cached(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        js, css = b"// runtime", b"/* css */"
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.0",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(js)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(css)},
+                    rm.RUNTIME_CARTOGRAPH_JS: {"sha256": rm.sha256_of(b"// cg")},
+                    rm.RUNTIME_CARTOGRAPH_CSS: {"sha256": rm.sha256_of(b"/* cg */")},
+                },
+            },
+        )
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        # Simulate an old cache written before cartograph lock entries existed.
+        old_cache = provider.cached_dir()
+        old_cache.mkdir(parents=True)
+        (old_cache / rm.RUNTIME_JS).write_bytes(js)
+        (old_cache / rm.RUNTIME_CSS).write_bytes(css)
+
+        assert not provider.is_cached()
+
+    def test_load_refetches_and_verifies_a_stale_cache(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        js, css = b"// runtime", b"/* css */"
+        cartograph_js, cartograph_css = b"// cg", b"/* cg */"
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.0",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(js)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(css)},
+                    rm.RUNTIME_CARTOGRAPH_JS: {"sha256": rm.sha256_of(cartograph_js)},
+                    rm.RUNTIME_CARTOGRAPH_CSS: {"sha256": rm.sha256_of(cartograph_css)},
+                },
+            },
+        )
+        monkeypatch.setattr(
+            rm,
+            "download_tarball",
+            lambda *a, **k: npm_tarball_with_cartograph(
+                js, css, cartograph_js, cartograph_css
+            ),
+        )
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        old_cache = provider.cached_dir()
+        old_cache.mkdir(parents=True)
+        (old_cache / rm.RUNTIME_JS).write_bytes(js)
+        (old_cache / rm.RUNTIME_CSS).write_bytes(css)
+
+        bundle = provider.load()
+
+        assert bundle.cartograph_javascript == cartograph_js
+        assert bundle.cartograph_css == cartograph_css
+        assert bundle.lock_warnings == ()
+        assert provider.is_cached()
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ONLYMAP_NETWORK_TESTS=1 to run")

@@ -402,7 +402,12 @@ class TestRuntimeLock:
         lock = read_lock()
         assert lock, "runtime-lock.json is missing or unreadable"
         assert lock["version"]
-        assert set(lock["files"]) == {"onlymap.standalone.js", "onlymapjs.css"}
+        assert set(lock["files"]) == {
+            "onlymap.standalone.js",
+            "onlymapjs.css",
+            "cartograph.standalone.js",
+            "cartograph.css",
+        }
 
     def test_matching_bytes_produce_no_warning(self) -> None:
         directory = discover_runtime_dir()

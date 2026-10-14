@@ -31,7 +31,15 @@ LOCK_FILE = RUNTIME_DIR / "runtime-lock.json"
 # raises none of the objections that shipping the software would.
 LICENCE_FILE = RUNTIME_DIR / "ONLYMAP-LICENSE.md"
 
-RUNTIME_FILES = ("onlymap.standalone.js", "onlymapjs.css")
+RUNTIME_FILES = (
+    "onlymap.standalone.js",
+    "onlymapjs.css",
+    # Added for the cartograph feature. Same package, same pinned version - the
+    # dist/ directory has carried these since 0.8.0 - so this is additive and
+    # does not move the pin.
+    "cartograph.standalone.js",
+    "cartograph.css",
+)
 
 COMMENT = [
     "The OnlyMap runtime build this plugin is developed and tested against.",

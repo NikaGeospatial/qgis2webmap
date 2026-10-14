@@ -51,6 +51,12 @@ LOCK_FILE = RUNTIME_DIR / "runtime-lock.json"
 RUNTIME_JS = "onlymap.standalone.js"
 RUNTIME_CSS = "onlymapjs.css"
 RUNTIME_LICENCE = "LICENSE.md"
+# The cartograph runtime, shipped in the same `dist/` since 0.8.0. Optional on
+# a loaded bundle (see `RuntimeBundle`): the web-map export never needs these,
+# so a runtime fetched or vendored before the cartograph feature existed must
+# keep working for it rather than failing to load at all.
+RUNTIME_CARTOGRAPH_JS = "cartograph.standalone.js"
+RUNTIME_CARTOGRAPH_CSS = "cartograph.css"
 # The runtime's attribute contract. Optional: the map works without it, but
 # the test suite's attribute-contract checks and AI-assisted editing both read
 # it, so it is cached beside the runtime when the package ships it.
@@ -135,6 +141,12 @@ class RuntimeBundle:
     # `runtime-lock.json`. A test double leaves it empty rather than having every
     # writer test assert around a mismatch it deliberately caused.
     lock_warnings: tuple[str, ...] = ()
+    # The cartograph dist files, for the cartograph writer path. `None` rather
+    # than `b""` when absent - a runtime vendored or cached before cartograph
+    # existed has no opinion on these files at all, which is different from
+    # shipping them empty. The web-map export never reads these two fields.
+    cartograph_javascript: bytes | None = None
+    cartograph_css: bytes | None = None
 
     @property
     def total_bytes(self) -> int:
@@ -286,12 +298,17 @@ class LocalRuntime:
 
         javascript = js_path.read_bytes()
         css = css_path.read_bytes()
+        cartograph_javascript, cartograph_css = _read_cartograph_files(directory)
         return RuntimeBundle(
             javascript=javascript,
             css=css,
             version=_read_version(directory),
             sha256=sha256_of(javascript),
-            lock_warnings=lock_mismatches(javascript, css),
+            lock_warnings=lock_mismatches(
+                javascript, css, cartograph_javascript, cartograph_css
+            ),
+            cartograph_javascript=cartograph_javascript,
+            cartograph_css=cartograph_css,
         )
 
 
@@ -391,6 +408,11 @@ def extract_runtime(tarball: bytes, destination: Path) -> None:
         # either, and treat it as optional below - a map draws without it
         f"{TARBALL_PREFIX}/dist/{RUNTIME_SCHEMA}": RUNTIME_SCHEMA,
         f"{TARBALL_PREFIX}/{RUNTIME_SCHEMA}": RUNTIME_SCHEMA,
+        # cartograph dist files, optional like the schema: a web-map-only
+        # export never needs them, so a tarball from before 0.8.0 extracting
+        # without them is not an error.
+        f"{TARBALL_PREFIX}/dist/{RUNTIME_CARTOGRAPH_JS}": RUNTIME_CARTOGRAPH_JS,
+        f"{TARBALL_PREFIX}/dist/{RUNTIME_CARTOGRAPH_CSS}": RUNTIME_CARTOGRAPH_CSS,
     }
 
     written: set[str] = set()
@@ -429,7 +451,12 @@ def read_lock() -> dict:
         return {}
 
 
-def lock_mismatches(javascript: bytes, css: bytes) -> tuple[str, ...]:
+def lock_mismatches(
+    javascript: bytes,
+    css: bytes,
+    cartograph_javascript: bytes | None = None,
+    cartograph_css: bytes | None = None,
+) -> tuple[str, ...]:
     """Where the loaded runtime differs from `runtime-lock.json`.
 
     Empty when it matches, or when there is no lock file to check against.
@@ -439,6 +466,12 @@ def lock_mismatches(javascript: bytes, css: bytes) -> tuple[str, ...]:
     the mismatch surfaces in the fidelity report instead. It becomes a hard
     check the day the runtime is fetched over the network, where an unexpected
     hash means something quite different.
+
+    The cartograph files are optional here too: when the lock file pins them
+    but the loaded bundle has none (an older cached runtime, or a vendored
+    directory from before the cartograph feature existed), that is reported as
+    a mismatch like any other - the difference from a corrupted file is for the
+    caller to act on (`FetchingRuntime` re-fetches; `LocalRuntime` only warns).
     """
     lock = read_lock()
     files = lock.get("files") or {}
@@ -446,14 +479,40 @@ def lock_mismatches(javascript: bytes, css: bytes) -> tuple[str, ...]:
         return ()
 
     mismatches = []
-    for name, data in ((RUNTIME_JS, javascript), (RUNTIME_CSS, css)):
+    for name, data in (
+        (RUNTIME_JS, javascript),
+        (RUNTIME_CSS, css),
+        (RUNTIME_CARTOGRAPH_JS, cartograph_javascript),
+        (RUNTIME_CARTOGRAPH_CSS, cartograph_css),
+    ):
         expected = (files.get(name) or {}).get("sha256")
-        if expected and expected != sha256_of(data):
+        if not expected:
+            continue
+        if data is None:
+            mismatches.append(
+                f"{name} is pinned in runtime-lock.json but is missing from the "
+                "loaded runtime."
+            )
+        elif expected != sha256_of(data):
             mismatches.append(
                 f"{name} does not match the build pinned in runtime-lock.json "
                 f"(expected {lock.get('version', 'unknown')})."
             )
     return tuple(mismatches)
+
+
+def _read_cartograph_files(directory: Path) -> tuple[bytes | None, bytes | None]:
+    """The cartograph dist files from a runtime directory, if both are there.
+
+    Deliberately all-or-nothing: a directory with only one of the two is not a
+    usable cartograph runtime, and reporting it as "half present" would just
+    push the same judgement call onto every caller.
+    """
+    js_path = directory / RUNTIME_CARTOGRAPH_JS
+    css_path = directory / RUNTIME_CARTOGRAPH_CSS
+    if js_path.is_file() and css_path.is_file():
+        return js_path.read_bytes(), css_path.read_bytes()
+    return None, None
 
 
 def _read_version(directory: Path) -> str:
@@ -517,7 +576,27 @@ class FetchingRuntime:
         return cached_runtime_dir(self._version, self._cache_dir)
 
     def is_cached(self) -> bool:
-        return (self.cached_dir() / RUNTIME_JS).is_file()
+        """Whether this version is fully on disk, by the current lock's terms.
+
+        Checks the core files unconditionally, plus the cartograph files when
+        `runtime-lock.json` pins them. The second half is what makes a cache
+        written by an older plugin version - before the cartograph feature
+        added those entries to the lock - count as *not* cached: `load()` then
+        re-fetches and re-verifies it instead of silently running without
+        cartograph support or crashing when a writer asks for it.
+        """
+        directory = self.cached_dir()
+        if not (directory / RUNTIME_JS).is_file():
+            return False
+
+        lock = read_lock()
+        if lock.get("version") != self._version:
+            return True
+        pinned = lock.get("files") or {}
+        for name in (RUNTIME_CARTOGRAPH_JS, RUNTIME_CARTOGRAPH_CSS):
+            if name in pinned and not (directory / name).is_file():
+                return False
+        return True
 
     def licence_text(self) -> str | None:
         """The licence as published with the runtime, if it has been fetched."""
@@ -589,7 +668,10 @@ class FetchingRuntime:
 
         javascript = (staging / RUNTIME_JS).read_bytes()
         css = (staging / RUNTIME_CSS).read_bytes()
-        mismatches = lock_mismatches(javascript, css)
+        cartograph_javascript, cartograph_css = _read_cartograph_files(staging)
+        mismatches = lock_mismatches(
+            javascript, css, cartograph_javascript, cartograph_css
+        )
         if mismatches:
             _remove_tree(staging)
             raise RuntimeDownloadError(
