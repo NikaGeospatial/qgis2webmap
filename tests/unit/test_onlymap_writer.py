@@ -8,6 +8,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from dataclasses import fields
 from datetime import datetime, timezone
 from pathlib import Path
@@ -175,6 +176,73 @@ class TestWriter:
             make_project(), tmp_path, mode=OutputMode.STANDALONE_HTML
         )
         assert result.mode is OutputMode.STANDALONE_HTML
+
+
+class TestRenderMapElement:
+    """`render_map_element`, for embedding `<om-map>` in another document.
+
+    The cartograph's live frames need the element alone, not a full page -
+    see `spike-findings.md` §1. The guarantee that matters is that this is
+    not a second renderer: it must produce exactly what the full page's own
+    manifest produces, through the same `build_manifest` call.
+    """
+
+    def element(self, compress: bool = True, **project_overrides):
+        return OnlyMapWriter(runtime_provider=FakeRuntime()).render_map_element(
+            make_project(**project_overrides),
+            FakeRuntime().load(),
+            verdict=CapVerdict(allowed=True),
+            compress=compress,
+        )
+
+    def full_page(self, **project_overrides) -> str:
+        return OnlyMapWriter(runtime_provider=FakeRuntime()).render_html(
+            make_project(**project_overrides),
+            FakeRuntime().load(),
+            verdict=CapVerdict(allowed=True),
+        )
+
+    def test_the_element_is_byte_identical_to_the_one_in_the_full_page(self) -> None:
+        """Proves the single code path: the manifest cannot drift between them.
+
+        The template's own comments mention "<om-map>" in prose (e.g. "The
+        <om-map> block below IS the map"), closed on the same breath, so a
+        plain `.index("<om-map")` finds that first. The real opening tag is
+        never self-closing on the spot - it is followed by attributes - which
+        is what the negative lookahead below tells apart.
+        """
+        page = self.full_page()
+        match = re.search(r"<om-map(?!>)", page)
+        assert match is not None, "the real <om-map> tag was not found"
+        # Back up to the start of the line: `build_manifest` leads with
+        # indentation the tag match itself does not include.
+        start = page.rfind("\n", 0, match.start()) + 1
+        end = page.index("</om-map>", match.start()) + len("</om-map>")
+        embedded_in_page = page[start:end]
+
+        assert self.element().html == embedded_in_page
+
+    def test_the_element_carries_no_page_chrome(self) -> None:
+        """A host document supplies its own chrome around the element."""
+        element = self.element()
+        assert "om-credit" not in element.html
+        assert "<html" not in element.html.lower()
+        assert "<body" not in element.html.lower()
+
+    def test_the_runtime_stylesheet_is_included_verbatim(self) -> None:
+        element = self.element()
+        assert element.runtime_css == FakeRuntime().load().css.decode("utf-8")
+
+    def test_the_compressed_script_matches_the_full_page_bootstrap(self) -> None:
+        """Same branch, same bytes - not a second compression pass."""
+        element = self.element(compress=True)
+        page = self.full_page()
+        assert element.runtime_script in page
+        assert "DecompressionStream" in element.runtime_script
+
+    def test_the_uncompressed_script_is_the_runtime_verbatim(self) -> None:
+        element = self.element(compress=False)
+        assert element.runtime_script == "/* fake runtime */"
 
 
 class TestCreditComponent:
