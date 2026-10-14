@@ -187,12 +187,10 @@ class TestRenderMapElement:
     manifest produces, through the same `build_manifest` call.
     """
 
-    def element(self, compress: bool = True, **project_overrides):
+    def element(self, **project_overrides) -> str:
         return OnlyMapWriter(runtime_provider=FakeRuntime()).render_map_element(
             make_project(**project_overrides),
-            FakeRuntime().load(),
             verdict=CapVerdict(allowed=True),
-            compress=compress,
         )
 
     def full_page(self, **project_overrides) -> str:
@@ -220,29 +218,16 @@ class TestRenderMapElement:
         end = page.index("</om-map>", match.start()) + len("</om-map>")
         embedded_in_page = page[start:end]
 
-        assert self.element().html == embedded_in_page
+        assert self.element() == embedded_in_page
 
-    def test_the_element_carries_no_page_chrome(self) -> None:
-        """A host document supplies its own chrome around the element."""
+    def test_the_element_carries_no_page_chrome_or_boot_script(self) -> None:
+        """The cartograph loads the runtime itself; a second boot would race it."""
         element = self.element()
-        assert "om-credit" not in element.html
-        assert "<html" not in element.html.lower()
-        assert "<body" not in element.html.lower()
-
-    def test_the_runtime_stylesheet_is_included_verbatim(self) -> None:
-        element = self.element()
-        assert element.runtime_css == FakeRuntime().load().css.decode("utf-8")
-
-    def test_the_compressed_script_matches_the_full_page_bootstrap(self) -> None:
-        """Same branch, same bytes - not a second compression pass."""
-        element = self.element(compress=True)
-        page = self.full_page()
-        assert element.runtime_script in page
-        assert "DecompressionStream" in element.runtime_script
-
-    def test_the_uncompressed_script_is_the_runtime_verbatim(self) -> None:
-        element = self.element(compress=False)
-        assert element.runtime_script == "/* fake runtime */"
+        assert "om-credit" not in element
+        assert "<html" not in element.lower()
+        assert "<body" not in element.lower()
+        assert "/* fake runtime */" not in element
+        assert "DecompressionStream" not in element
 
 
 class TestCreditComponent:

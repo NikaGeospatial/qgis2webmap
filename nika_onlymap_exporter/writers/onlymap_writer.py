@@ -153,65 +153,6 @@ class ArtifactResult:
         }
 
 
-def _runtime_script_body(
-    runtime: RuntimeBundle,
-    compress: bool,
-    compress_data: bool,
-    runtime_file: str | None,
-) -> str:
-    """The `<script type="module">` body that boots the runtime.
-
-    Extracted from `render_html` so `render_map_element` can boot a bare
-    `<om-map>` the same way without copying the branching - the two must
-    always choose identically, or an embedded element could register
-    differently from the one in the full exported page.
-    """
-    if runtime_file:
-        # An import rather than a `src=` attribute, so the template's single
-        # script block serves both shapes. The inline module resolves it
-        # against the document URL, which is the sibling file we wrote.
-        #
-        # Compressed data needs its inflater in the SAME block, ahead of the
-        # import. This branch used to emit the bare import and nothing else,
-        # so a folder export large enough to gzip its data shipped base64 no
-        # runtime could read - a map with rasters, legend and layer switcher
-        # and not one feature, with no error anywhere. See the note on
-        # `DATA_INFLATE_TEMPLATE`.
-        return (
-            build_data_inflater(runtime_file)
-            if compress_data
-            else f'      import "./{runtime_file}";'
-        )
-    if compress:
-        # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
-        # of the raw size, and nobody edits minified runtime code anyway.
-        return build_bootstrap(gzip_base64(runtime.javascript))
-    return runtime.javascript.decode("utf-8")
-
-
-@dataclass(frozen=True)
-class MapElement:
-    """An `<om-map>` element ready to embed in a host document.
-
-    For the cartograph's live frames: a frame embeds an `<om-map>` directly
-    rather than opening a full exported page (see `spike-findings.md` §1), so
-    something has to produce the element on its own. This is that something,
-    and it is deliberately thin - a page-level concern like the attribution
-    footer, the caption or the chrome-scale CSS belongs to `render_html`'s
-    template, not here; a host document supplies its own chrome around the
-    element.
-
-    What a host page genuinely cannot do without is bundled alongside the
-    markup: the runtime stylesheet (the no-JavaScript fallback is a pure-CSS
-    rule, same as the full page) and the script that registers the custom
-    elements and boots them.
-    """
-
-    html: str
-    runtime_css: str
-    runtime_script: str
-
-
 def generator_line(runtime: RuntimeBundle, when: datetime | None = None) -> str:
     """The provenance comment placed at the top of every artifact.
 
@@ -254,9 +195,29 @@ class OnlyMapWriter:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
-        script_body = _runtime_script_body(
-            runtime, compress, compress_data, runtime_file
-        )
+
+        if runtime_file:
+            # An import rather than a `src=` attribute, so the template's single
+            # script block serves both shapes. The inline module resolves it
+            # against the document URL, which is the sibling file we wrote.
+            #
+            # Compressed data needs its inflater in the SAME block, ahead of the
+            # import. This branch used to emit the bare import and nothing else,
+            # so a folder export large enough to gzip its data shipped base64 no
+            # runtime could read - a map with rasters, legend and layer switcher
+            # and not one feature, with no error anywhere. See the note on
+            # `DATA_INFLATE_TEMPLATE`.
+            script_body = (
+                build_data_inflater(runtime_file)
+                if compress_data
+                else f'      import "./{runtime_file}";'
+            )
+        elif compress:
+            # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
+            # of the raw size, and nobody edits minified runtime code anyway.
+            script_body = build_bootstrap(gzip_base64(runtime.javascript))
+        else:
+            script_body = runtime.javascript.decode("utf-8")
 
         # Replacement, not format(): the template is full of CSS braces, and
         # str.format would choke on every one of them.
@@ -285,34 +246,24 @@ class OnlyMapWriter:
     def render_map_element(
         self,
         project: ExportProject,
-        runtime: RuntimeBundle,
         verdict: CapVerdict,
-        compress: bool = True,
         compress_data: bool = False,
-    ) -> MapElement:
-        """The `<om-map>` element alone, for embedding in another document.
+    ) -> str:
+        """The `<om-map>` element alone, for a cartograph's live frame.
 
-        Calls `build_manifest` with the same arguments `render_html` passes
-        it, so the element is produced by the exact same code path as the one
-        inside a full exported page - not a second implementation that could
-        drift from it the way qgis2web's two renderers drifted from each
-        other (see the module docstring). A caller that wants the full page
-        instead should call `render_html`; this exists for a host document
-        (the cartograph's live frames) that wants only the element.
+        The same `build_manifest` call `render_html` makes, so a live frame
+        draws exactly what the exported web map draws - not a second renderer
+        that could drift from it. Only the element: the cartograph page loads
+        the runtime itself, lazily, through its own core loader, so a boot
+        script here would load it a second time.
 
-        No raster staging and no unbundled runtime file: both assume a
-        destination directory to write siblings into, which an embedded
-        element - living inside somebody else's document - does not have.
-        Rasters must already be embedded in `project` (as `render_html`
-        itself requires when it is not given `embedded_rasters`).
+        With `compress_data`, layer data arrives as gzip blocks the host page
+        must inflate before the runtime loads - the same order rule as
+        `DATA_INFLATE_TEMPLATE`, applied wherever the host keeps the element.
+        Rasters must already be embedded in `project`: an element living in
+        somebody else's document has no directory to stage siblings into.
         """
-        return MapElement(
-            html=build_manifest(project, verdict, compress_data=compress_data),
-            runtime_css=runtime.css.decode("utf-8"),
-            runtime_script=_runtime_script_body(
-                runtime, compress, compress_data, runtime_file=None
-            ),
-        )
+        return build_manifest(project, verdict, compress_data=compress_data)
 
     def _stage_rasters(
         self,
