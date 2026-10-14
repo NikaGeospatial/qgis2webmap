@@ -1,0 +1,93 @@
+{
+  "about": "Shared legend-colour check fixture (qgis2carto#4, onlymap-js#42). The parcels palette has a known red/green collapse under deuteranopia. 'expected' was produced by the OnlyMap cartograph runtime's lintLegendColours (0.12.0, threshold 10) and is pinned by both implementations; distances are CIEDE2000 rounded to 6 decimals. 'Residential (pending)' is too close to 'Residential' for normal vision and must be skipped; 'Unknown' (#rrggbbaa) is unparseable and must be ignored; 'roads' must never be paired with 'parcels'.",
+  "threshold": 10,
+  "entries": [
+    {
+      "layer": "parcels",
+      "label": "Residential",
+      "color": "#d62728"
+    },
+    {
+      "layer": "parcels",
+      "label": "Agricultural",
+      "color": "#2ca02c"
+    },
+    {
+      "layer": "parcels",
+      "label": "Commercial",
+      "color": "#1f77b4"
+    },
+    {
+      "layer": "parcels",
+      "label": "Open space",
+      "color": "#f7f7c8"
+    },
+    {
+      "layer": "parcels",
+      "label": "Residential (pending)",
+      "color": "rgb(214, 40, 41)"
+    },
+    {
+      "layer": "parcels",
+      "label": "Unknown",
+      "color": "#d6272880"
+    },
+    {
+      "layer": "roads",
+      "label": "Primary",
+      "color": "#d62728"
+    },
+    {
+      "layer": "roads",
+      "label": "Path",
+      "color": "#1b2d0a"
+    }
+  ],
+  "expected": {
+    "worstCondition": "achromatopsia",
+    "collapses": [
+      {
+        "condition": "deuteranopia",
+        "layer": "parcels",
+        "a": "Residential",
+        "b": "Agricultural",
+        "distance": 4.96916
+      },
+      {
+        "condition": "deuteranopia",
+        "layer": "parcels",
+        "a": "Agricultural",
+        "b": "Residential (pending)",
+        "distance": 4.838598
+      },
+      {
+        "condition": "tritanopia",
+        "layer": "parcels",
+        "a": "Agricultural",
+        "b": "Commercial",
+        "distance": 8.876809
+      },
+      {
+        "condition": "achromatopsia",
+        "layer": "parcels",
+        "a": "Residential",
+        "b": "Commercial",
+        "distance": 1.116721
+      },
+      {
+        "condition": "achromatopsia",
+        "layer": "parcels",
+        "a": "Agricultural",
+        "b": "Commercial",
+        "distance": 9.685988
+      },
+      {
+        "condition": "achromatopsia",
+        "layer": "parcels",
+        "a": "Commercial",
+        "b": "Residential (pending)",
+        "distance": 1.022592
+      }
+    ]
+  }
+}
