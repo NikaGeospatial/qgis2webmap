@@ -124,6 +124,9 @@ _NORTH_ARROW_RESOURCE = ":/images/north_arrows/layout_default_north_arrow.svg"
 _NORTH_FALLBACK_SVG = "arrows/NorthArrow_02.svg"
 _NORTH_ROSE_SVG = "arrows/NorthArrow_05.svg"
 
+#: How every atlas issue names its element.
+_ATLAS_SUBJECT = "<om-atlas>"
+
 _TOKEN_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 _DATA_URI_RE = re.compile(r"^data:([^;,]*)((?:;[^;,]*)*),(.*)$", re.DOTALL)
 _IMAGE_SUFFIX_BY_MIME = {
@@ -214,17 +217,22 @@ def import_cartograph_file(path: Path, project: QgsProject) -> BuiltLayout:
     build it into a new layout added to `project`.
 
     The layout is named after the cartograph's title (else the file name),
-    made unique; relative image paths resolve against the file's folder and
-    embedded images stay embedded, so the project does not grow a folder of
-    loose files. The result's `issues` hold the parser's findings followed by
-    the builder's. Raises `CartographImportError` when the file cannot be
-    read or holds no cartograph.
+    made unique. Relative image paths resolve against the file's folder;
+    embedded (`data:`) images are written to `<name>.images/` beside the file
+    -- the sibling of the `<name>.frames/` folder issue #3 keeps frame
+    rasters in -- because `core/layout_reader.py` re-exports a picture by
+    reading its file, and an embedded `base64:` picture has none. The
+    folder is only created when there is an image to write. The result's
+    `issues` hold the parser's findings followed by the builder's. Raises
+    `CartographImportError` when the file cannot be read or holds no
+    cartograph.
     """
     imported = read_cartograph_file(path)
     built = build_layout(
         imported.spec,
         project,
         name=imported.spec.title or path.stem,
+        image_dir=path.parent / f"{path.stem}.images",
         source_dir=path.parent,
         add_to_project=True,
     )
@@ -425,9 +433,10 @@ class _Builder:
         spec = self.spec
         if spec.size is not None:
             width, height = page_dimensions(spec.size, spec.orientation or "portrait")
-        else:
-            assert spec.width is not None and spec.height is not None  # IR rule
+        elif spec.width is not None and spec.height is not None:
             width, height = spec.width, spec.height
+        else:  # enforced by CartographSpec.__post_init__
+            raise ValueError("CartographSpec needs either size or width and height")
         page = self.layout.pageCollection().page(0)
         page.setPageSize(QgsLayoutSize(width, height, _MM))
         if spec.bg is not None:
@@ -1166,7 +1175,7 @@ class _Builder:
     # -- atlas ----------------------------------------------------------------
 
     def _build_atlas(self, atlas_spec: AtlasSpec) -> None:
-        subject = "<om-atlas>"
+        subject = _ATLAS_SUBJECT
         layers = [
             layer
             for layer in self.project.mapLayersByName(atlas_spec.layer)

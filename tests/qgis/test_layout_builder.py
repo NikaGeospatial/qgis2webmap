@@ -722,3 +722,19 @@ class TestImportFile:
     def test_unreadable_file(self, project, tmp_path) -> None:
         with pytest.raises(CartographImportError):
             import_cartograph_file(tmp_path / "missing.html", project)
+
+    def test_embedded_images_are_written_beside_the_file(
+        self, project, tmp_path
+    ) -> None:
+        path = tmp_path / "sheet.html"
+        html = write_cartograph_html(
+            replace(_furniture_spec(), atlas=None),
+            CartographRuntimeBundle(
+                cartograph_js=b"//", cartograph_css="", core_js=b"", core_css=""
+            ),
+        )
+        path.write_text(html, "utf-8")
+        built = import_cartograph_file(path, project)
+        logo = built.items_by_id["logo"]
+        assert logo.picturePath() == str(tmp_path / "sheet.images" / "logo.svg")
+        assert not logo.isMissingImage()

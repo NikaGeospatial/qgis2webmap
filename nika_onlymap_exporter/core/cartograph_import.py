@@ -229,6 +229,9 @@ _VOID_ELEMENTS = frozenset(
     ]
 )
 
+#: How every page-level issue names the root element.
+_ROOT_SUBJECT = "<om-cartograph>"
+
 _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 _DATA_URI_RE = re.compile(r"^data:([^;,]*)(;base64)?,(.*)$", re.DOTALL)
 
@@ -268,7 +271,7 @@ def parse_cartograph_html(text: str) -> CartographImport:
     issues = _Issues()
     if len(parser.roots) > 1:
         issues.add(
-            "<om-cartograph>",
+            _ROOT_SUBJECT,
             f"The file holds {len(parser.roots)} cartographs; only the first was "
             "imported, the second and later ones were ignored.",
         )
@@ -497,7 +500,7 @@ class _Converter:
     # -- root -------------------------------------------------------------
 
     def convert(self, root: _Node) -> CartographImport:
-        subject = "<om-cartograph>"
+        subject = _ROOT_SUBJECT
         self._report_attributes(
             root, _ROOT_ATTRS, subject, not_carried=_ROOT_NOT_CARRIED
         )
@@ -667,11 +670,10 @@ class _Converter:
 
     @staticmethod
     def _box(attrs: _Attrs) -> Box:
-        x = attrs.number("x", required=True)
-        y = attrs.number("y", required=True)
-        w = attrs.number("w", required=True)
-        h = attrs.number("h", required=True)
-        assert x is not None and y is not None and w is not None and h is not None
+        values = [attrs.number(name, required=True) for name in ("x", "y", "w", "h")]
+        x, y, w, h = (value if value is not None else 0.0 for value in values)
+        # `required=True` raises rather than return None, so the fallback is
+        # never used; it only gives the type checker floats.
         return Box(x, y, w, h)
 
     @staticmethod
