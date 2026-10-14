@@ -21,7 +21,11 @@ from nika_onlymap_exporter.core.export_ir import (
     OutputMode,
     OverlayCorner,
 )
-from nika_onlymap_exporter.core.settings import DialogState, LayerSettings
+from nika_onlymap_exporter.core.settings import (
+    CARTOGRAPH_FIELDS,
+    DialogState,
+    LayerSettings,
+)
 
 
 class TestStability:
@@ -97,8 +101,16 @@ class TestCompleteness:
         """
         snapshot_keys = set(json.loads(DialogState().snapshot()).keys())
         declared = {f.name for f in dataclasses.fields(DialogState)}
-        missing = declared - snapshot_keys
+        missing = declared - snapshot_keys - set(CARTOGRAPH_FIELDS)
         assert not missing, (
             f"DialogState fields missing from snapshot(): {sorted(missing)}. "
             "Add them, or the live preview will not refresh when they change."
         )
+
+
+def test_the_cartographs_fields_never_refresh_the_web_preview() -> None:
+    """Exempt by name, so the exemption cannot quietly cover a web-map field."""
+    snapshot_keys = set(json.loads(DialogState().snapshot()).keys())
+    assert not snapshot_keys & set(CARTOGRAPH_FIELDS)
+    declared = {f.name for f in dataclasses.fields(DialogState)}
+    assert set(CARTOGRAPH_FIELDS) <= declared
