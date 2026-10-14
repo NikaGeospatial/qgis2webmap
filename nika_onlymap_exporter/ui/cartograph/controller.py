@@ -64,6 +64,11 @@ from ...core.settings import (
     default_frame_mode,
     save_state,
 )
+from ...packaging.runtime_manager import (
+    RuntimeBundle,
+    RuntimeNotAcceptedError,
+    RuntimeUnavailableError,
+)
 from ..background_job import BackgroundJob
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
@@ -126,6 +131,7 @@ class CartographController:
         self._last_saved_bytes: int | None = None
         self._last_error = ""
         self._last_summary: ReportSummary | None = None
+        self._runtime: RuntimeBundle | None = None
         self._preview_server: PreviewServer | None = None
 
         self._autosave_timer = QTimer(dialog)
@@ -477,12 +483,8 @@ class CartographController:
             self._autosave_timer.start()
             return
 
-        runtime = ensure_runtime(self.dialog)
+        runtime = self._load_runtime()
         if runtime is None:
-            self._last_error = tr(
-                "The OnlyMap runtime is needed to save a cartograph. Nothing "
-                "was written."
-            )
             self._update_status_label()
             return
 
@@ -523,6 +525,36 @@ class CartographController:
         job.failed.connect(self._on_build_failed)
         job.finished.connect(job.deleteLater)
         job.start()
+
+    def _load_runtime(self) -> RuntimeBundle | None:
+        """The runtime's bytes, read once per runtime version.
+
+        `ensure_runtime` answers with a *provider* (asking and downloading
+        first if it must); the export needs what it loads. Reading 9 MB from
+        disk on every autosave would make each save visibly slower, so the
+        bundle is kept until the provider would load a different version.
+        """
+        provider = ensure_runtime(self.dialog)
+        if provider is None:
+            self._last_error = tr(
+                "The OnlyMap runtime is needed to save a cartograph. Nothing "
+                "was written."
+            )
+            return None
+        version = getattr(provider, "version", None)
+        if self._runtime is not None and (
+            version is None or version == self._runtime.version
+        ):
+            return self._runtime
+        try:
+            self._runtime = provider.load()
+        except (RuntimeUnavailableError, RuntimeNotAcceptedError, OSError) as exc:
+            self._last_error = tr(
+                "The OnlyMap runtime could not be loaded, so nothing was "
+                "written: {error}"
+            ).format(error=str(exc))
+            return None
+        return self._runtime
 
     def _on_build_succeeded(
         self, path: Path, html: str, report: FidelityReportBuilder

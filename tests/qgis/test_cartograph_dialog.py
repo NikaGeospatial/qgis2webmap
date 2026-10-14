@@ -102,8 +102,15 @@ def fake_cartograph_export(monkeypatch):
 
     monkeypatch.setattr(export_module, "prepare_cartograph", prepare_cartograph)
     monkeypatch.setattr(export_module, "finish_cartograph", finish_cartograph)
+
+    class _Provider:
+        version = "fake"
+
+        def load(self):
+            return types.SimpleNamespace(version="fake")
+
     monkeypatch.setattr(
-        controller_module, "ensure_runtime", lambda parent=None: object()
+        controller_module, "ensure_runtime", lambda parent=None: _Provider()
     )
 
     return types.SimpleNamespace(
@@ -599,5 +606,43 @@ class TestCartographShareMenu:
             )
             dialog._cartograph.on_reveal()
             assert opened == [str(target.parent)]
+        finally:
+            dialog.close()
+
+
+class TestRealAutosave:
+    """No fakes: the dialog, the real export and the real runtime.
+
+    The faked tests above proved the controller's plumbing but stood in for
+    both the runtime and the export, which is how a provider got passed where
+    the export needed the loaded bundle and nobody noticed.
+    """
+
+    def test_a_real_layout_autosaves_a_real_cartograph(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        import os
+
+        from cartograph_fixtures import build_survey_layout
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR (see CONTRIBUTING.md)")
+        survey = build_survey_layout(project, tmp_path)
+        project.layoutManager().addLayout(survey.layout)
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            cartograph.layout_combo.setCurrentText(survey.layout.name())
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            cartograph._on_file_edited(str(target))
+
+            assert _wait_for(qgis_app, lambda: target.exists(), timeout=60)
+            html = target.read_text(encoding="utf-8")
+            assert "<om-cartograph" in html
+            assert html.count("<om-frame") == 2
+            assert cartograph._last_error == ""
+            assert "Saved" in cartograph.cartograph_status_label.text()
         finally:
             dialog.close()
