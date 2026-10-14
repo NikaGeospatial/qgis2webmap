@@ -699,3 +699,126 @@ class TestRealAutosave:
             assert "Saved" in cartograph.cartograph_status_label.text()
         finally:
             dialog.close()
+
+
+class TestPrintSettings:
+    """Share > Print settings: kept per layout, applied on every save, and
+    deciding which way Export PDF goes."""
+
+    def _real_dialog(self, qgis_app, project, tmp_path):
+        import os
+
+        from cartograph_fixtures import build_survey_layout
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
+        survey = build_survey_layout(project, tmp_path)
+        survey.layout.pageCollection().deletePage(1)
+        project.layoutManager().addLayout(survey.layout)
+        dialog = _dialog(project)
+        dialog.output_cartograph_button.setChecked(True)
+        cartograph = dialog._cartograph
+        cartograph.layout_combo.setCurrentText(survey.layout.name())
+        target = tmp_path / "survey.html"
+        cartograph.file_edit.setText(str(target))
+        cartograph._on_file_edited(str(target))
+        assert _wait_for(qgis_app, lambda: target.exists(), timeout=60)
+        return dialog, target
+
+    def test_saved_settings_reach_the_file(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
+
+        dialog, target = self._real_dialog(qgis_app, project, tmp_path)
+        try:
+            chosen = PrintSettings(bleed="3mm", crop_marks=True)
+            monkeypatch.setattr(
+                print_settings_dialog,
+                "ask_print_settings",
+                lambda *a, **k: (print_settings_dialog.ACTION_SAVE, chosen),
+            )
+            before = target.stat().st_mtime_ns
+            dialog._cartograph.on_print_settings()
+            assert _wait_for(
+                qgis_app, lambda: target.stat().st_mtime_ns != before, timeout=60
+            )
+            html = target.read_text(encoding="utf-8")
+            assert 'bleed="3"' in html
+            assert 'crop-marks=""' in html
+            assert dialog.state.cartograph_print["survey-utm"] == chosen.to_json()
+        finally:
+            dialog.close()
+
+    def test_rgb_export_prints_once_the_settings_are_saved(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
+
+        dialog, target = self._real_dialog(qgis_app, project, tmp_path)
+        try:
+            opened = []
+            monkeypatch.setattr(
+                dialog._cartograph, "_open_url", lambda url: opened.append(url)
+            )
+            monkeypatch.setattr(
+                print_settings_dialog,
+                "ask_print_settings",
+                lambda *a, **k: (
+                    print_settings_dialog.ACTION_EXPORT,
+                    PrintSettings(bleed="5mm"),
+                ),
+            )
+            dialog._cartograph.on_print_settings()
+            assert opened == []  # not before the file has the new settings
+            assert _wait_for(qgis_app, lambda: opened, timeout=60)
+            assert opened[0].query() == "print=1"
+            assert 'bleed="5"' in target.read_text(encoding="utf-8")
+        finally:
+            dialog.close()
+
+    def test_cmyk_export_goes_through_qgis(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.exporters import print_pdf
+
+        dialog, _target = self._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cmyk = PrintSettings(profile="cmyk")
+            dialog.state.cartograph_print["survey-utm"] = cmyk.to_json()
+            pdf = tmp_path / "survey.pdf"
+            monkeypatch.setattr(
+                QFileDialog, "getSaveFileName", lambda *a, **k: (str(pdf), "")
+            )
+            calls = []
+            monkeypatch.setattr(
+                print_pdf,
+                "export_print_pdf",
+                lambda layout, settings, path: (
+                    calls.append((layout.name(), path))
+                    or print_pdf.PrintPdfResult(path=path, warnings=())
+                ),
+            )
+            opened = []
+            monkeypatch.setattr(
+                dialog._cartograph, "_open_url", lambda url: opened.append(url)
+            )
+            dialog._cartograph.on_export_pdf()
+            assert calls == [("survey-utm", pdf)]
+            assert opened == []
+        finally:
+            dialog.close()
+
+    def test_print_settings_row_needs_a_layout(self, qgis_app, project) -> None:
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            row = dialog._cartograph.cartograph_share_actions["print_settings"]
+            assert not row.isEnabled()
+        finally:
+            dialog.close()

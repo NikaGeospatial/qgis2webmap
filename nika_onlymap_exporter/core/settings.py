@@ -65,6 +65,7 @@ KEY_OUTPUT = "output"
 KEY_CARTOGRAPH_LAYOUT = "cartographLayout"
 KEY_CARTOGRAPH_FILES = "cartographFiles"
 KEY_CARTOGRAPH_FRAMES = "cartographFrames"
+KEY_CARTOGRAPH_PRINT = "cartographPrint"
 
 # The OnlyMap licence key, in QSettings rather than the project.
 #
@@ -414,6 +415,7 @@ CARTOGRAPH_FIELDS = (
     "cartograph_layout",
     "cartograph_files",
     "cartograph_frames",
+    "cartograph_print",
 )
 
 
@@ -474,6 +476,11 @@ class DialogState:
     cartograph_files: dict[str, str] = field(default_factory=dict)
     # Layout name -> map item id -> that item's Live/Static + DPI choice.
     cartograph_frames: dict[str, dict[str, FrameChoice]] = field(default_factory=dict)
+    # Layout name -> its Print settings, as `PrintSettings.to_json()`. Kept as
+    # the JSON text so this module needs no import of the print model; no
+    # entry means no print attributes, so a cartograph saved before the user
+    # opened Print settings stays byte-identical.
+    cartograph_print: dict[str, str] = field(default_factory=dict)
 
     def frame_choices(self, layout_name: str) -> dict[str, FrameChoice]:
         """Frame choices for one layout, creating an empty map on first sight."""
@@ -663,6 +670,15 @@ def load_state(project: QgsProject) -> DialogState:
         except (ValueError, AttributeError):
             pass
 
+    print_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_PRINT, "")
+    if ok and print_json:
+        try:
+            for name, text in json.loads(print_json).items():
+                if isinstance(name, str) and isinstance(text, str):
+                    state.cartograph_print[name] = text
+        except (ValueError, AttributeError):
+            pass
+
     return state
 
 
@@ -725,4 +741,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 for layout_name, items in state.cartograph_frames.items()
             }
         ),
+    )
+    project.writeEntry(
+        SCOPE, KEY_CARTOGRAPH_PRINT, json.dumps(dict(state.cartograph_print))
     )

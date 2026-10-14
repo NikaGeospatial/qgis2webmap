@@ -20,6 +20,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import re
 import sys
 import time
@@ -56,6 +57,7 @@ from ...core.fidelity_summary import (
     strip_message,
     summarise,
 )
+from ...core.print_settings import PrintSettings, apply_to_spec
 from ...core.settings import (
     DEFAULT_STATIC_DPI,
     DialogOutput,
@@ -134,6 +136,7 @@ class CartographController:
         # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
         # the hand-off prompt's print-safety line.
         self._last_page_label: str | None = None
+        self._print_after_save = False
         self._preview_server: PreviewServer | None = None
 
         self._autosave_timer = QTimer(dialog)
@@ -527,6 +530,11 @@ class CartographController:
         except Exception as exc:
             self._on_build_failed(str(exc), traceback.format_exc())
             return
+        print_settings = self._print_settings()
+        if print_settings is not None:
+            prepared = dataclasses.replace(
+                prepared, spec=apply_to_spec(prepared.spec, print_settings)
+            )
         self._last_page_label = page_label(prepared.spec)
 
         def work(_progress: object) -> str:
@@ -585,6 +593,11 @@ class CartographController:
         self._last_saved_at = time.time()
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
+        if self._print_after_save:
+            self._print_after_save = False
+            self._open_url(
+                self._served_url(path, "print=1") or QUrl.fromLocalFile(str(path))
+            )
         self._update_status_label()
         self._update_share_enabled()
         if self.state.output is DialogOutput.CARTOGRAPH:
@@ -823,9 +836,9 @@ class CartographController:
         add(
             "print_settings",
             tr("Print settings..."),
-            tr("Coming in a later version"),
-            lambda: None,
-        ).setEnabled(False)
+            tr("Page size, bleed, crop marks and colour profile for Export PDF"),
+            self.on_print_settings,
+        )
 
         return menu
 
@@ -845,9 +858,10 @@ class CartographController:
             action = self.cartograph_share_actions.get(key)
             if action is not None:
                 action.setEnabled(exists)
-        qpt_action = self.cartograph_share_actions.get("export_qpt")
-        if qpt_action is not None:
-            qpt_action.setEnabled(self._current_layout is not None)
+        for key in ("export_qpt", "print_settings"):
+            action = self.cartograph_share_actions.get(key)
+            if action is not None:
+                action.setEnabled(self._current_layout is not None)
 
     def on_copy_path(self) -> None:
         path = self._current_path()
@@ -890,12 +904,126 @@ class CartographController:
         HandoffDialog(context, self.dialog).exec()
 
     def on_export_pdf(self) -> None:
+        """Share > Export PDF, by the route the Print settings choose.
+
+        RGB (the default) prints from the browser, which honours the page's
+        true size; the file already carries the print attributes, because
+        every save applies the settings. CMYK and ICC go through QGIS's own
+        PDF exporter on the source layout - the one thing a browser cannot do.
+        """
         path = self._current_path()
         if path is None or not path.exists():
+            return
+        settings = self._print_settings()
+        if settings is not None and settings.uses_qgis_exporter:
+            self._export_pdf_through_qgis(settings, path)
             return
         self._open_url(
             self._served_url(path, "print=1") or QUrl.fromLocalFile(str(path))
         )
+
+    # ---- Print settings ----------------------------------------------------
+
+    def _print_settings(self) -> PrintSettings | None:
+        text = self.state.cartograph_print.get(self.state.cartograph_layout)
+        if not text:
+            return None
+        try:
+            return PrintSettings.from_json(text)
+        except ValueError:
+            return None
+
+    def _layout_page_mm(self) -> tuple[float, float]:
+        from qgis.core import QgsLayoutMeasurementConverter, QgsUnitTypes
+
+        layout = self._current_layout
+        if layout is None or layout.pageCollection().pageCount() == 0:
+            return (297.0, 210.0)
+        converter = QgsLayoutMeasurementConverter()
+        size = converter.convert(
+            layout.pageCollection().page(0).sizeWithUnits(),
+            QgsUnitTypes.LayoutMillimeters,
+        )
+        return (size.width(), size.height())
+
+    def _has_live_frame(self) -> bool:
+        if self._current_layout is None:
+            return False
+        choices = self.state.frame_choices(self.state.cartograph_layout)
+        for item in layout_map_items(self._current_layout):
+            choice = choices.get(item.item_id)
+            mode = choice.mode if choice else default_frame_mode(item.crs_authid)
+            if mode == "live":
+                return True
+        return False
+
+    def on_print_settings(self) -> None:
+        """Share > Print settings: saved per layout, applied on every save."""
+        from .print_settings_dialog import ACTION_EXPORT, ask_print_settings
+
+        if self._current_layout is None:
+            return
+        answer = ask_print_settings(
+            self._print_settings() or PrintSettings(),
+            layout_page_mm=self._layout_page_mm(),
+            has_live_frame=self._has_live_frame(),
+            parent=self.dialog,
+        )
+        if answer is None:
+            return
+        action, settings = answer
+        self.state.cartograph_print[self.state.cartograph_layout] = settings.to_json()
+        save_state(self.project, self.state)
+        if action == ACTION_EXPORT:
+            if settings.uses_qgis_exporter:
+                path = self._current_path()
+                if path is not None:
+                    self._export_pdf_through_qgis(settings, path)
+                self.schedule_autosave()
+            else:
+                # The browser must print the file with these settings in it,
+                # so print once the save that applies them has landed.
+                self._print_after_save = True
+                self.schedule_autosave()
+        else:
+            self.schedule_autosave()
+
+    def _export_pdf_through_qgis(self, settings: PrintSettings, path: Path) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from ...exporters.print_pdf import PrintPdfError, export_print_pdf
+
+        if self._current_layout is None:
+            return
+        if self._has_live_frame():
+            QMessageBox.information(
+                self.dialog,
+                tr("Export PDF"),
+                tr(
+                    "A CMYK or ICC PDF is made by QGIS from the print layout, "
+                    "which only works when every frame is static. Set the live "
+                    "frames to Static on the Frames tab, or choose RGB in Print "
+                    "settings."
+                ),
+            )
+            return
+        chosen, _ = QFileDialog.getSaveFileName(
+            self.dialog,
+            tr("Export PDF"),
+            str(path.with_suffix(".pdf")),
+            tr("PDF (*.pdf)"),
+        )
+        if not chosen:
+            return
+        try:
+            result = export_print_pdf(self._current_layout, settings, Path(chosen))
+        except PrintPdfError as exc:
+            QMessageBox.warning(self.dialog, tr("Export PDF"), str(exc))
+            return
+        message = tr("Saved {path}").format(path=result.path)
+        if result.warnings:
+            message += " - " + " ".join(result.warnings)
+        self.dialog.status_label.setText(message)
 
     def on_export_png(self) -> None:
         path = self._current_path()
