@@ -73,7 +73,7 @@ from qgis.PyQt.QtCore import QFile, QPointF, Qt
 from qgis.PyQt.QtGui import QColor, QPolygonF
 
 from .canvas_layout import nice_interval, page_dimensions
-from .cartograph_import import RoundTripIssue
+from .cartograph_import import RoundTripIssue, read_cartograph_file
 from .cartograph_ir import (
     AtlasSpec,
     Box,
@@ -206,6 +206,34 @@ def build_layout(
         items_by_id=dict(builder.items_by_id),
         frame_modes=dict(builder.frame_modes),
         frame_dpis=dict(builder.frame_dpis),
+    )
+
+
+def import_cartograph_file(path: Path, project: QgsProject) -> BuiltLayout:
+    """ "Import cartograph as QGIS layout…": parse the file at `path` and
+    build it into a new layout added to `project`.
+
+    The layout is named after the cartograph's title (else the file name),
+    made unique; relative image paths resolve against the file's folder and
+    embedded images stay embedded, so the project does not grow a folder of
+    loose files. The result's `issues` hold the parser's findings followed by
+    the builder's. Raises `CartographImportError` when the file cannot be
+    read or holds no cartograph.
+    """
+    imported = read_cartograph_file(path)
+    built = build_layout(
+        imported.spec,
+        project,
+        name=imported.spec.title or path.stem,
+        source_dir=path.parent,
+        add_to_project=True,
+    )
+    return BuiltLayout(
+        layout=built.layout,
+        issues=imported.issues + built.issues,
+        items_by_id=built.items_by_id,
+        frame_modes=built.frame_modes,
+        frame_dpis=built.frame_dpis,
     )
 
 

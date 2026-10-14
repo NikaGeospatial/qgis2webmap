@@ -21,7 +21,10 @@ from nika_onlymap_exporter.core.cartograph_export import (
     _frame_extent_wgs84,
     prepare_cartograph,
 )
-from nika_onlymap_exporter.core.cartograph_import import parse_cartograph_html
+from nika_onlymap_exporter.core.cartograph_import import (
+    CartographImportError,
+    parse_cartograph_html,
+)
 from nika_onlymap_exporter.core.cartograph_ir import (
     AtlasSpec,
     Box,
@@ -39,6 +42,7 @@ from nika_onlymap_exporter.core.expression_tokens import translate_label
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layout_builder import (
     build_layout,
+    import_cartograph_file,
     label_text_from_tokens,
     live_frame_extent,
     unique_layout_name,
@@ -699,3 +703,22 @@ class TestTokens:
             notes="",
         )
         assert text == "{{frame.gone.scale}}" and unmapped == ("{{frame.gone.scale}}",)
+
+
+class TestImportFile:
+    def test_imports_into_the_project(self, survey, project, runtime, tmp_path) -> None:
+        spec = _prepare(survey.layout, project, runtime)
+        path = tmp_path / "survey.html"
+        html = write_cartograph_html(
+            spec, CartographRuntimeBundle(cartograph_js=b"//", cartograph_css="/**/")
+        )
+        path.write_text(html.replace("<om-legend ", '<om-legend data-x="1" '), "utf-8")
+        built = import_cartograph_file(path, project)
+        assert project.layoutManager().layoutByName("Survey UTM") is built.layout
+        details = [issue.detail for issue in built.issues]
+        assert "data-x" in details[0]  # the parser's findings come first
+        assert any("written-out row" in detail for detail in details[1:])
+
+    def test_unreadable_file(self, project, tmp_path) -> None:
+        with pytest.raises(CartographImportError):
+            import_cartograph_file(tmp_path / "missing.html", project)
