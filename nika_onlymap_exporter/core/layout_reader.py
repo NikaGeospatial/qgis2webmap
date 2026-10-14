@@ -90,13 +90,9 @@ from .cartograph_ir import (
 )
 from .expression_tokens import translate_label
 from .fidelity_report import FidelityReportBuilder
+from .settings import default_frame_mode
 
 FrameMode = Literal["live", "static"]
-
-#: Per issue #1 section 3: a map item defaults to a live frame only in one of
-#: the runtime's own camera projections. Anything else defaults to static --
-#: a pixel-exact raster never needs a reprojection at all.
-_WEB_SAFE_CRS_AUTHIDS = ("EPSG:3857", "EPSG:4326")
 
 #: QgsLayoutItemMapGrid.GridStyle -> `<om-graticule kind>`. `Markers` is the
 #: runtime's own name too. `FrameAndAnnotationsOnly` (the "zebra" border grid)
@@ -174,7 +170,6 @@ def read_layout(
     report: FidelityReportBuilder,
     *,
     frame_modes: Mapping[str, FrameMode] | None = None,
-    static_dpi: int = 200,
 ) -> LayoutReading:
     """Read `layout`'s first page into a `LayoutReading`.
 
@@ -240,7 +235,7 @@ def read_layout(
 
     for item in map_items:
         _record_unrepresentable_item_properties(item, report)
-        mode = _frame_mode(item, frame_modes, static_dpi=static_dpi)
+        mode = _frame_mode(item, frame_modes)
         box = _box(item, converter)
         frame_id = f"frame-{item.uuid()}"
         map_frame_id_by_uuid[item.uuid()] = frame_id
@@ -406,16 +401,19 @@ def _record_unrepresentable_item_properties(
 def _frame_mode(
     item: QgsLayoutItemMap,
     frame_modes: Mapping[str, FrameMode],
-    *,
-    static_dpi: int,
 ) -> FrameMode:
+    """The caller's override, else issue #1 section 3's default: live only in
+    one of the runtime's own camera projections, static (pixel-exact, never
+    reprojected) for anything else -- the same rule the Frames tab shows."""
     override = frame_modes.get(item.uuid())
     if override is not None:
         return override
     crs = item.crs()
-    if crs.isValid() and crs.authid() in _WEB_SAFE_CRS_AUTHIDS:
-        return "live"
-    return "static"
+    return (
+        "live"
+        if default_frame_mode(crs.authid() if crs.isValid() else "") == "live"
+        else "static"
+    )
 
 
 # --------------------------------------------------------------------------

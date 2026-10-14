@@ -12,7 +12,11 @@ import re
 import pytest
 from cartograph_fixtures import build_survey_layout
 
-from nika_onlymap_exporter.core.cartograph_export import export_layout_to_cartograph
+from nika_onlymap_exporter.core.cartograph_export import (
+    export_layout_to_cartograph,
+    finish_cartograph,
+    prepare_cartograph,
+)
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
@@ -34,6 +38,49 @@ def fake_runtime() -> RuntimeBundle:
         cartograph_javascript=b"// cartograph js placeholder",
         cartograph_css=b"/* cartograph css placeholder */",
     )
+
+
+def _live_layout(project):
+    """One EPSG:3857 map item over one polygon: a layout that exports a live
+    frame by default."""
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsFeature,
+        QgsFillSymbol,
+        QgsGeometry,
+        QgsLayoutItemMap,
+        QgsLayoutPoint,
+        QgsLayoutSize,
+        QgsPrintLayout,
+        QgsRectangle,
+        QgsUnitTypes,
+        QgsVectorLayer,
+    )
+
+    wm = QgsCoordinateReferenceSystem("EPSG:3857")
+    project.setCrs(wm)
+    layer = QgsVectorLayer("Polygon?crs=EPSG:3857", "parcels", "memory")
+    feature = QgsFeature()
+    feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(0, 0, 1000, 1000)))
+    layer.dataProvider().addFeatures([feature])
+    layer.updateExtents()
+    layer.renderer().setSymbol(QgsFillSymbol.createSimple({"color": "#eba941"}))
+    project.addMapLayer(layer)
+
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("live-only")
+    map_item = QgsLayoutItemMap(layout)
+    layout.addLayoutItem(map_item)
+    map_item.attemptMove(QgsLayoutPoint(10, 10, QgsUnitTypes.LayoutMillimeters))
+    map_item.attemptResize(QgsLayoutSize(150, 100, QgsUnitTypes.LayoutMillimeters))
+    map_item.setCrs(wm)
+    map_item.setLayers([layer])
+    extent = layer.extent()
+    extent.grow(500)
+    map_item.setExtent(extent)
+    map_item.refresh()
+    return layout
 
 
 class TestExportLayoutToCartograph:
@@ -102,57 +149,78 @@ class TestExportLayoutToCartograph:
         )
 
     def test_live_frame_embeds_an_om_map_and_the_core_runtime(
-        self, project, tmp_path
+        self, project, fake_runtime
     ) -> None:
-        from qgis.core import (
-            QgsCoordinateReferenceSystem,
-            QgsFeature,
-            QgsFillSymbol,
-            QgsGeometry,
-            QgsLayoutItemMap,
-            QgsLayoutPoint,
-            QgsLayoutSize,
-            QgsPrintLayout,
-            QgsRectangle,
-            QgsUnitTypes,
-            QgsVectorLayer,
-        )
-
-        wm = QgsCoordinateReferenceSystem("EPSG:3857")
-        project.setCrs(wm)
-        layer = QgsVectorLayer("Polygon?crs=EPSG:3857", "parcels", "memory")
-        feature = QgsFeature()
-        feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(0, 0, 1000, 1000)))
-        layer.dataProvider().addFeatures([feature])
-        layer.updateExtents()
-        layer.renderer().setSymbol(QgsFillSymbol.createSimple({"color": "#eba941"}))
-        project.addMapLayer(layer)
-
-        layout = QgsPrintLayout(project)
-        layout.initializeDefaults()
-        layout.setName("live-only")
-        map_item = QgsLayoutItemMap(layout)
-        layout.addLayoutItem(map_item)
-        map_item.attemptMove(QgsLayoutPoint(10, 10, QgsUnitTypes.LayoutMillimeters))
-        map_item.attemptResize(QgsLayoutSize(150, 100, QgsUnitTypes.LayoutMillimeters))
-        map_item.setCrs(wm)
-        map_item.setLayers([layer])
-        extent = layer.extent()
-        extent.grow(500)
-        map_item.setExtent(extent)
-        map_item.refresh()
-
-        runtime = RuntimeBundle(
-            javascript=b"// core js placeholder",
-            css=b"/* core css placeholder */",
-            version="0.12.0",
-            sha256="0" * 64,
-            cartograph_javascript=b"// cartograph js placeholder",
-            cartograph_css=b"/* cartograph css placeholder */",
-        )
+        layout = _live_layout(project)
+        runtime = fake_runtime
         report = FidelityReportBuilder()
         html = export_layout_to_cartograph(layout, project, runtime, report)
 
         assert html.count("<om-frame") == 1
         assert "const CORE_GZ" in html
         assert "carto.setCoreLoader" in html
+
+
+class TestPrepareThenFinish:
+    """`prepare_cartograph` does everything that reads or changes the layout,
+    on the GUI thread; `finish_cartograph` reads layers only, so the dialog
+    can run it on a worker thread while the layout stays on screen."""
+
+    def test_finish_needs_nothing_from_the_layout(self, survey, fake_runtime) -> None:
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(
+            survey.layout, survey.project, fake_runtime, report
+        )
+        for item in list(survey.layout.items()):
+            if isinstance(item, qgis_core.QgsLayoutItem) and not isinstance(
+                item, qgis_core.QgsLayoutItemPage
+            ):
+                survey.layout.removeLayoutItem(item)
+
+        html = finish_cartograph(prepared, survey.project, report)
+        assert html.count("<om-frame") == 2
+
+    def test_finish_runs_on_a_worker_thread(
+        self, qgis_app, project, fake_runtime
+    ) -> None:
+        from qgis.PyQt.QtCore import QThread
+
+        layout = _live_layout(project)
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(layout, project, fake_runtime, report)
+        result: dict[str, object] = {}
+
+        class Worker(QThread):
+            def run(self) -> None:
+                try:
+                    result["html"] = finish_cartograph(prepared, project, report)
+                except Exception as exc:  # surfaced by the assert below
+                    result["error"] = exc
+
+        worker = Worker()
+        worker.start()
+        assert worker.wait(60_000)
+        assert "error" not in result, result.get("error")
+        assert "<om-map" in str(result["html"])
+
+    def test_each_static_frame_renders_at_its_own_dpi(
+        self, survey, fake_runtime
+    ) -> None:
+        from qgis.PyQt.QtGui import QImage
+
+        from nika_onlymap_exporter.core.cartograph_ir import FrameSpec
+
+        dpis = {survey.main_map.uuid(): 100, survey.inset_map.uuid(): 300}
+        prepared = prepare_cartograph(
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            FidelityReportBuilder(),
+            frame_dpis=dpis,
+        )
+        frames = {i.id: i for i in prepared.items if isinstance(i, FrameSpec)}
+        for uuid, dpi in dpis.items():
+            frame = frames[f"frame-{uuid}"]
+            assert frame.dpi == dpi
+            image = QImage.fromData(frame.image_bytes, "PNG")
+            assert image.width() == round(frame.box.w / 25.4 * dpi)

@@ -22,6 +22,16 @@ pure on their own:
 This module is where those three results get assembled into one
 `CartographSpec` and handed to `writers/cartograph_writer.py`.
 
+**Two halves, for threads.** `prepare_cartograph` does everything that reads
+or changes the layout -- reading its items, hiding them for a static render,
+rendering it -- and must run on the GUI thread: the layout is a graphics
+scene that may be on screen in the layout designer, and QGIS's own layout
+export algorithms are no-threading for the same reason. `finish_cartograph`
+only reads layers (the same `read_project` the web-map export runs on a
+worker thread) and assembles the HTML, so the dialog runs it off the GUI
+thread. `export_layout_to_cartograph` runs both, for callers already on one
+thread.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -31,6 +41,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -61,6 +72,34 @@ _CSS_PIXELS_PER_MM = 96.0 / 25.4
 _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 
 
+@dataclass(frozen=True)
+class LiveFrameSource:
+    """What a live frame still needs read once the layout is out of reach:
+    which layers it draws, in its own order, over which WGS84 extent."""
+
+    frame_id: str
+    layer_order: tuple[str, ...]
+    extent: Extent
+
+
+@dataclass(frozen=True)
+class PreparedCartograph:
+    """A cartograph with every layout-dependent part done.
+
+    `items` holds the furniture and every frame's `FrameSpec` (static ones
+    with their raster); `live_frames` lists what `finish_cartograph` still has
+    to render into `<om-map>` markup. Nothing here refers to the layout.
+    """
+
+    spec: CartographSpec
+    live_frames: tuple[LiveFrameSource, ...]
+    bundle: CartographRuntimeBundle
+
+    @property
+    def items(self) -> tuple[CartographItem, ...]:
+        return self.spec.items
+
+
 def export_layout_to_cartograph(
     layout: QgsPrintLayout,
     project: QgsProject,
@@ -68,10 +107,41 @@ def export_layout_to_cartograph(
     report: FidelityReportBuilder,
     *,
     frame_modes: Mapping[str, FrameMode] | None = None,
+    frame_dpis: Mapping[str, int] | None = None,
     static_dpi: int = 200,
     title_override: str | None = None,
 ) -> str:
-    """Read `layout` and render it to a standalone cartograph HTML document.
+    """Read `layout` and render it to a standalone cartograph HTML document,
+    all on the calling thread -- which must be the GUI thread (see the module
+    docstring)."""
+    prepared = prepare_cartograph(
+        layout,
+        project,
+        runtime,
+        report,
+        frame_modes=frame_modes,
+        frame_dpis=frame_dpis,
+        static_dpi=static_dpi,
+        title_override=title_override,
+    )
+    return finish_cartograph(prepared, project, report)
+
+
+def prepare_cartograph(
+    layout: QgsPrintLayout,
+    project: QgsProject,
+    runtime: RuntimeBundle,
+    report: FidelityReportBuilder,
+    *,
+    frame_modes: Mapping[str, FrameMode] | None = None,
+    frame_dpis: Mapping[str, int] | None = None,
+    static_dpi: int = 200,
+    title_override: str | None = None,
+) -> PreparedCartograph:
+    """Everything that touches `layout`. GUI thread only.
+
+    `frame_modes` and `frame_dpis` are keyed by map item uuid; a static frame
+    missing from `frame_dpis` renders at `static_dpi`.
 
     Raises `ValueError` up front when the runtime bundle has no cartograph
     dist files at all -- that is a packaging problem, not a fidelity one, so
@@ -83,46 +153,64 @@ def export_layout_to_cartograph(
             "(cartograph_javascript/cartograph_css); re-fetch or re-lock the "
             "runtime before exporting a cartograph"
         )
+    frame_dpis = frame_dpis or {}
 
-    reading = read_layout(
-        layout, report, frame_modes=frame_modes, static_dpi=static_dpi
-    )
+    reading = read_layout(layout, report, frame_modes=frame_modes)
 
-    writer = OnlyMapWriter()
     items: list[CartographItem] = list(reading.furniture)
-    live_markup: dict[str, str] = {}
-    has_live = False
+    live_frames: list[LiveFrameSource] = []
 
     for frame in reading.frames:
         if frame.mode == "static":
-            items.append(_build_static_frame(layout, frame, static_dpi))
+            dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
+            items.append(_build_static_frame(layout, frame, dpi))
         else:
-            has_live = True
-            frame_spec, markup = _build_live_frame(frame, project, writer, report)
+            frame_spec, source = _build_live_frame(frame, project)
             items.append(frame_spec)
-            live_markup[frame.frame_id] = markup
+            live_frames.append(source)
 
     items.sort(key=lambda item: item.z if item.z is not None else 0)
 
-    cartograph_id = _cartograph_id(layout)
     title = title_override if title_override is not None else (project.title() or "")
-
     spec = CartographSpec(
-        cartograph_id=cartograph_id,
+        cartograph_id=_cartograph_id(layout),
         title=title,
         width=reading.page_width,
         height=reading.page_height,
         orientation=reading.orientation,
         items=tuple(items),
     )
-
+    has_live = bool(live_frames)
     bundle = CartographRuntimeBundle(
         cartograph_js=runtime.cartograph_javascript,
         cartograph_css=runtime.cartograph_css.decode("utf-8"),
         core_js=runtime.javascript if has_live else None,
         core_css=runtime.css.decode("utf-8") if has_live else None,
     )
-    return write_cartograph_html(spec, bundle, live_markup)
+    return PreparedCartograph(spec=spec, live_frames=tuple(live_frames), bundle=bundle)
+
+
+def finish_cartograph(
+    prepared: PreparedCartograph,
+    project: QgsProject,
+    report: FidelityReportBuilder,
+) -> str:
+    """Render each live frame's `<om-map>` and write the document. Reads
+    layers only, never the layout, so it is safe on a worker thread."""
+    writer = OnlyMapWriter()
+    live_markup: dict[str, str] = {}
+    for source in prepared.live_frames:
+        export_project = read_project(
+            project,
+            report,
+            layer_order=source.layer_order,
+            canvas_extent=source.extent,
+        )
+        verdict = writer.license_policy.evaluate(export_project)
+        live_markup[source.frame_id] = writer.render_map_element(
+            export_project, verdict
+        )
+    return write_cartograph_html(prepared.spec, prepared.bundle, live_markup)
 
 
 def _cartograph_id(layout: QgsPrintLayout) -> str:
@@ -153,24 +241,10 @@ def _build_static_frame(
 
 
 def _build_live_frame(
-    frame: MapFrameReading,
-    project: QgsProject,
-    writer: OnlyMapWriter,
-    report: FidelityReportBuilder,
-) -> tuple[FrameSpec, str]:
+    frame: MapFrameReading, project: QgsProject
+) -> tuple[FrameSpec, LiveFrameSource]:
     map_item = frame.map_item
-    layer_order = tuple(layer.id() for layer in map_item.layersToRender())
     extent = _frame_extent_wgs84(map_item, project)
-
-    export_project = read_project(
-        project,
-        report,
-        layer_order=layer_order,
-        canvas_extent=extent,
-    )
-    verdict = writer.license_policy.evaluate(export_project)
-    markup = writer.render_map_element(export_project, verdict)
-
     center, zoom = _camera_for_extent(extent, frame.box.w)
     frame_spec = FrameSpec(
         id=frame.frame_id,
@@ -185,7 +259,12 @@ def _build_live_frame(
         bearing=map_item.mapRotation(),
         overview_of=frame.overview_of,
     )
-    return frame_spec, markup
+    source = LiveFrameSource(
+        frame_id=frame.frame_id,
+        layer_order=tuple(layer.id() for layer in map_item.layersToRender()),
+        extent=extent,
+    )
+    return frame_spec, source
 
 
 def _frame_extent_wgs84(map_item, project: QgsProject) -> Extent:
