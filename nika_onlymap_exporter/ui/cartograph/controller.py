@@ -170,6 +170,10 @@ class CartographController:
     def showing(self) -> None:
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
+        has_canvas = self._map_canvas() is not None
+        self.canvas_radio.setEnabled(has_canvas)
+        if not has_canvas:
+            self.canvas_radio.setToolTip(tr("There is no map canvas to build from."))
         self.refresh_layouts()
 
     def hiding(self) -> None:
@@ -204,14 +208,19 @@ class CartographController:
         self._source_group = QButtonGroup(source_box)
         self.layout_radio = QRadioButton(tr("A print layout"), source_box)
         self.layout_radio.setChecked(True)
-        self.canvas_radio = QRadioButton(tr("Current canvas (coming soon)"), source_box)
-        self.canvas_radio.setEnabled(False)
+        self.canvas_radio = QRadioButton(
+            tr("Current canvas (creates a print layout)"), source_box
+        )
         self.canvas_radio.setToolTip(
             tr(
-                "One-click canvas mode - building a layout for you from what is "
-                "on screen - is coming in a later version."
+                "Builds a print layout from what the map canvas shows - title, "
+                "map, legend, scale bar and north arrow - and uses it here. "
+                "Edit it in the layout designer any time."
             )
         )
+        # One click, then the new layout is the source: the radio is an
+        # action that leaves "A print layout" selected, not a second mode.
+        self.canvas_radio.clicked.connect(self._on_canvas_radio)
         self._source_group.addButton(self.layout_radio)
         self._source_group.addButton(self.canvas_radio)
         source_layout.addWidget(self.layout_radio)
@@ -219,7 +228,15 @@ class CartographController:
 
         self.layout_combo = QComboBox(source_box)
         self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
-        source_layout.addWidget(self.layout_combo)
+        source_row = QHBoxLayout()
+        source_row.addWidget(self.layout_combo, 1)
+        self.import_button = QPushButton(tr("Import cartograph..."), source_box)
+        self.import_button.setToolTip(
+            tr("Turn a cartograph HTML file back into a QGIS print layout")
+        )
+        self.import_button.clicked.connect(self.on_import_cartograph)
+        source_row.addWidget(self.import_button)
+        source_layout.addLayout(source_row)
 
         self.layout_empty_note = FittedLabel(
             tr(
@@ -275,6 +292,96 @@ class CartographController:
         layout.addStretch(1)
         return page
 
+    def _on_canvas_radio(self) -> None:
+        self.layout_radio.setChecked(True)
+        self.create_from_canvas()
+
+    def create_from_canvas(self) -> None:
+        """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
+        layout in the project, selected as this cartograph's source."""
+        from ...core.canvas_cartograph import cartograph_from_canvas
+
+        canvas = self._map_canvas()
+        if canvas is None:
+            self.dialog.status_label.setText(
+                tr("There is no map canvas to build a layout from.")
+            )
+            return
+        try:
+            result = cartograph_from_canvas(canvas, self.project)
+        except Exception as exc:  # a canvas state nobody anticipated
+            self.dialog.status_label.setText(
+                tr("Could not build a layout from the canvas: {error}").format(
+                    error=str(exc)
+                )
+            )
+            return
+        name = result.layout.name()
+        choices = self.state.frame_choices(name)
+        for item_id, mode in result.frame_modes.items():
+            choices[item_id] = FrameChoice(mode=mode)
+        self._show_new_layout(name)
+        self.dialog.status_label.setText(
+            tr(
+                'Created the print layout "{name}" from the canvas. Edit it in '
+                "the layout designer any time; the cartograph follows."
+            ).format(name=name)
+        )
+
+    def on_import_cartograph(self) -> None:
+        """Import cartograph...: an HTML cartograph back into a QGIS layout
+        (the round trip), then used as the source."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from ...core.cartograph_import import CartographImportError
+        from ...core.layout_builder import import_cartograph_file
+
+        chosen, _ = QFileDialog.getOpenFileName(
+            self.dialog,
+            tr("Import cartograph"),
+            str(
+                Path(self.project.fileName()).parent
+                if self.project.fileName()
+                else Path.home()
+            ),
+            tr("Cartograph (*.html *.htm)"),
+        )
+        if not chosen:
+            return
+        try:
+            built = import_cartograph_file(Path(chosen), self.project)
+        except (CartographImportError, OSError) as exc:
+            QMessageBox.warning(self.dialog, tr("Import cartograph"), str(exc))
+            return
+        name = built.layout.name()
+        choices = self.state.frame_choices(name)
+        for item_id, mode in built.frame_modes.items():
+            dpi = built.frame_dpis.get(item_id, DEFAULT_STATIC_DPI)
+            choices[item_id] = FrameChoice(mode=mode, dpi=dpi)
+        self._show_new_layout(name)
+        message = tr('Imported as the print layout "{name}".').format(name=name)
+        if built.issues:
+            details = "\n".join(
+                f"- {issue.subject}: {issue.detail}" for issue in built.issues
+            )
+            QMessageBox.information(
+                self.dialog,
+                tr("Import cartograph"),
+                message
+                + "\n\n"
+                + tr("Some parts could not be carried into QGIS:")
+                + "\n"
+                + details,
+            )
+        self.dialog.status_label.setText(message)
+
+    def _show_new_layout(self, name: str) -> None:
+        """Select a layout that was just added to the project."""
+        self.state.cartograph_layout = name
+        self.refresh_layouts()
+        self.layout_combo.setCurrentText(name)
+        save_state(self.project, self.state)
+
     def _on_layout_combo_changed(self, name: str) -> None:
         self._select_layout(name)
 
@@ -309,12 +416,12 @@ class CartographController:
     def _apply_page_fields(self, spec: CartographSpec) -> CartographSpec:
         """The Cartograph tab's title, attribution and theme on the page root."""
         page = self.state.page_choice(self.state.cartograph_layout)
-        changes: dict[str, object] = {"theme": page.theme or None}
-        if page.title:
-            changes["title"] = page.title
-        if page.attribution:
-            changes["attribution"] = page.attribution
-        return dataclasses.replace(spec, **changes)
+        return dataclasses.replace(
+            spec,
+            theme=page.theme or None,
+            title=page.title or spec.title,
+            attribution=page.attribution or spec.attribution,
+        )
 
     def update_window_title(self) -> None:
         """The dialog's title names the cartograph file, per issue #3 S1."""

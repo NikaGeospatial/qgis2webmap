@@ -2726,8 +2726,8 @@ class MainDialog(QDialog):
             "cartograph",
             tr("Make a cartograph..."),
             tr(
-                "Switches to the Cartograph (Beta) output, using the layers "
-                "configured here"
+                "Builds a print layout from the current map view and switches "
+                "to the Cartograph (Beta) output"
             ),
             self._switch_to_cartograph,
         )
@@ -2768,6 +2768,7 @@ class MainDialog(QDialog):
         side pressed.
         """
         self.output_cartograph_button.setChecked(True)
+        self._cartograph.create_from_canvas()
 
     def _build_settings_tab(self) -> QWidget:
         """The person's own preferences, apart from the map's.

@@ -968,3 +968,95 @@ class TestFramesTabExtras:
             assert all(count.isdigit() and int(count) >= 1 for count in counts)
         finally:
             dialog.close()
+
+
+class TestCanvasAndImport:
+    def _canvas_dialog(self, project):
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsFeature,
+            QgsGeometry,
+            QgsRectangle,
+            QgsVectorLayer,
+        )
+        from qgis.gui import QgsMapCanvas
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "parks", "memory")
+        feature = QgsFeature()
+        feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(103.7, 1.25, 103.9, 1.4)))
+        layer.dataProvider().addFeatures([feature])
+        layer.updateExtents()
+        project.addMapLayer(layer)
+        project.setTitle("Parks")
+        canvas = QgsMapCanvas()
+        canvas.resize(400, 300)
+        canvas.setDestinationCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+        canvas.setLayers([layer])
+        canvas.setExtent(layer.extent())
+
+        class Iface(FakeIface):
+            def mapCanvas(self):  # noqa: N802 - mirrors the QGIS interface
+                return canvas
+
+        return MainDialog(Iface(), None), canvas
+
+    def test_current_canvas_creates_and_selects_a_carto_layout(
+        self, qgis_app, project
+    ) -> None:
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            assert cartograph.canvas_radio.isEnabled()
+            cartograph.canvas_radio.click()
+            name = cartograph.layout_combo.currentText()
+            assert name.startswith("carto: ")
+            assert project.layoutManager().layoutByName(name) is not None
+            assert cartograph.layout_radio.isChecked()
+            assert dialog.state.cartograph_layout == name
+            assert len(cartograph._frame_rows) == 1
+        finally:
+            dialog.close()
+
+    def test_make_a_cartograph_builds_from_the_canvas(self, qgis_app, project) -> None:
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            dialog.share_actions["cartograph"].trigger()
+            assert dialog.output_cartograph_button.isChecked()
+            assert dialog._cartograph.layout_combo.currentText().startswith("carto: ")
+        finally:
+            dialog.close()
+
+    def test_without_a_canvas_the_radio_says_why(self, qgis_app, project) -> None:
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            radio = dialog._cartograph.canvas_radio
+            assert not radio.isEnabled()
+            assert "no map canvas" in radio.toolTip()
+        finally:
+            dialog.close()
+
+    def test_import_turns_a_cartograph_back_into_a_layout(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        dialog, target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            monkeypatch.setattr(
+                QFileDialog, "getOpenFileName", lambda *a, **k: (str(target), "")
+            )
+            from qgis.PyQt.QtWidgets import QMessageBox
+
+            monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: 0)
+            before = {layout.name() for layout in project.layoutManager().layouts()}
+            dialog._cartograph.on_import_cartograph()
+            after = {layout.name() for layout in project.layoutManager().layouts()}
+            (new_name,) = after - before
+            assert dialog._cartograph.layout_combo.currentText() == new_name
+            assert len(dialog._cartograph._frame_rows) == 2
+        finally:
+            dialog.close()
