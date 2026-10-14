@@ -57,3 +57,34 @@ def status_text(
     elapsed = format_elapsed(now - saved_at)
     size = format_bytes(saved_bytes or 0)
     return translate("Saved {elapsed} · {size}").format(elapsed=elapsed, size=size)
+
+
+#: ISO 216 A sizes in mm, portrait (width, height), for naming a page.
+_ISO_A_SIZES = {
+    "A0": (841.0, 1189.0),
+    "A1": (594.0, 841.0),
+    "A2": (420.0, 594.0),
+    "A3": (297.0, 420.0),
+    "A4": (210.0, 297.0),
+    "A5": (148.0, 210.0),
+}
+
+
+def page_label(spec: object) -> str | None:
+    """ "A3 landscape", or "500 x 300 mm landscape" for a custom page.
+
+    The hand-off prompt quotes it so a print critique knows the sheet.
+    """
+    width = getattr(spec, "width", None)
+    height = getattr(spec, "height", None)
+    size = getattr(spec, "size", None)
+    orientation = getattr(spec, "orientation", None) or ""
+    if size:
+        return f"{size} {orientation}".strip()
+    if not width or not height:
+        return None
+    short, long = sorted((float(width), float(height)))
+    for name, (w, h) in _ISO_A_SIZES.items():
+        if abs(short - w) < 1.0 and abs(long - h) < 1.0:
+            return f"{name} {orientation}".strip()
+    return f"{width:g} x {height:g} mm {orientation}".strip()

@@ -1572,18 +1572,34 @@ class TestLivePreviewLifecycle:
         finally:
             dialog.close()
 
-    def test_rows_not_built_yet_are_greyed_out_and_stay_so(
-        self, qgis_app, project, make_memory_layer, tmp_path
+    def test_the_hand_off_rows_open_the_dialog_on_the_current_map_file(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
     ) -> None:
+        """Enhance and Critique open the hand-off dialog (issue #3 S4), on a
+        map file brought up to date first like every other Share row."""
+        from nika_onlymap_exporter.ui import handoff_dialog
+
+        shown = []
+        monkeypatch.setattr(
+            handoff_dialog.HandoffDialog,
+            "exec",
+            lambda self: shown.append(self.context) or 0,
+        )
         dialog = self._dialog(project, make_memory_layer)
         try:
-            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
-            dialog._set_busy(True, "working")
-            dialog._set_busy(False)
+            target = tmp_path / "peaks.html"
+            dialog.path_edit.setText(str(target))
+            monkeypatch.setattr(
+                dialog, "_with_current_map_file", lambda then: then(target)
+            )
             for key in ("enhance", "critique"):
                 action = dialog.share_actions[key]
-                assert not action.isEnabled(), key
-                assert action.toolTip().startswith("Coming soon"), key
+                assert action.isEnabled(), key
+                action.trigger()
+            assert [(c.output, c.file_path, c.task) for c in shown] == [
+                ("web_map", target, "enhance"),
+                ("web_map", target, "critique"),
+            ]
         finally:
             dialog.close()
 

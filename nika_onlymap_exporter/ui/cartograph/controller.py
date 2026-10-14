@@ -74,7 +74,7 @@ from ..i18n import plural, tr
 from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import layout_map_items
-from .status import status_text
+from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ...core.fidelity_report import FidelityReportBuilder
@@ -131,6 +131,9 @@ class CartographController:
         self._last_error = ""
         self._last_summary: ReportSummary | None = None
         self._runtime: RuntimeBundle | None = None
+        # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
+        # the hand-off prompt's print-safety line.
+        self._last_page_label: str | None = None
         self._preview_server: PreviewServer | None = None
 
         self._autosave_timer = QTimer(dialog)
@@ -470,6 +473,16 @@ class CartographController:
         self._autosave_timer.start()
 
     def _run_autosave(self) -> None:
+        """The debounce timer's slot. Never lets an exception escape: from a
+        timer it would surface as a Python error dialog in QGIS, and the
+        status line exists to say why a save did not happen."""
+        try:
+            self._start_build()
+        except Exception as exc:
+            self._job = None
+            self._on_build_failed(str(exc), traceback.format_exc())
+
+    def _start_build(self) -> None:
         if self._current_layout is None:
             return
         path_text = self.file_edit.text().strip()
@@ -514,6 +527,7 @@ class CartographController:
         except Exception as exc:
             self._on_build_failed(str(exc), traceback.format_exc())
             return
+        self._last_page_label = page_label(prepared.spec)
 
         def work(_progress: object) -> str:
             return cartograph_export.finish_cartograph(prepared, project, report)
@@ -776,15 +790,15 @@ class CartographController:
         add(
             "enhance",
             tr("Enhance with NIKA AI..."),
-            tr("Coming soon: a hand-off with a prompt to paste into NIKA"),
-            lambda: None,
-        ).setEnabled(False)
+            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
+            lambda: self.on_handoff("enhance"),
+        )
         add(
             "critique",
             tr("Ask NIKA for a critique..."),
-            tr("Coming soon: NIKA reviews the cartograph as a cartographer would"),
-            lambda: None,
-        ).setEnabled(False)
+            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
+            lambda: self.on_handoff("critique"),
+        )
 
         menu.addSection(tr("Export"))
         add(
@@ -819,7 +833,15 @@ class CartographController:
         if not hasattr(self, "cartograph_share_actions"):
             return
         exists = self._file_exists()
-        for key in ("copy_path", "reveal", "open_browser", "export_pdf", "export_png"):
+        for key in (
+            "copy_path",
+            "reveal",
+            "open_browser",
+            "export_pdf",
+            "export_png",
+            "enhance",
+            "critique",
+        ):
             action = self.cartograph_share_actions.get(key)
             if action is not None:
                 action.setEnabled(exists)
@@ -840,6 +862,32 @@ class CartographController:
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
         self.dialog.status_label.setText(tr("Opened {path}").format(path=path.parent))
+
+    def on_handoff(self, task: str, cvd_findings: str | None = None) -> None:
+        """Share > Enhance / Critique: the hand-off dialog on the saved file.
+
+        The cartograph is always saved (autosave), so unlike the web map there
+        is nothing to build first - only a file that must exist.
+        """
+        from ...core.handoff_prompt import PageInfo
+        from ...writers.onlymap_writer import PLUGIN_VERSION
+        from ..handoff_dialog import HandoffContext, HandoffDialog
+
+        path = self._current_path()
+        if path is None or not path.exists():
+            return
+        context = HandoffContext(
+            output="cartograph",
+            file_path=path,
+            source_name=self.state.cartograph_layout or path.stem,
+            plugin_version=PLUGIN_VERSION,
+            task="enhance" if task == "enhance" else "critique",
+            cvd_findings=cvd_findings,
+            page=PageInfo(size=self._last_page_label, bleed=None, atlas_pages=None)
+            if self._last_page_label
+            else None,
+        )
+        HandoffDialog(context, self.dialog).exec()
 
     def on_export_pdf(self) -> None:
         path = self._current_path()

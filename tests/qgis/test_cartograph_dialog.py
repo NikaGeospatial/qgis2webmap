@@ -92,7 +92,11 @@ def fake_cartograph_export(monkeypatch):
                 "prepare_on_gui_thread": on_gui_thread(),
             }
         )
-        return "prepared"
+        return types.SimpleNamespace(
+            spec=types.SimpleNamespace(
+                size=None, width=420.0, height=297.0, orientation="landscape"
+            )
+        )
 
     def finish_cartograph(prepared, project, report):
         calls[-1]["finish_on_gui_thread"] = on_gui_thread()
@@ -363,6 +367,27 @@ class TestAutosave:
 
 
 class TestBuildThreadsAndJobs:
+    def test_an_unexpected_error_lands_on_the_status_line(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        def explode(*_args, **_kwargs):
+            raise RuntimeError("a layout item nobody anticipated")
+
+        monkeypatch.setattr(export_module, "prepare_cartograph", explode)
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            cartograph.file_edit.setText(str(tmp_path / "survey.html"))
+            cartograph._run_autosave()
+            assert "nobody anticipated" in cartograph.cartograph_status_label.text()
+            assert not cartograph.busy
+        finally:
+            dialog.close()
+
     def test_the_layout_is_read_on_the_gui_thread_and_layers_off_it(
         self, qgis_app, project, fake_cartograph_export, tmp_path
     ) -> None:
@@ -552,13 +577,41 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
-    def test_rows_that_never_touch_the_file_stay_disabled_for_the_handoff(
-        self, qgis_app, project, tmp_path
+    def test_the_hand_off_rows_open_the_dialog_on_the_saved_file(
+        self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
-        dialog, _target = self._ready_dialog(project, tmp_path)
+        from nika_onlymap_exporter.ui import handoff_dialog
+
+        shown = []
+        monkeypatch.setattr(
+            handoff_dialog.HandoffDialog,
+            "exec",
+            lambda self: shown.append(self.context) or 0,
+        )
+        dialog, target = self._ready_dialog(project, tmp_path)
         try:
             actions = dialog._cartograph.cartograph_share_actions
-            for key in ("enhance", "critique", "print_settings"):
+            for key in ("enhance", "critique"):
+                assert actions[key].isEnabled(), key
+                actions[key].trigger()
+            assert [(c.output, c.file_path, c.task, c.source_name) for c in shown] == [
+                ("cartograph", target, "enhance", "Survey"),
+                ("cartograph", target, "critique", "Survey"),
+            ]
+        finally:
+            dialog.close()
+
+    def test_hand_off_rows_wait_for_a_saved_file(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            dialog._cartograph.file_edit.setText(str(tmp_path / "missing.html"))
+            dialog._cartograph._update_share_enabled()
+            actions = dialog._cartograph.cartograph_share_actions
+            for key in ("enhance", "critique"):
                 assert not actions[key].isEnabled(), key
         finally:
             dialog.close()

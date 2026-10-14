@@ -80,3 +80,25 @@ class TestFormatHelpers:
         assert format_bytes(12) == "12 B"
         assert format_bytes(2048) == "2 KB"
         assert format_bytes(int(2.1 * 1024 * 1024)) == "2.1 MB"
+
+
+class TestPageLabel:
+    def test_iso_sizes_are_named_with_their_orientation(self) -> None:
+        from types import SimpleNamespace
+
+        from nika_onlymap_exporter.ui.cartograph.status import page_label
+
+        a3 = SimpleNamespace(
+            width=420.0, height=297.0, size=None, orientation="landscape"
+        )
+        assert page_label(a3) == "A3 landscape"
+
+    def test_a_custom_page_is_given_in_millimetres(self) -> None:
+        from types import SimpleNamespace
+
+        from nika_onlymap_exporter.ui.cartograph.status import page_label
+
+        odd = SimpleNamespace(
+            width=500.0, height=300.0, size=None, orientation="landscape"
+        )
+        assert page_label(odd) == "500 x 300 mm landscape"

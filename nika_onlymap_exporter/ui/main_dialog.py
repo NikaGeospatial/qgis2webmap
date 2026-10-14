@@ -132,7 +132,11 @@ from ..packaging.dependency_scanner import (
     standalone_raster_reason,
 )
 from ..packaging.runtime_manager import read_lock
-from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
+from ..writers.onlymap_writer import (
+    PLUGIN_VERSION,
+    ExportBlockedError,
+    OnlyMapWriter,
+)
 from . import languages, theme
 from .account_button import AccountButton, PendingHostingBackend
 from .background_job import BackgroundJob, Progress
@@ -2706,15 +2710,15 @@ class MainDialog(QDialog):
         add(
             "enhance",
             tr("Enhance with NIKA AI..."),
-            tr("Coming soon: a hand-off with a prompt to paste into NIKA"),
-            lambda: None,
-        ).setEnabled(False)
+            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
+            lambda: self.on_handoff("enhance"),
+        )
         add(
             "critique",
             tr("Ask NIKA for a critique..."),
-            tr("Coming soon: NIKA reviews the map as a cartographer would"),
-            lambda: None,
-        ).setEnabled(False)
+            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
+            lambda: self.on_handoff("critique"),
+        )
 
         add(
             "cartograph",
@@ -3655,6 +3659,28 @@ class MainDialog(QDialog):
                 ),
             )
         )
+
+    def on_handoff(self, task: str) -> None:
+        """Share > Enhance / Critique: the hand-off dialog, on a current file.
+
+        Through `_with_current_map_file` like every other Share row, so the
+        prompt never names a map file that is missing or out of date.
+        """
+        from .handoff_dialog import HandoffContext, HandoffDialog
+
+        def show(destination: Path) -> None:
+            context = HandoffContext(
+                output="web_map",
+                file_path=destination,
+                source_name=self.state.map_name
+                or self.project.title()
+                or Path(self._project_identity()).stem,
+                plugin_version=PLUGIN_VERSION,
+                task="enhance" if task == "enhance" else "critique",
+            )
+            HandoffDialog(context, self).exec()
+
+        self._with_current_map_file(show)
 
     def on_publish(self) -> None:
         """Hosting, for as long as hosting is a form rather than a feature.
