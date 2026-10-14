@@ -58,6 +58,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -131,13 +133,18 @@ _GRID_KIND_BY_STYLE = {
 #: QgsLayoutItemScaleBar style *names* (there is no enum -- `setStyle` takes a
 #: string) -> `<om-scalebar kind>`, per issue #1 section 2's style map.
 # "Numeric" is handled separately: it becomes an `<om-text>`, not a scalebar.
+# `style()` returns the renderer *id*, not the visible name: "hollow" and
+# "stepped" (shown as "Hollow" and "Stepped Line") on both 3.44 and 4.2; the
+# visible names are kept for projects written by older QGIS versions.
 _SCALEBAR_KIND_BY_STYLE = {
     "Single Box": "single",
     "Double Box": "double",
     "Line Ticks Up": "ticks",
     "Line Ticks Down": "ticks",
     "Line Ticks Middle": "ticks",
+    "stepped": "single",
     "Stepped Line": "single",
+    "hollow": "single",
     "Hollow": "single",
 }
 
@@ -432,6 +439,19 @@ def _box(item: QgsLayoutItem, converter: QgsLayoutMeasurementConverter) -> Box:
     """
     pos = converter.convert(item.positionWithUnits(), QgsUnitTypes.LayoutMillimeters)
     size = converter.convert(item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters)
+    if item.itemRotation():
+        # A rotated item's position is its *rotated* top-left corner (an item
+        # at (10, 20), 100 x 50, rotated 20 degrees reads (21.57, 4.41)),
+        # but the runtime rotates the x/y/w/h box about its centre. So the
+        # box is the unrotated one around the item's scene centre -- scene
+        # units are layout millimetres.
+        centre = item.mapToScene(item.rect().center())
+        return Box(
+            x=centre.x() - size.width() / 2.0,
+            y=centre.y() - size.height() / 2.0,
+            w=size.width(),
+            h=size.height(),
+        )
     return Box(x=pos.x(), y=pos.y(), w=size.width(), h=size.height())
 
 
@@ -1251,6 +1271,18 @@ def _legend_shape_for_geometry(layer: QgsVectorLayer) -> str | None:
 # --------------------------------------------------------------------------
 
 
+def _segment_length_metres(item: QgsLayoutItemScaleBar) -> float | None:
+    """`segment-length` is ground metres in the runtime; QGIS stores it in
+    the bar's own units (a "2 km" segment is `unitsPerSegment() == 2`)."""
+    per_segment = item.unitsPerSegment()
+    if not per_segment:
+        return None
+    factor = QgsUnitTypes.fromUnitToUnitFactor(
+        item.units(), QgsUnitTypes.DistanceMeters
+    )
+    return per_segment * factor
+
+
 def _read_scalebar(
     item: QgsLayoutItemScaleBar,
     map_frame_id_by_uuid: Mapping[str, str],
@@ -1304,7 +1336,7 @@ def _read_scalebar(
         for_=frame_id,
         units=units,
         segments=item.numberOfSegments() or None,
-        segment_length=item.unitsPerSegment() or None,
+        segment_length=_segment_length_metres(item),
         kind=kind,
         # The runtime has one ink for bar and labels; the bar's line is the
         # one every QGIS style draws.
@@ -1384,7 +1416,11 @@ def _read_picture(
         )
 
     path = item.evaluatedPath() or item.picturePath()
-    src = _image_data_uri(path, report, label)
+    src = (
+        _embedded_data_uri(path, report, label)
+        if path.startswith("base64:")
+        else _image_data_uri(path, report, label)
+    )
     if src is None:
         return None
     report.preserved(label, "Picture preserved.")
@@ -1410,11 +1446,51 @@ def _image_data_uri(path: str, report: FidelityReportBuilder, label: str) -> str
             label, f"The picture source {path!r} could not be read ({error}); left out."
         )
         return None
-    import base64
-
     suffix = Path(path).suffix.lower()
-    mime = _IMAGE_MIME_BY_SUFFIX.get(suffix, "image/png")
+    mime = _IMAGE_MIME_BY_SUFFIX.get(suffix) or _sniff_image_mime(data)
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def _embedded_data_uri(
+    path: str, report: FidelityReportBuilder, label: str
+) -> str | None:
+    """A picture embedded in the project (`base64:<data>`, the picture
+    item's "Embed file" option) -- there is no file to read."""
+    try:
+        data = base64.b64decode(path[len("base64:") :], validate=True)
+    except (binascii.Error, ValueError) as error:
+        report.unsupported(
+            label, f"The embedded picture could not be decoded ({error}); left out."
+        )
+        return None
+    if not data:
+        report.unsupported(label, "The embedded picture is empty, so it was left out.")
+        return None
+    mime = _sniff_image_mime(data)
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+#: Leading bytes -> media type, for pictures with no (or a wrong) suffix.
+_IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"BM", "image/bmp"),
+)
+
+
+def _sniff_image_mime(data: bytes) -> str:
+    for magic, mime in _IMAGE_MAGIC:
+        if data.startswith(magic):
+            return mime
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    head = data[:512].lstrip().lower()
+    if head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in head):
+        return "image/svg+xml"
+    # QGIS's own raster pictures are overwhelmingly PNG.
+    return "image/png"
 
 
 # --------------------------------------------------------------------------

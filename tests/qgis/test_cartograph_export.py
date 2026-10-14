@@ -529,3 +529,24 @@ class TestStaticFrameCache:
             )
             assert render.call_count == 4
         cartograph_export.clear_static_frame_cache()
+
+
+class TestLiveCamera:
+    def test_the_centre_is_the_mercator_midpoint(self) -> None:
+        """The runtime centres in Web Mercator: 0..60 N centres near 35.3 N,
+        not at the 30 N average of the degrees."""
+        import math
+
+        from nika_onlymap_exporter.core.cartograph_export import _camera_for_extent
+        from nika_onlymap_exporter.core.export_ir import Extent
+
+        (lon, lat), _zoom = _camera_for_extent(
+            Extent(west=0.0, south=0.0, east=10.0, north=60.0), 100.0
+        )
+
+        def y(latitude: float) -> float:
+            return math.log(math.tan(math.pi / 4 + math.radians(latitude) / 2))
+
+        assert lon == pytest.approx(5.0)
+        assert y(lat) == pytest.approx((y(0.0) + y(60.0)) / 2)
+        assert lat == pytest.approx(35.26, abs=0.01)

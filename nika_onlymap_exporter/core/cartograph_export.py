@@ -633,7 +633,10 @@ def _camera_for_extent(
     distance (the extent's width) and a pixel distance (the frame's own
     width) are turned into the zoom that makes one cover the other.
     """
-    center_lat = (extent.south + extent.north) / 2.0
+    # The Mercator midpoint, not the degree midpoint: the runtime centres the
+    # camera in Web Mercator, where a span of latitude is not symmetric about
+    # its average (0..60 N centres at ~35.3 N, not 30 N).
+    center_lat = _mercator_mid_latitude(extent.south, extent.north)
     if extent.crosses_antimeridian:
         center_lon = extent.east + ((extent.west - extent.east) % 360.0) / 2.0
         if center_lon > 180.0:
@@ -659,3 +662,18 @@ def _camera_for_extent(
     )
     zoom = math.log2(metres_per_pixel_at_zoom_0 / metres_per_pixel)
     return (center_lon, center_lat), max(0.0, zoom)
+
+
+#: Web Mercator's latitude limit; beyond it `y` is infinite.
+_MAX_MERCATOR_LATITUDE = 85.0511287798066
+
+
+def _mercator_mid_latitude(south: float, north: float) -> float:
+    """The latitude halfway between `south` and `north` in Mercator `y`."""
+
+    def to_y(latitude: float) -> float:
+        latitude = max(-_MAX_MERCATOR_LATITUDE, min(_MAX_MERCATOR_LATITUDE, latitude))
+        return math.log(math.tan(math.pi / 4.0 + math.radians(latitude) / 2.0))
+
+    mid_y = (to_y(south) + to_y(north)) / 2.0
+    return math.degrees(2.0 * math.atan(math.exp(mid_y)) - math.pi / 2.0)

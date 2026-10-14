@@ -517,3 +517,103 @@ class TestColours:
         symbol = QgsFillSymbol.createSimple({"color": "#ff0000", "style": "no"})
         shape = self._shape(project, symbol)
         assert shape.fill_opacity == 0.0
+
+
+# --------------------------------------------------------------------------
+# Round-trip fixes: rotation, scale bar units and styles, embedded pictures
+# --------------------------------------------------------------------------
+
+
+class TestRotatedPlacement:
+    def test_a_rotated_item_keeps_its_unrotated_box(self, project) -> None:
+        """QGIS reports a rotated item's rotated top-left corner; the runtime
+        rotates the x/y/w/h box about its centre, so the box written must be
+        the unrotated one around the same centre."""
+        layout, *_ = _layout(project)
+        shape = QgsLayoutItemShape(layout)
+        layout.addLayoutItem(shape)
+        shape.attemptMove(QgsLayoutPoint(10, 150, QgsUnitTypes.LayoutMillimeters))
+        shape.attemptResize(QgsLayoutSize(100, 50, QgsUnitTypes.LayoutMillimeters))
+        shape.setItemRotation(20)
+        spec = _only(read_layout(layout, FidelityReportBuilder()), ShapeSpec)
+        assert spec.rotation == pytest.approx(20)
+        assert (spec.box.x, spec.box.y) == (pytest.approx(10), pytest.approx(150))
+        assert (spec.box.w, spec.box.h) == (pytest.approx(100), pytest.approx(50))
+
+
+class TestScalebarDetails:
+    def _bar(self, project, configure) -> tuple[ScalebarSpec, FidelityReportBuilder]:
+        layout, map_item, *_ = _layout(project)
+        scalebar = QgsLayoutItemScaleBar(layout)
+        layout.addLayoutItem(scalebar)
+        scalebar.setLinkedMap(map_item)
+        scalebar.setStyle("Single Box")
+        scalebar.applyDefaultSize()
+        configure(scalebar)
+        report = FidelityReportBuilder()
+        return _only(read_layout(layout, report), ScalebarSpec), report
+
+    @pytest.mark.parametrize(
+        ("unit", "metres"),
+        [
+            (QgsUnitTypes.DistanceMeters, 2.0),
+            (QgsUnitTypes.DistanceKilometers, 2000.0),
+            (QgsUnitTypes.DistanceFeet, 2 * 0.3048),
+            (QgsUnitTypes.DistanceNauticalMiles, 2 * 1852.0),
+        ],
+    )
+    def test_segment_length_is_in_metres(self, project, unit, metres) -> None:
+        def configure(scalebar):
+            scalebar.setUnits(unit)
+            scalebar.setUnitsPerSegment(2)
+
+        bar, _ = self._bar(project, configure)
+        assert bar.segment_length == pytest.approx(metres, rel=1e-6)
+
+    @pytest.mark.parametrize("renderer_id", ["hollow", "stepped"])
+    def test_current_style_ids_are_known(self, project, renderer_id) -> None:
+        bar, report = self._bar(project, lambda sb: sb.setStyle(renderer_id))
+        assert bar.kind == "single"
+        assert not any("style" in r for r in _rows(report, FidelityStatus.APPROXIMATED))
+
+    def test_every_registered_style_is_mapped(self, project) -> None:
+        from qgis.core import QgsApplication
+
+        from nika_onlymap_exporter.core import layout_reader
+
+        registry = QgsApplication.scaleBarRendererRegistry()
+        for renderer_id in registry.renderers():
+            if renderer_id == "Numeric":
+                continue
+            assert renderer_id in layout_reader._SCALEBAR_KIND_BY_STYLE, renderer_id
+
+
+_PNG_1PX = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+    "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+class TestEmbeddedPictures:
+    def _image(self, project, path: str):
+        from nika_onlymap_exporter.core.cartograph_ir import ImageSpec
+
+        layout, *_ = _layout(project)
+        picture = QgsLayoutItemPicture(layout)
+        layout.addLayoutItem(picture)
+        picture.setPicturePath(path)
+        picture.attemptResize(QgsLayoutSize(10, 10, QgsUnitTypes.LayoutMillimeters))
+        return _only(read_layout(layout, FidelityReportBuilder()), ImageSpec)
+
+    def test_an_embedded_base64_picture_is_kept(self, project) -> None:
+        image = self._image(project, f"base64:{_PNG_1PX}")
+        assert image.src == f"data:image/png;base64,{_PNG_1PX}"
+
+    def test_a_suffixless_file_is_typed_by_its_bytes(self, project, tmp_path) -> None:
+        svg = tmp_path / "logo"
+        svg.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>',
+            encoding="utf-8",
+        )
+        image = self._image(project, str(svg))
+        assert image.src.startswith("data:image/svg+xml;base64,")
