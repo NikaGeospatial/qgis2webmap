@@ -879,6 +879,40 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.field};
 }}
 
+/* The Make switch: two checkable buttons in one outlined pill, the same shape
+   as the Preview pill below the tabs. Modest on purpose - it is read once per
+   session, not pressed often, so it borrows the corner's quiet styling rather
+   than inventing a louder one. */
+{d} QFrame[role="outputGroup"] {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+}}
+{d} QToolButton[role="outputPart"] {{
+    background: transparent;
+    color: {p.ink};
+    border: none;
+    padding: 4px 12px;
+    min-height: 20px;
+    font-weight: 600;
+    margin: 0;
+}}
+{d} QToolButton[role="outputPart"][position="left"] {{
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+{d} QToolButton[role="outputPart"][position="right"] {{
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d} QToolButton[role="outputPart"]:hover {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="outputPart"]:checked {{
+    background: {p.accent};
+    color: {p.on_accent};
+}}
+
 /* Footer chips: outlined, so they read as things to press. */
 {d} QPushButton[role="chip"], {d} QToolButton[role="chip"] {{
     background: transparent;
