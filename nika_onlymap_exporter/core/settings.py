@@ -24,6 +24,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .cartograph_ir import CARTOGRAPH_THEMES
 from .export_ir import (
     Color,
     ExportSettings,
@@ -66,6 +67,7 @@ KEY_CARTOGRAPH_LAYOUT = "cartographLayout"
 KEY_CARTOGRAPH_FILES = "cartographFiles"
 KEY_CARTOGRAPH_FRAMES = "cartographFrames"
 KEY_CARTOGRAPH_PRINT = "cartographPrint"
+KEY_CARTOGRAPH_PAGE = "cartographPage"
 
 # The OnlyMap licence key, in QSettings rather than the project.
 #
@@ -181,6 +183,35 @@ class FrameChoice:
         except (TypeError, ValueError):
             dpi = DEFAULT_STATIC_DPI
         return cls(mode=mode, dpi=dpi)
+
+
+@dataclass
+class PageChoice:
+    """The Cartograph tab's page fields for one layout.
+
+    Blank title and attribution mean "the project's own": the project title,
+    and no attribution line beyond the runtime's credits.
+    """
+
+    title: str = ""
+    attribution: str = ""
+    theme: str = "default"
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "title": self.title,
+            "attribution": self.attribution,
+            "theme": self.theme,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PageChoice:
+        theme = str(data.get("theme", "default"))
+        return cls(
+            title=str(data.get("title", "") or ""),
+            attribution=str(data.get("attribution", "") or ""),
+            theme=theme if theme in CARTOGRAPH_THEMES else "default",
+        )
 
 
 @dataclass
@@ -416,6 +447,7 @@ CARTOGRAPH_FIELDS = (
     "cartograph_files",
     "cartograph_frames",
     "cartograph_print",
+    "cartograph_page",
 )
 
 
@@ -481,12 +513,20 @@ class DialogState:
     # entry means no print attributes, so a cartograph saved before the user
     # opened Print settings stays byte-identical.
     cartograph_print: dict[str, str] = field(default_factory=dict)
+    # Layout name -> its Cartograph tab page fields (title, attribution, theme).
+    cartograph_page: dict[str, PageChoice] = field(default_factory=dict)
 
     def frame_choices(self, layout_name: str) -> dict[str, FrameChoice]:
         """Frame choices for one layout, creating an empty map on first sight."""
         if layout_name not in self.cartograph_frames:
             self.cartograph_frames[layout_name] = {}
         return self.cartograph_frames[layout_name]
+
+    def page_choice(self, layout_name: str) -> PageChoice:
+        """Page fields for one layout, creating the defaults on first sight."""
+        if layout_name not in self.cartograph_page:
+            self.cartograph_page[layout_name] = PageChoice()
+        return self.cartograph_page[layout_name]
 
     def cartograph_file_for(self, layout_name: str) -> str:
         return self.cartograph_files.get(layout_name, "")
@@ -670,6 +710,15 @@ def load_state(project: QgsProject) -> DialogState:
         except (ValueError, AttributeError):
             pass
 
+    page_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_PAGE, "")
+    if ok and page_json:
+        try:
+            for name, data in json.loads(page_json).items():
+                if isinstance(name, str) and isinstance(data, dict):
+                    state.cartograph_page[name] = PageChoice.from_dict(data)
+        except (ValueError, AttributeError):
+            pass
+
     print_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_PRINT, "")
     if ok and print_json:
         try:
@@ -744,4 +793,11 @@ def save_state(project: QgsProject, state: DialogState) -> None:
     )
     project.writeEntry(
         SCOPE, KEY_CARTOGRAPH_PRINT, json.dumps(dict(state.cartograph_print))
+    )
+    project.writeEntry(
+        SCOPE,
+        KEY_CARTOGRAPH_PAGE,
+        json.dumps(
+            {name: page.to_dict() for name, page in state.cartograph_page.items()}
+        ),
     )

@@ -92,10 +92,17 @@ def fake_cartograph_export(monkeypatch):
                 "prepare_on_gui_thread": on_gui_thread(),
             }
         )
-        return types.SimpleNamespace(
-            spec=types.SimpleNamespace(
-                size=None, width=420.0, height=297.0, orientation="landscape"
-            )
+        from nika_onlymap_exporter.core.cartograph_ir import CartographSpec
+        from nika_onlymap_exporter.writers.cartograph_writer import (
+            CartographRuntimeBundle,
+        )
+
+        return export_module.PreparedCartograph(
+            spec=CartographSpec(
+                cartograph_id="fake", width=420.0, height=297.0, orientation="landscape"
+            ),
+            live_frames=(),
+            bundle=CartographRuntimeBundle(cartograph_js=b"", cartograph_css=""),
         )
 
     def finish_cartograph(prepared, project, report):
@@ -820,5 +827,144 @@ class TestPrintSettings:
             dialog.output_cartograph_button.setChecked(True)
             row = dialog._cartograph.cartograph_share_actions["print_settings"]
             assert not row.isEnabled()
+        finally:
+            dialog.close()
+
+
+class TestPageFieldsAndTitle:
+    def test_title_attribution_and_theme_reach_the_file(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            before = target.stat().st_mtime_ns
+            cartograph.title_edit.setText("Parcel survey")
+            cartograph.title_edit.textEdited.emit("Parcel survey")
+            cartograph.attribution_edit.setText("Survey: NIKA 2026")
+            cartograph.attribution_edit.textEdited.emit("Survey: NIKA 2026")
+            cartograph.theme_combo.setCurrentIndex(
+                cartograph.theme_combo.findData("sepia")
+            )
+            assert _wait_for(
+                qgis_app, lambda: target.stat().st_mtime_ns != before, timeout=60
+            )
+            assert _wait_for(
+                qgis_app,
+                lambda: 'theme="sepia"' in target.read_text(encoding="utf-8"),
+                timeout=60,
+            )
+            html = target.read_text(encoding="utf-8")
+            assert 'title="Parcel survey"' in html
+            assert 'attribution="Survey: NIKA 2026"' in html
+        finally:
+            dialog.close()
+
+    def test_page_fields_are_per_layout_and_survive_reopening(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import load_state
+
+        _add_layout(project, "One", [("A", "EPSG:4326")])
+        _add_layout(project, "Two", [("B", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            cartograph.layout_combo.setCurrentText("One")
+            cartograph.title_edit.setText("First")
+            cartograph.title_edit.textEdited.emit("First")
+            cartograph.layout_combo.setCurrentText("Two")
+            assert cartograph.title_edit.text() == ""
+            cartograph.layout_combo.setCurrentText("One")
+            assert cartograph.title_edit.text() == "First"
+        finally:
+            dialog.close()
+        assert load_state(project).page_choice("One").title == "First"
+
+    def test_the_window_title_names_the_cartograph_file(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            dialog._cartograph.file_edit.setText(str(tmp_path / "parcels.html"))
+            dialog._cartograph._on_file_edited(str(tmp_path / "parcels.html"))
+            assert dialog.windowTitle().startswith("parcels.html")
+            dialog.output_web_button.setChecked(True)
+            assert dialog.windowTitle() == "QGIS2WebMap by NIKA"
+        finally:
+            dialog.close()
+
+
+class TestFramesTabExtras:
+    def test_use_canvas_view_sets_the_item_extent_undoably(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle
+        from qgis.gui import QgsMapCanvas
+
+        layout = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        canvas = QgsMapCanvas()
+        canvas.setDestinationCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+        canvas.resize(400, 300)
+        canvas.setExtent(QgsRectangle(100.0, 0.0, 104.0, 3.0))
+
+        class Iface(FakeIface):
+            def mapCanvas(self):  # noqa: N802 - mirrors the QGIS interface
+                return canvas
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        dialog = MainDialog(Iface(), None)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            (item_id,) = cartograph._frame_rows
+            button = cartograph.frames_tree.itemWidget(
+                cartograph._frame_tree_rows[item_id], 5
+            )
+            assert button.isEnabled()
+            button.click()
+            from qgis.core import QgsLayoutItemMap
+
+            map_item = next(
+                i for i in layout.items() if isinstance(i, QgsLayoutItemMap)
+            )
+            shown = canvas.extent()
+            assert map_item.extent().contains(shown.center())
+            assert layout.undoStack().stack().count() >= 1
+        finally:
+            dialog.close()
+
+    def test_use_canvas_view_is_disabled_without_a_canvas(
+        self, qgis_app, project
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            (item_id,) = cartograph._frame_rows
+            button = cartograph.frames_tree.itemWidget(
+                cartograph._frame_tree_rows[item_id], 5
+            )
+            assert not button.isEnabled()
+        finally:
+            dialog.close()
+
+    def test_each_frame_shows_its_count_of_changes(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            counts = [
+                cartograph._frame_tree_rows[item_id].text(4)
+                for item_id in cartograph._frame_rows
+            ]
+            # Both survey frames are static (UTM), which is a "Changed" row each.
+            assert all(count.isdigit() and int(count) >= 1 for count in counts)
         finally:
             dialog.close()

@@ -51,6 +51,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import cartograph_export
 from ...core.atomic_write import write_text_atomic
+from ...core.cartograph_ir import CartographSpec
 from ...core.fidelity_summary import (
     ReportState,
     ReportSummary,
@@ -72,7 +73,7 @@ from ...packaging.runtime_manager import (
 )
 from ..background_job import BackgroundJob
 from ..fitted_label import FittedLabel
-from ..i18n import plural, tr
+from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import layout_map_items
@@ -88,6 +89,16 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 AUTOSAVE_DEBOUNCE_MS = 600
 STATUS_TICK_MS = 1000
 DPI_CHOICES = (150, 200, 300)
+
+# The runtime's built-in themes (`core/cartograph_ir.CARTOGRAPH_THEMES`), in
+# the order the Theme box offers them.
+_THEME_LABELS = (
+    ("default", N_("Default")),
+    ("dark", N_("Dark")),
+    ("sepia", N_("Sepia")),
+    ("blueprint", N_("Blueprint")),
+    ("minimal", N_("Minimal")),
+)
 
 
 def _reveal_label() -> str:
@@ -126,6 +137,7 @@ class CartographController:
         self._layout_changed_connected = False
         self._manager_connected = False
         self._frame_rows: dict[str, dict[str, QComboBox]] = {}
+        self._frame_tree_rows: dict[str, QTreeWidgetItem] = {}
 
         self._job: BackgroundJob | None = None
         self._last_saved_at: float | None = None
@@ -137,6 +149,9 @@ class CartographController:
         # the hand-off prompt's print-safety line.
         self._last_page_label: str | None = None
         self._print_after_save = False
+        self._loading_page = False
+        # Map item uuid -> how many of its fidelity rows are not "Kept".
+        self._frame_issue_counts: dict[str, int] = {}
         self._preview_server: PreviewServer | None = None
 
         self._autosave_timer = QTimer(dialog)
@@ -232,6 +247,26 @@ class CartographController:
         file_form.addRow(tr("Save to"), file_row)
         layout.addWidget(file_box)
 
+        page_box = QGroupBox(tr("Page"), page)
+        page_form = QFormLayout(page_box)
+        self.title_edit = QLineEdit(page_box)
+        self.title_edit.setPlaceholderText(tr("The project title"))
+        self.title_edit.setToolTip(
+            tr("Shown wherever the layout uses the project title. Blank keeps it.")
+        )
+        self.title_edit.textEdited.connect(self._on_page_edited)
+        page_form.addRow(tr("Title"), self.title_edit)
+        self.attribution_edit = QLineEdit(page_box)
+        self.attribution_edit.setPlaceholderText(tr("Optional, e.g. data sources"))
+        self.attribution_edit.textEdited.connect(self._on_page_edited)
+        page_form.addRow(tr("Attribution"), self.attribution_edit)
+        self.theme_combo = QComboBox(page_box)
+        for theme_id, label in _THEME_LABELS:
+            self.theme_combo.addItem(tr(label), theme_id)
+        self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
+        page_form.addRow(tr("Theme"), self.theme_combo)
+        layout.addWidget(page_box)
+
         self.cartograph_status_label = FittedLabel("", page)
         self.cartograph_status_label.setWordWrap(True)
         layout.addWidget(self.cartograph_status_label)
@@ -248,6 +283,46 @@ class CartographController:
             self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
         self._on_cartograph_setting_changed()
         self._update_share_enabled()
+        self.update_window_title()
+
+    def _on_page_edited(self, *_args: object) -> None:
+        if not self.state.cartograph_layout or self._loading_page:
+            return
+        page = self.state.page_choice(self.state.cartograph_layout)
+        page.title = self.title_edit.text().strip()
+        page.attribution = self.attribution_edit.text().strip()
+        page.theme = self.theme_combo.currentData() or "default"
+        self._on_cartograph_setting_changed()
+
+    def _load_page_fields(self) -> None:
+        """Show the selected layout's page fields without counting as edits."""
+        page = self.state.page_choice(self.state.cartograph_layout)
+        self._loading_page = True
+        try:
+            self.title_edit.setText(page.title)
+            self.attribution_edit.setText(page.attribution)
+            index = self.theme_combo.findData(page.theme)
+            self.theme_combo.setCurrentIndex(max(index, 0))
+        finally:
+            self._loading_page = False
+
+    def _apply_page_fields(self, spec: CartographSpec) -> CartographSpec:
+        """The Cartograph tab's title, attribution and theme on the page root."""
+        page = self.state.page_choice(self.state.cartograph_layout)
+        changes: dict[str, object] = {"theme": page.theme or None}
+        if page.title:
+            changes["title"] = page.title
+        if page.attribution:
+            changes["attribution"] = page.attribution
+        return dataclasses.replace(spec, **changes)
+
+    def update_window_title(self) -> None:
+        """The dialog's title names the cartograph file, per issue #3 S1."""
+        if self.state.output is not DialogOutput.CARTOGRAPH:
+            return
+        path = self._current_path()
+        base = tr("QGIS2WebMap by NIKA")
+        self.dialog.setWindowTitle(f"{path.name} - {base}" if path else base)
 
     def _on_choose_file(self) -> None:
         current = self.file_edit.text().strip()
@@ -284,9 +359,9 @@ class CartographController:
         layout.addWidget(note)
 
         self.frames_tree = QTreeWidget(page)
-        self.frames_tree.setColumnCount(4)
+        self.frames_tree.setColumnCount(6)
         self.frames_tree.setHeaderLabels(
-            [tr("Map item"), tr("CRS"), tr("Frame"), tr("DPI")]
+            [tr("Map item"), tr("CRS"), tr("Frame"), tr("DPI"), tr("Changes"), ""]
         )
         self.frames_tree.setRootIsDecorated(False)
         self.frames_tree.setUniformRowHeights(True)
@@ -305,6 +380,7 @@ class CartographController:
     def _rebuild_frames_rows(self) -> None:
         self.frames_tree.clear()
         self._frame_rows.clear()
+        self._frame_tree_rows.clear()
         if self._current_layout is None:
             self.frames_empty_note.setVisible(False)
             return
@@ -349,10 +425,67 @@ class CartographController:
                     self._on_frame_dpi_changed(item_id, dpi_combo)
                 )
             )
+            issues = self._frame_issue_counts.get(item_id)
+            row.setText(4, "" if issues is None else str(issues))
+            row.setToolTip(
+                4,
+                tr(
+                    "Items on this frame the cartograph changes or leaves out; "
+                    "see the Fidelity tab"
+                ),
+            )
+            match = QToolButton(self.frames_tree)
+            match.setText(tr("Use canvas view"))
+            match.setToolTip(
+                tr("Set this map item's extent to what the QGIS map canvas shows")
+            )
+            match.setEnabled(self._map_canvas() is not None)
+            match.clicked.connect(
+                lambda _checked=False, item_id=item_id: self._match_canvas(item_id)
+            )
+            self.frames_tree.setItemWidget(row, 5, match)
             self._frame_rows[item_id] = {"mode": mode_combo, "dpi": dpi_combo}
+            self._frame_tree_rows[item_id] = row
 
-        for column in range(4):
+        for column in range(6):
             self.frames_tree.resizeColumnToContents(column)
+
+    def _map_canvas(self):
+        iface = getattr(self.dialog, "iface", None)
+        get_canvas = getattr(iface, "mapCanvas", None)
+        return get_canvas() if callable(get_canvas) else None
+
+    def _match_canvas(self, item_id: str) -> None:
+        """Frames > Use canvas view: the map item takes the canvas's extent.
+
+        An edit to the user's own layout, so it goes on the layout's undo
+        stack where the layout designer's Undo can take it back.
+        """
+        from qgis.core import QgsCoordinateTransform, QgsLayoutItemMap
+
+        canvas = self._map_canvas()
+        layout = self._current_layout
+        if canvas is None or layout is None:
+            return
+        item = next(
+            (
+                i
+                for i in layout.items()
+                if isinstance(i, QgsLayoutItemMap) and i.uuid() == item_id
+            ),
+            None,
+        )
+        if item is None:
+            return
+        extent = canvas.extent()
+        source = canvas.mapSettings().destinationCrs()
+        if source.isValid() and item.crs().isValid() and source != item.crs():
+            transform = QgsCoordinateTransform(source, item.crs(), self.project)
+            extent = transform.transformBoundingBox(extent)
+        layout.undoStack().beginCommand(item, tr("Use canvas view"))
+        item.zoomToExtent(extent)
+        layout.undoStack().endCommand()
+        self.schedule_autosave()
 
     def _on_frame_mode_changed(
         self, item_id: str, mode_combo: QComboBox, dpi_combo: QComboBox
@@ -440,6 +573,8 @@ class CartographController:
 
         self._rebuild_frames_rows()
         self._update_file_default()
+        self._load_page_fields()
+        self.update_window_title()
         self._update_status_label()
         self._update_share_enabled()
         save_state(self.project, self.state)
@@ -530,6 +665,9 @@ class CartographController:
         except Exception as exc:
             self._on_build_failed(str(exc), traceback.format_exc())
             return
+        prepared = dataclasses.replace(
+            prepared, spec=self._apply_page_fields(prepared.spec)
+        )
         print_settings = self._print_settings()
         if print_settings is not None:
             prepared = dataclasses.replace(
@@ -593,6 +731,7 @@ class CartographController:
         self._last_saved_at = time.time()
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
+        self._count_frame_issues(report)
         if self._print_after_save:
             self._print_after_save = False
             self._open_url(
@@ -631,6 +770,26 @@ class CartographController:
                 translate=tr,
             )
         )
+
+    def _count_frame_issues(self, report: FidelityReportBuilder) -> None:
+        """Per map item, the fidelity rows that are not "Kept"."""
+        from ...core.export_ir import FidelityStatus
+
+        counts: dict[str, int] = {}
+        if self._current_layout is not None:
+            for item in layout_map_items(self._current_layout):
+                needle = f"'{item.name}'"
+                counts[item.item_id] = sum(
+                    1
+                    for row in report.items
+                    if row.status is not FidelityStatus.PRESERVED
+                    and needle in row.subject
+                )
+        self._frame_issue_counts = counts
+        for item_id, count in counts.items():
+            row = self._frame_tree_rows.get(item_id)
+            if row is not None:
+                row.setText(4, str(count))
 
     @property
     def has_report(self) -> bool:

@@ -2485,8 +2485,10 @@ class MainDialog(QDialog):
 
         if web:
             self._cartograph.hiding()
+            self.setWindowTitle(tr("QGIS2WebMap by NIKA"))
         else:
             self._cartograph.showing()
+            self._cartograph.update_window_title()
         self._show_active_fidelity()
         if web:
             # The web map's report may have gone stale while it was off
