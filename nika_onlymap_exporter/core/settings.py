@@ -52,6 +52,20 @@ KEY_MAP_FILE_RELATIVE = "mapFileRelative"
 # key 0.1.x wrote, so an upgrading project reopens on the type it last used.
 KEY_OUTPUT_MODE = "outputMode"
 
+# Which output the dialog is making: the web map it has always made, or the
+# new Cartograph (Beta) output. Kept with the project, like `outputMode`, so
+# reopening the plugin on a project that was last doing cartograph work opens
+# there again rather than silently back on the web map.
+KEY_OUTPUT = "output"
+
+# Cartograph state, all keyed by print layout name so switching layouts keeps
+# each one's own choices. JSON blobs rather than one key per field: the set of
+# per-item Frame choices is open-ended (one entry per map item in the layout),
+# which does not fit the fixed-key style the rest of this module uses.
+KEY_CARTOGRAPH_LAYOUT = "cartographLayout"
+KEY_CARTOGRAPH_FILES = "cartographFiles"
+KEY_CARTOGRAPH_FRAMES = "cartographFrames"
+
 # The OnlyMap licence key, in QSettings rather than the project.
 #
 # **Deliberately not stored with the `.qgz`.** Everything else in this module
@@ -121,6 +135,51 @@ def save_license_key(value: str) -> None:
             settings.setValue(LICENSE_KEY_SETTING, text)
         else:
             settings.remove(LICENSE_KEY_SETTING)
+
+
+class DialogOutput(Enum):
+    """What the dialog is making: the switch at the top of the window."""
+
+    WEB_MAP = "web_map"
+    CARTOGRAPH = "cartograph"
+
+
+# Live if the map item's CRS is one the runtime can render as an interactive
+# `<om-map>` (both are the projections OnlyMap's live basemaps are built for);
+# anything else - a local UTM zone, a survey CRS - has no live basemap to put
+# under it, so it defaults to a static raster instead. A small pure function so
+# it is unit-testable without a layout or a dialog.
+LIVE_DEFAULT_CRS = frozenset({"EPSG:3857", "EPSG:4326"})
+
+
+def default_frame_mode(crs_authid: str) -> str:
+    """ "live" or "static", from a map item's CRS authid alone."""
+    return "live" if crs_authid in LIVE_DEFAULT_CRS else "static"
+
+
+DEFAULT_STATIC_DPI = 150
+
+
+@dataclass
+class FrameChoice:
+    """One map item's Live/Static choice, persisted per layout."""
+
+    mode: str = "live"
+    dpi: int = DEFAULT_STATIC_DPI
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"mode": self.mode, "dpi": self.dpi}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> FrameChoice:
+        mode = str(data.get("mode", "live"))
+        if mode not in ("live", "static"):
+            mode = "live"
+        try:
+            dpi = int(data.get("dpi", DEFAULT_STATIC_DPI))
+        except (TypeError, ValueError):
+            dpi = DEFAULT_STATIC_DPI
+        return cls(mode=mode, dpi=dpi)
 
 
 @dataclass
@@ -347,6 +406,16 @@ CHROME_FIELDS = (
     "widget_foreground",
 )
 
+# The Make switch and the cartograph's own choices. Deliberately NOT watched
+# by the web map's live preview: none of them changes the web map, and the
+# cartograph rebuilds through its own autosave (`ui/cartograph/controller.py`).
+CARTOGRAPH_FIELDS = (
+    "output",
+    "cartograph_layout",
+    "cartograph_files",
+    "cartograph_frames",
+)
+
 
 @dataclass
 class DialogState:
@@ -389,6 +458,31 @@ class DialogState:
     extent_source: ExtentSource = ExtentSource.DATA
     clip_to_extent: bool = False
     layers: dict[str, LayerSettings] = field(default_factory=dict)
+
+    # ---- Cartograph (Beta) --------------------------------------------
+    # Which output the switch at the top of the dialog is on. A project saved
+    # before this field existed has no entry for it at all, and `load_state`
+    # leaves the default below in place - the web map, exactly as before.
+    output: DialogOutput = DialogOutput.WEB_MAP
+    # The print layout the Cartograph tab's Source dropdown has selected, by
+    # name. Layout names are unique within a project (QGIS enforces it), so a
+    # name is a stable enough key without carrying a QGIS object into state.
+    cartograph_layout: str = ""
+    # Layout name -> the cartograph file chosen for it. A dict, not a single
+    # path, because the Source dropdown can be pointed at a different layout
+    # without losing the file already chosen for the first one.
+    cartograph_files: dict[str, str] = field(default_factory=dict)
+    # Layout name -> map item id -> that item's Live/Static + DPI choice.
+    cartograph_frames: dict[str, dict[str, FrameChoice]] = field(default_factory=dict)
+
+    def frame_choices(self, layout_name: str) -> dict[str, FrameChoice]:
+        """Frame choices for one layout, creating an empty map on first sight."""
+        if layout_name not in self.cartograph_frames:
+            self.cartograph_frames[layout_name] = {}
+        return self.cartograph_frames[layout_name]
+
+    def cartograph_file_for(self, layout_name: str) -> str:
+        return self.cartograph_files.get(layout_name, "")
 
     def snapshot(self) -> str:
         """A deterministic string that changes whenever any setting does.
@@ -537,6 +631,38 @@ def load_state(project: QgsProject) -> DialogState:
         except (ValueError, AttributeError):
             pass
 
+    output, ok = project.readEntry(SCOPE, KEY_OUTPUT, "")
+    if ok and output:
+        with contextlib.suppress(ValueError):
+            state.output = DialogOutput(output)
+
+    layout_name, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_LAYOUT, "")
+    if ok and layout_name:
+        state.cartograph_layout = layout_name
+
+    files_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_FILES, "")
+    if ok and files_json:
+        try:
+            for name, path in json.loads(files_json).items():
+                if isinstance(name, str) and isinstance(path, str) and path:
+                    state.cartograph_files[name] = path
+        except (ValueError, AttributeError):
+            pass
+
+    frames_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_FRAMES, "")
+    if ok and frames_json:
+        try:
+            for name, items in json.loads(frames_json).items():
+                if not isinstance(name, str) or not isinstance(items, dict):
+                    continue
+                state.cartograph_frames[name] = {
+                    item_id: FrameChoice.from_dict(data)
+                    for item_id, data in items.items()
+                    if isinstance(item_id, str) and isinstance(data, dict)
+                }
+        except (ValueError, AttributeError):
+            pass
+
     return state
 
 
@@ -582,4 +708,21 @@ def save_state(project: QgsProject, state: DialogState) -> None:
         SCOPE,
         KEY_LAYERS,
         json.dumps({k: v.to_dict() for k, v in state.layers.items()}),
+    )
+    project.writeEntry(SCOPE, KEY_OUTPUT, state.output.value)
+    project.writeEntry(SCOPE, KEY_CARTOGRAPH_LAYOUT, state.cartograph_layout)
+    project.writeEntry(
+        SCOPE, KEY_CARTOGRAPH_FILES, json.dumps(dict(state.cartograph_files))
+    )
+    project.writeEntry(
+        SCOPE,
+        KEY_CARTOGRAPH_FRAMES,
+        json.dumps(
+            {
+                layout_name: {
+                    item_id: choice.to_dict() for item_id, choice in items.items()
+                }
+                for layout_name, items in state.cartograph_frames.items()
+            }
+        ),
     )

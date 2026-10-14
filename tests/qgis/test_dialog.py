@@ -95,6 +95,55 @@ class TestSettingsPersistence:
         state = load_state(project)
         assert state.layers == {}
 
+    def test_an_older_saved_state_loads_with_the_web_map_default(self, project) -> None:
+        """A project saved before the Cartograph switch existed has no
+        `output` entry at all - it must open on the web map, exactly as it
+        always has, not on whatever `DialogOutput`'s first member happens to
+        be."""
+        from nika_onlymap_exporter.core.settings import DialogOutput
+
+        save_state(project, DialogState(map_name="Old project"))
+        project.removeEntry("qgis2webmap", "output")
+        project.removeEntry("qgis2webmap", "cartographLayout")
+        project.removeEntry("qgis2webmap", "cartographFiles")
+        project.removeEntry("qgis2webmap", "cartographFrames")
+
+        state = load_state(project)
+        assert state.output is DialogOutput.WEB_MAP
+        assert state.cartograph_layout == ""
+        assert state.cartograph_files == {}
+        assert state.cartograph_frames == {}
+
+    def test_cartograph_choices_round_trip_per_layout(self, project) -> None:
+        from nika_onlymap_exporter.core.settings import DialogOutput, FrameChoice
+
+        state = DialogState()
+        state.output = DialogOutput.CARTOGRAPH
+        state.cartograph_layout = "Parcel map"
+        state.cartograph_files["Parcel map"] = "/tmp/parcel.html"
+        state.frame_choices("Parcel map")["item-1"] = FrameChoice(
+            mode="static", dpi=300
+        )
+        save_state(project, state)
+
+        restored = load_state(project)
+        assert restored.output is DialogOutput.CARTOGRAPH
+        assert restored.cartograph_layout == "Parcel map"
+        assert restored.cartograph_file_for("Parcel map") == "/tmp/parcel.html"
+        assert restored.frame_choices("Parcel map")["item-1"] == FrameChoice(
+            mode="static", dpi=300
+        )
+
+    def test_corrupt_cartograph_entries_do_not_prevent_opening(self, project) -> None:
+        project.writeEntry("qgis2webmap", "output", "not_a_real_output")
+        project.writeEntry("qgis2webmap", "cartographFrames", "{{{ not json")
+        state = load_state(project)
+
+        from nika_onlymap_exporter.core.settings import DialogOutput
+
+        assert state.output is DialogOutput.WEB_MAP
+        assert state.cartograph_frames == {}
+
     def test_the_export_type_survives_a_round_trip(self, project) -> None:
         """`outputMode` is the Export as choice again, kept with the project.
 
@@ -1531,10 +1580,28 @@ class TestLivePreviewLifecycle:
             dialog.path_edit.setText(str(tmp_path / "peaks.html"))
             dialog._set_busy(True, "working")
             dialog._set_busy(False)
-            for key in ("enhance", "critique", "cartograph"):
+            for key in ("enhance", "critique"):
                 action = dialog.share_actions[key]
                 assert not action.isEnabled(), key
                 assert action.toolTip().startswith("Coming soon"), key
+        finally:
+            dialog.close()
+
+    def test_make_a_cartograph_is_enabled_and_switches_the_output(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Unlike the hand-off rows above, this one is no longer a stub: it
+        switches the dialog to the Cartograph (Beta) output (see
+        `ui/cartograph/`)."""
+        from nika_onlymap_exporter.core.settings import DialogOutput
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            action = dialog.share_actions["cartograph"]
+            assert action.isEnabled()
+            action.trigger()
+            assert dialog.state.output is DialogOutput.CARTOGRAPH
+            assert dialog.output_cartograph_button.isChecked()
         finally:
             dialog.close()
 
