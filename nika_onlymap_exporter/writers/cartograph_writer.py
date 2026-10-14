@@ -183,6 +183,11 @@ def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
             "carto.setCoreLoader(async () => blobImport(await inflate(CORE_GZ)));",
         ]
     lines.append("document.body.appendChild(fragment);")
+    # The runtime installs `?print=1` / `?export=png` / `?cvd=` when it is
+    # imported, which is before the sheet leaves its <template>, so it finds
+    # no page to act on. Installing again now that the page is connected is
+    # what makes the Share menu's Export PDF/PNG work at all.
+    lines.append("carto.installUrlActions();")
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
 

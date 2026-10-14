@@ -533,3 +533,14 @@ class TestPrintShopAttributes:
         frame = _static_spec().items[0]
         with pytest.raises(ValueError):
             CartographSpec(cartograph_id="cg", size="A3", items=(frame,), cvd="sepia")
+
+
+class TestUrlActions:
+    def test_triggers_are_installed_after_the_sheet_is_connected(self) -> None:
+        """Installed at import, the runtime's triggers see an empty document
+        (the sheet is still in its <template>), so `?print=1` and
+        `?export=png` did nothing until this second install."""
+        html = write_cartograph_html(_static_spec(), _runtime())
+        append = html.index("document.body.appendChild(fragment);")
+        install = html.index("carto.installUrlActions();")
+        assert install > append
