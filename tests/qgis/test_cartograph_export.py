@@ -17,6 +17,7 @@ from nika_onlymap_exporter.core.cartograph_export import (
     finish_cartograph,
     prepare_cartograph,
 )
+from nika_onlymap_exporter.core.cartograph_ir import element_id
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
@@ -220,7 +221,7 @@ class TestPrepareThenFinish:
         )
         frames = {i.id: i for i in prepared.items if isinstance(i, FrameSpec)}
         for uuid, dpi in dpis.items():
-            frame = frames[f"frame-{uuid}"]
+            frame = frames[element_id("frame", uuid)]
             assert frame.dpi == dpi
             image = QImage.fromData(frame.image_bytes, "PNG")
             assert image.width() == round(frame.box.w / 25.4 * dpi)
