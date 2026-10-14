@@ -485,3 +485,51 @@ class TestDeterminism:
         first = write_cartograph_html(spec, runtime)
         second = write_cartograph_html(spec, runtime)
         assert first == second
+
+
+class TestPrintShopAttributes:
+    def test_print_controls_are_written_on_the_root(self) -> None:
+        frame = _static_spec().items[0]
+        spec = CartographSpec(
+            cartograph_id="cg",
+            size="A3",
+            items=(frame,),
+            bleed=3.0,
+            crop_marks=True,
+            safe_zone=8.0,
+            dpi=300,
+            flatten=True,
+            color_profile="sRGB",
+            cvd="deuteranopia",
+        )
+        root = _parse_sheet(write_cartograph_html(spec, _runtime())).find(
+            "om-cartograph"
+        )
+        assert root is not None
+        assert root.get("bleed") == "3"
+        assert root.get("crop-marks") == ""
+        assert root.get("safe-zone") == "8"
+        assert root.get("dpi") == "300"
+        assert root.get("flatten") == ""
+        assert root.get("color-profile") == "sRGB"
+        assert root.get("cvd") == "deuteranopia"
+
+    def test_defaults_write_none_of_them(self) -> None:
+        root = _parse_sheet(write_cartograph_html(_static_spec(), _runtime())).find(
+            "om-cartograph"
+        )
+        assert root is not None
+        for name in ("bleed", "crop-marks", "safe-zone", "dpi", "flatten", "cvd"):
+            assert root.get(name) is None, name
+
+    def test_crop_marks_without_a_bleed_are_refused(self) -> None:
+        frame = _static_spec().items[0]
+        with pytest.raises(ValueError, match="bleed"):
+            CartographSpec(
+                cartograph_id="cg", size="A3", items=(frame,), crop_marks=True
+            )
+
+    def test_an_unknown_cvd_mode_is_refused(self) -> None:
+        frame = _static_spec().items[0]
+        with pytest.raises(ValueError):
+            CartographSpec(cartograph_id="cg", size="A3", items=(frame,), cvd="sepia")

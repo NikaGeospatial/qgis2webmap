@@ -301,6 +301,15 @@ def _render_sheet(spec: CartographSpec, markup_by_frame: Mapping[str, str]) -> s
     attrs.append(_attr("title", spec.title or None))
     attrs.append(_attr("attribution", spec.attribution or None))
     attrs.append(_attr("notes", spec.notes))
+    attrs.append(_attr("bleed", _format_mm(spec.bleed) if spec.bleed else None))
+    attrs.append(_attr("crop-marks", spec.crop_marks))
+    attrs.append(
+        _attr("safe-zone", _format_mm(spec.safe_zone) if spec.safe_zone else None)
+    )
+    attrs.append(_attr("dpi", spec.dpi))
+    attrs.append(_attr("flatten", spec.flatten))
+    attrs.append(_attr("color-profile", spec.color_profile))
+    attrs.append(_attr("cvd", spec.cvd if spec.cvd != "none" else None))
     # Always on: a QGIS plugin has no embedded browser, so the only way it can
     # drive print/export is the URL-trigger surface, which is opt-in by design
     # (docs/cartograph.md "Host triggers").

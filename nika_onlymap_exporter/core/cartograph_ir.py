@@ -59,6 +59,10 @@ GRATICULE_KINDS = ("solid", "cross", "markers")
 GRATICULE_LABELS = ("outside", "inside", "none")
 GRATICULE_FORMATS = ("dms",)
 TEXT_KINDS = ("title", "text", "attribution")
+
+#: `<om-cartograph cvd>` values, long spelling (the runtime also accepts the
+#: short `protan`/`deutan`/`tritan`/`achroma` aliases; we always write these).
+CVD_MODES = ("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia")
 SHAPE_KINDS = ("rect", "ellipse", "line", "arrow")
 IMAGE_FITS = ("contain", "cover", "fill")
 
@@ -474,6 +478,16 @@ class CartographSpec:
     notes: str | None = None
     items: tuple[CartographItem, ...] = field(default_factory=tuple)
     atlas: AtlasSpec | None = None
+    # Print-shop controls (runtime "Print-shop attributes"). `bleed` and
+    # `safe_zone` are millimetres; `crop_marks` needs a bleed to draw in.
+    bleed: float | None = None
+    crop_marks: bool = False
+    safe_zone: float | None = None
+    dpi: int | None = None
+    flatten: bool = False
+    color_profile: str | None = None
+    # Whole-page colour-vision simulation, a review aid (runtime `cvd`).
+    cvd: str | None = None
 
     def __post_init__(self) -> None:
         if not self.cartograph_id:
@@ -493,6 +507,15 @@ class CartographSpec:
         _check_choice(self.size, PAGE_SIZE_NAMES, "size")
         _check_choice(self.orientation, ORIENTATIONS, "orientation")
         _check_choice(self.theme, CARTOGRAPH_THEMES, "theme")
+        _check_choice(self.cvd, CVD_MODES, "cvd")
+        if self.bleed is not None and self.bleed < 0:
+            raise ValueError(f"bleed must be >= 0, got {self.bleed!r}")
+        if self.safe_zone is not None and self.safe_zone < 0:
+            raise ValueError(f"safe_zone must be >= 0, got {self.safe_zone!r}")
+        if self.dpi is not None and self.dpi <= 0:
+            raise ValueError(f"dpi must be positive, got {self.dpi!r}")
+        if self.crop_marks and not self.bleed:
+            raise ValueError("crop_marks are drawn in the bleed, so they need a bleed")
 
         seen_ids: set[str] = set()
         frame_ids: set[str] = set()
