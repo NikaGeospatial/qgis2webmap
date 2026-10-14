@@ -39,6 +39,7 @@ from pathlib import Path
 from urllib.parse import unquote_to_bytes
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsExpression,
@@ -828,7 +829,10 @@ class _Builder:
         legend.setResizeToContents(False)
         layers = self.frame_layers.get(item.for_)
         if layers is not None:
-            legend.setAutoUpdateModel(False)
+            if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
+                legend.setSyncMode(Qgis.LegendSyncMode.Manual)
+            else:  # QGIS 3: the same switch, deprecated in 4.0
+                legend.setAutoUpdateModel(False)
             root = legend.model().rootGroup()
             root.removeAllChildren()
             for layer in layers:
@@ -905,11 +909,31 @@ class _Builder:
         if item.color is not None:
             self.issue(subject, "The scale bar colour was not carried over.")
         self._place(bar, item.box)
-        bar.update()
+        if item.segment_length is None:
+            self._fit_scalebar_width(bar, item.box)
         self._check_box(
             bar, item.box, subject, "QGIS sizes a scale bar to its segments."
         )
         return bar
+
+    def _fit_scalebar_width(self, bar: QgsLayoutItemScaleBar, box: Box) -> None:
+        """Shrink a fit-width bar until the whole item fits its box.
+
+        QGIS's minimum/maximum bar width bound the bar alone; the item also
+        holds the labels and padding, so a bar allowed the full box width
+        spills past it -- into whatever sits beside it. The overshoot is
+        measured and taken off the bar, a few times, since a narrower bar can
+        pick a shorter label.
+        """
+        maximum = box.w
+        for _ in range(4):
+            overshoot = bar.sizeWithUnits().width() - box.w
+            if overshoot <= 0.01:
+                break
+            maximum = max(1.0, maximum - overshoot)
+            bar.setMaximumBarWidth(maximum)
+            bar.setMinimumBarWidth(min(bar.minimumBarWidth(), maximum / 2))
+            self._place(bar, box)
 
     def _build_north(self, item: NorthSpec) -> QgsLayoutItem:
         picture = QgsLayoutItemPicture(self.layout)

@@ -73,7 +73,9 @@ _GAP = 4.0
 _HEADER_H = 14.0
 _NORTH_W = 12.0
 _SCALEBAR_W = 50.0
-_SCALEBAR_H = 10.0
+#: QGIS's default scale bar text needs about 13 mm of height; the box leaves
+#: it that, so the built bar never grows into the attribution line below.
+_SCALEBAR_H = 14.0
 _ATTRIBUTION_H = 5.0
 _LEGEND_TITLE_H = 8.0
 _LEGEND_ROW_H = 6.0
