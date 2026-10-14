@@ -30,7 +30,7 @@ from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from .ui.i18n import N_
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from qgis.gui import QgisInterface
+    from qgis.gui import QgisInterface, QgsLayoutDesignerInterface
 
 LOG_TAG = "QGIS2WebMap"
 MENU_TITLE = "&QGIS2WebMap by NIKA"
@@ -61,7 +61,7 @@ class Qgis2WebMapPlugin:
         # One "Export as cartograph..." action per open layout designer,
         # keyed by the designer itself - a project can have several open at
         # once, each needing its own action naming its own layout.
-        self._designer_actions: dict[object, QAction] = {}
+        self._designer_actions: dict[QgsLayoutDesignerInterface, QAction] = {}
         self._designer_opened_connected = False
         # Before anything shows text: the menu entry is created in `initGui`.
         # English unless a language pack is chosen, or QGIS speaks one that is
