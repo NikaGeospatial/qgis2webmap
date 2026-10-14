@@ -22,7 +22,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from qgis.core import (
@@ -267,11 +267,23 @@ def read_project(
     layer_settings: Mapping[str, LayerSettings] | None = None,
     canvas_extent: Extent | None = None,
     progress: Callable[[int, int, str], None] | None = None,
+    layer_order: Sequence[str] | None = None,
 ) -> ExportProject:
     """Read a whole project into the normalized model.
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
+
+    `layer_order` is for the cartograph's live frames: layer ids, top-to-bottom
+    exactly as `QgsLayoutItemMap.layersToRender()` returns them for one layout
+    map item. When given, it both orders and *selects* the exported layers -
+    only the ids it names are read, in the order it names them - overriding
+    `selected_layer_ids` and the layer tree's own order. `None` (the default)
+    leaves both exactly as they were: the web-map export's own behaviour. Map
+    themes and style overrides on the layout item are not read yet; a layer
+    named in `layer_order` but not found in the project's layer tree is
+    skipped rather than raised, since a layout can reference a layer that was
+    since removed from the project.
 
     `layer_settings` carries the dialog's per-layer popup and label checkboxes,
     keyed by layer id. A layer absent from the mapping keeps the defaults, so a
@@ -306,8 +318,23 @@ def read_project(
         else:
             clip_extent = canvas_extent
 
-    # findLayers() is top-first; the map draws bottom-first.
-    tree_layers = list(reversed(root.findLayers()))
+    if layer_order is not None:
+        # `layer_order` implies selection, and overrides the tree's own order.
+        # It is top-to-bottom; the map draws bottom-first, so it is walked in
+        # reverse to land in the same bottom-first order the tree branch below
+        # produces. A layer named here that no longer exists in the tree (the
+        # layout item remembers it, the project does not) is skipped rather
+        # than raised - looked up once as a dict, since `findLayers()` is a
+        # flat list and would otherwise be rescanned per id.
+        by_id: dict[str, QgsLayerTreeLayer] = {}
+        for candidate in root.findLayers():
+            by_id.setdefault(candidate.layerId(), candidate)
+        tree_layers = [by_id[lid] for lid in reversed(layer_order) if lid in by_id]
+        effective_selected_ids: frozenset[str] | None = frozenset(layer_order)
+    else:
+        # findLayers() is top-first; the map draws bottom-first.
+        tree_layers = list(reversed(root.findLayers()))
+        effective_selected_ids = selected_layer_ids
 
     layers = []
     # Named, not counted: "1 layer(s) could not be loaded" left the user to
@@ -323,7 +350,8 @@ def read_project(
         and tree_layer.layer() is not None
         and tree_layer.layer().isValid()
         and (
-            selected_layer_ids is None or tree_layer.layer().id() in selected_layer_ids
+            effective_selected_ids is None
+            or tree_layer.layer().id() in effective_selected_ids
         )
     )
     done = 0
@@ -336,8 +364,8 @@ def read_project(
         # Selection first: a broken layer the user has unticked is not part of
         # the export, so it has no business being reported as a problem with it.
         if (
-            selected_layer_ids is not None
-            and tree_layer.layerId() not in selected_layer_ids
+            effective_selected_ids is not None
+            and tree_layer.layerId() not in effective_selected_ids
         ):
             continue
 

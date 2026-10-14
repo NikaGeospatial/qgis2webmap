@@ -369,6 +369,75 @@ class TestReadProject:
         assert result.extent.north == pytest.approx(52.0)
 
 
+class TestLayerOrder:
+    """`layer_order`, for the cartograph's live frames.
+
+    It takes layer ids top-to-bottom, as `QgsLayoutItemMap.layersToRender()`
+    returns them - the opposite direction from the layer tree's own top-first
+    listing - and both orders and selects the export.
+    """
+
+    def test_order_follows_layer_order_not_the_tree(
+        self, project, make_memory_layer
+    ) -> None:
+        a = make_memory_layer("a", features=[("a", [0.0, 0.0])])
+        b = make_memory_layer("b", features=[("b", [1.0, 1.0])])
+        c = make_memory_layer("c", features=[("c", [2.0, 2.0])])
+        # Added in tree order a, b, c (c ends up topmost in the QGIS panel);
+        # the layout wants the reverse: c on top, then a, then b.
+        project.addMapLayer(a)
+        project.addMapLayer(b)
+        project.addMapLayer(c)
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_order=[c.id(), a.id(), b.id()],
+        )
+
+        # layer_order is top-to-bottom; the document is bottom-first, so the
+        # last-named id (b) is the first one drawn.
+        assert [layer.name for layer in result.layers] == ["b", "a", "c"]
+
+    def test_layer_order_implies_selection(self, project, make_memory_layer) -> None:
+        keep = make_memory_layer("keep", features=[("a", [0.0, 0.0])])
+        drop = make_memory_layer("drop", features=[("b", [1.0, 1.0])])
+        project.addMapLayer(keep)
+        project.addMapLayer(drop)
+
+        result = read_project(project, FidelityReportBuilder(), layer_order=[keep.id()])
+
+        assert [layer.name for layer in result.layers] == ["keep"]
+
+    def test_an_id_no_longer_in_the_project_is_skipped(
+        self, project, make_memory_layer
+    ) -> None:
+        """A layout can outlive the layer it once pointed at."""
+        keep = make_memory_layer("keep", features=[("a", [0.0, 0.0])])
+        project.addMapLayer(keep)
+
+        result = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_order=[keep.id(), "no-such-layer-id"],
+        )
+
+        assert [layer.name for layer in result.layers] == ["keep"]
+
+    def test_none_leaves_behaviour_unchanged(self, project, make_memory_layer) -> None:
+        """The default: today's tree order, today's selection rules."""
+        bottom = make_memory_layer("bottom", features=[("a", [0.0, 0.0])])
+        top = make_memory_layer("top", features=[("b", [1.0, 1.0])])
+        project.addMapLayer(bottom)
+        project.addMapLayer(top)
+
+        with_default = read_project(project, FidelityReportBuilder())
+        explicit_none = read_project(project, FidelityReportBuilder(), layer_order=None)
+
+        assert [layer.name for layer in with_default.layers] == ["bottom", "top"]
+        assert with_default.snapshot() == explicit_none.snapshot()
+
+
 class TestPerLayerToggles:
     """The dialog's per-layer Popup and Label checkboxes.
 
