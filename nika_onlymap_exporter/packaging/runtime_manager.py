@@ -467,11 +467,12 @@ def lock_mismatches(
     check the day the runtime is fetched over the network, where an unexpected
     hash means something quite different.
 
-    The cartograph files are optional here too: when the lock file pins them
-    but the loaded bundle has none (an older cached runtime, or a vendored
-    directory from before the cartograph feature existed), that is reported as
-    a mismatch like any other - the difference from a corrupted file is for the
-    caller to act on (`FetchingRuntime` re-fetches; `LocalRuntime` only warns).
+    The cartograph files are checked only when they are present. A bundle
+    without them (an older cached runtime, or a local directory from before
+    the cartograph feature existed) still draws every web map, and these
+    warnings surface in the web map's own fidelity report - so absence is not
+    a mismatch. The cartograph path refuses a bundle without them itself, and
+    `FetchingRuntime.is_cached` re-fetches a cache that lacks them.
     """
     lock = read_lock()
     files = lock.get("files") or {}
@@ -486,14 +487,9 @@ def lock_mismatches(
         (RUNTIME_CARTOGRAPH_CSS, cartograph_css),
     ):
         expected = (files.get(name) or {}).get("sha256")
-        if not expected:
+        if not expected or data is None:
             continue
-        if data is None:
-            mismatches.append(
-                f"{name} is pinned in runtime-lock.json but is missing from the "
-                "loaded runtime."
-            )
-        elif expected != sha256_of(data):
+        if expected != sha256_of(data):
             mismatches.append(
                 f"{name} does not match the build pinned in runtime-lock.json "
                 f"(expected {lock.get('version', 'unknown')})."

@@ -429,18 +429,20 @@ class TestCartographMismatchDetection:
 
         assert rm.lock_mismatches(js, css, cartograph_js, cartograph_css) == ()
 
-    def test_a_missing_cartograph_file_is_reported_not_silently_ignored(
+    def test_a_missing_cartograph_file_is_not_a_web_map_warning(
         self, monkeypatch
     ) -> None:
+        """An older runtime without cartograph files still draws every web map.
+
+        These warnings land in the web map's fidelity report, so absence must
+        not show up there; the cartograph path refuses such a bundle itself.
+        """
         js, css = b"// runtime", b"/* css */"
         self.lock_with_cartograph(
             monkeypatch, js, css, b"// cartograph", b"/* cartograph css */"
         )
 
-        mismatches = rm.lock_mismatches(js, css, None, None)
-
-        assert any("cartograph.standalone.js" in m for m in mismatches)
-        assert any("cartograph.css" in m for m in mismatches)
+        assert rm.lock_mismatches(js, css, None, None) == ()
 
 
 class TestStaleCacheIsRefetched:
