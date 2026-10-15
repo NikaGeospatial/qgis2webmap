@@ -73,7 +73,13 @@ from .cartograph_ir import CartographItem, CartographSpec, FrameSpec
 from .export_ir import ExportProject, Extent
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
-from .layout_reader import AtlasRequirement, FrameMode, MapFrameReading, read_layout
+from .layout_reader import (
+    ATLAS_SUBJECT,
+    AtlasRequirement,
+    FrameMode,
+    MapFrameReading,
+    read_layout,
+)
 from .project_reader import read_project
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
@@ -187,12 +193,17 @@ class StaticFrameCache:
         """Forget every raster and stop listening to every layer."""
         self._entries.clear()
         for layer, bump, forget in self._watched.values():
-            connections = [(signal, bump) for signal in _layer_change_signals(layer)]
-            connections.append((layer.willBeDeleted, forget))
-            for signal, slot in connections:
-                # TypeError/RuntimeError: already gone with its layer.
-                with contextlib.suppress(TypeError, RuntimeError):
-                    signal.disconnect(slot)
+            # A layer QGIS already deleted (a project closing deletes its
+            # layers before `cleared`) raises on any attribute, signals
+            # included; its connections went with it.
+            with contextlib.suppress(TypeError, RuntimeError):
+                connections = [
+                    (signal, bump) for signal in _layer_change_signals(layer)
+                ]
+                connections.append((layer.willBeDeleted, forget))
+                for signal, slot in connections:
+                    with contextlib.suppress(TypeError, RuntimeError):
+                        signal.disconnect(slot)
         self._watched.clear()
         self._generations.clear()
 
@@ -505,7 +516,7 @@ def _atlas_layer_survived(
     )
     if layer is None or layer.geojson is None:
         report.blocked(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             f"No atlas pages were exported: the coverage layer "
             f"'{requirement.layer_name}' could not be exported into the atlas "
             "map (see its own rows in this report), and the cartograph pages "
@@ -519,7 +530,7 @@ def _atlas_layer_survived(
     for field_name in requirement.fields:
         if field_name not in present:
             report.approximated(
-                "Layout item 'Atlas'",
+                ATLAS_SUBJECT,
                 f"The atlas reads the field '{field_name}' of "
                 f"'{requirement.layer_name}', but that field is not in the "
                 "exported data (a field hidden in the layer's attribute table "

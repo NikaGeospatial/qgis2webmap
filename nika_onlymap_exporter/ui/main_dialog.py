@@ -760,6 +760,7 @@ class MainDialog(QDialog):
             self._cartograph.build_cartograph_tab()
         )
         self._frames_tab_widget = _scrollable(self._cartograph.build_frames_tab())
+        self._atlas_tab_widget = _scrollable(self._cartograph.build_atlas_tab())
 
         layout.addWidget(self._build_output_switch())
         layout.addWidget(self.tabs)
@@ -2477,6 +2478,13 @@ class MainDialog(QDialog):
         if self.tabs.widget(2) is not second_widget:
             self.tabs.removeTab(2)
             self.tabs.insertTab(2, second_widget, second_label)
+        # Atlas is the cartograph's alone, after Frames; the web map has no
+        # third output tab to trade it with.
+        atlas_index = self.tabs.indexOf(self._atlas_tab_widget)
+        if web and atlas_index >= 0:
+            self.tabs.removeTab(atlas_index)
+        elif not web and atlas_index < 0:
+            self.tabs.insertTab(3, self._atlas_tab_widget, tr("Atlas"))
 
         # `setCornerWidget` hides the corner it replaces - even when that is
         # the same widget - and never shows the one it installs. So skip a

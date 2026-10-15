@@ -121,6 +121,10 @@ from .expression_tokens import (
 from .fidelity_report import FidelityReportBuilder
 from .settings import default_frame_mode
 
+#: The Fidelity subject of every row about the layout's atlas, so the Atlas
+#: tab can find why an atlas will not page.
+ATLAS_SUBJECT = "Layout item 'Atlas'"
+
 #: A label's cartograph text kind, stored on the item by
 #: `core/layout_builder.py` so a layout built from a cartograph reads back
 #: with the same kinds (QGIS has no field for it).
@@ -657,7 +661,7 @@ def _read_atlas(
     coverage = atlas.coverageLayer()
     if coverage is None or not coverage.isValid():
         report.blocked(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             "The atlas is turned on but has no coverage layer, so no atlas "
             "pages were exported. Choose a coverage layer in the layout's "
             "Atlas panel, or turn the atlas off.",
@@ -707,7 +711,7 @@ def _read_atlas(
                 "Live in the Frames tab."
             )
         report.blocked(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             "No atlas pages were exported: the cartograph turns atlas pages "
             "with a live map that carries the coverage layer "
             f"'{coverage_name}', and this layout has none. {remedy}",
@@ -738,7 +742,7 @@ def _read_atlas(
     limit_render = getattr(atlas, "limitCoverageLayerRenderToCurrentFeature", None)
     if limit_render is not None and limit_render():
         report.approximated(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             "QGIS draws only the current feature of the coverage layer on each "
             "page; the cartograph draws all of them.",
         )
@@ -752,7 +756,7 @@ def _read_atlas(
         page_name=_atlas_page_name(atlas, coverage, report),
     )
     report.preserved(
-        "Layout item 'Atlas'",
+        ATLAS_SUBJECT,
         f"One page per feature of '{coverage_name}', turned with the arrow "
         "keys or the on-sheet pager, and exported page by page.",
     )
@@ -862,10 +866,10 @@ def _atlas_filter(
     expression = atlas.filterExpression()
     translated = translate_filter_expression(expression)
     if translated is not None:
-        report.preserved("Layout item 'Atlas'", f"Atlas filter `{expression}` kept.")
+        report.preserved(ATLAS_SUBJECT, f"Atlas filter `{expression}` kept.")
         return translated
     report.approximated(
-        "Layout item 'Atlas'",
+        ATLAS_SUBJECT,
         f"The atlas filter `{expression}` has no equivalent in the cartograph's "
         "expression language, so it was left out: the cartograph has a page "
         f"for each of the layer's {_count_features(coverage, None)} features, "
@@ -881,7 +885,7 @@ def _atlas_sort(atlas, report: FidelityReportBuilder) -> str | None:
     translated = translate_sort_expression(expression, ascending=atlas.sortAscending())
     if translated is None:
         report.approximated(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             f"Pages are sorted by `{expression}` in QGIS; the cartograph can "
             "only sort by a field, so its pages follow the layer's own order.",
         )
@@ -895,7 +899,7 @@ def _atlas_filename(atlas, report: FidelityReportBuilder) -> str | None:
     translated = translate_atlas_pattern(expression)
     if translated is None:
         report.approximated(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             f"The page file names `{expression}` could not be translated; "
             "exported pages are named page-1, page-2, ... instead.",
         )
@@ -915,7 +919,7 @@ def _atlas_page_name(
     translated = translate_atlas_pattern(expression)
     if translated is None:
         report.approximated(
-            "Layout item 'Atlas'",
+            ATLAS_SUBJECT,
             f"The page names `{atlas.pageNameExpression()}` could not be "
             "translated; the pager shows each page's number instead.",
         )

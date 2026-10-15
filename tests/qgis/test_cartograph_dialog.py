@@ -1212,3 +1212,109 @@ class TestSavesFollowTheProject:
             assert cartograph.cartograph_status_label.text().startswith("Not saved")
         finally:
             dialog.close()
+
+
+class TestAtlasTab:
+    def _atlas_dialog(self, project, tmp_path):
+        from atlas_fixtures import build_atlas_layout
+
+        built = build_atlas_layout(project)
+        project.layoutManager().addLayout(built.layout)
+        project.setFileName(str(tmp_path / "parcels.qgz"))
+        dialog = _dialog(project)
+        dialog.output_cartograph_button.setChecked(True)
+        dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
+        return dialog, built
+
+    def test_the_tab_exists_only_on_cartograph(self, qgis_app, project) -> None:
+        dialog = _dialog(project)
+        try:
+
+            def titles() -> list[str]:
+                return [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+
+            assert "Atlas" not in titles()
+            dialog.output_cartograph_button.setChecked(True)
+            assert titles().index("Atlas") == titles().index("Frames") + 1
+            dialog.output_web_button.setChecked(True)
+            assert "Atlas" not in titles()
+        finally:
+            dialog.close()
+
+    def test_it_mirrors_the_layouts_atlas(self, qgis_app, project, tmp_path) -> None:
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            tab = dialog._cartograph.atlas_tab
+            assert tab.enabled_check.isChecked()
+            assert tab.coverage_combo.currentLayer() is built.parcels
+            assert tab.map_combo.currentData() == built.main_map.uuid()
+            assert tab.count_label.text() == "3 pages in QGIS"
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_an_edit_changes_the_layout_undoably_and_saves(
+        self, qgis_app, project, tmp_path, fake_cartograph_export
+    ) -> None:
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            tab = dialog._cartograph.atlas_tab
+            before = len(fake_cartograph_export.calls)
+            tab.filter_edit.setExpression(""""lot" <> 'A-1'""")
+            tab.filter_edit.fieldChanged.emit(tab.filter_edit.expression())
+            assert built.atlas.filterFeatures()
+            assert tab.count_label.text() == "2 pages in QGIS"
+            assert _wait_for(
+                qgis_app, lambda: len(fake_cartograph_export.calls) > before
+            )
+            built.layout.undoStack().stack().undo()
+            assert not built.atlas.filterFeatures()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_a_static_atlas_map_shows_why_it_will_not_page(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        import os
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            (item_id,) = [
+                key for key in cartograph._frame_rows if key == built.main_map.uuid()
+            ]
+            mode = cartograph._frame_rows[item_id]["mode"]
+            mode.setCurrentIndex(mode.findData("static"))
+            tab = cartograph.atlas_tab
+            assert _wait_for(
+                qgis_app, lambda: not tab.problem_label.isHidden(), timeout=60
+            )
+            assert "Live" in tab.problem_label.text()
+            assert not tab.zip_button.isEnabled()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_all_pages_buttons_open_the_atlas_triggers(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        import os
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
+        dialog, _built = self._atlas_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            tab = cartograph.atlas_tab
+            assert _wait_for(qgis_app, lambda: tab.zip_button.isEnabled(), timeout=60)
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            tab.zip_button.click()
+            tab.print_button.click()
+            assert [url.query() for url in opened] == ["atlas=zip", "atlas=print"]
+        finally:
+            dialog.close()
+            project.setFileName("")

@@ -516,6 +516,37 @@ class CartographController:
         layout.addStretch(1)
         return page
 
+    # ---- Atlas tab -------------------------------------------------------
+
+    def build_atlas_tab(self) -> QWidget:
+        from .atlas_tab import AtlasTab
+
+        self.atlas_tab = AtlasTab(self._open_all_pages, self.dialog)
+        self.atlas_tab.changed.connect(self.schedule_autosave)
+        return self.atlas_tab
+
+    def _open_all_pages(self, kind: str) -> None:
+        """Atlas > Export all pages / Print all pages: the saved cartograph,
+        opened with this plugin's `?atlas=` trigger (see the writer)."""
+        path = self._current_path()
+        if path is None or not path.exists():
+            return
+        self._open_url(
+            self._served_url(path, f"atlas={kind}") or QUrl.fromLocalFile(str(path))
+        )
+
+    def _show_atlas_outcome(self, report: FidelityReportBuilder, html: str) -> None:
+        from ...core.export_ir import FidelityStatus
+        from ...core.layout_reader import ATLAS_SUBJECT
+
+        problems = tuple(
+            row.detail
+            for row in report.items
+            if row.subject == ATLAS_SUBJECT
+            and row.status in (FidelityStatus.BLOCKED, FidelityStatus.UNSUPPORTED)
+        )
+        self.atlas_tab.show_outcome(problems, pages_written="<om-atlas" in html)
+
     def _rebuild_frames_rows(self) -> None:
         self.frames_tree.clear()
         self._frame_rows.clear()
@@ -715,6 +746,7 @@ class CartographController:
                 self._layout_changed_connected = False
 
         self._rebuild_frames_rows()
+        self.atlas_tab.show_layout(layout)
         self._update_file_default()
         self._load_page_fields()
         self.update_window_title()
@@ -756,6 +788,7 @@ class CartographController:
             }
             if current_ids != set(self._frame_rows.keys()):
                 self._rebuild_frames_rows()
+                self.atlas_tab.show_layout(self._current_layout)
         self.schedule_autosave()
 
     def _update_file_default(self) -> None:
@@ -926,6 +959,7 @@ class CartographController:
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
         self._count_frame_issues(report)
+        self._show_atlas_outcome(report, html)
         if self._pending_spec is not None:
             self._collect_legend_entries(self._pending_spec, finished.projects)
             if self._colour_vision is not None:
