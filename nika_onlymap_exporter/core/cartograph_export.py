@@ -47,9 +47,12 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import math
+import os
 import re
+import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -71,6 +74,7 @@ from ..exporters.frame_raster import (
     frame_corners_wgs84,
     render_static_frame,
 )
+from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
@@ -81,7 +85,15 @@ from .cartograph_ir import (
     FrameGeoreference,
     FrameSpec,
 )
-from .export_ir import ExportProject, ExportSettings, Extent
+from .export_ir import (
+    ExportLayer,
+    ExportProject,
+    ExportSettings,
+    Extent,
+    FidelityItem,
+    OutputMode,
+    RasterSpec,
+)
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .layout_reader import (
@@ -522,6 +534,9 @@ def finish_cartograph_full(
     spec = prepared.spec
     live_markup: dict[str, str] = {}
     projects: list[ExportProject] = []
+    # By file name, which carries the layer id: a raster drawn in two frames
+    # is converted to the same bytes and carried once.
+    embedded_rasters: dict[str, bytes] = {}
     for source in prepared.live_frames:
         export_project = read_project(
             project,
@@ -531,6 +546,9 @@ def finish_cartograph_full(
             layer_settings=layer_settings,
             settings=_LIVE_FRAME_SETTINGS,
         )
+        export_project, frame_rasters = _embed_rasters(export_project, report)
+        for name, data in frame_rasters:
+            embedded_rasters.setdefault(name, data)
         projects.append(export_project)
         requirement = prepared.atlas_requirement
         if (
@@ -556,9 +574,95 @@ def finish_cartograph_full(
             _as_rendered_in_frame(export_project, source), verdict
         )
     return FinishedCartograph(
-        html=write_cartograph_html(spec, prepared.bundle, live_markup),
+        html=write_cartograph_html(
+            spec,
+            prepared.bundle,
+            live_markup,
+            embedded_rasters=tuple(embedded_rasters.items()),
+        ),
         projects=tuple(projects),
     )
+
+
+@dataclass(frozen=True)
+class _EmbeddedRasters:
+    """One frame's rasters as converted for the page: each staged
+    `RasterSpec` by layer id, the bytes the page carries, and the Fidelity
+    rows the conversion wrote, replayed when the result is reused."""
+
+    rasters: Mapping[str, RasterSpec]
+    embedded: tuple[tuple[str, bytes], ...]
+    rows: tuple[FidelityItem, ...]
+
+
+#: The last conversions, most recent last. A cartograph autosaves on every
+#: edit, and converting a large raster to a COG takes long enough that redoing
+#: it each time would stall every save; the key holds everything that changes
+#: the bytes, so an entry is only reused while it is still right.
+_RASTER_EMBEDS: dict[tuple[object, ...], _EmbeddedRasters] = {}
+_RASTER_EMBEDS_MAX = 8
+
+
+def _embed_rasters(
+    export_project: ExportProject, report: FidelityReportBuilder
+) -> tuple[ExportProject, tuple[tuple[str, bytes], ...]]:
+    """Convert a live frame's rasters into bytes the page carries, as the
+    single-file web map does (`packaging/raster_staging.py`), and point each
+    `RasterSpec.src` at them. A raster that cannot be carried is left out of
+    the frame; the rows `stage_rasters` writes say why. Without this a
+    `<om-layer type="COGLayer">` would name the file on the author's machine.
+    """
+    rasters = [layer for layer in export_project.layers if layer.raster is not None]
+    if not rasters:
+        return export_project, ()
+    key = _raster_embed_key(rasters)
+    staged = _RASTER_EMBEDS.pop(key, None) if key is not None else None
+    if staged is None:
+        before = len(report)
+        with tempfile.TemporaryDirectory(prefix="qgis2webmap-carto-") as work:
+            result = stage_rasters(
+                export_project, Path(work), OutputMode.STANDALONE_HTML, report
+            )
+        staged = _EmbeddedRasters(
+            rasters={
+                layer.layer_id: layer.raster
+                for layer in result.project.layers
+                if layer.raster is not None and layer.raster.src is not None
+            },
+            embedded=result.embedded,
+            rows=report.items[before:],
+        )
+    else:
+        report.extend(staged.rows)
+    if key is not None:
+        _RASTER_EMBEDS[key] = staged
+        while len(_RASTER_EMBEDS) > _RASTER_EMBEDS_MAX:
+            _RASTER_EMBEDS.pop(next(iter(_RASTER_EMBEDS)))
+    layers = tuple(
+        replace(layer, raster=staged.rasters[layer.layer_id])
+        if layer.raster is not None and layer.layer_id in staged.rasters
+        else layer
+        for layer in export_project.layers
+        if layer.raster is None or layer.layer_id in staged.rasters
+    )
+    return replace(export_project, layers=layers), staged.embedded
+
+
+def _raster_embed_key(rasters: list[ExportLayer]) -> tuple[object, ...] | None:
+    """What the converted bytes depend on: each raster's spec (file, style,
+    bands, stretch) and its file's size and modification time. None when a
+    file cannot be read, which is left to the conversion to report."""
+    parts: list[object] = []
+    for layer in rasters:
+        raster = layer.raster
+        if raster is None:
+            continue
+        try:
+            stat = os.stat(raster.path)
+        except (OSError, TypeError):
+            return None
+        parts.append((layer.layer_id, raster, stat.st_size, stat.st_mtime_ns))
+    return tuple(parts)
 
 
 def _draws_in_plane(

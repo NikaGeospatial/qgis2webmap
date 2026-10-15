@@ -58,7 +58,7 @@ import base64
 import html
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ..core.cartograph_ir import (
@@ -78,6 +78,7 @@ from ..core.cartograph_ir import (
     TextSpec,
 )
 from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
+from ..packaging.raster_embed import build_raster_embed
 
 #: Shown instead of a live cartograph when the browser runs no JavaScript:
 #: its live maps and the inlined runtime need it. (A static-only cartograph
@@ -137,8 +138,16 @@ def write_cartograph_html(
     spec: CartographSpec,
     runtime: CartographRuntimeBundle,
     live_frame_markup: Mapping[str, str] | None = None,
+    *,
+    embedded_rasters: Sequence[tuple[str, bytes]] = (),
 ) -> str:
-    """Render `spec` into a complete, standalone HTML document string."""
+    """Render `spec` into a complete, standalone HTML document string.
+
+    `embedded_rasters` are the live frames' rasters as `(src, bytes)`
+    (`packaging/raster_staging.py`): the page carries them and answers the
+    runtime's range requests for them itself, exactly as a single-file web
+    map does (`packaging/raster_embed.py`), ahead of the runtime script.
+    """
     markup_by_frame, has_shared_data = _share_repeated_data(live_frame_markup or {})
     has_live = any(
         isinstance(item, FrameSpec) and item.mode == "live" for item in spec.items
@@ -172,6 +181,8 @@ def write_cartograph_html(
             f'<noscript><p style="font:16px sans-serif;margin:2em">'
             f"{html.escape(NOSCRIPT_MESSAGE)}</p></noscript>\n"
         )
+        if embedded_rasters:
+            body += build_raster_embed(embedded_rasters) + "\n"
     else:
         # No live frame, no loader to wait for: the sheet is in the page from
         # the start, so it reads with JavaScript off too - the runtime's

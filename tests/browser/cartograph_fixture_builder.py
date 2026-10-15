@@ -17,6 +17,8 @@ acceptance check meet through files):
   UTM 48N, and where QGIS puts the main map's corners.
 - `geo-live.html`: an EPSG:4326 map at 60N, live, drawn as plate carree,
   and where QGIS puts its corners.
+- `raster-live.html`: a live map of a raster (a red square on white) whose
+  source file is deleted once exported, so it can only draw from the page.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
@@ -60,6 +62,8 @@ def main(out_dir: Path) -> int:
         expected["survey_live"] = _write_survey_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["geo_live"] = _write_geo_live(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["raster_live"] = _write_raster_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -207,6 +211,77 @@ def _write_geo_live(project, out_dir: Path) -> dict:
             [extent.xMinimum(), extent.yMinimum()],
         ],
         "size_mm": [size.width(), size.height()],
+    }
+
+
+def _write_raster_live(project, out_dir: Path) -> dict:
+    from osgeo import gdal
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsCoordinateTransform,
+        QgsLayoutItemMap,
+        QgsLayoutPoint,
+        QgsLayoutSize,
+        QgsPointXY,
+        QgsPrintLayout,
+        QgsRasterLayer,
+    )
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    gdal.UseExceptions()
+    mercator = QgsCoordinateReferenceSystem("EPSG:3857")
+    # 40 x 40 pixels of 100 m around (1 MN, 6 MN): white, a red middle half.
+    size, pixel, west, north = 40, 100.0, 1_000_000.0, 6_000_000.0
+    source = Path(tempfile.mkdtemp()) / "square.tif"
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        str(source), size, size, 3, gdal.GDT_Byte
+    )
+    dataset.SetGeoTransform([west, pixel, 0.0, north, 0.0, -pixel])
+    dataset.SetProjection(mercator.toWkt())
+    for band, value in ((1, 255), (2, 0), (3, 0)):
+        rows = bytearray(b"\xff" * size * size)
+        for y in range(10, 30):
+            rows[y * size + 10 : y * size + 30] = bytes([value]) * 20
+        dataset.GetRasterBand(band).WriteRaster(0, 0, size, size, bytes(rows))
+    dataset = None
+    raster = QgsRasterLayer(str(source), "square", "gdal")
+    project.addMapLayer(raster)
+    project.setCrs(mercator)
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    map_item = QgsLayoutItemMap(layout)
+    layout.addLayoutItem(map_item)
+    map_item.attemptMove(QgsLayoutPoint(20, 20))
+    map_item.attemptResize(QgsLayoutSize(120, 120))
+    map_item.setCrs(mercator)
+    map_item.setLayers([raster])
+    map_item.setExtent(raster.extent())
+    html = export_layout_to_cartograph(
+        layout,
+        project,
+        _runtime(),
+        FidelityReportBuilder(),
+        frame_modes={map_item.uuid(): "live"},
+    )
+    (out_dir / "raster-live.html").write_text(html, encoding="utf-8")
+    project.removeMapLayer(raster.id())
+    source.unlink()
+    to_wgs84 = QgsCoordinateTransform(
+        mercator, QgsCoordinateReferenceSystem("EPSG:4326"), project
+    )
+
+    def lonlat(x: float, y: float) -> list[float]:
+        point = to_wgs84.transform(QgsPointXY(x, y))
+        return [point.x(), point.y()]
+
+    return {
+        "main_frame": _frame_id(layout, map_item),
+        "red": lonlat(west + 20 * pixel, north - 20 * pixel),
+        "white": lonlat(west + 5 * pixel, north - 5 * pixel),
     }
 
 

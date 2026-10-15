@@ -17,11 +17,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -257,6 +259,52 @@ class TestLiveFrameInWgs84:
         checks = page.evaluate("window.__omChecks")
         assert checks, "the map ran no checks of its own"
         assert all(check["errors"] == [] for check in checks)
+
+
+class TestRasterInALiveFrame:
+    """A raster in a live frame draws from the page itself: its source file
+    is gone, and the page has no server to fetch from."""
+
+    def test_it_draws_where_qgis_puts_it(self, page, fixtures: Path, expected) -> None:
+        _needs_webgl(page)
+        want = expected["raster_live"]
+        _open(page, fixtures / "raster-live.html")
+
+        def colour(lonlat: list[float]) -> list[int]:
+            x, y = page.evaluate(
+                """([frameId, at]) => {
+                  const frame = document.getElementById(frameId);
+                  const box = frame.getBoundingClientRect();
+                  const p = frame.georef.project(at);
+                  const perMm = box.width / Number(frame.getAttribute('w'));
+                  return [box.left + p.xMm * perMm, box.top + p.yMm * perMm];
+                }""",
+                [want["main_frame"], lonlat],
+            )
+            shot = base64.b64encode(page.screenshot()).decode()
+            return page.evaluate(
+                """async ([png, x, y]) => {
+                  const image = new Image();
+                  image.src = 'data:image/png;base64,' + png;
+                  await image.decode();
+                  const canvas = document.createElement('canvas');
+                  canvas.width = image.width;
+                  canvas.height = image.height;
+                  const context = canvas.getContext('2d');
+                  context.drawImage(image, 0, 0);
+                  const at = [Math.round(x), Math.round(y)];
+                  return [...context.getImageData(...at, 1, 1).data];
+                }""",
+                [shot, x, y],
+            )
+
+        deadline = time.monotonic() + 30
+        red = colour(want["red"])
+        while red[:3] != [255, 0, 0] and time.monotonic() < deadline:
+            page.wait_for_timeout(500)
+            red = colour(want["red"])
+        assert red[:3] == pytest.approx([255, 0, 0], abs=8)
+        assert colour(want["white"])[:3] == pytest.approx([255, 255, 255], abs=8)
 
 
 class TestWithoutWebgl:

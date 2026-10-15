@@ -53,6 +53,7 @@ QGIS drew, so its layers come across as they look.
 | Map item, **live** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or vector tiles ([which CRS a live frame draws in](live-or-static-frames.md#which-crs-a-live-frame-draws-in)) |
 | Map rotation | **Kept** |
 | A layer drawn in more than one live frame | **Kept** in each - its features are written into the file once |
+| A raster from a file on disk (GeoTIFF) in a live frame | **Kept** - carried inside the cartograph, as in a single-file web map, up to 100 MB of imagery per map; a raster in two maps is carried once. The map is drawn in Web Mercator |
 | Overview (locator inset showing another map's extent) | **Kept** |
 | Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Fidelity tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
 
