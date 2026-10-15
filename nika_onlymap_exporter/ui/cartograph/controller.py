@@ -80,7 +80,10 @@ from .frames import layout_map_items
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Sequence
+
     from ...core.cvd import Condition, LegendEntry
+    from ...core.export_ir import ExportProject
     from ...core.fidelity_report import FidelityReportBuilder
     from ..main_dialog import MainDialog
     from .accessibility_dialog import AccessibilityDialog
@@ -159,6 +162,10 @@ class CartographController:
         self._frame_issue_counts: dict[str, int] = {}
         self._preview_server: PreviewServer | None = None
 
+        # Rendered static frames are kept between saves; a closed project's
+        # are no use to the next one and only hold memory.
+        self.project.cleared.connect(cartograph_export.clear_static_frame_cache)
+
         self._autosave_timer = QTimer(dialog)
         self._autosave_timer.setSingleShot(True)
         self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
@@ -200,6 +207,8 @@ class CartographController:
             self._preview_server = None
         self._disconnect_layout_manager()
         self._disconnect_current_layout()
+        with contextlib.suppress(TypeError, RuntimeError):
+            self.project.cleared.disconnect(cartograph_export.clear_static_frame_cache)
 
     # ---- Cartograph tab -----------------------------------------------
 
@@ -788,12 +797,20 @@ class CartographController:
         self._last_page_label = page_label(prepared.spec)
         self._pending_spec = prepared.spec
 
-        def work(_progress: object) -> str:
-            return cartograph_export.finish_cartograph(prepared, project, report)
+        # The dialog's own writer, so a licence key the user set reaches the
+        # cartograph's live frames exactly as it reaches a web map.
+        writer = self.dialog._writer()
+
+        def work(_progress: object) -> cartograph_export.FinishedCartograph:
+            return cartograph_export.finish_cartograph_full(
+                prepared, project, report, writer=writer
+            )
 
         job = BackgroundJob(work, self.dialog)
         self._job = job
-        job.succeeded.connect(lambda html: self._on_build_succeeded(path, html, report))
+        job.succeeded.connect(
+            lambda finished: self._on_build_succeeded(path, finished, report)
+        )
         job.failed.connect(self._on_build_failed)
         job.finished.connect(job.deleteLater)
         job.start()
@@ -829,9 +846,13 @@ class CartographController:
         return self._runtime
 
     def _on_build_succeeded(
-        self, path: Path, html: str, report: FidelityReportBuilder
+        self,
+        path: Path,
+        finished: cartograph_export.FinishedCartograph,
+        report: FidelityReportBuilder,
     ) -> None:
         self._job = None
+        html = finished.html
         try:
             self._write_atomic(path, html)
         except OSError as exc:
@@ -846,7 +867,7 @@ class CartographController:
         self._last_summary = summarise(report.items)
         self._count_frame_issues(report)
         if self._pending_spec is not None:
-            self._collect_legend_entries(self._pending_spec)
+            self._collect_legend_entries(self._pending_spec, finished.projects)
             if self._colour_vision is not None:
                 self._colour_vision.refresh()
         if self._print_after_save:
@@ -1024,7 +1045,9 @@ class CartographController:
         if self._colour_vision is not None:
             self._colour_vision.reset_canvas()
 
-    def _collect_legend_entries(self, spec: CartographSpec) -> None:
+    def _collect_legend_entries(
+        self, spec: CartographSpec, projects: Sequence[ExportProject] = ()
+    ) -> None:
         """The legend classes the colour-vision check compares, from a save.
 
         Static frames' legends are literal rows already in the spec; a live
@@ -1046,6 +1069,9 @@ class CartographController:
                                 layer_name=row.layer,
                             )
                         )
+        from ...core.cvd import legend_entries_for_projects
+
+        entries.extend(legend_entries_for_projects(projects))
         self._legend_entries = tuple(entries)
 
     # ---- Preview -----------------------------------------------------------

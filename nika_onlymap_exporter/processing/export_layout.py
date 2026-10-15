@@ -33,12 +33,14 @@ from qgis.core import (
 from ..core.atomic_write import write_text_atomic
 from ..core.cartograph_export import export_layout_to_cartograph
 from ..core.fidelity_report import FidelityReportBuilder
-from ..core.settings import default_frame_mode
+from ..core.license_policy import default_policy
+from ..core.settings import default_frame_mode, resolve_license_key
 from ..packaging.runtime_manager import (
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
 from ..ui.i18n import N_, tr
+from ..writers.onlymap_writer import OnlyMapWriter
 from .export_project import ExportProjectAlgorithm
 
 # Order is part of a saved model's parameters. Append, never reorder.
@@ -173,6 +175,11 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
                 frame_modes=frame_modes,
                 static_dpi=dpi,
                 title_override=title,
+                # Same key resolution as the web-map algorithm: environment,
+                # then whatever the dialog stored on this computer.
+                writer=OnlyMapWriter(
+                    license_policy=default_policy(resolve_license_key())
+                ),
             )
         except ValueError as exc:
             raise QgsProcessingException(str(exc)) from exc

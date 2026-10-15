@@ -105,14 +105,15 @@ def fake_cartograph_export(monkeypatch):
             bundle=CartographRuntimeBundle(cartograph_js=b"", cartograph_css=""),
         )
 
-    def finish_cartograph(prepared, project, report):
+    def finish_cartograph_full(prepared, project, report, *, writer=None):
         calls[-1]["finish_on_gui_thread"] = on_gui_thread()
+        calls[-1]["writer"] = writer
         if should_fail["value"]:
             raise RuntimeError("synthetic export failure")
-        return html_text["value"]
+        return export_module.FinishedCartograph(html=html_text["value"], projects=())
 
     monkeypatch.setattr(export_module, "prepare_cartograph", prepare_cartograph)
-    monkeypatch.setattr(export_module, "finish_cartograph", finish_cartograph)
+    monkeypatch.setattr(export_module, "finish_cartograph_full", finish_cartograph_full)
 
     class _Provider:
         version = "fake"
@@ -374,6 +375,23 @@ class TestAutosave:
 
 
 class TestBuildThreadsAndJobs:
+    def test_the_users_licence_key_reaches_the_build(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        """The dialog's writer, which carries the key, not a free default."""
+        import nika_onlymap_exporter.ui.main_dialog as main_dialog_module
+
+        monkeypatch.setattr(
+            main_dialog_module.MainDialog, "_license_key", lambda self: "paid-key"
+        )
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            writer = fake_cartograph_export.calls[-1]["writer"]
+            assert writer is not None
+            assert writer.license_policy.license_key == "paid-key"
+        finally:
+            dialog.close()
+
     def test_an_unexpected_error_lands_on_the_status_line(
         self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
     ) -> None:
