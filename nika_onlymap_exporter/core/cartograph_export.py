@@ -938,13 +938,33 @@ def _plane_camera(
     )
     if metres_per_pixel <= 0:
         return (center.x(), center.y()), 0.0
-    metres_per_pixel_at_zoom_0 = (
+    zoom = math.log2(_plane_metres_per_pixel_at_zoom_0(center.y()) / metres_per_pixel)
+    return (center.x(), center.y()), max(0.0, zoom)
+
+
+def _plane_metres_per_pixel_at_zoom_0(latitude: float) -> float:
+    """Ground metres per CSS pixel at zoom 0 in the runtime's plane view:
+    the Web Mercator scale at `latitude`, on deck's circumference."""
+    return (
         _DECK_EARTH_CIRCUMFERENCE
         / WORLD_PIXELS_AT_ZOOM_0
-        * math.cos(math.radians(center.y()))
+        * math.cos(math.radians(latitude))
     )
-    zoom = math.log2(metres_per_pixel_at_zoom_0 / metres_per_pixel)
-    return (center.x(), center.y()), max(0.0, zoom)
+
+
+def plane_view_width(
+    latitude: float, zoom: float, frame_width_mm: float, proj_definition: str
+) -> float:
+    """How wide, in plane units, a live frame `frame_width_mm` wide shows
+    the plane at `zoom` centred on `latitude`: `_plane_camera` run backwards,
+    for importing a cartograph back into QGIS."""
+    metres_per_pixel = _plane_metres_per_pixel_at_zoom_0(latitude) / 2.0**zoom
+    return (
+        frame_width_mm
+        * _CSS_PIXELS_PER_MM
+        * metres_per_pixel
+        / plane_metres_per_unit(proj_definition)
+    )
 
 
 def plane_metres_per_unit(proj_definition: str) -> float:

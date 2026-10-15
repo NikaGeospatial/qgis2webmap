@@ -723,7 +723,10 @@ class _Converter:
                     "ignored on this live frame.",
                 )
         self._report_children(node, attrs.subject, frozenset({"om-map"}))
-        if any(child.tag == "om-map" for child in node.children):
+        embedded_map = next(
+            (child for child in node.children if child.tag == "om-map"), None
+        )
+        if embedded_map is not None:
             self.issues.add(
                 attrs.subject,
                 "The map embedded in this live frame was not imported; in QGIS "
@@ -738,6 +741,8 @@ class _Converter:
             zoom=attrs.number("zoom"),
             bearing=attrs.number("bearing") or 0.0,
             pitch=attrs.number("pitch") or 0.0,
+            plane_crs=_blank_to_none(embedded_map, "crs"),
+            plane_crs_def=_blank_to_none(embedded_map, "crs-def"),
             **self._placement(attrs),
             **shared,
         )
@@ -1020,3 +1025,12 @@ def _decode_data_uri(src: str) -> bytes | None:
         except (binascii.Error, ValueError):
             return None
     return unquote_to_bytes(payload)
+
+
+def _blank_to_none(node: _Node | None, name: str) -> str | None:
+    """`node`'s attribute `name`, or None when the node or the value is absent
+    or blank."""
+    if node is None:
+        return None
+    value = (node.attrs.get(name) or "").strip()
+    return value or None

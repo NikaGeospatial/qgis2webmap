@@ -18,12 +18,17 @@ import pytest
 from cartograph_fixtures import build_survey_layout
 
 from nika_onlymap_exporter.core.cartograph_export import (
+    _plane_camera,
     finish_cartograph,
     plane_metres_per_unit,
+    plane_view_width,
     prepare_cartograph,
 )
+from nika_onlymap_exporter.core.cartograph_import import parse_cartograph_html
+from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, FrameSpec
 from nika_onlymap_exporter.core.export_ir import FidelityStatus
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.layout_builder import build_layout
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -195,6 +200,101 @@ class TestAtlasInAPlane:
         assert frame.get("atlas-fit") == "fixed"
         cameras = json.loads(frame.get("data-qgis2webmap-atlas-cameras") or "{}")
         assert len(cameras) == survey.parcels.featureCount()
+
+
+class TestCanvasMode:
+    def test_a_live_canvas_frame_draws_in_the_canvas_crs(
+        self, survey, fake_runtime
+    ) -> None:
+        """The canvas becomes a layout first, so its live frame goes through
+        the same projected-plane path as any layout's."""
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            cartograph_from_view,
+        )
+
+        canvas = cartograph_from_view(
+            survey.main_map.extent(),
+            survey.main_map.crs(),
+            [survey.parcels],
+            survey.project,
+        )
+        prepared = prepare_cartograph(
+            canvas.layout,
+            survey.project,
+            fake_runtime,
+            FidelityReportBuilder(),
+            frame_modes=dict.fromkeys(canvas.frame_modes, "live"),
+            raster_cache=None,
+        )
+        html = finish_cartograph(prepared, survey.project, FidelityReportBuilder())
+        assert 'crs="EPSG:32648"' in _om_map_tag(html)
+
+
+class TestImportedBackIntoItsCrs:
+    """Importing the cartograph builds the map item back in the plane's CRS,
+    over the extent QGIS had."""
+
+    def test_the_survey_map_comes_back_in_utm(
+        self, survey, fake_runtime, project
+    ) -> None:
+        original = survey.main_map.extent()
+        imported = parse_cartograph_html(
+            _export(survey, fake_runtime, FidelityReportBuilder())
+        )
+        frame = next(
+            item
+            for item in imported.spec.items
+            if isinstance(item, FrameSpec) and item.mode == "live"
+        )
+        assert frame.plane_crs == "EPSG:32648"
+        built = build_layout(imported.spec, project)
+        rebuilt = built.items_by_id[frame.id]
+        assert rebuilt.crs().authid() == "EPSG:32648"
+        assert rebuilt.mapRotation() == 0
+        extent = rebuilt.extent()
+        # Zoom is written to 4 places (0.003% of the width) and the centre
+        # to 6 (0.1 m); a Web Mercator rebuild is off by kilometres.
+        tolerance = original.width() * 1e-4
+        for got, want in (
+            (extent.xMinimum(), original.xMinimum()),
+            (extent.yMinimum(), original.yMinimum()),
+            (extent.xMaximum(), original.xMaximum()),
+            (extent.yMaximum(), original.yMaximum()),
+        ):
+            assert got == pytest.approx(want, abs=tolerance)
+
+    def test_a_crs_qgis_cannot_use_stays_in_web_mercator_and_says_so(
+        self, project
+    ) -> None:
+        spec = CartographSpec(
+            cartograph_id="c",
+            size="A4",
+            orientation="landscape",
+            items=(
+                FrameSpec(
+                    id="main",
+                    box=Box(10, 10, 200, 120),
+                    center=(103.8, 1.3),
+                    zoom=12,
+                    plane_crs="EPSG:999999",
+                ),
+            ),
+        )
+        built = build_layout(spec, project)
+        assert built.items_by_id["main"].crs().authid() == "EPSG:3857"
+        assert any("EPSG:999999" in issue.detail for issue in built.issues)
+
+
+@pytest.mark.parametrize("zoom_shift", [0.0, 2.5, -1.25])
+def test_plane_view_width_is_the_camera_run_backwards(survey, zoom_shift) -> None:
+    crs = survey.main_map.crs()
+    rect = survey.main_map.extent()
+    rect.scale(2.0**-zoom_shift)
+    width_mm = survey.main_map.sizeWithUnits().width()
+    (_lon, lat), zoom = _plane_camera(crs, rect, width_mm, survey.project)
+    assert plane_view_width(lat, zoom, width_mm, crs.toProj()) == pytest.approx(
+        rect.width(), rel=1e-9
+    )
 
 
 @pytest.mark.parametrize(

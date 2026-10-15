@@ -333,6 +333,32 @@ class TestTolerance:
         assert len(result.spec.items) == 1
         assert any("data-nika" in issue.detail for issue in result.issues)
 
+    def test_a_live_map_drawn_in_a_plane_keeps_its_crs(self) -> None:
+        result = parse_cartograph_html(
+            _page(
+                _FRAME.replace(
+                    "></om-frame>",
+                    '><om-map crs="EPSG:32648" '
+                    'crs-def="+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs">'
+                    "</om-map></om-frame>",
+                )
+            )
+        )
+        frame = result.spec.items[0]
+        assert isinstance(frame, FrameSpec)
+        assert frame.plane_crs == "EPSG:32648"
+        assert (
+            frame.plane_crs_def == "+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs"
+        )
+
+    def test_a_live_map_in_web_mercator_has_no_plane(self) -> None:
+        result = parse_cartograph_html(
+            _page(_FRAME.replace("></om-frame>", "><om-map></om-map></om-frame>"))
+        )
+        frame = result.spec.items[0]
+        assert isinstance(frame, FrameSpec)
+        assert frame.plane_crs is None and frame.plane_crs_def is None
+
     def test_unknown_root_attribute_is_reported(self) -> None:
         result = parse_cartograph_html(
             _page("", 'cartograph-id="c" size="A4" keep-badge sparkle="yes"')

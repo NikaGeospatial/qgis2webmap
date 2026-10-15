@@ -124,6 +124,18 @@ class TestFrameSpec:
                 image_bytes=b"x",
             )
 
+    def test_static_frame_rejects_a_plane_crs(self) -> None:
+        with pytest.raises(ValueError):
+            FrameSpec(
+                id="main",
+                box=Box(0, 0, 10, 10),
+                mode="static",
+                plane_crs="EPSG:32648",
+                crs="EPSG:3857",
+                corners=((0, 1), (1, 1), (1, 0), (0, 0)),
+                image_bytes=b"x",
+            )
+
     def test_static_frame_needs_image(self) -> None:
         with pytest.raises(ValueError):
             FrameSpec(

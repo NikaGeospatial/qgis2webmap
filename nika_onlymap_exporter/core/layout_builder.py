@@ -73,6 +73,7 @@ from qgis.PyQt.QtCore import QFile, QPointF, Qt
 from qgis.PyQt.QtGui import QColor, QPolygonF
 
 from .canvas_layout import nice_interval, page_dimensions
+from .cartograph_export import plane_view_width
 from .cartograph_import import RoundTripIssue, read_cartograph_file
 from .cartograph_ir import (
     AtlasSpec,
@@ -709,11 +710,53 @@ class _Builder:
                 "full extent of its layers instead.",
             )
             return WEB_MERCATOR, None, frame.bearing
+        if frame.plane_crs or frame.plane_crs_def:
+            plane = self._plane_extent(frame, frame.center, frame.zoom, subject)
+            if plane is not None:
+                return plane
         return (
             WEB_MERCATOR,
             live_frame_extent(frame.center, frame.zoom, frame.box),
             frame.bearing,
         )
+
+    def _plane_extent(
+        self,
+        frame: FrameSpec,
+        center: tuple[float, float],
+        zoom: float,
+        subject: str,
+    ) -> tuple[QgsCoordinateReferenceSystem, QgsRectangle, float] | None:
+        """The CRS and extent of a live frame whose map was drawn in a
+        projected CRS's plane (`<om-map crs>`), or None -- reported -- when
+        QGIS cannot place it there, which leaves it in Web Mercator."""
+        crs = QgsCoordinateReferenceSystem(frame.plane_crs or "")
+        if not crs.isValid() and frame.plane_crs_def:
+            crs = QgsCoordinateReferenceSystem.fromProj(frame.plane_crs_def)
+        proj_definition = frame.plane_crs_def or (crs.toProj() if crs.isValid() else "")
+        if not crs.isValid() or crs.isGeographic() or not proj_definition:
+            self.issue(
+                subject,
+                "The frame's map was drawn in "
+                f"{frame.plane_crs or frame.plane_crs_def}, which QGIS cannot use "
+                "as a projected map CRS here, so the frame was placed in Web "
+                "Mercator (EPSG:3857).",
+            )
+            return None
+        lon, lat = center
+        centre = QgsCoordinateTransform(WGS84, crs, self.project).transform(
+            QgsPointXY(lon, lat)
+        )
+        width = plane_view_width(lat, zoom, frame.box.w, proj_definition)
+        height = width * frame.box.h / frame.box.w
+        extent = QgsRectangle(
+            centre.x() - width / 2,
+            centre.y() - height / 2,
+            centre.x() + width / 2,
+            centre.y() + height / 2,
+        )
+        # A plane view has no bearing (the runtime refuses one).
+        return crs, extent, 0.0
 
     def _layers_extent(
         self, map_item: QgsLayoutItemMap, crs: QgsCoordinateReferenceSystem

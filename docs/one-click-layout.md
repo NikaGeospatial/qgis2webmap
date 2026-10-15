@@ -80,7 +80,8 @@ builds a new print layout from it:
 - every item keeps the ID the cartograph used, so the Items panel shows the
   same names;
 - static frames come back at their georeferenced extent and CRS; live frames at
-  their camera's view, in Web Mercator;
+  their camera's view, in the projected CRS the map was drawn in, or in Web
+  Mercator when it was drawn in Web Mercator;
 - pictures embedded in the file are written to a `<name>.images` folder beside
   it, because a QGIS picture item needs a file to point at;
 - labels get their QGIS expressions back - a live scale becomes

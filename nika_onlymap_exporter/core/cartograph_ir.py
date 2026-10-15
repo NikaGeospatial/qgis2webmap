@@ -250,6 +250,11 @@ class FrameSpec:
     zoom: float | None = None
     bearing: float = 0.0
     pitch: float = 0.0
+    # The projected CRS a live frame's map draws in, read back from its
+    # embedded `<om-map crs crs-def>` on import. Never written from here: on
+    # export the embedded map's own markup carries it.
+    plane_crs: str | None = None
+    plane_crs_def: str | None = None
 
     # Static frame georeference.
     crs: str | None = None
@@ -287,7 +292,7 @@ class FrameSpec:
             if self.center is not None and len(self.center) != 2:
                 raise ValueError(f"center must be (lon, lat), got {self.center!r}")
         else:  # static
-            if self.src is not None or self.center is not None:
+            if self.src is not None or self.center is not None or self.plane_crs:
                 raise ValueError("a static frame must not carry live-only fields")
             _check_corners(self.corners)
             if self.image_bytes is None and self.image_path is None:
