@@ -33,10 +33,11 @@ howto:
     - name: Check where it saves
       anchor: 4-check-where-it-saves
       text: >-
-        The Save to field names the cartograph file, beside the project and
-        named after the layout. The file is rewritten about half a second
-        after every change, and the line under the form says when it was
-        last saved and how large it is.
+        The Save to field names the cartograph file - in a saved project,
+        beside it and named after the layout; in an unsaved one, choose a
+        place first. The file is rewritten about half a second after every
+        change, and the line under the form says when it was last saved and
+        how large it is.
     - name: Choose live or static frames
       anchor: 5-choose-live-or-static-frames
       text: >-
@@ -76,7 +77,7 @@ updates itself.
 Two limits worth knowing before you start:
 
 - **Only page 1 is exported.** A layout with more pages still saves, with page 1
-  only, and the Fidelity tab marks the rest **Blocked**. An
+  only, and the Fidelity tab marks the rest **Not exported**. An
   [atlas](cartograph-atlas.md) is the way to get many pages.
 - **Some items have no cartograph equivalent** - HTML frames, attribute
   tables, polylines and polygons drawn on the page, among others. They are left
@@ -117,18 +118,26 @@ cartograph file back into a QGIS print layout.
 
 ## 4. Check where it saves
 
-**Save to** under **Cartograph file** is where the cartograph lives. It starts
-beside your project file, named after the layout - `Parcel survey.html` for a
-layout called *Parcel survey*. Press **Choose…** to put it somewhere else.
+**Save to** under **Cartograph file** is where the cartograph lives. In a
+saved project it starts beside the project file, named after the layout -
+`Parcel-survey.html` for a layout called *Parcel survey* - and the first save
+happens as soon as the layout is selected. Press **Choose…** to put it
+somewhere else.
+
+In a project that has **never been saved**, there is no folder to put it
+beside: the field only suggests a name, greyed out, and nothing is written
+until you type a path or press **Choose…**.
 
 There is **no Export button**, on purpose. The cartograph is a file that is
-always up to date: about half a second after any change - on these tabs, or in
-the layout itself - the plugin rewrites it. The line under the form says how
+always up to date: about half a second after any change - on these tabs, in
+the layout itself, on the Layers tab, or to a layer's style or data in QGIS -
+the plugin rewrites it. The line under the form says how
 it went:
 
 | It says | It means |
 |---|---|
-| *Not saved yet* | Nothing has been written. Change any setting, or press **Check now** on the strip at the foot of the dialog |
+| *Not saved yet - choose where to save it above* | The project has never been saved, so there is no file yet. Type a path in **Save to** or press **Choose…** |
+| *Not saved yet* | The first save is still running, or no layout is selected |
 | *Saved 2 s ago · 3.2 MB* | The file on disk matches what you see |
 | A sentence starting *Could not...* | The save failed, and why. The previous file is left untouched |
 
@@ -147,7 +156,7 @@ The **Frames** tab has one row per map on the layout:
 | **Map item** | The map's ID from the layout designer |
 | **CRS** | The map's CRS |
 | **Frame** | **Live** or **Static** |
-| **DPI** | Resolution of a static frame's image: 150, 200 or 300. Greyed out for a live frame |
+| **DPI** | Resolution of a static frame's image: 150, 200 (the default) or 300. Greyed out for a live frame |
 | **Changes** | How many Fidelity rows about this map are not *Kept* |
 | **Use canvas view** | Sets this map's extent to what the QGIS canvas shows |
 
@@ -174,10 +183,10 @@ first save, the bar at the foot of the dialog says so.
 
 The **Fidelity** tab lists every layout item that did not come across exactly,
 with one of the same verdicts the web map uses - **Kept**, **Changed**,
-**Not exported**, **Blocked**. It fills after each save; the strip at the foot
+**Rasterised**, **Not exported**, **Blocked**. It fills after each save; the strip at the foot
 of the dialog sums it up whichever tab you are on.
 
-![The Fidelity tab for a cartograph: a static map frame, its legend, the north arrow and a title with a frozen expression are marked Changed.](images/cartograph-fidelity-tab.png)
+![The Fidelity tab for a cartograph: a static map frame, its legend, the north arrow and a title with a frozen expression are marked Changed, and the layer the static frame draws is marked Rasterised.](images/cartograph-fidelity-tab.png)
 
 Typical rows for a first cartograph:
 
@@ -187,6 +196,9 @@ Typical rows for a first cartograph:
   the page cannot work out by itself, written in as text.
 - *The QGIS north-arrow picture is replaced by the cartograph runtime's own
   north indicator glyph.*
+- *Drawn into this static frame's picture by QGIS* - **Rasterised**, for each
+  layer of a static frame: it looks exactly as in QGIS, but a reader cannot
+  click it.
 
 Then send the file. The recipient needs a web browser and nothing else. See
 [sharing a cartograph](share-qgis-print-layout-without-qgis.md) and

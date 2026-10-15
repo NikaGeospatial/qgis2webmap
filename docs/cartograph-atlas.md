@@ -14,22 +14,27 @@ parcel, per site, per corridor segment. A cartograph keeps the atlas in **one
 file**. The reader opens it once and turns the pages in the browser, and the
 map, the scale bar and every page-dependent label update as they go.
 
-<!-- verify: this page was written from the specification and the atlas
-reader while the Atlas tab was being built - check control names, the export
-route and the page-count wording against the finished build -->
-
 ## Setting it up
 
-1. In the layout designer, set up the atlas as usual: **Atlas → Atlas
-   Settings**, tick **Generate an atlas**, choose the **coverage layer**, and
-   on the main map's item properties tick **Controlled by atlas**.
-2. Open the cartograph on that layout. On the **Frames** tab, make sure the
-   map the atlas controls is **Live**.
-3. Make sure that map **draws the coverage layer**. To keep it from showing,
-   tick **Hide coverage layer** in the atlas settings rather than removing it
-   from the map.
-4. Check the **Atlas** tab: it shows the coverage layer and how many pages the
-   atlas has.
+On the cartograph's **Atlas** tab:
+
+1. Tick **Generate an atlas**.
+2. Choose the **Coverage layer** - one page per feature of it.
+3. Choose the **Map that follows it**. A map that did not follow the atlas
+   before gets QGIS's defaults: it fits each feature, with a 10% margin.
+4. Optionally, **Sort by** a field (tick **Descending** to reverse it), a
+   **Filter** expression, and a **File names** expression for exported pages.
+5. On the **Frames** tab, make sure the map that follows the atlas is
+   **Live**, and that it **draws the coverage layer**. To keep the layer from
+   showing, tick **Hide coverage layer** in the layout's atlas settings rather
+   than removing it from the map.
+
+![The Atlas tab, with the atlas on, a coverage layer and its map chosen, and the page count.](images/cartograph-atlas-tab.png)
+
+These are the layout's own atlas settings - the same ones as the layout
+designer's Atlas panel, which works just as well - so every change is on the
+layout's undo stack. The tab shows how many pages QGIS's atlas has, and, when
+the cartograph will not page, a warning line saying why and what to change.
 
 The cartograph saves itself as usual. One file holds every page.
 
@@ -78,19 +83,26 @@ The cartograph can have **fewer pages** than QGIS's atlas. It skips features
 the map does not draw - a category switched off in the layer's style, for
 example - so it never prints a sheet for a feature nobody can see.
 
-## Exporting every page
+## Exporting and printing every page
 
-**Export PNG...** in the Share menu renders pages at 300 dpi. For an atlas, the
-browser renders the pages one after another through the same live map and
-downloads them as **one ZIP**, named by the filename pattern, because browsers
-block a run of separate downloads.
+Two buttons at the foot of the Atlas tab work on the saved cartograph. They
+stay greyed out until it has atlas pages.
 
-<!-- verify: how the all-pages ZIP is started from the plugin - Export PNG's
-tooltip still says "300 dpi image of the first page", and the runtime's URL
-trigger renders one page per request (?export=png&page=N) -->
+- **Export all pages (PNG, ZIP)...** opens the cartograph, which renders every
+  page at 300 dpi, one after another through the same live map, and downloads
+  them as **one ZIP** (`<name>-atlas.zip`), each page named by the **File
+  names** expression. One ZIP rather than one download per page, because
+  browsers block a run of separate downloads.
+- **Print all pages...** opens the cartograph with every page rendered and
+  laid out for one print job. Choose **Save as PDF** for one multi-page PDF; in
+  a Chromium-based browser every page is at its true size. Each page is an
+  image rendered at 200 dpi, so text in that PDF is not selectable.
 
-To print the series, see
-[printing a cartograph](printing-a-cartograph.md#printing-an-atlas).
+**Export PNG...** and **Export PDF...** in the Share menu work on the page the
+cartograph opens on, page 1. For a single page, a cartograph opened with
+`?export=png&page=3` added to its address downloads page 3.
+
+See also [printing a cartograph](printing-a-cartograph.md#printing-an-atlas).
 
 ## Limits
 

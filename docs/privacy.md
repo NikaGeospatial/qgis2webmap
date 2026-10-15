@@ -94,7 +94,8 @@ it from a small server on your own machine (`127.0.0.1`), which nothing outside
 your computer can reach.
 
 What a cartograph **contains** differs by frame. A static frame holds an image
-of the map. A live frame holds the features it draws, with their attributes -
+of the map. A live frame holds the features it draws, with the attributes its
+popups show - the Layers tab's popup settings decide which -
 see [what travels in the file](share-qgis-print-layout-without-qgis.md#what-travels-in-the-file).
 
 The [hand-off to NIKA](enhance-with-ai.md#hand-off-to-nika) sends nothing

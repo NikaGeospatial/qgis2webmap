@@ -43,10 +43,10 @@ sheet for the next parcel, you are back in QGIS exporting again.
 - **Every page of an atlas** in the one file, turned with the arrow keys. See
   [atlas cartographs](cartograph-atlas.md).
 
-What they need: a web browser that runs JavaScript. Not QGIS, not an account,
-and - unless a live map draws an online tile layer - not an internet
-connection. A live map also needs a browser with WebGL, which practically
-every current browser has; a page of only static frames does not.
+What they need: a web browser. Not QGIS, not an account, and - unless a live
+map draws an online tile layer - not an internet connection. A live map needs
+JavaScript and WebGL, which practically every current browser has. A page of
+only static frames needs neither: it reads even in a mail or file preview.
 
 ## What travels in the file
 
@@ -54,15 +54,16 @@ Be deliberate about this before you send it:
 
 - A **static** frame carries an **image** of the map. Nobody can recover the
   features or their attributes from it.
-- A **live** frame carries the **features of the layers it draws, with their
-  attributes**, so that clicking a feature can show them. Anyone with the file
-  can open it in a text editor and read that data.
-  <!-- verify: the Layers tab's Popups and Include settings are not applied to
-  a cartograph's live frames today, so unticking Popups does not remove the
-  attribute values from a cartograph -->
+- A **live** frame carries the **features of the layers it draws** - their
+  shapes, and the attributes its popups show. Anyone with the file can open it
+  in a text editor and read that data.
 
-So for a page going to someone who should see the map but not the data, set
-its frames to **Static** on the Frames tab. Database passwords and service
+To keep attributes out, use the **Layers** tab, as for a web map: untick
+**Popups** on a layer, or set a field to *Do not show this field*, and those
+values are not written into the file at all. A field the map draws with - the
+one a categorised style or a label reads - stays, since it is visible on the
+map anyway. To keep the features themselves out, set the frame to **Static**:
+then the file holds only a picture. Database passwords and service
 credentials are never written into the file in either case.
 
 ## Sending it
@@ -87,7 +88,7 @@ credentials are never written into the file in either case.
   marks and, where they ask for it, CMYK.
 - **A filing system that only takes PDFs.**
 - **A reader on a very locked-down machine** that blocks JavaScript in local
-  files.
+  files - unless every frame is static, which reads without it.
 
 Everywhere else, the cartograph is the better thing to send: it is the PDF
 when they print it, and more than the PDF when they do not.

@@ -31,9 +31,10 @@ Other ways in:
 ## The document model, in one paragraph
 
 A cartograph is **a file that is always saved**, not something an Export
-button produces. Every change on the Cartograph, Frames or Atlas tab - and
-every change to the print layout itself - rewrites the file about 600 ms
-later, through a temporary file that is swapped in, so it is never half
+button produces. Selecting a layout saves it at once, and every change after
+that - on the Cartograph, Layers, Frames or Atlas tab, in the print layout
+itself, or to the style or data of a layer it draws - rewrites the file about
+600 ms later, through a temporary file that is swapped in, so it is never half
 written. Preview, Share and the NIKA hand-off all work on that file. The
 dialog's title names it. Closing the dialog leaves it where it is, and
 reopening the plugin on the same project picks it up again.
@@ -62,9 +63,12 @@ own file, frames, page fields and print settings.
 
 ### Cartograph file
 
-**Save to** is the file. It starts beside the project file, named after the
-layout, or in your home folder for a project that has never been saved. Press
-**Choose…** to pick another place; the name always ends in `.html`.
+**Save to** is the file. In a saved project it starts beside the project
+file, named after the layout, with anything other than letters, digits, dots
+and hyphens turned into a hyphen - `carto: Parcels` becomes
+`carto-Parcels.html`. In a project that has never been saved, the field only
+suggests a name and nothing is written until you type a path or press
+**Choose…**. The name always ends in `.html`.
 
 A cartograph is always **one standalone HTML file**. There is no Share ZIP or
 Folder type as there is for the web map: the page, its static images and the
@@ -74,31 +78,39 @@ data of its live maps are all inside it.
 
 - **Title** - replaces the project title wherever the layout shows it
   (`[% @project_title %]`). Blank keeps the project title.
-- **Attribution** - a credit line for the page, such as your data sources.
-  <!-- verify: where the Attribution field appears on the page - it is written
-  as the page's attribution attribute; only an item that uses the attribution
-  token shows it, and the plugin's layout reader never emits that token -->
+- **Attribution** - a credit for the page, such as your data sources. It is
+  stored on the page, and shown by any text on it that uses the
+  `{{attribution}}` token - text added by hand or by an AI agent, for example.
+  A label in the QGIS layout does not use the token, so to print a credit from
+  QGIS, write it into a layout label.
 - **Theme** - the page's look: **Default**, **Dark**, **Sepia**,
   **Blueprint** or **Minimal**. It colours the page and the furniture - legend,
   scale bar, north arrow, grid - not your map data.
 
 ### The status line
 
-Under the form: *Not saved yet*, *Saved 2 s ago · 3.2 MB*, or the reason a
-save failed. See [your first cartograph](cartograph-first-export.md#4-check-where-it-saves).
+Under the form: *Not saved yet - choose where to save it above* (an unsaved
+project with no path yet), *Saved 2 s ago · 3.2 MB*, or the reason a save
+failed. See [your first cartograph](cartograph-first-export.md#4-check-where-it-saves).
 
 ---
 
 ## Layers
 
-Shared with the web map and shown in both. A cartograph's frames draw the
-layers their map item draws in the layout - its own layer list, or the
-project's visible layers - so this is not where a cartograph's layers are
-chosen.
+Shared with the web map and shown in both. For a cartograph it sets how the
+layers in **live** frames behave:
 
-<!-- verify: the Include / Popups / Labels columns have no effect on a
-cartograph today - the live-frame export does not pass the dialog's layer
-settings, so a live frame keeps every popup field the layer itself defines -->
+- **Popups** and the per-field popup settings apply. A layer with Popups
+  unticked, or a field set to *Do not show this field*, has those values left
+  out of the file - not merely hidden.
+- **Labels** applies: unticked, the layer's labels are not drawn in live
+  frames.
+- **Include** does not choose a cartograph's layers. A frame draws the layers
+  its map item draws in the layout - its own locked layer list, or the
+  project's visible layers - so change that in the layout designer.
+
+Static frames are pictures drawn by QGIS, so none of this changes them.
+Changing anything here saves the cartograph again.
 
 ---
 
@@ -111,11 +123,11 @@ One row per map item on the layout:
 | **Map item** | The map's ID in the layout designer, or its display name |
 | **CRS** | The map's CRS, or *Unknown CRS* |
 | **Frame** | **Live** - an interactive map drawn in the browser, in Web Mercator. **Static** - an image of the map as QGIS draws it, in its own CRS |
-| **DPI** | A static frame's image resolution: **150** (the default), **200** or **300**. Greyed out for a live frame |
+| **DPI** | A static frame's image resolution: **150**, **200** (the default) or **300**. Greyed out for a live frame |
 | **Changes** | Fidelity rows about this map that are not *Kept*. Empty until the first save |
 | **Use canvas view** | Sets the map's extent to what the QGIS canvas shows. It is an edit to your layout, so the layout designer's **Undo** takes it back |
 
-![The Frames tab with two maps: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 150 dpi.](images/cartograph-03-frames.png)
+![The Frames tab with two maps: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 200 dpi.](images/cartograph-03-frames.png)
 
 A map starts **Live** when its CRS is EPSG:3857 or EPSG:4326, and **Static**
 otherwise. [Live or static frames](live-or-static-frames.md) is the whole
@@ -129,26 +141,27 @@ list rebuilds.
 
 ## Atlas
 
-<!-- verify: the whole Atlas tab section - written from the specification
-while the tab is being built; check every control name and behaviour against
-the finished tab -->
+One page per feature of a coverage layer, in one file. The tab edits the
+layout's own atlas - the same settings as QGIS's Atlas panel - so every change
+goes on the layout's undo stack, and **Undo** in the layout designer takes it
+back. [Atlas cartographs](cartograph-atlas.md) explains the rules.
 
-The layout's atlas, as the cartograph will page it. One cartograph file holds
-every page: the reader turns them with the arrow keys or the pager at the foot
-of the sheet. [Atlas cartographs](cartograph-atlas.md) explains the rules.
+![The Atlas tab: Generate an atlas ticked, the coverage layer, the map that follows it, sort, filter and file names, the page count, and the two all-pages buttons.](images/cartograph-atlas-tab.png)
 
 | Control | What it is |
 |---|---|
-| **Enabled** | Whether the cartograph pages the layout's atlas |
-| **Coverage layer** | One page per feature of this layer |
-| **Sort** | The field pages are ordered by |
-| **Filter** | Which features get a page |
-| **Filename pattern** | How each page is named when the pages are exported as images |
-| **Page count** | How many pages QGIS's atlas has. The cartograph can have fewer when the map hides some features |
+| **Generate an atlas** | Turns the layout's atlas on or off. The rest of the tab is greyed out while it is off |
+| **Coverage layer** | One page per feature of this vector layer |
+| **Map that follows it** | The map that zooms to each feature in turn. It must be a **Live** frame. Choosing a map that did not follow the atlas before sets it to QGIS's own defaults: fit each feature, with a 10% margin |
+| **Sort by** + **Descending** | The field pages are ordered by. Blank keeps the layer's order |
+| **Filter** | An expression: only features for which it is true get a page. Blank gives every feature a page |
+| **File names** | An expression naming each page's image when all pages are exported |
+| *N pages in QGIS* | How many pages QGIS's atlas has. The cartograph can have fewer, because it skips features the map does not draw |
+| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in the Frames tab* |
+| **Export all pages (PNG, ZIP)...** | Opens the cartograph, which renders every page and downloads them as one ZIP |
+| **Print all pages...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF, each page at its true size in a Chromium-based browser |
 
-The atlas only works through a **live** map that draws the coverage layer.
-If the map the atlas drives is static, the Fidelity tab marks the atlas
-**Blocked** and says to set that map to Live on the Frames tab.
+The two buttons stay greyed out until the saved cartograph has atlas pages.
 
 ---
 
@@ -160,8 +173,9 @@ layout item that changed or was left out, with the verdicts **Kept**,
 after each save. Before the first save it reads *Not checked yet*, and **Check
 now** on the strip saves the cartograph to check it.
 
-Layout items are listed under **Whole map**, and each layer a live frame draws
-gets its own group, exactly as on the web map. The verdicts are explained in
+Layout items are listed under **Whole map**, and the layers the frames draw
+get their own groups, as on the web map - a static frame's layers marked
+**Rasterised**, since they are part of its picture. The verdicts are explained in
 [what a cartograph keeps](cartograph-supported-features.md).
 
 ---
@@ -174,9 +188,6 @@ Three buttons in the top-right corner of the tab bar, reachable from every tab:
   simulate colour-vision deficiencies on the canvas and in the browser, and
   check which legend classes become indistinguishable. Stays pressed while a
   simulation is on, and its tooltip names it.
-  <!-- verify: the Accessibility button is wired to the Colour vision dialog -
-  in the current build it is disabled with the tooltip "Coming in a later
-  version" -->
 - **Preview** - opens the saved cartograph in your default browser.
 - **Open in browser** - the same; its **arrow** opens the Share menu.
 
@@ -201,12 +212,12 @@ The arrow beside **Open in browser**:
 | **Enhance with NIKA AI...** | Opens the [hand-off dialog](enhance-with-ai.md#hand-off-to-nika) with a prompt asking an AI agent to improve the cartograph | Once the file exists |
 | **Ask NIKA for a critique...** | The same dialog, with a prompt asking for a cartographer's critique | Once the file exists |
 | **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
-| **Export PNG...** | Opens the cartograph, which renders a 300 dpi image of the page and downloads it | Once the file exists |
+| **Export PNG...** | Opens the cartograph, which renders a 300 dpi image of the page and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
 | **Export QGIS layout template (.qpt)...** | Saves the source layout as a `.qpt` template, to load into another project | Once a layout is selected |
 | **Print settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Export PDF | Once a layout is selected |
 
-<!-- verify: Ctrl+O and Ctrl+P fire from the dialog itself, not only while the
-menu is open (the actions are not added to the dialog) -->
+**Ctrl+O** and **Ctrl+P** work from anywhere in the dialog, without opening
+the menu.
 
 Export PDF and Export PNG are **derived** from the cartograph rather than being
 the export: the browser makes them from the saved file. Both are covered in
@@ -228,14 +239,14 @@ export as the dialog, once, with these parameters:
 |---|---|
 | **Print layout** | The layout to export |
 | **Frames** | **By map CRS** (live in EPSG:3857 and EPSG:4326, static otherwise), **All live** or **All static** |
-| **Static frame resolution (dpi)** | 72 to 600; 200 by default |
+| **Static frame resolution (dpi)** | 72 to 600; 200 by default, as in the dialog |
 | **Title** | Replaces the project title; blank keeps it |
-| **Export even if some items are blocked** | Off by default, so a Blocked item - a second page, say - stops the run and names it |
+| **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on a static map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |
 | **Cartograph** | Where to write the `.html` |
 
 Every Fidelity row is written to the log. Print settings, the Cartograph tab's
-page fields and per-map choices from the Frames tab are not used: the
-algorithm takes only its own parameters.
+page fields, per-map choices from the Frames tab and the Layers tab's popup
+and label choices are not used: the algorithm takes only its own parameters.
 
 On a computer that has never downloaded the OnlyMap runtime, the algorithm
 stops and says so - it cannot show the licence in a batch run. Save one

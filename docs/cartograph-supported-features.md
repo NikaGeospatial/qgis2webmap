@@ -23,9 +23,9 @@ The verdicts are the same ones the [web map](supported-features.md) uses:
 |---|---|
 | **Kept** | Comes across exactly as it is in the layout |
 | **Changed** | Comes across, but not identically - the row says how |
-| **Rasterised** | Inside a live frame, a layer style drawn as a picture because the web has no equivalent - as on the web map |
+| **Rasterised** | Drawn as a picture: every layer of a **static** frame, which QGIS paints into the frame's image, and, inside a live frame, a layer style the web cannot draw any other way - as on the web map |
 | **Not exported** | Left out. The rest of the page is still made |
-| **Blocked** | Cannot be made as asked - a second page, or an atlas with nothing to drive it. The rest of the page is still saved, and the row says what to change |
+| **Blocked** | Cannot be made as asked - an atlas on a static map, or with no map that draws its coverage layer. The rest of the page is still saved, and the row says what to change |
 
 Layers drawn inside a **live** frame are translated exactly as for the web
 map, and their rows appear in the same report, one group per layer - see
@@ -37,7 +37,7 @@ QGIS drew, so its layers come across as they look.
 | In the layout | In the cartograph |
 |---|---|
 | Page 1 - size and orientation | **Kept** |
-| Pages 2 and after | **Blocked**. Page 1 is still saved; the other pages are not. Use an [atlas](cartograph-atlas.md) for many pages |
+| Pages 2 and after | **Not exported** - a cartograph is one page, so page 1 is saved and the rest are left out. Use an [atlas](cartograph-atlas.md) for a page per feature |
 | Item position, size, rotation | **Kept**, in millimetres from the page's top-left corner |
 | Stacking order | **Kept** |
 | Locked and hidden items | **Kept** - a hidden item stays hidden, in print too |
@@ -49,11 +49,11 @@ QGIS drew, so its layers come across as they look.
 
 | In the layout | In the cartograph |
 |---|---|
-| Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen on the Frames tab |
-| Map item, **live** frame | **Kept** - an interactive map. In a CRS other than Web Mercator it is drawn in Web Mercator, and marked **Changed** <!-- verify: the Changed row for a live frame in another CRS comes with the carto/atlas reader --> |
+| Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen on the Frames tab. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
+| Map item, **live** frame | **Kept** in EPSG:3857 - an interactive map. In any other CRS it is drawn in Web Mercator, and marked **Changed** |
 | Map rotation | **Kept** |
 | Overview (locator inset showing another map's extent) | **Kept** |
-| Map themes and per-item layer styles | Not read yet for **live** frames, which draw the layers' current styles. Use a static frame where a map theme matters <!-- verify: no Fidelity row reports this yet --> |
+| Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Fidelity tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
 
 ## Grids
 
@@ -61,10 +61,10 @@ QGIS drew, so its layers come across as they look.
 |---|---|
 | Grid as lines, crosses or markers | **Kept**, in the grid's own CRS, with coordinates outside the frame |
 | Frame and annotations only (zebra border) | **Changed** - drawn as crosses |
-| Interval in page units | **Changed** - the interval is chosen automatically <!-- verify: carto/atlas reader --> |
-| Annotations on some sides only, or inside the map | **Changed** - every side is labelled, outside <!-- verify: carto/atlas reader --> |
-| Degrees and minutes | **Changed** - printed as degrees, minutes and seconds <!-- verify: carto/atlas reader --> |
-| Custom annotation expression | **Changed** - printed as plain coordinates <!-- verify: carto/atlas reader --> |
+| Interval in page units | **Changed** - the interval is chosen automatically |
+| Annotations on some sides only, or inside the map | **Changed** - every side is labelled, outside |
+| Degrees and minutes | **Changed** - printed as degrees, minutes and seconds |
+| Custom annotation expression | **Changed** - printed as plain coordinates |
 
 ## Legends
 
@@ -74,14 +74,14 @@ QGIS drew, so its layers come across as they look.
 | Legend linked to a **static** map | **Changed** - its rows are written in once, from the layers' styles |
 | Legend title and columns | **Kept** |
 | Legend not linked to a map | **Not exported** |
-| Groups, hidden layer titles, entries reordered or a symbol edited in the legend only | **Changed** - the legend follows the layers' own entries <!-- verify: carto/atlas reader --> |
+| Groups, hidden layer titles, entries reordered or a symbol edited in the legend only | **Changed** - the legend follows the layers' own entries |
 
 ## Scale bars and north arrows
 
 | In the layout | In the cartograph |
 |---|---|
 | Scale bar: Single Box, Double Box, Line Ticks Up, Down or Middle | **Kept** - worked out from the frame, in metric, imperial or nautical units |
-| Scale bar: Stepped Line, Hollow | Drawn as a single box |
+| Scale bar: Stepped Line, Hollow | **Changed** - exported as a single-box scale bar, the nearest the cartograph draws |
 | Scale bar: any other style | **Changed** - drawn as a single box |
 | Scale bar: Numeric | **Kept** - a scale text (`1:25 000`) that stays correct |
 | Scale bar not linked to a map | **Not exported** |
@@ -99,8 +99,8 @@ QGIS drew, so its layers come across as they look.
 | Label: `@map_crs`, `@project_title`, today's date in ISO form | **Kept** live |
 | Label: `@atlas_featurenumber`, `@atlas_totalfeatures`, the atlas feature's fields | **Kept** live, inside an [atlas](cartograph-atlas.md) |
 | Label: any other expression | **Changed** - worked out once when the cartograph is saved, and written in as text |
-| Label rendered as HTML | **Changed** - the text is kept, the HTML formatting is not <!-- verify: carto/atlas reader --> |
-| Italic text, text buffers, justified or vertically centred text | **Changed** <!-- verify: carto/atlas reader --> |
+| Label rendered as HTML | **Changed** - the text is kept, the HTML formatting is not |
+| Italic text, text buffers, justified or vertically centred text | **Changed** |
 | Rectangle and ellipse shapes | **Kept** - fill, outline and corner radius |
 | Triangle shapes | **Not exported** |
 | A shape outline that is not a simple line | **Changed** - the shape is kept without its outline |

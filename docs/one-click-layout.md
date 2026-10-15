@@ -65,11 +65,10 @@ and change anything - move the legend, restyle the title, add a logo. The
 cartograph follows: each change in the layout designer saves the cartograph
 again about half a second later.
 
-**The first save.** Selecting the new layout does not save it by itself; the
-status line reads *Not saved yet* until you change something, or press **Check
-now** on the strip. <!-- verify: whether the one-click layout should save
-straight away - today the status line and Fidelity tab can still describe the
-previously selected layout until the first change -->
+**The first save** happens as soon as the new layout is selected: in a saved
+project its cartograph is `carto-<project title>.html`, beside the project
+file. In a project that has never been saved, nothing is written until you
+choose where on the Cartograph tab.
 
 ## Importing a cartograph back into QGIS
 
