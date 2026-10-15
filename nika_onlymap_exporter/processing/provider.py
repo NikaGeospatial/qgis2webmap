@@ -1,9 +1,9 @@
 """The Processing provider.
 
-One provider, one algorithm today. It exists so export is reachable from the
-Processing toolbox, the graphical modeller and `qgis_process` on the command
-line -- which is what makes batch export possible without a second
-implementation of the export itself.
+One provider, two algorithms: the web map export and the cartograph export.
+It exists so export is reachable from the Processing toolbox, the graphical
+modeller and `qgis_process` on the command line -- which is what makes batch
+export possible without a second implementation of the export itself.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
