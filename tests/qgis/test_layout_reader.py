@@ -451,3 +451,12 @@ class TestShapeAndPictureDetail:
         assert reading.furniture == ()
         unsupported = report.by_status(FidelityStatus.UNSUPPORTED)
         assert any("no size" in item.detail for item in unsupported)
+
+
+def test_a_stepped_scale_bar_is_changed_not_kept(survey) -> None:
+    """Drawn as the runtime's single box: a change the Fidelity tab shows."""
+    survey.scalebar.setStyle("stepped")
+    report = FidelityReportBuilder()
+    read_layout(survey.layout, report)
+    rows = [item for item in report.items if item.subject.startswith("Scale bar")]
+    assert rows and all(item.status is FidelityStatus.APPROXIMATED for item in rows)

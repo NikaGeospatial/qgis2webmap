@@ -138,7 +138,8 @@ class HandoffDialog(QDialog):
         self.setWindowTitle(
             tr("Hand off to NIKA - {name}").format(name=context.file_path.name)
         )
-        self.setMinimumWidth(420)
+        # Wide enough for step 1's three buttons with their full labels.
+        self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -194,8 +195,14 @@ class HandoffDialog(QDialog):
         self.status_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
+        self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, stretch=1)
+        column.addLayout(row)
 
+        # The buttons on a row of their own: beside the status they clipped
+        # it ("not found on this cor") at the dialog's narrower widths.
+        row = QHBoxLayout()
+        row.addStretch(1)
         self.open_button = QPushButton(tr("Open NIKA desktop"), box)
         self.open_button.clicked.connect(self.on_open_desktop)
         row.addWidget(self.open_button)

@@ -166,6 +166,9 @@ _SCALEBAR_KIND_BY_STYLE = {
     "Hollow": "single",
 }
 
+#: Styles in the map above only as the nearest kind the runtime draws.
+_NEAREST_ONLY_STYLES = frozenset({"stepped", "Stepped Line", "hollow", "Hollow"})
+
 #: Picture suffix -> data-URI media type. Anything unlisted is sent as PNG,
 #: which is what QGIS's own raster pictures overwhelmingly are.
 _IMAGE_MIME_BY_SUFFIX = {
@@ -1372,11 +1375,13 @@ def _read_scalebar(
         )
 
     kind = _SCALEBAR_KIND_BY_STYLE.get(style_name, "single")
-    if style_name not in _SCALEBAR_KIND_BY_STYLE:
+    if style_name not in _SCALEBAR_KIND_BY_STYLE or style_name in _NEAREST_ONLY_STYLES:
+        # Mapped to the nearest kind the runtime draws is still a change the
+        # reader sees: "Kept" would be a silent one.
         report.approximated(
             label,
             f"QGIS scale bar style {style_name!r} has no exact cartograph "
-            "equivalent; exported as a single-box scale bar.",
+            f"equivalent; exported as a {kind} scale bar.",
         )
     else:
         report.preserved(label, "Scale bar preserved.")

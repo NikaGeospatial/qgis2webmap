@@ -252,3 +252,32 @@ class TestSave:
         )
         make_dialog().save_action.trigger()
         assert warned and "Could not save the prompt" in warned[0]
+
+
+def test_the_status_is_never_clipped_at_the_minimum_width(qgis_app, tmp_path) -> None:
+    """At the narrowest the dialog allows, the "not found" status reads in
+    full rather than "not found on this cor"."""
+    from nika_onlymap_exporter.core.nika_desktop import NOT_FOUND
+    from nika_onlymap_exporter.ui.handoff_dialog import HandoffContext, HandoffDialog
+
+    target = tmp_path / "map.html"
+    target.write_text("<html></html>")
+    dialog = HandoffDialog(
+        HandoffContext(
+            output="cartograph",
+            file_path=target,
+            source_name="Survey",
+            plugin_version="0.3.0",
+        ),
+        detector=lambda *_a, **_k: NOT_FOUND,
+    )
+    try:
+        dialog.resize(dialog.minimumWidth(), dialog.sizeHint().height())
+        dialog.show()
+        qgis_app.processEvents()
+        label = dialog.status_label
+        needed = label.fontMetrics().horizontalAdvance(label.text())
+        assert label.width() >= needed or label.wordWrap()
+        assert label.height() >= label.heightForWidth(label.width()) - 1
+    finally:
+        dialog.close()

@@ -574,9 +574,11 @@ class TestScalebarDetails:
 
     @pytest.mark.parametrize("renderer_id", ["hollow", "stepped"])
     def test_current_style_ids_are_known(self, project, renderer_id) -> None:
+        """Known by their current ids, and drawn as the nearest kind - which
+        the report says, rather than calling it kept."""
         bar, report = self._bar(project, lambda sb: sb.setStyle(renderer_id))
         assert bar.kind == "single"
-        assert not any("style" in r for r in _rows(report, FidelityStatus.APPROXIMATED))
+        assert any("style" in r for r in _rows(report, FidelityStatus.APPROXIMATED))
 
     def test_every_registered_style_is_mapped(self, project) -> None:
         from qgis.core import QgsApplication

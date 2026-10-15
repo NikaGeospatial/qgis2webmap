@@ -45,10 +45,11 @@ OUTPUTS: tuple[OutputKind, ...] = ("cartograph", "web_map")
 PRODUCER = "QGIS2WebMap"
 
 # Where a general-purpose agent learns the vocabulary before editing. The
-# cartograph link is the issue's (onlymap's llms.txt "Cartographs" section); the
+# cartograph link is the public onlymap-js llms.txt, whose "PRINT LAYOUTS" entry
+# covers cartographs (the issue named a private repo's copy, which 404s); the
 # web-map one is the skill file docs/enhance-with-ai.md already sends people to.
 CARTOGRAPH_PRIMER = (
-    "https://raw.githubusercontent.com/NikaGeospatial/onlymap/main/llms.txt"
+    "https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/llms.txt"
 )
 WEB_MAP_PRIMER = (
     "https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/"
@@ -133,7 +134,7 @@ def _opening(request: HandoffRequest) -> str:
 
     if request.output == "cartograph":
         return (
-            f'Read {CARTOGRAPH_PRIMER} and its "Cartographs" section before '
+            f'Read {CARTOGRAPH_PRIMER} and its "PRINT LAYOUTS" entry before '
             f"touching anything. The cartograph is {request.file_path}, a plain "
             "HTML document using @nika-js/onlymap/cartograph."
         )
