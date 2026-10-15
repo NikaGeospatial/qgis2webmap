@@ -582,3 +582,32 @@ class TestLayersTabChoices:
         )
         assert "Ms Tan" in with_popups
         assert "Ms Tan" not in without
+
+
+class TestPagePolish:
+    def test_a_grid_is_drawn_over_its_frame(self, survey, fake_runtime) -> None:
+        """QGIS draws a map's grid on top of the map; a graticule placed
+        before its frame at the same z ended up underneath it, invisible."""
+        from nika_onlymap_exporter.core.cartograph_ir import FrameSpec, GraticuleSpec
+
+        prepared = prepare_cartograph(
+            survey.layout, survey.project, fake_runtime, FidelityReportBuilder()
+        )
+        order = [type(i) for i in prepared.items]
+        graticule = order.index(GraticuleSpec)
+        frame_of_grid = next(
+            index
+            for index, item in enumerate(prepared.items)
+            if isinstance(item, FrameSpec) and item.id == prepared.items[graticule].for_
+        )
+        assert frame_of_grid < graticule
+
+    def test_live_frames_carry_no_web_map_controls(self, project, fake_runtime) -> None:
+        """A printed page with zoom buttons, a second legend and a layer menu
+        inside its map: the cartograph's own furniture does those jobs."""
+        layout = _live_layout(project)
+        html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        sheet = html[html.index("<template") :]
+        assert "<om-widget" not in sheet

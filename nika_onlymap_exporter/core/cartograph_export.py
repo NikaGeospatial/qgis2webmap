@@ -70,7 +70,7 @@ from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
 from .cartograph_ir import CartographItem, CartographSpec, FrameSpec
-from .export_ir import ExportProject, Extent
+from .export_ir import ExportProject, ExportSettings, Extent
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .layout_reader import (
@@ -85,6 +85,18 @@ from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
+
+#: A live frame is a map on a printed page: the page's own legend, scale bar
+#: and north arrow do those jobs, and zoom buttons or a layer menu have no
+#: business on paper. The web map's on-map widgets are all off.
+_LIVE_FRAME_SETTINGS = ExportSettings(
+    show_legend=False,
+    show_layer_switcher=False,
+    show_zoom_controls=False,
+    show_scale_bar=False,
+    show_title=False,
+    show_abstract=False,
+)
 
 #: A CSS pixel, same definition `core/zoom_range.py` uses, so a live frame's
 #: camera is measured in the runtime's own units.
@@ -383,7 +395,14 @@ def prepare_cartograph(
             items.append(frame_spec)
             live_frames.append(source)
 
-    items.sort(key=lambda item: item.z if item.z is not None else 0)
+    # A frame before everything else at its z: QGIS draws a map's grid and
+    # any item stacked at the map's own level over the map, never under it.
+    items.sort(
+        key=lambda item: (
+            item.z if item.z is not None else 0,
+            0 if isinstance(item, FrameSpec) else 1,
+        )
+    )
 
     title = title_override if title_override is not None else (project.title() or "")
     spec = CartographSpec(
@@ -456,6 +475,7 @@ def finish_cartograph_full(
             layer_order=source.layer_order,
             canvas_extent=source.extent,
             layer_settings=layer_settings,
+            settings=_LIVE_FRAME_SETTINGS,
         )
         projects.append(export_project)
         requirement = prepared.atlas_requirement

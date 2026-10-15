@@ -1870,10 +1870,15 @@ def _label_expression_context(
         # rather than blank (the label's own context would carry them).
         context.appendScope(QgsExpressionContextUtils.atlasScope(atlas))
     if map_item is not None:
-        size = map_item.sizeWithUnits()
-        settings = map_item.mapSettings(
-            map_item.extent(), QSizeF(size.width(), size.height()), 96, False
+        # The size is in PIXELS at the dpi given, not the item's millimetres:
+        # passing mm made `@map_scale` read 96/25.4 times too large.
+        converter = QgsLayoutMeasurementConverter()
+        converter.setDpi(layout.renderContext().dpi())
+        size = converter.convert(
+            map_item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters
         )
+        pixels = QSizeF(size.width() / 25.4 * 96, size.height() / 25.4 * 96)
+        settings = map_item.mapSettings(map_item.extent(), pixels, 96, False)
         context.appendScope(QgsExpressionContextUtils.mapSettingsScope(settings))
         context.appendScope(QgsExpressionContextUtils.layoutItemScope(map_item))
     return context

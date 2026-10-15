@@ -460,3 +460,13 @@ def test_a_stepped_scale_bar_is_changed_not_kept(survey) -> None:
     read_layout(survey.layout, report)
     rows = [item for item in report.items if item.subject.startswith("Scale bar")]
     assert rows and all(item.status is FidelityStatus.APPROXIMATED for item in rows)
+
+
+def test_a_frozen_map_scale_is_the_maps_own_scale(survey) -> None:
+    """`@map_scale` frozen on a static frame must read what QGIS shows for the
+    map item, not a figure off by the mm-to-pixel factor."""
+    report = FidelityReportBuilder()
+    reading = read_layout(survey.layout, report)
+    label = next(item for item in reading.furniture if isinstance(item, TextSpec))
+    frozen = int(re.search(r"scale 1:(\d+)", label.body).group(1))
+    assert frozen == pytest.approx(survey.main_map.scale(), rel=0.01)

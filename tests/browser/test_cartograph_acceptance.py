@@ -141,6 +141,26 @@ class TestSurveyCartograph:
         for got, wanted in zip(sorted(drawn), sorted(want)):
             assert got == pytest.approx(wanted, abs=1.0)
 
+    def test_the_graticule_is_visible_above_its_frame(
+        self, page, fixtures: Path
+    ) -> None:
+        """Counting lines in the DOM passed while the frame's image covered
+        every one of them; this asks what is on top at a grid line."""
+        _open(page, fixtures / "survey-static.html")
+        # Graticules take no pointer events, so a hit test sees through them;
+        # what decides painting is z-index, then document order.
+        on_top = page.evaluate(
+            """() => {
+              const grid = document.querySelector('om-graticule');
+              const frame = document.getElementById(grid.getAttribute('for'));
+              const z = (e) => Number(getComputedStyle(e).zIndex) || 0;
+              const after = frame.compareDocumentPosition(grid)
+                & Node.DOCUMENT_POSITION_FOLLOWING;
+              return z(grid) > z(frame) || (z(grid) === z(frame) && !!after);
+            }"""
+        )
+        assert on_top
+
     def test_the_legend_has_the_same_rows_as_qgis(
         self, page, fixtures: Path, expected
     ) -> None:
