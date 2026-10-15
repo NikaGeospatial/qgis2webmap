@@ -56,6 +56,13 @@ HELP_DOCS = (
     "supported-features.md",
     "troubleshooting.md",
     "privacy.md",
+    "cartograph-first-export.md",
+    "cartograph-dialog.md",
+    "live-or-static-frames.md",
+    "cartograph-atlas.md",
+    "printing-a-cartograph.md",
+    "colour-vision.md",
+    "cartograph-supported-features.md",
 )
 
 

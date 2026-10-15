@@ -40,6 +40,29 @@ guides:
       - title: Alternatives for QGIS web export
         url: /qgis2web-alternative.html
 
+  - title: Cartographs (Beta)
+    items:
+      - title: QGIS print layout to HTML
+        url: /qgis-print-layout-to-html.html
+      - title: Your first cartograph
+        url: /cartograph-first-export.html
+      - title: The Cartograph dialog
+        url: /cartograph-dialog.html
+      - title: Live or static frames
+        url: /live-or-static-frames.html
+      - title: Atlas cartographs
+        url: /cartograph-atlas.html
+      - title: One-click layouts
+        url: /one-click-layout.html
+      - title: Printing a cartograph
+        url: /printing-a-cartograph.html
+      - title: Colour vision
+        url: /colour-vision.html
+      - title: What a cartograph keeps
+        url: /cartograph-supported-features.html
+      - title: Sharing a print layout
+        url: /share-qgis-print-layout-without-qgis.html
+
   - title: After the export
     items:
       - title: Sharing a map

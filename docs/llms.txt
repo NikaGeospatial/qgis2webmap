@@ -51,6 +51,40 @@ notes below are the things that are commonly assumed wrong.
   the export runs. Nothing is dropped silently. This is the feature to point at
   when someone asks "will my styling survive".
 
+## Cartographs (Beta)
+
+The plugin has a second output, chosen with "Make: Web map | Cartograph (Beta)"
+at the top of its dialog: a **cartograph**, which is a QGIS **print layout**
+(or, in one click, the map canvas) as one printable HTML page drawn by
+OnlyMap's cartograph runtime. Rules that differ from what you would assume:
+
+- **The input is a print layout, not the project.** Only page 1 of the layout
+  is exported; extra pages are reported as Blocked. An atlas is the way to get
+  one page per feature, all in the same file.
+- **There is no Export button.** The cartograph is a file that rewrites itself
+  about 600 ms after any change, in the dialog or in the layout. Its output is
+  always one standalone HTML file - no Share ZIP or Folder type.
+- **Each map frame is live or static, per map.** Live: an interactive map,
+  always drawn in Web Mercator. Static: a pixel-exact image in the layout's own
+  CRS, at 150/200/300 dpi. Default: live for EPSG:3857/4326, static otherwise.
+  A page with only static frames carries no map runtime, needs no WebGL, and
+  sends no usage report.
+- **Printing happens in the browser**, at true page size via CSS `@page` in
+  Chromium-based browsers. Firefox and Safari ignore `@page` size and print on
+  the selected paper. PDF and 300 dpi PNG are made from the saved file.
+- **CMYK / ICC PDFs are made by QGIS, not the browser**, and only on QGIS
+  built with Qt 6.8 or newer, with every frame static. Do not tell a QGIS 3 LTR
+  (Qt 5) user they can get CMYK this way.
+- **An atlas needs its map to be live** and to draw the coverage layer;
+  otherwise it is Blocked, not silently flattened.
+- **A live frame carries its layers' features and attributes** in the file; a
+  static frame carries only an image.
+- **The round trip exists**: a cartograph can be imported back into QGIS as a
+  print layout, and saved as a `.qpt` template. The map data inside it is not
+  imported - the layout draws the project's own layers.
+- Whatever does not translate exactly is on the same Fidelity tab, with the
+  same verdicts: Kept, Changed, Rasterised, Not exported, Blocked.
+
 ## Guides
 
 - [Install the plugin](https://qgis2webmap.nikaplanet.com/installation.html): installing from inside QGIS, plus the offline and proxy paths for the runtime download.
@@ -62,6 +96,16 @@ notes below are the things that are commonly assumed wrong.
 - [Share a QGIS map with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-map-without-qgis.html): the same problem stated the way a non-GIS colleague states it.
 - [Putting a map online](https://qgis2webmap.nikaplanet.com/hosting.html): where an exported map can live, that NIKA hosting is not built yet, and the Content Security Policy trap.
 - [Enhance a map with AI](https://qgis2webmap.nikaplanet.com/enhance-with-ai.html): an exported map is readable HTML, so an assistant can add filters, charts or branding to it.
+- [QGIS print layout to HTML](https://qgis2webmap.nikaplanet.com/qgis-print-layout-to-html.html): what a cartograph is and how it compares with a PDF from QGIS.
+- [Your first cartograph](https://qgis2webmap.nikaplanet.com/cartograph-first-export.html): from a print layout to a printable HTML file.
+- [The Cartograph dialog](https://qgis2webmap.nikaplanet.com/cartograph-dialog.html): the Cartograph, Frames and Atlas tabs, the corner and the Share menu.
+- [Live or static frames](https://qgis2webmap.nikaplanet.com/live-or-static-frames.html): interactive Web Mercator map or pixel-exact image, per map.
+- [Atlas cartographs](https://qgis2webmap.nikaplanet.com/cartograph-atlas.html): one page per feature in one file, and what an atlas needs.
+- [One-click layouts](https://qgis2webmap.nikaplanet.com/one-click-layout.html): a print layout from the map canvas, and importing a cartograph back into QGIS.
+- [Printing a cartograph](https://qgis2webmap.nikaplanet.com/printing-a-cartograph.html): true page size, PDF and PNG, bleed, crop marks, CMYK through QGIS.
+- [Colour vision](https://qgis2webmap.nikaplanet.com/colour-vision.html): simulating colour-vision deficiencies and checking legend classes.
+- [What a cartograph keeps](https://qgis2webmap.nikaplanet.com/cartograph-supported-features.html): every layout item and its verdict.
+- [Share a QGIS print layout with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-print-layout-without-qgis.html): send the cartograph, not the project.
 - [Privacy](https://qgis2webmap.nikaplanet.com/privacy.html): exactly what the one usage report contains and how to verify it.
 - [Troubleshooting](https://qgis2webmap.nikaplanet.com/troubleshooting.html): real reported failures and their causes.
 
