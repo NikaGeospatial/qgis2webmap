@@ -65,8 +65,53 @@ Ask in the same words you would use with a colleague:
 > **In beta.** NIKA Agent is currently listed as **NIKA Desktop** while the
 > naming settles, and it is still being finished — so if something it does to a
 > map is not what you asked for, keep the original export and
-> [tell us](mailto:support@nikaplanet.com). The route below is the older, more
-> settled one.
+> [tell us](mailto:support@nikaplanet.com). Using
+> [any assistant that can read files](#or-any-assistant-that-can-read-files) is
+> the older, more settled route.
+
+## Hand off to NIKA
+
+The plugin writes the request for you. In the dialog's **Share** menu, choose
+**Enhance with NIKA AI...** or **Ask NIKA for a critique...** - on a web map
+and on a [cartograph](cartograph-dialog.md#the-share-menu) alike. A web map
+needs a **Save to** path on the Map tab, and is written first if it is missing
+or out of date, so the prompt never points at a stale file. A cartograph is
+always saved already.
+
+The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
+
+![The Hand off to NIKA dialog for a cartograph: NIKA desktop not found, with a Download button; NIKA desktop chosen as the target and Critique this cartograph as the task; the prompt below, with Copy prompt highlighted.](images/handoff-dialog.png)
+
+1. **NIKA desktop** - whether the app is installed on this computer, and its
+   version when it is. Found, **Open NIKA desktop** is enabled. Not found,
+   **Download NIKA desktop ↗** opens the download page in your browser; install
+   it and press **Re-check**. The plugin finds the app by looking in the usual
+   install folders on disk - it asks no server.
+2. **What to ask**:
+   - **Paste into** - **NIKA desktop**, for a prompt its map skills recognise,
+     or **Other agent**, for a prompt any coding assistant can follow, which
+     starts by sending it to OnlyMap's own documentation.
+   - **Task** - **Critique** asks for a cartographer's review, ranked by
+     impact, and asks the agent to change nothing until you confirm.
+     **Enhance** asks it to improve the map or page without changing its data,
+     fixing what the Fidelity tab marked *Changed*. The menu row you chose
+     preselects it.
+   - **Files** - the map or cartograph file, ticked. **Change files...** picks
+     others from the same folder; anything from elsewhere is left out, because
+     the agent works in that folder.
+   - An optional box for your own instructions.
+3. **The prompt** - read-only, rebuilt as you change anything above it, so what
+   you see is exactly what is copied. **Copy prompt** puts it on the clipboard
+   (the button reads *Copied* for a moment). Its arrow also has **Open NIKA
+   desktop**, which copies the prompt and opens the app ready to paste, and
+   **Save prompt as .md...**.
+
+**Nothing is sent anywhere.** The plugin never talks to NIKA or to any AI
+service: the prompt goes onto your clipboard or into a file, and you paste it
+where you choose.
+
+From the [Colour vision](colour-vision.md) dialog, **Ask NIKA to fix ↗** opens
+the same dialog with the colour findings already in the prompt.
 
 ## Or any assistant that can read files
 
@@ -107,6 +152,14 @@ Useful things to ask for:
    minified library code. Nothing you want to change lives there.
 2. **Keep the attribution.** If your data came with a licence or a required
    credit, it has to stay.
+
+## Cartographs too
+
+A [cartograph](qgis-print-layout-to-html.md) is the same kind of file: a page
+described in readable markup - `<om-cartograph>`, `<om-frame>`, `<om-legend>` -
+with sizes in millimetres. The same two rules apply, plus one: **keep every
+element's `id`**, because the legend, scale bar and north arrow find their map
+by it. The hand-off prompt says so for you.
 
 ## Reference
 

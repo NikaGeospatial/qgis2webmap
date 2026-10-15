@@ -31,6 +31,25 @@ The [Settings tab](#settings) gathers the per-machine ones you can change.
 
 ---
 
+## Make: Web map or Cartograph
+
+Above the tabs, **Make:** chooses what the dialog makes:
+
+- **Web map** - an interactive map of the whole project, which is what the
+  rest of this page describes.
+- **Cartograph (Beta)** - a QGIS print layout as one printable HTML page. The
+  Map and Appearance tabs give way to **Cartograph**, **Frames** and **Atlas**,
+  and the corner changes. See
+  [the Cartograph dialog, tab by tab](cartograph-dialog.md).
+
+![The top of the dialog: Make:, with Web map and Cartograph (Beta), the latter highlighted.](images/cartograph-make-switch.png)
+
+Layers, Fidelity, Settings and Help stay in both; Fidelity shows the report of
+whichever output is chosen. Switching back and forth loses nothing you typed
+on either side, and the choice is remembered with the project.
+
+---
+
 ## Map
 
 Everything about the map as a whole, and the one place the exported title is set.
@@ -378,14 +397,15 @@ opens the menu:
 | **Copy file path** | Puts the map file's path on the clipboard |
 | **Show in file manager** | Opens the folder the map file is in |
 | **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
-| **Enhance with NIKA AI**, **Ask NIKA for a critique** | Coming soon; greyed out for now |
-| **Make a cartograph with QGIS2Carto** | Coming soon; greyed out for now |
+| **Enhance with NIKA AI...**, **Ask NIKA for a critique...** | Opens the [Hand off to NIKA](enhance-with-ai.md#hand-off-to-nika) dialog with a prompt to paste into NIKA desktop or another AI agent |
+| **Make a cartograph...** | Builds a print layout from the current map view and switches to [Cartograph (Beta)](one-click-layout.md) |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
 **Copy file path and Show in file manager need a Save to path first.** Until
 you have set one on the Map tab they are greyed out, and each says so if you
-hover it. Publish with NIKA hosting and Ask on Discord always work; the
-rows marked coming soon are greyed out.
+hover it. The other rows are always available. The two NIKA rows also need a
+map file, and say so if there is no Save to path yet; like Show in file
+manager, they write the map first when it is missing or out of date.
 
 **Show in file manager writes the map first** when it is missing or out of
 date, so it never points at something stale. Copy file path only copies the

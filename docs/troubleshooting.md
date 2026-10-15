@@ -53,6 +53,12 @@ faq:
       It cannot. Browsers refuse to load the runtime from a separate file on a
       file:// page. Folder mode exists for uploading to a web server. Use
       Standalone HTML for anything that has to open off a disk.
+  - q: Why does my cartograph print at the wrong size in Firefox or Safari?
+    a: >-
+      Firefox and Safari ignore the page size a web page sets and print on the
+      paper chosen in their print dialog, scaled to fit. Choose the matching
+      paper size there, or print from Chrome, Edge or another Chromium-based
+      browser, which prints a cartograph at its true page size.
 ---
 
 # Troubleshooting
@@ -278,6 +284,99 @@ expressions the runtime evaluates at draw time, so a policy without
 The tiles come from the provider's servers on every open, so the recipient needs
 internet access and an unblocked route to that provider. If you need a map that
 works with no connection at all, set **Basemap** to **None** — the default.
+
+## Cartographs
+
+### "Not saved yet", and Preview does nothing
+
+A cartograph is written after the first change, not when you open the tab. Its
+status line reads *Not saved yet*, and Preview and the Share menu's file rows
+wait for a file. Change any setting on the Cartograph or Frames tab, or press
+**Check now** on the strip at the foot of the dialog, and it saves about half a
+second later.
+
+If it still does not save, the status line says why:
+
+| It says | What to do |
+|---|---|
+| *The OnlyMap runtime is needed to save a cartograph. Nothing was written.* | The one-off runtime download was declined or failed. See [the runtime download](#the-runtime-download), then change any setting to try again |
+| *Could not save the cartograph: ...* | The place in **Save to** cannot be written to. **Choose…** another |
+| *Could not build the cartograph: ...* | Something in the layout could not be read. The detail is in **View → Panels → Log Messages**, `QGIS2WebMap` tab |
+
+No **Save to** path at all - a layout picked for the first time in a project
+that has not been saved - also means nothing is written. **Choose…** a place.
+
+### The Source list is empty
+
+The project has no print layouts. Create one from **Project → Layouts → New
+Layout** and add a map to it, or click **Current canvas (creates a print
+layout)** to have one built. See [one-click layouts](one-click-layout.md).
+
+### A live frame is blank in the browser
+
+A live frame is drawn by the graphics card through WebGL. When the browser has
+WebGL switched off or unavailable - some virtual desktops, remote sessions,
+locked-down work machines, old graphics drivers - the frame shows a short
+message instead of a map, and the rest of the page draws normally. Try another
+browser, or turn on hardware acceleration in the browser's settings.
+
+For a page that must work everywhere, set the frame to **Static** on the Frames
+tab. A page with only static frames needs no WebGL at all. See
+[live or static frames](live-or-static-frames.md).
+
+### The page is blank in a preview pane
+
+Every cartograph needs JavaScript. A mail client's, chat app's or file
+manager's preview does not run it and shows an empty page. Save the file and
+open it in a browser.
+
+### It prints at the wrong size in Firefox or Safari
+
+Those two browsers ignore the page size a web page sets, and print on the paper
+chosen in their print dialog, scaled to fit. Pick the matching paper there, or
+print from Chrome, Edge or another Chromium-based browser, which prints at the
+true size. See [printing a cartograph](printing-a-cartograph.md).
+
+### A live frame prints blank or blurry
+
+Print with **Share → Export PDF...** from the plugin. It waits for the maps and
+swaps each live frame for a print-resolution image before the print dialog
+opens. Or set the frame to **Static**, which prints the same however it is
+printed.
+
+### The atlas is Blocked: the map is static
+
+The Fidelity tab says *This map follows the atlas, but it is a static frame*.
+A static frame is one picture, so it would show the same place on every page.
+On the **Frames** tab, set the map the atlas controls to **Live**. If it then
+says the coverage layer is missing, add that layer to the map's layers - tick
+**Hide coverage layer** in the layout's atlas settings if it should not show.
+See [atlas cartographs](cartograph-atlas.md).
+
+### CMYK and ICC are greyed out in Print settings
+
+Hover the choice to see why. Two causes:
+
+- **QGIS is built on Qt older than 6.8**, or is older than 3.40. QGIS 3 LTR is
+  built on Qt 5, and colour-managed PDFs need Qt 6.8. Use a QGIS 4 build on Qt
+  6.8 or newer, or send the print shop an RGB PDF and let them convert it.
+- **A frame is live.** CMYK and ICC PDFs are made by QGIS from the layout, and
+  QGIS cannot draw a live frame as the cartograph shows it. Set every frame to
+  **Static** on the Frames tab.
+
+See [CMYK and print-shop profiles](printing-a-cartograph.md#cmyk-and-print-shop-profiles).
+
+### The CMYK PDF is not PDF/X-4
+
+The project has no CMYK colour profile. Set one in **Project Properties →
+Styles**, or choose **Printer ICC profile...** in Print settings with the file
+your print shop gave you.
+
+### Only page 1 came out
+
+A cartograph is one page per layout; pages 2 and after are marked **Blocked**
+on the Fidelity tab and left out. Make each page its own layout, or use an
+[atlas](cartograph-atlas.md) for a page per feature.
 
 ## Still stuck
 

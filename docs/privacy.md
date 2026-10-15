@@ -73,6 +73,34 @@ additional identifier travels with it, and the file is no larger. But the
 so the dialog warns in red when it is not, and the Fidelity tab names the
 provider.
 
+## Cartographs
+
+A [cartograph](qgis-print-layout-to-html.md) follows the same policy, and
+sends even less:
+
+- **A cartograph whose frames are all static sends nothing at all.** It does
+  not carry the map runtime, so there is nothing in it to report. Open it with
+  the developer tools' Network tab showing and reload: no request.
+- **A cartograph with a live frame** sends the same one anonymous usage report
+  as an exported map, from the map runtime inside that frame, with
+  `cartograph` among the features it counts. Same service, nothing new sent.
+- On the free plan, every cartograph carries a small credit at the foot of the
+  page - *Built with OnlyMap by NIKA · free for non-commercial use*. It is part
+  of the free licence's attribution condition, so it prints and appears in an
+  exported PNG too. It is text on the page, not a request.
+
+Opening a cartograph from the plugin's **Preview** or **Open in browser** serves
+it from a small server on your own machine (`127.0.0.1`), which nothing outside
+your computer can reach.
+
+What a cartograph **contains** differs by frame. A static frame holds an image
+of the map. A live frame holds the features it draws, with their attributes -
+see [what travels in the file](share-qgis-print-layout-without-qgis.md#what-travels-in-the-file).
+
+The [hand-off to NIKA](enhance-with-ai.md#hand-off-to-nika) sends nothing
+either: it finds NIKA desktop by looking on your disk, and the prompt goes onto
+your clipboard or into a file you choose.
+
 ## What is in the file
 
 The map's data, taken from your QGIS project. If a layer came from a database or

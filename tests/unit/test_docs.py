@@ -220,3 +220,84 @@ class TestRuntimeDownloadSize:
         assert not wrong, (
             f"stale runtime download sizes (expected {declared!r}): {wrong}"
         )
+
+
+def _front_matter(path: Path) -> str:
+    """The YAML between the opening and closing `---`, or "" when absent."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return ""
+    return text[4:].partition("\n---\n")[0]
+
+
+class TestFrontMatter:
+    """Two readers, one source: the site needs these fields on every guide.
+
+    `title` is what the Help tab and the sidebar show; `seo_title` and
+    `description` are what a searcher sees. A guide missing either ships a
+    search result that says nothing about the page.
+    """
+
+    # The home page is laid out by `_layouts/home.html` from its own fields.
+    EXEMPT = frozenset({"index.md"})
+
+    def test_every_guide_has_title_seo_title_and_description(self) -> None:
+        missing: list[str] = []
+        for path in markdown_files():
+            if path.name in self.EXEMPT:
+                continue
+            front = _front_matter(path)
+            for key in ("title", "seo_title", "description"):
+                if not re.search(rf"^{key}:", front, re.MULTILINE):
+                    missing.append(f"{path.name}: {key}")
+        assert not missing, f"guides missing front matter: {missing}"
+
+
+class TestNavigation:
+    """`_data/nav.yml` links are `.html`, written by hand - so check them."""
+
+    NAV_URL = re.compile(r"^\s*url:\s*/([\w-]+)\.html\s*$", re.MULTILINE)
+
+    def test_every_nav_entry_has_a_guide(self) -> None:
+        nav = (DOCS / "_data" / "nav.yml").read_text(encoding="utf-8")
+        slugs = self.NAV_URL.findall(nav)
+        assert slugs, "no nav entries found"
+        missing = [slug for slug in slugs if not (DOCS / f"{slug}.md").is_file()]
+        assert not missing, f"nav.yml links to guides that do not exist: {missing}"
+
+    def test_the_cartograph_guides_are_in_the_nav(self) -> None:
+        nav = (DOCS / "_data" / "nav.yml").read_text(encoding="utf-8")
+        for name in HELP_DOCS:
+            if name.startswith(("cartograph-", "live-or-static", "printing-a")):
+                assert f"/{name[:-3]}.html" in nav, f"{name} is not in nav.yml"
+
+    def test_llms_txt_links_resolve(self) -> None:
+        llms = (DOCS / "llms.txt").read_text(encoding="utf-8")
+        slugs = re.findall(r"https://qgis2webmap\.nikaplanet\.com/([\w-]+)\.html", llms)
+        assert slugs
+        missing = [slug for slug in slugs if not (DOCS / f"{slug}.md").is_file()]
+        assert not missing, f"llms.txt links to guides that do not exist: {missing}"
+
+
+class TestPublicRepository:
+    """This repository and its site are public; some NIKA repositories are not.
+
+    A link into an internal repository is a 404 for every reader and leaks a
+    name that was never meant to be published.
+    """
+
+    INTERNAL = (
+        "github.com/NikaGeospatial/nika-agent",
+        "github.com/NikaGeospatial/qgis2carto",
+        "github.com/NikaGeospatial/nika-cf-workers",
+    )
+
+    def test_no_guide_links_into_an_internal_repository(self) -> None:
+        files = [*markdown_files(), DOCS / "llms.txt"]
+        offenders = [
+            f"{path.name}: {needle}"
+            for path in files
+            for needle in self.INTERNAL
+            if needle in path.read_text(encoding="utf-8")
+        ]
+        assert not offenders, offenders
