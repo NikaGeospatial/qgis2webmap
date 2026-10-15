@@ -315,7 +315,9 @@ layout)** to have one built. See [one-click layouts](one-click-layout.md).
 A live frame is drawn by the graphics card through WebGL. When the browser has
 WebGL switched off or unavailable - some virtual desktops, remote sessions,
 locked-down work machines, old graphics drivers - the frame shows a short
-message instead of a map, and the rest of the page draws normally. Try another
+message instead of a map, and the rest of the page draws normally: scale bars,
+grids and scale text still use the map's real extent, the map's legend is left
+out, and the page still prints. Try another
 browser, or turn on hardware acceleration in the browser's settings.
 
 For a page that must work everywhere, set the frame to **Static** on the Frames

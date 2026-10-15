@@ -22,7 +22,7 @@ each frame is one of two kinds. You choose per map, on the **Frames** tab.
 | Styling | Translated, with the web map's [fidelity](supported-features.md) - the Fidelity tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
 | Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default) |
-| Needs WebGL in the reader's browser | Yes | No |
+| Needs WebGL in the reader's browser | Yes - without it the frame shows a note instead of the map | No |
 | File size | Larger - the map's data and the map runtime, a few megabytes | Small - an image per frame |
 | Can drive an [atlas](cartograph-atlas.md) | Yes | No |
 

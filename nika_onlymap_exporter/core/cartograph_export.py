@@ -66,11 +66,21 @@ from qgis.core import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
-from ..exporters.frame_raster import StaticFrameRender, render_static_frame
+from ..exporters.frame_raster import (
+    StaticFrameRender,
+    frame_corners_wgs84,
+    render_static_frame,
+)
 from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
-from .cartograph_ir import AtlasCamera, CartographItem, CartographSpec, FrameSpec
+from .cartograph_ir import (
+    AtlasCamera,
+    CartographItem,
+    CartographSpec,
+    FrameGeoreference,
+    FrameSpec,
+)
 from .export_ir import ExportProject, ExportSettings, Extent
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
@@ -733,6 +743,22 @@ def _build_static_frame(
     )
 
 
+def _georeference(
+    map_item: QgsLayoutItemMap, project: QgsProject
+) -> FrameGeoreference | None:
+    """Where QGIS draws `map_item`, as a static frame would be placed: the
+    page's fallback when the browser cannot draw the live map. None for a
+    CRS with no authority code, which a frame's `crs=` cannot name."""
+    crs = map_item.crs()
+    if not crs.isValid() or not crs.authid():
+        return None
+    return FrameGeoreference(
+        corners=frame_corners_wgs84(map_item, project),
+        crs=crs.authid(),
+        crs_def=crs.toProj() or None,
+    )
+
+
 def _build_live_frame(
     frame: MapFrameReading,
     project: QgsProject,
@@ -784,6 +810,7 @@ def _build_live_frame(
         atlas_fit=frame.atlas_fit,
         atlas_margin=frame.atlas_margin,
         atlas_cameras=atlas_cameras,
+        georeference=_georeference(map_item, project),
     )
     source = LiveFrameSource(
         frame_id=frame.frame_id,

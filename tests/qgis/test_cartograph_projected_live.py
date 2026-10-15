@@ -256,6 +256,22 @@ class TestGeographicPlane:
             assert got == pytest.approx(want, abs=tolerance)
 
 
+class TestGeoreferenceForBrowsersWithoutWebgl:
+    def test_a_live_frame_carries_where_qgis_draws_it(
+        self, survey, fake_runtime
+    ) -> None:
+        import json
+
+        from nika_onlymap_exporter.exporters.frame_raster import frame_corners_wgs84
+
+        frame = _live_frame(_export(survey, fake_runtime, FidelityReportBuilder()))
+        georef = json.loads(frame.get("data-qgis2webmap-georef") or "")
+        assert georef["crs"] == "EPSG:32648"
+        assert georef["crs-def"].startswith("+proj=utm +zone=48")
+        want = frame_corners_wgs84(survey.main_map, survey.project)
+        assert georef["corners"] == [list(corner) for corner in want]
+
+
 class TestAtlasInAPlane:
     def test_an_atlas_map_in_utm_follows_qgis_pages_in_the_plane(
         self, survey, fake_runtime

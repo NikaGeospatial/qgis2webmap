@@ -15,6 +15,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     AtlasSpec,
     Box,
     CartographSpec,
+    FrameGeoreference,
     FrameSpec,
     GraticuleSpec,
     ImageSpec,
@@ -582,4 +583,27 @@ class TestReadableIds:
         for uuid in tokens:
             assert re.fullmatch(
                 r"[A-Za-z][A-Za-z0-9_]*", element_id("frame", uuid, tokens)
+            )
+
+
+class TestFrameGeoreference:
+    CORNERS = ((0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0))
+
+    def test_it_needs_four_corners_and_a_crs(self) -> None:
+        with pytest.raises(ValueError, match="4 points"):
+            FrameGeoreference(corners=self.CORNERS[:3], crs="EPSG:4326")  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="crs"):
+            FrameGeoreference(corners=self.CORNERS, crs="")
+
+    def test_only_a_live_frame_carries_one(self) -> None:
+        georeference = FrameGeoreference(corners=self.CORNERS, crs="EPSG:4326")
+        FrameSpec(id="f", box=Box(0, 0, 10, 10), georeference=georeference)
+        with pytest.raises(ValueError, match="live-only"):
+            FrameSpec(
+                id="f",
+                box=Box(0, 0, 10, 10),
+                mode="static",
+                corners=self.CORNERS,
+                image_bytes=b"png",
+                georeference=georeference,
             )

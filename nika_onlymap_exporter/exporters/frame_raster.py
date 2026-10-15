@@ -97,18 +97,25 @@ def render_static_frame(
 
     crs = map_item.crs()
     project = layout.project() or QgsProject.instance()
-    transform = QgsCoordinateTransform(crs, WGS84, project)
+    return StaticFrameRender(
+        png_bytes=png_bytes,
+        corners=frame_corners_wgs84(map_item, project),
+        crs_authid=crs.authid(),
+        crs_def=crs.toProj(),
+    )
+
+
+def frame_corners_wgs84(
+    map_item: QgsLayoutItemMap, project: QgsProject
+) -> tuple[LonLat, LonLat, LonLat, LonLat]:
+    """The map item's tl/tr/br/bl corners in lon/lat: its own
+    `visibleExtentPolygon()`, so a rotated map's corners turn with it."""
+    transform = QgsCoordinateTransform(map_item.crs(), WGS84, project)
     corners_map = [(point.x(), point.y()) for point in map_item.visibleExtentPolygon()][
         :4
     ]
     corners = tuple(_to_wgs84(transform, x, y) for x, y in corners_map)
-
-    return StaticFrameRender(
-        png_bytes=png_bytes,
-        corners=corners,  # type: ignore[arg-type]  # always length 4, checked below
-        crs_authid=crs.authid(),
-        crs_def=crs.toProj(),
-    )
+    return corners  # type: ignore[return-value]  # always length 4, checked below
 
 
 def _to_wgs84(transform: QgsCoordinateTransform, x: float, y: float) -> LonLat:

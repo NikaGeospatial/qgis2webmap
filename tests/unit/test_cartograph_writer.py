@@ -18,6 +18,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     AtlasSpec,
     Box,
     CartographSpec,
+    FrameGeoreference,
     FrameSpec,
     GraticuleSpec,
     LegendRowSpec,
@@ -631,6 +632,60 @@ class TestAtlasCameras:
             _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
         )
         assert "om-atlas-page" not in html
+
+
+class TestNoWebglFallback:
+    """A browser without WebGL cannot draw a live frame, and the runtime then
+    never settles it; the page turns such a frame static by QGIS's own
+    georeference so its furniture still reads the map."""
+
+    CORNERS = ((103.7, 1.4), (103.9, 1.4), (103.9, 1.2), (103.7, 1.2))
+
+    def _html(self, georeference: FrameGeoreference | None) -> str:
+        main = FrameSpec(
+            id="main",
+            box=Box(10, 24, 150, 120),
+            mode="live",
+            center=(103.8, 1.3),
+            zoom=12,
+            georeference=georeference,
+        )
+        spec = CartographSpec(cartograph_id="cg", size="A4", items=(main,))
+        return write_cartograph_html(
+            spec, _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+
+    def test_the_frame_carries_qgis_georeference(self) -> None:
+        import json
+
+        html = self._html(
+            FrameGeoreference(
+                corners=self.CORNERS,
+                crs="EPSG:32648",
+                crs_def="+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs",
+            )
+        )
+        frame = _parse_sheet(html).find(".//om-frame")
+        assert frame is not None
+        georef = json.loads(frame.get("data-qgis2webmap-georef") or "")
+        assert georef == {
+            "corners": [list(c) for c in self.CORNERS],
+            "crs": "EPSG:32648",
+            "crs-def": "+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs",
+        }
+
+    def test_the_fallback_runs_before_the_sheet_connects(self) -> None:
+        html = self._html(FrameGeoreference(corners=self.CORNERS, crs="EPSG:4326"))
+        check = html.index("getContext('webgl2')")
+        append = html.index("document.body.appendChild(fragment);")
+        assert check < append
+        assert "setAttribute('mode', 'static')" in html
+
+    def test_a_frame_without_one_is_left_alone(self) -> None:
+        html = self._html(None)
+        frame = _parse_sheet(html).find(".//om-frame")
+        assert frame is not None
+        assert frame.get("data-qgis2webmap-georef") is None
 
 
 class TestSharedLayerData:

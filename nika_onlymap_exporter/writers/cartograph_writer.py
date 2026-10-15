@@ -66,6 +66,7 @@ from ..core.cartograph_ir import (
     Box,
     CartographItem,
     CartographSpec,
+    FrameGeoreference,
     FrameSpec,
     GraticuleSpec,
     ImageSpec,
@@ -107,6 +108,13 @@ _DATA_BLOCK_RE = re.compile(
 
 #: On a live frame the page script moves per atlas page (see `_ATLAS_CAMERAS`).
 ATLAS_CAMERAS_ATTRIBUTE = "data-qgis2webmap-atlas-cameras"
+
+#: On a live frame: where QGIS draws its map, for a browser without WebGL
+#: (see `_NO_WEBGL`).
+GEOREFERENCE_ATTRIBUTE = "data-qgis2webmap-georef"
+
+#: Shown in a live frame's place when the browser cannot draw maps.
+NO_WEBGL_MESSAGE = "This map needs WebGL, which this browser does not provide."
 
 
 @dataclass(frozen=True)
@@ -269,6 +277,7 @@ def _render_script(
         ]
     if has_atlas_cameras:
         lines += _ATLAS_CAMERAS
+    lines += _NO_WEBGL
     lines.append("document.body.appendChild(fragment);")
     # The runtime installs `?print=1` / `?export=png` / `?cvd=` when it is
     # imported, which is before the sheet leaves its <template>, so it finds
@@ -278,6 +287,51 @@ def _render_script(
     lines += _ATLAS_ACTIONS
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
+
+
+#: A browser with no WebGL2 cannot draw a live frame, and the runtime then
+#: never settles the frame (upstream request #1): the page would keep an
+#: empty box and every `{{frame.*}}` token, and print or PNG export would
+#: wait forever. So before the sheet connects, each live frame that carries
+#: QGIS's georeference becomes a static frame placed by it, with a note in
+#: the map's place -- its scale bar, tokens and grid still read QGIS's map.
+_NO_WEBGL = [
+    "const hasWebgl = (() => {",
+    "  try { return !!document.createElement('canvas').getContext('webgl2'); }",
+    "  catch { return false; }",
+    "})();",
+    "if (!hasWebgl) {",
+    f"  const GEOREF = '{GEOREFERENCE_ATTRIBUTE}';",
+    "  for (const frame of fragment.querySelectorAll(`om-frame[${GEOREF}]`)) {",
+    "    let georef;",
+    "    try { georef = JSON.parse(frame.getAttribute(GEOREF)); } catch { continue; }",
+    "    for (const name of ['center', 'zoom', 'bearing', 'pitch']) {",
+    "      frame.removeAttribute(name);",
+    "    }",
+    "    frame.setAttribute('mode', 'static');",
+    "    frame.setAttribute('corners', JSON.stringify(georef.corners));",
+    "    frame.setAttribute('crs', georef.crs);",
+    "    if (georef['crs-def']) frame.setAttribute('crs-def', georef['crs-def']);",
+    "    const w = Number(frame.getAttribute('w')) || 100;",
+    "    const h = Number(frame.getAttribute('h')) || 100;",
+    "    const note = document.createElement('img');",
+    f"    note.alt = {json.dumps(NO_WEBGL_MESSAGE)};",
+    "    const svg = `<svg xmlns='http://www.w3.org/2000/svg' `",
+    "      + `viewBox='0 0 ${w} ${h}'><text x='${w / 2}' y='${h / 2}' `",
+    "      + `text-anchor='middle' font-family='sans-serif' font-size='3.5' `",
+    "      + `fill='#6d5b72'>${note.alt}</text></svg>`;",
+    "    note.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);",
+    "    const map = frame.querySelector(':scope > om-map');",
+    "    if (map) map.replaceWith(note); else frame.append(note);",
+    # A legend lists the live map's layers, so with no map it would only
+    # print "waiting for its frame's layers".
+    '    const forFrame = `om-legend[for="${CSS.escape(frame.id)}"]`;',
+    "    for (const legend of fragment.querySelectorAll(forFrame)) {",
+    "      legend.setAttribute('hidden', '');",
+    "    }",
+    "  }",
+    "}",
+]
 
 
 #: QGIS's fixed and predefined atlas scales (and points, which QGIS centres
@@ -551,6 +605,18 @@ def _atlas_cameras_json(item: FrameSpec) -> str:
     )
 
 
+def _georeference_json(georeference: FrameGeoreference) -> str:
+    """`{"corners": [...], "crs": ..., "crs-def": ...}`: the attributes the
+    page script gives the frame if it has to turn it static."""
+    data: dict[str, object] = {
+        "corners": [[lon, lat] for lon, lat in georeference.corners],
+        "crs": georeference.crs,
+    }
+    if georeference.crs_def:
+        data["crs-def"] = georeference.crs_def
+    return json.dumps(data, separators=(",", ":"))
+
+
 def _corners_json(corners: tuple[tuple[float, float], ...]) -> str:
     return json.dumps([[lon, lat] for lon, lat in corners])
 
@@ -665,6 +731,10 @@ def _render_frame(item: FrameSpec, markup_by_frame: Mapping[str, str]) -> str:
         attrs.append(_attr("atlas-margin", _format_num(item.atlas_margin)))
     if item.atlas_cameras:
         attrs.append(_attr(ATLAS_CAMERAS_ATTRIBUTE, _atlas_cameras_json(item)))
+    if item.georeference is not None:
+        attrs.append(
+            _attr(GEOREFERENCE_ATTRIBUTE, _georeference_json(item.georeference))
+        )
 
     child = ""
     if item.mode == "live":

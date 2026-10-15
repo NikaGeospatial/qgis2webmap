@@ -259,6 +259,64 @@ class TestLiveFrameInWgs84:
         assert all(check["errors"] == [] for check in checks)
 
 
+class TestWithoutWebgl:
+    """A browser without WebGL cannot draw a live frame, and the runtime then
+    never settles it. The page turns the frame static by QGIS's own
+    georeference instead: the frame settles, shows a note where the map
+    would be, and its corners and scale tokens still read QGIS's map."""
+
+    def test_the_live_frame_turns_static_by_qgis_georeference(
+        self, browser_type, fixtures: Path, expected
+    ) -> None:
+        want = expected["survey_live"]
+        browser = browser_type.launch(args=["--disable-webgl", "--disable-3d-apis"])
+        try:
+            page = browser.new_page()
+            page.goto((fixtures / "survey-live.html").as_uri())
+            assert not page.evaluate(
+                "() => !!document.createElement('canvas').getContext('webgl2')"
+            )
+            page.wait_for_function(
+                "() => [...document.querySelectorAll('om-frame')].every(f => f.georef)",
+                timeout=30_000,
+            )
+            state = page.evaluate(
+                """async ([frameId, corners]) => {
+                  const frame = document.getElementById(frameId);
+                  const timeout = new Promise((r) => setTimeout(() => r(false), 20000));
+                  const settled = await Promise.race([
+                    Promise.resolve(frame.ready).then(() => true, () => true),
+                    timeout,
+                  ]);
+                  return {
+                    settled,
+                    mode: frame.getAttribute('mode'),
+                    note: frame.querySelector(':scope > img')?.alt ?? null,
+                    corners: corners.map((c) => {
+                      const p = frame.georef.project(c);
+                      return [p.xMm, p.yMm];
+                    }),
+                    text: [...document.querySelectorAll('om-text')]
+                      .map((t) => t.innerText).join(' '),
+                    legendHidden: [...document.querySelectorAll(
+                      `om-legend[for="${frameId}"]`)].every((l) => l.hidden),
+                  };
+                }""",
+                [want["main_frame"], want["corners"]],
+            )
+        finally:
+            browser.close()
+        assert state["settled"]
+        assert state["mode"] == "static"
+        assert state["note"] and "WebGL" in state["note"]
+        w, h = want["size_mm"]
+        for got, wanted in zip(state["corners"], ([0, 0], [w, 0], [w, h], [0, h])):
+            assert got == pytest.approx(wanted, abs=0.05)
+        assert "{{" not in state["text"]
+        # Its legend lists the map's layers; with no map it would only wait.
+        assert state["legendHidden"]
+
+
 class TestLiveCartograph:
     def test_the_live_frame_mounts_and_resolves_its_scale(
         self, page, fixtures: Path, cartograph_source: str

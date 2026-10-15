@@ -223,6 +223,28 @@ class AtlasCamera:
 
 
 @dataclass(frozen=True)
+class FrameGeoreference:
+    """Where QGIS draws a live frame's map: the frame's four corners
+    (lon/lat, tl/tr/br/bl) in the map's own `crs` -- exactly what a static
+    frame is placed by.
+
+    A live frame carries it so that a browser that cannot draw the map (no
+    WebGL) still gets the frame's scale bar, `{{frame.*}}` tokens and grid
+    right: the page script turns that frame static, with a note in place of
+    the map (`writers/cartograph_writer.py`).
+    """
+
+    corners: tuple[LonLat, LonLat, LonLat, LonLat]
+    crs: str
+    crs_def: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_corners(self.corners)
+        if not self.crs:
+            raise ValueError("a frame georeference needs a crs")
+
+
+@dataclass(frozen=True)
 class FrameSpec:
     """A placed map: `<om-frame>`.
 
@@ -273,6 +295,8 @@ class FrameSpec:
     atlas_fit: str | None = None
     atlas_margin: float | None = None
     atlas_cameras: tuple[AtlasCamera, ...] = ()
+    # Live frames only: where QGIS puts the map, for a browser without WebGL.
+    georeference: FrameGeoreference | None = None
 
     def __post_init__(self) -> None:
         _check_choice(self.mode, FRAME_MODES, "mode")
@@ -292,7 +316,12 @@ class FrameSpec:
             if self.center is not None and len(self.center) != 2:
                 raise ValueError(f"center must be (lon, lat), got {self.center!r}")
         else:  # static
-            if self.src is not None or self.center is not None or self.plane_crs:
+            if (
+                self.src is not None
+                or self.center is not None
+                or self.plane_crs
+                or self.georeference is not None
+            ):
                 raise ValueError("a static frame must not carry live-only fields")
             _check_corners(self.corners)
             if self.image_bytes is None and self.image_path is None:
