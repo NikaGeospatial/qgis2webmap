@@ -13,20 +13,20 @@
     "allowlist pragma to say so."
   ],
   "package": "@nika-js/onlymap",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "files": {
     "onlymap.standalone.js": {
-      "sha256": "669d3418ad1d3292c389266dd58a0f8c1a2c50a791fd24a039a915f008553af7", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "bytes": 8634145
+      "sha256": "d9ef94dda1567083f16921c0fd163091e483f66415236d567705ab150ae9a867", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "bytes": 8971310
     },
     "onlymapjs.css": {
       "sha256": "dcc8a840d879480a816c2173e5dda6c4cf3693cd2532832fa5c6a199278ba822", "_": "checksum of a public artifact # pragma: allowlist secret",
       "bytes": 71278
     },
     "cartograph.standalone.js": {
-      "sha256": "4b659b34179478f33d9aa7717e69dc16fc2a1cc5e719ddee10ae632520523669", "_": "checksum of a public artifact # pragma: allowlist secret",
-      "bytes": 344918
+      "sha256": "404f3833915b1ae4506610a32c4cf74a75524b794ad26f250dd68d8d8812f889", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "bytes": 345026
     },
     "cartograph.css": {
       "sha256": "7b97c30d58091e7c4a72b708f813b63e3263a323e762295fa32235c21096bea4", "_": "checksum of a public artifact # pragma: allowlist secret",

@@ -77,7 +77,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ### Changed
 - **Labels are sized in the right unit** and stay readable over imagery.
 - **Relief imagery moved from CARTO to NASA GIBS.**
-- **The OnlyMap runtime moves to 0.12.1.**
+- **The OnlyMap runtime moves to 0.13.0.**
 
 ### Fixed
 - **A labelled 3D polygon layer aborted the export** with "too many values to

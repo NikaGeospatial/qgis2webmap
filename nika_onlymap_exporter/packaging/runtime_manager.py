@@ -71,7 +71,7 @@ NPM_REGISTRY = "https://registry.npmjs.org"
 # Paths inside the npm tarball. npm wraps everything in `package/`.
 TARBALL_PREFIX = "package"
 
-# A decompression-bomb guard. The real tarball is ~5.4 MB and expands to ~8.7 MB;
+# A decompression-bomb guard. The real tarball is ~5.6 MB and expands to ~9.4 MB;
 # anything an order of magnitude past that is not the runtime.
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
 
@@ -80,14 +80,15 @@ MAX_MEMBER_BYTES = 64 * 1024 * 1024
 # wrong for a whole release because the 0.3.3 -> 0.5.11 bump left four
 # hand-written copies saying "about 3 MB" for a download that had become 4.5 MB.
 # It drifted again on the 0.6.1 -> 0.6.20 bump (4.5 -> 4.8 MB) and the 0.6.20 ->
-# 0.12.0 bump (4.8 -> 5.4 MB), which is why the
-# figure is measured from the tarball at pin time rather than remembered.
+# 0.12.0 bump (4.8 -> 5.4 MB) and the 0.12.1 -> 0.13.0 bump (5.4 -> 5.6 MB),
+# which is why the figure is measured from the tarball at pin time rather than
+# remembered.
 #
 # It describes the *compressed tarball*, which is what actually crosses the
-# network, not the ~8.7 MB the files occupy once unpacked. `tests/unit` asserts the
+# network, not the ~9.4 MB the files occupy once unpacked. `tests/unit` asserts the
 # user guide quotes this same string, so a bump cannot update the code and leave
 # the docs behind. Update it in `scripts/lock_runtime.py`'s output when re-pinning.
-RUNTIME_DOWNLOAD_SIZE = "about 5.4 MB"
+RUNTIME_DOWNLOAD_SIZE = "about 5.6 MB"
 
 DOWNLOAD_TIMEOUT_SECONDS = 120
 
