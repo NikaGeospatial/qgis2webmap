@@ -64,7 +64,8 @@ A live frame draws in the map's own CRS, exactly where QGIS draws it, when the
 map:
 
 - is in a **projected** CRS - UTM, a national grid, an equal-area or conic
-  projection;
+  projection - or a **geographic** one such as EPSG:4326, which is drawn as
+  QGIS draws it: one scale in degrees on both axes;
 - is not rotated;
 - carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
   or `.webp` tiles).
@@ -76,8 +77,6 @@ Otherwise it is redrawn in Web Mercator, and the Fidelity tab marks it
 **Changed**, with the reason: shapes, and distances away from the centre,
 differ slightly from the layout. That happens for
 
-- a map in **EPSG:4326** or another geographic CRS - a browser map cannot
-  draw degrees as a flat sheet;
 - a **rotated** map - the rotation is kept, in Web Mercator;
 - a map carrying an embedded **raster** or **vector tiles** - the row names
   the layer.

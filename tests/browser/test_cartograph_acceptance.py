@@ -216,6 +216,49 @@ class TestLiveFrameInUtm:
         assert result["errors"] == []
 
 
+class TestLiveFrameInWgs84:
+    """A live frame of an EPSG:4326 layout map draws as plate carree, as
+    QGIS does: at 60N its corners land on the frame's corners, where a Web
+    Mercator redraw is off by centimetres. The runtime flags a geographic
+    plane as a warning only."""
+
+    def test_qgis_corners_land_on_the_frame_corners(
+        self, page, fixtures: Path, expected, cartograph_source: str, tmp_path: Path
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["geo_live"]
+        # validate="silent" makes the map run its own checks and report them.
+        html = (fixtures / "geo-live.html").read_text(encoding="utf-8")
+        checked = tmp_path / "geo-live.html"
+        checked.write_text(
+            re.sub(r"<om-map\b", '<om-map validate="silent"', html, count=1),
+            encoding="utf-8",
+        )
+        page.add_init_script(
+            "window.__omChecks = [];"
+            "document.addEventListener('om-validation-error',"
+            " (e) => window.__omChecks.push(e.detail), true);"
+        )
+        _open(page, checked)
+        landed = page.evaluate(
+            """([frameId, corners]) => {
+              const georef = document.getElementById(frameId).georef;
+              return corners.map((c) => {
+                const p = georef.project(c);
+                return p && [p.xMm, p.yMm];
+              });
+            }""",
+            [want["main_frame"], want["corners"]],
+        )
+        w, h = want["size_mm"]
+        for got, wanted in zip(landed, ([0, 0], [w, 0], [w, h], [0, h])):
+            assert got == pytest.approx(wanted, abs=0.05)
+        assert page.evaluate(_VALIDATE, cartograph_source)["errors"] == []
+        checks = page.evaluate("window.__omChecks")
+        assert checks, "the map ran no checks of its own"
+        assert all(check["errors"] == [] for check in checks)
+
+
 class TestLiveCartograph:
     def test_the_live_frame_mounts_and_resolves_its_scale(
         self, page, fixtures: Path, cartograph_source: str

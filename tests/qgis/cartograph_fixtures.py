@@ -221,3 +221,36 @@ def all_static(layout: QgsPrintLayout) -> dict[str, str]:
         for item in layout.items()
         if isinstance(item, QgsLayoutItemMap)
     }
+
+
+def build_geo_layout(
+    project: QgsProject, authid: str = "EPSG:4326"
+) -> tuple[QgsPrintLayout, QgsLayoutItemMap]:
+    """Six parcels around 60N in `authid` on one live-able map, far enough
+    north that plate carree and Web Mercator disagree by centimetres."""
+    crs = QgsCoordinateReferenceSystem(authid)
+    layer = QgsVectorLayer(f"Polygon?crs={authid}", "blocks", "memory")
+    features = []
+    for i in range(3):
+        for j in range(2):
+            feature = QgsFeature()
+            x, y = 10 + i * 0.4, 59.6 + j * 0.3
+            feature.setGeometry(
+                QgsGeometry.fromRect(QgsRectangle(x, y, x + 0.3, y + 0.25))
+            )
+            features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    project.addMapLayer(layer)
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("geo")
+    map_item = QgsLayoutItemMap(layout)
+    layout.addLayoutItem(map_item)
+    map_item.attemptMove(QgsLayoutPoint(20, 20))
+    map_item.attemptResize(QgsLayoutSize(200, 150))
+    map_item.setCrs(crs)
+    map_item.setLayers([layer])
+    extent = layer.extent()
+    extent.grow(0.1)
+    map_item.setExtent(extent)
+    return layout, map_item

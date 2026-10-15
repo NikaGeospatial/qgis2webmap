@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other unrotated map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>将 QGIS 打印布局导出为图版：一个可移植的 HTML 文件，双击即可打开，并可从浏览器按实际页面大小打印。
 
-地图项会变为实时画框（可平移和缩放，使用 Web Mercator 或地图自身的投影 CRS）或静态画框（在布局自身 CRS 下的像素级精确图像）。默认情况下，当浏览器能像 QGIS 一样绘制地图时（EPSG:3857 或 EPSG:4326，或由矢量图层或图像瓦片组成的未旋转投影地图），地图为实时，其余为静态；“画框”会为布局上的每张地图覆盖此设置。
+地图项会变为实时画框（可平移和缩放，使用 Web Mercator 或地图自身的 CRS）或静态画框（在布局自身 CRS 下的像素级精确图像）。默认情况下，当浏览器能像 QGIS 一样绘制地图时（EPSG:3857 或 EPSG:4326，或由矢量图层或图像瓦片组成的其他未旋转地图），地图为实时，其余为静态；“画框”会为布局上的每张地图覆盖此设置。
 
 无法精确转换的内容会记录在日志中。如果某个项被阻止（例如不会导出的第二页），导出会停止，除非勾选了“即使部分项被阻止仍导出”。
 

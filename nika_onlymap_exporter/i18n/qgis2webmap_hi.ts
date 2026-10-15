@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other unrotated map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>QGIS मुद्रण लेआउट को मानचित्र पट्टिका में निर्यात करता है: एक पोर्टेबल HTML फ़ाइल जो डबल-क्लिक से खुलती है और ब्राउज़र से असली पेज आकार में प्रिंट होती है।
 
-मानचित्र आइटम लाइव फ़्रेम (पैन और ज़ूम, Web Mercator में या मानचित्र के अपने प्रक्षेपित CRS में) या स्थिर फ़्रेम (लेआउट के अपने CRS में पिक्सेल-सटीक छवि) बन जाते हैं। डिफ़ॉल्ट रूप से मानचित्र तब लाइव होता है जब ब्राउज़र उसे QGIS की तरह बना सके (EPSG:3857 या EPSG:4326, या वेक्टर परतों या छवि टाइलों वाला बिना घुमाया प्रक्षेपित मानचित्र), और बाकी सभी स्थिर; 'फ़्रेम' लेआउट के हर मानचित्र के लिए इसे बदल देता है।
+मानचित्र आइटम लाइव फ़्रेम (पैन और ज़ूम, Web Mercator में या मानचित्र के अपने CRS में) या स्थिर फ़्रेम (लेआउट के अपने CRS में पिक्सेल-सटीक छवि) बन जाते हैं। डिफ़ॉल्ट रूप से मानचित्र तब लाइव होता है जब ब्राउज़र उसे QGIS की तरह बना सके (EPSG:3857 या EPSG:4326, या वेक्टर परतों या छवि टाइलों वाला कोई भी अन्य बिना घुमाया मानचित्र), और बाकी सभी स्थिर; 'फ़्रेम' लेआउट के हर मानचित्र के लिए इसे बदल देता है।
 
 जो कुछ ठीक-ठीक नहीं ले जाया जा सकता, वह लॉग में बताया जाता है। अगर कोई आइटम अवरुद्ध है (जैसे दूसरा पेज, जो निर्यात नहीं होता), तो निर्यात रुक जाता है जब तक 'कुछ आइटम अवरुद्ध हों तब भी निर्यात करें' पर टिक न हो।
 

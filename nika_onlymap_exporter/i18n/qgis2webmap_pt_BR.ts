@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other unrotated map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>Exporta um layout de impressão do QGIS para uma prancha cartográfica: um único arquivo HTML portátil que abre com clique duplo e imprime no tamanho real da página pelo navegador.
 
-Os itens de mapa viram quadros ao vivo (que permitem arrastar e aplicar zoom, em Web Mercator ou no próprio CRS projetado do mapa) ou quadros estáticos (uma imagem fiel ao pixel no próprio CRS do layout). Por padrão, um mapa fica ao vivo quando o navegador consegue desenhá-lo como o QGIS (EPSG:3857 ou EPSG:4326, ou um mapa projetado sem rotação com camadas vetoriais ou blocos de imagem) e estático nos demais casos; 'Quadros' substitui isso para cada mapa do layout.
+Os itens de mapa viram quadros ao vivo (que permitem arrastar e aplicar zoom, em Web Mercator ou no próprio CRS do mapa) ou quadros estáticos (uma imagem fiel ao pixel no próprio CRS do layout). Por padrão, um mapa fica ao vivo quando o navegador consegue desenhá-lo como o QGIS (EPSG:3857 ou EPSG:4326, ou qualquer outro mapa sem rotação com camadas vetoriais ou blocos de imagem) e estático nos demais casos; 'Quadros' substitui isso para cada mapa do layout.
 
 Tudo o que não pode ser levado com exatidão é informado no log. Se um item estiver Bloqueado (por exemplo, uma segunda página, que não é exportada), a exportação para, a menos que 'Exportar mesmo que alguns itens estejam bloqueados' esteja marcado.
 

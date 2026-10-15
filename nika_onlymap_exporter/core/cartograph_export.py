@@ -969,13 +969,19 @@ def plane_view_width(
 
 def plane_metres_per_unit(proj_definition: str) -> float:
     """Metres per plane unit, as the runtime prices a proj4 definition
-    (`projection.ts`'s `unitsOf`): `+to_meter` when given, feet for any
-    foot unit, metres otherwise."""
+    (`projection.ts`'s `unitsOf`): the equatorial degree for a longitude/
+    latitude system, `+to_meter` when given, feet for any foot unit, metres
+    otherwise."""
     parameters = dict(
         part[1:].split("=", 1)
         for part in proj_definition.split()
         if part.startswith("+") and "=" in part
     )
+    if parameters.get("proj") == "longlat" or parameters.get(
+        "units", ""
+    ).lower().startswith("deg"):
+        # The runtime's `METRES_PER_EQUATORIAL_DEGREE`: 2*pi*6378137 / 360.
+        return EQUATOR_METRES / 360.0
     try:
         to_meter = float(parameters.get("to_meter", ""))
     except ValueError:

@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
 import pytest
-from cartograph_fixtures import build_survey_layout
+from cartograph_fixtures import build_geo_layout, build_survey_layout
 
 from nika_onlymap_exporter.core.cartograph_export import (
     _plane_camera,
@@ -144,19 +144,6 @@ class TestStaysInWebMercator:
             "Web Mercator" in row for row in _rows(report, FidelityStatus.APPROXIMATED)
         )
 
-    def test_a_geographic_map_is_not_drawn_as_a_stretched_plane(
-        self, survey, fake_runtime
-    ) -> None:
-        """The runtime refuses a degree-based plane, so EPSG:4326 stays in
-        Web Mercator, as before."""
-        survey.main_map.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:4326"))
-        report = FidelityReportBuilder()
-        html = _export(survey, fake_runtime, report)
-        assert "crs=" not in _om_map_tag(html)
-        assert any(
-            "Web Mercator" in row for row in _rows(report, FidelityStatus.APPROXIMATED)
-        )
-
     def test_a_raster_keeps_the_frame_in_web_mercator_and_is_named(
         self, survey, fake_runtime, make_raster_layer
     ) -> None:
@@ -182,6 +169,91 @@ class TestStaysInWebMercator:
         survey.main_map.setLayers([survey.parcels, tiles])
         html = _export(survey, fake_runtime, FidelityReportBuilder())
         assert 'crs="EPSG:32648"' in _om_map_tag(html)
+
+
+def _export_geo(layout, map_item, project, runtime, report) -> str:
+    prepared = prepare_cartograph(
+        layout,
+        project,
+        runtime,
+        report,
+        frame_modes={map_item.uuid(): "live"},
+        raster_cache=None,
+    )
+    return finish_cartograph(prepared, project, report)
+
+
+class TestGeographicPlane:
+    """A map in a geographic CRS draws as plate carree, as QGIS draws it
+    (runtime 0.13.0 made that a warning, not an error)."""
+
+    def test_a_wgs84_map_is_drawn_as_plate_carree(self, project, fake_runtime) -> None:
+        layout, map_item = build_geo_layout(project)
+        report = FidelityReportBuilder()
+        tag = _om_map_tag(_export_geo(layout, map_item, project, fake_runtime, report))
+        assert 'crs="EPSG:4326"' in tag
+        assert "+proj=longlat" in tag
+        assert any(
+            "drawn in EPSG:4326" in row
+            for row in _rows(report, FidelityStatus.PRESERVED)
+        )
+
+    def test_its_zoom_prices_a_degree_at_the_equator(
+        self, project, fake_runtime
+    ) -> None:
+        layout, map_item = build_geo_layout(project)
+        extent = map_item.extent()
+        lat = extent.center().y()
+        width_px = map_item.sizeWithUnits().width() * 96 / 25.4
+        metres_per_degree = 2 * math.pi * 6378137 / 360
+        want = math.log2(
+            40.03e6
+            * math.cos(math.radians(lat))
+            / 512
+            / (extent.width() * metres_per_degree / width_px)
+        )
+        html = _export_geo(
+            layout, map_item, project, fake_runtime, FidelityReportBuilder()
+        )
+        assert float(_live_frame(html).get("zoom") or 0) == pytest.approx(
+            want, abs=1e-4
+        )
+
+    def test_nad83_draws_in_its_own_plane_and_starts_live(
+        self, project, fake_runtime
+    ) -> None:
+        layout, map_item = build_geo_layout(project, "EPSG:4269")
+        assert default_mode_for_map(map_item) == "live"
+        html = _export_geo(
+            layout, map_item, project, fake_runtime, FidelityReportBuilder()
+        )
+        assert 'crs="EPSG:4269"' in _om_map_tag(html)
+
+    def test_it_comes_back_in_wgs84_on_import(self, project, fake_runtime) -> None:
+        layout, map_item = build_geo_layout(project)
+        original = map_item.extent()
+        imported = parse_cartograph_html(
+            _export_geo(
+                layout, map_item, project, fake_runtime, FidelityReportBuilder()
+            )
+        )
+        frame = next(
+            item
+            for item in imported.spec.items
+            if isinstance(item, FrameSpec) and item.mode == "live"
+        )
+        built = build_layout(imported.spec, project)
+        rebuilt = built.items_by_id[frame.id]
+        assert rebuilt.crs().authid() == "EPSG:4326"
+        extent = rebuilt.extent()
+        tolerance = original.width() * 1e-4
+        for got, want in (
+            (extent.xMinimum(), original.xMinimum()),
+            (extent.yMinimum(), original.yMinimum()),
+            (extent.xMaximum(), original.xMaximum()),
+            (extent.yMaximum(), original.yMaximum()),
+        ):
+            assert got == pytest.approx(want, abs=tolerance)
 
 
 class TestAtlasInAPlane:
@@ -308,6 +380,7 @@ def test_plane_view_width_is_the_camera_run_backwards(survey, zoom_shift) -> Non
         ("+proj=lcc +lat_1=33 +units=us-ft +no_defs", 0.3048),
         ("+proj=tmerc +k=1 +to_meter=0.201168 +no_defs", 0.201168),
         ("+proj=tmerc +k=1 +no_defs", 1.0),
+        ("+proj=longlat +datum=WGS84 +no_defs", 2 * math.pi * 6378137 / 360),
     ],
 )
 def test_plane_units_are_priced_like_the_runtime(

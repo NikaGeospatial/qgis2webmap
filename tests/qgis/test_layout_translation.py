@@ -325,9 +325,12 @@ class TestFrameFidelity:
             i.subject for i in report.by_status(FidelityStatus.PRESERVED)
         ]
 
-    def test_a_geographic_live_frame_is_reprojected(self, project) -> None:
+    def test_a_rotated_geographic_live_frame_is_reprojected(self, project) -> None:
+        # Unrotated, a geographic map draws in its own plane (plate carree);
+        # a plane has no bearing, so a rotated one is redrawn in Web Mercator.
         wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
-        layout, *_ = _layout(project, crs=wgs84)
+        layout, map_item, *_ = _layout(project, crs=wgs84)
+        map_item.setMapRotation(15)
         report = FidelityReportBuilder()
         reading = read_layout(layout, report)
         assert reading.frames[0].mode == "live"

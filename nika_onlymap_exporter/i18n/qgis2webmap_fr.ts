@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other unrotated map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>Exporte une mise en page d'impression QGIS vers une planche cartographique : un fichier HTML portable unique qui s'ouvre par double-clic et s'imprime à la taille réelle de la page depuis le navigateur.
 
-Les éléments de carte deviennent des cadres en direct (déplacement et zoom, en Web Mercator ou dans le CRS projeté propre à la carte) ou des cadres statiques (une image fidèle au pixel près, dans le CRS propre à la mise en page). Par défaut, une carte est en direct quand le navigateur peut la dessiner comme QGIS (EPSG:3857 ou EPSG:4326, ou une carte projetée sans rotation faite de couches vecteur ou de tuiles image) et statique sinon ; « Cadres » remplace ce choix pour chaque carte de la mise en page.
+Les éléments de carte deviennent des cadres en direct (déplacement et zoom, en Web Mercator ou dans le CRS propre à la carte) ou des cadres statiques (une image fidèle au pixel près, dans le CRS propre à la mise en page). Par défaut, une carte est en direct quand le navigateur peut la dessiner comme QGIS (EPSG:3857 ou EPSG:4326, ou toute autre carte sans rotation faite de couches vecteur ou de tuiles image) et statique sinon ; « Cadres » remplace ce choix pour chaque carte de la mise en page.
 
 Tout ce qui ne peut pas être reproduit exactement est signalé dans le journal. Si un élément est Bloqué (par exemple une deuxième page, qui n'est pas exportée), l'export s'arrête sauf si « Exporter même si certains éléments sont bloqués » est coché.
 

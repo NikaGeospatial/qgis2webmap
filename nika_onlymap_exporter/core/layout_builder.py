@@ -728,19 +728,19 @@ class _Builder:
         subject: str,
     ) -> tuple[QgsCoordinateReferenceSystem, QgsRectangle, float] | None:
         """The CRS and extent of a live frame whose map was drawn in a
-        projected CRS's plane (`<om-map crs>`), or None -- reported -- when
-        QGIS cannot place it there, which leaves it in Web Mercator."""
+        CRS's own plane (`<om-map crs>`), or None -- reported -- when QGIS
+        cannot place it there, which leaves it in Web Mercator."""
         crs = QgsCoordinateReferenceSystem(frame.plane_crs or "")
         if not crs.isValid() and frame.plane_crs_def:
             crs = QgsCoordinateReferenceSystem.fromProj(frame.plane_crs_def)
         proj_definition = frame.plane_crs_def or (crs.toProj() if crs.isValid() else "")
-        if not crs.isValid() or crs.isGeographic() or not proj_definition:
+        if not crs.isValid() or not proj_definition:
             self.issue(
                 subject,
                 "The frame's map was drawn in "
                 f"{frame.plane_crs or frame.plane_crs_def}, which QGIS cannot use "
-                "as a projected map CRS here, so the frame was placed in Web "
-                "Mercator (EPSG:3857).",
+                "as a map CRS here, so the frame was placed in Web Mercator "
+                "(EPSG:3857).",
             )
             return None
         lon, lat = center

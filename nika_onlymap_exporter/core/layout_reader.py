@@ -594,9 +594,9 @@ def plane_blocking_layers(item: QgsLayoutItemMap) -> list[str]:
 def draws_in_own_plane(item: QgsLayoutItemMap) -> bool:
     """Whether a live frame of `item` can draw in the map's own CRS.
 
-    The runtime draws a map with `crs=` in that projection's plane, but only
-    a projected one: a geographic CRS as a plane is refused (a degree of
-    longitude and of latitude are different distances), and a plane view
+    The runtime draws a map with `crs=` in that projection's plane: a
+    projected one, or a geographic one as plate carree (one scale in degrees
+    on both axes, as QGIS draws it; runtime 0.13.0 and later). A plane view
     has no bearing, so a rotated map stays in Web Mercator, which keeps the
     rotation. Whether the frame's layers can follow is only known once they
     are read (`core/cartograph_export.py`), which also reports the outcome.
@@ -604,7 +604,6 @@ def draws_in_own_plane(item: QgsLayoutItemMap) -> bool:
     crs = item.crs()
     return (
         crs.isValid()
-        and not crs.isGeographic()
         and crs.authid() != "EPSG:3857"
         and bool(crs.toProj())
         and item.mapRotation() == 0

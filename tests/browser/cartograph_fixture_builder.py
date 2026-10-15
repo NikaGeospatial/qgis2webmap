@@ -15,6 +15,8 @@ acceptance check meet through files):
   A3 landscape page, both frames static.
 - `survey-live.html`: the same survey with its main map live, drawn in
   UTM 48N, and where QGIS puts the main map's corners.
+- `geo-live.html`: an EPSG:4326 map at 60N, live, drawn as plate carree,
+  and where QGIS puts its corners.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
@@ -56,6 +58,8 @@ def main(out_dir: Path) -> int:
         }
         QgsProject.instance().clear()
         expected["survey_live"] = _write_survey_live(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["geo_live"] = _write_geo_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -170,6 +174,38 @@ def _write_survey_live(project, out_dir: Path) -> dict:
     return {
         "main_frame": _frame_id(survey.layout, main_map),
         "corners": corners,
+        "size_mm": [size.width(), size.height()],
+    }
+
+
+def _write_geo_live(project, out_dir: Path) -> dict:
+    from cartograph_fixtures import build_geo_layout
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    layout, map_item = build_geo_layout(project)
+    html = export_layout_to_cartograph(
+        layout,
+        project,
+        _runtime(),
+        FidelityReportBuilder(),
+        frame_modes={map_item.uuid(): "live"},
+    )
+    (out_dir / "geo-live.html").write_text(html, encoding="utf-8")
+    extent = map_item.extent()
+    size = map_item.sizeWithUnits()
+    return {
+        "main_frame": _frame_id(layout, map_item),
+        # The map is in EPSG:4326, so its extent corners are already lon/lat.
+        "corners": [
+            [extent.xMinimum(), extent.yMaximum()],
+            [extent.xMaximum(), extent.yMaximum()],
+            [extent.xMaximum(), extent.yMinimum()],
+            [extent.xMinimum(), extent.yMinimum()],
+        ],
         "size_mm": [size.width(), size.height()],
     }
 

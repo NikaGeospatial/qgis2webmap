@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map is live when the browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other unrotated map of vector layers or image tiles) and static otherwise; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>Exporta un diseño de impresión de QGIS a una lámina cartográfica: un único archivo HTML portátil que se abre con doble clic e imprime al tamaño real de página desde el navegador.
 
-Los elementos de mapa se convierten en marcos en vivo (desplazamiento y zoom, en Web Mercator o en el CRS proyectado propio del mapa) o marcos estáticos (una imagen fiel al píxel, en el CRS propio del diseño). De forma predeterminada, un mapa es en vivo cuando el navegador puede dibujarlo como QGIS (EPSG:3857 o EPSG:4326, o un mapa proyectado sin rotar de capas vectoriales o teselas de imagen) y estático en otro caso; «Marcos» anula esto para cada mapa del diseño.
+Los elementos de mapa se convierten en marcos en vivo (desplazamiento y zoom, en Web Mercator o en el CRS propio del mapa) o marcos estáticos (una imagen fiel al píxel, en el CRS propio del diseño). De forma predeterminada, un mapa es en vivo cuando el navegador puede dibujarlo como QGIS (EPSG:3857 o EPSG:4326, o cualquier otro mapa sin rotar de capas vectoriales o teselas de imagen) y estático en otro caso; «Marcos» anula esto para cada mapa del diseño.
 
 Todo lo que no se pueda reproducir con exactitud se indica en el registro. Si un elemento está Bloqueado (por ejemplo, una segunda página, que no se exporta), la exportación se detiene a menos que esté marcado «Exportar aunque algunos elementos estén bloqueados».
 
