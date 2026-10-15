@@ -510,3 +510,42 @@ class TestTextAlign:
     def test_qgis_spellings_are_refused(self, align: str) -> None:
         with pytest.raises(ValueError, match="align"):
             TextSpec(id="t", box=Box(0, 0, 1, 1), align=align)
+
+
+class TestReadableIds:
+    def test_a_qgis_item_id_becomes_a_readable_token(self) -> None:
+        from nika_onlymap_exporter.core.cartograph_ir import element_id, item_id_tokens
+
+        tokens = item_id_tokens([("{aa-1}", "Main map"), ("{bb-2}", "")])
+        assert element_id("frame", "{aa-1}", tokens) == "frame_main_map"
+        # No id of its own: the uuid, as before.
+        assert element_id("frame", "{bb-2}", tokens) == "frame_bb2"
+
+    def test_duplicates_are_numbered_in_order(self) -> None:
+        from nika_onlymap_exporter.core.cartograph_ir import item_id_tokens
+
+        tokens = item_id_tokens(
+            [("{a}", "Legend"), ("{b}", "legend"), ("{c}", "Legend")]
+        )
+        assert list(tokens.values()) == ["legend", "legend_2", "legend_3"]
+
+    def test_an_id_that_already_carries_the_prefix_is_not_doubled(self) -> None:
+        """A layout built from a cartograph names its items by the spec ids;
+        reading it back must give the same ids."""
+        from nika_onlymap_exporter.core.cartograph_ir import element_id, item_id_tokens
+
+        tokens = item_id_tokens([("{a}", "frame_main")])
+        assert element_id("frame", "{a}", tokens) == "frame_main"
+
+    def test_tokens_are_safe_in_ids_selectors_and_runtime_tokens(self) -> None:
+        import re
+
+        from nika_onlymap_exporter.core.cartograph_ir import element_id, item_id_tokens
+
+        tokens = item_id_tokens(
+            [("{a}", "Carte 1 (é)"), ("{b}", "2nd map"), ("{c}", "---"), ("{d}", "{x}")]
+        )
+        for uuid in tokens:
+            assert re.fullmatch(
+                r"[A-Za-z][A-Za-z0-9_]*", element_id("frame", uuid, tokens)
+            )

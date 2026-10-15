@@ -156,6 +156,18 @@ def _assert_equivalent(a: dict[str, object], b: dict[str, object]) -> None:
                 assert value_b == value_a, (key, name)
 
 
+def _frame_id(layout, map_item) -> str:
+    """The id the reader gives `map_item` within `layout`."""
+    from qgis.core import QgsLayoutItem
+
+    from nika_onlymap_exporter.core.cartograph_ir import element_id, item_id_tokens
+
+    tokens = item_id_tokens(
+        [(i.uuid(), i.id()) for i in layout.items() if isinstance(i, QgsLayoutItem)]
+    )
+    return element_id("frame", map_item.uuid(), tokens)
+
+
 class TestSurveyRoundTrip:
     def test_read_build_read_gives_an_equivalent_spec(
         self, survey, project, runtime
@@ -208,7 +220,7 @@ class TestSurveyRoundTrip:
         spec = _prepare(survey.layout, project, runtime)
         built = build_layout(spec, project)
         for original in (survey.main_map, survey.inset_map):
-            rebuilt = built.items_by_id[f"frame-{original.uuid()}"]
+            rebuilt = built.items_by_id[_frame_id(survey.layout, original)]
             assert rebuilt.crs().authid() == original.crs().authid()
             a, b = original.extent(), rebuilt.extent()
             for getter in ("xMinimum", "yMinimum", "xMaximum", "yMaximum"):
@@ -237,7 +249,7 @@ class TestSurveyRoundTrip:
         _assert_equivalent(
             _canonical(spec, survey.layout), _canonical(again, built.layout)
         )
-        rebuilt = built.items_by_id[f"frame-{survey.main_map.uuid()}"]
+        rebuilt = built.items_by_id[_frame_id(survey.layout, survey.main_map)]
         assert rebuilt.mapRotation() == pytest.approx(30)
 
     def test_through_the_html_file(self, survey, project, runtime) -> None:
@@ -738,3 +750,11 @@ class TestImportFile:
         logo = built.items_by_id["logo"]
         assert logo.picturePath() == str(tmp_path / "sheet.images" / "logo.svg")
         assert not logo.isMissingImage()
+
+
+def test_first_font_family_reads_a_css_font_list() -> None:
+    from nika_onlymap_exporter.core.layout_builder import first_font_family as first
+
+    assert first('"Sans Serif", sans-serif') == "Sans Serif"
+    assert first("'Open Sans',Arial") == "Open Sans"
+    assert first("serif") == "serif"

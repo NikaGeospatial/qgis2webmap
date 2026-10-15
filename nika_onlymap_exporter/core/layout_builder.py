@@ -88,7 +88,7 @@ from .cartograph_ir import (
     ShapeSpec,
     TextSpec,
 )
-from .layout_reader import FrameMode
+from .layout_reader import TEXT_KIND_PROPERTY, FrameMode
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -138,6 +138,10 @@ _IMAGE_SUFFIX_BY_MIME = {
     "image/bmp": ".bmp",
 }
 _HALIGN = {
+    # The runtime's own spellings (`core/cartograph_ir.TEXT_ALIGNS`) ...
+    "start": Qt.AlignmentFlag.AlignLeft,
+    "end": Qt.AlignmentFlag.AlignRight,
+    # ... and the CSS ones a hand-edited cartograph may carry.
     "left": Qt.AlignmentFlag.AlignLeft,
     "center": Qt.AlignmentFlag.AlignHCenter,
     "right": Qt.AlignmentFlag.AlignRight,
@@ -943,8 +947,21 @@ class _Builder:
             bar.setMinimumBarWidth(item.box.w / 2)
             bar.setMaximumBarWidth(item.box.w)
         bar.setUnitLabel(QgsUnitTypes.toAbbreviatedString(units))
-        if item.color is not None:
-            self.issue(subject, "The scale bar colour was not carried over.")
+        colour = _color(item.color) if item.color is not None else None
+        if colour is not None:
+            # The runtime's `color` is the bar's one ink: its lines and its
+            # filled segments alike.
+            for getter, setter in (
+                (bar.lineSymbol, bar.setLineSymbol),
+                (bar.fillSymbol, bar.setFillSymbol),
+            ):
+                symbol = getter()
+                if symbol is not None:
+                    symbol = symbol.clone()
+                    symbol.setColor(colour)
+                    setter(symbol)
+        elif item.color is not None:
+            self.issue(subject, f"Unreadable scale bar colour {item.color!r}; left.")
         self._place(bar, item.box)
         if item.segment_length is None:
             self._fit_scalebar_width(bar, item.box)
@@ -990,6 +1007,9 @@ class _Builder:
         subject = _subject("text", item.id)
         label = QgsLayoutItemLabel(self.layout)
         self.layout.addLayoutItem(label)
+        # What the text is (title / attribution / text) has no QGIS field;
+        # kept on the item so reading the layout back says the same.
+        label.setCustomProperty(TEXT_KIND_PROPERTY, item.kind)
         frame_ids = [i.id for i in self.spec.items if isinstance(i, FrameSpec)]
         text, unmapped = label_text_from_tokens(
             item.body,
@@ -1020,8 +1040,9 @@ class _Builder:
 
         text_format = label.textFormat()
         font = text_format.font()
-        if item.font:
-            font.setFamily(item.font)
+        family = first_font_family(item.font) if item.font else None
+        if family:
+            font.setFamily(family)
         if item.weight is not None:
             font.setBold(_is_bold(item.weight))
         text_format.setFont(font)
@@ -1231,6 +1252,26 @@ class _Builder:
 # --------------------------------------------------------------------------
 # Small pure helpers
 # --------------------------------------------------------------------------
+
+
+#: CSS generic families: a fallback, never the face the author chose.
+_GENERIC_FAMILIES = {
+    "serif",
+    "sans-serif",
+    "monospace",
+    "cursive",
+    "fantasy",
+    "system-ui",
+}
+
+
+def first_font_family(css_font: str) -> str | None:
+    """The first named family of a CSS font list: `"Open Sans", sans-serif`
+    -> `Open Sans`. A list of generics only gives the first generic."""
+    families = [part.strip().strip("'\"").strip() for part in css_font.split(",")]
+    families = [f for f in families if f]
+    named = [f for f in families if f.lower() not in _GENERIC_FAMILIES]
+    return (named or families or [None])[0]
 
 
 def _is_bold(weight: str) -> bool:

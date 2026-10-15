@@ -100,7 +100,7 @@ def _write_survey(project, out_dir: Path) -> dict:
     size = pages.page(0).pageSize()
     return {
         "page_mm": [size.width(), size.height()],
-        "main_frame": f"frame-{main_map.uuid()}",
+        "main_frame": _frame_id(survey.layout, main_map),
         "grid_x_mm": grid_x_mm,
         "legend_rows": [
             symbol.label() or survey.parcels.name()
@@ -167,7 +167,18 @@ def _write_story(project, out_dir: Path) -> dict:
         layout, project, _runtime(), FidelityReportBuilder()
     )
     (out_dir / "story-live.html").write_text(html, encoding="utf-8")
-    return {"main_frame": f"frame-{map_item.uuid()}"}
+    return {"main_frame": _frame_id(layout, map_item)}
+
+
+def _frame_id(layout, map_item) -> str:
+    from qgis.core import QgsLayoutItem
+
+    from nika_onlymap_exporter.core.cartograph_ir import element_id, item_id_tokens
+
+    tokens = item_id_tokens(
+        [(i.uuid(), i.id()) for i in layout.items() if isinstance(i, QgsLayoutItem)]
+    )
+    return element_id("frame", map_item.uuid(), tokens)
 
 
 if __name__ == "__main__":

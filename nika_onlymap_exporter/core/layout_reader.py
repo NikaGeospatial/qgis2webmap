@@ -62,6 +62,7 @@ import base64
 import binascii
 import re
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
@@ -95,6 +96,7 @@ from qgis.PyQt.QtCore import QSizeF, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QTextDocument
 
 from .cartograph_ir import (
+    TEXT_KINDS,
     AtlasSpec,
     Box,
     CartographItem,
@@ -107,6 +109,7 @@ from .cartograph_ir import (
     ShapeSpec,
     TextSpec,
     element_id,
+    item_id_tokens,
     live_layer_dom_ids,
 )
 from .expression_tokens import (
@@ -117,6 +120,17 @@ from .expression_tokens import (
 )
 from .fidelity_report import FidelityReportBuilder
 from .settings import default_frame_mode
+
+#: A label's cartograph text kind, stored on the item by
+#: `core/layout_builder.py` so a layout built from a cartograph reads back
+#: with the same kinds (QGIS has no field for it).
+TEXT_KIND_PROPERTY = "qgis2webmap/cartograph_text_kind"
+
+#: The QGIS item names (`item_id_tokens`) of the layout being read, so every
+#: helper names its element consistently without threading a map through.
+_ITEM_TOKENS: ContextVar[dict[str, str] | None] = ContextVar(
+    "cartograph_item_tokens", default=None
+)
 
 FrameMode = Literal["live", "static"]
 
@@ -226,6 +240,37 @@ def read_layout(
     *,
     frame_modes: Mapping[str, FrameMode] | None = None,
 ) -> LayoutReading:
+    """Read `layout`'s first page into a `LayoutReading` (see `_read_layout`).
+
+    Element ids are named after the QGIS item ids where the user gave one
+    (`core/cartograph_ir.item_id_tokens`); the names are worked out once for
+    the whole layout, so two items called "Legend" stay distinct.
+    """
+    tokens = item_id_tokens(
+        [
+            (item.uuid(), item.id())
+            for item in layout.items()
+            if isinstance(item, QgsLayoutItem)
+        ]
+    )
+    reset = _ITEM_TOKENS.set(tokens)
+    try:
+        return _read_layout(layout, report, frame_modes=frame_modes)
+    finally:
+        _ITEM_TOKENS.reset(reset)
+
+
+def _eid(prefix: str, uuid: str) -> str:
+    """`element_id` with the names of the layout being read."""
+    return element_id(prefix, uuid, _ITEM_TOKENS.get())
+
+
+def _read_layout(
+    layout: QgsPrintLayout,
+    report: FidelityReportBuilder,
+    *,
+    frame_modes: Mapping[str, FrameMode] | None = None,
+) -> LayoutReading:
     """Read `layout`'s first page into a `LayoutReading`.
 
     `frame_modes` overrides the live/static default per map item, keyed by
@@ -292,7 +337,7 @@ def read_layout(
         _record_unrepresentable_item_properties(item, report)
         mode = _frame_mode(item, frame_modes)
         box = _box(item, converter)
-        frame_id = element_id("frame", item.uuid())
+        frame_id = _eid("frame", item.uuid())
         map_frame_id_by_uuid[item.uuid()] = frame_id
         frame_mode_by_uuid[item.uuid()] = mode
         frames.append(
@@ -350,8 +395,10 @@ def read_layout(
         if isinstance(item, QgsLayoutItemMap):
             grids = item.grids().asList() if item.grids() is not None else []
             frame_id = map_frame_id_by_uuid[item.uuid()]
-            for grid in grids:
-                graticule = _read_grid(item, grid, frame_id, converter, report)
+            for index, grid in enumerate(grids):
+                graticule = _read_grid(
+                    item, grid, frame_id, converter, report, index=index
+                )
                 if graticule is not None:
                     furniture.append(graticule)
             continue
@@ -910,6 +957,8 @@ def _read_grid(
     frame_id: str,
     converter: QgsLayoutMeasurementConverter,
     report: FidelityReportBuilder,
+    *,
+    index: int = 0,
 ) -> GraticuleSpec | None:
     if not grid.enabled():
         return None
@@ -940,7 +989,8 @@ def _read_grid(
             "no equivalent for; the interval is chosen automatically instead.",
         )
     return GraticuleSpec(
-        id=element_id("graticule", map_item.uuid()),
+        # A map can carry several grids; each needs its own id.
+        id=_eid("graticule", map_item.uuid()) + (f"_{index + 1}" if index else ""),
         box=_box(map_item, converter),
         for_=frame_id,
         crs=crs.authid() or None,
@@ -1082,7 +1132,7 @@ def _read_legend(
         return None
 
     return LegendSpec(
-        id=element_id("legend", item.uuid()),
+        id=_eid("legend", item.uuid()),
         box=_box(item, converter),
         for_=frame_id,
         title=item.title() or None,
@@ -1306,7 +1356,7 @@ def _read_scalebar(
     if style_name == "Numeric":
         report.preserved(label, "Numeric scale bar exported as a live {{scale}} token.")
         return TextSpec(
-            id=element_id("scalebar", item.uuid()),
+            id=_eid("scalebar", item.uuid()),
             box=_box(item, converter),
             body=f"1:{{{{frame.{frame_id}.scale}}}}",
             kind="text",
@@ -1335,7 +1385,7 @@ def _read_scalebar(
 
     line_symbol = item.lineSymbol()
     return ScalebarSpec(
-        id=element_id("scalebar", item.uuid()),
+        id=_eid("scalebar", item.uuid()),
         box=_box(item, converter),
         for_=frame_id,
         units=units,
@@ -1410,7 +1460,7 @@ def _read_picture(
             "runtime's own north indicator glyph.",
         )
         return NorthSpec(
-            id=element_id("north", item.uuid()),
+            id=_eid("north", item.uuid()),
             box=_box(item, converter),
             for_=frame_id,
             kind="arrow",
@@ -1429,7 +1479,7 @@ def _read_picture(
         return None
     report.preserved(label, "Picture preserved.")
     return ImageSpec(
-        id=element_id("image", item.uuid()),
+        id=_eid("image", item.uuid()),
         box=_box(item, converter),
         src=src,
         rotation=item.itemRotation(),
@@ -1591,7 +1641,7 @@ def _read_label(
 
     style = _label_style(item, label, report)
     return TextSpec(
-        id=element_id("label", item.uuid()),
+        id=_eid("label", item.uuid()),
         box=_box(item, converter),
         body=body,
         kind=_text_kind(item),
@@ -1632,6 +1682,9 @@ _ATTRIBUTION_WORDS = re.compile(
 
 
 def _text_kind(item: QgsLayoutItemLabel) -> str:
+    stored = item.customProperty(TEXT_KIND_PROPERTY)
+    if stored in TEXT_KINDS:
+        return str(stored)
     names = f"{item.id()} {item.displayName()}".replace("_", " ")
     if _TITLE_WORDS.search(names):
         return "title"
@@ -1844,7 +1897,7 @@ def _read_shape(
     ).length()
 
     return ShapeSpec(
-        id=element_id("shape", item.uuid()),
+        id=_eid("shape", item.uuid()),
         box=_box(item, converter),
         kind=kind,
         fill=fill,

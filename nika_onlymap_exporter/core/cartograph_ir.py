@@ -37,7 +37,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Union
 
@@ -86,20 +86,54 @@ def _check_finite(value: float, field_name: str) -> None:
         raise ValueError(f"{field_name}={value!r} must be a finite number")
 
 
+_TOKEN_RUN_RE = re.compile(r"[^a-z0-9]+")
 _NON_WORD_RE = re.compile(r"[^A-Za-z0-9]+")
 
 
-def element_id(prefix: str, uuid: str) -> str:
-    """A placed element's id from a QGIS item uuid: `frame_ce62f8a3...`.
+def element_id(prefix: str, uuid: str, tokens: Mapping[str, str] | None = None) -> str:
+    r"""A placed element's id: `frame_main_map`, or `frame_ce62f8a3...`.
 
     QGIS uuids carry braces and hyphens (`{ce62f8a3-...}`). Neither survives
     where an id is used: the runtime's `{{frame.<id>.scale}}` token pattern
-    is `[\\w.]+` (no braces, no hyphens), and a brace breaks a
-    `querySelector('#...')`. So an id is the prefix, `_`, and the uuid's
-    letters and digits only -- valid as an HTML id, a CSS selector and inside
-    a token alike. `prefix` must itself be letters, digits and `_`.
+    is `[\w.]+` (no braces, no hyphens), and a brace breaks a
+    `querySelector('#...')`. So an id is the prefix, `_`, and word characters
+    only -- valid as an HTML id, a CSS selector and inside a token alike.
+
+    With `tokens` (from `item_id_tokens`), an item the user named in QGIS is
+    named after that instead of its uuid: someone editing the HTML, or an
+    agent asked to, reads `frame_overview` rather than 32 hex digits. A token
+    that already starts with the prefix (a layout built from a cartograph,
+    whose items carry the spec ids) is used as it is, so a round trip keeps
+    every id. `prefix` must itself be letters, digits and `_`.
     """
-    return f"{prefix}_{_NON_WORD_RE.sub('', uuid).lower()}"
+    base = tokens.get(uuid) if tokens is not None else None
+    if base is None:
+        return f"{prefix}_{_NON_WORD_RE.sub('', uuid).lower()}"
+    return base if base.startswith(f"{prefix}_") else f"{prefix}_{base}"
+
+
+def item_id_tokens(items: Sequence[tuple[str, str]]) -> dict[str, str]:
+    """`(uuid, QGIS item id)` pairs -> a unique, token-safe name per uuid.
+
+    Lower-cased, every run of other characters folded to `_`, and numbered
+    `_2`, `_3`... in layout order where two items share a name. An item with
+    no usable id is left out, so `element_id` falls back to its uuid.
+    """
+    tokens: dict[str, str] = {}
+    taken: set[str] = set()
+    for uuid, qgis_id in items:
+        base = _TOKEN_RUN_RE.sub("_", qgis_id.strip().lower()).strip("_")
+        if not base:
+            continue
+        if not base[0].isalpha():
+            base = "item_" + base
+        candidate, number = base, 2
+        while candidate in taken:
+            candidate = f"{base}_{number}"
+            number += 1
+        taken.add(candidate)
+        tokens[uuid] = candidate
+    return tokens
 
 
 def live_layer_dom_ids(
