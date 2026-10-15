@@ -6,6 +6,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from nika_onlymap_exporter.core.cartograph_ir import (
@@ -21,6 +23,8 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     ScalebarSpec,
     ShapeSpec,
     TextSpec,
+    element_id,
+    live_layer_dom_ids,
 )
 
 
@@ -452,3 +456,57 @@ class TestCartographSpec:
             items=(main, grid, legend, bar, north, title, shape, image),
         )
         assert len(spec.items) == 8
+
+
+# --------------------------------------------------------------------------
+# Ids
+# --------------------------------------------------------------------------
+
+#: The runtime's token pattern, `/\{\{\s*([\w.]+)\s*\}\}/`, restricted to
+#: what an id inside `{{frame.<id>.scale}}` may contain.
+_TOKEN_SAFE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+class TestElementId:
+    def test_a_qgis_uuid_loses_its_braces_and_hyphens(self) -> None:
+        uuid = "{CE62F8A3-1b2c-4d5e-8f90-0123456789ab}"
+        assert element_id("frame", uuid) == "frame_ce62f8a31b2c4d5e8f900123456789ab"
+
+    def test_the_id_is_safe_inside_a_runtime_token(self) -> None:
+        assert _TOKEN_SAFE_ID.match(element_id("legend", "{a-b}"))
+
+    def test_two_uuids_stay_distinct(self) -> None:
+        assert element_id("frame", "{1-2}") != element_id("frame", "{1-3}")
+
+
+class TestLiveLayerDomIds:
+    def test_a_layer_in_one_frame_keeps_its_qgis_id(self) -> None:
+        ids = live_layer_dom_ids([("main", ["parcels"]), ("inset", ["roads"])])
+        assert ids == {("main", "parcels"): "parcels", ("inset", "roads"): "roads"}
+
+    def test_a_layer_in_two_frames_is_prefixed_in_both(self) -> None:
+        ids = live_layer_dom_ids(
+            [("main", ["parcels", "roads"]), ("inset", ["parcels"])]
+        )
+        assert ids[("main", "parcels")] == "main__parcels"
+        assert ids[("inset", "parcels")] == "inset__parcels"
+        assert ids[("main", "roads")] == "roads"
+
+    def test_every_dom_id_is_unique(self) -> None:
+        frames = [("a", ["x", "y"]), ("b", ["x", "y"]), ("c", ["y", "z"])]
+        ids = live_layer_dom_ids(frames)
+        assert len(set(ids.values())) == len(ids)
+
+    def test_a_layer_listed_twice_in_one_frame_is_not_shared(self) -> None:
+        assert live_layer_dom_ids([("a", ["x", "x"])]) == {("a", "x"): "x"}
+
+
+class TestTextAlign:
+    @pytest.mark.parametrize("align", ["start", "center", "end", None])
+    def test_runtime_values_are_accepted(self, align: str | None) -> None:
+        TextSpec(id="t", box=Box(0, 0, 1, 1), align=align)
+
+    @pytest.mark.parametrize("align", ["left", "right", "justify"])
+    def test_qgis_spellings_are_refused(self, align: str) -> None:
+        with pytest.raises(ValueError, match="align"):
+            TextSpec(id="t", box=Box(0, 0, 1, 1), align=align)

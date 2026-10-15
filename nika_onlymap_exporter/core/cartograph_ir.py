@@ -36,6 +36,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Union
 
@@ -59,6 +61,9 @@ GRATICULE_KINDS = ("solid", "cross", "markers")
 GRATICULE_LABELS = ("outside", "inside", "none")
 GRATICULE_FORMATS = ("dms",)
 TEXT_KINDS = ("title", "text", "attribution")
+#: `<om-text align>`. The runtime ignores anything else (it is *not*
+#: left/right), so a wrong spelling would silently fall back to the theme.
+TEXT_ALIGNS = ("start", "center", "end")
 
 #: `<om-cartograph cvd>` values, long spelling (the runtime also accepts the
 #: short `protan`/`deutan`/`tritan`/`achroma` aliases; we always write these).
@@ -79,6 +84,50 @@ def _check_finite(value: float, field_name: str) -> None:
     # catch too but importing `math` for one check is not worth it here.
     if value != value or value in (float("inf"), float("-inf")):
         raise ValueError(f"{field_name}={value!r} must be a finite number")
+
+
+_NON_WORD_RE = re.compile(r"[^A-Za-z0-9]+")
+
+
+def element_id(prefix: str, uuid: str) -> str:
+    """A placed element's id from a QGIS item uuid: `frame_ce62f8a3...`.
+
+    QGIS uuids carry braces and hyphens (`{ce62f8a3-...}`). Neither survives
+    where an id is used: the runtime's `{{frame.<id>.scale}}` token pattern
+    is `[\\w.]+` (no braces, no hyphens), and a brace breaks a
+    `querySelector('#...')`. So an id is the prefix, `_`, and the uuid's
+    letters and digits only -- valid as an HTML id, a CSS selector and inside
+    a token alike. `prefix` must itself be letters, digits and `_`.
+    """
+    return f"{prefix}_{_NON_WORD_RE.sub('', uuid).lower()}"
+
+
+def live_layer_dom_ids(
+    frames: Sequence[tuple[str, Sequence[str]]],
+) -> dict[tuple[str, str], str]:
+    """The `<om-layer id>` each QGIS layer gets in each live frame.
+
+    `frames` is `(frame id, QGIS layer ids)` per live frame. A layer shown in
+    one live frame keeps its QGIS id -- what the web-map export writes too.
+    A layer shown in two or more gets `<frame id>__<layer id>` in *every*
+    frame that shows it: two `<om-map>`s in one document would otherwise
+    carry the same `id` twice (and the same `-labels`/`-popup` ids derived
+    from it), which is invalid HTML. The runtime itself looks layers up per
+    frame (`om-atlas layer`, `om-legend-row layer`), so the prefixed id is
+    what those attributes must name -- callers look it up here.
+    """
+    frames_by_layer: dict[str, int] = {}
+    for _frame_id, layer_ids in frames:
+        for layer_id in dict.fromkeys(layer_ids):
+            frames_by_layer[layer_id] = frames_by_layer.get(layer_id, 0) + 1
+    result: dict[tuple[str, str], str] = {}
+    for frame_id, layer_ids in frames:
+        for layer_id in layer_ids:
+            shared = frames_by_layer[layer_id] > 1
+            result[(frame_id, layer_id)] = (
+                f"{frame_id}__{layer_id}" if shared else layer_id
+            )
+    return result
 
 
 # --------------------------------------------------------------------------
@@ -363,6 +412,7 @@ class TextSpec:
 
     def __post_init__(self) -> None:
         _check_choice(self.kind, TEXT_KINDS, "kind")
+        _check_choice(self.align, TEXT_ALIGNS, "align")
         if self.font_size is not None and self.font_size <= 0:
             raise ValueError(f"font_size must be positive, got {self.font_size!r}")
 
