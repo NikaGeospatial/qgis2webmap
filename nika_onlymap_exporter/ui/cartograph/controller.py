@@ -578,6 +578,9 @@ class CartographController:
             self.frames_tree.setItemWidget(row, 2, mode_combo)
 
             dpi_combo = QComboBox(self.frames_tree)
+            # Wide enough for "300" whatever the style's arrow takes.
+            dpi_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            dpi_combo.setMinimumContentsLength(4)
             for dpi in DPI_CHOICES:
                 dpi_combo.addItem(str(dpi), dpi)
             found = dpi_combo.findData(choice.dpi)

@@ -40,6 +40,7 @@ from qgis.PyQt.QtWidgets import (
 from ...core.layout_reader import atlas_page_count
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
+from .frames import layout_map_items
 
 #: The margin a map gets when this tab first makes it follow the atlas: QGIS's
 #: own default in the Item Properties panel.
@@ -198,11 +199,16 @@ class AtlasTab(QWidget):
         if self._layout is None:
             return
         chosen = 0
-        for item in self._layout.items():
-            if isinstance(item, QgsLayoutItemMap):
-                self.map_combo.addItem(item.displayName(), item.uuid())
-                if item.atlasDriven() and not chosen:
-                    chosen = self.map_combo.count() - 1
+        driven = {
+            item.uuid()
+            for item in self._layout.items()
+            if isinstance(item, QgsLayoutItemMap) and item.atlasDriven()
+        }
+        # Named and ordered as the Frames tab lists them.
+        for frame in layout_map_items(self._layout):
+            self.map_combo.addItem(frame.name, frame.item_id)
+            if frame.item_id in driven and not chosen:
+                chosen = self.map_combo.count() - 1
         self.map_combo.setCurrentIndex(chosen)
 
     def _update_count(self) -> None:
