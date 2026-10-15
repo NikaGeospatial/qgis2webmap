@@ -59,26 +59,35 @@ at the top of its dialog: a **cartograph**, which is a QGIS **print layout**
 OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 
 - **The input is a print layout, not the project.** Only page 1 of the layout
-  is exported; extra pages are reported as Blocked. An atlas is the way to get
+  is exported; extra pages are reported as Not exported. An atlas is the way to get
   one page per feature, all in the same file.
-- **There is no Export button.** The cartograph is a file that rewrites itself
-  about 600 ms after any change, in the dialog or in the layout. Its output is
+- **There is no Export button.** The cartograph is a file that saves as soon
+  as a layout is selected (in a saved project) and rewrites itself about
+  600 ms after any change, in the dialog, the layout or the layers. Its output is
   always one standalone HTML file - no Share ZIP or Folder type.
 - **Each map frame is live or static, per map.** Live: an interactive map,
   always drawn in Web Mercator. Static: a pixel-exact image in the layout's own
-  CRS, at 150/200/300 dpi. Default: live for EPSG:3857/4326, static otherwise.
+  CRS, at 150/200/300 dpi (200 by default). Default: live for EPSG:3857/4326, static otherwise.
   A page with only static frames carries no map runtime, needs no WebGL, and
   sends no usage report.
 - **Printing happens in the browser**, at true page size via CSS `@page` in
   Chromium-based browsers. Firefox and Safari ignore `@page` size and print on
-  the selected paper. PDF and 300 dpi PNG are made from the saved file.
+  the selected paper. PDF and 300 dpi PNG are made from the saved file. A page
+  with live frames must be printed through `?print=1` (the plugin's Export
+  PDF), which swaps each WebGL map for a print-resolution image first; a plain
+  Ctrl+P prints live maps blank or at screen resolution.
 - **CMYK / ICC PDFs are made by QGIS, not the browser**, and only on QGIS
   built with Qt 6.8 or newer, with every frame static. Do not tell a QGIS 3 LTR
   (Qt 5) user they can get CMYK this way.
 - **An atlas needs its map to be live** and to draw the coverage layer;
-  otherwise it is Blocked, not silently flattened.
-- **A live frame carries its layers' features and attributes** in the file; a
-  static frame carries only an image.
+  otherwise it is Blocked, not silently flattened. One file holds every page;
+  the Atlas tab exports them all as one PNG ZIP or prints them as one
+  multi-page PDF.
+- **A live frame carries its layers' features** in the file, with the
+  attributes its popups show (the Layers tab's Popups and per-field settings
+  apply; Include does not - the layout's map item chooses the layers). A
+  static frame carries only an image, and a static-only page reads even with
+  JavaScript off.
 - **The round trip exists**: a cartograph can be imported back into QGIS as a
   print layout, and saved as a `.qpt` template. The map data inside it is not
   imported - the layout draws the project's own layers.

@@ -90,7 +90,11 @@ The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
 2. **What to ask**:
    - **Paste into** - **NIKA desktop**, for a prompt its map skills recognise,
      or **Other agent**, for a prompt any coding assistant can follow, which
-     starts by sending it to OnlyMap's own documentation.
+     starts by sending it to OnlyMap's own documentation - the
+     [OnlyMap skill](https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/skills/onlymapjs/SKILL.md)
+     for a web map, the *PRINT LAYOUTS* entry of OnlyMap's
+     [llms.txt](https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/llms.txt)
+     for a cartograph.
    - **Task** - **Critique** asks for a cartographer's review, ranked by
      impact, and asks the agent to change nothing until you confirm.
      **Enhance** asks it to improve the map or page without changing its data,
@@ -159,7 +163,10 @@ A [cartograph](qgis-print-layout-to-html.md) is the same kind of file: a page
 described in readable markup - `<om-cartograph>`, `<om-frame>`, `<om-legend>` -
 with sizes in millimetres. The same two rules apply, plus one: **keep every
 element's `id`**, because the legend, scale bar and north arrow find their map
-by it. The hand-off prompt says so for you.
+by it. The hand-off prompt says so for you. The ids are readable: each is
+named after the item's ID in the QGIS layout designer - `frame_main_map`,
+`legend_legend` - so give layout items sensible IDs and the HTML, and any
+agent working on it, reads the same names you do.
 
 ## Reference
 

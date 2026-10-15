@@ -32,13 +32,17 @@ print dialog for you. To get a PDF, choose **Save as PDF** as the printer.
 Text stays text in the PDF - selectable and searchable - and the legend, scale
 bar, north arrow and grid stay sharp vector shapes.
 
-**Export PDF** is the better route for a page with **live** frames. It waits
-until every map has finished drawing, then swaps each live map for an image
-rendered at print resolution before the print dialog opens. A map drawn by
-the graphics card cannot be printed directly: on its own it prints blank or at
-screen resolution. <!-- verify: whether a reader's own Ctrl+P on a page with
-live frames is handled by the runtime (beforeprint) or prints them blank/low
-resolution, as the runtime docs say of an "unassisted Ctrl+P" -->
+**For a page with live frames, print with Export PDF, not Ctrl+P.** A live
+map is drawn by the graphics card, and browsers print such a map blank or at
+screen resolution. Export PDF opens the cartograph with `?print=1` added to
+its address: the page waits until every map has finished drawing, swaps each
+live map for an image rendered at print resolution, and only then opens the
+print dialog. The browser's own **Ctrl+P** does none of that - the print
+dialog opens at once, before an image could be made.
+
+Anyone can do the same without the plugin: add `?print=1` to the end of the
+cartograph's address in the browser (`…/Parcel-survey.html?print=1`) and
+press Enter.
 
 A page of only static frames prints the same either way.
 
@@ -137,12 +141,16 @@ do not apply to a CMYK or ICC PDF; the layout's own text and colours do.
 
 ## Printing an atlas
 
-<!-- verify: what printing an atlas cartograph produces - the runtime pages one
-sheet at a time and its print path is per page; confirm whether Export PDF
-prints the current page only or every page -->
+**Export PDF** and Ctrl+P print the page on screen - one page of the atlas.
+The pager at the foot of the sheet is never printed.
 
-The pager at the foot of the sheet is never printed. Turn to the page you want
-and print it, or export every page as images from **Export PNG...**.
+For the whole series, use **Print all pages...** on the
+[Atlas tab](cartograph-atlas.md#exporting-and-printing-every-page): every page
+is rendered and laid out for one print job, and **Save as PDF** gives one
+multi-page PDF, each page at its true size in a Chromium-based browser. The
+pages are images rendered at 200 dpi, so text in that PDF is not selectable.
+**Export all pages (PNG, ZIP)...** beside it gives every page as a 300 dpi PNG
+instead.
 
 ## Sending it to someone who will print it
 

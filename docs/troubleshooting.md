@@ -289,11 +289,12 @@ works with no connection at all, set **Basemap** to **None** — the default.
 
 ### "Not saved yet", and Preview does nothing
 
-A cartograph is written after the first change, not when you open the tab. Its
-status line reads *Not saved yet*, and Preview and the Share menu's file rows
-wait for a file. Change any setting on the Cartograph or Frames tab, or press
-**Check now** on the strip at the foot of the dialog, and it saves about half a
-second later.
+In a saved project, a cartograph is written as soon as a layout is selected.
+In a project that has **never been saved**, there is no folder to put it
+beside, so nothing is written until you say where: the status line reads *Not
+saved yet - choose where to save it above*, and Preview and the Share menu's
+file rows wait for a file. Type a path in **Save to**, or press **Choose…**, and
+it saves about half a second later.
 
 If it still does not save, the status line says why:
 
@@ -302,9 +303,6 @@ If it still does not save, the status line says why:
 | *The OnlyMap runtime is needed to save a cartograph. Nothing was written.* | The one-off runtime download was declined or failed. See [the runtime download](#the-runtime-download), then change any setting to try again |
 | *Could not save the cartograph: ...* | The place in **Save to** cannot be written to. **Choose…** another |
 | *Could not build the cartograph: ...* | Something in the layout could not be read. The detail is in **View → Panels → Log Messages**, `QGIS2WebMap` tab |
-
-No **Save to** path at all - a layout picked for the first time in a project
-that has not been saved - also means nothing is written. **Choose…** a place.
 
 ### The Source list is empty
 
@@ -324,11 +322,12 @@ For a page that must work everywhere, set the frame to **Static** on the Frames
 tab. A page with only static frames needs no WebGL at all. See
 [live or static frames](live-or-static-frames.md).
 
-### The page is blank in a preview pane
+### A preview pane shows "This cartograph needs JavaScript"
 
-Every cartograph needs JavaScript. A mail client's, chat app's or file
-manager's preview does not run it and shows an empty page. Save the file and
-open it in a browser.
+A cartograph with a live frame needs JavaScript to draw its maps, and a mail
+client's, chat app's or file manager's preview does not run it - so it shows
+that note instead. Save the file and open it in a browser. A cartograph whose
+frames are all static reads in a preview too, without JavaScript.
 
 ### It prints at the wrong size in Firefox or Safari
 
@@ -374,8 +373,8 @@ your print shop gave you.
 
 ### Only page 1 came out
 
-A cartograph is one page per layout; pages 2 and after are marked **Blocked**
-on the Fidelity tab and left out. Make each page its own layout, or use an
+A cartograph is one page per layout; pages 2 and after are marked **Not
+exported** on the Fidelity tab and left out. Make each page its own layout, or use an
 [atlas](cartograph-atlas.md) for a page per feature.
 
 ## Still stuck

@@ -19,8 +19,7 @@ checks the legend for you: which classes collapse into each other, and for
 whom.
 
 Open it with **Accessibility** in the corner of the dialog, on Cartograph
-(Beta). <!-- verify: the Accessibility button is wired to this dialog - in the
-current build it is disabled with the tooltip "Coming in a later version" -->
+(Beta). It floats beside the dialog and stays open while you work.
 
 ![The Colour vision dialog, simulating deuteranopia.](images/cartograph-colour-vision.png)
 
@@ -73,8 +72,11 @@ with the palette.
 It is the same check the cartograph's own validator runs, with the same
 numbers, so the dialog and the file never disagree.
 
-<!-- verify: which legend classes the table lists - the dialog itself says
-"Save the cartograph with a live map frame first" when it has none -->
+**Which classes are listed.** Every class of every layer drawn in a **live**
+frame, and the written-out rows of each legend on a **static** frame - what
+the saved cartograph's legends actually show. Each layer appears once, however
+many frames draw it. The table describes the last save, and refreshes after every
+save while the dialog is open; before the first save it is empty.
 
 ## Ask NIKA to fix
 
