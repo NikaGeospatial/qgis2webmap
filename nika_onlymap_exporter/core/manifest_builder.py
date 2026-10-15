@@ -1929,6 +1929,10 @@ def build_manifest(
         center_lon, center_lat = project.extent.center
         zoom = _zoom_for_extent(project.extent.width_degrees)
 
+    # A projected map draws flat, in its own plane: the runtime refuses a
+    # MapLibre basemap, terrain, pitch and bearing on it, each one an error.
+    projected = project.settings.map_crs is not None
+
     attributes: list[tuple[str, str | None]] = [
         ("center", f"[{center_lon:.6f}, {center_lat:.6f}]"),
         ("zoom", _number(round(zoom, 2))),
@@ -1938,7 +1942,7 @@ def build_manifest(
         (
             "basemap",
             project.settings.basemap
-            if project.settings.basemap in BASEMAP_PRESETS
+            if project.settings.basemap in BASEMAP_PRESETS and not projected
             else BASEMAP,
         ),
         # Telemetry is deliberately left to the runtime's default, which is on.
@@ -1949,10 +1953,14 @@ def build_manifest(
         # `docs/privacy.md` for how we describe it to the person exporting.
     ]
 
+    if projected:
+        attributes.append(("crs", project.settings.map_crs))
+        attributes.append(("crs-def", project.settings.map_crs_def))
+
     # Same guard as the basemap: an unknown preset would make the runtime
     # request a DEM it cannot resolve, and blank relief is worse than none.
     terrain = project.settings.terrain
-    has_terrain = terrain != "none" and terrain in TERRAIN_PRESETS
+    has_terrain = not projected and terrain != "none" and terrain in TERRAIN_PRESETS
     if has_terrain:
         attributes.append(("terrain", terrain))
         # The runtime replaces the basemap while terrain is on, so the chosen
@@ -1971,8 +1979,9 @@ def build_manifest(
     # style preference but the difference between the extrusion showing and the
     # map looking identical to a flat one - so it follows whatever raises the
     # scene, rather than being a separate control the user has to find.
-    if has_terrain or any(
-        layer.elevation.is_set for layer in project.exportable_layers
+    if not projected and (
+        has_terrain
+        or any(layer.elevation.is_set for layer in project.exportable_layers)
     ):
         attributes.append(("pitch", _number(EXTRUDED_PITCH)))
 

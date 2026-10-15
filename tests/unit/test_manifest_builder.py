@@ -1573,6 +1573,36 @@ class TestExtrusion:
         assert "pitch" not in build_manifest(make_project())
 
 
+class TestProjectedMap:
+    """A cartograph's live frame in a projected CRS: the runtime refuses a
+    MapLibre basemap, terrain and pitch on a map with `crs`, each an error."""
+
+    SETTINGS: ClassVar[dict[str, str]] = {
+        "map_crs": "EPSG:32648",
+        "map_crs_def": "+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs",
+    }
+
+    def test_crs_and_its_definition_are_written(self) -> None:
+        markup = build_manifest(make_project(settings=ExportSettings(**self.SETTINGS)))
+        assert 'crs="EPSG:32648"' in markup
+        assert 'crs-def="+proj=utm +zone=48 +datum=WGS84 +units=m +no_defs"' in markup
+
+    def test_no_basemap_terrain_or_tilt_reaches_a_projected_map(self) -> None:
+        markup = build_manifest(
+            make_project(
+                settings=ExportSettings(
+                    basemap="osm", terrain="terrarium", **self.SETTINGS
+                )
+            )
+        )
+        assert 'basemap="none"' in markup
+        assert "terrain" not in markup
+        assert "pitch" not in markup
+
+    def test_a_web_map_has_no_crs(self) -> None:
+        assert "crs" not in build_manifest(make_project())
+
+
 class TestTerrain:
     def test_a_preset_is_emitted_and_tilts_the_map(self) -> None:
         markup = build_manifest(

@@ -79,6 +79,7 @@ from .layout_reader import (
     AtlasRequirement,
     FrameMode,
     MapFrameReading,
+    draws_in_own_plane,
     read_layout,
 )
 from .project_reader import read_project
@@ -107,6 +108,28 @@ _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 
 
 @dataclass(frozen=True)
+class ProjectedPlane:
+    """A live frame that can draw in its map's own projected CRS.
+
+    `center`/`zoom` are the frame's camera in that plane, by the runtime's
+    own definition (`plane-camera.ts`): the camera stays geographic, and
+    zoom means the Web Mercator scale at the centre latitude, so the camera
+    here is the plane extent's centre and the zoom that gives the plane
+    extent's metres per pixel. `atlas_cameras` likewise, per atlas page.
+    Whether the frame's layers can draw in a plane is only known once they
+    are read, so `finish_cartograph` decides between this and the frame's
+    Web Mercator camera, and reports which (`subject` is the frame's row).
+    """
+
+    subject: str
+    crs: str
+    crs_def: str
+    center: tuple[float, float]
+    zoom: float
+    atlas_cameras: tuple[AtlasCamera, ...] = ()
+
+
+@dataclass(frozen=True)
 class LiveFrameSource:
     """What a live frame still needs read once the layout is out of reach:
     which layers it draws, in its own order, over which WGS84 extent.
@@ -122,6 +145,7 @@ class LiveFrameSource:
     extent: Extent
     layer_dom_ids: tuple[tuple[str, str], ...] = ()
     hidden_layer_ids: tuple[str, ...] = ()
+    plane: ProjectedPlane | None = None
 
 
 @dataclass(frozen=True)
@@ -386,10 +410,19 @@ def prepare_cartograph(
 
     items: list[CartographItem] = list(reading.furniture)
     live_frames: list[LiveFrameSource] = []
-    atlas_cameras = _atlas_cameras(
+    in_plane = {
+        frame.frame_id
+        for frame in reading.frames
+        if frame.mode == "live" and draws_in_own_plane(frame.map_item)
+    }
+    page_extents = _atlas_page_extents(
         layout,
-        project,
-        [frame for frame in reading.frames if frame.atlas_cameras_from_qgis],
+        [
+            frame
+            for frame in reading.frames
+            if frame.atlas_cameras_from_qgis
+            or (frame.atlas_fit is not None and frame.frame_id in in_plane)
+        ],
     )
 
     for frame in reading.frames:
@@ -398,7 +431,10 @@ def prepare_cartograph(
             items.append(_build_static_frame(layout, project, frame, dpi, raster_cache))
         else:
             frame_spec, source = _build_live_frame(
-                frame, project, atlas_cameras.get(frame.frame_id, ())
+                frame,
+                project,
+                page_extents.get(frame.frame_id, ()),
+                in_plane=frame.frame_id in in_plane,
             )
             items.append(frame_spec)
             live_frames.append(source)
@@ -493,6 +529,18 @@ def finish_cartograph_full(
             and not _atlas_layer_survived(export_project, requirement, report)
         ):
             spec = _without_atlas(spec)
+        if source.plane is not None and _draws_in_plane(
+            source.plane, export_project, report
+        ):
+            spec = _with_plane_camera(spec, source.frame_id, source.plane)
+            export_project = replace(
+                export_project,
+                settings=replace(
+                    export_project.settings,
+                    map_crs=source.plane.crs,
+                    map_crs_def=source.plane.crs_def,
+                ),
+            )
         verdict = writer.license_policy.evaluate(export_project)
         live_markup[source.frame_id] = writer.render_map_element(
             _as_rendered_in_frame(export_project, source), verdict
@@ -501,6 +549,77 @@ def finish_cartograph_full(
         html=write_cartograph_html(spec, prepared.bundle, live_markup),
         projects=tuple(projects),
     )
+
+
+def _draws_in_plane(
+    plane: ProjectedPlane,
+    export_project: ExportProject,
+    report: FidelityReportBuilder,
+) -> bool:
+    """Whether every layer of a live frame can draw in its map's plane, with
+    the frame's fidelity row either way.
+
+    The runtime projects vector rows into a plane and warps image tiles onto
+    it; tiles of anything else, and embedded rasters, are indexed in Web
+    Mercator and would draw in the wrong place (its validator says so for
+    tiles; a raster is not projected at all). One such layer keeps the whole
+    frame in Web Mercator, which still draws every layer where it belongs.
+    """
+    blockers = [
+        layer.name
+        for layer in export_project.exportable_layers
+        if layer.raster is not None
+        or (layer.tiles is not None and not _is_image_tile_template(layer.tiles.url))
+    ]
+    if not blockers:
+        report.preserved(
+            plane.subject, f"Exported as a live frame, drawn in {plane.crs} as in QGIS."
+        )
+        return True
+    names = ", ".join(f"'{name}'" for name in blockers)
+    report.approximated(
+        plane.subject,
+        "Exported as a live frame in Web Mercator (EPSG:3857) rather than in "
+        f"{plane.crs}, because {names} cannot be drawn in another projection "
+        "by the browser (rasters and non-image tiles stay in Web Mercator); "
+        "shapes, and distances away from the centre, differ slightly from "
+        "QGIS. Set the frame to Static in the Frames tab to keep QGIS's "
+        "projection exactly.",
+    )
+    return False
+
+
+#: The runtime's own test for tiles it warps onto a plane
+#: (`data-layer.ts`'s `isImageTileTemplate`).
+_IMAGE_TILE_RE = re.compile(r"\.(png|jpe?g|webp|gif|avif)(\?|$)", re.IGNORECASE)
+
+
+def _is_image_tile_template(url: str) -> bool:
+    return _IMAGE_TILE_RE.search(url) is not None
+
+
+def _with_plane_camera(
+    spec: CartographSpec, frame_id: str, plane: ProjectedPlane
+) -> CartographSpec:
+    """`spec` with frame `frame_id` on its plane camera. An atlas frame
+    follows QGIS's own pages then: the runtime's feature fit works in Web
+    Mercator, and the plane cameras are already QGIS's."""
+
+    def moved(item: CartographItem) -> CartographItem:
+        if not isinstance(item, FrameSpec) or item.id != frame_id:
+            return item
+        if item.atlas_fit is None:
+            return replace(item, center=plane.center, zoom=plane.zoom)
+        return replace(
+            item,
+            center=plane.center,
+            zoom=plane.zoom,
+            atlas_fit="fixed",
+            atlas_margin=None,
+            atlas_cameras=plane.atlas_cameras,
+        )
+
+    return replace(spec, items=tuple(moved(item) for item in spec.items))
 
 
 def _as_rendered_in_frame(
@@ -617,11 +736,39 @@ def _build_static_frame(
 def _build_live_frame(
     frame: MapFrameReading,
     project: QgsProject,
-    atlas_cameras: tuple[AtlasCamera, ...] = (),
+    page_extents: tuple[tuple[int, QgsRectangle], ...] = (),
+    *,
+    in_plane: bool = False,
 ) -> tuple[FrameSpec, LiveFrameSource]:
     map_item = frame.map_item
+    crs = map_item.crs()
     extent = _frame_extent_wgs84(map_item, project)
     center, zoom = _camera_for_extent(extent, frame.box.w)
+    atlas_cameras: tuple[AtlasCamera, ...] = ()
+    if frame.atlas_cameras_from_qgis:
+        atlas_cameras = tuple(
+            AtlasCamera(
+                feature_id,
+                *_camera_for_extent(_rect_wgs84(crs, rect, project), frame.box.w),
+            )
+            for feature_id, rect in page_extents
+        )
+    plane = None
+    if in_plane:
+        plane_center, plane_zoom = _plane_camera(
+            crs, map_item.extent(), frame.box.w, project
+        )
+        plane = ProjectedPlane(
+            subject=f"Map frame '{map_item.displayName()}'",
+            crs=crs.authid(),
+            crs_def=crs.toProj(),
+            center=plane_center,
+            zoom=plane_zoom,
+            atlas_cameras=tuple(
+                AtlasCamera(feature_id, *_plane_camera(crs, rect, frame.box.w, project))
+                for feature_id, rect in page_extents
+            ),
+        )
     frame_spec = FrameSpec(
         id=frame.frame_id,
         box=frame.box,
@@ -644,16 +791,17 @@ def _build_live_frame(
         extent=extent,
         layer_dom_ids=frame.layer_dom_ids,
         hidden_layer_ids=frame.hidden_layer_ids,
+        plane=plane,
     )
     return frame_spec, source
 
 
-def _atlas_cameras(
+def _atlas_page_extents(
     layout: QgsPrintLayout,
-    project: QgsProject,
     frames: list[MapFrameReading],
-) -> dict[str, tuple[AtlasCamera, ...]]:
-    """Each frame's camera on every atlas page, by QGIS's own atlas.
+) -> dict[str, tuple[tuple[int, QgsRectangle], ...]]:
+    """Each frame's extent on every atlas page, by QGIS's own atlas, keyed
+    by the page's feature id.
 
     Paging the real atlas rather than re-deriving its rules keeps fixed
     scales, predefined-scale choice and point centring exactly QGIS's,
@@ -667,7 +815,9 @@ def _atlas_cameras(
     atlas = layout.atlas()
     previewed = atlas.currentFeatureNumber()
     saved = {frame.frame_id: QgsRectangle(frame.map_item.extent()) for frame in frames}
-    cameras: dict[str, list[AtlasCamera]] = {frame.frame_id: [] for frame in frames}
+    pages: dict[str, list[tuple[int, QgsRectangle]]] = {
+        frame.frame_id: [] for frame in frames
+    }
     if not atlas.beginRender():
         return {}
     try:
@@ -676,10 +826,8 @@ def _atlas_cameras(
                 continue
             feature_id = int(layout.reportContext().feature().id())
             for frame in frames:
-                extent = _frame_extent_wgs84(frame.map_item, project)
-                center, zoom = _camera_for_extent(extent, frame.box.w)
-                cameras[frame.frame_id].append(
-                    AtlasCamera(feature_id=feature_id, center=center, zoom=zoom)
+                pages[frame.frame_id].append(
+                    (feature_id, QgsRectangle(frame.map_item.extent()))
                 )
     finally:
         atlas.endRender()
@@ -687,7 +835,7 @@ def _atlas_cameras(
             frame.map_item.setExtent(saved[frame.frame_id])
         if previewed >= 0:
             atlas.seekTo(previewed)
-    return {frame_id: tuple(found) for frame_id, found in cameras.items()}
+    return {frame_id: tuple(found) for frame_id, found in pages.items()}
 
 
 def _frame_extent_wgs84(map_item, project: QgsProject) -> Extent:
@@ -698,9 +846,12 @@ def _frame_extent_wgs84(map_item, project: QgsProject) -> Extent:
     other reader in this plugin does: a naive box over a dateline-crossing
     view opens at the whole planet's width.
     """
-    crs = map_item.crs()
+    return _rect_wgs84(map_item.crs(), map_item.extent(), project)
+
+
+def _rect_wgs84(crs, rect: QgsRectangle, project: QgsProject) -> Extent:
+    """`rect` in `crs`, as the WGS84 extent `_frame_extent_wgs84` describes."""
     transform = QgsCoordinateTransform(crs, WGS84, project)
-    rect = map_item.extent()
     corners = [
         (rect.xMinimum(), rect.yMinimum()),
         (rect.xMinimum(), rect.yMaximum()),
@@ -716,7 +867,7 @@ def _frame_extent_wgs84(map_item, project: QgsProject) -> Extent:
 
     extent = extent_from_longitudes_latitudes(longitudes, latitudes)
     if extent is None:  # pragma: no cover - defensive; four corners are never empty
-        raise ValueError(f"could not compute an extent for map item {map_item.id()!r}")
+        raise ValueError(f"could not compute an extent for {rect.toString()}")
     return extent
 
 
@@ -760,6 +911,61 @@ def _camera_for_extent(
     )
     zoom = math.log2(metres_per_pixel_at_zoom_0 / metres_per_pixel)
     return (center_lon, center_lat), max(0.0, zoom)
+
+
+#: deck.gl's rounded circumference of the earth, which its Web Mercator
+#: scale (and so the runtime's plane zoom, `plane-camera.ts`) is built on.
+#: Not `EQUATOR_METRES`: the two differ by 0.13%, a visible scale error on
+#: a printed plate. `_camera_for_extent` needs neither -- its two uses of the
+#: constant cancel -- but a plane's metres per pixel are absolute.
+_DECK_EARTH_CIRCUMFERENCE = 40.03e6
+
+
+def _plane_camera(
+    crs, rect: QgsRectangle, frame_width_mm: float, project: QgsProject
+) -> tuple[tuple[float, float], float]:
+    """A live frame's `center`/`zoom` when its map draws in `crs`'s plane.
+
+    The runtime keeps the camera geographic and defines zoom as the Web
+    Mercator scale at the centre latitude (`plane-camera.ts`). So the centre
+    is the plane extent's centre, unprojected, and the zoom is the one whose
+    Mercator metres per pixel at that latitude equal the extent's.
+    """
+    center = QgsCoordinateTransform(crs, WGS84, project).transform(rect.center())
+    frame_width_px = frame_width_mm * _CSS_PIXELS_PER_MM
+    metres_per_pixel = (
+        rect.width() * plane_metres_per_unit(crs.toProj()) / frame_width_px
+    )
+    if metres_per_pixel <= 0:
+        return (center.x(), center.y()), 0.0
+    metres_per_pixel_at_zoom_0 = (
+        _DECK_EARTH_CIRCUMFERENCE
+        / WORLD_PIXELS_AT_ZOOM_0
+        * math.cos(math.radians(center.y()))
+    )
+    zoom = math.log2(metres_per_pixel_at_zoom_0 / metres_per_pixel)
+    return (center.x(), center.y()), max(0.0, zoom)
+
+
+def plane_metres_per_unit(proj_definition: str) -> float:
+    """Metres per plane unit, as the runtime prices a proj4 definition
+    (`projection.ts`'s `unitsOf`): `+to_meter` when given, feet for any
+    foot unit, metres otherwise."""
+    parameters = dict(
+        part[1:].split("=", 1)
+        for part in proj_definition.split()
+        if part.startswith("+") and "=" in part
+    )
+    try:
+        to_meter = float(parameters.get("to_meter", ""))
+    except ValueError:
+        to_meter = 0.0
+    if to_meter > 0:
+        return to_meter
+    units = parameters.get("units", "m").lower()
+    if "ft" in units or "foot" in units:
+        return 0.3048
+    return 1.0
 
 
 #: Web Mercator's latitude limit; beyond it `y` is infinite.

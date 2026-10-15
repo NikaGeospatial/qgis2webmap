@@ -42,8 +42,8 @@ howto:
       anchor: 5-choose-live-or-static-frames
       text: >-
         On the Frames tab, each map on the layout is Live (an interactive map,
-        drawn in Web Mercator) or Static (a pixel-exact image in the layout's
-        own CRS, at the DPI you choose).
+        in Web Mercator or the map's own projected CRS) or Static (a
+        pixel-exact image in the layout's own CRS, at the DPI you choose).
     - name: Preview it
       anchor: 6-preview-it
       text: >-

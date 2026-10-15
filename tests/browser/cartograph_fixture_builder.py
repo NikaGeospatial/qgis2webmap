@@ -13,6 +13,8 @@ acceptance check meet through files):
 - `survey-static.html`: issue #1's acceptance layout (UTM 48N, 500 m grid,
   locator inset, legend, scale bar, north arrow, a `@map_scale` title) on an
   A3 landscape page, both frames static.
+- `survey-live.html`: the same survey with its main map live, drawn in
+  UTM 48N, and where QGIS puts the main map's corners.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
@@ -52,6 +54,8 @@ def main(out_dir: Path) -> int:
         expected = {
             "survey": _write_survey(QgsProject.instance(), out_dir),
         }
+        QgsProject.instance().clear()
+        expected["survey_live"] = _write_survey_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -117,6 +121,51 @@ def _write_survey(project, out_dir: Path) -> dict:
             symbol.label() or survey.parcels.name()
             for symbol in survey.parcels.renderer().legendSymbolItems()
         ],
+    }
+
+
+def _write_survey_live(project, out_dir: Path) -> dict:
+    from cartograph_fixtures import build_survey_layout
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsCoordinateTransform,
+        QgsPointXY,
+    )
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    survey = build_survey_layout(project, Path(tempfile.mkdtemp()))
+    survey.layout.pageCollection().deletePage(1)
+    main_map = survey.main_map
+    html = export_layout_to_cartograph(
+        survey.layout,
+        project,
+        _runtime(),
+        FidelityReportBuilder(),
+        frame_modes={main_map.uuid(): "live", survey.inset_map.uuid(): "static"},
+    )
+    (out_dir / "survey-live.html").write_text(html, encoding="utf-8")
+    extent = main_map.extent()
+    to_wgs84 = QgsCoordinateTransform(
+        main_map.crs(), QgsCoordinateReferenceSystem("EPSG:4326"), project
+    )
+    corners = []
+    for x, y in (
+        (extent.xMinimum(), extent.yMaximum()),
+        (extent.xMaximum(), extent.yMaximum()),
+        (extent.xMaximum(), extent.yMinimum()),
+        (extent.xMinimum(), extent.yMinimum()),
+    ):
+        point = to_wgs84.transform(QgsPointXY(x, y))
+        corners.append([point.x(), point.y()])
+    size = main_map.sizeWithUnits()
+    return {
+        "main_frame": _frame_id(survey.layout, main_map),
+        "corners": corners,
+        "size_mm": [size.width(), size.height()],
     }
 
 

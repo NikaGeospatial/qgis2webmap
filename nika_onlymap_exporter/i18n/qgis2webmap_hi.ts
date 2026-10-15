@@ -266,14 +266,14 @@
       <location filename="../processing/export_layout.py" line="87" />
       <source>Exports a QGIS print layout to a cartograph: one portable HTML file that opens by double-click and prints at true page size from the browser.
 
-Map items become live frames (pan and zoom, in Web Mercator) or static frames (a pixel-exact image in the layout's own CRS). By default a map in EPSG:3857 or EPSG:4326 is live and any other is static; 'Frames' overrides that for every map on the layout.
+Map items become live frames (pan and zoom, in Web Mercator or in the map's own projected CRS) or static frames (a pixel-exact image in the layout's own CRS). By default a map in EPSG:3857 or EPSG:4326 is live and any other is static; 'Frames' overrides that for every map on the layout.
 
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
       <translation>QGIS मुद्रण लेआउट को मानचित्र पट्टिका में निर्यात करता है: एक पोर्टेबल HTML फ़ाइल जो डबल-क्लिक से खुलती है और ब्राउज़र से असली पेज आकार में प्रिंट होती है।
 
-मानचित्र आइटम लाइव फ़्रेम (पैन और ज़ूम, Web Mercator में) या स्थिर फ़्रेम (लेआउट के अपने CRS में पिक्सेल-सटीक छवि) बन जाते हैं। डिफ़ॉल्ट रूप से EPSG:3857 या EPSG:4326 वाला मानचित्र लाइव होता है और बाकी सभी स्थिर; 'फ़्रेम' लेआउट के हर मानचित्र के लिए इसे बदल देता है।
+मानचित्र आइटम लाइव फ़्रेम (पैन और ज़ूम, Web Mercator में या मानचित्र के अपने प्रक्षेपित CRS में) या स्थिर फ़्रेम (लेआउट के अपने CRS में पिक्सेल-सटीक छवि) बन जाते हैं। डिफ़ॉल्ट रूप से EPSG:3857 या EPSG:4326 वाला मानचित्र लाइव होता है और बाकी सभी स्थिर; 'फ़्रेम' लेआउट के हर मानचित्र के लिए इसे बदल देता है।
 
 जो कुछ ठीक-ठीक नहीं ले जाया जा सकता, वह लॉग में बताया जाता है। अगर कोई आइटम अवरुद्ध है (जैसे दूसरा पेज, जो निर्यात नहीं होता), तो निर्यात रुक जाता है जब तक 'कुछ आइटम अवरुद्ध हों तब भी निर्यात करें' पर टिक न हो।
 
@@ -748,53 +748,53 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>{other} जैसा</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="68" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="69" />
       <source>One page per feature of a coverage layer, like QGIS's own atlas: the map that follows the atlas zooms to each feature in turn, and text can show the feature's fields.</source>
       <translation>कवरेज परत के हर फ़ीचर के लिए एक पेज, ठीक QGIS के अपने एटलस की तरह: एटलस का अनुसरण करने वाला मानचित्र बारी-बारी से हर फ़ीचर पर ज़ूम करता है, और टेक्स्ट फ़ीचर के फ़ील्ड दिखा सकता है।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="78" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="79" />
       <source>Generate an atlas</source>
       <translation>एटलस बनाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="82" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="83" />
       <location filename="../ui/main_dialog.py" line="2494" />
       <source>Atlas</source>
       <translation>एटलस</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="88" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="89" />
       <source>Coverage layer</source>
       <translation>कवरेज परत</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="92" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="93" />
       <source>The map that zooms to each feature. It must be a Live frame.</source>
       <translation>वह मानचित्र जो हर फ़ीचर पर ज़ूम करता है। यह ज़रूर लाइव फ़्रेम होना चाहिए।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="95" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="96" />
       <source>Map that follows it</source>
       <translation>उसका अनुसरण करने वाला मानचित्र</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="102" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="103" />
       <source>Descending</source>
       <translation>अवरोही</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="105" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="106" />
       <source>Sort by</source>
       <translation>इसके अनुसार क्रमबद्ध करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="109" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="110" />
       <source>Only features for which this is true get a page. Blank: all.</source>
       <translation>केवल वे फ़ीचर जिनके लिए यह सत्य है, उन्हें पेज मिलता है। खाली: सभी।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="112" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="113" />
       <location filename="../ui/fidelity_panel.py" line="339" />
       <location filename="../ui/fidelity_panel.py" line="560" />
       <location filename="../ui/fidelity_panel.py" line="580" />
@@ -802,82 +802,82 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>फ़िल्टर</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="116" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="117" />
       <source>How each page's image is named when all pages are exported.</source>
       <translation>सभी पेज निर्यात करते समय हर पेज की छवि का नाम कैसे रखा जाता है।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="119" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="120" />
       <source>File names</source>
       <translation>फ़ाइल नाम</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="131" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="132" />
       <source>Export all pages (PNG, ZIP)...</source>
       <translation>सभी पेज निर्यात करें (PNG, ZIP)...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="133" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="134" />
       <source>Opens the cartograph and downloads every page as one ZIP</source>
       <translation>मानचित्र पट्टिका खोलता है और हर पेज को एक ZIP के रूप में डाउनलोड करता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="137" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="138" />
       <source>Print all pages...</source>
       <translation>सभी पेज प्रिंट करें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="139" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="140" />
       <source>Opens the cartograph with every page ready to print - choose Save as PDF for one multi-page PDF</source>
       <translation>मानचित्र पट्टिका को हर पेज के साथ प्रिंट के लिए तैयार खोलता है - एक मल्टी-पेज PDF के लिए Save as PDF चुनें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="197" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="198" />
       <source>(none)</source>
       <translation>(कोई नहीं)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="238" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="244" />
       <source>Toggle Atlas</source>
       <translation>एटलस टॉगल करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="249" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="255" />
       <source>Change Atlas Coverage</source>
       <translation>एटलस कवरेज बदलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="264" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="270" />
       <source>Change Atlas Map</source>
       <translation>एटलस मानचित्र बदलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="276" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="282" />
       <source>Change Atlas Sort</source>
       <translation>एटलस क्रम बदलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="286" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="292" />
       <source>Change Atlas Filter</source>
       <translation>एटलस फ़िल्टर बदलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="291" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="297" />
       <source>Change Atlas Filename</source>
       <translation>एटलस फ़ाइल नाम बदलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="213" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="219" />
       <source>{n} page in QGIS</source>
       <translation>QGIS में {n} पेज</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="213" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="219" />
       <source>{n} pages in QGIS</source>
       <translation>QGIS में {n} पेज</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="193" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="194" />
       <source>The saved cartograph has no atlas pages yet</source>
       <translation>सहेजी गई मानचित्र पट्टिका में अभी कोई एटलस पेज नहीं है</translation>
     </message>
@@ -1062,177 +1062,177 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>इस लेआउट में अभी तक कोई मानचित्र नहीं है।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="656" />
-      <location filename="../ui/cartograph/controller.py" line="609" />
+      <location filename="../ui/cartograph/controller.py" line="659" />
+      <location filename="../ui/cartograph/controller.py" line="612" />
       <source>Use canvas view</source>
       <translation>कैनवस दृश्य उपयोग करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="920" />
+      <location filename="../ui/cartograph/controller.py" line="923" />
       <source>The OnlyMap runtime is needed to save a cartograph. Nothing was written.</source>
       <translation>मानचित्र पट्टिका सहेजने के लिए OnlyMap रनटाइम चाहिए। कुछ भी नहीं लिखा गया।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1084" />
+      <location filename="../ui/cartograph/controller.py" line="1087" />
       <source>Accessibility</source>
       <translation>सुलभता</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1088" />
-      <location filename="../ui/cartograph/controller.py" line="1139" />
+      <location filename="../ui/cartograph/controller.py" line="1091" />
+      <location filename="../ui/cartograph/controller.py" line="1142" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>रंग दृष्टि: इसका अनुकरण करें और लेजेंड के रंगों की जाँच करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1094" />
+      <location filename="../ui/cartograph/controller.py" line="1097" />
       <location filename="../ui/main_dialog.py" line="2583" />
       <location filename="../ui/main_dialog.py" line="2658" />
       <source>Preview</source>
       <translation>पूर्वावलोकन</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1097" />
+      <location filename="../ui/cartograph/controller.py" line="1100" />
       <source>Open the cartograph in your browser.</source>
       <translation>मानचित्र पट्टिका को अपने ब्राउज़र में खोलें।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1104" />
-      <location filename="../ui/cartograph/controller.py" line="1277" />
+      <location filename="../ui/cartograph/controller.py" line="1107" />
+      <location filename="../ui/cartograph/controller.py" line="1280" />
       <source>Open in browser</source>
       <translation>ब्राउज़र में खोलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1265" />
+      <location filename="../ui/cartograph/controller.py" line="1268" />
       <location filename="../ui/main_dialog.py" line="2704" />
       <source>Copy file path</source>
       <translation>फ़ाइल पथ कॉपी करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1266" />
+      <location filename="../ui/cartograph/controller.py" line="1269" />
       <source>Copies the cartograph's path</source>
       <translation>मानचित्र पट्टिका का पथ कॉपी करता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1272" />
+      <location filename="../ui/cartograph/controller.py" line="1275" />
       <source>Shows the cartograph in your file manager</source>
       <translation>मानचित्र पट्टिका को फ़ाइल मैनेजर में दिखाता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1278" />
+      <location filename="../ui/cartograph/controller.py" line="1281" />
       <source>Opens the cartograph in your browser</source>
       <translation>मानचित्र पट्टिका को आपके ब्राउज़र में खोलता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1283" />
+      <location filename="../ui/cartograph/controller.py" line="1286" />
       <location filename="../ui/main_dialog.py" line="2715" />
       <source>Publish</source>
       <translation>प्रकाशित करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1286" />
+      <location filename="../ui/cartograph/controller.py" line="1289" />
       <location filename="../ui/main_dialog.py" line="2718" />
       <source>Publish with NIKA hosting... (waitlist)</source>
       <translation>NIKA होस्टिंग से प्रकाशित करें... (प्रतीक्षा सूची)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1287" />
+      <location filename="../ui/cartograph/controller.py" line="1290" />
       <location filename="../ui/main_dialog.py" line="2719" />
       <source>Hosting is not live yet. This opens a short form so we can see how many people want it.</source>
       <translation>होस्टिंग अभी शुरू नहीं हुई है। इससे एक छोटा फ़ॉर्म खुलता है ताकि हम जान सकें कि कितने लोग इसे चाहते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1295" />
+      <location filename="../ui/cartograph/controller.py" line="1298" />
       <location filename="../ui/main_dialog.py" line="2729" />
       <source>NIKA</source>
       <translation>NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1298" />
+      <location filename="../ui/cartograph/controller.py" line="1301" />
       <location filename="../ui/main_dialog.py" line="2732" />
       <source>Enhance with NIKA AI...</source>
       <translation>NIKA AI से बेहतर बनाएँ...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1299" />
-      <location filename="../ui/cartograph/controller.py" line="1305" />
+      <location filename="../ui/cartograph/controller.py" line="1302" />
+      <location filename="../ui/cartograph/controller.py" line="1308" />
       <location filename="../ui/main_dialog.py" line="2733" />
       <location filename="../ui/main_dialog.py" line="2739" />
       <source>Opens a hand-off dialog with a prompt to paste into NIKA</source>
       <translation>NIKA में चिपकाने के लिए एक प्रॉम्प्ट के साथ हैंड-ऑफ़ डायलॉग खोलता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1304" />
+      <location filename="../ui/cartograph/controller.py" line="1307" />
       <location filename="../ui/main_dialog.py" line="2738" />
       <source>Ask NIKA for a critique...</source>
       <translation>NIKA से समीक्षा माँगें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1309" />
+      <location filename="../ui/cartograph/controller.py" line="1312" />
       <location filename="../ui/main_dialog.py" line="933" />
       <location filename="../ui/main_dialog.py" line="2615" />
       <source>Export</source>
       <translation>निर्यात</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1312" />
+      <location filename="../ui/cartograph/controller.py" line="1315" />
       <source>Export PDF...</source>
       <translation>PDF निर्यात करें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1313" />
+      <location filename="../ui/cartograph/controller.py" line="1316" />
       <source>Opens the cartograph and prints it at true page size</source>
       <translation>मानचित्र पट्टिका को खोलता है और उसे वास्तविक पृष्ठ आकार में प्रिंट करता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1319" />
+      <location filename="../ui/cartograph/controller.py" line="1322" />
       <source>Export PNG...</source>
       <translation>PNG निर्यात करें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1320" />
+      <location filename="../ui/cartograph/controller.py" line="1323" />
       <source>300 dpi image of the first page</source>
       <translation>पहले पृष्ठ की 300 dpi छवि</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1325" />
+      <location filename="../ui/cartograph/controller.py" line="1328" />
       <source>Export QGIS layout template (.qpt)...</source>
       <translation>QGIS लेआउट टेम्पलेट (.qpt) निर्यात करें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1326" />
+      <location filename="../ui/cartograph/controller.py" line="1329" />
       <source>Round trip back into QGIS</source>
       <translation>वापस QGIS में राउंड ट्रिप</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1331" />
+      <location filename="../ui/cartograph/controller.py" line="1334" />
       <source>Print settings...</source>
       <translation>प्रिंट सेटिंग्स...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1332" />
+      <location filename="../ui/cartograph/controller.py" line="1335" />
       <source>Page size, bleed, crop marks and colour profile for Export PDF</source>
       <translation>Export PDF के लिए पेज आकार, ब्लीड, क्रॉप मार्क और रंग प्रोफ़ाइल</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1505" />
-      <location filename="../ui/cartograph/controller.py" line="1494" />
-      <location filename="../ui/cartograph/controller.py" line="1514" />
+      <location filename="../ui/cartograph/controller.py" line="1508" />
+      <location filename="../ui/cartograph/controller.py" line="1497" />
+      <location filename="../ui/cartograph/controller.py" line="1517" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="322" />
       <source>Export PDF</source>
       <translation>PDF निर्यात करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1507" />
+      <location filename="../ui/cartograph/controller.py" line="1510" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1540" />
+      <location filename="../ui/cartograph/controller.py" line="1543" />
       <source>Save layout template as</source>
       <translation>लेआउट टेम्पलेट को इस रूप में सहेजें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1542" />
+      <location filename="../ui/cartograph/controller.py" line="1545" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>QGIS लेआउट टेम्पलेट (*.qpt)</translation>
     </message>
@@ -1288,33 +1288,33 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>स्थिर</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="603" />
+      <location filename="../ui/cartograph/controller.py" line="606" />
       <source>Items on this frame the cartograph changes or leaves out; see the Fidelity tab</source>
       <translation>इस फ़्रेम के ऐसे आइटम जिन्हें मानचित्र पट्टिका बदलती है या छोड़ देती है; विश्वसनीयता टैब देखें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="611" />
+      <location filename="../ui/cartograph/controller.py" line="614" />
       <source>Set this map item's extent to what the QGIS map canvas shows</source>
       <translation>इस मानचित्र आइटम के विस्तार को वही सेट करें जो QGIS मानचित्र कैनवस दिखाता है</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="987" />
+      <location filename="../ui/cartograph/controller.py" line="990" />
       <source>Could not build the cartograph: {message}</source>
       <translation>मानचित्र पट्टिका नहीं बनाई जा सकी: {message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1212" />
+      <location filename="../ui/cartograph/controller.py" line="1215" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
       <translation>अभी पूर्वावलोकन के लिए कुछ नहीं है - मानचित्र पट्टिका सहेजी नहीं गई है। मानचित्र पट्टिका टैब पर एक लेआउट और एक फ़ाइल चुनें।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1495" />
+      <location filename="../ui/cartograph/controller.py" line="1498" />
       <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
       <translation>CMYK या ICC PDF QGIS द्वारा मुद्रण लेआउट से बनाया जाता है, जो तभी काम करता है जब हर फ़्रेम स्थिर हो। Frames टैब में लाइव फ़्रेम को Static पर सेट करें, या Print settings में RGB चुनें।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1516" />
-      <location filename="../ui/cartograph/controller.py" line="1549" />
+      <location filename="../ui/cartograph/controller.py" line="1519" />
+      <location filename="../ui/cartograph/controller.py" line="1552" />
       <source>Saved {path}</source>
       <translation>सहेजा: {path}</translation>
     </message>
@@ -1324,13 +1324,13 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>कैनवस से मुद्रण लेआउट "{name}" बनाया गया। इसे कभी भी लेआउट डिज़ाइनर में संपादित करें; मानचित्र पट्टिका उसका अनुसरण करेगी।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1364" />
+      <location filename="../ui/cartograph/controller.py" line="1367" />
       <location filename="../ui/main_dialog.py" line="3663" />
       <source>Copied {path}</source>
       <translation>कॉपी किया: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1371" />
+      <location filename="../ui/cartograph/controller.py" line="1374" />
       <location filename="../ui/main_dialog.py" line="3683" />
       <source>Opened {path}</source>
       <translation>खोला गया: {path}</translation>
@@ -1341,12 +1341,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>अज्ञात CRS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="933" />
+      <location filename="../ui/cartograph/controller.py" line="936" />
       <source>The OnlyMap runtime could not be loaded, so nothing was written: {error}</source>
       <translation>OnlyMap रनटाइम लोड नहीं हो सका, इसलिए कुछ नहीं लिखा गया: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="953" />
+      <location filename="../ui/cartograph/controller.py" line="956" />
       <source>Could not save the cartograph: {error}</source>
       <translation>मानचित्र पट्टिका सहेजी नहीं जा सकी: {error}</translation>
     </message>

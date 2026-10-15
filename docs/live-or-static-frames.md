@@ -18,7 +18,7 @@ each frame is one of two kinds. You choose per map, on the **Frames** tab.
 | | Live | Static |
 |---|---|---|
 | What the reader gets | A real map inside the page: pan, zoom, click a feature | A picture of the map, exactly as QGIS draws it |
-| Projection | Always **Web Mercator** (EPSG:3857), whatever the layout uses | The map's **own CRS**, untouched |
+| Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-a-live-frame-draws-in) | The map's **own CRS**, untouched |
 | Styling | Translated, with the web map's [fidelity](supported-features.md) - the Fidelity tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
 | Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default) |
@@ -34,9 +34,10 @@ The plugin picks from the map's CRS, and you can change it:
   projection it already uses (or close to it), so nothing is lost by making it
   interactive.
 - **Anything else** → **Static**. A survey in UTM, a national grid, an
-  equal-area thematic map: a live frame would redraw it in Web Mercator, and
-  shapes, angles and distances away from the centre would no longer match the
-  layout. A static frame keeps it exact.
+  equal-area thematic map: a static frame keeps every style and every layer
+  exactly as QGIS draws it, and reads without WebGL. Switch it to Live when
+  the reader should explore it - it stays in its own CRS unless one of its
+  layers cannot.
 
 The same rule is the **By map CRS** choice of the
 [Processing algorithm](cartograph-dialog.md#processing), which also offers *All live* and
@@ -50,9 +51,29 @@ The same rule is the **By map CRS** choice of the
 - It is the map an [atlas](cartograph-atlas.md) turns - an atlas only pages
   through a live frame.
 
-A live map in any CRS other than Web Mercator is redrawn in Web Mercator, and
-the Fidelity tab marks it **Changed**: shapes, and distances away from the
-centre, differ slightly from the layout.
+### Which CRS a live frame draws in
+
+A live frame draws in the map's own CRS, exactly where QGIS draws it, when the
+map:
+
+- is in a **projected** CRS - UTM, a national grid, an equal-area or conic
+  projection;
+- is not rotated;
+- carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
+  or `.webp` tiles).
+
+The Fidelity tab then marks the frame **Kept**. A live frame has no basemap in
+a projected CRS; add an XYZ layer to the map for one.
+
+Otherwise it is redrawn in Web Mercator, and the Fidelity tab marks it
+**Changed**, with the reason: shapes, and distances away from the centre,
+differ slightly from the layout. That happens for
+
+- a map in **EPSG:4326** or another geographic CRS - a browser map cannot
+  draw degrees as a flat sheet;
+- a **rotated** map - the rotation is kept, in Web Mercator;
+- a map carrying an embedded **raster** or **vector tiles** - the row names
+  the layer.
 
 ## When to keep a map Static
 

@@ -188,6 +188,34 @@ class TestSurveyCartograph:
         page.wait_for_function("() => window.__printed === true", timeout=30_000)
 
 
+class TestLiveFrameInUtm:
+    """A live frame in UTM 48N draws in UTM 48N: QGIS's own map corners land
+    on the frame's corners, not just near them as a Web Mercator redraw
+    would."""
+
+    def test_qgis_corners_land_on_the_frame_corners(
+        self, page, fixtures: Path, expected, cartograph_source: str
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["survey_live"]
+        _open(page, fixtures / "survey-live.html")
+        landed = page.evaluate(
+            """([frameId, corners]) => {
+              const georef = document.getElementById(frameId).georef;
+              return corners.map((c) => {
+                const p = georef.project(c);
+                return p && [p.xMm, p.yMm];
+              });
+            }""",
+            [want["main_frame"], want["corners"]],
+        )
+        w, h = want["size_mm"]
+        for got, wanted in zip(landed, ([0, 0], [w, 0], [w, h], [0, h])):
+            assert got == pytest.approx(wanted, abs=0.05)
+        result = page.evaluate(_VALIDATE, cartograph_source)
+        assert result["errors"] == []
+
+
 class TestLiveCartograph:
     def test_the_live_frame_mounts_and_resolves_its_scale(
         self, page, fixtures: Path, cartograph_source: str

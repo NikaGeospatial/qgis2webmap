@@ -996,6 +996,13 @@ class ExportSettings:
     # Off by default: exporting fewer features than the project contains must
     # always be something the user asked for.
     clip_to_extent: bool = False
+    # The projection `<om-map crs>` draws in; None is the runtime's Web
+    # Mercator. Only a cartograph's live frame in a projected CRS sets it
+    # (`core/cartograph_export.py`) - the web-map dialog never does, because a
+    # projected map can have no basemap. `map_crs_def` is the proj4 string, so
+    # the map resolves its CRS offline rather than asking epsg.io.
+    map_crs: str | None = None
+    map_crs_def: str | None = None
 
     @property
     def has_lossy_transform(self) -> bool:
@@ -1034,6 +1041,8 @@ class ExportSettings:
             ),
             "extentSource": self.extent_source.value,
             "clipToExtent": self.clip_to_extent,
+            "mapCrs": self.map_crs,
+            "mapCrsDef": self.map_crs_def,
         }
 
 

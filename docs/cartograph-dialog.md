@@ -122,7 +122,7 @@ One row per map item on the layout:
 |---|---|
 | **Map item** | The map's ID in the layout designer, or its display name |
 | **CRS** | The map's CRS, or *Unknown CRS* |
-| **Frame** | **Live** - an interactive map drawn in the browser, in Web Mercator. **Static** - an image of the map as QGIS draws it, in its own CRS |
+| **Frame** | **Live** - an interactive map drawn in the browser, in Web Mercator or in the map's own projected CRS ([which one](live-or-static-frames.md#which-crs-a-live-frame-draws-in)). **Static** - an image of the map as QGIS draws it, in its own CRS |
 | **DPI** | A static frame's image resolution: **150**, **200** (the default) or **300**. Greyed out for a live frame |
 | **Changes** | Fidelity rows about this map that are not *Kept*. Empty until the first save |
 | **Use canvas view** | Sets the map's extent to what the QGIS canvas shows. It is an edit to your layout, so the layout designer's **Undo** takes it back |

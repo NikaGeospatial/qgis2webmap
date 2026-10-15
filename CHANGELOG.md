@@ -11,8 +11,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Cartograph** switch at the top of the dialog turns a QGIS print layout into
   one HTML page that opens by double-click and prints at true page size from
   Chromium-based browsers.
-  - Map items become **live frames** (pan, zoom, popups; Web Mercator) or
-    **static frames** (a pixel-exact image in the layout's own CRS). Maps in
+  - Map items become **live frames** (pan, zoom, popups; in Web Mercator, or
+    in the map's own projected CRS when its layers allow) or **static
+    frames** (a pixel-exact image in the layout's own CRS). Maps in
     EPSG:3857/4326 default to live, others to static; the Frames tab
     switches each one and sets its DPI.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with

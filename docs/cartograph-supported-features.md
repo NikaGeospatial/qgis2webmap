@@ -50,7 +50,7 @@ QGIS drew, so its layers come across as they look.
 | In the layout | In the cartograph |
 |---|---|
 | Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen on the Frames tab. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
-| Map item, **live** frame | **Kept** in EPSG:3857 - an interactive map. In any other CRS it is drawn in Web Mercator, and marked **Changed** |
+| Map item, **live** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own projected CRS when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, in EPSG:4326 and other geographic CRSs, when the map is rotated, or when it carries a raster or vector tiles ([which CRS a live frame draws in](live-or-static-frames.md#which-crs-a-live-frame-draws-in)) |
 | Map rotation | **Kept** |
 | A layer drawn in more than one live frame | **Kept** in each - its features are written into the file once |
 | Overview (locator inset showing another map's extent) | **Kept** |

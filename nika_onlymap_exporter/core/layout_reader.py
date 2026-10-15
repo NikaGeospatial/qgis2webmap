@@ -562,17 +562,40 @@ def _frame_mode(
     )
 
 
+def draws_in_own_plane(item: QgsLayoutItemMap) -> bool:
+    """Whether a live frame of `item` can draw in the map's own CRS.
+
+    The runtime draws a map with `crs=` in that projection's plane, but only
+    a projected one: a geographic CRS as a plane is refused (a degree of
+    longitude and of latitude are different distances), and a plane view
+    has no bearing, so a rotated map stays in Web Mercator, which keeps the
+    rotation. Whether the frame's layers can follow is only known once they
+    are read (`core/cartograph_export.py`), which also reports the outcome.
+    """
+    crs = item.crs()
+    return (
+        crs.isValid()
+        and not crs.isGeographic()
+        and crs.authid() != "EPSG:3857"
+        and bool(crs.toProj())
+        and item.mapRotation() == 0
+    )
+
+
 def _record_live_frame_projection(
     item: QgsLayoutItemMap, report: FidelityReportBuilder
 ) -> None:
     """A live frame is drawn by the map runtime in Web Mercator, whatever CRS
     the QGIS map uses (issue #1 section 2's "approximated (live, reprojected
-    to Web Mercator)"). Exact only for an EPSG:3857 map."""
+    to Web Mercator)"). Exact only for an EPSG:3857 map -- and for a map
+    that `draws_in_own_plane`, whose row is written once its layers are read."""
     crs = item.crs()
     authid = crs.authid() if crs.isValid() else ""
     label = f"Map frame {_name(item)}"
     if authid == "EPSG:3857":
         report.preserved(label, "Exported as a live frame.")
+        return
+    if draws_in_own_plane(item):
         return
     report.approximated(
         label,
