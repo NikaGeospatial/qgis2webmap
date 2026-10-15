@@ -102,3 +102,15 @@ class TestPageLabel:
             width=500.0, height=300.0, size=None, orientation="landscape"
         )
         assert page_label(odd) == "500 x 300 mm landscape"
+
+
+def test_with_no_file_chosen_the_status_says_what_to_do() -> None:
+    text = status_text(
+        saved_at=None,
+        saved_bytes=None,
+        error="",
+        now=0.0,
+        translate=lambda s: s,
+        has_path=False,
+    )
+    assert "choose where to save" in text

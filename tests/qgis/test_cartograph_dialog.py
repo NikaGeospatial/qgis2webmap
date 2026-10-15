@@ -105,7 +105,9 @@ def fake_cartograph_export(monkeypatch):
             bundle=CartographRuntimeBundle(cartograph_js=b"", cartograph_css=""),
         )
 
-    def finish_cartograph_full(prepared, project, report, *, writer=None):
+    def finish_cartograph_full(
+        prepared, project, report, *, writer=None, layer_settings=None
+    ):
         calls[-1]["finish_on_gui_thread"] = on_gui_thread()
         calls[-1]["writer"] = writer
         if should_fail["value"]:
@@ -351,7 +353,9 @@ class TestAutosave:
         dialog = _dialog(project)
         try:
             dialog.output_cartograph_button.setChecked(True)
-            assert dialog._cartograph.cartograph_status_label.text() == "Not saved yet"
+            assert dialog._cartograph.cartograph_status_label.text().startswith(
+                "Not saved yet"
+            )
         finally:
             dialog.close()
 
@@ -1122,5 +1126,89 @@ class TestAccessibility:
             monkeypatch.setattr(dialog._cartograph, "_open_url", opened.append)
             dialog._cartograph._open_cvd_preview("tritanopia")
             assert opened[0].query() == "cvd=tritanopia"
+        finally:
+            dialog.close()
+
+
+class TestWhereItSaves:
+    def test_an_unsaved_project_writes_nothing_until_a_file_is_chosen(
+        self, qgis_app, project, fake_cartograph_export
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            cartograph = dialog._cartograph
+            assert cartograph.file_edit.text() == ""
+            assert cartograph.file_edit.placeholderText().endswith("Survey.html")
+            _wait_for(qgis_app, lambda: False, timeout=1.0)
+            assert fake_cartograph_export.calls == []
+            assert "choose where" in cartograph.cartograph_status_label.text()
+        finally:
+            dialog.close()
+
+    def test_a_saved_project_saves_beside_itself_at_once(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        project.setFileName(str(tmp_path / "parcels.qgz"))
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            target = tmp_path / "Survey.html"
+            assert dialog._cartograph.file_edit.text() == str(target)
+            assert _wait_for(qgis_app, lambda: target.exists())
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+
+class TestSavesFollowTheProject:
+    def test_a_layer_restyled_in_qgis_saves_again(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        """Also the guard for closing mid-build: the dialog closes while this
+        rebuild runs, which once aborted the process at exit."""
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            before = len(fake_cartograph_export.calls)
+            dialog.content_watcher.changed.emit()
+            assert _wait_for(
+                qgis_app, lambda: len(fake_cartograph_export.calls) > before
+            )
+        finally:
+            dialog.close()
+
+    def test_a_layers_tab_change_saves_again(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            before = len(fake_cartograph_export.calls)
+            dialog.state.layers["some-layer"] = LayerSettings(popup=False)
+            assert _wait_for(
+                qgis_app, lambda: len(fake_cartograph_export.calls) > before
+            )
+        finally:
+            dialog.close()
+
+    def test_switching_layouts_resets_the_status_and_saves(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        _add_layout(project, "Second", [("Other", "EPSG:4326")])
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            assert cartograph._last_summary is not None
+            other = (
+                "Survey"
+                if cartograph.layout_combo.currentText() == "Second"
+                else "Second"
+            )
+            cartograph.layout_combo.setCurrentText(other)
+            assert cartograph._last_summary is None
+            assert cartograph.cartograph_status_label.text().startswith("Not saved")
         finally:
             dialog.close()

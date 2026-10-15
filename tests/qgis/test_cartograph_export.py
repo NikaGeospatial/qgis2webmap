@@ -550,3 +550,35 @@ class TestLiveCamera:
         assert lon == pytest.approx(5.0)
         assert y(lat) == pytest.approx((y(0.0) + y(60.0)) / 2)
         assert lat == pytest.approx(35.26, abs=0.01)
+
+
+class TestLayersTabChoices:
+    """The Layers tab's popup choices apply to live frames as to a web map:
+    a field kept out of popups is not in the cartograph either."""
+
+    def test_popups_off_keeps_the_overlay_out_of_the_live_frame(
+        self, project, fake_runtime
+    ) -> None:
+        from qgis.core import QgsField
+        from qgis.PyQt.QtCore import QMetaType
+
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        layout = _live_layout(project)
+        layer = next(iter(project.mapLayers().values()))
+        layer.dataProvider().addAttributes([QgsField("owner", QMetaType.Type.QString)])
+        layer.updateFields()
+        feature = next(layer.getFeatures())
+        layer.dataProvider().changeAttributeValues({feature.id(): {0: "Ms Tan"}})
+        with_popups = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        without = export_layout_to_cartograph(
+            layout,
+            project,
+            fake_runtime,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(popup=False)},
+        )
+        assert "Ms Tan" in with_popups
+        assert "Ms Tan" not in without

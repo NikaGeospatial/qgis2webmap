@@ -788,6 +788,9 @@ class MainDialog(QDialog):
         # (or saved edits) changes the map without moving anything above.
         self.content_watcher = LayerContentWatcher(self.project, self)
         self.content_watcher.changed.connect(self._project_content_changed)
+        self.content_watcher.changed.connect(
+            self._cartograph.on_project_content_changed
+        )
 
         # Notices a report going out of date whatever changed it. Polled, like
         # the live preview, because a signal per setting is what let Include,

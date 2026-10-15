@@ -20,6 +20,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import copy
 import dataclasses
 import re
 import sys
@@ -93,6 +94,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # settles on for the document model.
 AUTOSAVE_DEBOUNCE_MS = 600
 STATUS_TICK_MS = 1000
+# How long closing waits for a running build, as `main_dialog`'s own job.
+SHUTDOWN_WAIT_MS = 5000
 DPI_CHOICES = (150, 200, 300)
 
 # The runtime's built-in themes (`core/cartograph_ir.CARTOGRAPH_THEMES`), in
@@ -160,6 +163,9 @@ class CartographController:
         self._pending_spec: CartographSpec | None = None
         # Map item uuid -> how many of its fidelity rows are not "Kept".
         self._frame_issue_counts: dict[str, int] = {}
+        self._built_layers_signature = self._layers_signature()
+        self._selected_name: str | None = None
+        self._shut_down = False
         self._preview_server: PreviewServer | None = None
 
         # Rendered static frames are kept between saves; a closed project's
@@ -173,7 +179,7 @@ class CartographController:
 
         self._status_timer = QTimer(dialog)
         self._status_timer.setInterval(STATUS_TICK_MS)
-        self._status_timer.timeout.connect(self._update_status_label)
+        self._status_timer.timeout.connect(self._on_status_tick)
 
         self._corner: QWidget | None = None
 
@@ -202,6 +208,18 @@ class CartographController:
         from `MainDialog._shutdown`, alongside the web map's own teardown."""
         self._autosave_timer.stop()
         self._status_timer.stop()
+        # Same rule as the web map's job (`MainDialog._shutdown`): a build
+        # thread still running when its dialog is destroyed takes QGIS down.
+        self._shut_down = True
+        job, self._job = self._job, None
+        if job is not None:
+            # Its result is for widgets that are about to go: never deliver it.
+            for signal in (job.succeeded, job.failed):
+                with contextlib.suppress(TypeError, RuntimeError):
+                    signal.disconnect()
+            job.cancel()
+            with contextlib.suppress(RuntimeError):
+                job.wait(SHUTDOWN_WAIT_MS)
         if self._preview_server is not None:
             self._preview_server.stop()
             self._preview_server = None
@@ -675,6 +693,10 @@ class CartographController:
         self._layout_changed_connected = False
 
     def _select_layout(self, name: str) -> None:
+        # The same layout again (the tab re-shown, the list refreshed) keeps
+        # its last save's status and report; only another layout starts over.
+        switching = name != self._selected_name
+        self._selected_name = name
         self._disconnect_current_layout()
         manager = self.project.layoutManager()
         layout = manager.layoutByName(name) if name else None
@@ -696,9 +718,36 @@ class CartographController:
         self._update_file_default()
         self._load_page_fields()
         self.update_window_title()
+        if switching:
+            self._forget_last_save()
         self._update_status_label()
         self._update_share_enabled()
         save_state(self.project, self.state)
+        if switching:
+            if self.state.output is DialogOutput.CARTOGRAPH:
+                self.show_fidelity()
+            # The file is a document that follows its layout: bring it up to
+            # date now, not on the user's first edit.
+            self.schedule_autosave()
+
+    def _forget_last_save(self) -> None:
+        """What the status line and Fidelity tab say about a save belongs to
+        the layout it was for; another layout starts from its own file."""
+        path = self._current_path()
+        if path is not None and path.exists():
+            stat = path.stat()
+            self._last_saved_at, self._last_saved_bytes = stat.st_mtime, stat.st_size
+        else:
+            self._last_saved_at = self._last_saved_bytes = None
+        self._last_error = ""
+        self._last_summary = None
+        self._frame_issue_counts = {}
+
+    def on_project_content_changed(self) -> None:
+        """A layer was restyled or its edits saved in QGIS: the cartograph
+        draws those layers, so it is saved again."""
+        if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
+            self.schedule_autosave()
 
     def _on_layout_content_changed(self) -> None:
         if self._current_layout is not None:
@@ -715,9 +764,15 @@ class CartographController:
             self.file_edit.setText("")
             return
         stored = self.state.cartograph_file_for(name)
-        if not stored:
-            stored = str(default_cartograph_path(self.project.fileName(), name))
+        suggested = default_cartograph_path(self.project.fileName(), name)
+        if not stored and self.project.fileName():
+            # Beside the saved project, named after the layout: a place the
+            # user can be assumed to want it, so the cartograph starts there.
+            stored = str(suggested)
             self.state.cartograph_files[name] = stored
+        # An unsaved project has no folder of its own: the suggestion is only
+        # shown, and nothing is written until the user picks a place.
+        self.file_edit.setPlaceholderText(str(suggested))
         self.file_edit.setText(stored)
 
     def _on_cartograph_setting_changed(self) -> None:
@@ -800,10 +855,13 @@ class CartographController:
         # The dialog's own writer, so a licence key the user set reaches the
         # cartograph's live frames exactly as it reaches a web map.
         writer = self.dialog._writer()
+        # The Layers tab's popup and label choices, copied: the worker must
+        # not read state the GUI thread may be editing.
+        layers = copy.deepcopy(dict(self.state.layers))
 
         def work(_progress: object) -> cartograph_export.FinishedCartograph:
             return cartograph_export.finish_cartograph_full(
-                prepared, project, report, writer=writer
+                prepared, project, report, writer=writer, layer_settings=layers
             )
 
         job = BackgroundJob(work, self.dialog)
@@ -852,6 +910,8 @@ class CartographController:
         report: FidelityReportBuilder,
     ) -> None:
         self._job = None
+        if self._shut_down:
+            return
         html = finished.html
         try:
             self._write_atomic(path, html)
@@ -882,6 +942,8 @@ class CartographController:
 
     def _on_build_failed(self, message: str, details: str) -> None:
         self._job = None
+        if self._shut_down:
+            return
         from qgis.core import Qgis, QgsMessageLog
 
         QgsMessageLog.logMessage(
@@ -896,6 +958,24 @@ class CartographController:
     def _write_atomic(path: Path, content: str) -> None:
         write_text_atomic(path, content)
 
+    def _on_status_tick(self) -> None:
+        """Once a second while Cartograph is on screen: refresh the "Saved 2 s
+        ago" line, and save again when the Layers tab's popup or label choices
+        changed - the same settings-polling the web map's live preview uses
+        (`DialogState.snapshot`), for the one part of it a cartograph reads."""
+        self._update_status_label()
+        layers = self._layers_signature()
+        if layers != self._built_layers_signature:
+            self._built_layers_signature = layers
+            self.schedule_autosave()
+
+    def _layers_signature(self) -> str:
+        import json
+
+        return json.dumps(
+            {k: v.to_dict() for k, v in self.state.layers.items()}, sort_keys=True
+        )
+
     def _update_status_label(self) -> None:
         if not hasattr(self, "cartograph_status_label"):
             return
@@ -906,6 +986,9 @@ class CartographController:
                 error=self._last_error,
                 now=time.time(),
                 translate=tr,
+                has_path=bool(self.file_edit.text().strip())
+                if hasattr(self, "file_edit")
+                else True,
             )
         )
 

@@ -75,6 +75,7 @@ from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .layout_reader import AtlasRequirement, FrameMode, MapFrameReading, read_layout
 from .project_reader import read_project
+from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -305,6 +306,7 @@ def export_layout_to_cartograph(
     static_dpi: int = 200,
     title_override: str | None = None,
     writer: OnlyMapWriter | None = None,
+    layer_settings: Mapping[str, LayerSettings] | None = None,
 ) -> str:
     """Read `layout` and render it to a standalone cartograph HTML document,
     all on the calling thread -- which must be the GUI thread (see the module
@@ -319,7 +321,9 @@ def export_layout_to_cartograph(
         static_dpi=static_dpi,
         title_override=title_override,
     )
-    return finish_cartograph(prepared, project, report, writer=writer)
+    return finish_cartograph(
+        prepared, project, report, writer=writer, layer_settings=layer_settings
+    )
 
 
 def prepare_cartograph(
@@ -401,10 +405,13 @@ def finish_cartograph(
     report: FidelityReportBuilder,
     *,
     writer: OnlyMapWriter | None = None,
+    layer_settings: Mapping[str, LayerSettings] | None = None,
 ) -> str:
     """Render each live frame's `<om-map>` and write the document. Reads
     layers only, never the layout, so it is safe on a worker thread."""
-    return finish_cartograph_full(prepared, project, report, writer=writer).html
+    return finish_cartograph_full(
+        prepared, project, report, writer=writer, layer_settings=layer_settings
+    ).html
 
 
 def finish_cartograph_full(
@@ -413,6 +420,7 @@ def finish_cartograph_full(
     report: FidelityReportBuilder,
     *,
     writer: OnlyMapWriter | None = None,
+    layer_settings: Mapping[str, LayerSettings] | None = None,
 ) -> FinishedCartograph:
     """`finish_cartograph`, also returning each live frame's `ExportProject`.
 
@@ -420,6 +428,11 @@ def finish_cartograph_full(
     user's licence policy (`OnlyMapWriter(license_policy=...)`, as the web-map
     export does) so a paid key reaches the cartograph's maps too. `None`
     keeps the default (free) policy.
+
+    `layer_settings` are the Layers tab's per-layer choices (popups, popup
+    fields, labels), applied to every live frame exactly as to a web map: a
+    field the user kept out of a web map's popups stays out of a cartograph's.
+    Which layers a frame draws is the layout's own choice, not the tab's.
     """
     writer = writer or OnlyMapWriter()
     spec = prepared.spec
@@ -431,6 +444,7 @@ def finish_cartograph_full(
             report,
             layer_order=source.layer_order,
             canvas_extent=source.extent,
+            layer_settings=layer_settings,
         )
         projects.append(export_project)
         requirement = prepared.atlas_requirement

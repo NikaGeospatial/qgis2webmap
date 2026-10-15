@@ -43,6 +43,7 @@ def status_text(
     error: str,
     now: float,
     translate,
+    has_path: bool = True,
 ) -> str:
     """The Cartograph tab's status line.
 
@@ -53,6 +54,8 @@ def status_text(
     if error:
         return error
     if saved_at is None:
+        if not has_path:
+            return translate("Not saved yet - choose where to save it above")
         return translate("Not saved yet")
     elapsed = format_elapsed(now - saved_at)
     size = format_bytes(saved_bytes or 0)
