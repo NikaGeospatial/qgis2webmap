@@ -178,6 +178,11 @@ class TestLiveCartograph:
             pytest.skip("this browser has no WebGL2, so a live frame cannot draw")
         _open(page, fixtures / "story-live.html")
         assert page.locator("om-map").count() == 1
+        # Tokens resolve once the map has mounted, which is after georef.
+        page.wait_for_function(
+            "() => !document.querySelector('om-text').innerText.includes('{{')",
+            timeout=60_000,
+        )
         text = page.locator("om-text").first.inner_text()
         assert "{{" not in text
         assert re.search(r"Scale 1:\s?\d[\d\s,.]*", text)
@@ -189,3 +194,47 @@ class TestLiveCartograph:
         # The core rides gzip+base64 inside the file; nothing is fetched.
         assert "const CORE_GZ" in html
         assert 'src="http' not in html
+
+
+def _needs_webgl(page) -> None:
+    page.goto("about:blank")
+    if not page.evaluate(
+        "() => !!document.createElement('canvas').getContext('webgl2')"
+    ):
+        pytest.skip("this browser has no WebGL2, so a live frame cannot draw")
+
+
+class TestAtlasCartograph:
+    """The whole series, not one sheet per URL: the two triggers this plugin
+    adds for an atlas."""
+
+    def test_atlas_zip_downloads_every_page(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        import zipfile
+
+        _needs_webgl(page)
+        with page.expect_download(timeout=120_000) as download_info:
+            page.goto((fixtures / "atlas-live.html").as_uri() + "?atlas=zip&dpi=72")
+        download = download_info.value
+        assert download.suggested_filename.endswith("-atlas.zip")
+        with zipfile.ZipFile(download.path()) as archive:
+            names = archive.namelist()
+        assert len(names) == expected["atlas"]["pages"] == 3
+        assert all(name.endswith(".png") for name in names)
+
+    def test_atlas_print_sends_every_page_to_one_print(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(
+            "window.print = () => { window.__printedSheets = document"
+            ".querySelectorAll('[data-qgis2webmap-atlas-print] img').length; };"
+        )
+        page.goto((fixtures / "atlas-live.html").as_uri() + "?atlas=print&dpi=72")
+        page.wait_for_function(
+            "() => window.__printedSheets !== undefined", timeout=120_000
+        )
+        assert (
+            page.evaluate("() => window.__printedSheets") == expected["atlas"]["pages"]
+        )

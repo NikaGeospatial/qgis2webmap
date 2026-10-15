@@ -14,6 +14,7 @@ acceptance check meet through files):
   locator inset, legend, scale bar, north arrow, a `@map_scale` title) on an
   A3 landscape page, both frames static.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
+- `atlas-live.html`: a live atlas over three parcels, one page each.
 - `expected.json`: what QGIS itself says the browser must show - the page
   size, where each grid line falls on the main frame in millimetres
   (`mapToItemCoords`, the same measurement the static-frame spike used), and
@@ -49,6 +50,8 @@ def main(out_dir: Path) -> int:
         }
         QgsProject.instance().clear()
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
     finally:
         app.exitQgis()
@@ -168,6 +171,23 @@ def _write_story(project, out_dir: Path) -> dict:
     )
     (out_dir / "story-live.html").write_text(html, encoding="utf-8")
     return {"main_frame": _frame_id(layout, map_item)}
+
+
+def _write_atlas(project, out_dir: Path) -> dict:
+    from atlas_fixtures import build_atlas_layout
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.layout_reader import atlas_page_count
+
+    built = build_atlas_layout(project)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-live.html").write_text(html, encoding="utf-8")
+    return {"pages": atlas_page_count(built.layout)}
 
 
 def _frame_id(layout, map_item) -> str:

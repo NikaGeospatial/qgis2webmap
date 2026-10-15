@@ -188,8 +188,82 @@ def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
     # no page to act on. Installing again now that the page is connected is
     # what makes the Share menu's Export PDF/PNG work at all.
     lines.append("carto.installUrlActions();")
+    lines += _ATLAS_ACTIONS
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
+
+
+#: Two host triggers of this plugin's own, for an atlas: the runtime's
+#: `?export=png&page=N` downloads one sheet per URL, which is no way to take
+#: a 50-page series home. `?atlas=zip` downloads every sheet as PNGs in one
+#: ZIP; `?atlas=print` renders every sheet and hands them to the browser's
+#: print dialog together, so "Save as PDF" makes one multi-page PDF at true
+#: page size. Same opt-in as the runtime's own triggers: the root must carry
+#: `allow-url-actions`, and an editor host (`data-om-host="editor"`) owns
+#: its own print UI. A separate parameter, not `export=`, so the runtime's
+#: trigger never sees it.
+_ATLAS_ACTIONS = [
+    "const atlasAction = new URLSearchParams(location.search).get('atlas');",
+    "const sheet = document.querySelector('om-cartograph');",
+    "if (atlasAction && sheet && sheet.hasAttribute('allow-url-actions')",
+    "    && document.documentElement.dataset.omHost !== 'editor') {",
+    "  runAtlasAction(atlasAction).catch((error) =>",
+    "    console.warn(`[qgis2webmap] atlas ${atlasAction} failed: ${error.message}`));",
+    "}",
+    "async function runAtlasAction(kind) {",
+    "  await carto.whenPageReady(sheet);",
+    "  const atlas = sheet.atlas;",
+    "  if (!atlas) throw new Error('this cartograph has no atlas');",
+    "  atlas.refresh?.();",
+    "  const query = new URLSearchParams(location.search);",
+    "  const stem = sheet.getAttribute('cartograph-id') || 'cartograph';",
+    "  if (kind === 'zip') {",
+    "    const dpi = Number(query.get('dpi')) || 300;",
+    "    const result = await carto.renderCartographAtlas(sheet, { dpi });",
+    "    const link = document.createElement('a');",
+    "    link.href = URL.createObjectURL(result.blob);",
+    "    link.download = `${stem}-atlas.zip`;",
+    "    document.body.appendChild(link);",
+    "    link.click();",
+    "    link.remove();",
+    "    setTimeout(() => URL.revokeObjectURL(link.href), 10000);",
+    "    return;",
+    "  }",
+    "  if (kind !== 'print') throw new Error(`unknown atlas action ${kind}`);",
+    # Print-resolution images, one per sheet, at the sheet's own size; the
+    # page's `@page` rule (written by the runtime from the sheet) still sets
+    # the paper, so Chromium prints every sheet at true size.
+    "  const dpi = Number(query.get('dpi')) || 200;",
+    "  const widthMm = sheet.offsetWidth * 25.4 / 96;",
+    "  const heightMm = sheet.offsetHeight * 25.4 / 96;",
+    "  const sheets = document.createElement('div');",
+    "  sheets.setAttribute('data-qgis2webmap-atlas-print', '');",
+    "  for (let index = 0; index < atlas.count; index++) {",
+    "    const page = await carto.renderCartographAtlas(sheet, { dpi, page: index });",
+    "    const image = new Image();",
+    "    image.src = URL.createObjectURL(page.blob);",
+    "    image.style.cssText = `display:block;width:${widthMm}mm;`",
+    "      + `height:${heightMm}mm;break-after:page;`;",
+    "    await image.decode();",
+    "    sheets.appendChild(image);",
+    "  }",
+    "  const style = document.createElement('style');",
+    "  const printed = '[data-qgis2webmap-atlas-print]';",
+    "  style.textContent = `@media screen { ${printed} { display: none } }`",
+    "    + ' @media print { om-cartograph { display: none !important }'",
+    "    + ` ${printed} { display: block !important } }`;",
+    "  document.body.append(style, sheets);",
+    "  const restore = () => {",
+    "    for (const image of sheets.querySelectorAll('img')) {",
+    "      URL.revokeObjectURL(image.src);",
+    "    }",
+    "    sheets.remove();",
+    "    style.remove();",
+    "  };",
+    "  window.addEventListener('afterprint', restore, { once: true });",
+    "  window.print();",
+    "}",
+]
 
 
 # --------------------------------------------------------------------------

@@ -544,3 +544,13 @@ class TestUrlActions:
         append = html.index("document.body.appendChild(fragment);")
         install = html.index("carto.installUrlActions();")
         assert install > append
+
+
+class TestAtlasTriggers:
+    def test_the_bootstrap_offers_whole_atlas_zip_and_print(self) -> None:
+        html = write_cartograph_html(_static_spec(), _runtime())
+        assert "get('atlas')" in html
+        assert "renderCartographAtlas(sheet, { dpi })" in html
+        assert "window.print()" in html
+        # Its own parameter: the runtime's `export=` trigger must never see it.
+        assert "export=atlas" not in html
