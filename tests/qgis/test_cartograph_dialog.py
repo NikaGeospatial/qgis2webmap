@@ -1060,3 +1060,49 @@ class TestCanvasAndImport:
             assert len(dialog._cartograph._frame_rows) == 2
         finally:
             dialog.close()
+
+
+class TestAccessibility:
+    def test_the_button_opens_one_colour_vision_dialog_fed_by_the_save(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            assert cartograph.accessibility_button.isEnabled()
+            cartograph.accessibility_button.click()
+            first = cartograph._colour_vision
+            assert first is not None and first.isVisible()
+            cartograph.accessibility_button.click()
+            assert cartograph._colour_vision is first
+            # The survey's static legend is literal rows: the check sees them.
+            assert [e.color for e in cartograph._legend_entries] == ["#eba941"]
+        finally:
+            dialog.close()
+
+    def test_a_simulation_checks_the_button_and_names_the_mode(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            cartograph.accessibility_button.click()
+            cartograph._colour_vision.set_condition("deuteranopia")
+            assert cartograph.accessibility_button.isChecked()
+            assert "deuteranopia" in cartograph.accessibility_button.toolTip().lower()
+            cartograph._colour_vision.set_condition(None)
+            assert not cartograph.accessibility_button.isChecked()
+        finally:
+            dialog.close()
+
+    def test_the_browser_preview_opens_with_the_cvd_trigger(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            opened = []
+            monkeypatch.setattr(dialog._cartograph, "_open_url", opened.append)
+            dialog._cartograph._open_cvd_preview("tritanopia")
+            assert opened[0].query() == "cvd=tritanopia"
+        finally:
+            dialog.close()

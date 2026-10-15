@@ -221,6 +221,10 @@ class Qgis2WebMapPlugin:
         self._designer_actions.clear()
 
         if self.dialog is not None:
+            # Issue #4: closing the Colour vision dialog keeps the canvas
+            # preview the user chose; unloading the plugin must not leave it.
+            with contextlib.suppress(Exception):
+                self.dialog.release_canvas_effects()
             self.dialog.close()
             self.dialog.deleteLater()
             self.dialog = None

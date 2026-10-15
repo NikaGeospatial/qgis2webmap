@@ -26,7 +26,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from qgis.PyQt.QtCore import QSize, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
@@ -80,8 +80,10 @@ from .frames import layout_map_items
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ...core.cvd import Condition, LegendEntry
     from ...core.fidelity_report import FidelityReportBuilder
     from ..main_dialog import MainDialog
+    from .accessibility_dialog import AccessibilityDialog
 
 # Debounce per the spec: a burst of edits - dragging a DPI slider would be one
 # if this tab had one - collapses into one rebuild, the same ~600 ms the plan
@@ -150,6 +152,9 @@ class CartographController:
         self._last_page_label: str | None = None
         self._print_after_save = False
         self._loading_page = False
+        self._colour_vision: AccessibilityDialog | None = None
+        self._legend_entries: tuple[LegendEntry, ...] = ()
+        self._pending_spec: CartographSpec | None = None
         # Map item uuid -> how many of its fidelity rows are not "Kept".
         self._frame_issue_counts: dict[str, int] = {}
         self._preview_server: PreviewServer | None = None
@@ -781,6 +786,7 @@ class CartographController:
                 prepared, spec=apply_to_spec(prepared.spec, print_settings)
             )
         self._last_page_label = page_label(prepared.spec)
+        self._pending_spec = prepared.spec
 
         def work(_progress: object) -> str:
             return cartograph_export.finish_cartograph(prepared, project, report)
@@ -839,6 +845,10 @@ class CartographController:
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
         self._count_frame_issues(report)
+        if self._pending_spec is not None:
+            self._collect_legend_entries(self._pending_spec)
+            if self._colour_vision is not None:
+                self._colour_vision.refresh()
         if self._print_after_save:
             self._print_after_save = False
             self._open_url(
@@ -935,8 +945,10 @@ class CartographController:
         self.accessibility_button.setText(tr("Accessibility"))
         self.accessibility_button.setProperty("role", "corner")
         self.accessibility_button.setCheckable(True)
-        self.accessibility_button.setEnabled(False)
-        self.accessibility_button.setToolTip(tr("Coming in a later version"))
+        self.accessibility_button.setToolTip(
+            tr("Colour vision: simulate it and check the legend's colours")
+        )
+        self.accessibility_button.clicked.connect(self.on_accessibility)
         layout.addWidget(self.accessibility_button)
 
         self.cartograph_preview_button = QToolButton(corner)
@@ -963,6 +975,78 @@ class CartographController:
         self._corner = corner
         self._update_share_enabled()
         return corner
+
+    # ---- Accessibility: colour vision --------------------------------------
+
+    def on_accessibility(self) -> None:
+        """The corner's Accessibility button: one non-modal Colour vision
+        dialog, raised again rather than duplicated."""
+        from .accessibility_dialog import AccessibilityDialog, simulating_tooltip
+
+        if self._colour_vision is None:
+            dialog = AccessibilityDialog(
+                lambda: self._legend_entries,
+                canvas=self._map_canvas(),
+                open_preview=self._open_cvd_preview,
+                ask_nika=lambda findings: self.on_handoff("critique", findings),
+                parent=self.dialog,
+            )
+
+            def on_mode(condition: str) -> None:
+                self.accessibility_button.setChecked(bool(condition))
+                self.accessibility_button.setToolTip(
+                    simulating_tooltip(cast("Condition", condition))
+                    if condition
+                    else tr("Colour vision: simulate it and check the legend's colours")
+                )
+
+            dialog.mode_changed.connect(on_mode)
+            self._colour_vision = dialog
+        # A checkable button toggles itself before this runs; the dialog's own
+        # mode is what it should show.
+        self.accessibility_button.setChecked(
+            bool(self._colour_vision.current_condition())
+        )
+        self._colour_vision.refresh()
+        self._colour_vision.show()
+        self._colour_vision.raise_()
+
+    def _open_cvd_preview(self, condition: str | None) -> None:
+        path = self._current_path()
+        if path is None or not path.exists():
+            return
+        query = f"cvd={condition}" if condition else ""
+        self._open_url(self._served_url(path, query) or QUrl.fromLocalFile(str(path)))
+
+    def release_canvas_effects(self) -> None:
+        """Undo a colour-vision preview this plugin put on the QGIS canvas.
+        Called when the plugin unloads; closing a dialog leaves it, per #4."""
+        if self._colour_vision is not None:
+            self._colour_vision.reset_canvas()
+
+    def _collect_legend_entries(self, spec: CartographSpec) -> None:
+        """The legend classes the colour-vision check compares, from a save.
+
+        Static frames' legends are literal rows already in the spec; a live
+        frame's come from its layers' renderers (added by the export).
+        """
+        from ...core.cartograph_ir import LegendSpec
+        from ...core.cvd import LegendEntry
+
+        entries: list[LegendEntry] = []
+        for item in spec.items:
+            if isinstance(item, LegendSpec):
+                for row in item.rows:
+                    if row.color:
+                        entries.append(
+                            LegendEntry(
+                                label=row.label or row.layer or "",
+                                color=row.color,
+                                layer=row.layer,
+                                layer_name=row.layer,
+                            )
+                        )
+        self._legend_entries = tuple(entries)
 
     # ---- Preview -----------------------------------------------------------
 

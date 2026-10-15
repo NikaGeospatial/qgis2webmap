@@ -2759,6 +2759,10 @@ class MainDialog(QDialog):
         if layout_name:
             self._cartograph.layout_combo.setCurrentText(layout_name)
 
+    def release_canvas_effects(self) -> None:
+        """For the plugin's unload: undo canvas previews this dialog set."""
+        self._cartograph.release_canvas_effects()
+
     def _switch_to_cartograph(self) -> None:
         """The web-map Share menu's "Make a cartograph..." row.
 
