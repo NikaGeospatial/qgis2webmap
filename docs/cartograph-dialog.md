@@ -129,10 +129,13 @@ One row per map item on the layout:
 
 ![The Frames tab with two maps: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 200 dpi.](images/cartograph-03-frames.png)
 
-A map starts **Live** when its CRS is EPSG:3857 or EPSG:4326, and **Static**
-otherwise. [Live or static frames](live-or-static-frames.md) is the whole
-story; the short version is that live costs fidelity in projected CRSs and
-file size, and static costs interactivity.
+A map starts **Live** when the browser can draw it where QGIS does - in
+EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers and
+image tiles - and **Static** otherwise. (The Main map in the picture was
+switched to Static by hand.)
+[Live or static frames](live-or-static-frames.md) is the whole story; the
+short version is that live costs some styling and file size, and static costs
+interactivity.
 
 The rows follow the layout: add or delete a map in the layout designer and the
 list rebuilds.
@@ -238,7 +241,7 @@ export as the dialog, once, with these parameters:
 | Parameter | What it is |
 |---|---|
 | **Print layout** | The layout to export |
-| **Frames** | **By map CRS** (live in EPSG:3857 and EPSG:4326, static otherwise), **All live** or **All static** |
+| **Frames** | **Automatic** (live where it matches QGIS, static otherwise - the dialog's default), **All live** or **All static** |
 | **Static frame resolution (dpi)** | 72 to 600; 200 by default, as in the dialog |
 | **Title** | Replaces the project title; blank keeps it |
 | **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on a static map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |

@@ -28,18 +28,25 @@ each frame is one of two kinds. You choose per map, on the **Frames** tab.
 
 ## The default
 
-The plugin picks from the map's CRS, and you can change it:
+The plugin starts a map **Live** whenever the browser can draw it where QGIS
+does, and **Static** otherwise. You can change either:
 
 - **EPSG:3857 or EPSG:4326** → **Live**. The live frame shows the map in the
   projection it already uses (or close to it), so nothing is lost by making it
   interactive.
-- **Anything else** → **Static**. A survey in UTM, a national grid, an
-  equal-area thematic map: a static frame keeps every style and every layer
-  exactly as QGIS draws it, and reads without WebGL. Switch it to Live when
-  the reader should explore it - it stays in its own CRS unless one of its
-  layers cannot.
+- **A projected CRS** - UTM, a national grid, an equal-area map - → **Live**
+  when the frame can draw in that CRS (see
+  [Which CRS a live frame draws in](#which-crs-a-live-frame-draws-in)): the
+  map is not rotated and every layer is a vector layer or image tiles.
+- **Anything else** → **Static**: a rotated projected map, or one with a
+  raster file or non-image tiles. A static frame keeps every style and every
+  layer exactly as QGIS draws it, and reads without WebGL.
 
-The same rule is the **By map CRS** choice of the
+Switch a live map to Static when a style matters more than interaction - a
+static frame is a picture QGIS drew itself - or when the page must read
+without a graphics card.
+
+The same rule is the **Automatic** choice of the
 [Processing algorithm](cartograph-dialog.md#processing), which also offers *All live* and
 *All static*.
 

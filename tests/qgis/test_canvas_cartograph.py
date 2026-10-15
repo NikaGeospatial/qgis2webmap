@@ -7,7 +7,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-from cartograph_fixtures import UTM, build_parcels_layer
+from cartograph_fixtures import UTM, all_static, build_parcels_layer
 
 from nika_onlymap_exporter.core.canvas_cartograph import (
     FRAME_ID,
@@ -132,10 +132,16 @@ class TestCanvasLayout:
         assert map_item.mapRotation() == pytest.approx(20)
         _assert_same_rect(canvas.mapSettings().extent(), map_item.extent(), 0.01)
 
-    def test_projected_canvas_defaults_to_a_static_frame(
+    def test_projected_canvas_of_vectors_defaults_to_a_live_frame(
         self, project, parcels
     ) -> None:
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
+        assert list(result.frame_modes.values()) == ["live"]
+
+    def test_rotated_projected_canvas_defaults_to_a_static_frame(
+        self, project, parcels
+    ) -> None:
+        result = cartograph_from_canvas(_utm_canvas(parcels, rotation=15), project)
         assert list(result.frame_modes.values()) == ["static"]
 
     def test_geographic_canvas_gets_a_graticule_and_a_live_frame(
@@ -172,7 +178,7 @@ class TestCanvasLayout:
             project,
             runtime,
             FidelityReportBuilder(),
-            frame_modes=result.frame_modes,
+            frame_modes=all_static(result.layout),
         ).spec
         frame = next(item for item in spec.items if isinstance(item, FrameSpec))
         assert frame.mode == "static" and frame.image_bytes

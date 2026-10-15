@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from cartograph_fixtures import build_survey_layout
+from cartograph_fixtures import all_static, build_survey_layout
 
 from nika_onlymap_exporter.core.cartograph_export import (
     export_layout_to_cartograph,
@@ -103,9 +103,14 @@ class TestExportLayoutToCartograph:
     def test_static_only_layout_embeds_no_core_js(self, survey, fake_runtime) -> None:
         report = FidelityReportBuilder()
         html = export_layout_to_cartograph(
-            survey.layout, survey.project, fake_runtime, report, static_dpi=100
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            report,
+            frame_modes=all_static(survey.layout),
+            static_dpi=100,
         )
-        # Both map items default to static in a UTM project, so the 8.6 MB
+        # Both map items are static, so the 8.6 MB
         # live-map core must never be read, let alone embedded. The runtime
         # is embedded gzip+base64 (writers/cartograph_writer.py), so this
         # checks for the bootstrap's own CORE_GZ declaration rather than for
@@ -217,6 +222,7 @@ class TestPrepareThenFinish:
             survey.project,
             fake_runtime,
             FidelityReportBuilder(),
+            frame_modes=all_static(survey.layout),
             frame_dpis=dpis,
         )
         frames = {i.id: i for i in prepared.items if isinstance(i, FrameSpec)}
@@ -367,7 +373,12 @@ class TestWriterAndProjects:
 
         report = FidelityReportBuilder()
         prepared = prepare_cartograph(
-            survey.layout, survey.project, fake_runtime, report, static_dpi=72
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            report,
+            frame_modes=all_static(survey.layout),
+            static_dpi=72,
         )
         assert finish_cartograph_full(prepared, survey.project, report).projects == ()
 
@@ -390,6 +401,7 @@ class TestStaticFrameCache:
         cache.clear()
 
     def _prepare(self, survey, runtime, cache, **kwargs):
+        kwargs.setdefault("frame_modes", all_static(survey.layout))
         return prepare_cartograph(
             survey.layout,
             survey.project,
@@ -516,6 +528,7 @@ class TestStaticFrameCache:
                     survey.project,
                     fake_runtime,
                     FidelityReportBuilder(),
+                    frame_modes=all_static(survey.layout),
                     static_dpi=72,
                 )
             assert render.call_count == 2
@@ -525,6 +538,7 @@ class TestStaticFrameCache:
                 survey.project,
                 fake_runtime,
                 FidelityReportBuilder(),
+                frame_modes=all_static(survey.layout),
                 static_dpi=72,
             )
             assert render.call_count == 4

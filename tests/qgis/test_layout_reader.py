@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from cartograph_fixtures import build_survey_layout
+from cartograph_fixtures import all_static, build_survey_layout
 
 from nika_onlymap_exporter.core.cartograph_ir import (
     GraticuleSpec,
@@ -55,12 +55,21 @@ class TestPage:
 
 
 class TestFrames:
-    def test_both_maps_default_to_static_in_a_utm_project(self, survey) -> None:
+    def test_both_maps_default_to_live_in_a_utm_project_of_vectors(
+        self, survey
+    ) -> None:
         report = FidelityReportBuilder()
         reading = read_layout(survey.layout, report)
 
         assert len(reading.frames) == 2
-        assert all(frame.mode == "static" for frame in reading.frames)
+        assert all(frame.mode == "live" for frame in reading.frames)
+
+    def test_a_rotated_utm_map_defaults_to_static(self, survey) -> None:
+        survey.main_map.setMapRotation(15)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        modes = {f.map_item.uuid(): f.mode for f in reading.frames}
+        assert modes[survey.main_map.uuid()] == "static"
+        assert modes[survey.inset_map.uuid()] == "live"
 
     def test_final_geometry_is_read_back_after_setextent_resize(self, survey) -> None:
         # setExtent() grows the item's aspect to match the extent (issue #1's
@@ -189,7 +198,9 @@ class TestFurniture:
 
     def test_static_legend_rows_are_literal_and_not_derived(self, survey) -> None:
         report = FidelityReportBuilder()
-        reading = read_layout(survey.layout, report)
+        reading = read_layout(
+            survey.layout, report, frame_modes=all_static(survey.layout)
+        )
         legend = next(
             item for item in reading.furniture if isinstance(item, LegendSpec)
         )
@@ -200,7 +211,9 @@ class TestFurniture:
 
     def test_label_expression_is_frozen_on_a_static_frame(self, survey) -> None:
         report = FidelityReportBuilder()
-        reading = read_layout(survey.layout, report)
+        reading = read_layout(
+            survey.layout, report, frame_modes=all_static(survey.layout)
+        )
         label = next(item for item in reading.furniture if isinstance(item, TextSpec))
         # @project_title has an exact dynamic equivalent, so it stays a token;
         # @map_scale is frozen to a literal number on a static frame (the
@@ -242,7 +255,7 @@ class TestFurniture:
         """Nothing extra, nothing missing -- the fidelity report is the
         plugin's non-negotiable contract that nothing vanishes silently."""
         report = FidelityReportBuilder()
-        read_layout(survey.layout, report)
+        read_layout(survey.layout, report, frame_modes=all_static(survey.layout))
 
         heads = {subject_head(item.subject) for item in report.items}
         assert heads == {
@@ -262,7 +275,7 @@ class TestFurniture:
         """The Fidelity tab shows subjects as they are: item names the
         designer shows, never a uuid, and each under the Layout items topic."""
         report = FidelityReportBuilder()
-        read_layout(survey.layout, report)
+        read_layout(survey.layout, report, frame_modes=all_static(survey.layout))
 
         subjects = {item.subject for item in report.items}
         assert "Map frame 'Map 1'" in subjects
@@ -466,7 +479,7 @@ def test_a_frozen_map_scale_is_the_maps_own_scale(survey) -> None:
     """`@map_scale` frozen on a static frame must read what QGIS shows for the
     map item, not a figure off by the mm-to-pixel factor."""
     report = FidelityReportBuilder()
-    reading = read_layout(survey.layout, report)
+    reading = read_layout(survey.layout, report, frame_modes=all_static(survey.layout))
     label = next(item for item in reading.furniture if isinstance(item, TextSpec))
     frozen = int(re.search(r"scale 1:(\d+)", label.body).group(1))
     assert frozen == pytest.approx(survey.main_map.scale(), rel=0.01)

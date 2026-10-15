@@ -64,7 +64,6 @@ from ...core.settings import (
     DEFAULT_STATIC_DPI,
     DialogOutput,
     FrameChoice,
-    default_frame_mode,
     save_state,
 )
 from ...packaging.runtime_manager import (
@@ -563,7 +562,7 @@ class CartographController:
         for frame_item in items:
             choice = choices.get(frame_item.item_id)
             if choice is None:
-                choice = FrameChoice(mode=default_frame_mode(frame_item.crs_authid))
+                choice = FrameChoice(mode=frame_item.default_mode)
                 choices[frame_item.item_id] = choice
 
             row = QTreeWidgetItem(
@@ -1448,7 +1447,7 @@ class CartographController:
         choices = self.state.frame_choices(self.state.cartograph_layout)
         for item in layout_map_items(self._current_layout):
             choice = choices.get(item.item_id)
-            mode = choice.mode if choice else default_frame_mode(item.crs_authid)
+            mode = choice.mode if choice else item.default_mode
             if mode == "live":
                 return True
         return False

@@ -150,8 +150,10 @@ class DialogOutput(Enum):
 # Live if the map item's CRS is one the runtime can render as an interactive
 # `<om-map>` (both are the projections OnlyMap's live basemaps are built for);
 # anything else - a local UTM zone, a survey CRS - has no live basemap to put
-# under it, so it defaults to a static raster instead. A small pure function so
-# it is unit-testable without a layout or a dialog.
+# under it, so on the CRS alone it defaults to a static raster instead. A small
+# pure function so it is unit-testable without a layout or a dialog. The full
+# default (`core/layout_reader.default_mode_for_map`) also makes a projected map
+# live when it can draw in its own CRS exactly.
 LIVE_DEFAULT_CRS = frozenset({"EPSG:3857", "EPSG:4326"})
 
 

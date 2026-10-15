@@ -33,10 +33,10 @@ from qgis.core import (
 from ..core.atomic_write import write_text_atomic
 from ..core.cartograph_export import export_layout_to_cartograph
 from ..core.fidelity_report import FidelityReportBuilder
+from ..core.layout_reader import default_mode_for_map
 from ..core.license_policy import default_policy
 from ..core.settings import (
     DEFAULT_STATIC_DPI,
-    default_frame_mode,
     resolve_license_key,
 )
 from ..packaging.runtime_manager import (
@@ -49,7 +49,7 @@ from .export_project import ExportProjectAlgorithm
 
 # Order is part of a saved model's parameters. Append, never reorder.
 FRAME_MODES = (
-    ("auto", N_("By map CRS (live in EPSG:3857/4326, static otherwise)")),
+    ("auto", N_("Automatic (live where it matches QGIS, static otherwise)")),
     ("live", N_("All live")),
     ("static", N_("All static")),
 )
@@ -90,9 +90,11 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             "from the browser.\n\n"
             "Map items become live frames (pan and zoom, in Web Mercator or in "
             "the map's own projected CRS) or static frames (a pixel-exact image "
-            "in the layout's own CRS). By "
-            "default a map in EPSG:3857 or EPSG:4326 is live and any other is "
-            "static; 'Frames' overrides that for every map on the layout.\n\n"
+            "in the layout's own CRS). By default a map is live when the "
+            "browser can draw it as QGIS does (EPSG:3857 or EPSG:4326, or an "
+            "unrotated projected map of vector layers or image tiles) and "
+            "static otherwise; 'Frames' overrides that for every map on the "
+            "layout.\n\n"
             "Anything that cannot be translated exactly is reported in the log. "
             "If an item is Blocked (for example a second page, which is not "
             "exported), the export stops unless 'Export even if some items are "
@@ -223,10 +225,7 @@ def _frame_modes(layout, choice: str) -> dict[str, str]:
         if not isinstance(item, QgsLayoutItemMap):
             continue
         if choice == "auto":
-            crs = item.crs()
-            modes[item.uuid()] = default_frame_mode(
-                crs.authid() if crs.isValid() else ""
-            )
+            modes[item.uuid()] = default_mode_for_map(item)
         else:
             modes[item.uuid()] = choice
     return modes

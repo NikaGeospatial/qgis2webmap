@@ -246,12 +246,14 @@ class TestOutputSwitch:
 
 
 class TestFramesTab:
-    def test_two_maps_get_the_crs_based_default(self, qgis_app, project) -> None:
-        _add_layout(
+    def test_two_maps_get_their_defaults(self, qgis_app, project) -> None:
+        layout = _add_layout(
             project,
             "Survey",
             [("Overview", "EPSG:4326"), ("Detail", "EPSG:32648")],
         )
+        # A rotated UTM map cannot draw in its own CRS, so it starts static.
+        layout.itemById("Detail").setMapRotation(15)
         dialog = _dialog(project)
         try:
             dialog.output_cartograph_button.setChecked(True)
@@ -734,7 +736,7 @@ class TestPrintSettings:
     """Share > Print settings: kept per layout, applied on every save, and
     deciding which way Export PDF goes."""
 
-    def _real_dialog(self, qgis_app, project, tmp_path):
+    def _real_dialog(self, qgis_app, project, tmp_path, *, static=False):
         import os
 
         from cartograph_fixtures import build_survey_layout
@@ -748,6 +750,9 @@ class TestPrintSettings:
         dialog.output_cartograph_button.setChecked(True)
         cartograph = dialog._cartograph
         cartograph.layout_combo.setCurrentText(survey.layout.name())
+        if static:
+            for choice in dialog.state.frame_choices(survey.layout.name()).values():
+                choice.mode = "static"
         target = tmp_path / "survey.html"
         cartograph.file_edit.setText(str(target))
         cartograph._on_file_edited(str(target))
@@ -816,7 +821,9 @@ class TestPrintSettings:
         from nika_onlymap_exporter.core.print_settings import PrintSettings
         from nika_onlymap_exporter.exporters import print_pdf
 
-        dialog, _target = self._real_dialog(qgis_app, project, tmp_path)
+        # QGIS's exporter prints only an all-static layout; the survey's maps
+        # would otherwise start live in their own CRS.
+        dialog, _target = self._real_dialog(qgis_app, project, tmp_path, static=True)
         try:
             cmyk = PrintSettings(profile="cmyk")
             dialog.state.cartograph_print["survey-utm"] = cmyk.to_json()
@@ -979,7 +986,9 @@ class TestFramesTabExtras:
     def test_each_frame_shows_its_count_of_changes(
         self, qgis_app, project, tmp_path
     ) -> None:
-        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        dialog, _target = TestPrintSettings()._real_dialog(
+            qgis_app, project, tmp_path, static=True
+        )
         try:
             cartograph = dialog._cartograph
             counts = [

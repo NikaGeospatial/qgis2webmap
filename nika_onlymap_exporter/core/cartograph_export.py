@@ -569,7 +569,7 @@ def _draws_in_plane(
         layer.name
         for layer in export_project.exportable_layers
         if layer.raster is not None
-        or (layer.tiles is not None and not _is_image_tile_template(layer.tiles.url))
+        or (layer.tiles is not None and not is_image_tile_template(layer.tiles.url))
     ]
     if not blockers:
         report.preserved(
@@ -594,7 +594,7 @@ def _draws_in_plane(
 _IMAGE_TILE_RE = re.compile(r"\.(png|jpe?g|webp|gif|avif)(\?|$)", re.IGNORECASE)
 
 
-def _is_image_tile_template(url: str) -> bool:
+def is_image_tile_template(url: str) -> bool:
     return _IMAGE_TILE_RE.search(url) is not None
 
 

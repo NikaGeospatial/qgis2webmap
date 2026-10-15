@@ -29,6 +29,10 @@ from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, FrameS
 from nika_onlymap_exporter.core.export_ir import FidelityStatus
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layout_builder import build_layout
+from nika_onlymap_exporter.core.layout_reader import (
+    default_mode_for_map,
+    plane_blocking_layers,
+)
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -310,3 +314,65 @@ def test_plane_units_are_priced_like_the_runtime(
     definition: str, metres: float
 ) -> None:
     assert plane_metres_per_unit(definition) == pytest.approx(metres)
+
+
+class TestDefaultMode:
+    """A projected map starts live exactly when it would draw in its own
+    CRS, so the default never makes a map less like QGIS."""
+
+    def test_a_utm_map_of_vectors_starts_live(self, survey) -> None:
+        assert default_mode_for_map(survey.main_map) == "live"
+
+    def test_a_rotated_utm_map_starts_static(self, survey) -> None:
+        survey.main_map.setMapRotation(15)
+        assert default_mode_for_map(survey.main_map) == "static"
+
+    def test_a_raster_file_keeps_it_static(self, survey, make_raster_layer) -> None:
+        raster = make_raster_layer(
+            "dem", crs="EPSG:32648", west=372000, north=145000, pixel_size=100
+        )
+        survey.project.addMapLayer(raster)
+        survey.main_map.setLayers([survey.parcels, raster])
+        assert default_mode_for_map(survey.main_map) == "static"
+        assert plane_blocking_layers(survey.main_map) == ["dem"]
+
+    @pytest.mark.parametrize(
+        ("template", "mode"),
+        [
+            ("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "live"),
+            ("https://tiles.example.com/{z}/{x}/{y}.pbf", "static"),
+        ],
+    )
+    def test_xyz_tiles_follow_the_runtime_image_rule(
+        self, survey, template: str, mode: str
+    ) -> None:
+        source = "type=xyz&url=" + quote(template, safe=":/")
+        tiles = qgis_core.QgsRasterLayer(source, "tiles", "wms")
+        survey.project.addMapLayer(tiles)
+        survey.main_map.setLayers([survey.parcels, tiles])
+        assert default_mode_for_map(survey.main_map) == mode
+
+    def test_web_mercator_and_wgs84_start_live_as_before(self, survey) -> None:
+        for authid in ("EPSG:3857", "EPSG:4326"):
+            survey.main_map.setCrs(qgis_core.QgsCoordinateReferenceSystem(authid))
+            assert default_mode_for_map(survey.main_map) == "live"
+
+    def test_an_export_without_a_choice_uses_it(self, survey, fake_runtime) -> None:
+        prepared = prepare_cartograph(
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            FidelityReportBuilder(),
+            frame_modes={},
+            raster_cache=None,
+        )
+        html = finish_cartograph(prepared, survey.project, FidelityReportBuilder())
+        assert 'crs="EPSG:32648"' in _om_map_tag(html)
+
+    def test_the_frames_tab_and_processing_agree(self, survey) -> None:
+        from nika_onlymap_exporter.processing.export_layout import _frame_modes
+        from nika_onlymap_exporter.ui.cartograph.frames import layout_map_items
+
+        listed = {f.item_id: f.default_mode for f in layout_map_items(survey.layout)}
+        assert listed == _frame_modes(survey.layout, "auto")
+        assert listed[survey.main_map.uuid()] == "live"

@@ -14,8 +14,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - Map items become **live frames** (pan, zoom, popups; in Web Mercator, or
     in the map's own projected CRS when its layers allow) or **static
     frames** (a pixel-exact image in the layout's own CRS). Maps in
-    EPSG:3857/4326 default to live, others to static; the Frames tab
-    switches each one and sets its DPI.
+    EPSG:3857/4326, and projected maps that draw in their own CRS, default
+    to live, others to static; the Frames tab switches each one and sets its
+    DPI.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
     pictures carry over; the Fidelity tab lists everything that changes or

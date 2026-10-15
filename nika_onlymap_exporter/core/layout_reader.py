@@ -548,18 +548,47 @@ def _frame_mode(
     item: QgsLayoutItemMap,
     frame_modes: Mapping[str, FrameMode],
 ) -> FrameMode:
-    """The caller's override, else issue #1 section 3's default: live only in
-    one of the runtime's own camera projections, static (pixel-exact, never
-    reprojected) for anything else -- the same rule the Frames tab shows."""
+    """The caller's override, else `default_mode_for_map` -- the same rule
+    the Frames tab shows."""
     override = frame_modes.get(item.uuid())
     if override is not None:
         return override
+    return default_mode_for_map(item)
+
+
+def default_mode_for_map(item: QgsLayoutItemMap) -> FrameMode:
+    """Issue #1 section 3's default, widened now that a live frame can draw
+    in a projected CRS: live in one of the runtime's own camera projections,
+    and live in any other CRS the frame draws in exactly (`draws_in_own_plane`
+    with every layer able to follow); static (pixel-exact, never reprojected)
+    for anything else, so a default never makes a map less like QGIS."""
     crs = item.crs()
-    return (
-        "live"
-        if default_frame_mode(crs.authid() if crs.isValid() else "") == "live"
-        else "static"
-    )
+    if default_frame_mode(crs.authid() if crs.isValid() else "") == "live":
+        return "live"
+    if draws_in_own_plane(item) and not plane_blocking_layers(item):
+        return "live"
+    return "static"
+
+
+def plane_blocking_layers(item: QgsLayoutItemMap) -> list[str]:
+    """The names of `item`'s layers that keep a live frame in Web Mercator:
+    a file raster (embedded, never projected) or an XYZ layer whose tiles are
+    not images. The same test `core/cartograph_export.py` makes on the read
+    layers, made here on QGIS's own so a default needs no export."""
+    from .cartograph_export import is_image_tile_template
+    from .layer_reader import xyz_template
+
+    blockers = []
+    for layer in item.layersToRender():
+        if not isinstance(layer, QgsRasterLayer):
+            continue
+        provider = (layer.providerType() or "").lower()
+        tiles = xyz_template(layer) if provider == "wms" else None
+        if (tiles is not None and not is_image_tile_template(tiles["url"])) or (
+            provider == "gdal"
+        ):
+            blockers.append(layer.name())
+    return blockers
 
 
 def draws_in_own_plane(item: QgsLayoutItemMap) -> bool:

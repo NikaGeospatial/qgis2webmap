@@ -7,6 +7,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from cartograph_fixtures import build_survey_layout
 
@@ -94,9 +96,29 @@ class TestExport:
         )
         assert result["OUTPUT"] == str(destination)
         html = destination.read_text(encoding="utf-8")
-        assert html.count('mode="static"') == 2
+        # Automatic: both UTM maps of vectors are live, in their own CRS.
+        assert 'mode="static"' not in html
+        assert html.count("<om-map") == 2
+        assert len(re.findall(r'<om-map\b[^>]*crs="EPSG:32648"', html)) == 2
         assert any("Wrote" in line for line in messages)
         assert list(destination.parent.glob("*.tmp")) == []
+
+    def test_automatic_keeps_a_rotated_utm_map_static(self, survey, tmp_path) -> None:
+        survey.layout.pageCollection().deletePage(1)
+        survey.main_map.setMapRotation(15)
+        destination = tmp_path / "survey.html"
+        _run(
+            survey.project,
+            {
+                "LAYOUT": "survey-utm",
+                "FRAMES": 0,
+                "DPI": 72,
+                "OUTPUT": str(destination),
+            },
+        )
+        html = destination.read_text(encoding="utf-8")
+        assert html.count('mode="static"') == 1
+        assert html.count("<om-map") == 1
 
     def test_a_blocked_item_stops_the_run_unless_ticked(
         self, project, tmp_path
@@ -131,7 +153,7 @@ class TestExport:
         assert destination.exists()
         assert any("Page count" in line for line in messages)
 
-    def test_all_live_overrides_the_crs_default(self, survey, tmp_path) -> None:
+    def test_all_live_overrides_the_default(self, survey, tmp_path) -> None:
         survey.layout.pageCollection().deletePage(1)
         destination = tmp_path / "survey.html"
         _run(

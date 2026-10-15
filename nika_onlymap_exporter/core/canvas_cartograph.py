@@ -17,7 +17,7 @@ four corners in that CRS -- exactly how a static frame is georeferenced -- so
 the builder puts the map item back on the canvas extent and rotation
 bit-for-bit, whatever the CRS. Whether the cartograph then draws it live or
 as a raster is an export-time choice, so `CanvasCartograph.frame_modes`
-carries the usual CRS default (`core/settings.default_frame_mode`) for the
+carries the usual default (`core/layout_reader.default_mode_for_map`) for the
 caller to pass to `prepare_cartograph`, and the user can still flip it in
 the Frames tab.
 
@@ -53,8 +53,7 @@ from .cartograph_import import RoundTripIssue
 from .cartograph_ir import CartographSpec, FrameSpec
 from .layer_reader import read_attribution
 from .layout_builder import build_layout
-from .layout_reader import FrameMode
-from .settings import default_frame_mode
+from .layout_reader import FrameMode, default_mode_for_map
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -166,7 +165,7 @@ def cartograph_from_view(
         add_to_project=True,
     )
     map_item = built.items_by_id[FRAME_ID]
-    mode: FrameMode = "live" if default_frame_mode(crs.authid()) == "live" else "static"
+    mode: FrameMode = default_mode_for_map(map_item)
     return CanvasCartograph(
         spec=spec,
         layout=built.layout,

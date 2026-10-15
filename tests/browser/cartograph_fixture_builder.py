@@ -83,7 +83,7 @@ def _runtime():
 
 
 def _write_survey(project, out_dir: Path) -> dict:
-    from cartograph_fixtures import build_survey_layout
+    from cartograph_fixtures import all_static, build_survey_layout
     from qgis.core import QgsLayoutItemPage
     from qgis.PyQt.QtCore import QPointF
 
@@ -109,7 +109,12 @@ def _write_survey(project, out_dir: Path) -> dict:
 
     report = FidelityReportBuilder()
     html = export_layout_to_cartograph(
-        survey.layout, project, _runtime(), report, static_dpi=150
+        survey.layout,
+        project,
+        _runtime(),
+        report,
+        frame_modes=all_static(survey.layout),
+        static_dpi=150,
     )
     (out_dir / "survey-static.html").write_text(html, encoding="utf-8")
     size = pages.page(0).pageSize()

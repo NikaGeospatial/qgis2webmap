@@ -490,7 +490,7 @@ _KEY_PARAMETERS = frozenset(
 )
 
 
-def _xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
+def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
     """The parameters of an XYZ source, or `None` for any other `wms` layer.
 
     QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
@@ -520,7 +520,7 @@ def read_tile_service(
 
     layer_id = layer.id()
     name = layer.name()
-    fields = _xyz_template(layer) or {}
+    fields = xyz_template(layer) or {}
     url = fields.get("url", "")
 
     if not ("{z}" in url and "{x}" in url and ("{y}" in url or "{-y}" in url)):
@@ -624,7 +624,7 @@ def read_raster(
     provider = layer.dataProvider()
     provider_key = (layer.providerType() or "").lower()
 
-    if provider_key == "wms" and _xyz_template(layer) is not None:
+    if provider_key == "wms" and xyz_template(layer) is not None:
         return read_tile_service(layer, report, group_path=group_path, visible=visible)
 
     if provider_key not in _RASTER_FILE_PROVIDERS or provider is None:

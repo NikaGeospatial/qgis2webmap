@@ -14,7 +14,7 @@ import math
 from dataclasses import fields, replace
 
 import pytest
-from cartograph_fixtures import build_survey_layout
+from cartograph_fixtures import all_static, build_survey_layout
 
 from nika_onlymap_exporter.core.cartograph_export import (
     _camera_for_extent,
@@ -172,7 +172,7 @@ class TestSurveyRoundTrip:
     def test_read_build_read_gives_an_equivalent_spec(
         self, survey, project, runtime
     ) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project, name="round trip")
         again = _prepare(built.layout, project, runtime, built.frame_modes)
 
@@ -183,13 +183,13 @@ class TestSurveyRoundTrip:
     def test_only_the_static_legend_rows_are_reported(
         self, survey, project, runtime
     ) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project)
         assert len(built.issues) == 1
         assert built.issues[0].subject.startswith("<om-legend")
 
     def test_item_ids_are_the_spec_ids(self, survey, project, runtime) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project)
         placed = {item.id for item in spec.items if not isinstance(item, GraticuleSpec)}
         assert placed == set(built.items_by_id)
@@ -197,7 +197,7 @@ class TestSurveyRoundTrip:
             assert item.id() == spec_id
 
     def test_grid_and_overview_and_legend_links(self, survey, project, runtime) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project)
         main_id = next(
             i.id
@@ -217,7 +217,7 @@ class TestSurveyRoundTrip:
         assert built.layout.referenceMap() is main
 
     def test_frame_crs_and_extent_match(self, survey, project, runtime) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project)
         for original in (survey.main_map, survey.inset_map):
             rebuilt = built.items_by_id[_frame_id(survey.layout, original)]
@@ -229,7 +229,7 @@ class TestSurveyRoundTrip:
                 )
 
     def test_frame_modes_survive_for_reexport(self, survey, project, runtime) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         spec = replace(
             spec,
             items=tuple(
@@ -243,7 +243,7 @@ class TestSurveyRoundTrip:
 
     def test_rotated_static_frame_round_trips(self, survey, project, runtime) -> None:
         survey.main_map.setMapRotation(30)
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         built = build_layout(spec, project)
         again = _prepare(built.layout, project, runtime, built.frame_modes)
         _assert_equivalent(
@@ -254,7 +254,7 @@ class TestSurveyRoundTrip:
 
     def test_through_the_html_file(self, survey, project, runtime) -> None:
         """Writer -> importer -> builder ends where the spec alone does."""
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         html = write_cartograph_html(
             spec,
             CartographRuntimeBundle(cartograph_js=b"//", cartograph_css="/**/"),
@@ -719,7 +719,7 @@ class TestTokens:
 
 class TestImportFile:
     def test_imports_into_the_project(self, survey, project, runtime, tmp_path) -> None:
-        spec = _prepare(survey.layout, project, runtime)
+        spec = _prepare(survey.layout, project, runtime, all_static(survey.layout))
         path = tmp_path / "survey.html"
         html = write_cartograph_html(
             spec, CartographRuntimeBundle(cartograph_js=b"//", cartograph_css="/**/")

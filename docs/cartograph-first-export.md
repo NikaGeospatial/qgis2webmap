@@ -162,10 +162,13 @@ The **Frames** tab has one row per map on the layout:
 
 ![The Frames tab, with the Frame column highlighted: the Locator map is Live and the Main map is Static.](images/cartograph-03-frames.png)
 
-The default follows the map's CRS. A map in **EPSG:3857** or **EPSG:4326**
-starts **Live**, an interactive map in the page. Anything else - a UTM survey,
-a national grid - starts **Static**: an image of the map exactly as QGIS draws
-it, in its own CRS. [Live or static frames](live-or-static-frames.md) explains
+A map starts **Live**, an interactive map in the page, when the browser can
+draw it where QGIS does: in **EPSG:3857** or **EPSG:4326**, or in a projected
+CRS such as a UTM zone when the map is not rotated and holds only vector
+layers and image tiles. Anything else - a rotated map, a map with a raster
+file - starts **Static**: an image of the map exactly as QGIS draws it, in its
+own CRS. The survey in these pictures starts Live; its Main map was switched
+to Static to keep the parcel styling pixel-exact for print. [Live or static frames](live-or-static-frames.md) explains
 the trade, including why a page of only static frames is small and needs no
 graphics card.
 

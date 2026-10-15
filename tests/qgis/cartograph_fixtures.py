@@ -210,3 +210,14 @@ def build_survey_layout(project: QgsProject, tmp_path: Path) -> SurveyLayout:
         shape=shape,
         unsupported=unsupported,
     )
+
+
+def all_static(layout: QgsPrintLayout) -> dict[str, str]:
+    """Frame modes making every map on `layout` static, for a test about
+    static frames: a projected map of vectors would otherwise start live in
+    its own CRS (`core/layout_reader.default_mode_for_map`)."""
+    return {
+        item.uuid(): "static"
+        for item in layout.items()
+        if isinstance(item, QgsLayoutItemMap)
+    }
