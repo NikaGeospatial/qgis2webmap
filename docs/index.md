@@ -132,6 +132,32 @@ sections:
           blank, the file was blocked in transit.
         url: /troubleshooting.html
 
+  - title: Print layouts too (Beta)
+    lede: >-
+      The same plugin turns a QGIS print layout into a cartograph - one HTML
+      page that prints at its true size, with maps that can stay live.
+    cards:
+      - title: QGIS print layout to HTML
+        text: >-
+          What a cartograph is, what it keeps, and how it compares with a PDF
+          exported from QGIS.
+        url: /qgis-print-layout-to-html.html
+      - title: Your first cartograph
+        text: >-
+          From a print layout - or the map canvas, in one click - to a file you
+          can email and print.
+        url: /cartograph-first-export.html
+      - title: Live or static frames
+        text: >-
+          When a map in the page stays interactive and when it is a
+          pixel-exact image in the layout's own CRS.
+        url: /live-or-static-frames.html
+      - title: Printing a cartograph
+        text: >-
+          True page size from the browser, PDF and PNG, bleed and crop marks,
+          and CMYK through QGIS.
+        url: /printing-a-cartograph.html
+
   - title: Going further
     cards:
       - title: Putting a map online
@@ -164,6 +190,14 @@ If you are weighing this against the other ways of getting a QGIS project into a
 browser, [QGIS to web map](qgis-to-web-map.md) surveys them, and
 [QGIS2WebMap or qgis2web](qgis2web-comparison.md) is the direct comparison with
 the established plugin.
+
+## Print layouts too
+
+Press **Cartograph (Beta)** at the top of the dialog, or choose **Create
+cartograph...** from the same Web menu, and the plugin turns a QGIS print layout
+into a **cartograph**: one HTML page that opens by double-click, prints at the
+layout's page size, and keeps each map live or pixel-exact. See
+[QGIS print layout to HTML](qgis-print-layout-to-html.md).
 
 ## What you get
 
