@@ -52,6 +52,7 @@ QGIS drew, so its layers come across as they look.
 | Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen on the Frames tab. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
 | Map item, **live** frame | **Kept** in EPSG:3857 - an interactive map. In any other CRS it is drawn in Web Mercator, and marked **Changed** |
 | Map rotation | **Kept** |
+| A layer drawn in more than one live frame | **Kept** in each - its features are written into the file once |
 | Overview (locator inset showing another map's extent) | **Kept** |
 | Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Fidelity tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
 

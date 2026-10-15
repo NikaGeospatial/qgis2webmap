@@ -17,6 +17,8 @@ acceptance check meet through files):
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
   QGIS's own atlas centres each parcel.
+- `shared-live.html`: one layer drawn in two live frames, its rows written
+  once.
 - `expected.json`: what QGIS itself says the browser must show - the page
   size, where each grid line falls on the main frame in millimetres
   (`mapToItemCoords`, the same measurement the static-frame spike used), and
@@ -56,6 +58,8 @@ def main(out_dir: Path) -> int:
         expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas_fixed"] = _write_atlas_fixed(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["shared"] = _write_shared(QgsProject.instance(), out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
     finally:
         app.exitQgis()
@@ -221,6 +225,61 @@ def _write_atlas_fixed(project, out_dir: Path) -> dict:
         centre = to_wgs84.transform(feature.geometry().boundingBox().center())
         centres[str(feature.id())] = [centre.x(), centre.y()]
     return {"main_frame": _frame_id(built.layout, built.main_map), "centres": centres}
+
+
+def _write_shared(project, out_dir: Path) -> dict:
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsFeature,
+        QgsGeometry,
+        QgsLayoutItemMap,
+        QgsLayoutPoint,
+        QgsLayoutSize,
+        QgsPrintLayout,
+        QgsRectangle,
+        QgsUnitTypes,
+        QgsVectorLayer,
+    )
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    web_mercator = QgsCoordinateReferenceSystem("EPSG:3857")
+    project.setCrs(web_mercator)
+    layer = QgsVectorLayer(
+        "Polygon?crs=EPSG:3857&field=name:string", "blocks", "memory"
+    )
+    for index in range(12):
+        feature = QgsFeature(layer.fields())
+        feature.setAttribute("name", f"block {index}")
+        x = 11555000 + index * 400
+        feature.setGeometry(
+            QgsGeometry.fromRect(QgsRectangle(x, 143000, x + 300, 143300))
+        )
+        layer.dataProvider().addFeatures([feature])
+    layer.updateExtents()
+    project.addMapLayer(layer)
+
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("shared")
+    for x, y, w, h in ((10, 20, 180, 120), (200, 20, 80, 60)):
+        map_item = QgsLayoutItemMap(layout)
+        layout.addLayoutItem(map_item)
+        map_item.attemptMove(QgsLayoutPoint(x, y, QgsUnitTypes.LayoutMillimeters))
+        map_item.attemptResize(QgsLayoutSize(w, h, QgsUnitTypes.LayoutMillimeters))
+        map_item.setCrs(web_mercator)
+        map_item.setLayers([layer])
+        extent = layer.extent()
+        extent.grow(5000)
+        map_item.setExtent(extent)
+    html = export_layout_to_cartograph(
+        layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "shared-live.html").write_text(html, encoding="utf-8")
+    return {"features": layer.featureCount(), "marker": "block 7"}
 
 
 def _frame_id(layout, map_item) -> str:

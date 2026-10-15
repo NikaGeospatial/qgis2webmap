@@ -631,3 +631,57 @@ class TestAtlasCameras:
             _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
         )
         assert "om-atlas-page" not in html
+
+
+class TestSharedLayerData:
+    """A layer drawn in two live frames: its rows go into the file once, and
+    the bootstrap copies them into the second frame before the sheet
+    connects, because the runtime reads a layer's rows only from that
+    layer's own `<script>` child."""
+
+    ROWS = (
+        "[" + ",".join(f'{{"x": {i}, "name": "parcel {i}"}}' for i in range(40)) + "]"
+    )
+
+    def _markup(self, rows: str) -> str:
+        return (
+            '<om-map center="[0, 0]" zoom="2">'
+            '<om-layer id="parcels" type="GeoJsonLayer">'
+            f'<script type="application/json">{rows}</script>'
+            "</om-layer></om-map>"
+        )
+
+    def _spec(self) -> CartographSpec:
+        main = FrameSpec(
+            id="main", box=Box(10, 24, 150, 150), mode="live", center=(0, 0), zoom=2
+        )
+        inset = FrameSpec(
+            id="inset", box=Box(165, 24, 40, 40), mode="live", center=(0, 0), zoom=1
+        )
+        return CartographSpec(cartograph_id="cg", size="A4", items=(main, inset))
+
+    def test_rows_in_two_frames_are_written_once(self) -> None:
+        markup = self._markup(self.ROWS)
+        html = write_cartograph_html(
+            self._spec(),
+            _runtime(with_core=True),
+            {"main": markup, "inset": markup},
+        )
+        assert html.count(self.ROWS) == 1
+        assert "data-qgis2webmap-same-as" in html
+        # Restored inside the fragment, before it is appended.
+        restore = html.index("fragment.querySelectorAll(SHARED_SELECTOR)")
+        assert restore < html.index("fragment.querySelectorAll(GZIP_SELECTOR)")
+        assert restore < html.index("document.body.appendChild(fragment);")
+
+    def test_different_rows_are_left_alone(self) -> None:
+        html = write_cartograph_html(
+            self._spec(),
+            _runtime(with_core=True),
+            {
+                "main": self._markup(self.ROWS),
+                "inset": self._markup(self.ROWS.replace("parcel", "lot")),
+            },
+        )
+        assert "data-qgis2webmap-same-as" not in html
+        assert "x-qgis2webmap-same-data" not in html

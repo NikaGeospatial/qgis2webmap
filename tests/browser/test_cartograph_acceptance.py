@@ -299,6 +299,31 @@ class TestAtlasFixedScale:
             )
 
 
+class TestSharedLayerData:
+    def test_a_layer_in_two_live_frames_is_written_once_and_drawn_in_both(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        want = expected["shared"]
+        html = (fixtures / "shared-live.html").read_text(encoding="utf-8")
+        assert html.count(want["marker"]) == 1
+        _needs_webgl(page)
+        _open(page, fixtures / "shared-live.html")
+        page.wait_for_function(
+            "() => [...document.querySelectorAll('om-map')]"
+            ".every(map => map.getLayers?.().length > 0)",
+            timeout=60_000,
+        )
+        counts = page.evaluate(
+            """() => [...document.querySelectorAll('om-map')].map((map) => {
+              const layer = map.getLayers().find((l) => l.data);
+              const data = layer?.data;
+              return Array.isArray(data) ? data.length
+                : (data?.features?.length ?? data?.length ?? 0);
+            })"""
+        )
+        assert counts == [want["features"], want["features"]]
+
+
 def test_a_static_cartograph_reads_without_javascript(browser, fixtures: Path) -> None:
     """Mail and chat previews, QuickLook, locked-down viewers: no script runs,
     and a static-only page still shows its frames where they belong."""

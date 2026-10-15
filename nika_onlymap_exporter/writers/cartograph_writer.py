@@ -42,6 +42,12 @@ Non-negotiables verified in the spikes (`specs/cartograph/spike-findings.md`):
    the runtime side; this writer enforces the plugin-side half of it by
    simply never reading `runtime.core_js` unless a live frame exists.
 
+The one exception to "opaque": a layer drawn in several live frames carries
+the same rows in each frame's markup, and the runtime reads rows only from
+the layer's own `<script>` child. `_share_repeated_data` keeps one copy in
+the file and the bootstrap copies it back into the fragment before it
+connects -- the same place, and the same reason, as the gzip inflation.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -51,6 +57,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -82,6 +89,22 @@ NOSCRIPT_MESSAGE = (
 #: One template id per document; there is only ever one sheet per page.
 _TEMPLATE_ID = "sheet"
 
+#: A data block standing in for an identical one elsewhere in the sheet; the
+#: bootstrap swaps it for a copy before the sheet connects. Its own script
+#: type, so nothing can mistake the empty placeholder for empty rows.
+SHARED_DATA_TYPE = "application/x-qgis2webmap-same-data"
+
+#: Below this a placeholder saves too little to be worth the indirection.
+_SHARE_MIN_BYTES = 256
+
+#: A layer's inline rows as `build_manifest` writes them. `json_for_script`
+#: escapes `</` inside the payload, so the first `</script>` ends it.
+_DATA_BLOCK_RE = re.compile(
+    r'<script type="(application/json|' + re.escape(GZIP_SCRIPT_TYPE) + r')">'
+    r"(.*?)</script>",
+    re.DOTALL,
+)
+
 #: On a live frame the page script moves per atlas page (see `_ATLAS_CAMERAS`).
 ATLAS_CAMERAS_ATTRIBUTE = "data-qgis2webmap-atlas-cameras"
 
@@ -108,7 +131,7 @@ def write_cartograph_html(
     live_frame_markup: Mapping[str, str] | None = None,
 ) -> str:
     """Render `spec` into a complete, standalone HTML document string."""
-    markup_by_frame = live_frame_markup or {}
+    markup_by_frame, has_shared_data = _share_repeated_data(live_frame_markup or {})
     has_live = any(
         isinstance(item, FrameSpec) and item.mode == "live" for item in spec.items
     )
@@ -129,7 +152,10 @@ def write_cartograph_html(
         isinstance(item, FrameSpec) and item.atlas_cameras for item in spec.items
     )
     script = _render_script(
-        runtime, has_live=has_live, has_atlas_cameras=has_atlas_cameras
+        runtime,
+        has_live=has_live,
+        has_atlas_cameras=has_atlas_cameras,
+        has_shared_data=has_shared_data,
     )
     if has_live:
         # Inert until the core loader is set (see the module docstring).
@@ -171,6 +197,7 @@ def _render_script(
     *,
     has_live: bool,
     has_atlas_cameras: bool = False,
+    has_shared_data: bool = False,
 ) -> str:
     carto_gz = gzip_base64(runtime.cartograph_js)
     lines = [
@@ -200,6 +227,23 @@ def _render_script(
         # disconnected until it is actually appended to document.body below.
         f'const template = document.getElementById("{_TEMPLATE_ID}");',
         "const fragment = template.content.cloneNode(true);",
+    ]
+    if has_shared_data:
+        # Before the inflation below, so a shared gzipped block is copied as
+        # it is and every copy is inflated like any other block.
+        lines += [
+            f"const SHARED_SELECTOR = 'script[type=\"{SHARED_DATA_TYPE}\"]';",
+            "for (const placeholder of fragment.querySelectorAll(SHARED_SELECTOR)) {",
+            "  const key = placeholder.getAttribute('data-qgis2webmap-same-as');",
+            "  const source = fragment.querySelector(",
+            '    `script[data-qgis2webmap-data="${key}"]`);',
+            "  if (!source) { placeholder.remove(); continue; }",
+            "  const copy = source.cloneNode(true);",
+            "  copy.removeAttribute('data-qgis2webmap-data');",
+            "  placeholder.replaceWith(copy);",
+            "}",
+        ]
+    lines += [
         # A live frame's embedded <om-map> may carry its layer data as
         # gzipped base64 (packaging/asset_embedder.py's GZIP_SCRIPT_TYPE),
         # exactly like a standalone map's data blocks. querySelectorAll on
@@ -441,6 +485,54 @@ def _placement_attrs(
 
 def _lonlat_json(point: tuple[float, float]) -> str:
     return json.dumps([point[0], point[1]])
+
+
+def _share_repeated_data(
+    markup_by_frame: Mapping[str, str],
+) -> tuple[dict[str, str], bool]:
+    """Write a data block repeated across live frames once.
+
+    The first copy gets `data-qgis2webmap-data="<key>"`, every other copy
+    becomes an empty `SHARED_DATA_TYPE` placeholder naming that key. Text
+    equality is an honest identity here: the same rows with the same popup
+    and field choices serialise to the same text, and anything that differs
+    -- a frame clipped to its own extent -- is simply not shared. Returns the
+    rewritten markup and whether anything was shared.
+    """
+    seen: dict[str, int] = {}
+    for markup in markup_by_frame.values():
+        for match in _DATA_BLOCK_RE.finditer(markup):
+            if len(match.group(2)) >= _SHARE_MIN_BYTES:
+                seen[match.group(0)] = seen.get(match.group(0), 0) + 1
+    keys: dict[str, str] = {}
+    for block, count in seen.items():
+        if count > 1:
+            keys[block] = f"d{len(keys) + 1}"
+    if not keys:
+        return dict(markup_by_frame), False
+
+    written: set[str] = set()
+
+    def share(match: re.Match[str]) -> str:
+        key = keys.get(match.group(0))
+        if key is None:
+            return match.group(0)
+        if key in written:
+            return (
+                f'<script type="{SHARED_DATA_TYPE}" '
+                f'data-qgis2webmap-same-as="{key}"></script>'
+            )
+        written.add(key)
+        return (
+            f'<script type="{match.group(1)}" data-qgis2webmap-data="{key}">'
+            f"{match.group(2)}</script>"
+        )
+
+    shared = {
+        frame_id: _DATA_BLOCK_RE.sub(share, markup)
+        for frame_id, markup in markup_by_frame.items()
+    }
+    return shared, True
 
 
 def _atlas_cameras_json(item: FrameSpec) -> str:
