@@ -1314,7 +1314,8 @@ def first_font_family(css_font: str) -> str | None:
     families = [part.strip().strip("'\"").strip() for part in css_font.split(",")]
     families = [f for f in families if f]
     named = [f for f in families if f.lower() not in _GENERIC_FAMILIES]
-    return (named or families or [None])[0]
+    chosen = named or families
+    return chosen[0] if chosen else None
 
 
 def _is_bold(weight: str) -> bool:
