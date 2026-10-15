@@ -99,8 +99,12 @@ def _live_spec() -> CartographSpec:
 
 
 def _extract_template_inner(html_doc: str) -> str:
+    """The sheet's markup: inside the <template> of a live cartograph, or
+    straight in the body of a static-only one."""
     match = re.search(r'<template id="sheet">(.*)</template>', html_doc, re.DOTALL)
-    assert match is not None, "no <template id=sheet> found"
+    if match is None:
+        match = re.search(r"(<om-cartograph.*</om-cartograph>)", html_doc, re.DOTALL)
+    assert match is not None, "no sheet found"
     return match.group(1)
 
 
@@ -123,12 +127,22 @@ class TestDocumentShape:
         )
         assert "<title>cg-x</title>" in doc
 
-    def test_sheet_is_inside_a_template(self) -> None:
-        doc = write_cartograph_html(_static_spec(), _runtime())
+    def test_a_live_sheet_waits_inside_a_template(self) -> None:
+        doc = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
         assert '<template id="sheet">' in doc
-        template_start = doc.index('<template id="sheet">')
-        body_start = doc.index("<body")
-        assert body_start < template_start
+        assert doc.index("<body") < doc.index('<template id="sheet">')
+        # It cannot read without JavaScript, so it says so.
+        assert "<noscript>" in doc
+
+    def test_a_static_sheet_is_in_the_page_so_it_reads_without_javascript(
+        self,
+    ) -> None:
+        doc = write_cartograph_html(_static_spec(), _runtime())
+        assert "<template" not in doc
+        assert "<noscript>" not in doc
+        assert doc.index("<om-cartograph") < doc.index('<script type="module">')
 
     def test_root_element_is_om_cartograph(self) -> None:
         root = _parse_sheet(write_cartograph_html(_static_spec(), _runtime()))
@@ -199,14 +213,16 @@ class TestRuntimeEmbedding:
         append_pos = script.index("appendChild")
         assert clone_pos < gzip_selector_pos < set_loader_pos < append_pos
 
-    def test_static_only_bootstrap_still_inflates_data_blocks(self) -> None:
-        # Harmless no-op for a page with no such blocks, but the same single
-        # code path runs regardless of has_live -- there is no separate
-        # static-only branch to drift out of sync.
+    def test_a_static_bootstrap_only_imports_the_runtime(self) -> None:
+        """The import upgrades the sheet and installs the URL triggers on it;
+        installing them a second time would print or download twice."""
         doc = write_cartograph_html(_static_spec(), _runtime())
         script_match = re.search(r'<script type="module">(.*)</script>', doc, re.DOTALL)
         assert script_match is not None
-        assert GZIP_SCRIPT_TYPE in script_match.group(1)
+        script = script_match.group(1)
+        assert "blobImport(await inflate(CARTO_GZ))" in script
+        assert "installUrlActions" not in script
+        assert GZIP_SCRIPT_TYPE not in script
 
 
 class TestPlacementAgreement:
@@ -540,7 +556,9 @@ class TestUrlActions:
         """Installed at import, the runtime's triggers see an empty document
         (the sheet is still in its <template>), so `?print=1` and
         `?export=png` did nothing until this second install."""
-        html = write_cartograph_html(_static_spec(), _runtime())
+        html = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
         append = html.index("document.body.appendChild(fragment);")
         install = html.index("carto.installUrlActions();")
         assert install > append
@@ -548,7 +566,10 @@ class TestUrlActions:
 
 class TestAtlasTriggers:
     def test_the_bootstrap_offers_whole_atlas_zip_and_print(self) -> None:
-        html = write_cartograph_html(_static_spec(), _runtime())
+        # Only a live page can carry an atlas, so only it needs the triggers.
+        html = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
         assert "get('atlas')" in html
         assert "renderCartographAtlas(sheet, { dpi })" in html
         assert "window.print()" in html

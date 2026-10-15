@@ -160,7 +160,7 @@ def default_frame_mode(crs_authid: str) -> str:
     return "live" if crs_authid in LIVE_DEFAULT_CRS else "static"
 
 
-DEFAULT_STATIC_DPI = 150
+DEFAULT_STATIC_DPI = 200
 
 
 @dataclass

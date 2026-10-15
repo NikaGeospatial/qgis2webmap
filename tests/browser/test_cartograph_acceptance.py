@@ -238,3 +238,18 @@ class TestAtlasCartograph:
         assert (
             page.evaluate("() => window.__printedSheets") == expected["atlas"]["pages"]
         )
+
+
+def test_a_static_cartograph_reads_without_javascript(browser, fixtures: Path) -> None:
+    """Mail and chat previews, QuickLook, locked-down viewers: no script runs,
+    and a static-only page still shows its frames where they belong."""
+    context = browser.new_context(java_script_enabled=False)
+    try:
+        page = context.new_page()
+        page.goto((fixtures / "survey-static.html").as_uri())
+        images = page.locator("om-frame img")
+        assert images.count() == 2
+        box = images.first.bounding_box()
+        assert box is not None and box["width"] > 100
+    finally:
+        context.close()

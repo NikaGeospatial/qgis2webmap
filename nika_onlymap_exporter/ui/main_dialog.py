@@ -543,6 +543,13 @@ HELP_PAGES = (
     (N_("What gets exported"), "supported-features.md"),
     (N_("Troubleshooting"), "troubleshooting.md"),
     (N_("Privacy"), "privacy.md"),
+    (N_("Your first cartograph"), "cartograph-first-export.md"),
+    (N_("The Cartograph dialog, tab by tab"), "cartograph-dialog.md"),
+    (N_("Live or static frames"), "live-or-static-frames.md"),
+    (N_("Atlas cartographs"), "cartograph-atlas.md"),
+    (N_("Printing a cartograph"), "printing-a-cartograph.md"),
+    (N_("Colour vision"), "colour-vision.md"),
+    (N_("What a cartograph keeps"), "cartograph-supported-features.md"),
 )
 
 HELP_UNAVAILABLE = N_(

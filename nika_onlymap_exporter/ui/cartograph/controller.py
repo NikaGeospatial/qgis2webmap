@@ -129,7 +129,8 @@ def default_cartograph_path(project_file_name: str, layout_name: str) -> Path:
     which for a GUI application is rarely where the user would look.
     """
     base_dir = Path(project_file_name).parent if project_file_name else Path.home()
-    safe = re.sub(r"[^\w .-]", "_", layout_name).strip(" .") or "cartograph"
+    # "carto: Parcels" -> "carto-Parcels": a name a file manager shows as is.
+    safe = re.sub(r"[^\w.-]+", "-", layout_name).strip("-.") or "cartograph"
     return base_dir / f"{safe}.html"
 
 
@@ -1290,8 +1291,7 @@ class CartographController:
             self.dialog.on_publish,
         )
 
-        # Out of scope for this task - the hand-off dialog (issue #3 S4) - so
-        # these stay disabled, as they already were on the web-map menu.
+        # The hand-off dialog (issue #3 S4), shared with the web map's menu.
         menu.addSection(tr("NIKA"))
         add(
             "enhance",

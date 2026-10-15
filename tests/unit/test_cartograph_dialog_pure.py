@@ -6,7 +6,11 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from nika_onlymap_exporter.core.settings import FrameChoice, default_frame_mode
+from nika_onlymap_exporter.core.settings import (
+    DEFAULT_STATIC_DPI,
+    FrameChoice,
+    default_frame_mode,
+)
 from nika_onlymap_exporter.ui.cartograph.status import (
     format_bytes,
     format_elapsed,
@@ -38,7 +42,8 @@ class TestFrameChoiceRoundTrip:
         assert FrameChoice.from_dict({"mode": "huh", "dpi": 150}).mode == "live"
 
     def test_a_bad_dpi_falls_back_to_the_default(self) -> None:
-        assert FrameChoice.from_dict({"mode": "static", "dpi": "huh"}).dpi == 150
+        choice = FrameChoice.from_dict({"mode": "static", "dpi": "huh"})
+        assert choice.dpi == DEFAULT_STATIC_DPI
 
 
 class TestStatusText:

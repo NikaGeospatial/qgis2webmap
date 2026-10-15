@@ -137,7 +137,7 @@ class TestExportLayoutToCartograph:
         assert match is not None
         assert match.group(1) == "survey-utm"
 
-    def test_forwards_the_second_page_block(self, survey, fake_runtime) -> None:
+    def test_forwards_the_second_page_row(self, survey, fake_runtime) -> None:
         report = FidelityReportBuilder()
         export_layout_to_cartograph(
             survey.layout, survey.project, fake_runtime, report, static_dpi=100
@@ -146,7 +146,7 @@ class TestExportLayoutToCartograph:
 
         assert any(
             item.subject == "Page count"
-            for item in report.by_status(FidelityStatus.BLOCKED)
+            for item in report.by_status(FidelityStatus.UNSUPPORTED)
         )
 
     def test_live_frame_embeds_an_om_map_and_the_core_runtime(

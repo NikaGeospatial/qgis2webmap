@@ -98,17 +98,38 @@ class TestExport:
         assert any("Wrote" in line for line in messages)
         assert list(destination.parent.glob("*.tmp")) == []
 
-    def test_a_blocked_item_stops_the_run_unless_ticked(self, survey, tmp_path) -> None:
+    def test_a_blocked_item_stops_the_run_unless_ticked(
+        self, project, tmp_path
+    ) -> None:
+        """An atlas on a static map cannot page: Blocked, so a batch run with
+        nobody to ask stops unless told to go ahead."""
+        from atlas_fixtures import build_atlas_layout
         from qgis.core import QgsProcessingException
 
-        destination = tmp_path / "survey.html"
-        parameters = {"LAYOUT": "survey-utm", "DPI": 100, "OUTPUT": str(destination)}
-        with pytest.raises(QgsProcessingException, match="Page count"):
-            _run(survey.project, parameters)
+        built = build_atlas_layout(project)
+        project.layoutManager().addLayout(built.layout)
+        destination = tmp_path / "atlas.html"
+        parameters = {
+            "LAYOUT": built.layout.name(),
+            "FRAMES": 2,  # all static
+            "DPI": 72,
+            "OUTPUT": str(destination),
+        }
+        with pytest.raises(QgsProcessingException, match="Atlas"):
+            _run(project, parameters)
         assert not destination.exists()
 
-        _run(survey.project, {**parameters, "EXPORT_BLOCKED": True})
+        _run(project, {**parameters, "EXPORT_BLOCKED": True})
         assert destination.exists()
+
+    def test_a_second_page_is_logged_and_left_out(self, survey, tmp_path) -> None:
+        destination = tmp_path / "survey.html"
+        _, messages = _run(
+            survey.project,
+            {"LAYOUT": "survey-utm", "DPI": 72, "OUTPUT": str(destination)},
+        )
+        assert destination.exists()
+        assert any("Page count" in line for line in messages)
 
     def test_all_live_overrides_the_crs_default(self, survey, tmp_path) -> None:
         survey.layout.pageCollection().deletePage(1)

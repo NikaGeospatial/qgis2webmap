@@ -71,6 +71,14 @@ from ..core.cartograph_ir import (
 )
 from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
 
+#: Shown instead of a live cartograph when the browser runs no JavaScript:
+#: its live maps and the inlined runtime need it. (A static-only cartograph
+#: reads without JavaScript and needs no such note.)
+NOSCRIPT_MESSAGE = (
+    "This cartograph needs JavaScript to show its maps. Open it in a web "
+    "browser with JavaScript turned on."
+)
+
 #: One template id per document; there is only ever one sheet per page.
 _TEMPLATE_ID = "sheet"
 
@@ -115,6 +123,19 @@ def write_cartograph_html(
 
     title = html.escape(spec.title or spec.cartograph_id, quote=True)
     script = _render_script(runtime, has_live=has_live)
+    if has_live:
+        # Inert until the core loader is set (see the module docstring).
+        body = (
+            f'<template id="{_TEMPLATE_ID}">{sheet}</template>\n'
+            f'<noscript><p style="font:16px sans-serif;margin:2em">'
+            f"{html.escape(NOSCRIPT_MESSAGE)}</p></noscript>\n"
+        )
+    else:
+        # No live frame, no loader to wait for: the sheet is in the page from
+        # the start, so it reads with JavaScript off too - the runtime's
+        # stylesheet places static frames, text and shapes at their mm
+        # positions before (or without) the elements upgrading.
+        body = f"{sheet}\n"
 
     return (
         "<!doctype html>\n"
@@ -125,7 +146,7 @@ def write_cartograph_html(
         f"<style>{css}</style>\n"
         "</head>\n"
         '<body style="margin:0">\n'
-        f'<template id="{_TEMPLATE_ID}">{sheet}</template>\n'
+        f"{body}"
         f'<script type="module">{script}</script>\n'
         "</body>\n"
         "</html>\n"
@@ -153,6 +174,13 @@ def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
         "}",
         f'const CARTO_GZ = "{carto_gz}";',
         "const carto = await blobImport(await inflate(CARTO_GZ));",
+    ]
+    if not has_live:
+        # The sheet is already in the page: importing the runtime upgrades
+        # it and installs the URL triggers on it, and that is all.
+        indent = "\n      "
+        return indent + indent.join(lines) + "\n    "
+    lines += [
         # Cloned from the <template> -- still inert, so touching it here
         # (even defining custom elements already happened above) triggers no
         # upgrade: a DocumentFragment cloned from template content stays

@@ -42,13 +42,16 @@ class TestPage:
         assert reading.page_width == pytest.approx(297.0)
         assert reading.page_height == pytest.approx(210.0)
 
-    def test_second_page_is_blocked(self, survey) -> None:
+    def test_a_second_page_is_left_out_not_blocking(self, survey) -> None:
+        """The cartograph is page 1 and is saved anyway, so the other pages
+        are "Not exported", with the atlas named as the way to many pages."""
         report = FidelityReportBuilder()
         read_layout(survey.layout, report)
 
-        blocked = report.by_status(FidelityStatus.BLOCKED)
-        assert any(item.subject == "Page count" for item in blocked)
-        assert report.has_blockers
+        left_out = report.by_status(FidelityStatus.UNSUPPORTED)
+        row = next(item for item in left_out if item.subject == "Page count")
+        assert "page 1" in row.detail and "atlas" in row.detail
+        assert not report.has_blockers
 
 
 class TestFrames:

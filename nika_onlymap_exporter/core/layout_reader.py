@@ -291,10 +291,13 @@ def _read_layout(
     if page_count == 0:
         raise ValueError("layout has no pages")
     if page_count > 1:
-        report.blocked(
+        # Not Blocked: the cartograph is page 1 and is saved regardless, so
+        # the honest verdict is that the other pages are left out.
+        report.unsupported(
             "Page count",
-            f"This layout has {page_count} pages. Only page 1 is exported in "
-            "v0.1 -- export page 1 only?",
+            f"This layout has {page_count} pages. A cartograph is one page, so "
+            f"only page 1 is exported; pages 2 to {page_count} are left out. "
+            "For one page per feature, use an atlas.",
         )
     page = pages.page(0)
     page_size = _box(page, converter)

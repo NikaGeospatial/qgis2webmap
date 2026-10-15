@@ -34,7 +34,11 @@ from ..core.atomic_write import write_text_atomic
 from ..core.cartograph_export import export_layout_to_cartograph
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy
-from ..core.settings import default_frame_mode, resolve_license_key
+from ..core.settings import (
+    DEFAULT_STATIC_DPI,
+    default_frame_mode,
+    resolve_license_key,
+)
 from ..packaging.runtime_manager import (
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
@@ -111,7 +115,7 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             self.DPI,
             tr("Static frame resolution (dpi)"),
             type=Qgis.ProcessingNumberParameterType.Integer,
-            defaultValue=200,
+            defaultValue=DEFAULT_STATIC_DPI,
             minValue=72,
             maxValue=600,
         )
