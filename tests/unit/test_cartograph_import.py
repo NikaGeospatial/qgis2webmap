@@ -333,6 +333,17 @@ class TestTolerance:
         assert len(result.spec.items) == 1
         assert any("data-nika" in issue.detail for issue in result.issues)
 
+    def test_the_plugins_own_attributes_are_not_reported(self) -> None:
+        # Derived data the export writes again on every save.
+        result = parse_cartograph_html(
+            _page(
+                '<om-frame id="f" x="0" y="0" w="10" h="10" atlas-fit="fixed" '
+                "data-qgis2webmap-atlas-cameras='{\"7\":[103.8,1.3,15]}'>"
+                "</om-frame>"
+            )
+        )
+        assert not any("qgis2webmap" in issue.detail for issue in result.issues)
+
     def test_a_live_map_drawn_in_a_plane_keeps_its_crs(self) -> None:
         result = parse_cartograph_html(
             _page(

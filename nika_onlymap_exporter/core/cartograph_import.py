@@ -98,6 +98,11 @@ _PLACEMENT = frozenset(["id", "x", "y", "w", "h", "rotation", "z", "locked", "hi
 #: are the source of truth, so it is read past without a report.
 _IGNORED_EVERYWHERE = frozenset({"style"})
 
+#: This plugin's own attributes (`writers/cartograph_writer.py`): data the
+#: export derives from the QGIS project and writes again on every save, such
+#: as an atlas frame's per-page cameras, so they are skipped, not reported.
+_OWN_ATTRIBUTE_PREFIX = "data-qgis2webmap-"
+
 _ROOT_ATTRS = frozenset(
     [
         "cartograph-id",
@@ -647,7 +652,11 @@ class _Converter:
                 subject, f"Attribute '{name}' appears twice; the first one was used."
             )
         for name in node.attrs:
-            if name in known or name in _IGNORED_EVERYWHERE:
+            if (
+                name in known
+                or name in _IGNORED_EVERYWHERE
+                or name.startswith(_OWN_ATTRIBUTE_PREFIX)
+            ):
                 continue
             if name in not_carried:
                 self.issues.add(subject, f"Attribute '{name}': {not_carried[name]}")
