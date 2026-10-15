@@ -107,7 +107,11 @@ def build(outdir: Path) -> Path:
 
     size_kb = target.stat().st_size / 1024
     total = len(files) + 1 + len(HELP_DOCS)
-    print(f"built {target.relative_to(REPO_ROOT)}  ({total} files, {size_kb:.1f} KB)")
+    # Relative inside the repo; an --outdir elsewhere has no relative form.
+    shown = target.resolve()
+    if shown.is_relative_to(REPO_ROOT):
+        shown = shown.relative_to(REPO_ROOT)
+    print(f"built {shown}  ({total} files, {size_kb:.1f} KB)")
     return target
 
 
