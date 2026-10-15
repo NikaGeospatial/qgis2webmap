@@ -2,9 +2,9 @@
 name=QGIS2WebMap by NIKA
 qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
-description=Export QGIS projects to interactive, portable HTML maps. Open locally, share as a zip, or put them on any static host.
-about=Documentation: https://qgis2webmap.nikaplanet.com/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
-version=0.2.1
+description=Export QGIS projects to interactive, portable HTML maps, and print layouts to printable HTML cartographs (Beta). Open locally, share as a zip, or put them on any static host.
+about=Documentation: https://qgis2webmap.nikaplanet.com/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. New in Beta: turn a QGIS print layout - or the current map view - into a cartograph, one printable HTML page with live or pixel-exact map frames, grids, legends, scale bars and atlas pages, that prints at true page size from any Chromium-based browser. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
+version=0.3.0
 author=NIKA
 email=support@nikaplanet.com
 
@@ -29,7 +29,7 @@ homepage=https://qgis2webmap.nikaplanet.com/
 # incumbent carries. Exported maps are drawn by OnlyMap and use none of them -
 # tagging for a renderer we do not ship would be a false claim to reviewers and
 # to anyone browsing that tag.
-tags=html,webmap,webmaps,web,export,offline,portable,standalone,3d,map,javascript,onlymap
+tags=html,webmap,webmaps,web,export,offline,portable,standalone,3d,map,javascript,onlymap,layout,print,atlas,cartography,pdf
 
 category=Web
 icon=icons/qgis2webmap.svg
@@ -38,7 +38,23 @@ deprecated=False
 license=GPL-2.0-or-later
 hasProcessingProvider=yes
 
-changelog=0.2.1
+changelog=0.3.0
+    Cartograph (Beta): a "Make: Web map | Cartograph" switch turns a QGIS
+    print layout - or the current map view - into one printable HTML page.
+    Map items become live frames (pan and zoom) or static, pixel-exact images
+    in the layout's own CRS; grids, locator insets, legends, scale bars,
+    north arrows, labels with live scale and title tokens, shapes and
+    pictures carry over, and the Fidelity tab lists anything that changes.
+    The file saves itself as you work. Atlas layouts give one page per
+    feature, exported as one ZIP or printed as one multi-page PDF. Print
+    settings add bleed, crop marks and a safe zone; CMYK and ICC PDFs go
+    through QGIS. A Colour vision check simulates protanopia, deuteranopia,
+    tritanopia and achromatopsia on the canvas and the page. Export as
+    cartograph from the layout designer, Processing, and back again: import
+    a cartograph as a QGIS layout.
+    Both outputs: Enhance with NIKA AI and Ask NIKA for a critique open a
+    hand-off with a ready prompt.
+    0.2.1
     Fixes for QGIS 3: the plugin could close QGIS while the Fidelity tab was
     resizing; message boxes were unreadable after switching to the dark theme;
     the Layers tab's drop-downs were cut off; menus opened narrower than their

@@ -4,6 +4,41 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Unreleased
+
+### Added
+- **Cartograph (Beta): print layouts as printable HTML.** A **Make: Web map |
+  Cartograph** switch at the top of the dialog turns a QGIS print layout into
+  one HTML page that opens by double-click and prints at true page size from
+  Chromium-based browsers.
+  - Map items become **live frames** (pan, zoom, popups; Web Mercator) or
+    **static frames** (a pixel-exact image in the layout's own CRS). Maps in
+    EPSG:3857/4326 default to live, others to static; the Frames tab
+    switches each one and sets its DPI.
+  - Grids, locator insets, legends, scale bars, north arrows, labels (with
+    live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
+    pictures carry over; the Fidelity tab lists everything that changes or
+    is left out.
+  - **The file saves itself** about a second after each change - in the
+    dialog, the layout, a layer's style or the Layers tab. Title, attribution
+    and theme on the Cartograph tab.
+  - **Current canvas** builds a `carto:` print layout from the map view, and
+    **Import cartograph** turns a cartograph back into a QGIS layout.
+  - **Atlas**: one page per feature, set on the Atlas tab; every page as one
+    PNG ZIP, or printed together into one multi-page PDF.
+  - **Print settings**: page size, resolution, bleed, crop marks, safe-zone
+    guide, presets; CMYK and ICC PDFs through QGIS's own exporter where the
+    QGIS build supports them.
+  - **Colour vision**: simulate protanopia, deuteranopia, tritanopia and
+    achromatopsia on the QGIS canvas and the page, and list the legend
+    classes that become indistinguishable.
+  - **Export as cartograph (HTML)...** in the layout designer's Layout menu,
+    **Create cartograph...** in the Web menu, and the **Export print layout
+    to cartograph (Beta)** Processing algorithm.
+- **Hand off to NIKA**, for web maps and cartographs: **Enhance with NIKA
+  AI...** and **Ask NIKA for a critique...** open a dialog with a ready prompt
+  for NIKA desktop or any other agent.
+
 ## [0.2.1] - 2026-10-13
 
 ### Fixed
