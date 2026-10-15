@@ -102,3 +102,17 @@ def test_the_web_menu_action_opens_on_the_last_layout(plugin_and_iface) -> None:
     plugin, _iface, opened = plugin_and_iface
     plugin.cartograph_action.trigger()
     assert opened == [None]
+
+
+def test_unloading_with_the_dialog_open_does_not_raise(qgis_app) -> None:
+    """Closing an open dialog emits `finished`, which also clears the
+    plugin's reference; unload used to delete through that cleared name."""
+    import nika_onlymap_exporter
+
+    iface = _Iface()
+    plugin = nika_onlymap_exporter.classFactory(iface)
+    plugin.initGui()
+    plugin.run()
+    assert plugin.dialog is not None and plugin.dialog.isVisible()
+    plugin.unload()
+    assert plugin.dialog is None

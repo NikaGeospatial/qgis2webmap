@@ -220,14 +220,17 @@ class Qgis2WebMapPlugin:
             action.deleteLater()
         self._designer_actions.clear()
 
-        if self.dialog is not None:
+        # Taken off `self` first: closing an open dialog emits `finished`,
+        # whose handler also drops `self.dialog`, and the delete below then
+        # ran on None - an unload with the dialog open raised.
+        dialog, self.dialog = self.dialog, None
+        if dialog is not None:
             # Issue #4: closing the Colour vision dialog keeps the canvas
             # preview the user chose; unloading the plugin must not leave it.
             with contextlib.suppress(Exception):
-                self.dialog.release_canvas_effects()
-            self.dialog.close()
-            self.dialog.deleteLater()
-            self.dialog = None
+                dialog.release_canvas_effects()
+            dialog.close()
+            dialog.deleteLater()
 
         from .ui.i18n import use_language
 
