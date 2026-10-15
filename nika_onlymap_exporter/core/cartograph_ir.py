@@ -206,6 +206,23 @@ def _check_corners(corners: tuple[LonLat, ...] | None) -> None:
 
 
 @dataclass(frozen=True)
+class AtlasCamera:
+    """Where QGIS's own atlas puts a live frame on one feature's page.
+
+    The runtime's atlas can only fit each feature into the frame; QGIS also
+    keeps a fixed scale, snaps to predefined scales, and centres points at
+    the map's scale. For those the export pages QGIS's atlas itself and the
+    page script applies each camera when the runtime turns to that feature,
+    found by `feature_id` -- the QGIS feature id, which is also the GeoJSON
+    `id` of the feature the runtime's `om-atlas-page` event carries.
+    """
+
+    feature_id: int
+    center: LonLat
+    zoom: float
+
+
+@dataclass(frozen=True)
 class FrameSpec:
     """A placed map: `<om-frame>`.
 
@@ -250,6 +267,7 @@ class FrameSpec:
     attribution: str | None = None
     atlas_fit: str | None = None
     atlas_margin: float | None = None
+    atlas_cameras: tuple[AtlasCamera, ...] = ()
 
     def __post_init__(self) -> None:
         _check_choice(self.mode, FRAME_MODES, "mode")
@@ -280,6 +298,10 @@ class FrameSpec:
             )
         if self.atlas_margin is not None and self.atlas_margin < 0:
             raise ValueError(f"atlas_margin must be >= 0, got {self.atlas_margin!r}")
+        if self.atlas_cameras and (self.mode != "live" or self.atlas_fit != "fixed"):
+            # The runtime refits a `feature` frame itself; with cameras too,
+            # every page would be moved twice and land wherever ran last.
+            raise ValueError("atlas_cameras need a live frame with atlas_fit='fixed'")
 
 
 @dataclass(frozen=True)

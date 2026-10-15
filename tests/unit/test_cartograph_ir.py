@@ -11,6 +11,7 @@ import re
 import pytest
 
 from nika_onlymap_exporter.core.cartograph_ir import (
+    AtlasCamera,
     AtlasSpec,
     Box,
     CartographSpec,
@@ -189,6 +190,27 @@ class TestFrameSpec:
     def test_negative_atlas_margin_rejected(self) -> None:
         with pytest.raises(ValueError):
             FrameSpec(id="main", box=Box(0, 0, 10, 10), mode="live", atlas_margin=-0.1)
+
+    def test_atlas_cameras_need_a_frame_the_runtime_leaves_alone(self) -> None:
+        """The cameras are applied by this plugin's page script; a frame the
+        runtime also refits (`feature`) would be moved twice per page."""
+        camera = AtlasCamera(feature_id=1, center=(103.8, 1.3), zoom=14.0)
+        with pytest.raises(ValueError):
+            FrameSpec(
+                id="main",
+                box=Box(0, 0, 10, 10),
+                mode="live",
+                atlas_fit="feature",
+                atlas_cameras=(camera,),
+            )
+        frame = FrameSpec(
+            id="main",
+            box=Box(0, 0, 10, 10),
+            mode="live",
+            atlas_fit="fixed",
+            atlas_cameras=(camera,),
+        )
+        assert frame.atlas_cameras == (camera,)
 
 
 # --------------------------------------------------------------------------

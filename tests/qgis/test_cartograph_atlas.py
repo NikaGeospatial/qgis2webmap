@@ -169,7 +169,7 @@ class TestAtlasFit:
         assert 0 < main.atlas_margin < 0.001
 
     @pytest.mark.parametrize("mode", ["Fixed", "Predefined"])
-    def test_fixed_and_predefined_scales_are_approximated(
+    def test_fixed_and_predefined_scales_follow_qgis_page_by_page(
         self, atlas_layout, mode: str
     ) -> None:
         from qgis.core import QgsLayoutItemMap
@@ -179,11 +179,133 @@ class TestAtlasFit:
         )
         report = FidelityReportBuilder()
         main = read_layout(atlas_layout.layout, report).frames[0]
-        assert main.atlas_fit == "feature"
+        # The runtime leaves the frame alone; the plugin's cameras move it.
+        assert main.atlas_fit == "fixed"
+        assert main.atlas_margin is None
+        assert main.atlas_cameras_from_qgis
+        assert not _rows(report, FidelityStatus.APPROXIMATED)
         assert any(
             row.startswith("Map frame") and "scale" in row
-            for row in _rows(report, FidelityStatus.APPROXIMATED)
+            for row in _rows(report, FidelityStatus.PRESERVED)
         )
+
+
+class TestAtlasCameras:
+    """Fixed and predefined scales, and points: each page's camera is where
+    QGIS's own atlas puts the map, keyed by the feature id the page script
+    finds on the runtime's `om-atlas-page` event."""
+
+    @staticmethod
+    def _cameras(html: str) -> dict[str, list[float]]:
+        import json
+
+        frame = next(_sheet(html).iter("om-frame"))
+        return json.loads(frame.get("data-qgis2webmap-atlas-cameras") or "{}")
+
+    @staticmethod
+    def _lonlat(x: float, y: float) -> tuple[float, float]:
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsCoordinateTransform,
+            QgsPointXY,
+            QgsProject,
+        )
+
+        transform = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem("EPSG:3857"),
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsProject.instance(),
+        )
+        point = transform.transform(QgsPointXY(x, y))
+        return point.x(), point.y()
+
+    def test_fixed_scale_keeps_the_zoom_and_centres_each_feature(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        from qgis.core import QgsLayoutItemMap
+
+        atlas_layout.main_map.setAtlasScalingMode(
+            QgsLayoutItemMap.AtlasScalingMode.Fixed
+        )
+        html = _export(atlas_layout, fake_runtime)
+        frame = next(_sheet(html).iter("om-frame"))
+        cameras = self._cameras(html)
+        assert sorted(cameras) == ["1", "2", "3"]
+        for feature in atlas_layout.parcels.getFeatures():
+            lon, lat, zoom = cameras[str(feature.id())]
+            centre = feature.geometry().boundingBox().center()
+            assert (lon, lat) == pytest.approx(
+                self._lonlat(centre.x(), centre.y()), abs=1e-7
+            )
+            # The map's own scale on every page: the authored zoom.
+            assert zoom == pytest.approx(float(frame.get("zoom") or 0), abs=1e-4)
+
+    def test_predefined_scales_use_the_scale_qgis_picks(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        import math
+
+        from qgis.core import QgsLayoutItemMap
+
+        authored_scale = atlas_layout.main_map.scale()
+        atlas_layout.main_map.setAtlasScalingMode(
+            QgsLayoutItemMap.AtlasScalingMode.Predefined
+        )
+        atlas_layout.layout.renderContext().setPredefinedScales([50000.0])
+        html = _export(atlas_layout, fake_runtime)
+        authored_zoom = float(next(_sheet(html).iter("om-frame")).get("zoom") or 0)
+        want = authored_zoom - math.log2(50000.0 / authored_scale)
+        for _lon, _lat, zoom in self._cameras(html).values():
+            assert zoom == pytest.approx(want, abs=1e-3)
+
+    def test_auto_scaling_over_points_keeps_the_scale_like_qgis(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        """QGIS centres a point at the map's own scale even in Auto mode; the
+        runtime's feature fit would zoom to the point instead."""
+        from qgis.core import QgsFeature, QgsGeometry, QgsPointXY, QgsVectorLayer
+
+        points = QgsVectorLayer(
+            "Point?crs=EPSG:3857&field=lot:string", "sites", "memory"
+        )
+        for x in (100.0, 5200.0):
+            feature = QgsFeature(points.fields())
+            feature.setAttribute("lot", f"site-{x:.0f}")
+            feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, 300.0)))
+            points.dataProvider().addFeatures([feature])
+        atlas_layout.project.addMapLayer(points)
+        atlas_layout.main_map.setLayers([points, atlas_layout.parcels])
+        atlas_layout.atlas.setCoverageLayer(points)
+        report = FidelityReportBuilder()
+        html = _export(atlas_layout, fake_runtime, report)
+        frame = next(_sheet(html).iter("om-frame"))
+        assert frame.get("atlas-fit") == "fixed"
+        cameras = self._cameras(html)
+        lon, lat, _zoom = cameras["2"]
+        assert (lon, lat) == pytest.approx(self._lonlat(5200.0, 300.0), abs=1e-7)
+
+    def test_auto_scaling_over_polygons_is_left_to_the_runtime(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        html = _export(atlas_layout, fake_runtime)
+        frame = next(_sheet(html).iter("om-frame"))
+        assert frame.get("atlas-fit") == "feature"
+        assert frame.get("data-qgis2webmap-atlas-cameras") is None
+
+    def test_paging_qgis_atlas_leaves_the_layout_as_it_was(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        """QGIS's atlas leaves the map on the last page's extent when it is
+        done; an autosave must not move the author's map."""
+        from qgis.core import QgsLayoutItemMap, QgsRectangle
+
+        atlas_layout.main_map.setAtlasScalingMode(
+            QgsLayoutItemMap.AtlasScalingMode.Fixed
+        )
+        before = QgsRectangle(atlas_layout.main_map.extent())
+        _export(atlas_layout, fake_runtime)
+        after = atlas_layout.main_map.extent()
+        assert after.toString(6) == before.toString(6)
 
 
 class TestAtlasBlocked:

@@ -59,18 +59,18 @@ In the browser, a reader can:
 The pager is for the screen only: it is never printed and never appears in an
 exported image.
 
-On every page the map refits to that feature, the scale bar is worked out
-again (the scale really does change from page to page), and labels using the
-feature's fields, `@atlas_featurenumber` or `@atlas_totalfeatures` show that
-page's values.
+On every page the map moves to that feature the way QGIS's atlas moves it,
+the scale bar is worked out again, and labels using the feature's fields,
+`@atlas_featurenumber` or `@atlas_totalfeatures` show that page's values.
 
 ## What changes from QGIS
 
 | In QGIS | In the cartograph |
 |---|---|
 | Map scaling **Margin around feature** | Kept |
-| Map scaling **Fixed scale** | Each feature is fitted into the frame instead, so the scale changes from page to page. Marked **Changed** |
-| Map scaling **Predefined scale** | Fitted exactly instead of snapping to the nearest listed scale. Marked **Changed** |
+| Map scaling **Fixed scale** | Kept: every page at the map's scale, centred on its feature |
+| Map scaling **Predefined scale** | Kept: each page at the scale QGIS picks for that feature |
+| A **point** coverage layer | Kept: QGIS centres each point at the map's scale, in any scaling mode |
 | **Hide coverage layer** | Kept on live frames |
 | **Only show the current atlas feature** | Not kept - every feature of the layer is drawn. Marked **Changed** |
 | **Filter with** | Kept when the expression has a cartograph equivalent; otherwise left out, so every feature gets a page. Named on the Fidelity tab |

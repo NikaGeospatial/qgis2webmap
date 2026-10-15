@@ -14,6 +14,7 @@ from xml.etree import ElementTree
 import pytest
 
 from nika_onlymap_exporter.core.cartograph_ir import (
+    AtlasCamera,
     AtlasSpec,
     Box,
     CartographSpec,
@@ -575,3 +576,58 @@ class TestAtlasTriggers:
         assert "window.print()" in html
         # Its own parameter: the runtime's `export=` trigger must never see it.
         assert "export=atlas" not in html
+
+
+class TestAtlasCameras:
+    """QGIS's fixed and predefined atlas scales: where QGIS's own atlas puts
+    the map on each page, keyed by feature id, applied by the bootstrap."""
+
+    @staticmethod
+    def _spec() -> CartographSpec:
+        main = FrameSpec(
+            id="main",
+            box=Box(10, 24, 150, 120),
+            mode="live",
+            center=(0.0, 0.0),
+            zoom=14,
+            atlas_fit="fixed",
+            atlas_cameras=(
+                AtlasCamera(feature_id=1, center=(0.001, 0.003), zoom=13.5),
+                AtlasCamera(feature_id=7, center=(0.05, 0.002), zoom=13.5),
+            ),
+        )
+        return CartographSpec(
+            cartograph_id="cg",
+            size="A4",
+            items=(main,),
+            atlas=AtlasSpec(for_="main", layer="parcels"),
+        )
+
+    def test_the_cameras_ride_on_the_frame_keyed_by_feature_id(self) -> None:
+        import json
+
+        html = write_cartograph_html(
+            self._spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+        frame = _parse_sheet(html).find(".//om-frame")
+        assert frame is not None
+        assert frame.get("atlas-fit") == "fixed"
+        cameras = json.loads(frame.get("data-qgis2webmap-atlas-cameras") or "")
+        assert cameras == {"1": [0.001, 0.003, 13.5], "7": [0.05, 0.002, 13.5]}
+
+    def test_the_page_listener_is_in_place_before_the_sheet_connects(self) -> None:
+        """The atlas applies page one as soon as its frame mounts; a listener
+        added after the sheet is connected could miss that first page."""
+        html = write_cartograph_html(
+            self._spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+        listen = html.index("addEventListener('om-atlas-page'")
+        append = html.index("document.body.appendChild(fragment);")
+        assert listen < append
+        assert "refreshFurniture()" in html
+
+    def test_no_listener_without_cameras(self) -> None:
+        html = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+        assert "om-atlas-page" not in html

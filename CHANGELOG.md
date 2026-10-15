@@ -24,8 +24,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     and theme on the Cartograph tab.
   - **Current canvas** builds a `carto:` print layout from the map view, and
     **Import cartograph** turns a cartograph back into a QGIS layout.
-  - **Atlas**: one page per feature, set on the Atlas tab; every page as one
-    PNG ZIP, or printed together into one multi-page PDF.
+  - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
+    margin, fixed and predefined scales; every page as one PNG ZIP, or
+    printed together into one multi-page PDF.
   - **Print settings**: page size, resolution, bleed, crop marks, safe-zone
     guide, presets; CMYK and ICC PDFs through QGIS's own exporter where the
     QGIS build supports them.

@@ -61,6 +61,7 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
     QgsReadWriteContext,
+    QgsRectangle,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtXml import QDomDocument
@@ -69,7 +70,7 @@ from ..exporters.frame_raster import StaticFrameRender, render_static_frame
 from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
-from .cartograph_ir import CartographItem, CartographSpec, FrameSpec
+from .cartograph_ir import AtlasCamera, CartographItem, CartographSpec, FrameSpec
 from .export_ir import ExportProject, ExportSettings, Extent
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
@@ -385,13 +386,20 @@ def prepare_cartograph(
 
     items: list[CartographItem] = list(reading.furniture)
     live_frames: list[LiveFrameSource] = []
+    atlas_cameras = _atlas_cameras(
+        layout,
+        project,
+        [frame for frame in reading.frames if frame.atlas_cameras_from_qgis],
+    )
 
     for frame in reading.frames:
         if frame.mode == "static":
             dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
             items.append(_build_static_frame(layout, project, frame, dpi, raster_cache))
         else:
-            frame_spec, source = _build_live_frame(frame, project)
+            frame_spec, source = _build_live_frame(
+                frame, project, atlas_cameras.get(frame.frame_id, ())
+            )
             items.append(frame_spec)
             live_frames.append(source)
 
@@ -564,7 +572,7 @@ def _atlas_layer_survived(
 
 def _without_atlas(spec: CartographSpec) -> CartographSpec:
     items = tuple(
-        replace(item, atlas_fit=None, atlas_margin=None)
+        replace(item, atlas_fit=None, atlas_margin=None, atlas_cameras=())
         if isinstance(item, FrameSpec) and item.atlas_fit is not None
         else item
         for item in spec.items
@@ -607,7 +615,9 @@ def _build_static_frame(
 
 
 def _build_live_frame(
-    frame: MapFrameReading, project: QgsProject
+    frame: MapFrameReading,
+    project: QgsProject,
+    atlas_cameras: tuple[AtlasCamera, ...] = (),
 ) -> tuple[FrameSpec, LiveFrameSource]:
     map_item = frame.map_item
     extent = _frame_extent_wgs84(map_item, project)
@@ -626,6 +636,7 @@ def _build_live_frame(
         overview_of=frame.overview_of,
         atlas_fit=frame.atlas_fit,
         atlas_margin=frame.atlas_margin,
+        atlas_cameras=atlas_cameras,
     )
     source = LiveFrameSource(
         frame_id=frame.frame_id,
@@ -635,6 +646,48 @@ def _build_live_frame(
         hidden_layer_ids=frame.hidden_layer_ids,
     )
     return frame_spec, source
+
+
+def _atlas_cameras(
+    layout: QgsPrintLayout,
+    project: QgsProject,
+    frames: list[MapFrameReading],
+) -> dict[str, tuple[AtlasCamera, ...]]:
+    """Each frame's camera on every atlas page, by QGIS's own atlas.
+
+    Paging the real atlas rather than re-deriving its rules keeps fixed
+    scales, predefined-scale choice and point centring exactly QGIS's,
+    including the parts that live in project settings (the predefined scale
+    list). The atlas leaves its maps on the last page's extent when it is
+    done, and this runs on every autosave, so the extents are put back, and
+    the designer's atlas preview returns to the page it was showing.
+    """
+    if not frames:
+        return {}
+    atlas = layout.atlas()
+    previewed = atlas.currentFeatureNumber()
+    saved = {frame.frame_id: QgsRectangle(frame.map_item.extent()) for frame in frames}
+    cameras: dict[str, list[AtlasCamera]] = {frame.frame_id: [] for frame in frames}
+    if not atlas.beginRender():
+        return {}
+    try:
+        for index in range(atlas.count()):
+            if not atlas.seekTo(index):
+                continue
+            feature_id = int(layout.reportContext().feature().id())
+            for frame in frames:
+                extent = _frame_extent_wgs84(frame.map_item, project)
+                center, zoom = _camera_for_extent(extent, frame.box.w)
+                cameras[frame.frame_id].append(
+                    AtlasCamera(feature_id=feature_id, center=center, zoom=zoom)
+                )
+    finally:
+        atlas.endRender()
+        for frame in frames:
+            frame.map_item.setExtent(saved[frame.frame_id])
+        if previewed >= 0:
+            atlas.seekTo(previewed)
+    return {frame_id: tuple(found) for frame_id, found in cameras.items()}
 
 
 def _frame_extent_wgs84(map_item, project: QgsProject) -> Extent:

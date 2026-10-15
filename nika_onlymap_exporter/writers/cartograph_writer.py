@@ -82,6 +82,9 @@ NOSCRIPT_MESSAGE = (
 #: One template id per document; there is only ever one sheet per page.
 _TEMPLATE_ID = "sheet"
 
+#: On a live frame the page script moves per atlas page (see `_ATLAS_CAMERAS`).
+ATLAS_CAMERAS_ATTRIBUTE = "data-qgis2webmap-atlas-cameras"
+
 
 @dataclass(frozen=True)
 class CartographRuntimeBundle:
@@ -122,7 +125,12 @@ def write_cartograph_html(
         css = f"{css}\n{runtime.core_css or ''}"
 
     title = html.escape(spec.title or spec.cartograph_id, quote=True)
-    script = _render_script(runtime, has_live=has_live)
+    has_atlas_cameras = any(
+        isinstance(item, FrameSpec) and item.atlas_cameras for item in spec.items
+    )
+    script = _render_script(
+        runtime, has_live=has_live, has_atlas_cameras=has_atlas_cameras
+    )
     if has_live:
         # Inert until the core loader is set (see the module docstring).
         body = (
@@ -158,7 +166,12 @@ def write_cartograph_html(
 # --------------------------------------------------------------------------
 
 
-def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
+def _render_script(
+    runtime: CartographRuntimeBundle,
+    *,
+    has_live: bool,
+    has_atlas_cameras: bool = False,
+) -> str:
     carto_gz = gzip_base64(runtime.cartograph_js)
     lines = [
         "async function inflate(base64) {",
@@ -210,6 +223,8 @@ def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
             f'const CORE_GZ = "{core_gz}";',
             "carto.setCoreLoader(async () => blobImport(await inflate(CORE_GZ)));",
         ]
+    if has_atlas_cameras:
+        lines += _ATLAS_CAMERAS
     lines.append("document.body.appendChild(fragment);")
     # The runtime installs `?print=1` / `?export=png` / `?cvd=` when it is
     # imported, which is before the sheet leaves its <template>, so it finds
@@ -219,6 +234,55 @@ def _render_script(runtime: CartographRuntimeBundle, *, has_live: bool) -> str:
     lines += _ATLAS_ACTIONS
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
+
+
+#: QGIS's fixed and predefined atlas scales (and points, which QGIS centres
+#: at the map's scale even in Auto mode): the runtime can only fit a feature
+#: into its frame, so those frames carry `atlas-fit="fixed"` -- the runtime
+#: leaves them alone -- and, per feature id, the camera QGIS's own atlas gave
+#: them (`core/cartograph_export.py`). On each page this applies the camera
+#: through the frame's public `fitBounds`, with the one box whose Web
+#: Mercator fit IS that camera, because `fitBounds` also re-derives the
+#: frame's corners at once; then the furniture is redrawn so scale bars and
+#: `{{frame.*}}` tokens read the new page. Added before the sheet connects:
+#: the atlas applies page one as soon as its frame mounts.
+_ATLAS_CAMERAS = [
+    f"const ATLAS_CAMERAS = '{ATLAS_CAMERAS_ATTRIBUTE}';",
+    "const atlasCameras = new WeakMap();",
+    "document.addEventListener('om-atlas-page', (event) => {",
+    "  const id = event.detail?.feature?.id;",
+    "  const sheet = event.target.closest?.('om-cartograph');",
+    "  if (id === undefined || id === null || !sheet) return;",
+    "  let moved = false;",
+    "  for (const frame of sheet.querySelectorAll(`om-frame[${ATLAS_CAMERAS}]`)) {",
+    "    if (!atlasCameras.has(frame)) {",
+    "      let cameras = {};",
+    "      try { cameras = JSON.parse(frame.getAttribute(ATLAS_CAMERAS)); }",
+    "      catch { console.warn('[qgis2webmap] unreadable atlas cameras'); }",
+    "      atlasCameras.set(frame, cameras);",
+    "    }",
+    "    const camera = atlasCameras.get(frame)[String(id)];",
+    "    if (!camera || typeof frame.fitBounds !== 'function') continue;",
+    "    frame.fitBounds(boundsForCamera(frame, camera));",
+    "    moved = true;",
+    "  }",
+    "  if (moved) sheet.refreshFurniture();",
+    "});",
+    "function boundsForCamera(frame, [lon, lat, zoom]) {",
+    "  const world = 512 * 2 ** zoom;",
+    "  const pxPerMm = 96 / 25.4;",
+    "  const halfWidth = Number(frame.getAttribute('w')) * pxPerMm / 2;",
+    "  const halfHeight = Number(frame.getAttribute('h')) * pxPerMm / 2;",
+    "  const sin = Math.sin(lat * Math.PI / 180);",
+    "  const x = (lon + 180) / 360 * world;",
+    "  const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * world;",
+    "  const toLon = (px) => px / world * 360 - 180;",
+    "  const toLat = (py) =>",
+    "    Math.atan(Math.sinh(Math.PI * (1 - 2 * py / world))) * 180 / Math.PI;",
+    "  return [toLon(x - halfWidth), toLat(y + halfHeight),",
+    "    toLon(x + halfWidth), toLat(y - halfHeight)];",
+    "}",
+]
 
 
 #: Two host triggers of this plugin's own, for an atlas: the runtime's
@@ -379,6 +443,22 @@ def _lonlat_json(point: tuple[float, float]) -> str:
     return json.dumps([point[0], point[1]])
 
 
+def _atlas_cameras_json(item: FrameSpec) -> str:
+    """`{"<feature id>": [lon, lat, zoom], ...}`, at the precision the
+    runtime's own `fitBounds` writes a camera with."""
+    return json.dumps(
+        {
+            str(camera.feature_id): [
+                round(camera.center[0], 8),
+                round(camera.center[1], 8),
+                round(camera.zoom, 4),
+            ]
+            for camera in item.atlas_cameras
+        },
+        separators=(",", ":"),
+    )
+
+
 def _corners_json(corners: tuple[tuple[float, float], ...]) -> str:
     return json.dumps([[lon, lat] for lon, lat in corners])
 
@@ -491,6 +571,8 @@ def _render_frame(item: FrameSpec, markup_by_frame: Mapping[str, str]) -> str:
     attrs.append(_attr("atlas-fit", item.atlas_fit))
     if item.atlas_margin is not None:
         attrs.append(_attr("atlas-margin", _format_num(item.atlas_margin)))
+    if item.atlas_cameras:
+        attrs.append(_attr(ATLAS_CAMERAS_ATTRIBUTE, _atlas_cameras_json(item)))
 
     child = ""
     if item.mode == "live":

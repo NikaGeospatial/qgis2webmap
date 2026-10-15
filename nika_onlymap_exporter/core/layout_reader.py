@@ -204,6 +204,9 @@ class MapFrameReading:
     # Set on a live frame the atlas refits (`<om-frame atlas-fit atlas-margin>`).
     atlas_fit: str | None = None
     atlas_margin: float | None = None
+    # The atlas moves this frame as QGIS's own atlas does, page by page
+    # (`atlas_fit` is then "fixed"): fixed and predefined scales, and points.
+    atlas_cameras_from_qgis: bool = False
     # Live frames only: `(QGIS layer id, <om-layer id>)` for every layer the
     # frame draws -- see `cartograph_ir.live_layer_dom_ids` for why the two
     # can differ -- and the layers to export hidden (the atlas coverage layer
@@ -691,8 +694,13 @@ def _read_atlas(
                 "every page. Set the atlas map to Live in the Frames tab.",
             )
             continue
-        fit, margin = _atlas_fit(mf.map_item, report)
-        updated[index] = replace(mf, atlas_fit=fit, atlas_margin=margin)
+        fit, margin = _atlas_fit(mf.map_item, coverage, report)
+        updated[index] = replace(
+            mf,
+            atlas_fit=fit,
+            atlas_margin=margin,
+            atlas_cameras_from_qgis=fit == "fixed",
+        )
         driven_live.append(updated[index])
 
     driver = next(
@@ -726,7 +734,13 @@ def _read_atlas(
         # attributes rather than leave the validator a dangling atlas-fit.
         return _AtlasPlan(
             frames=tuple(
-                replace(mf, atlas_fit=None, atlas_margin=None) for mf in updated
+                replace(
+                    mf,
+                    atlas_fit=None,
+                    atlas_margin=None,
+                    atlas_cameras_from_qgis=False,
+                )
+                for mf in updated
             )
         )
 
@@ -789,42 +803,41 @@ _SMALLEST_ATLAS_MARGIN = 0.0001
 
 
 def _atlas_fit(
-    map_item: QgsLayoutItemMap, report: FidelityReportBuilder
-) -> tuple[str, float]:
+    map_item: QgsLayoutItemMap,
+    coverage: QgsVectorLayer,
+    report: FidelityReportBuilder,
+) -> tuple[str, float | None]:
     """An atlas-driven live map -> `atlas-fit`, `atlas-margin`.
 
-    The margin is halved, not copied. Both are fractions, but QGIS scales
-    the fitted extent by `1 + margin` about its centre (a 10% margin pads
-    each side by 5% -- verified headlessly: a 1000 x 500 m feature at margin
-    0.10 gives a 550 m tall map), whereas the runtime pads *each side* by
+    QGIS Auto over lines or polygons is the runtime's own `feature` fit. The
+    margin is halved, not copied. Both are fractions, but QGIS scales the
+    fitted extent by `1 + margin` about its centre (a 10% margin pads each
+    side by 5% -- verified headlessly: a 1000 x 500 m feature at margin 0.10
+    gives a 550 m tall map), whereas the runtime pads *each side* by
     `margin` (`padBounds`). So QGIS's `m` is the runtime's `m / 2`.
 
-    The runtime only knows `feature` (refit to the feature) and `fixed`
-    (do not move at all). QGIS Auto is `feature`. QGIS Fixed scale keeps the
-    scale and recentres, and Predefined scales snaps to the nearest listed
-    scale; neither exists in the runtime, and `fixed` would show the same
-    place on every page, so both become `feature`, reported.
+    QGIS Fixed scale keeps the scale and recentres, Predefined scales picks
+    one of the project's scales, and over points even Auto keeps the scale
+    and recentres; the runtime can do none of these. Those frames become
+    `fixed`, which the runtime never moves, and the export pages QGIS's own
+    atlas for where each page puts the map (`AtlasCamera`).
     """
     label = f"Map frame {_name(map_item)}"
-    margin = max(map_item.atlasMargin() / 2.0, _SMALLEST_ATLAS_MARGIN)
     mode = int(map_item.atlasScalingMode())
-    if mode == _ATLAS_AUTO:
+    over_points = coverage.geometryType() == Qgis.GeometryType.Point
+    if mode == _ATLAS_AUTO and not over_points:
         report.preserved(label, "Refits to each atlas feature, with QGIS's margin.")
-    elif mode == _ATLAS_FIXED:
-        report.approximated(
-            label,
-            "QGIS keeps this map at a fixed scale and centres it on each atlas "
-            "feature; the cartograph fits each feature into the frame instead, "
-            "so the scale changes from page to page.",
+        margin = max(map_item.atlasMargin() / 2.0, _SMALLEST_ATLAS_MARGIN)
+        return "feature", round(margin, 6)
+    if mode == _ATLAS_PREDEFINED:
+        detail = (
+            "Shows each atlas feature at the predefined scale QGIS picks for "
+            "it, centred as in QGIS."
         )
     else:
-        report.approximated(
-            label,
-            "QGIS shows each atlas feature at the nearest of the project's "
-            "predefined scales; the cartograph fits each feature into the "
-            "frame exactly instead, so pages are not at those scales.",
-        )
-    return "feature", round(margin, 6)
+        detail = "Keeps the map's scale and centres each atlas feature, as QGIS does."
+    report.preserved(label, detail)
+    return "fixed", None
 
 
 def _count_features(layer: QgsVectorLayer, expression: str | None) -> int:

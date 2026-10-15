@@ -260,6 +260,45 @@ class TestAtlasCartograph:
         )
 
 
+class TestAtlasFixedScale:
+    """QGIS's Fixed atlas scale, which the runtime cannot do: every page
+    keeps the map's scale and centres its parcel where QGIS does."""
+
+    def test_every_page_is_centred_like_qgis_at_one_scale(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["atlas_fixed"]
+        _open(page, fixtures / "atlas-fixed.html")
+        page.wait_for_function(
+            "() => document.querySelector('om-atlas')?.count > 0", timeout=60_000
+        )
+        cameras = page.evaluate(
+            """(frameId) => {
+              const atlas = document.querySelector('om-atlas');
+              const frame = document.getElementById(frameId);
+              const seen = [];
+              for (let index = 0; index < atlas.count; index++) {
+                atlas.seek(index);
+                seen.push({
+                  id: String(atlas.current.id),
+                  center: JSON.parse(frame.getAttribute('center')),
+                  zoom: Number(frame.getAttribute('zoom')),
+                });
+              }
+              return seen;
+            }""",
+            want["main_frame"],
+        )
+        assert sorted(c["id"] for c in cameras) == sorted(want["centres"])
+        zooms = {round(c["zoom"], 3) for c in cameras}
+        assert len(zooms) == 1, f"the scale changed between pages: {zooms}"
+        for camera in cameras:
+            assert camera["center"] == pytest.approx(
+                want["centres"][camera["id"]], abs=1e-6
+            )
+
+
 def test_a_static_cartograph_reads_without_javascript(browser, fixtures: Path) -> None:
     """Mail and chat previews, QuickLook, locked-down viewers: no script runs,
     and a static-only page still shows its frames where they belong."""

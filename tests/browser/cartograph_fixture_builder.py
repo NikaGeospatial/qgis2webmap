@@ -15,6 +15,8 @@ acceptance check meet through files):
   A3 landscape page, both frames static.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
 - `atlas-live.html`: a live atlas over three parcels, one page each.
+- `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
+  QGIS's own atlas centres each parcel.
 - `expected.json`: what QGIS itself says the browser must show - the page
   size, where each grid line falls on the main frame in millimetres
   (`mapToItemCoords`, the same measurement the static-frame spike used), and
@@ -52,6 +54,8 @@ def main(out_dir: Path) -> int:
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas_fixed"] = _write_atlas_fixed(QgsProject.instance(), out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
     finally:
         app.exitQgis()
@@ -188,6 +192,35 @@ def _write_atlas(project, out_dir: Path) -> dict:
     )
     (out_dir / "atlas-live.html").write_text(html, encoding="utf-8")
     return {"pages": atlas_page_count(built.layout)}
+
+
+def _write_atlas_fixed(project, out_dir: Path) -> dict:
+    from atlas_fixtures import build_atlas_layout
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsCoordinateTransform,
+        QgsLayoutItemMap,
+    )
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    built = build_atlas_layout(project)
+    built.main_map.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Fixed)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-fixed.html").write_text(html, encoding="utf-8")
+    to_wgs84 = QgsCoordinateTransform(
+        built.parcels.crs(), QgsCoordinateReferenceSystem("EPSG:4326"), project
+    )
+    centres = {}
+    for feature in built.parcels.getFeatures():
+        centre = to_wgs84.transform(feature.geometry().boundingBox().center())
+        centres[str(feature.id())] = [centre.x(), centre.y()]
+    return {"main_frame": _frame_id(built.layout, built.main_map), "centres": centres}
 
 
 def _frame_id(layout, map_item) -> str:
