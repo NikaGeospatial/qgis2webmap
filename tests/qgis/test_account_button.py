@@ -374,7 +374,6 @@ class TestTheDialogSeatsIt:
 
     def test_it_is_not_in_the_tab_corner(self, qgis_app, project):
         """The corner is for things that act on the map. An account is not."""
-        from qgis.PyQt.QtCore import Qt
 
         from nika_onlymap_exporter.ui.account_button import AccountButton
         from nika_onlymap_exporter.ui.main_dialog import MainDialog
@@ -385,7 +384,7 @@ class TestTheDialogSeatsIt:
 
         dialog = MainDialog(FakeIface(), None)
         try:
-            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            corner = dialog.active_actions()
             assert corner.findChild(AccountButton) is None
         finally:
             dialog.close()

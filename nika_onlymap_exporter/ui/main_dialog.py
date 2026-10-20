@@ -154,6 +154,7 @@ from .links import (
     REPO_URL,
 )
 from .live_server import PreviewServer
+from .output_switcher import OutputSwitcher
 from .preview import (
     preview_directory,
     preview_mode,
@@ -745,11 +746,10 @@ class MainDialog(QDialog):
             "Fidelity": self._fidelity_page,
             "Help": self._help_page,
         }
-        # Held apart from `self.tabs.cornerWidget()`: the corner swaps between
-        # this and the Cartograph output's own when the switch is pressed (see
-        # `_apply_output`), and only one of the two is ever installed at once.
+        # The web map's actions. They sit in the header beside the output's
+        # name, with the Cartograph output's own; `_apply_output` shows the
+        # one that matches.
         self._web_corner = self._build_tab_corner()
-        self.tabs.setCornerWidget(self._web_corner, Qt.Corner.TopRightCorner)
         # Before Help, where people look for settings.
         self.tabs.insertTab(
             self.tabs.indexOf(self._help_page),
@@ -769,7 +769,7 @@ class MainDialog(QDialog):
         self._frames_tab_widget = _scrollable(self._cartograph.build_frames_tab())
         self._atlas_tab_widget = _scrollable(self._cartograph.build_atlas_tab())
 
-        layout.addWidget(self._build_output_switch())
+        layout.addWidget(self._build_header())
         layout.addWidget(self.tabs)
         # Puts Map/Appearance or Cartograph/Frames on screen to match what was
         # last saved, without marking a project that only opened the dialog as
@@ -2394,74 +2394,38 @@ class MainDialog(QDialog):
 
     # ---- Help tab -------------------------------------------------------
 
-    # ---- Make: Web map | Cartograph (Beta) -------------------------------
+    # ---- Header: Web map ▾ | the output's actions -----------------------
 
-    def _build_output_switch(self) -> QWidget:
-        """`Make: [Web map | Cartograph (Beta)]`, above the tabs.
+    def _build_header(self) -> QWidget:
+        """The output's name as the dialog's title, its actions on the right.
 
-        Two checkable `QToolButton`s in one outlined pill - the same shape as
-        the Preview pill in the corner below, styled by `theme`'s
-        `outputGroup`/`outputPart` roles so it stays modest: this is read once
-        a session, not pressed often, and the dialog's one filled colour is
-        still spent on Export (web map) or nothing at all (cartograph has
-        none), not on this.
+        One row where there were two: the old `Make:` switch had a row of its
+        own above a tab bar that also carried the actions. Here the title
+        opens the menu of outputs (see `ui/output_switcher.py`), and the tab
+        bar below is left with nothing but its tabs.
         """
         row = QWidget(self)
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 6)
         row_layout.setSpacing(8)
 
-        label = QLabel(tr("Make:"), row)
-        row_layout.addWidget(label)
-
-        group_frame = QFrame(row)
-        group_frame.setProperty("role", "outputGroup")
-        group_layout = QHBoxLayout(group_frame)
-        group_layout.setContentsMargins(0, 0, 0, 0)
-        group_layout.setSpacing(0)
-
-        self.output_web_button = QToolButton(group_frame)
-        self.output_web_button.setText(tr("Web map"))
-        self.output_web_button.setProperty("role", "outputPart")
-        self.output_web_button.setProperty("position", "left")
-        self.output_web_button.setCheckable(True)
-        group_layout.addWidget(self.output_web_button)
-
-        self.output_cartograph_button = QToolButton(group_frame)
-        self.output_cartograph_button.setText(tr("Cartograph (Beta)"))
-        self.output_cartograph_button.setProperty("role", "outputPart")
-        self.output_cartograph_button.setProperty("position", "right")
-        self.output_cartograph_button.setCheckable(True)
-        group_layout.addWidget(self.output_cartograph_button)
-
-        self._output_group = QButtonGroup(row)
-        self._output_group.setExclusive(True)
-        self._output_group.addButton(self.output_web_button)
-        self._output_group.addButton(self.output_cartograph_button)
-
-        # Set before connecting: a `QToolButton` emits `toggled` the moment
-        # its checked state actually changes, and at this point in `__init__`
-        # the Cartograph tabs are already built - but connecting first would
-        # still fire this from construction rather than from a press, which is
-        # not what "the user chose a mode" should mean.
-        checked = (
-            self.output_web_button
-            if self.state.output is DialogOutput.WEB_MAP
-            else self.output_cartograph_button
+        self.output_switcher = OutputSwitcher(self.state.output, row)
+        self.output_switcher.chosen.connect(self._apply_output)
+        row_layout.addWidget(self.output_switcher)
+        row_layout.addWidget(
+            self.output_switcher.beta_chip, 0, Qt.AlignmentFlag.AlignVCenter
         )
-        checked.setChecked(True)
-        self.output_web_button.toggled.connect(self._on_output_switch_toggled)
-
-        row_layout.addWidget(group_frame)
         row_layout.addStretch(1)
+        # Both always in the row, one hidden: a hidden widget takes no room.
+        row_layout.addWidget(self._web_corner)
+        row_layout.addWidget(self._cartograph.build_corner())
         return row
 
-    def _on_output_switch_toggled(self, web_checked: bool) -> None:
-        """Only the web button is wired: in an exclusive `QButtonGroup`,
-        checking the other one always toggles this one off first."""
-        self._apply_output(
-            DialogOutput.WEB_MAP if web_checked else DialogOutput.CARTOGRAPH
-        )
+    def active_actions(self) -> QWidget:
+        """The header's actions for the output on screen."""
+        if self.state.output is DialogOutput.WEB_MAP:
+            return self._web_corner
+        return self._cartograph.build_corner()
 
     def _apply_output(self, output: DialogOutput, persist: bool = True) -> None:
         """Swap in the tabs and corner for `output`.
@@ -2479,12 +2443,17 @@ class MainDialog(QDialog):
         second_widget = self._appearance_tab_widget if web else self._frames_tab_widget
         second_label = tr("Appearance") if web else tr("Frames")
 
+        # Removing the open tab moves the selection on to its neighbour; keep
+        # it on whichever tab took the open one's place instead.
+        current = self.tabs.currentIndex()
         if self.tabs.widget(0) is not first_widget:
             self.tabs.removeTab(0)
             self.tabs.insertTab(0, first_widget, first_label)
         if self.tabs.widget(2) is not second_widget:
             self.tabs.removeTab(2)
             self.tabs.insertTab(2, second_widget, second_label)
+        if current in (0, 2):
+            self.tabs.setCurrentIndex(current)
         # Atlas is the cartograph's alone, after Frames; the web map has no
         # third output tab to trade it with.
         atlas_index = self.tabs.indexOf(self._atlas_tab_widget)
@@ -2493,13 +2462,12 @@ class MainDialog(QDialog):
         elif not web and atlas_index < 0:
             self.tabs.insertTab(3, self._atlas_tab_widget, tr("Atlas"))
 
-        # `setCornerWidget` hides the corner it replaces - even when that is
-        # the same widget - and never shows the one it installs. So skip a
-        # no-op install, and show a corner that an earlier swap hid.
-        corner = self._web_corner if web else self._cartograph.build_corner()
-        if self.tabs.cornerWidget(Qt.Corner.TopRightCorner) is not corner:
-            self.tabs.setCornerWidget(corner, Qt.Corner.TopRightCorner)
-            corner.show()
+        self._web_corner.setVisible(web)
+        self._cartograph.build_corner().setVisible(not web)
+        if hasattr(self, "output_switcher"):
+            self.output_switcher.set_output(output)
+            if hasattr(self, "theme"):
+                theme.paint_line_icons(self.output_switcher.parentWidget(), self.theme)
 
         if web:
             self._cartograph.hiding()
@@ -2559,6 +2527,9 @@ class MainDialog(QDialog):
         They belong here for the same reason the count does: these are the two
         things a user does *to* the map, and the tab they happen to be reading
         when they decide to do one is not the dialog's business.
+
+        They now sit in the header, beside the output's name, rather than in
+        the tab bar's corner - see `_build_header`.
         """
         corner = QWidget(self)
         layout = QHBoxLayout(corner)
@@ -2773,7 +2744,7 @@ class MainDialog(QDialog):
         `_switch_to_cartograph` is: the switch's checked state has to move
         with the output it names.
         """
-        self.output_cartograph_button.setChecked(True)
+        self.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
         if layout_name:
             self._cartograph.layout_combo.setCurrentText(layout_name)
 
@@ -2789,7 +2760,7 @@ class MainDialog(QDialog):
         `self.state.output` directly would leave the switch showing the wrong
         side pressed.
         """
-        self.output_cartograph_button.setChecked(True)
+        self.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
         self._cartograph.create_from_canvas()
 
     def _build_settings_tab(self) -> QWidget:

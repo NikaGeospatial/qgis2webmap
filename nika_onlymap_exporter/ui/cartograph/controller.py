@@ -29,7 +29,7 @@ import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from qgis.PyQt.QtCore import QSize, QTimer, QUrl
+from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -1104,6 +1104,14 @@ class CartographController:
     # ---- Corner: Accessibility, Preview, Share ----------------------------
 
     def build_corner(self) -> QWidget:
+        """The cartograph's actions, styled as the web map's are.
+
+        Preview and Share in the same outlined buttons with the same line
+        icons. There is no filled button: the cartograph saves itself, so it
+        has no Export, and "Open in browser" did what Preview does - it lives
+        in Share's menu now, still on Ctrl+O. Accessibility is a tool rather
+        than an act, so it is an icon on its own ahead of them.
+        """
         if self._corner is not None:
             return self._corner
 
@@ -1112,36 +1120,42 @@ class CartographController:
         layout.setContentsMargins(0, 0, 6, 0)
         layout.setSpacing(6)
 
-        self.accessibility_button = QToolButton(corner)
-        self.accessibility_button.setText(tr("Accessibility"))
-        self.accessibility_button.setProperty("role", "corner")
+        def button(text: str, icon: str) -> QToolButton:
+            made = QToolButton(corner)
+            made.setText(text)
+            made.setProperty("role", "corner")
+            made.setProperty("accent", False)
+            made.setProperty("hasMenu", False)
+            made.setProperty("lineIcon", icon)
+            made.setIconSize(QSize(15, 15))
+            made.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            layout.addWidget(made)
+            return made
+
+        self.accessibility_button = button("", "contrast")
+        self.accessibility_button.setProperty("iconOnly", True)
+        self.accessibility_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        self.accessibility_button.setAccessibleName(tr("Accessibility"))
         self.accessibility_button.setCheckable(True)
         self.accessibility_button.setToolTip(
             tr("Colour vision: simulate it and check the legend's colours")
         )
         self.accessibility_button.clicked.connect(self.on_accessibility)
-        layout.addWidget(self.accessibility_button)
 
-        self.cartograph_preview_button = QToolButton(corner)
-        self.cartograph_preview_button.setText(tr("Preview"))
-        self.cartograph_preview_button.setProperty("role", "corner")
+        self.cartograph_preview_button = button(tr("Preview"), "preview")
         self.cartograph_preview_button.setToolTip(
             tr("Open the cartograph in your browser.")
         )
-        self.cartograph_preview_button.setIconSize(QSize(15, 15))
         self.cartograph_preview_button.clicked.connect(self.preview)
-        layout.addWidget(self.cartograph_preview_button)
 
-        self.cartograph_share_button = QToolButton(corner)
-        self.cartograph_share_button.setText(tr("Open in browser"))
-        self.cartograph_share_button.setProperty("role", "corner")
+        self.cartograph_share_button = button(tr("Share"), "share")
         self.cartograph_share_button.setProperty("hasMenu", True)
         self.cartograph_share_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.MenuButtonPopup
+            QToolButton.ToolButtonPopupMode.InstantPopup
         )
         self.cartograph_share_button.setMenu(self.build_share_menu())
-        self.cartograph_share_button.clicked.connect(self.on_open_in_browser)
-        layout.addWidget(self.cartograph_share_button)
 
         self._corner = corner
         self._update_share_enabled()

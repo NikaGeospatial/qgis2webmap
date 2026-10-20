@@ -237,8 +237,8 @@ class HandoffDialog(QDialog):
         column.setContentsMargins(0, 0, 0, 0)
         column.addWidget(self._heading(tr("2 · What to ask")))
 
-        # The two-segment control, built the way the main dialog's output
-        # switch is so the theme already dresses it.
+        # The two-segment control, on the theme's `outputGroup`/`outputPart`
+        # roles so it is already dressed.
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel(tr("Paste into"), box))
         group_frame = QFrame(box)

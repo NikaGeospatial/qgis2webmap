@@ -30,6 +30,19 @@ def _dialog(project):
     return MainDialog(FakeIface(), None)
 
 
+def _choose_cartograph(dialog) -> None:
+    """Pick Cartograph from the title's menu, as a click on its row does."""
+    from nika_onlymap_exporter.core.settings import DialogOutput
+
+    dialog.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
+
+
+def _choose_web(dialog) -> None:
+    from nika_onlymap_exporter.core.settings import DialogOutput
+
+    dialog.output_switcher.actions_by_output[DialogOutput.WEB_MAP].trigger()
+
+
 def _add_layout(project, name, maps):
     """A print layout with one `QgsLayoutItemMap` per `(item_id, crs)` in
     `maps`. `item_id` becomes the item's `id()`, so rows are recognisable in
@@ -159,7 +172,7 @@ def _saved_once(qgis_app, project, fake, tmp_path):
     """A dialog on Cartograph whose first autosave has landed."""
     _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
     dialog = _dialog(project)
-    dialog.output_cartograph_button.setChecked(True)
+    _choose_cartograph(dialog)
     target = tmp_path / "survey.html"
     dialog._cartograph.file_edit.setText(str(target))
     dialog._cartograph._on_file_edited(str(target))
@@ -186,21 +199,21 @@ class TestOutputSwitch:
             assert dialog.state.output is DialogOutput.WEB_MAP
             assert dialog.tabs.tabText(0) == "Map"
             assert dialog.tabs.tabText(2) == "Appearance"
-            assert dialog.tabs.cornerWidget() is dialog._web_corner
+            assert dialog.active_actions() is dialog._web_corner
 
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog.state.output is DialogOutput.CARTOGRAPH
             assert dialog.tabs.tabText(0) == "Cartograph"
             assert dialog.tabs.tabText(2) == "Frames"
             assert dialog.tabs.widget(0) is dialog._cartograph_tab_widget
             assert dialog.tabs.widget(2) is dialog._frames_tab_widget
-            assert dialog.tabs.cornerWidget() is not dialog._web_corner
+            assert dialog.active_actions() is not dialog._web_corner
 
-            dialog.output_web_button.setChecked(True)
+            _choose_web(dialog)
             assert dialog.state.output is DialogOutput.WEB_MAP
             assert dialog.tabs.tabText(0) == "Map"
             assert dialog.tabs.widget(0) is dialog._map_tab_widget
-            assert dialog.tabs.cornerWidget() is dialog._web_corner
+            assert dialog.active_actions() is dialog._web_corner
         finally:
             dialog.close()
 
@@ -214,16 +227,98 @@ class TestOutputSwitch:
             dialog.show()
             web = dialog._web_corner
             cartograph = dialog._cartograph.build_corner()
-            for output_button, shown, gone in (
-                (dialog.output_cartograph_button, cartograph, web),
-                (dialog.output_web_button, web, cartograph),
-                (dialog.output_cartograph_button, cartograph, web),
+            for choose, shown, gone in (
+                (_choose_cartograph, cartograph, web),
+                (_choose_web, web, cartograph),
+                (_choose_cartograph, cartograph, web),
             ):
-                output_button.setChecked(True)
+                choose(dialog)
                 qgis_app.processEvents()
-                assert dialog.tabs.cornerWidget() is shown
+                assert dialog.active_actions() is shown
                 assert shown.isVisible()
                 assert not gone.isVisible()
+        finally:
+            dialog.close()
+
+    def test_the_title_names_the_output_and_its_menu_switches_it(
+        self, qgis_app, project
+    ) -> None:
+        """`Web map ▾` is the heading; a row in its menu is the switch."""
+        from nika_onlymap_exporter.core.settings import DialogOutput
+        from nika_onlymap_exporter.ui.output_switcher import _OutputRow
+
+        dialog = _dialog(project)
+        try:
+            dialog.show()
+            switcher = dialog.output_switcher
+            assert switcher.text() == "Web map"
+            assert switcher.property("lineIcon") == "web"
+            assert not switcher.beta_chip.isVisibleTo(dialog)
+            rows = switcher.menu().findChildren(_OutputRow)
+            assert [r.name.text() for r in rows] == ["Web map", "Cartograph"]
+            assert all(r.description.text() for r in rows)
+            assert [r.tick.text() for r in rows] == ["✓", ""]
+
+            rows[1]._choose()
+            assert dialog.state.output is DialogOutput.CARTOGRAPH
+            assert switcher.text() == "Cartograph"
+            assert switcher.property("lineIcon") == "page"
+            assert switcher.beta_chip.isVisibleTo(dialog)
+            assert [r.tick.text() for r in rows] == ["", "✓"]
+        finally:
+            dialog.close()
+
+    def test_a_menu_row_chooses_by_keyboard(self, qgis_app, project) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        from nika_onlymap_exporter.core.settings import DialogOutput
+        from nika_onlymap_exporter.ui.output_switcher import _OutputRow
+
+        dialog = _dialog(project)
+        try:
+            row = dialog.output_switcher.menu().findChildren(_OutputRow)[1]
+            QTest.keyClick(row, Qt.Key.Key_Return)
+            assert dialog.state.output is DialogOutput.CARTOGRAPH
+        finally:
+            dialog.close()
+
+    def test_the_open_tab_stays_open_across_the_switch(self, qgis_app, project) -> None:
+        """The first tab swaps for the first tab, not for Layers beside it."""
+        dialog = _dialog(project)
+        try:
+            dialog.tabs.setCurrentIndex(0)
+            _choose_cartograph(dialog)
+            assert dialog.tabs.currentWidget() is dialog._cartograph_tab_widget
+            _choose_web(dialog)
+            assert dialog.tabs.currentWidget() is dialog._map_tab_widget
+            dialog.tabs.setCurrentIndex(2)
+            _choose_cartograph(dialog)
+            assert dialog.tabs.currentWidget() is dialog._frames_tab_widget
+        finally:
+            dialog.close()
+
+    def test_the_actions_are_in_the_header_not_the_tab_bar(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        dialog = _dialog(project)
+        try:
+            assert dialog.tabs.cornerWidget() is None
+            header = dialog.output_switcher.parentWidget()
+            assert dialog._web_corner.parentWidget() is header
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph.build_corner()
+            assert cartograph.parentWidget() is header
+            buttons = cartograph.findChildren(QToolButton)
+            # Styled as the web map's: line icons, Share's one chevron.
+            assert all(b.property("role") == "corner" for b in buttons)
+            assert all(b.property("lineIcon") for b in buttons)
+            share = dialog._cartograph.cartograph_share_button
+            assert share.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+            assert "open_browser" in dialog._cartograph.cartograph_share_actions
+            assert dialog._cartograph.accessibility_button.accessibleName()
         finally:
             dialog.close()
 
@@ -233,7 +328,7 @@ class TestOutputSwitch:
         dialog = _dialog(project)
         try:
             layers_widget = dialog.tabs.widget(1)
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog.tabs.widget(1) is layers_widget
             assert dialog.tabs.tabText(1) == "Layers"
         finally:
@@ -245,11 +340,11 @@ class TestOutputSwitch:
         dialog = _dialog(project)
         try:
             assert hasattr(dialog, "export_button")
-            dialog.output_cartograph_button.setChecked(True)
-            corner = dialog.tabs.cornerWidget()
+            _choose_cartograph(dialog)
+            corner = dialog.active_actions()
             assert corner.findChild(type(dialog.export_button), "export_button") is None
-            dialog.output_web_button.setChecked(True)
-            assert dialog.tabs.cornerWidget() is dialog._web_corner
+            _choose_web(dialog)
+            assert dialog.active_actions() is dialog._web_corner
             assert hasattr(dialog, "export_button")
         finally:
             dialog.close()
@@ -279,7 +374,7 @@ class TestFramesTab:
         layout.itemById("Detail").setMapRotation(15)
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog._cartograph.layout_combo.currentText() == "Survey"
             assert dialog._cartograph.frames_tree.topLevelItemCount() == 2
 
@@ -301,7 +396,7 @@ class TestFramesTab:
         _add_layout(project, "Blank", [])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog._cartograph.frames_tree.topLevelItemCount() == 0
             assert not dialog._cartograph.frames_empty_note.isHidden()
         finally:
@@ -312,7 +407,7 @@ class TestFramesTab:
     ) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog._cartograph.layout_combo.isEnabled() is False
             assert not dialog._cartograph.layout_empty_note.isHidden()
         finally:
@@ -326,7 +421,7 @@ class TestAutosave:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             target = tmp_path / "survey.html"
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(target))
@@ -346,7 +441,7 @@ class TestAutosave:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             target = tmp_path / "survey.html"
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(target))
@@ -377,7 +472,7 @@ class TestAutosave:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog._cartograph.cartograph_status_label.text().startswith(
                 "Not saved yet"
             )
@@ -390,7 +485,7 @@ class TestAutosave:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             target = tmp_path / "survey.html"
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(target))
@@ -433,7 +528,7 @@ class TestBuildThreadsAndJobs:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(tmp_path / "survey.html"))
             cartograph._run_autosave()
@@ -461,7 +556,7 @@ class TestBuildThreadsAndJobs:
         )
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             rows = list(cartograph._frame_rows.items())
             rows[0][1]["dpi"].setCurrentIndex(rows[0][1]["dpi"].findData(150))
@@ -485,7 +580,7 @@ class TestBuildThreadsAndJobs:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             target = tmp_path / "survey.html"
             dialog._job = object()  # a web-map job in flight
             dialog._cartograph.file_edit.setText(str(target))
@@ -522,11 +617,11 @@ class TestFidelityFollowsTheOutput:
             assert cartograph_summary is not None
             assert "1" in cartograph_message.text  # one row changed
 
-            dialog.output_web_button.setChecked(True)
+            _choose_web(dialog)
             assert dialog.fidelity_panel._summary is not cartograph_summary
             assert dialog.fidelity_strip.message != cartograph_message
 
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert dialog.fidelity_panel._summary is cartograph_summary
             assert dialog.fidelity_strip.message == cartograph_message
         finally:
@@ -563,7 +658,7 @@ class TestFidelityFollowsTheOutput:
     ) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             reads = []
             monkeypatch.setattr(
                 dialog, "_ensure_export", lambda *a, **k: reads.append(a)
@@ -578,7 +673,7 @@ class TestCartographShareMenu:
     def _ready_dialog(self, project, tmp_path):
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
-        dialog.output_cartograph_button.setChecked(True)
+        _choose_cartograph(dialog)
         cartograph = dialog._cartograph
         target = tmp_path / "survey.html"
         target.write_text("<html>pre-existing</html>")
@@ -591,7 +686,7 @@ class TestCartographShareMenu:
     ) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             actions = dialog._cartograph.cartograph_share_actions
             for key in (
                 "copy_path",
@@ -621,7 +716,7 @@ class TestCartographShareMenu:
     ) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert not dialog._cartograph.cartograph_share_actions[
                 "export_qpt"
             ].isEnabled()
@@ -661,7 +756,7 @@ class TestCartographShareMenu:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             dialog._cartograph.file_edit.setText(str(tmp_path / "missing.html"))
             dialog._cartograph._update_share_enabled()
             actions = dialog._cartograph.cartograph_share_actions
@@ -738,7 +833,7 @@ class TestRealAutosave:
         project.layoutManager().addLayout(survey.layout)
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             cartograph.layout_combo.setCurrentText(survey.layout.name())
             target = tmp_path / "survey.html"
@@ -770,7 +865,7 @@ class TestPrintSettings:
         survey.layout.pageCollection().deletePage(1)
         project.layoutManager().addLayout(survey.layout)
         dialog = _dialog(project)
-        dialog.output_cartograph_button.setChecked(True)
+        _choose_cartograph(dialog)
         cartograph = dialog._cartograph
         cartograph.layout_combo.setCurrentText(survey.layout.name())
         if static:
@@ -876,7 +971,7 @@ class TestPrintSettings:
     def test_print_settings_row_needs_a_layout(self, qgis_app, project) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             row = dialog._cartograph.cartograph_share_actions["print_settings"]
             assert not row.isEnabled()
         finally:
@@ -921,7 +1016,7 @@ class TestPageFieldsAndTitle:
         _add_layout(project, "Two", [("B", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             cartograph.layout_combo.setCurrentText("One")
             cartograph.title_edit.setText("First")
@@ -940,11 +1035,11 @@ class TestPageFieldsAndTitle:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             dialog._cartograph.file_edit.setText(str(tmp_path / "parcels.html"))
             dialog._cartograph._on_file_edited(str(tmp_path / "parcels.html"))
             assert dialog.windowTitle().startswith("parcels.html")
-            dialog.output_web_button.setChecked(True)
+            _choose_web(dialog)
             assert dialog.windowTitle() == "QGIS2WebMap by NIKA"
         finally:
             dialog.close()
@@ -971,7 +1066,7 @@ class TestFramesTabExtras:
 
         dialog = MainDialog(Iface(), None)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             (item_id,) = cartograph._frame_rows
             button = cartograph.frames_tree.itemWidget(
@@ -996,7 +1091,7 @@ class TestFramesTabExtras:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             (item_id,) = cartograph._frame_rows
             button = cartograph.frames_tree.itemWidget(
@@ -1061,7 +1156,7 @@ class TestCanvasAndImport:
     ) -> None:
         dialog, _canvas = self._canvas_dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             assert cartograph.canvas_radio.isEnabled()
             cartograph.canvas_radio.click()
@@ -1080,7 +1175,7 @@ class TestCanvasAndImport:
         picked_template.choice = ("locator", "A3", "portrait")
         dialog, _canvas = self._canvas_dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             dialog._cartograph.canvas_radio.click()
             assert picked_template.shown == 1
             # The picker's previews draw the real page for this canvas.
@@ -1101,7 +1196,7 @@ class TestCanvasAndImport:
         picked_template.choice = None
         dialog, _canvas = self._canvas_dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             before = len(project.layoutManager().layouts())
             dialog._cartograph.canvas_radio.click()
             assert picked_template.shown == 1
@@ -1110,10 +1205,12 @@ class TestCanvasAndImport:
             dialog.close()
 
     def test_make_a_cartograph_builds_from_the_canvas(self, qgis_app, project) -> None:
+        from nika_onlymap_exporter.core.settings import DialogOutput
+
         dialog, _canvas = self._canvas_dialog(project)
         try:
             dialog.share_actions["cartograph"].trigger()
-            assert dialog.output_cartograph_button.isChecked()
+            assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
             assert dialog._cartograph.layout_combo.currentText().startswith("carto: ")
         finally:
             dialog.close()
@@ -1121,7 +1218,7 @@ class TestCanvasAndImport:
     def test_without_a_canvas_the_radio_says_why(self, qgis_app, project) -> None:
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             radio = dialog._cartograph.canvas_radio
             assert not radio.isEnabled()
             assert "no map canvas" in radio.toolTip()
@@ -1204,7 +1301,7 @@ class TestWhereItSaves:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             assert cartograph.file_edit.text() == ""
             assert cartograph.file_edit.placeholderText().endswith("Survey.html")
@@ -1221,7 +1318,7 @@ class TestWhereItSaves:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             target = tmp_path / "Survey.html"
             assert dialog._cartograph.file_edit.text() == str(target)
             assert _wait_for(qgis_app, lambda: target.exists())
@@ -1289,7 +1386,7 @@ class TestAtlasTab:
         project.layoutManager().addLayout(built.layout)
         project.setFileName(str(tmp_path / "parcels.qgz"))
         dialog = _dialog(project)
-        dialog.output_cartograph_button.setChecked(True)
+        _choose_cartograph(dialog)
         dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
         return dialog, built
 
@@ -1301,9 +1398,9 @@ class TestAtlasTab:
                 return [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
 
             assert "Atlas" not in titles()
-            dialog.output_cartograph_button.setChecked(True)
+            _choose_cartograph(dialog)
             assert titles().index("Atlas") == titles().index("Frames") + 1
-            dialog.output_web_button.setChecked(True)
+            _choose_web(dialog)
             assert "Atlas" not in titles()
         finally:
             dialog.close()

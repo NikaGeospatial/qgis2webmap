@@ -70,6 +70,17 @@ LINE_ICONS = {
     "live-off": '<circle cx="8" cy="8" r="3.5"/>',
     "share": '<path d="M8 10V2.5M5 5.2 8 2.2l3 3M3.5 8.5v4.5h9V8.5"/>',
     "export": '<path d="M8 2.5V10M5 7.2l3 3 3-3M3.5 13.2h9"/>',
+    "web": (
+        '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.7 1.7 2.5 3.7 2.5 6'
+        'S9.7 12.3 8 14M8 2C6.3 3.7 5.5 5.7 5.5 8s.8 4.3 2.5 6"/>'
+    ),
+    "page": (
+        '<rect x="3.5" y="1.8" width="9" height="12.4" rx="1"/>'
+        '<path d="M5.6 4.6h4.8M5.6 7h4.8v4.4H5.6z"/>'
+    ),
+    "contrast": (
+        '<circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="{c}"/>'
+    ),
     "account": (
         '<circle cx="8" cy="5.5" r="2.5"/>'
         '<path d="M3 13.5c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>'
@@ -808,6 +819,13 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="corner"][hasMenu="true"] {{
     padding-right: 22px;
 }}
+{d} QToolButton[role="corner"][iconOnly="true"] {{
+    padding: 3px 6px;
+}}
+{d} QToolButton[role="corner"][iconOnly="true"]:checked {{
+    background: {p.accent_soft};
+    border-color: {p.muted};
+}}
 {d} QToolButton[role="corner"]::menu-indicator {{
     image: url({p.icon("chevron")});
     subcontrol-origin: padding;
@@ -879,10 +897,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.field};
 }}
 
-/* The Make switch: two checkable buttons in one outlined pill, the same shape
-   as the Preview pill below the tabs. Modest on purpose - it is read once per
-   session, not pressed often, so it borrows the corner's quiet styling rather
-   than inventing a louder one. */
+/* Two checkable buttons in one outlined pill (the hand-off dialog's choice of
+   where to paste), the same shape as the Preview pill. Modest on purpose - it
+   borrows the corner's quiet styling rather than inventing a louder one. */
 {d} QFrame[role="outputGroup"] {{
     background: {p.paper};
     border: 1px solid {p.rule};
@@ -911,6 +928,64 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="outputPart"]:checked {{
     background: {p.accent};
     color: {p.on_accent};
+}}
+
+/* The dialog's title, `Web map ▾`: what it makes, and the menu that changes
+   it. Flat until pointed at, like a heading that happens to open. */
+{d} QToolButton[role="outputTitle"] {{
+    background: transparent;
+    color: {p.ink};
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 3px 22px 3px 6px;
+    min-height: 22px;
+    font-size: 16px;
+    font-weight: 650;
+}}
+{d} QToolButton[role="outputTitle"]:hover,
+{d} QToolButton[role="outputTitle"][menuOpen="true"] {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="outputTitle"]::menu-indicator {{
+    image: url({p.icon("chevron")});
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 10px;
+    height: 10px;
+    right: 7px;
+}}
+{d} QLabel[role="betaChip"] {{
+    color: {p.link};
+    background: {p.accent_soft};
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}}
+{d} QFrame[role="outputRow"] {{
+    background: transparent;
+    border-radius: 5px;
+    min-width: 260px;
+}}
+{d} QFrame[role="outputRow"]:hover, {d} QFrame[role="outputRow"]:focus {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="outputRowIcon"] {{
+    background: transparent;
+    border: none;
+    padding: 0;
+}}
+{d} QLabel[role="outputRowName"] {{
+    color: {p.ink};
+    font-weight: 600;
+}}
+{d} QLabel[role="outputRowDescription"] {{
+    color: {p.muted};
+}}
+{d} QLabel[role="outputRowTick"] {{
+    color: {p.ink};
+    font-weight: 600;
+    min-width: 12px;
 }}
 
 /* Footer chips: outlined, so they read as things to press. */

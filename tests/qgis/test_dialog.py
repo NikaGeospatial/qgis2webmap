@@ -446,12 +446,11 @@ class TestTabCorner:
     def test_the_corner_holds_preview_export_and_share(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtWidgets import QToolButton
 
         dialog = self._dialog(project, make_memory_layer)
         try:
-            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            corner = dialog.active_actions()
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
             # The live switch is a bare dot inside Preview, where an arrow sits.
@@ -1617,7 +1616,7 @@ class TestLivePreviewLifecycle:
             assert action.isEnabled()
             action.trigger()
             assert dialog.state.output is DialogOutput.CARTOGRAPH
-            assert dialog.output_cartograph_button.isChecked()
+            assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
         finally:
             dialog.close()
 
@@ -2473,12 +2472,11 @@ class TestExportIsBack:
     def test_the_corner_is_separate_buttons_with_export_last(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtWidgets import QToolButton
 
         dialog = self._dialog(project, make_memory_layer)
         try:
-            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            corner = dialog.active_actions()
             buttons = corner.findChildren(QToolButton)
             assert buttons[-1] is dialog.export_button
             assert all(b.property("role") in ("corner", "cornerPart") for b in buttons)
@@ -2496,11 +2494,10 @@ class TestExportIsBack:
     def test_export_is_the_filled_button_in_the_corner(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        from qgis.PyQt.QtCore import Qt
 
         dialog = self._dialog(project, make_memory_layer)
         try:
-            corner = dialog.tabs.cornerWidget(Qt.Corner.TopRightCorner)
+            corner = dialog.active_actions()
             assert dialog.export_button.parent() is corner
             assert dialog.export_button.property("accent") is True
             assert dialog.preview_button.property("accent") is False
