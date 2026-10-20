@@ -52,9 +52,10 @@ own file, frames, page fields and print settings.
   Layout Manager as you add, rename or remove layouts. With none, the tab says
   how to make one (**Project → Layouts → New Layout**).
 - **Current canvas (creates a print layout)** - an action rather than a mode:
-  one click builds a layout named `carto: <project title>` from the map canvas,
-  adds it to the project and selects it in the list above. Greyed out when
-  there is no map canvas. See [one-click layouts](one-click-layout.md).
+  it opens the [template picker](one-click-layout.md#choose-a-template), then
+  builds a layout named `carto: <project title>` from the map canvas in the
+  template you chose, adds it to the project and selects it in the list
+  above. Greyed out when there is no map canvas.
 - **Import cartograph...** - turns a cartograph HTML file back into a new QGIS
   print layout, and selects it. Whatever QGIS cannot hold is listed when the
   import finishes. See [one-click layouts](one-click-layout.md#importing-a-cartograph-back-into-qgis).

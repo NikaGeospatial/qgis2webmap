@@ -107,9 +107,10 @@ On the **Cartograph** tab, under **Source**:
 - **A print layout** - pick it from the list. Every print layout in the
   project is there, and the list follows the Layout Manager: add, rename or
   delete a layout and it updates.
-- **Current canvas (creates a print layout)** - one click builds a new layout
-  called `carto: <project title>` from what the map canvas shows, adds it to
-  the project, and selects it. See [one-click layouts](one-click-layout.md).
+- **Current canvas (creates a print layout)** - pick one of ten
+  [templates](one-click-layout.md#choose-a-template), and a new layout called
+  `carto: <project title>` is built from what the map canvas shows, added to
+  the project and selected.
 
 ![The Cartograph tab, with the Source list highlighted.](images/cartograph-01-source.png)
 

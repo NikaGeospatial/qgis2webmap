@@ -50,6 +50,29 @@ def _add_layout(project, name, maps):
     return layout
 
 
+@pytest.fixture(autouse=True)
+def picked_template(monkeypatch):
+    """The template picker is modal; a test that reaches it would wait for a
+    click forever. It answers Classic on A4 fitted to the map unless a test
+    sets `choice` (`None` is Cancel), and records each time it was shown."""
+    from nika_onlymap_exporter.ui.cartograph import template_picker
+
+    class Picker:
+        def __init__(self) -> None:
+            self.choice: tuple[str, str, str] | None = ("classic", "A4", "auto")
+            self.shown = 0
+            self.previews: list[object] = []
+
+        def ask(self, render, parent=None):
+            self.shown += 1
+            self.previews.append(render("story-map", "A4", "auto", 120))
+            return self.choice
+
+    picker = Picker()
+    monkeypatch.setattr(template_picker, "ask_template", picker.ask)
+    return picker
+
+
 @pytest.fixture
 def fake_cartograph_export(monkeypatch):
     """Fakes `core.cartograph_export`'s two halves.
@@ -1048,6 +1071,41 @@ class TestCanvasAndImport:
             assert cartograph.layout_radio.isChecked()
             assert dialog.state.cartograph_layout == name
             assert len(cartograph._frame_rows) == 1
+        finally:
+            dialog.close()
+
+    def test_the_picked_template_is_the_layout_built(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        picked_template.choice = ("locator", "A3", "portrait")
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            dialog._cartograph.canvas_radio.click()
+            assert picked_template.shown == 1
+            # The picker's previews draw the real page for this canvas.
+            (preview,) = picked_template.previews
+            assert preview is not None and not preview.isNull()
+            layout = project.layoutManager().layoutByName(
+                dialog._cartograph.layout_combo.currentText()
+            )
+            page = layout.pageCollection().page(0).pageSize()
+            assert (round(page.width()), round(page.height())) == (297, 420)
+            assert layout.itemById("locator") is not None
+        finally:
+            dialog.close()
+
+    def test_cancelling_the_picker_builds_nothing(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        picked_template.choice = None
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            dialog.output_cartograph_button.setChecked(True)
+            before = len(project.layoutManager().layouts())
+            dialog._cartograph.canvas_radio.click()
+            assert picked_template.shown == 1
+            assert len(project.layoutManager().layouts()) == before
         finally:
             dialog.close()
 

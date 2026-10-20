@@ -37,6 +37,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from typing import TypedDict
 
 from .cartograph_ir import (
     PAGE_SIZE_NAMES,
@@ -63,7 +64,13 @@ _PORTRAIT_MM: dict[str, tuple[float, float]] = {
     "A5": (148.0, 210.0),
     "Letter": (215.9, 279.4),
     "Legal": (215.9, 355.6),
+    # ANSI B. Not one of the runtime's `size=` presets, so a page this size is
+    # written with its width and height instead (`page_spec_fields`).
+    "Tabloid": (279.4, 431.8),
 }
+
+#: Every page size a plan can use: the runtime's presets plus Tabloid.
+PLAN_PAGE_SIZES = tuple(_PORTRAIT_MM)
 
 #: Placement constants, in millimetres. Small and fixed rather than scaled by
 #: page size: furniture is read at arm's length on an A0 sheet too, and a
@@ -90,6 +97,7 @@ _LEGEND_SYMBOL_W = 10.0
 _LEGEND_MAX_BODY_SHARE = 0.4
 
 ORIENTATION_CHOICES = ("auto", "portrait", "landscape")
+LEGEND_CHOICES = ("auto", "right", "below")
 
 
 @dataclass(frozen=True)
@@ -106,6 +114,8 @@ class CanvasLayoutInput:
     title: str = ""
     layer_names: Sequence[str] = ()
     credits: Sequence[str] = ()
+    # "auto" puts the legend wherever the frame comes out larger.
+    legend: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -135,7 +145,7 @@ class CanvasLayoutPlan:
 def page_dimensions(size: str, orientation: str) -> tuple[float, float]:
     """`(width, height)` in mm of a preset page in a concrete orientation."""
     if size not in _PORTRAIT_MM:
-        raise ValueError(f"page size {size!r} is not one of {PAGE_SIZE_NAMES}")
+        raise ValueError(f"page size {size!r} is not one of {PLAN_PAGE_SIZES}")
     short, long = _PORTRAIT_MM[size]
     if orientation == "portrait":
         return short, long
@@ -167,8 +177,10 @@ def plan_canvas_layout(data: CanvasLayoutInput) -> CanvasLayoutPlan:
         )
     if data.page_size not in _PORTRAIT_MM:
         raise ValueError(
-            f"page size {data.page_size!r} is not one of {PAGE_SIZE_NAMES}"
+            f"page size {data.page_size!r} is not one of {PLAN_PAGE_SIZES}"
         )
+    if data.legend not in LEGEND_CHOICES:
+        raise ValueError(f"legend {data.legend!r} is not one of {LEGEND_CHOICES}")
 
     credits = _unique_credits(data.credits)
     orientations = (
@@ -190,13 +202,40 @@ def canvas_spec(
     """
     if not _same_box(frame.box, plan.frame):
         raise ValueError(f"frame box {frame.box} is not the planned box {plan.frame}")
-    items: list[CartographItem] = [_with_z(frame, 0)]
+    return CartographSpec(
+        cartograph_id=cartograph_id,
+        title=plan.title_text,
+        attribution=plan.attribution_text,
+        orientation=plan.orientation,
+        items=(_with_z(frame, 0), *canvas_furniture(plan, frame.id)),
+        **page_spec_fields(plan.page_size, plan.orientation),
+    )
+
+
+class PageSpecFields(TypedDict):
+    size: str | None
+    width: float | None
+    height: float | None
+
+
+def page_spec_fields(page_size: str, orientation: str) -> PageSpecFields:
+    """How a `CartographSpec` names this page: a runtime `size=` preset, or
+    its width and height in mm for a size the runtime has no preset for."""
+    if page_size in PAGE_SIZE_NAMES:
+        return {"size": page_size, "width": None, "height": None}
+    width, height = page_dimensions(page_size, orientation)
+    return {"size": None, "width": width, "height": height}
+
+
+def canvas_furniture(plan: CanvasLayoutPlan, frame_id: str) -> list[CartographItem]:
+    """Everything `plan` places around the frame `frame_id`."""
+    items: list[CartographItem] = []
     if plan.graticule_interval is not None:
         items.append(
             GraticuleSpec(
                 id="graticule",
                 box=plan.frame,
-                for_=frame.id,
+                for_=frame_id,
                 crs="EPSG:4326",
                 interval=plan.graticule_interval,
                 labels="inside",
@@ -208,13 +247,13 @@ def canvas_spec(
             LegendSpec(
                 id="legend",
                 box=plan.legend,
-                for_=frame.id,
+                for_=frame_id,
                 columns=plan.legend_columns,
                 z=2,
             )
         )
-    items.append(ScalebarSpec(id="scalebar", box=plan.scalebar, for_=frame.id, z=3))
-    items.append(NorthSpec(id="north", box=plan.north, for_=frame.id, z=4))
+    items.append(ScalebarSpec(id="scalebar", box=plan.scalebar, for_=frame_id, z=3))
+    items.append(NorthSpec(id="north", box=plan.north, for_=frame_id, z=4))
     if plan.title is not None:
         items.append(
             TextSpec(
@@ -238,14 +277,7 @@ def canvas_spec(
                 z=6,
             )
         )
-    return CartographSpec(
-        cartograph_id=cartograph_id,
-        title=plan.title_text,
-        attribution=plan.attribution_text,
-        size=plan.page_size,
-        orientation=plan.orientation,
-        items=tuple(items),
-    )
+    return items
 
 
 # --------------------------------------------------------------------------
@@ -307,7 +339,8 @@ def _plan_for(
         legend_w = _legend_right_width(data.layer_names)
         fw, fh = _fit(aspect, content_w - legend_w - _GAP, body_h)
         right_h = min(_LEGEND_TITLE_H + layer_count * _LEGEND_ROW_H, fh)
-        options.append((fw, fh, "right", legend_w, right_h, 1))
+        if data.legend in ("auto", "right"):
+            options.append((fw, fh, "right", legend_w, right_h, 1))
 
         below_columns = min(_LEGEND_MAX_COLUMNS, layer_count)
         rows = math.ceil(layer_count / below_columns)
@@ -315,7 +348,8 @@ def _plan_for(
             _LEGEND_TITLE_H + rows * _LEGEND_ROW_H, body_h * _LEGEND_MAX_BODY_SHARE
         )
         fw, fh = _fit(aspect, content_w, body_h - below_h - _GAP)
-        options.append((fw, fh, "below", fw, below_h, below_columns))
+        if data.legend in ("auto", "below"):
+            options.append((fw, fh, "below", fw, below_h, below_columns))
     # max() keeps the first of equals, so a tie goes to the right-hand legend.
     fw, fh, legend_position, legend_w, legend_h, columns = max(
         options, key=lambda option: option[0] * option[1]

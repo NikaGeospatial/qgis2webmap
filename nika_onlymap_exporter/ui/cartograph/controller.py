@@ -330,8 +330,10 @@ class CartographController:
 
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
-        layout in the project, selected as this cartograph's source."""
-        from ...core.canvas_cartograph import cartograph_from_canvas
+        layout in the project, selected as this cartograph's source -- in the
+        layout template the user picks (`template_picker.py`)."""
+        from ...core.canvas_cartograph import cartograph_from_canvas, template_preview
+        from .template_picker import ask_template
 
         canvas = self._map_canvas()
         if canvas is None:
@@ -339,8 +341,36 @@ class CartographController:
                 tr("There is no map canvas to build a layout from.")
             )
             return
+        settings = canvas.mapSettings()
+        placeholders = _template_placeholders()
+
+        def render(template_id: str, page_size: str, orientation: str, width_px: int):
+            return template_preview(
+                settings.extent(),
+                settings.destinationCrs(),
+                canvas.layers(),
+                self.project,
+                template_id=template_id,
+                width_px=width_px,
+                rotation=settings.rotation(),
+                page_size=page_size,
+                orientation=orientation,
+                placeholders=placeholders,
+            )
+
+        choice = ask_template(render, parent=self.dialog)
+        if choice is None:
+            return
+        template_id, page_size, orientation = choice
         try:
-            result = cartograph_from_canvas(canvas, self.project)
+            result = cartograph_from_canvas(
+                canvas,
+                self.project,
+                page_size=page_size,
+                orientation=orientation,
+                template_id=template_id,
+                placeholders=placeholders,
+            )
         except Exception as exc:  # a canvas state nobody anticipated
             self.dialog.status_label.setText(
                 tr("Could not build a layout from the canvas: {error}").format(
@@ -1549,3 +1579,14 @@ class CartographController:
 
         self._current_layout.saveAsTemplate(chosen, QgsReadWriteContext())
         self.dialog.status_label.setText(tr("Saved {path}").format(path=chosen))
+
+
+def _template_placeholders() -> dict[str, str]:
+    """The words a template's panels show until the user writes their own,
+    in the user's language (`core/layout_templates.py` keeps the keys)."""
+    return {
+        "notes": tr("Describe the map here: what it shows, where the data comes from."),
+        "figure": tr("Key figure"),
+        "figure_note": tr("What the number means"),
+        "author": tr("Author"),
+    }

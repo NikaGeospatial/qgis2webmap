@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsLayoutExporter,
     QgsMapLayer,
     QgsPointXY,
     QgsPrintLayout,
@@ -42,23 +43,27 @@ from qgis.core import (
     QgsRectangle,
 )
 from qgis.gui import QgsMapCanvas
+from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QImage
 
-from .canvas_layout import (
-    CanvasLayoutInput,
-    CanvasLayoutPlan,
-    canvas_spec,
-    plan_canvas_layout,
-)
 from .cartograph_import import RoundTripIssue
 from .cartograph_ir import CartographSpec, FrameSpec
 from .layer_reader import read_attribution
-from .layout_builder import build_layout
+from .layout_builder import BuiltLayout, build_layout
 from .layout_reader import FrameMode, default_mode_for_map
+from .layout_templates import (
+    MAIN_FRAME_ID,
+    FrameSlot,
+    TemplateInput,
+    TemplatePlan,
+    plan_template,
+    template_spec,
+)
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
-#: The frame's id in the spec and the map item's id in the layout.
-FRAME_ID = "main"
+#: The main frame's id in the spec and the map item's id in the layout.
+FRAME_ID = MAIN_FRAME_ID
 #: What the layout is called when the project has no title.
 _UNTITLED = "map"
 _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
@@ -79,7 +84,7 @@ class CanvasCartograph:
 
     spec: CartographSpec
     layout: QgsPrintLayout
-    plan: CanvasLayoutPlan
+    plan: TemplatePlan
     issues: tuple[RoundTripIssue, ...]
     frame_modes: Mapping[str, FrameMode]
 
@@ -90,9 +95,12 @@ def cartograph_from_canvas(
     *,
     page_size: str = "A4",
     orientation: str = "auto",
+    template_id: str = "classic",
+    placeholders: Mapping[str, str] | None = None,
 ) -> CanvasCartograph:
     """Plan and build the one-click cartograph for what `canvas` shows now:
-    its extent, rotation, destination CRS and layers (in drawing order)."""
+    its extent, rotation, destination CRS and layers (in drawing order), in
+    the layout template `template_id` (`core/layout_templates.py`)."""
     settings = canvas.mapSettings()
     return cartograph_from_view(
         settings.extent(),
@@ -102,6 +110,8 @@ def cartograph_from_canvas(
         rotation=settings.rotation(),
         page_size=page_size,
         orientation=orientation,
+        template_id=template_id,
+        placeholders=placeholders,
     )
 
 
@@ -114,64 +124,157 @@ def cartograph_from_view(
     rotation: float = 0.0,
     page_size: str = "A4",
     orientation: str = "auto",
+    template_id: str = "classic",
+    placeholders: Mapping[str, str] | None = None,
 ) -> CanvasCartograph:
     """`cartograph_from_canvas` for a view given as plain values -- the same
     thing without a widget, for callers (and tests) that have no canvas.
 
     `extent` is the *unrotated* extent in `crs` (`QgsMapSettings.extent()`),
     `rotation` the canvas rotation in degrees, `layers` top layer first.
-    Raises `ValueError` for an empty or non-finite extent or an invalid CRS.
+    Raises `ValueError` for an empty or non-finite extent, an invalid CRS or
+    an unknown template, page size or orientation.
     """
+    plan, spec, built = _build_from_view(
+        extent,
+        crs,
+        layers,
+        project,
+        rotation=rotation,
+        page_size=page_size,
+        orientation=orientation,
+        template_id=template_id,
+        placeholders=placeholders,
+        add_to_project=True,
+    )
+    map_item = built.items_by_id[FRAME_ID]
+    mode: FrameMode = default_mode_for_map(map_item)
+    modes = {map_item.uuid(): mode}
+    for slot in plan.frames[1:]:
+        # A locator inset is context, not the subject: a static picture
+        # keeps it exactly as QGIS draws it at no cost to the page.
+        modes[built.items_by_id[slot.id].uuid()] = "static"
+    return CanvasCartograph(
+        spec=spec,
+        layout=built.layout,
+        plan=plan,
+        issues=built.issues,
+        frame_modes=modes,
+    )
+
+
+def template_preview(
+    extent: QgsRectangle,
+    crs: QgsCoordinateReferenceSystem,
+    layers: Sequence[QgsMapLayer],
+    project: QgsProject,
+    *,
+    template_id: str,
+    width_px: int,
+    rotation: float = 0.0,
+    page_size: str = "A4",
+    orientation: str = "auto",
+    placeholders: Mapping[str, str] | None = None,
+) -> QImage:
+    """The page `template_id` would make of this view, drawn by QGIS
+    `width_px` wide -- the template picker's thumbnail. The layout is built
+    outside the project and thrown away; nothing is added to it."""
+    plan, _spec, built = _build_from_view(
+        extent,
+        crs,
+        layers,
+        project,
+        rotation=rotation,
+        page_size=page_size,
+        orientation=orientation,
+        template_id=template_id,
+        placeholders=placeholders,
+        add_to_project=False,
+    )
+    height_px = max(1, round(width_px * plan.page_height / plan.page_width))
+    image = QgsLayoutExporter(built.layout).renderPageToImage(
+        0, QSize(width_px, height_px)
+    )
+    return image
+
+
+def _build_from_view(
+    extent: QgsRectangle,
+    crs: QgsCoordinateReferenceSystem,
+    layers: Sequence[QgsMapLayer],
+    project: QgsProject,
+    *,
+    rotation: float,
+    page_size: str,
+    orientation: str,
+    template_id: str,
+    placeholders: Mapping[str, str] | None,
+    add_to_project: bool,
+) -> tuple[TemplatePlan, CartographSpec, BuiltLayout]:
     if not crs.isValid():
         raise ValueError("the canvas has no valid CRS")
     if extent.isNull() or not extent.isFinite() or extent.isEmpty():
         raise ValueError("the canvas extent is empty")
 
     title = project.title().strip()
-    plan = plan_canvas_layout(
-        CanvasLayoutInput(
+    plan = plan_template(
+        template_id,
+        TemplateInput(
             extent_width=extent.width(),
             extent_height=extent.height(),
             crs_is_geographic=crs.isGeographic(),
+            crs_authid=crs.authid(),
+            crs_def=crs.toProj() or None,
             page_size=page_size,
             orientation=orientation,
             title=title,
             layer_names=tuple(layer.name() for layer in layers),
             credits=tuple(_credits(layers)),
-        )
+            notes=project.metadata().abstract(),
+            placeholders=dict(placeholders or {}),
+        ),
     )
-    frame = FrameSpec(
-        id=FRAME_ID,
-        box=plan.frame,
-        mode="static",
-        crs=crs.authid() or None,
-        crs_def=crs.toProj() or None,
-        corners=_corners_wgs84(extent, rotation, crs, project),
-        # A placeholder, never written: the frame only carries the view here,
-        # and the export renders its real raster from the layout (see the
-        # `CanvasCartograph.spec` note).
-        image_bytes=b"",
-    )
-    spec = canvas_spec(
+    frames = {
+        slot.id: _frame(slot, extent, rotation, crs, project) for slot in plan.frames
+    }
+    spec = template_spec(
         plan,
-        frame,
+        frames,
         cartograph_id=_ID_SANITIZE_RE.sub("-", title).strip("-") or "cartograph",
     )
     built = build_layout(
         spec,
         project,
         name=f"carto: {title or _UNTITLED}",
-        frame_layers={FRAME_ID: list(layers)},
-        add_to_project=True,
+        frame_layers={slot.id: list(layers) for slot in plan.frames},
+        add_to_project=add_to_project,
     )
-    map_item = built.items_by_id[FRAME_ID]
-    mode: FrameMode = default_mode_for_map(map_item)
-    return CanvasCartograph(
-        spec=spec,
-        layout=built.layout,
-        plan=plan,
-        issues=built.issues,
-        frame_modes={map_item.uuid(): mode},
+    return plan, spec, built
+
+
+def _frame(
+    slot: FrameSlot,
+    extent: QgsRectangle,
+    rotation: float,
+    crs: QgsCoordinateReferenceSystem,
+    project: QgsProject,
+) -> FrameSpec:
+    """The frame for `slot`: the canvas view (a locator's zoomed out about
+    the same centre), as four corners in the canvas CRS."""
+    view = QgsRectangle(extent)
+    if slot.zoom_out != 1.0:
+        view.scale(slot.zoom_out)
+    return FrameSpec(
+        id=slot.id,
+        box=slot.box,
+        mode="static",
+        crs=crs.authid() or None,
+        crs_def=crs.toProj() or None,
+        corners=_corners_wgs84(view, rotation, crs, project),
+        # A placeholder, never written: the frame only carries the view here,
+        # and the export renders its real raster from the layout (see the
+        # `CanvasCartograph.spec` note).
+        image_bytes=b"",
     )
 
 

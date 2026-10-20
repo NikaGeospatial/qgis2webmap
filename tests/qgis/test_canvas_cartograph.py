@@ -90,7 +90,7 @@ class TestCanvasLayout:
         project.setTitle("")
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
         assert result.layout.name() == "carto: map"
-        assert result.plan.title is None
+        assert not any(item.id == "title" for item in result.plan.items)
 
     def test_map_item_shows_the_canvas_view(self, project, parcels) -> None:
         canvas = _utm_canvas(parcels)
@@ -104,7 +104,7 @@ class TestCanvasLayout:
     def test_frame_box_is_the_plan(self, project, parcels) -> None:
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
         map_item = result.layout.itemById(FRAME_ID)
-        box = result.plan.frame
+        box = result.plan.frames[0].box
         pos, size = map_item.positionWithUnits(), map_item.sizeWithUnits()
         assert (pos.x(), pos.y(), size.width(), size.height()) == pytest.approx(
             (box.x, box.y, box.w, box.h), abs=0.01
@@ -156,7 +156,8 @@ class TestCanvasLayout:
         assert map_item.crs().authid() == "EPSG:4326"
         grids = map_item.grids().asList()
         assert len(grids) == 1 and grids[0].enabled()
-        assert grids[0].intervalX() == pytest.approx(result.plan.graticule_interval)
+        (grid,) = [i for i in result.plan.items if i.id == "graticule"]
+        assert grids[0].intervalX() == pytest.approx(grid.interval)
         assert list(result.frame_modes.values()) == ["live"]
 
     def test_credits_become_the_attribution_line(self, project, parcels) -> None:
@@ -182,7 +183,7 @@ class TestCanvasLayout:
         ).spec
         frame = next(item for item in spec.items if isinstance(item, FrameSpec))
         assert frame.mode == "static" and frame.image_bytes
-        assert frame.box.w == pytest.approx(result.plan.frame.w, abs=0.01)
+        assert frame.box.w == pytest.approx(result.plan.frames[0].box.w, abs=0.01)
         assert spec.title == "Survey"
 
     def test_empty_extent_is_rejected(self, project, parcels) -> None:

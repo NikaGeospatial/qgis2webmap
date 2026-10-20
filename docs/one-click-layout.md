@@ -24,6 +24,8 @@ go the other way, back into QGIS as a layout.
 2. On the **Cartograph** tab, click **Current canvas (creates a print
    layout)**. On the web map, **Share → Make a cartograph...** does the same and
    switches the dialog to Cartograph (Beta).
+3. Pick a [template](#choose-a-template), a page size and an orientation, and
+   click **Create layout**.
 
 The plugin builds a print layout called **`carto: <project title>`**
 (`carto: map` for a project with no title, and `carto: map (2)` if the name
@@ -31,7 +33,53 @@ is taken), adds it to the project, and selects it as the cartograph's source.
 
 ![The Cartograph tab after one click: the Source list shows "carto: Parcel survey", and the status bar reports the new layout.](images/cartograph-one-click.png)
 
-## What the layout contains
+## Choose a template
+
+Ten designs, modelled on the print layouts GIS users make most - Esri's print
+service set and the recurring designs of its map gallery. Each preview is the
+real page drawn with the map the canvas shows now, so what you pick is what
+you get.
+
+![The template picker: page size and orientation at the top, and ten previews of the current map - Classic, Legend below, Map only, Report figure, Field / survey map, Poster, Map with locator, Story map, Infographic and Dark full-bleed.](images/cartograph-templates.png)
+
+- **Classic** - title, map, legend beside it (or below, whichever leaves the
+  map larger), scale bar and north arrow. The layout described
+  [below](#what-the-classic-layout-contains).
+- **Legend below** - Classic with the legend always in a band under the map.
+- **Map only** - just the map and its data credits, for placing in another
+  document. The credits stay because most basemap and open-data licences
+  require them.
+- **Report figure** - the map with a caption, scale bar and north arrow under
+  it, and no legend.
+- **Field / survey map** - a bordered sheet with a labelled grid in the map's
+  own units and a title block with the scale, CRS, author and date.
+- **Poster** - a large title band, the map, and a side panel (below the map on
+  a portrait page) for the story, the legend, scale bar and north arrow. Text
+  and bands grow with the page size.
+- **Map with locator** - the map with a locator inset that outlines where it
+  is, and the legend under the inset.
+- **Story map** - the map fills the page, with the title, a text panel and a
+  locator inset laid over it.
+- **Infographic** - a bold title band, the map and legend, and three tiles for
+  key figures.
+- **Dark full-bleed** - a dark page with the map to within a few millimetres of
+  its edges, and light text over it.
+
+The **page size** can be A4, A3, Letter, Tabloid, A5, A2, A1, A0 or Legal;
+**Automatic** orientation takes whichever shows the map larger. The picker
+remembers your last choice.
+
+The panels' text comes from the project: the title from **Project Properties
+→ General → Project title**, the story text from **Metadata → Abstract**.
+Until there is an abstract, the text panels and the infographic tiles hold a
+short placeholder to replace in the layout designer.
+
+Every template except Classic and Legend below gives the map frame the shape
+its design needs; the frame then shows a little more around the canvas view
+rather than cutting any of it off. A locator inset is a static frame - a
+picture of its map, as QGIS draws it.
+
+## What the Classic layout contains
 
 An **A4** page, in whichever orientation gives the map more room, with:
 
@@ -55,8 +103,8 @@ page; unlock the layers in the map's item properties if you want the page to
 follow the canvas.
 
 Whether the map becomes a live or a static frame follows the usual
-[rule](live-or-static-frames.md#the-default): live in EPSG:3857 and
-EPSG:4326, static otherwise.
+[rule](live-or-static-frames.md#the-default): live when the browser can draw
+it where QGIS does, static otherwise.
 
 ## Keep editing it in QGIS
 

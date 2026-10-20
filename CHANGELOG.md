@@ -15,8 +15,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     in the map's own CRS - projected, or geographic such as EPSG:4326 - when
     its layers allow) or **static frames** (a pixel-exact image in the
     layout's own CRS). Maps in EPSG:3857/4326, and other maps that draw in
-    their own CRS, default to live, others to static; the Frames tab switches each one and sets its
-    DPI.
+    their own CRS, default to live, others to static; the Frames tab
+    switches each one and sets its DPI.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
     pictures carry over; the Fidelity tab lists everything that changes or
@@ -24,8 +24,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - **The file saves itself** about a second after each change - in the
     dialog, the layout, a layer's style or the Layers tab. Title, attribution
     and theme on the Cartograph tab.
-  - **Current canvas** builds a `carto:` print layout from the map view, and
-    **Import cartograph** turns a cartograph back into a QGIS layout.
+  - **Current canvas** builds a `carto:` print layout from the map view in
+    one of ten **layout templates** - Classic, Legend below, Map only, Report
+    figure, Field / survey map, Poster, Map with locator, Story map,
+    Infographic and Dark full-bleed - each previewed with the current map,
+    on A4, A3, Letter, Tabloid and more. **Import cartograph** turns a
+    cartograph back into a QGIS layout.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
     margin, fixed and predefined scales; every page as one PNG ZIP, or
     printed together into one multi-page PDF.
