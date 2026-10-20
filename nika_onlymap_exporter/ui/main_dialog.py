@@ -2748,6 +2748,10 @@ class MainDialog(QDialog):
         if layout_name:
             self._cartograph.layout_combo.setCurrentText(layout_name)
 
+    def open_on_web_map(self) -> None:
+        """Switch to Web map - the plugin's "Create web map" entry point."""
+        self.output_switcher.actions_by_output[DialogOutput.WEB_MAP].trigger()
+
     def release_canvas_effects(self) -> None:
         """For the plugin's unload: undo canvas previews this dialog set."""
         self._cartograph.release_canvas_effects()

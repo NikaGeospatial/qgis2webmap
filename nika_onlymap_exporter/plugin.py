@@ -245,8 +245,15 @@ class Qgis2WebMapPlugin:
     # ---- Entry point ----------------------------------------------------
 
     def run(self) -> None:
-        """Open the export dialog, on the web map."""
-        self._open_dialog()
+        """Open the export dialog, on the web map.
+
+        Switched there even when the project was last saved on Cartograph:
+        the action is called "Create web map", and Ctrl+Alt+C is the way in
+        to the other one.
+        """
+        dialog = self._open_dialog()
+        if dialog is not None:
+            dialog.open_on_web_map()
 
     def run_cartograph(self, layout_name: str | None = None) -> None:
         """Open the export dialog, switched to Cartograph (Beta).

@@ -116,3 +116,30 @@ def test_unloading_with_the_dialog_open_does_not_raise(qgis_app) -> None:
     assert plugin.dialog is not None and plugin.dialog.isVisible()
     plugin.unload()
     assert plugin.dialog is None
+
+
+def test_create_web_map_opens_on_the_web_map(qgis_app, project) -> None:
+    """Even for a project last saved on Cartograph, and with the dialog
+    already open there: the action is called "Create web map"."""
+    import nika_onlymap_exporter
+    from nika_onlymap_exporter.core.settings import (
+        DialogOutput,
+        load_state,
+        save_state,
+    )
+
+    state = load_state(project)
+    state.output = DialogOutput.CARTOGRAPH
+    save_state(project, state)
+    plugin = nika_onlymap_exporter.classFactory(_Iface())
+    plugin.initGui()
+    try:
+        plugin.run()
+        assert plugin.dialog.state.output is DialogOutput.WEB_MAP
+        assert plugin.dialog.output_switcher.text() == "Web map"
+        plugin.run_cartograph()
+        assert plugin.dialog.state.output is DialogOutput.CARTOGRAPH
+        plugin.run()
+        assert plugin.dialog.state.output is DialogOutput.WEB_MAP
+    finally:
+        plugin.unload()
