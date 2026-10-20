@@ -322,6 +322,27 @@ class TestOutputSwitch:
         finally:
             dialog.close()
 
+    def test_a_project_saved_on_cartograph_opens_on_it(self, qgis_app, project) -> None:
+        """It used to fail to open: the cartograph drew its report before the
+        dialog had built the strip the report goes on."""
+        from nika_onlymap_exporter.core.settings import (
+            DialogOutput,
+            load_state,
+            save_state,
+        )
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        state = load_state(project)
+        state.output = DialogOutput.CARTOGRAPH
+        save_state(project, state)
+        dialog = _dialog(project)
+        try:
+            assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
+            assert dialog.tabs.widget(0) is dialog._cartograph_tab_widget
+            assert dialog.fidelity_strip.label.text()
+        finally:
+            dialog.close()
+
     def test_layers_tab_is_untouched_by_the_switch(self, qgis_app, project) -> None:
         """Layers stays at index 1 in both modes - shared between outputs,
         per the plan."""

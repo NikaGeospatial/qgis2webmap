@@ -1087,6 +1087,10 @@ class CartographController:
         """Put the last saved cartograph's report on the Fidelity tab and
         strip. Its own report, never the web map's: the dialog calls this
         whenever Cartograph is the output on screen."""
+        if not hasattr(self.dialog, "fidelity_strip"):
+            # A project saved on Cartograph opens on it before the dialog has
+            # built its strip; the dialog draws the report once it has.
+            return
         panel = self.dialog.fidelity_panel
         strip = self.dialog.fidelity_strip
         if self._last_summary is None:
