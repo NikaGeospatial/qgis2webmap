@@ -11,6 +11,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Cartograph** switch at the top of the dialog turns a QGIS print layout into
   one HTML page that opens by double-click and prints at true page size from
   Chromium-based browsers.
+  **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) opens the dialog straight on it.
   - Map items become **live frames** (pan, zoom, popups; in Web Mercator, or
     in the map's own CRS - projected, or geographic such as EPSG:4326 - when
     its layers allow) or **static frames** (a pixel-exact image in the

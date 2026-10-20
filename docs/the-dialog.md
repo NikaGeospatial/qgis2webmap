@@ -12,8 +12,10 @@ lead_image:
 # The dialog, tab by tab
 
 Open it with **Web → QGIS2WebMap by NIKA → Create web map**, the toolbar
-button, or **Ctrl+Alt+W** (**Cmd+Alt+W** on macOS). To change the shortcut, search
-for *Create web map* in **Settings → Keyboard Shortcuts**.
+button, or **Ctrl+Alt+W** (**Cmd+Alt+W** on macOS). **Ctrl+Alt+C**
+(**Cmd+Alt+C**) opens it on Cartograph (Beta) instead. To change either
+shortcut, search for *Create web map* or *Create cartograph* in
+**Settings → Keyboard Shortcuts**.
 
 The dialog is **non-modal**: QGIS stays usable behind it. Reorder, rename or
 restyle layers in the Layers panel and the plugin follows immediately. There is

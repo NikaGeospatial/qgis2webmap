@@ -40,6 +40,10 @@ ACTION_TEXT = N_("Create web map")
 # QGIS binds that to New Map View (and macOS to Minimize), Ctrl+Shift+M to
 # Measure Line and Ctrl+Alt+M to New 3D Map View.
 DEFAULT_SHORTCUT = "Ctrl+Alt+W"
+# Opens the dialog on Cartograph (Beta). Same family as the web map's; QGIS
+# 4.2 binds nothing to it. On layouts where AltGr+C types a letter (AltGr is
+# Ctrl+Alt on Windows) it can be changed in Settings > Keyboard Shortcuts.
+CARTOGRAPH_SHORTCUT = "Ctrl+Alt+C"
 
 # The Cartograph (Beta) output's own Web-menu entry, beside the web map one.
 CARTOGRAPH_ACTION_TEXT = N_("Create cartograph...")
@@ -150,9 +154,9 @@ class Qgis2WebMapPlugin:
         # cleared - and a change made there wins over this default.
         self.iface.registerMainWindowAction(self.action, DEFAULT_SHORTCUT)
 
-        # Cartograph (Beta)'s own Web-menu entry - no toolbar icon and no
-        # default shortcut, so it does not compete with the web map's for
-        # either while it is still a Beta.
+        # Cartograph (Beta)'s own Web-menu entry and shortcut - no toolbar
+        # icon, so it does not compete with the web map's for one while it is
+        # still a Beta.
         self.cartograph_action = QAction(
             icon, tr(CARTOGRAPH_ACTION_TEXT), self.iface.mainWindow()
         )
@@ -164,6 +168,7 @@ class Qgis2WebMapPlugin:
         # which would arrive as the layout name.
         self.cartograph_action.triggered.connect(lambda: self.run_cartograph())
         self.iface.addPluginToWebMenu(MENU_TITLE, self.cartograph_action)
+        self.iface.registerMainWindowAction(self.cartograph_action, CARTOGRAPH_SHORTCUT)
 
         # Print users find the dialog from inside the layout designer, where
         # they already are - per the plan's "Ways in". One action per
@@ -202,6 +207,7 @@ class Qgis2WebMapPlugin:
             self.action = None
 
         if self.cartograph_action is not None:
+            self.iface.unregisterMainWindowAction(self.cartograph_action)
             self.iface.removePluginWebMenu(MENU_TITLE, self.cartograph_action)
             self.cartograph_action.deleteLater()
             self.cartograph_action = None

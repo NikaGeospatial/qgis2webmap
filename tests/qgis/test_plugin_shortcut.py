@@ -76,8 +76,22 @@ class TestShortcut:
             manager.setKeySequence(again.action, "Ctrl+Alt+W")
             again.unload()
 
+    def test_the_dialog_opens_on_cartograph_on_ctrl_alt_c(self, plugin):
+        from qgis.gui import QgsGui
+        from qgis.PyQt.QtGui import QKeySequence
+
+        assert plugin.cartograph_action.shortcut() == QKeySequence("Ctrl+Alt+C")
+        manager = QgsGui.shortcutsManager()
+        assert (
+            manager.actionByName("qgis2webmapCreateCartograph")
+            is plugin.cartograph_action
+        )
+        assert manager.defaultKeySequence(plugin.cartograph_action) == "Ctrl+Alt+C"
+
     def test_unloading_releases_the_shortcut(self, plugin):
         from qgis.gui import QgsGui
 
         plugin.unload()
-        assert QgsGui.shortcutsManager().actionByName("qgis2webmapCreateWebMap") is None
+        manager = QgsGui.shortcutsManager()
+        assert manager.actionByName("qgis2webmapCreateWebMap") is None
+        assert manager.actionByName("qgis2webmapCreateCartograph") is None

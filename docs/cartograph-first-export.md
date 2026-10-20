@@ -93,6 +93,8 @@ Any of these opens the plugin on Cartograph (Beta):
 - **Web → QGIS2WebMap by NIKA → Create cartograph...**
 - In the layout designer, **Layout → Export as cartograph (HTML)...** - this
   also selects the layout you have open.
+- Press **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) - the dialog opens on
+  Cartograph (Beta).
 - Open the plugin as usual (**Ctrl+Alt+W**, **Cmd+Alt+W** on macOS) and press
   **Cartograph (Beta)** beside **Make:** at the top.
 
