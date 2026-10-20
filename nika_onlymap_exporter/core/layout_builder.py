@@ -57,6 +57,7 @@ from qgis.core import (
     QgsLayoutMeasurement,
     QgsLayoutPoint,
     QgsLayoutSize,
+    QgsLegendStyle,
     QgsLineSymbol,
     QgsMapLayer,
     QgsPointXY,
@@ -864,6 +865,12 @@ class _Builder:
                 grid.setAnnotationPosition(position, side)
         if item.format == "dms":
             grid.setAnnotationFormat(QgsLayoutItemMapGrid.DegreeMinuteSecond)
+        else:
+            # As many decimals as the interval has, not QGIS's default three:
+            # a 500 m grid reads "364500", a 0.2 degree one "103.8".
+            grid.setAnnotationPrecision(
+                max(0, -math.floor(math.log10(min(interval_x, interval_y))))
+            )
         if item.color is not None:
             color = _color(item.color)
             symbol = grid.lineSymbol()
@@ -944,10 +951,25 @@ class _Builder:
                 "reordered rows) were not applied; edit them in the legend's "
                 "item properties.",
             )
+        if item.color is not None and (color := _color(item.color)) is not None:
+            # The runtime's `color` is the legend's text ink, every level of it.
+            for style in (
+                QgsLegendStyle.Title,
+                QgsLegendStyle.Group,
+                QgsLegendStyle.Subgroup,
+                QgsLegendStyle.SymbolLabel,
+            ):
+                legend_style = legend.rstyle(style)
+                text_format = legend_style.textFormat()
+                text_format.setColor(color)
+                legend_style.setTextFormat(text_format)
         not_kept = [
             name
             for name, value in (
-                ("color", item.color),
+                (
+                    "color",
+                    item.color if item.color and not _color(item.color) else None,
+                ),
                 ("font-size", item.font_size),
                 ("padding", item.padding),
             )
@@ -1003,6 +1025,9 @@ class _Builder:
                     symbol = symbol.clone()
                     symbol.setColor(colour)
                     setter(symbol)
+            text_format = bar.textFormat()
+            text_format.setColor(colour)
+            bar.setTextFormat(text_format)
         elif item.color is not None:
             self.issue(subject, f"Unreadable scale bar colour {item.color!r}; left.")
         self._place(bar, item.box)

@@ -758,3 +758,58 @@ def test_first_font_family_reads_a_css_font_list() -> None:
     assert first('"Sans Serif", sans-serif') == "Sans Serif"
     assert first("'Open Sans',Arial") == "Open Sans"
     assert first("serif") == "serif"
+
+
+class TestInkAndGridLabels:
+    """The furniture colours a design sets reach QGIS, text included, and a
+    grid labels as many decimals as its interval needs."""
+
+    @staticmethod
+    def _built(project):
+        spec = CartographSpec(
+            cartograph_id="ink",
+            size="A4",
+            orientation="landscape",
+            items=(
+                FrameSpec(
+                    id="main", box=Box(10, 10, 200, 150), center=(103.8, 1.3), zoom=12
+                ),
+                GraticuleSpec(
+                    id="metres",
+                    box=Box(10, 10, 200, 150),
+                    for_="main",
+                    crs="EPSG:32648",
+                    interval=500.0,
+                ),
+                GraticuleSpec(
+                    id="degrees",
+                    box=Box(10, 10, 200, 150),
+                    for_="main",
+                    crs="EPSG:4326",
+                    interval=0.2,
+                ),
+                LegendSpec(
+                    id="legend", box=Box(220, 10, 60, 40), for_="main", color="#eeeeee"
+                ),
+                ScalebarSpec(
+                    id="bar", box=Box(220, 60, 60, 12), for_="main", color="#ffffff"
+                ),
+            ),
+        )
+        return build_layout(spec, project)
+
+    def test_legend_and_scale_bar_text_take_the_colour(self, project) -> None:
+        from qgis.core import QgsLegendStyle
+
+        built = self._built(project)
+        legend = built.items_by_id["legend"]
+        for style in (QgsLegendStyle.Title, QgsLegendStyle.SymbolLabel):
+            assert legend.rstyle(style).textFormat().color().name() == "#eeeeee"
+        assert built.items_by_id["bar"].textFormat().color().name() == "#ffffff"
+        assert not any("color" in issue.detail for issue in built.issues)
+
+    def test_grid_labels_have_the_decimals_their_interval_needs(self, project) -> None:
+        built = self._built(project)
+        grids = built.items_by_id["main"].grids().asList()
+        precision = {round(g.intervalX(), 3): g.annotationPrecision() for g in grids}
+        assert precision == {500.0: 0, 0.2: 1}
