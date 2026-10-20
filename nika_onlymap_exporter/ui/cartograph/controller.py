@@ -33,16 +33,13 @@ from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QAction,
-    QButtonGroup,
     QComboBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMenu,
-    QPushButton,
-    QRadioButton,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -77,6 +74,7 @@ from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import layout_map_items
+from .layout_page import LayoutPicker, LayoutPreview, SaveLocation
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -99,6 +97,10 @@ DPI_CHOICES = (150, 200, 300)
 
 # The runtime's built-in themes (`core/cartograph_ir.CARTOGRAPH_THEMES`), in
 # the order the Theme box offers them.
+# The settings beside the page preview: wide enough for a path's tail and a
+# theme name, narrow enough that the page keeps most of the tab.
+PANEL_WIDTH = 300
+
 _THEME_LABELS = (
     ("default", N_("Default")),
     ("dark", N_("Dark")),
@@ -189,9 +191,10 @@ class CartographController:
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
         has_canvas = self._map_canvas() is not None
-        self.canvas_radio.setEnabled(has_canvas)
-        if not has_canvas:
-            self.canvas_radio.setToolTip(tr("There is no map canvas to build from."))
+        self.layout_combo.set_canvas_available(
+            has_canvas, tr("There is no map canvas to build from.")
+        )
+        self.page_preview.canvas_button.setEnabled(has_canvas)
         self.refresh_layouts()
 
     def hiding(self) -> None:
@@ -231,102 +234,94 @@ class CartographController:
     # ---- Cartograph tab -----------------------------------------------
 
     def build_cartograph_tab(self) -> QWidget:
+        """The page on the left, live; the layout and its settings beside it.
+
+        See `layout_page` for why the tab is split this way.
+        """
         page = QWidget(self.dialog)
-        layout = QVBoxLayout(page)
+        row = QHBoxLayout(page)
+        row.setSpacing(16)
 
-        source_box = QGroupBox(tr("Source"), page)
-        source_layout = QVBoxLayout(source_box)
+        self.page_preview = LayoutPreview(page)
+        self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
+        self.page_preview.import_requested.connect(self.on_import_cartograph)
+        row.addWidget(self.page_preview, 1)
 
-        self._source_group = QButtonGroup(source_box)
-        self.layout_radio = QRadioButton(tr("A print layout"), source_box)
-        self.layout_radio.setChecked(True)
-        self.canvas_radio = QRadioButton(
-            tr("Current canvas (creates a print layout)"), source_box
-        )
-        self.canvas_radio.setToolTip(
-            tr(
-                "Builds a print layout from what the map canvas shows - title, "
-                "map, legend, scale bar and north arrow - and uses it here. "
-                "Edit it in the layout designer any time."
-            )
-        )
-        # One click, then the new layout is the source: the radio is an
-        # action that leaves "A print layout" selected, not a second mode.
-        self.canvas_radio.clicked.connect(self._on_canvas_radio)
-        self._source_group.addButton(self.layout_radio)
-        self._source_group.addButton(self.canvas_radio)
-        source_layout.addWidget(self.layout_radio)
-        source_layout.addWidget(self.canvas_radio)
+        panel = QWidget(page)
+        panel.setFixedWidth(PANEL_WIDTH)
+        column = QVBoxLayout(panel)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(6)
 
-        self.layout_combo = QComboBox(source_box)
+        layout_heading = QLabel(tr("Layout"), panel)
+        layout_heading.setProperty("role", "panelHeading")
+        column.addWidget(layout_heading)
+        self.layout_combo = LayoutPicker(panel)
         self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
-        source_row = QHBoxLayout()
-        source_row.addWidget(self.layout_combo, 1)
-        self.import_button = QPushButton(tr("Import cartograph..."), source_box)
-        self.import_button.setToolTip(
-            tr("Turn a cartograph HTML file back into a QGIS print layout")
-        )
-        self.import_button.clicked.connect(self.on_import_cartograph)
-        source_row.addWidget(self.import_button)
-        source_layout.addLayout(source_row)
+        self.layout_combo.from_canvas_requested.connect(self.create_from_canvas)
+        self.layout_combo.import_requested.connect(self.on_import_cartograph)
+        column.addWidget(self.layout_combo)
 
         self.layout_empty_note = FittedLabel(
             tr(
-                "This project has no print layouts yet. Create one from the "
-                "Layout Manager (Project → Layouts → New Layout), add a "
-                "map to it, then come back here."
+                "This project has no print layouts yet. Build one from the "
+                "canvas, or import a cartograph."
             ),
-            source_box,
+            panel,
         )
         self.layout_empty_note.setWordWrap(True)
+        self.layout_empty_note.setProperty("role", "hint")
         self.layout_empty_note.setVisible(False)
-        source_layout.addWidget(self.layout_empty_note)
-        layout.addWidget(source_box)
+        column.addWidget(self.layout_empty_note)
+        column.addSpacing(10)
 
-        file_box = QGroupBox(tr("Cartograph file"), page)
-        file_form = QFormLayout(file_box)
-        file_row = QHBoxLayout()
-        self.file_edit = QLineEdit(file_box)
-        self.file_edit.setPlaceholderText(tr("Choose where the cartograph is saved"))
-        self.file_edit.textEdited.connect(self._on_file_edited)
-        file_row.addWidget(self.file_edit, 1)
-        choose = QPushButton(tr("Choose…"), file_box)
-        choose.clicked.connect(self._on_choose_file)
-        file_row.addWidget(choose)
-        file_form.addRow(tr("Save to"), file_row)
-        layout.addWidget(file_box)
-
-        page_box = QGroupBox(tr("Page"), page)
-        page_form = QFormLayout(page_box)
-        self.title_edit = QLineEdit(page_box)
+        # Everything below the list belongs to a layout; with none there is
+        # nothing to set, so it is hidden rather than left to type into.
+        self._layout_settings = QWidget(panel)
+        settings_column = QVBoxLayout(self._layout_settings)
+        settings_column.setContentsMargins(0, 0, 0, 0)
+        settings_column.setSpacing(6)
+        page_fields = QWidget(self._layout_settings)
+        page_form = QFormLayout(page_fields)
+        page_form.setContentsMargins(0, 0, 0, 0)
+        page_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        page_form.setVerticalSpacing(4)
+        self.title_edit = QLineEdit(page_fields)
         self.title_edit.setPlaceholderText(tr("The project title"))
         self.title_edit.setToolTip(
             tr("Shown wherever the layout uses the project title. Blank keeps it.")
         )
         self.title_edit.textEdited.connect(self._on_page_edited)
         page_form.addRow(tr("Title"), self.title_edit)
-        self.attribution_edit = QLineEdit(page_box)
+        self.attribution_edit = QLineEdit(page_fields)
         self.attribution_edit.setPlaceholderText(tr("Optional, e.g. data sources"))
         self.attribution_edit.textEdited.connect(self._on_page_edited)
         page_form.addRow(tr("Attribution"), self.attribution_edit)
-        self.theme_combo = QComboBox(page_box)
+        self.theme_combo = QComboBox(page_fields)
         for theme_id, label in _THEME_LABELS:
             self.theme_combo.addItem(tr(label), theme_id)
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
-        layout.addWidget(page_box)
+        settings_column.addWidget(page_fields)
+        settings_column.addStretch(1)
 
-        self.cartograph_status_label = FittedLabel("", page)
+        self.file_edit = SaveLocation(self._layout_settings)
+        self.file_edit.setPlaceholderText(tr("Choose where the cartograph is saved"))
+        self.file_edit.textEdited.connect(self._on_file_edited)
+        self.file_edit.change_requested.connect(self._on_choose_file)
+        settings_column.addWidget(self.file_edit)
+        self.cartograph_status_label = FittedLabel("", self._layout_settings)
         self.cartograph_status_label.setWordWrap(True)
-        layout.addWidget(self.cartograph_status_label)
+        self.cartograph_status_label.setProperty("role", "hint")
+        settings_column.addWidget(self.cartograph_status_label)
+        column.addWidget(self._layout_settings, 1)
+        # Hidden one by one, not as a block: the block's stretch is what keeps
+        # the layout list at the top of the panel.
+        self._layout_only = (page_fields, self.file_edit, self.cartograph_status_label)
         self._update_status_label()
 
-        layout.addStretch(1)
+        row.addWidget(panel)
         return page
-
-    def _on_canvas_radio(self) -> None:
-        self.layout_radio.setChecked(True)
-        self.create_from_canvas()
 
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
@@ -444,8 +439,12 @@ class CartographController:
         self.layout_combo.setCurrentText(name)
         save_state(self.project, self.state)
 
-    def _on_layout_combo_changed(self, name: str) -> None:
-        self._select_layout(name)
+    def _on_layout_combo_changed(self, _text: str) -> None:
+        # An action row passes through the list on its way to running; it
+        # is never a layout to select.
+        name = self.layout_combo.current_layout()
+        if name:
+            self._select_layout(name)
 
     def _on_file_edited(self, text: str) -> None:
         if self.state.cartograph_layout:
@@ -508,7 +507,7 @@ class CartographController:
         path = Path(chosen)
         if path.suffix.lower() != ".html":
             path = path.with_suffix(".html")
-        self.file_edit.setText(str(path))
+        self.file_edit.choose(str(path))
 
     # ---- Frames tab -----------------------------------------------------
 
@@ -717,10 +716,8 @@ class CartographController:
         names = [pl.name() for pl in manager.printLayouts()]
 
         self.layout_combo.blockSignals(True)
-        self.layout_combo.clear()
-        self.layout_combo.addItems(names)
+        self.layout_combo.set_layouts(names)
         self.layout_combo.blockSignals(False)
-        self.layout_combo.setEnabled(bool(names))
         self.layout_empty_note.setVisible(not names)
 
         target = (
@@ -728,10 +725,7 @@ class CartographController:
             if self.state.cartograph_layout in names
             else (names[0] if names else "")
         )
-        if target:
-            self.layout_combo.blockSignals(True)
-            self.layout_combo.setCurrentText(target)
-            self.layout_combo.blockSignals(False)
+        self.layout_combo.select_layout(target)
         self._select_layout(target)
 
     def _on_layouts_changed(self, *_args: object) -> None:
@@ -766,6 +760,9 @@ class CartographController:
         layout = manager.layoutByName(name) if name else None
         self._current_layout = layout
         self.state.cartograph_layout = name or ""
+        self.page_preview.show_layout(layout)
+        for widget in self._layout_only:
+            widget.setVisible(layout is not None)
 
         if layout is not None:
             try:
@@ -812,6 +809,9 @@ class CartographController:
         """A layer was restyled or its edits saved in QGIS: the cartograph
         draws those layers, so it is saved again."""
         if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
+            # The preview draws from caches the layout keeps per item; a
+            # restyled layer is only redrawn once they are refreshed.
+            self._current_layout.refresh()
             self.schedule_autosave()
 
     def _on_layout_content_changed(self) -> None:

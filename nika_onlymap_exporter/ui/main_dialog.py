@@ -763,9 +763,8 @@ class MainDialog(QDialog):
         # `_apply_output` - never added and removed by rebuilding, so a user's
         # in-progress edit on one is never lost by flipping the switch and
         # flipping it back.
-        self._cartograph_tab_widget = _scrollable(
-            self._cartograph.build_cartograph_tab()
-        )
+        # Not scrollable: its page preview scrolls and zooms by itself.
+        self._cartograph_tab_widget = self._cartograph.build_cartograph_tab()
         self._frames_tab_widget = _scrollable(self._cartograph.build_frames_tab())
         self._atlas_tab_widget = _scrollable(self._cartograph.build_atlas_tab())
 
@@ -2462,6 +2461,10 @@ class MainDialog(QDialog):
         elif not web and atlas_index < 0:
             self.tabs.insertTab(3, self._atlas_tab_widget, tr("Atlas"))
 
+        if hasattr(self, "status_label"):
+            self.status_label.setText(
+                getattr(self, "_ready_message", "") if web else ""
+            )
         self._web_corner.setVisible(web)
         self._cartograph.build_corner().setVisible(not web)
         if hasattr(self, "output_switcher"):
@@ -3313,7 +3316,11 @@ class MainDialog(QDialog):
         # so their own rule is applied on top rather than instead.
         self._export_ready = ready
         self._update_share_enabled()
-        self.status_label.setText(message)
+        # The footer line is the web map's; on Cartograph it would count
+        # layers for an export that is not the one on screen.
+        self._ready_message = message
+        if self.state.output is DialogOutput.WEB_MAP:
+            self.status_label.setText(message)
 
     # ---- Actions --------------------------------------------------------
 

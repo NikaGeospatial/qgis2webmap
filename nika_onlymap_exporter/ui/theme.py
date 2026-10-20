@@ -1039,6 +1039,31 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     text-decoration: underline;
 }}
 
+/* The Cartograph tab: the page preview, and the panel beside it. */
+{d} QgsLayoutView[role="layoutPreview"] {{
+    background: {p.canvas};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+}}
+{d} QFrame[role="layoutEmpty"] {{
+    background: {p.paper};
+    border: 1px dashed {p.rule};
+    border-radius: 8px;
+}}
+{d} QLabel[role="layoutEmptyHeading"] {{
+    color: {p.ink};
+    font-size: 15px;
+    font-weight: 650;
+}}
+{d} QLabel[role="layoutEmptyNote"], {d} QLabel[role="hint"],
+{d} QLabel[role="saveLocation"] {{
+    color: {p.muted};
+}}
+{d} QLabel[role="panelHeading"] {{
+    color: {p.ink};
+    font-weight: 600;
+}}
+
 /* A one-line notice across the top: the language offer. */
 {d} QFrame[role="notice"] {{
     background: {p.accent_soft};

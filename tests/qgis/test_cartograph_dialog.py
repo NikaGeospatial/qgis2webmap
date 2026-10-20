@@ -37,6 +37,16 @@ def _choose_cartograph(dialog) -> None:
     dialog.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
 
 
+def _pick_in_layout_list(dialog, kind: str) -> None:
+    """Pick a row of the layout list the way a click does: the list moves to
+    it, then reports it activated."""
+    combo = dialog._cartograph.layout_combo
+    index = combo.findData(kind)
+    assert index >= 0
+    combo.setCurrentIndex(index)
+    combo.activated.emit(index)
+
+
 def _choose_web(dialog) -> None:
     from nika_onlymap_exporter.core.settings import DialogOutput
 
@@ -423,14 +433,24 @@ class TestFramesTab:
         finally:
             dialog.close()
 
-    def test_no_layouts_disables_the_combo_and_shows_the_empty_state(
-        self, qgis_app, project
-    ) -> None:
+    def test_no_layouts_shows_the_empty_state(self, qgis_app, project) -> None:
+        """No layout to pick: the list offers only the two ways to make one,
+        the preview says so with the same two buttons, and the settings that
+        belong to a layout are hidden rather than left to type into."""
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            assert dialog._cartograph.layout_combo.isEnabled() is False
-            assert not dialog._cartograph.layout_empty_note.isHidden()
+            cartograph = dialog._cartograph
+            combo = cartograph.layout_combo
+            assert combo.currentText() == ""
+            assert [combo.itemData(i) for i in range(combo.count())] == [
+                "canvas",
+                "import",
+            ]
+            assert not cartograph.layout_empty_note.isHidden()
+            assert not cartograph.page_preview.showing_page()
+            assert cartograph.title_edit.parentWidget().isHidden()
+            assert cartograph.file_edit.isHidden()
         finally:
             dialog.close()
 
@@ -1179,12 +1199,11 @@ class TestCanvasAndImport:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.canvas_radio.isEnabled()
-            cartograph.canvas_radio.click()
+            assert cartograph.layout_combo.can_build_from_canvas()
+            _pick_in_layout_list(dialog, "canvas")
             name = cartograph.layout_combo.currentText()
             assert name.startswith("carto: ")
             assert project.layoutManager().layoutByName(name) is not None
-            assert cartograph.layout_radio.isChecked()
             assert dialog.state.cartograph_layout == name
             assert len(cartograph._frame_rows) == 1
         finally:
@@ -1197,7 +1216,7 @@ class TestCanvasAndImport:
         dialog, _canvas = self._canvas_dialog(project)
         try:
             _choose_cartograph(dialog)
-            dialog._cartograph.canvas_radio.click()
+            _pick_in_layout_list(dialog, "canvas")
             assert picked_template.shown == 1
             # The picker's previews draw the real page for this canvas.
             (preview,) = picked_template.previews
@@ -1219,7 +1238,7 @@ class TestCanvasAndImport:
         try:
             _choose_cartograph(dialog)
             before = len(project.layoutManager().layouts())
-            dialog._cartograph.canvas_radio.click()
+            _pick_in_layout_list(dialog, "canvas")
             assert picked_template.shown == 1
             assert len(project.layoutManager().layouts()) == before
         finally:
@@ -1236,13 +1255,14 @@ class TestCanvasAndImport:
         finally:
             dialog.close()
 
-    def test_without_a_canvas_the_radio_says_why(self, qgis_app, project) -> None:
+    def test_without_a_canvas_from_canvas_says_why(self, qgis_app, project) -> None:
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            radio = dialog._cartograph.canvas_radio
-            assert not radio.isEnabled()
-            assert "no map canvas" in radio.toolTip()
+            combo = dialog._cartograph.layout_combo
+            assert not combo.can_build_from_canvas()
+            assert "no map canvas" in combo.canvas_tooltip()
+            assert not dialog._cartograph.page_preview.canvas_button.isEnabled()
         finally:
             dialog.close()
 
@@ -1503,3 +1523,100 @@ class TestAtlasTab:
         finally:
             dialog.close()
             project.setFileName("")
+
+
+class TestCartographTab:
+    """The tab is the page, live, beside the layout list and its settings."""
+
+    def test_the_preview_is_the_selected_layout(self, qgis_app, project) -> None:
+        first = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        second = _add_layout(project, "Parcels", [("Main", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph.layout_combo.setCurrentText("Survey")
+            assert cartograph.page_preview.showing_page()
+            assert cartograph.page_preview.view.currentLayout() is first
+            cartograph.layout_combo.setCurrentText("Parcels")
+            assert cartograph.page_preview.view.currentLayout() is second
+            assert not cartograph.file_edit.isHidden()
+        finally:
+            dialog.close()
+
+    def test_a_restyled_layer_redraws_the_preview(self, qgis_app, project) -> None:
+        layout = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            refreshed: list[bool] = []
+            layout.refreshed.connect(lambda: refreshed.append(True))
+            dialog._cartograph.on_project_content_changed()
+            assert refreshed
+        finally:
+            dialog.close()
+
+    def test_the_list_ends_with_the_two_ways_to_make_a_layout(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        """Picking one runs it and leaves the list on the layout it showed."""
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            combo = cartograph.layout_combo
+            kinds = [combo.itemData(i) for i in range(combo.count())]
+            assert kinds == ["layout", None, "canvas", "import"]
+            calls: list[str] = []
+            monkeypatch.setattr(
+                cartograph, "on_import_cartograph", lambda: calls.append("import")
+            )
+            # Connected at build time, so reconnect to reach the stand-in.
+            combo.import_requested.disconnect()
+            combo.import_requested.connect(cartograph.on_import_cartograph)
+            _pick_in_layout_list(dialog, "import")
+            assert calls == ["import"]
+            assert combo.currentText() == "Survey"
+            assert dialog.state.cartograph_layout == "Survey"
+        finally:
+            dialog.close()
+
+    def test_change_saves_to_the_chosen_file(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            target = tmp_path / "chosen"
+            monkeypatch.setattr(
+                QFileDialog, "getSaveFileName", lambda *a, **k: (str(target), "")
+            )
+            cartograph.file_edit.change_button.click()
+            assert cartograph.file_edit.text() == str(target) + ".html"
+            assert dialog.state.cartograph_files["Survey"] == str(target) + ".html"
+            assert str(target) in cartograph.file_edit.label.toolTip()
+        finally:
+            dialog.close()
+
+    def test_the_footer_count_is_the_web_maps_alone(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        project.addMapLayer(make_memory_layer("roads"))
+        dialog = _dialog(project)
+        try:
+            assert "exported" in dialog.status_label.text()
+            _choose_cartograph(dialog)
+            assert dialog.status_label.text() == ""
+            # A layer added while on Cartograph recounts the web map's layers.
+            project.addMapLayer(make_memory_layer("rivers"))
+            dialog._update_export_readiness()
+            assert dialog.status_label.text() == ""
+            _choose_web(dialog)
+            assert "exported" in dialog.status_label.text()
+        finally:
+            dialog.close()
