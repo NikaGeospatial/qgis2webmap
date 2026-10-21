@@ -214,7 +214,10 @@ class FramesList(QWidget):
         """Replace the cards. None is no layout at all; [] a layout with no maps."""
         for card in self._cards.values():
             self._cards_box.removeWidget(card)
-            card.setParent(None)
+            # Hidden and left with its parent until Qt deletes it: taking the
+            # parent away hands it to Python, which could free it before the
+            # deferred delete runs - a crash on the next event loop turn.
+            card.hide()
             card.deleteLater()
         self._cards.clear()
         self._has_layout = rows is not None

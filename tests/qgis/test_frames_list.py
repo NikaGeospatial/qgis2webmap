@@ -164,6 +164,10 @@ def test_summary(frames):
     assert frames.summary() == ""
 
 
+def _shown(frames, kind):
+    return [card for card in frames.findChildren(kind) if not card.isHidden()]
+
+
 def test_replacing_frames_drops_the_old_cards(frames):
     from nika_onlymap_exporter.ui.cartograph.frames_list import FrameCard
 
@@ -171,7 +175,9 @@ def test_replacing_frames_drops_the_old_cards(frames):
     frames.set_frames(_rows())
     old = frames.card("map1")
     frames.set_frames(_rows()[1:])
-    assert len(frames.findChildren(FrameCard)) == 1
+    # Old cards are hidden at once and deleted by Qt on the next turn of the
+    # event loop, so only the shown ones count.
+    assert len(_shown(frames, FrameCard)) == 1
     with pytest.raises(KeyError):
         frames.card("map1")
     assert frames.card("map2") is not old
@@ -188,7 +194,7 @@ def test_replacing_frames_drops_the_old_cards(frames):
     assert record.matches == []
     frames.card("map2").match_button.click()
     assert record.matches == ["map2"]
-    assert len(frames.findChildren(FrameCard)) == 2
+    assert len(_shown(frames, FrameCard)) == 2
 
 
 def test_intro_note_kept(frames):
