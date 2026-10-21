@@ -2424,8 +2424,9 @@ class MainDialog(QDialog):
         """Open a tab by its English name. Titles on screen are translated, so
         the pages are looked up rather than the text.
 
-        Settings and Help open beside the map; on the cartograph, Layers and
-        Fidelity are sections of its panel, so those open instead.
+        Settings and Help open beside the map; on the cartograph, Layers is a
+        section of its panel and Fidelity is its Checks tab, so those open
+        instead.
         """
         page = self._pages.get(title)
         if page is None:
@@ -2563,15 +2564,11 @@ class MainDialog(QDialog):
         else:
             if self.tabs.indexOf(self._layers_page) >= 0:
                 self._web_tab_before_cartograph = self.tabs.currentWidget()
-            for page, section in (
-                (self._layers_page, self._cartograph.layers_section),
-                (self._fidelity_page, self._cartograph.checks_section),
-            ):
+            for page in (self._layers_page, self._fidelity_page):
                 index = self.tabs.indexOf(page)
                 if index >= 0:
                     self.tabs.removeTab(index)
-                section.body_layout.addWidget(page)
-                page.show()
+            self._cartograph.seat_shared(self._layers_page, self._fidelity_page)
         self._set_layers_compact(not web)
         self.fidelity_panel.set_compact(not web)
         if hasattr(self, "fidelity_strip"):
@@ -3481,7 +3478,12 @@ class MainDialog(QDialog):
 
         self._update_export_summary(len(selected))
         self._cartograph.layers_section.set_summary(
-            tr("{n} of {total} included").format(n=len(selected), total=len(available))
+            plural(
+                len(available),
+                "{included} of {n} layer included",
+                "{included} of {n} layers included",
+                included=len(selected),
+            )
             if available
             else ""
         )

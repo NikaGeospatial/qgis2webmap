@@ -352,7 +352,9 @@ class TestOutputSwitch:
             assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
             assert dialog.views.currentWidget() is dialog._cartograph_workspace
             assert dialog.fidelity_strip.label.text()
-            assert dialog._cartograph.checks_section.summary_text()
+            cartograph = dialog._cartograph
+            checks = cartograph._tab_keys.index("checks")
+            assert cartograph.panel_tabs.tabToolTip(checks)
         finally:
             dialog.close()
 
@@ -1467,9 +1469,9 @@ class TestAtlasTab:
         dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
         return dialog, built
 
-    def test_the_section_is_the_cartographs_alone(self, qgis_app, project) -> None:
-        """Atlas is a section of the cartograph's panel, after Map frames; the
-        web map has no tab for it."""
+    def test_the_tab_is_the_cartographs_alone(self, qgis_app, project) -> None:
+        """Atlas is a tab of the cartograph's panel, after Layout; the web map
+        has no tab for it."""
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
@@ -1479,16 +1481,17 @@ class TestAtlasTab:
                 return [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
 
             cartograph = dialog._cartograph
-            atlas = cartograph.atlas_section
+            atlas = cartograph.atlas_tab
+            tabs = cartograph.panel_tabs
             assert "Atlas" not in titles()
             assert not atlas.isVisible()
             _choose_cartograph(dialog)
+            cartograph.open_section("atlas")
             qgis_app.processEvents()
             assert atlas.isVisible()
-            assert cartograph.atlas_tab.parentWidget() is atlas.body
-            column = atlas.parentWidget().layout()
-            frames_at = column.indexOf(cartograph.frames_section)
-            assert column.indexOf(atlas) == frames_at + 1
+            index = tabs.indexOf(tabs.currentWidget())
+            assert index == tabs.indexOf(cartograph.layout_scroll) + 1
+            assert tabs.currentWidget().isAncestorOf(atlas)
             _choose_web(dialog)
             assert "Atlas" not in titles()
             assert not atlas.isVisible()
@@ -1672,9 +1675,10 @@ class TestCartographTab:
 
 
 class TestWorkspace:
-    """The cartograph is one screen - the page, and a panel of sections beside
-    it - in place of the web map's tabs. Layers and the checks are shared:
-    tabs on the web map, sections of the panel on the cartograph."""
+    """The cartograph is one screen - the page, and a panel beside it whose
+    tabs are Layout (in sections), Atlas and Checks - in place of the web
+    map's tabs. Layers and the checks are shared: tabs on the web map; on the
+    cartograph, the Layers section and the Checks tab."""
 
     def test_cartograph_shows_the_workspace_and_no_tabs(
         self, qgis_app, project
@@ -1696,7 +1700,7 @@ class TestWorkspace:
         finally:
             dialog.close()
 
-    def test_layers_and_checks_move_into_sections_and_back(
+    def test_layers_and_checks_move_into_the_panel_and_back(
         self, qgis_app, project
     ) -> None:
         """The same two widgets each way, never copies; back on the web map
@@ -1712,7 +1716,7 @@ class TestWorkspace:
                 assert dialog.tabs.indexOf(layers) < 0
                 assert dialog.tabs.indexOf(checks) < 0
                 assert layers.parentWidget() is cartograph.layers_section.body
-                assert checks.parentWidget() is cartograph.checks_section.body
+                assert checks.parentWidget() is cartograph.checks_page
                 _choose_web(dialog)
                 titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
                 assert titles == ["Map", "Layers", "Appearance", "Fidelity"]
@@ -1721,24 +1725,27 @@ class TestWorkspace:
         finally:
             dialog.close()
 
-    def test_an_open_section_shows_the_shared_widget(self, qgis_app, project) -> None:
+    def test_the_open_section_and_tab_show_the_shared_widgets(
+        self, qgis_app, project
+    ) -> None:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             dialog.show()
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layers_section.set_open(True)
-            cartograph.checks_section.set_open(True)
+            cartograph.open_section("layers")
             qgis_app.processEvents()
             assert dialog.layer_tree.isVisible()
+            cartograph.open_section("checks")
+            qgis_app.processEvents()
             assert dialog.fidelity_panel.isVisible()
         finally:
             dialog.close()
 
     def test_the_strip_is_hidden_on_cartograph(self, qgis_app, project) -> None:
-        """The Checks section's header says the same, so the strip would be
-        said twice."""
+        """The Checks tab's title says the same, so the strip would be said
+        twice."""
         dialog = _dialog(project)
         try:
             dialog.show()
@@ -1802,9 +1809,12 @@ class TestWorkspace:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             combo = cartograph.theme_combo
-            assert cartograph.page_section.summary_text() == combo.currentText()
+            assert combo.currentText() == "Default"
+            assert cartograph.page_section.summary_text() == "Default theme"
             combo.setCurrentIndex(1)
-            assert cartograph.page_section.summary_text() == combo.itemText(1)
+            assert cartograph.page_section.summary_text() == (
+                f"{combo.itemText(1)} theme"
+            )
         finally:
             dialog.close()
 
@@ -1816,7 +1826,7 @@ class TestWorkspace:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.frames_section.summary_text() == "2 live"
+            assert cartograph.frames_section.summary_text() == "2 interactive maps"
             (inset,) = (
                 item_id
                 for item_id in cartograph._frame_rows
@@ -1824,54 +1834,88 @@ class TestWorkspace:
             )
             card = cartograph.frames_list.card(inset)
             card.mode_combo.setCurrentIndex(card.mode_combo.findData("static"))
-            assert cartograph.frames_section.summary_text() == "1 live, 1 static"
+            assert (
+                cartograph.frames_section.summary_text() == "1 interactive map, 1 image"
+            )
             assert dialog.state.frame_choices("Survey")[inset].mode == "static"
         finally:
             dialog.close()
 
-    def test_atlas_summary_turns_on_with_the_atlas(self, qgis_app, project) -> None:
+    def test_atlas_tab_title_turns_on_with_the_atlas(self, qgis_app, project) -> None:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.atlas_section.summary_text() == "Off"
+            tabs = cartograph.panel_tabs
+            index = cartograph._tab_keys.index("atlas")
+
+            def shown() -> tuple[str, str]:
+                return tabs.tabText(index), tabs.tabToolTip(index)
+
+            off = ("Atlas", "One page per feature: off")
+            assert shown() == off
             cartograph.atlas_tab.enabled_check.setChecked(True)
-            assert cartograph.atlas_section.summary_text() == "On"
+            assert shown() == ("Atlas (on)", "One page per feature: on")
             cartograph.atlas_tab.enabled_check.setChecked(False)
-            assert cartograph.atlas_section.summary_text() == "Off"
+            assert shown() == off
         finally:
             dialog.close()
 
-    def test_checks_summary_before_any_check_and_with_nothing_to_report(
+    def test_checks_tab_before_any_check_and_with_nothing_to_report(
         self, qgis_app, project
     ) -> None:
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.checks_section.summary_text() == "Not checked yet."
+            tabs = cartograph.panel_tabs
+            index = cartograph._tab_keys.index("checks")
+
+            def shown() -> tuple[str, str]:
+                return tabs.tabText(index), tabs.tabToolTip(index)
+
+            assert shown() == ("Checks", "Not checked yet.")
             # A saved cartograph whose report changes nothing.
             cartograph._last_summary = types.SimpleNamespace(change_count=0)
             cartograph._update_checks_summary()
-            assert cartograph.checks_section.summary_text() == "Nothing to report."
+            assert shown() == ("Checks", "No differences from the QGIS layout.")
+            # The count goes in the title; the tooltip says it in words.
+            cartograph._last_summary = types.SimpleNamespace(change_count=1)
+            cartograph._update_checks_summary()
+            assert shown() == (
+                "Checks (1)",
+                "1 difference from the QGIS layout to review",
+            )
+            cartograph._last_summary = types.SimpleNamespace(change_count=3)
+            cartograph._update_checks_summary()
+            assert shown() == (
+                "Checks (3)",
+                "3 differences from the QGIS layout to review",
+            )
         finally:
             dialog.close()
 
-    def test_checks_summary_counts_the_changes_once_saved(
+    def test_checks_tab_counts_the_changes_once_saved(
         self, qgis_app, project, tmp_path
     ) -> None:
+        import re
+
         dialog, _target = TestPrintSettings()._real_dialog(
             qgis_app, project, tmp_path, static=True
         )
         try:
-            section = dialog._cartograph.checks_section
+            cartograph = dialog._cartograph
+            tabs = cartograph.panel_tabs
+            index = cartograph._tab_keys.index("checks")
             assert _wait_for(
-                qgis_app, lambda: section.summary_text() != "Not checked yet."
+                qgis_app, lambda: tabs.tabToolTip(index) != "Not checked yet."
             )
-            count, *rest = section.summary_text().split()
-            assert int(count) >= 1
-            assert " ".join(rest) in ("thing changes", "things change")
+            match = re.fullmatch(r"Checks \((\d+)\)", tabs.tabText(index))
+            assert match is not None, tabs.tabText(index)
+            count = int(match.group(1))
+            assert count >= 1
+            assert tabs.tabToolTip(index).startswith(f"{count} difference")
         finally:
             dialog.close()
 
@@ -1886,26 +1930,31 @@ class TestWorkspace:
         try:
             _choose_cartograph(dialog)
             section = dialog._cartograph.layers_section
-            assert section.summary_text() == "2 of 2 included"
+            assert section.summary_text() == "2 of 2 layers included"
             dialog.layer_tree.topLevelItem(0).setCheckState(1, Qt.CheckState.Unchecked)
-            assert section.summary_text() == "1 of 2 included"
+            assert section.summary_text() == "1 of 2 layers included"
         finally:
             dialog.close()
 
-    def test_show_tab_opens_a_section_on_cartograph_and_a_tab_on_the_web_map(
+    def test_show_tab_opens_the_panel_on_cartograph_and_a_tab_on_the_web_map(
         self, qgis_app, project
     ) -> None:
+        """On the cartograph, Fidelity opens the Checks tab and Layers opens
+        its section, back on the Layout tab."""
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
+            tabs = cartograph.panel_tabs
             assert not cartograph.layers_section.is_open()
-            assert not cartograph.checks_section.is_open()
+            assert tabs.currentWidget() is cartograph.layout_scroll
+            dialog._show_tab("Fidelity")
+            assert tabs.currentWidget() is cartograph.checks_page
+            assert dialog.views.currentWidget() is dialog._cartograph_workspace
             dialog._show_tab("Layers")
             assert cartograph.layers_section.is_open()
+            assert tabs.currentWidget() is cartograph.layout_scroll
             assert dialog.views.currentWidget() is dialog._cartograph_workspace
-            dialog._show_tab("Fidelity")
-            assert cartograph.checks_section.is_open()
 
             _choose_web(dialog)
             dialog._show_tab("Layers")
@@ -2043,5 +2092,240 @@ class TestWorkspace:
             assert state() == compact
             _choose_web(dialog)
             assert state() == web
+        finally:
+            dialog.close()
+
+
+class TestPanel:
+    """The panel beside the page: the layout list with its Add... button,
+    then the Layout, Atlas and Checks tabs, and its first width."""
+
+    def test_the_tabs_are_layout_atlas_checks(self, qgis_app, project) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            tabs = cartograph.panel_tabs
+            titles = [tabs.tabText(i) for i in range(tabs.count())]
+            assert titles == ["Layout", "Atlas", "Checks"]
+            assert cartograph._tab_keys == ("layout", "atlas", "checks")
+            assert tabs.widget(0) is cartograph.layout_scroll
+            assert tabs.widget(1).widget() is cartograph.atlas_tab
+            assert tabs.widget(2) is cartograph.checks_page
+            # The Layout tab's sections, and no others.
+            assert list(cartograph.sections) == ["page", "frames", "layers"]
+        finally:
+            dialog.close()
+
+    def test_open_section_picks_a_tab_or_a_layout_section(
+        self, qgis_app, project
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            tabs = cartograph.panel_tabs
+            page = cartograph.sections["page"]
+            page.set_open(False)
+            cartograph.open_section("atlas")
+            assert tabs.currentIndex() == 1
+            cartograph.open_section("checks")
+            assert tabs.currentIndex() == 2
+            assert not page.is_open()
+            cartograph.open_section("page")
+            assert tabs.currentIndex() == 0
+            assert page.is_open()
+        finally:
+            dialog.close()
+
+    def test_the_panel_scroll_areas_take_no_focus(self, qgis_app, project) -> None:
+        """The controls inside are the Tab stops; a focused scroll area shows
+        nothing."""
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtWidgets import QScrollArea
+
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            scrolls = [cartograph.layout_scroll, cartograph.panel_tabs.widget(1)]
+            for scroll in scrolls:
+                assert isinstance(scroll, QScrollArea)
+                assert scroll.focusPolicy() == Qt.FocusPolicy.NoFocus
+        finally:
+            dialog.close()
+
+    def test_the_tabs_keep_room_in_a_short_window(self, qgis_app, project) -> None:
+        from nika_onlymap_exporter.ui.cartograph.controller import (
+            PANEL_TABS_MIN_HEIGHT,
+        )
+
+        dialog = _dialog(project)
+        try:
+            tabs = dialog._cartograph.panel_tabs
+            assert tabs.minimumHeight() == PANEL_TABS_MIN_HEIGHT
+        finally:
+            dialog.close()
+
+    def test_layers_summary_says_layer_for_one(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            section = dialog._cartograph.layers_section
+            assert section.summary_text() == "1 of 1 layer included"
+            dialog.layer_tree.topLevelItem(0).setCheckState(1, Qt.CheckState.Unchecked)
+            assert section.summary_text() == "0 of 1 layer included"
+        finally:
+            dialog.close()
+
+    @staticmethod
+    def _stand_ins(monkeypatch) -> list[str]:
+        """The controller's two ways to make a layout, recorded instead of
+        run. Patched on the class before the dialog is built, since the
+        menu connects to the bound methods then."""
+        from nika_onlymap_exporter.ui.cartograph.controller import (
+            CartographController,
+        )
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            CartographController,
+            "create_from_canvas",
+            lambda self, *_args: calls.append("canvas"),
+        )
+        monkeypatch.setattr(
+            CartographController,
+            "on_import_cartograph",
+            lambda self, *_args: calls.append("import"),
+        )
+        return calls
+
+    def test_add_offers_from_canvas_and_import(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        calls = self._stand_ins(monkeypatch)
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            button = cartograph.add_layout_button
+            assert button.text() == "Add..."
+            assert button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+            actions = button.menu().actions()
+            assert [action.text() for action in actions] == [
+                "From canvas...",
+                "Import cartograph...",
+            ]
+            assert actions[0] is cartograph.add_from_canvas_action
+            assert cartograph.add_from_canvas_action.isEnabled()
+            actions[0].trigger()
+            assert calls == ["canvas"]
+            actions[1].trigger()
+            assert calls == ["canvas", "import"]
+        finally:
+            dialog.close()
+
+    def test_without_a_canvas_add_from_canvas_is_off(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        calls = self._stand_ins(monkeypatch)
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            assert not cartograph.add_from_canvas_action.isEnabled()
+            assert not cartograph.page_preview.canvas_button.isEnabled()
+            # Import needs no canvas.
+            (_from_canvas, import_action) = (
+                cartograph.add_layout_button.menu().actions()
+            )
+            assert import_action.isEnabled()
+            import_action.trigger()
+            assert calls == ["import"]
+        finally:
+            dialog.close()
+
+    def test_show_in_folder_reveals_the_cartograph(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph.controller import (
+            CartographController,
+        )
+
+        revealed: list[bool] = []
+        monkeypatch.setattr(
+            CartographController,
+            "on_reveal",
+            lambda self, *_args: revealed.append(True),
+        )
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            save = dialog._cartograph.file_edit
+            assert save.text()
+            assert not save.reveal_button.isHidden()
+            save.reveal_button.click()
+            assert revealed == [True]
+        finally:
+            dialog.close()
+
+    @staticmethod
+    def _panel_width(dialog) -> int:
+        return dialog._cartograph.workspace.sizes()[1]
+
+    @pytest.mark.parametrize(
+        ("window_width", "panel_width"), [(1000, 350), (1600, 430)]
+    )
+    def test_the_first_width_follows_the_window(
+        self, qgis_app, project, window_width, panel_width
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph.controller import PANEL_WIDE_WINDOW
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.resize(window_width, 700)
+            dialog.show()
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            assert _wait_for(qgis_app, lambda: cartograph._panel_sized)
+            workspace_width = cartograph.workspace.width()
+            assert (workspace_width < PANEL_WIDE_WINDOW) == (panel_width == 350)
+            assert self._panel_width(dialog) == panel_width
+        finally:
+            dialog.close()
+
+    def test_the_first_width_is_set_once(self, qgis_app, project) -> None:
+        """After that the width is the user's, through switching away and
+        back."""
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.resize(1000, 700)
+            dialog.show()
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            assert _wait_for(qgis_app, lambda: cartograph._panel_sized)
+            total = sum(cartograph.workspace.sizes())
+            cartograph.workspace.setSizes([total - 500, 500])
+            dialog.resize(1600, 700)
+            _choose_web(dialog)
+            _choose_cartograph(dialog)
+            for _ in range(10):
+                qgis_app.processEvents()
+            cartograph.fit_panel_to_window()
+            assert self._panel_width(dialog) == 500
         finally:
             dialog.close()

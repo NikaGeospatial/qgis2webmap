@@ -7,9 +7,9 @@ or squeeze every cell to an ellipsis. Each map is therefore a small card that
 stacks the same facts in three short lines:
 
 - the map's name, with how many of its items the cartograph changes at the
-  right (the Fidelity tab has the detail);
+  right (Checks has the detail);
 - its CRS, muted;
-- Live or Static, the DPI when Static, and "Use canvas view".
+- Live or Static, the DPI when Static, and "Match QGIS canvas".
 
 The DPI list is hidden rather than greyed out while a frame is Live: a
 disabled control in a narrow card reads as broken, and it only means
@@ -87,10 +87,7 @@ class FrameCard(QFrame):
         self.issues_label = QLabel(self)
         self.issues_label.setProperty("role", "frameIssues")
         self.issues_label.setToolTip(
-            tr(
-                "Items on this frame the cartograph changes or leaves out; "
-                "see the Fidelity tab"
-            )
+            tr("Items on this frame the cartograph changes or leaves out; see Checks")
         )
         head.addWidget(self.issues_label, 0, Qt.AlignmentFlag.AlignRight)
         layout.addLayout(head)
@@ -99,31 +96,41 @@ class FrameCard(QFrame):
         self.crs_label.setProperty("role", "hint")
         layout.addWidget(self.crs_label)
 
+        # What the choice changes, said where it is made: in the HTML the
+        # map is either one people pan and zoom, or a picture of it.
+        self.mode_heading = QLabel(tr("In the HTML"), self)
+        self.mode_heading.setProperty("role", "hint")
+        layout.addWidget(self.mode_heading)
         controls = QHBoxLayout()
         controls.setSpacing(6)
         self.mode_combo = QComboBox(self)
-        self.mode_combo.addItem(tr("Live"), LIVE)
-        self.mode_combo.addItem(tr("Static"), STATIC)
+        self.mode_combo.setAccessibleName(tr("In the HTML"))
+        self.mode_combo.addItem(tr("Live - pan and zoom"), LIVE)
+        self.mode_combo.addItem(tr("Static - an image"), STATIC)
         controls.addWidget(self.mode_combo)
 
         self.dpi_combo = QComboBox(self)
         # Wide enough for "300" whatever the style's arrow takes.
         self.dpi_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.dpi_combo.setMinimumContentsLength(4)
+        self.dpi_combo.setToolTip(tr("Image resolution"))
+        self.dpi_combo.setAccessibleName(tr("Image resolution"))
         for dpi in dpi_choices:
-            self.dpi_combo.addItem(str(dpi), dpi)
+            self.dpi_combo.addItem(tr("{dpi} dpi").format(dpi=dpi), dpi)
         controls.addWidget(self.dpi_combo)
         controls.addStretch(1)
 
         self.match_button = QToolButton(self)
-        self.match_button.setText(tr("Use canvas view"))
+        self.match_button.setText(tr("Match QGIS canvas"))
         self.match_button.setToolTip(
             tr("Set this map item's extent to what the QGIS map canvas shows")
         )
         self.match_button.setProperty("role", "secondary")
         self.match_button.setProperty("hasMenu", False)
-        controls.addWidget(self.match_button)
         layout.addLayout(controls)
+        # On a row of its own: beside the choice it pushed a card wider than
+        # the narrow panel, and it acts on the map item, not the choice.
+        layout.addWidget(self.match_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         self.set_values(row)
 
@@ -264,7 +271,7 @@ class FramesList(QWidget):
             card.set_issue_count(issues)
 
     def set_canvas_available(self, available: bool) -> None:
-        """ "Use canvas view" needs a QGIS map canvas to read the extent from."""
+        """ "Match QGIS canvas" needs a QGIS map canvas to read the extent from."""
         self._canvas_available = available
         for card in self._cards.values():
             card.match_button.setEnabled(available)
@@ -273,7 +280,7 @@ class FramesList(QWidget):
         return self._cards[item_id]
 
     def summary(self) -> str:
-        """A few words for the closed section: "2 live, 1 static"."""
+        """A few words for the closed section: "2 interactive maps, 1 image"."""
         if not self._has_layout:
             return ""
         if not self._cards:
@@ -281,8 +288,8 @@ class FramesList(QWidget):
         modes = [card.mode() for card in self._cards.values()]
         live = modes.count(LIVE)
         static = len(modes) - live
-        live_text = plural(live, "{n} live", "{n} live")
-        static_text = plural(static, "{n} static", "{n} static")
+        live_text = plural(live, "{n} interactive map", "{n} interactive maps")
+        static_text = plural(static, "{n} image", "{n} images")
         if live and static:
             return tr("{live}, {static}").format(live=live_text, static=static_text)
         return live_text if live else static_text

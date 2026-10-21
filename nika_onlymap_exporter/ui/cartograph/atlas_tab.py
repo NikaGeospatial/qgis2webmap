@@ -80,7 +80,8 @@ class AtlasTab(QWidget):
         self.enabled_check.toggled.connect(self._on_enabled)
         page.addWidget(self.enabled_check)
 
-        settings = QGroupBox(tr("Atlas"), self)
+        # Untitled: it sits in the panel's Atlas tab, under that name already.
+        settings = QGroupBox(self)
         form = QFormLayout(settings)
         self.coverage_combo = QgsMapLayerComboBox(settings)
         self.coverage_combo.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)

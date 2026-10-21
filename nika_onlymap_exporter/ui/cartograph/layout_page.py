@@ -21,12 +21,16 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan
-from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPalette, QResizeEvent, QShowEvent, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -208,9 +212,14 @@ class LayoutPreview(QStackedWidget):
         # The page fills the space - on first show, on a resize, on another
         # layout - until the user zooms; their zoom then stays, until another
         # layout is chosen.
+        # A zoom is the user's when it comes from their wheel or the zoom
+        # buttons: the view also reports a zoom change when it is merely
+        # resized, which once stopped the page fitting at all.
         self._user_zoomed = False
-        self._fitting = False
-        self.view.zoomLevelChanged.connect(self._on_zoom_changed)
+        self.view.viewport().installEventFilter(self)
+        # Not the first Tab stop: opening the dialog put the focus ring round
+        # the page. A click still focuses it; the zoom bar is the keyboard's.
+        self.view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.setInterval(0)
@@ -229,18 +238,32 @@ class LayoutPreview(QStackedWidget):
     def showing_page(self) -> bool:
         return self.currentWidget() is self.view
 
+    def fit_page(self) -> None:
+        """Fit page: the whole page again, and fitted from now on, as if
+        the user had never zoomed."""
+        self._user_zoomed = False
+        self._fit()
+        # Again once the zoomed page's scroll bars have gone: the first fit
+        # was measured with them still taking room.
+        self._fit_timer.start()
+
+    def zoom_in(self) -> None:
+        self._user_zoomed = True
+        self.view.zoomIn()
+
+    def zoom_out(self) -> None:
+        self._user_zoomed = True
+        self.view.zoomOut()
+
     def _fit(self) -> None:
         if not (self.isVisible() and self.showing_page()) or self._user_zoomed:
             return
-        self._fitting = True
-        try:
-            self.view.zoomFull()
-        finally:
-            self._fitting = False
+        self.view.zoomFull()
 
-    def _on_zoom_changed(self) -> None:
-        if not self._fitting:
+    def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if event is not None and event.type() == QEvent.Type.Wheel:
             self._user_zoomed = True
+        return False
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
@@ -257,34 +280,166 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.start()
 
 
-class SaveLocation(QWidget):
-    """`Saves to ~/Documents/parcels.html  Change...`, in one line.
+class PagePane(QWidget):
+    """The preview with what it is said above it and how to move it below.
 
-    Holds the path the way the text box it replaces did - `text()` and
+    Above: "QGIS layout · A4 landscape". The page is QGIS's drawing of the
+    layout, and the cartograph can differ from it - a north arrow the
+    runtime draws its own way, the Page settings applied on export - so it
+    is named for what it is; Preview shows the HTML itself. Below: Fit page,
+    zoom out, the zoom level and zoom in, which the wheel and a drag also do
+    but nothing on screen said so.
+    """
+
+    shown = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        column = QVBoxLayout(self)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(4)
+        self.caption = QLabel(self)
+        self.caption.setProperty("role", "pageCaption")
+        self.caption.setToolTip(
+            tr(
+                "QGIS's drawing of the print layout. The cartograph can differ "
+                "in places - see Checks - and Preview shows it in the browser."
+            )
+        )
+        column.addWidget(self.caption)
+        self.preview = LayoutPreview(self)
+        column.addWidget(self.preview, 1)
+
+        self.zoom_bar = QWidget(self)
+        bar = QHBoxLayout(self.zoom_bar)
+        bar.setContentsMargins(0, 0, 0, 0)
+        bar.setSpacing(4)
+        self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
+        self.fit_button.clicked.connect(self.preview.fit_page)
+        bar.addWidget(self.fit_button)
+        bar.addStretch(1)
+        self.zoom_out_button = self._bar_button("\N{MINUS SIGN}", tr("Zoom out"))
+        self.zoom_out_button.clicked.connect(self.preview.zoom_out)
+        bar.addWidget(self.zoom_out_button)
+        self.zoom_label = QLabel(self.zoom_bar)
+        self.zoom_label.setProperty("role", "hint")
+        self.zoom_label.setMinimumWidth(44)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bar.addWidget(self.zoom_label)
+        self.zoom_in_button = self._bar_button("+", tr("Zoom in"))
+        self.zoom_in_button.clicked.connect(self.preview.zoom_in)
+        bar.addWidget(self.zoom_in_button)
+        column.addWidget(self.zoom_bar)
+
+        self.preview.view.zoomLevelChanged.connect(self._show_zoom)
+        self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
+        self._show_page_parts()
+
+    def _bar_button(self, text: str, name: str) -> QToolButton:
+        button = QToolButton(self.zoom_bar)
+        button.setText(text)
+        button.setToolTip(name)
+        button.setAccessibleName(name)
+        button.setProperty("role", "secondary")
+        button.setProperty("hasMenu", False)
+        button.setProperty("zoom", True)
+        return button
+
+    def show_layout(self, layout) -> None:  # QgsPrintLayout | None
+        self.preview.show_layout(layout)
+        self.caption.setText(
+            tr("QGIS layout · {page}").format(page=_page_name(layout))
+            if layout is not None
+            else ""
+        )
+        self._show_page_parts()
+
+    def _show_page_parts(self) -> None:
+        showing = self.preview.showing_page()
+        self.caption.setVisible(showing)
+        self.zoom_bar.setVisible(showing)
+        self._show_zoom()
+
+    def _show_zoom(self, *_args: object) -> None:
+        # 100% is the page at its real size on this screen, as QGIS's own
+        # layout designer counts it.
+        view = self.preview.view
+        per_mm = view.physicalDpiX() / 25.4
+        level = view.transform().m11() / per_mm if per_mm else 0.0
+        self.zoom_label.setText(f"{round(level * 100)}%")
+
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        self.shown.emit()
+
+
+def _page_name(layout) -> str:  # QgsPrintLayout
+    """ "A4 landscape", or "216 x 279 mm portrait", for the first page."""
+    from qgis.core import QgsLayoutMeasurementConverter, QgsUnitTypes
+
+    from .status import page_label
+
+    pages = layout.pageCollection()
+    if pages.pageCount() == 0:
+        return ""
+    size = QgsLayoutMeasurementConverter().convert(
+        pages.page(0).pageSize(), QgsUnitTypes.LayoutMillimeters
+    )
+    width, height = size.width(), size.height()
+    orientation = "landscape" if width >= height else "portrait"
+    spec = SimpleNamespace(width=round(width), height=round(height), size=None)
+    spec.orientation = tr(orientation.capitalize()).lower()
+    return page_label(spec) or ""
+
+
+class SaveLocation(QWidget):
+    """Where the cartograph saves: its file name, then the folder under it.
+
+        parcels-Survey.html                     Change...
+        ~/Documents/QGIS2WebMap/Cartographs     Show in folder
+
+    The name first and whole, because it is what someone sharing the file
+    looks for; the folder below, shortened in the middle if it must be, with
+    the full path as its tooltip. It was one line - "Saves to" and a path
+    cut in the middle - which hid the one part people check.
+
+    Holds the path the way the text box it replaced did - `text()` and
     `setText()` - and emits `textEdited` only when the user picks a file, so
     the controller's rules for a typed path apply unchanged.
     """
 
     textEdited = pyqtSignal(str)  # noqa: N815 - mirrors QLineEdit's
     change_requested = pyqtSignal()
+    reveal_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
+        grid = QGridLayout(self)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(0)
         self._path = ""
         self._placeholder = ""
         self.label = QLabel(self)
-        self.label.setProperty("role", "saveLocation")
+        self.label.setProperty("role", "saveName")
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.label.setMinimumWidth(1)
-        row.addWidget(self.label, 1)
+        grid.addWidget(self.label, 0, 0)
+        self.folder_label = QLabel(self)
+        self.folder_label.setProperty("role", "saveLocation")
+        self.folder_label.setMinimumWidth(1)
+        grid.addWidget(self.folder_label, 1, 0)
         self.change_button = QPushButton(tr("Change..."), self)
         self.change_button.setProperty("role", "link")
         self.change_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.change_button.clicked.connect(self.change_requested)
-        row.addWidget(self.change_button)
+        grid.addWidget(self.change_button, 0, 1, Qt.AlignmentFlag.AlignRight)
+        self.reveal_button = QPushButton(tr("Show in folder"), self)
+        self.reveal_button.setProperty("role", "link")
+        self.reveal_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.reveal_button.clicked.connect(self.reveal_requested)
+        grid.addWidget(self.reveal_button, 1, 1, Qt.AlignmentFlag.AlignRight)
+        grid.setColumnStretch(0, 1)
 
     def text(self) -> str:
         return self._path
@@ -307,18 +462,40 @@ class SaveLocation(QWidget):
 
     def _show(self) -> None:
         self.label.setToolTip(self._path)
+        self.folder_label.setToolTip(str(Path(self._path).parent) if self._path else "")
+        has_path = bool(self._path)
+        self.folder_label.setVisible(has_path)
+        self.reveal_button.setVisible(has_path)
         self._elide()
 
     def _elide(self) -> None:
         if not self._path:
             self.label.setText(self._placeholder)
             return
-        prefix = tr("Saves to {path}")
-        metrics = self.label.fontMetrics()
-        room = max(40, self.label.width() - metrics.horizontalAdvance(prefix))
-        shown = metrics.elidedText(self._path, Qt.TextElideMode.ElideMiddle, room)
-        self.label.setText(prefix.format(path=shown))
+        path = Path(self._path)
+        name_metrics = self.label.fontMetrics()
+        self.label.setText(
+            name_metrics.elidedText(
+                path.name, Qt.TextElideMode.ElideMiddle, max(40, self.label.width())
+            )
+        )
+        folder = _home_relative(path.parent)
+        metrics = self.folder_label.fontMetrics()
+        self.folder_label.setText(
+            metrics.elidedText(
+                folder, Qt.TextElideMode.ElideMiddle, max(40, self.folder_label.width())
+            )
+        )
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
         self._elide()
+
+
+def _home_relative(folder: Path) -> str:
+    """`~/Documents/...` rather than `/home/name/Documents/...`: shorter,
+    and the part of the path the user recognises."""
+    try:
+        return str(Path("~") / folder.relative_to(Path.home()))
+    except ValueError:
+        return str(folder)

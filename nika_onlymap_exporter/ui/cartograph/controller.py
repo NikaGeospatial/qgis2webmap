@@ -43,6 +43,7 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
     QScrollArea,
     QSplitter,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -77,7 +78,7 @@ from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import layout_map_items
 from .frames_list import FrameRow, FramesList
-from .layout_page import LayoutPicker, LayoutPreview, SaveLocation
+from .layout_page import LayoutPicker, PagePane, SaveLocation
 from .panel_section import PanelSection
 from .status import page_label, status_text
 
@@ -106,6 +107,12 @@ DPI_CHOICES = (150, 200, 300)
 # screen. The user can drag it wider; never narrower than the minimum.
 PANEL_WIDTH = 380
 PANEL_MIN_WIDTH = 320
+# Its first width follows the window (`fit_panel_to_window`): a small window
+# keeps the page roomy, a large one gives the longer controls space.
+PANEL_WIDTH_SMALL = 350
+PANEL_WIDTH_LARGE = 430
+PANEL_WIDE_WINDOW = 1200
+PANEL_TABS_MIN_HEIGHT = 180
 
 _THEME_LABELS = (
     ("default", N_("Default")),
@@ -142,6 +149,19 @@ def default_cartograph_path(
     safe = re.sub(r"[^\w.-]+", "-", layout_name).strip("-.") or "cartograph"
     project = re.sub(r"[^\w.-]+", "-", Path(project_file_name).stem).strip("-.")
     return base_dir / (f"{project}-{safe}.html" if project else f"{safe}.html")
+
+
+def _panel_scroll(content: QWidget) -> QScrollArea:
+    """A panel tab's content, scrolling up and down only."""
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # Not a Tab stop of its own: the controls inside are, and a focused
+    # scroll area shows no sign of having the focus.
+    scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    scroll.setWidget(content)
+    return scroll
 
 
 class CartographController:
@@ -203,6 +223,7 @@ class CartographController:
             has_canvas, tr("There is no map canvas to build from.")
         )
         self.page_preview.canvas_button.setEnabled(has_canvas)
+        self.add_from_canvas_action.setEnabled(has_canvas)
         self.refresh_layouts()
 
     def hiding(self) -> None:
@@ -243,21 +264,28 @@ class CartographController:
 
     def build_cartograph_tab(self) -> QWidget:
         """The Cartograph output's whole screen: the page, live, and one
-        panel beside it - the layout list, then its settings in sections.
+        panel beside it - the layout list, then three tabs.
 
-        It replaces seven tabs. See `panel_section` for why the settings sit
-        in one panel, and `layout_page` for the page. Layers and Checks are
-        the dialog's own widgets, shared with the web map; the dialog moves
-        them into their sections (`layers_section`, `checks_section`) while
-        Cartograph is on screen.
+        It replaces seven tabs across the dialog. The panel's own tabs -
+        Layout, Atlas, Checks - are the split QGIS's layout designer and
+        ArcGIS Pro make beside their page: the longer tasks get the panel's
+        full height instead of fighting for one scrolling column. Inside
+        Layout, Page, Map frames and Layers are sections that open and close
+        (`panel_section`). Layers and Checks are the dialog's own widgets,
+        shared with the web map; the dialog seats them here while Cartograph
+        is on screen (`seat_shared`).
         """
         splitter = QSplitter(Qt.Orientation.Horizontal, self.dialog)
         splitter.setChildrenCollapsible(False)
 
-        self.page_preview = LayoutPreview(splitter)
+        self.page_pane = PagePane(splitter)
+        self.page_preview = self.page_pane.preview
         self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
         self.page_preview.import_requested.connect(self.on_import_cartograph)
-        splitter.addWidget(self.page_preview)
+        self.page_pane.shown.connect(
+            lambda: QTimer.singleShot(0, self.fit_panel_to_window)
+        )
+        splitter.addWidget(self.page_pane)
 
         panel = QWidget(splitter)
         panel.setMinimumWidth(PANEL_MIN_WIDTH)
@@ -265,14 +293,35 @@ class CartographController:
         column.setContentsMargins(12, 0, 0, 0)
         column.setSpacing(6)
 
-        layout_heading = QLabel(tr("Layout"), panel)
+        layout_heading = QLabel(tr("Print layout"), panel)
         layout_heading.setProperty("role", "panelHeading")
         column.addWidget(layout_heading)
+        picker_row = QHBoxLayout()
+        picker_row.setSpacing(6)
         self.layout_combo = LayoutPicker(panel)
         self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
         self.layout_combo.from_canvas_requested.connect(self.create_from_canvas)
         self.layout_combo.import_requested.connect(self.on_import_cartograph)
-        column.addWidget(self.layout_combo)
+        picker_row.addWidget(self.layout_combo, 1)
+        # The two ways to make a layout, always in sight: at the end of the
+        # list as well, but a list is for choosing, and once a project has
+        # a layout nobody scrolls past it looking for "new".
+        self.add_layout_button = QToolButton(panel)
+        self.add_layout_button.setText(tr("Add..."))
+        self.add_layout_button.setProperty("role", "secondary")
+        self.add_layout_button.setProperty("hasMenu", True)
+        self.add_layout_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        add_menu = QMenu(self.add_layout_button)
+        self.add_from_canvas_action = add_menu.addAction(tr("From canvas..."))
+        self.add_from_canvas_action.triggered.connect(self.create_from_canvas)
+        add_menu.addAction(tr("Import cartograph...")).triggered.connect(
+            self.on_import_cartograph
+        )
+        self.add_layout_button.setMenu(add_menu)
+        picker_row.addWidget(self.add_layout_button)
+        column.addLayout(picker_row)
 
         self.layout_empty_note = FittedLabel(
             tr(
@@ -285,21 +334,20 @@ class CartographController:
         self.layout_empty_note.setProperty("role", "hint")
         self.layout_empty_note.setVisible(False)
         column.addWidget(self.layout_empty_note)
-        column.addSpacing(6)
+        column.addSpacing(4)
 
-        # The sections scroll; the layout list above and the file line below
-        # stay put, so where it saves is always in view.
-        sections_scroll = QScrollArea(panel)
-        sections_scroll.setWidgetResizable(True)
-        sections_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        sections_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        sections = QWidget(sections_scroll)
+        self.panel_tabs = QTabWidget(panel)
+        self.panel_tabs.setProperty("role", "panelTabs")
+        self.panel_tabs.setDocumentMode(True)
+        # Never squeezed to nothing by a short window: the save lines below
+        # are fixed, so the tabs keep room for a few rows of their own.
+        self.panel_tabs.setMinimumHeight(PANEL_TABS_MIN_HEIGHT)
+
+        # Layout: the page's own settings, then its maps, then its layers.
+        sections = QWidget()
         sections_column = QVBoxLayout(sections)
-        sections_column.setContentsMargins(0, 0, 6, 0)
+        sections_column.setContentsMargins(0, 4, 6, 0)
         sections_column.setSpacing(2)
-
         self.page_section = PanelSection(
             "page", tr("Page"), sections, open_by_default=True
         )
@@ -324,27 +372,33 @@ class CartographController:
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
         self.page_section.body_layout.addLayout(page_form)
-
         self.frames_section = PanelSection("frames", tr("Map frames"), sections)
         self.frames_section.body_layout.addWidget(self.build_frames_tab())
-        self.atlas_section = PanelSection("atlas", tr("Atlas"), sections)
-        self.atlas_section.body_layout.addWidget(self.build_atlas_tab())
-        self.atlas_tab.changed.connect(self._update_section_summaries)
-        self.checks_section = PanelSection("checks", tr("Checks"), sections)
         self.layers_section = PanelSection("layers", tr("Layers"), sections)
         self.sections = {
             "page": self.page_section,
             "frames": self.frames_section,
-            "atlas": self.atlas_section,
-            "checks": self.checks_section,
             "layers": self.layers_section,
         }
         for section in self.sections.values():
             sections_column.addWidget(section)
         sections_column.addStretch(1)
-        sections_scroll.setWidget(sections)
-        column.addWidget(sections_scroll, 1)
-        # Takes the sections' room while they are hidden, so the layout list
+        self.layout_scroll = _panel_scroll(sections)
+        self.panel_tabs.addTab(self.layout_scroll, tr("Layout"))
+
+        self.build_atlas_tab()
+        self.atlas_tab.changed.connect(self._update_section_summaries)
+        self.panel_tabs.addTab(_panel_scroll(self.atlas_tab), tr("Atlas"))
+
+        # Checks: the dialog's report panel, which scrolls by itself.
+        self.checks_page = QWidget()
+        self._checks_layout = QVBoxLayout(self.checks_page)
+        self._checks_layout.setContentsMargins(0, 4, 0, 0)
+        self.panel_tabs.addTab(self.checks_page, tr("Checks"))
+        self._tab_keys = ("layout", "atlas", "checks")
+        column.addWidget(self.panel_tabs, 1)
+
+        # Takes the tabs' room while they are hidden, so the layout list
         # stays at the top of an empty panel instead of drifting down it.
         self._panel_filler = QWidget(panel)
         self._panel_filler.setVisible(False)
@@ -354,6 +408,7 @@ class CartographController:
         self.file_edit.setPlaceholderText(tr("Choose where the cartograph is saved"))
         self.file_edit.textEdited.connect(self._on_file_edited)
         self.file_edit.change_requested.connect(self._on_choose_file)
+        self.file_edit.reveal_requested.connect(self.on_reveal)
         column.addWidget(self.file_edit)
         self.cartograph_status_label = FittedLabel("", panel)
         self.cartograph_status_label.setWordWrap(True)
@@ -362,7 +417,7 @@ class CartographController:
         # Everything below the list belongs to a layout; with none there is
         # nothing to set, so it is hidden rather than left to type into.
         self._layout_only = (
-            sections_scroll,
+            self.panel_tabs,
             self.file_edit,
             self.cartograph_status_label,
         )
@@ -372,42 +427,82 @@ class CartographController:
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         splitter.setSizes([10_000, PANEL_WIDTH])
+        self._panel_sized = False
         self.workspace = splitter
         return splitter
 
+    def seat_shared(self, layers_page: QWidget, report_page: QWidget) -> None:
+        """Put the dialog's Layers list and report in this panel - the same
+        widgets the web map shows as tabs."""
+        self.layers_section.body_layout.addWidget(layers_page)
+        self._checks_layout.addWidget(report_page)
+        layers_page.show()
+        report_page.show()
+
+    def fit_panel_to_window(self) -> None:
+        """The panel's first width, from the window's: narrower on a small
+        window so the page keeps room, wider on a large one so the longer
+        controls breathe. Once only - after that the width is the user's."""
+        if self._panel_sized or not self.workspace.isVisible():
+            return
+        total = self.workspace.width()
+        if total <= 0:
+            return
+        self._panel_sized = True
+        width = PANEL_WIDTH_SMALL if total < PANEL_WIDE_WINDOW else PANEL_WIDTH_LARGE
+        self.workspace.setSizes([max(1, total - width), width])
+
     def open_section(self, key: str) -> None:
-        """Open a section and bring it into view - a jump from elsewhere,
-        such as a check's "Show in Layers"."""
+        """Bring a part of the panel into view - a jump from elsewhere, such
+        as a check's "Show in Layers". "atlas" and "checks" are tabs; the
+        rest are sections of the Layout tab."""
+        if key in self._tab_keys:
+            self.panel_tabs.setCurrentIndex(self._tab_keys.index(key))
+            return
+        self.panel_tabs.setCurrentIndex(0)
         section = self.sections[key]
         section.set_open(True)
-        scroll = self._layout_only[0]
-        if isinstance(scroll, QScrollArea):
-            QTimer.singleShot(0, lambda: scroll.ensureWidgetVisible(section, 0, 0))
+        scroll = self.layout_scroll
+        QTimer.singleShot(0, lambda: scroll.ensureWidgetVisible(section, 0, 0))
 
     def _update_checks_summary(self) -> None:
-        if not hasattr(self, "checks_section"):
+        """The Checks tab's title carries the count, as a badge would."""
+        if not hasattr(self, "panel_tabs"):
             return
         summary = self._last_summary
+        index = self._tab_keys.index("checks")
         if summary is None:
-            text = tr("Not checked yet.")
+            tip = tr("Not checked yet.")
+            title = tr("Checks")
         elif not summary.change_count:
-            text = tr("Nothing to report.")
+            tip = tr("No differences from the QGIS layout.")
+            title = tr("Checks")
         else:
-            text = plural(
-                summary.change_count, "{n} thing changes", "{n} things change"
+            tip = plural(
+                summary.change_count,
+                "{n} difference from the QGIS layout to review",
+                "{n} differences from the QGIS layout to review",
             )
-        self.checks_section.set_summary(text)
+            title = tr("Checks ({n})").format(n=summary.change_count)
+        self.panel_tabs.setTabText(index, title)
+        self.panel_tabs.setTabToolTip(index, tip)
 
     def _update_section_summaries(self, *_args: object) -> None:
-        """The few words each closed section shows about itself."""
+        """The few words each closed section, and the Atlas tab, show."""
         if not hasattr(self, "sections"):
             return
-        self.page_section.set_summary(self.theme_combo.currentText())
-        frames = self.frames_list.summary()
-        self.frames_section.set_summary(frames)
+        self.page_section.set_summary(
+            tr("{theme} theme").format(theme=self.theme_combo.currentText())
+        )
+        self.frames_section.set_summary(self.frames_list.summary())
         atlas = getattr(self, "atlas_tab", None)
         on = atlas is not None and atlas.enabled_check.isChecked()
-        self.atlas_section.set_summary(tr("On") if on else tr("Off"))
+        index = self._tab_keys.index("atlas")
+        self.panel_tabs.setTabText(index, tr("Atlas (on)") if on else tr("Atlas"))
+        self.panel_tabs.setTabToolTip(
+            index,
+            tr("One page per feature: on") if on else tr("One page per feature: off"),
+        )
 
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
@@ -685,7 +780,7 @@ class CartographController:
         return get_canvas() if callable(get_canvas) else None
 
     def _match_canvas(self, item_id: str) -> None:
-        """Frames > Use canvas view: the map item takes the canvas's extent.
+        """Map frames > Match QGIS canvas: the map item takes the canvas's extent.
 
         An edit to the user's own layout, so it goes on the layout's undo
         stack where the layout designer's Undo can take it back.
@@ -711,7 +806,7 @@ class CartographController:
         if source.isValid() and item.crs().isValid() and source != item.crs():
             transform = QgsCoordinateTransform(source, item.crs(), self.project)
             extent = transform.transformBoundingBox(extent)
-        layout.undoStack().beginCommand(item, tr("Use canvas view"))
+        layout.undoStack().beginCommand(item, tr("Match QGIS canvas"))
         item.zoomToExtent(extent)
         layout.undoStack().endCommand()
         self.schedule_autosave()
@@ -787,7 +882,7 @@ class CartographController:
         layout = manager.layoutByName(name) if name else None
         self._current_layout = layout
         self.state.cartograph_layout = name or ""
-        self.page_preview.show_layout(layout)
+        self.page_pane.show_layout(layout)
         for widget in self._layout_only:
             widget.setVisible(layout is not None)
         self._panel_filler.setVisible(layout is None)

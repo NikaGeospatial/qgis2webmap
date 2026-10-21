@@ -56,8 +56,12 @@ def test_cards_show_name_crs_mode_and_dpi(frames):
     assert inset.mode_combo.currentData() == "static"
     assert main.dpi_combo.currentData() == 150
     assert inset.dpi_combo.currentData() == 300
-    assert [inset.dpi_combo.itemText(i) for i in range(3)] == ["96", "150", "300"]
-    assert main.match_button.text() == "Use canvas view"
+    assert [inset.dpi_combo.itemText(i) for i in range(3)] == [
+        "96 dpi",
+        "150 dpi",
+        "300 dpi",
+    ]
+    assert main.match_button.text() == "Match QGIS canvas"
     assert main.property("role") == "frameCard"
     assert main.name_label.property("role") == "frameName"
     assert main.crs_label.property("role") == "hint"
@@ -129,7 +133,7 @@ def test_issue_chip(frames):
     frames.set_issue_count("map1", None)
     assert main.issues_label.isHidden()
     frames.set_issue_count("gone", 4)  # an unknown map is ignored
-    assert "Fidelity tab" in inset.issues_label.toolTip()
+    assert "Checks" in inset.issues_label.toolTip()
 
 
 def test_empty_note_only_for_a_layout_without_maps(frames):
@@ -152,14 +156,14 @@ def test_summary(frames):
     assert frames.summary() == "No maps"
     rows = [*_rows(), FrameRow("map3", "Third", "EPSG:3857", "live", 96, None)]
     frames.set_frames(rows)
-    assert frames.summary() == "2 live, 1 static"
+    assert frames.summary() == "2 interactive maps, 1 image"
     frames.set_frames(rows[:1])
-    assert frames.summary() == "1 live"
+    assert frames.summary() == "1 interactive map"
     frames.set_frames(rows[1:2])
-    assert frames.summary() == "1 static"
+    assert frames.summary() == "1 image"
     card = frames.card("map2")
     card.mode_combo.setCurrentIndex(card.mode_combo.findData("live"))
-    assert frames.summary() == "1 live"
+    assert frames.summary() == "1 interactive map"
     frames.set_frames(None)
     assert frames.summary() == ""
 
