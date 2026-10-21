@@ -1391,13 +1391,13 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1392" />
-      <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
-      <translation>لا شيء لمعاينته بعد - لم يتم حفظ اللوحة الخرائطية. اختر تخطيطًا وملفًا في تبويب اللوحة الخرائطية.</translation>
+      <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
+      <translation>لا شيء للمعاينة بعد - لم تُحفظ اللوحة الخرائطية. اختر تخطيط طباعة في اللوحة الجانبية.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1675" />
-      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
-      <translation>يُنشئ QGIS ملف PDF بنظام CMYK أو ICC من تخطيط الطباعة، وهذا يعمل فقط عندما تكون كل الإطارات ثابتة. عيّن الإطارات المباشرة على ثابت في تبويب الإطارات، أو اختر RGB في إعدادات الطباعة.</translation>
+      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
+      <translation>يُنشئ QGIS ملف PDF بنظام CMYK أو ICC من تخطيط الطباعة، ولا يعمل ذلك إلا عندما تكون كل الإطارات ثابتة. اجعل الإطارات المباشرة ثابتة في إطارات الخريطة، أو اختر RGB في إعدادات الطباعة.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1696" />
@@ -1841,8 +1841,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="189" />
-      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static on the Frames tab.</source>
-      <translation>تحتوي هذه اللوحة الخرائطية على إطار مباشر. تأتي ملفات PDF بنظام CMYK و ICC من QGIS، الذي لا يمكنه طباعة سوى الإطارات الثابتة كما يعرضها المتصفح: عيّن كل إطار على ثابت في تبويب الإطارات.</translation>
+      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static in Map frames.</source>
+      <translation>تحتوي هذه اللوحة الخرائطية على إطار مباشر. تأتي ملفات PDF بنظام CMYK و ICC من QGIS، الذي لا يطبع إلا الإطارات الثابتة كما يعرضها المتصفح: اجعل كل إطار ثابتًا في إطارات الخريطة.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="410" />

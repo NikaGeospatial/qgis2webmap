@@ -697,7 +697,7 @@ def _draws_in_plane(
         f"{plane.crs}, because {names} cannot be drawn in another projection "
         "by the browser (rasters and non-image tiles stay in Web Mercator); "
         "shapes, and distances away from the centre, differ slightly from "
-        "QGIS. Set the frame to Static in the Frames tab to keep QGIS's "
+        "QGIS. Set the frame to Static in Map frames to keep QGIS's "
         "projection exactly.",
     )
     return False

@@ -189,7 +189,7 @@ class PrintSettingsDialog(QDialog):
             why = tr(
                 "This cartograph has a live frame. CMYK and ICC PDFs come from "
                 "QGIS, which can only print static frames as the browser shows "
-                "them: set every frame to Static on the Frames tab."
+                "them: set every frame to Static in Map frames."
             )
         else:
             return {}

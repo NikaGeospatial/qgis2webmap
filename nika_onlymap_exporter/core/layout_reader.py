@@ -630,7 +630,7 @@ def _record_live_frame_projection(
         "Exported as a live frame, which the cartograph draws in Web Mercator "
         f"(EPSG:3857); QGIS draws this map in {authid or 'its own CRS'}, so "
         "shapes, and distances away from the centre, differ slightly. Set the "
-        "frame to Static in the Frames tab to keep QGIS's projection exactly.",
+        "frame to Static in Map frames to keep QGIS's projection exactly.",
     )
 
 
@@ -742,7 +742,7 @@ def _read_atlas(
                 f"Map frame {_name(mf.map_item)}",
                 "This map follows the atlas, but it is a static frame: its "
                 "picture is rendered once, so it would show the same place on "
-                "every page. Set the atlas map to Live in the Frames tab.",
+                "every page. Set the atlas map to Live in Map frames.",
             )
             continue
         fit, margin = _atlas_fit(mf.map_item, coverage, report)
@@ -769,11 +769,11 @@ def _read_atlas(
                 "drawn)."
             )
         elif driven_static:
-            remedy = "Set the atlas map to Live in the Frames tab."
+            remedy = "Set the atlas map to Live in Map frames."
         else:
             remedy = (
                 f"Show the coverage layer '{coverage_name}' in a map that is "
-                "Live in the Frames tab."
+                "Live in Map frames."
             )
         report.blocked(
             ATLAS_SUBJECT,

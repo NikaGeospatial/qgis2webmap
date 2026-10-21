@@ -1391,13 +1391,13 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1392" />
-      <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
-      <translation>Rien à prévisualiser pour l'instant : la planche cartographique n'a pas été enregistrée. Choisissez une mise en page et un fichier dans l'onglet Planche cartographique.</translation>
+      <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
+      <translation>Rien à prévisualiser pour l'instant - la planche cartographique n'a pas été enregistrée. Choisissez une mise en page dans le panneau.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1675" />
-      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
-      <translation>Un PDF CMYK ou ICC est produit par QGIS à partir de la mise en page d'impression, ce qui ne fonctionne que si tous les cadres sont statiques. Réglez les cadres en direct sur Statique dans l'onglet Cadres, ou choisissez RVB dans Paramètres d'impression.</translation>
+      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
+      <translation>Un PDF CMJN ou ICC est produit par QGIS à partir de la mise en page, ce qui ne fonctionne que si tous les cadres sont statiques. Passez les cadres en direct en Statique dans Cadres de carte, ou choisissez RVB dans les paramètres d'impression.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1696" />
@@ -1841,8 +1841,8 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="189" />
-      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static on the Frames tab.</source>
-      <translation>Cette planche cartographique comporte un cadre en direct. Les PDF CMYK et ICC proviennent de QGIS, qui ne peut imprimer les cadres statiques que tels que les affiche le navigateur : réglez tous les cadres sur Statique dans l'onglet Cadres.</translation>
+      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static in Map frames.</source>
+      <translation>Cette planche cartographique a un cadre en direct. Les PDF CMJN et ICC viennent de QGIS, qui ne peut imprimer que des cadres statiques tels que le navigateur les affiche : passez chaque cadre en Statique dans Cadres de carte.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="410" />

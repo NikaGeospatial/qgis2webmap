@@ -1391,13 +1391,13 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1392" />
-      <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
-      <translation>暂时没有可预览的内容——图版尚未保存。请在“图版”标签页中选择一个布局和一个文件。</translation>
+      <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
+      <translation>还没有可预览的内容 - 图版尚未保存。请在面板中选择一个打印布局。</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1675" />
-      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
-      <translation>CMYK 或 ICC 配置文件 PDF 由 QGIS 根据打印布局生成，只有当所有画框都是静态时才能生效。请在“画框”标签页中将实时画框设为静态，或在“打印设置”中选择 RGB。</translation>
+      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
+      <translation>CMYK 或 ICC PDF 由 QGIS 根据打印布局生成，只有在所有画框都为静态时才可用。请在“地图画框”中把实时画框设为静态，或在打印设置中选择 RGB。</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1696" />
@@ -1841,8 +1841,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="189" />
-      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static on the Frames tab.</source>
-      <translation>此图版包含实时画框。CMYK 和 ICC 配置文件的 PDF 均来自 QGIS，而 QGIS 只能按浏览器显示的方式打印静态画框：请在“画框”标签页中将所有画框设为静态。</translation>
+      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static in Map frames.</source>
+      <translation>此图版包含实时画框。CMYK 和 ICC PDF 由 QGIS 生成，它只能按浏览器显示的样子打印静态画框：请在“地图画框”中把每个画框都设为静态。</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="410" />

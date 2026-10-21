@@ -320,7 +320,7 @@ class TestAtlasBlocked:
         )
         assert reading.atlas is None
         blocked = _rows(report, FidelityStatus.BLOCKED)
-        assert any("Set the atlas map to Live in the Frames tab" in r for r in blocked)
+        assert any("Set the atlas map to Live in Map frames" in r for r in blocked)
 
     def test_coverage_missing_from_the_live_map_blocks_with_the_remedy(
         self, atlas_layout

@@ -48,7 +48,7 @@ to be in it.
 
 When either is missing, nothing half-works: no atlas is written, and the
 Checks tab marks it **Blocked** with the fix - *Set the atlas map to Live in
-the Frames tab* (the map's card in **Map frames**), or *Add the coverage layer
+Map frames*, or *Add the coverage layer
 ... to map ...'s layers*.
 
 ## Turning the pages

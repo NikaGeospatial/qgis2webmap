@@ -1391,7 +1391,7 @@ class CartographController:
             self.dialog.status_label.setText(
                 tr(
                     "Nothing to preview yet - the cartograph has not been "
-                    "saved. Choose a layout and a file on the Cartograph tab."
+                    "saved. Choose a print layout in the panel."
                 )
             )
             return
@@ -1675,7 +1675,7 @@ class CartographController:
                 tr(
                     "A CMYK or ICC PDF is made by QGIS from the print layout, "
                     "which only works when every frame is static. Set the live "
-                    "frames to Static on the Frames tab, or choose RGB in Print "
+                    "frames to Static in Map frames, or choose RGB in Print "
                     "settings."
                 ),
             )

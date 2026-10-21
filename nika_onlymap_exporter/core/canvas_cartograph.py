@@ -19,7 +19,7 @@ bit-for-bit, whatever the CRS. Whether the cartograph then draws it live or
 as a raster is an export-time choice, so `CanvasCartograph.frame_modes`
 carries the usual default (`core/layout_reader.default_mode_for_map`) for the
 caller to pass to `prepare_cartograph`, and the user can still flip it in
-the Frames tab.
+Map frames.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later

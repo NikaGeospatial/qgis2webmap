@@ -1391,13 +1391,13 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1392" />
-      <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
-      <translation>Todavía no hay nada que previsualizar: la lámina cartográfica no se ha guardado. Elige un diseño y un archivo en la pestaña Lámina cartográfica.</translation>
+      <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
+      <translation>Nada que previsualizar todavía: la lámina cartográfica no se ha guardado. Elija un diseño de impresión en el panel.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1675" />
-      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
-      <translation>QGIS genera un PDF CMYK o ICC a partir del diseño de impresión, lo que solo funciona cuando todos los marcos son estáticos. Pon los marcos en vivo en Estático en la pestaña Marcos, o elige RGB en Configuración de impresión.</translation>
+      <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
+      <translation>Un PDF CMYK o ICC lo genera QGIS a partir del diseño de impresión, lo que solo funciona si todos los marcos son estáticos. Cambie los marcos en vivo a Estático en Marcos de mapa, o elija RGB en la configuración de impresión.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1696" />
@@ -1841,8 +1841,8 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="189" />
-      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static on the Frames tab.</source>
-      <translation>Esta lámina cartográfica tiene un marco en vivo. Los PDF CMYK e ICC provienen de QGIS, que solo puede imprimir los marcos estáticos tal como los muestra el navegador: pon todos los marcos en Estático en la pestaña Marcos.</translation>
+      <source>This cartograph has a live frame. CMYK and ICC PDFs come from QGIS, which can only print static frames as the browser shows them: set every frame to Static in Map frames.</source>
+      <translation>Esta lámina cartográfica tiene un marco en vivo. Los PDF CMYK e ICC los genera QGIS, que solo puede imprimir marcos estáticos tal como los muestra el navegador: cambie cada marco a Estático en Marcos de mapa.</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="410" />

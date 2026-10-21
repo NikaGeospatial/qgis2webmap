@@ -179,7 +179,7 @@ back. The tab reads **Atlas (on)** while the atlas is on.
 | **Filter** | An expression: only features for which it is true get a page. Blank gives every feature a page |
 | **File names** | An expression naming each page's image when all pages are exported |
 | *N pages in QGIS* | How many pages QGIS's atlas has. The cartograph can have fewer, because it skips features the map does not draw |
-| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in the Frames tab* (Map frames, on the Layout tab) |
+| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in Map frames* (Map frames, on the Layout tab) |
 | **Export all pages (PNG, ZIP)...** | Opens the cartograph, which renders every page and downloads them as one ZIP |
 | **Print all pages...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF, each page at its true size in a Chromium-based browser |
 
