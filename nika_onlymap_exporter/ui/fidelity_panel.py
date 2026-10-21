@@ -33,7 +33,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from enum import Enum
 
 from qgis.PyQt import sip
@@ -43,6 +43,7 @@ from qgis.PyQt.QtWidgets import (
     QAbstractButton,
     QAction,
     QBoxLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -73,7 +74,7 @@ from ..core.fidelity_summary import (
     Tone,
     Topic,
 )
-from ..core.report_facts import ReportFacts, facts_line, facts_lines
+from ..core.report_facts import Fact, ReportFacts, facts_line, facts_lines
 from .i18n import N_, plural, tr
 from .theme import qgis_icon
 
@@ -118,11 +119,16 @@ DETAIL_MIN_HEIGHT = 60
 SEARCH_WIDTH = 220
 #: The search box in the cartograph's narrow panel (`set_compact`).
 COMPACT_SEARCH_WIDTH = 120
+#: Lines the narrow list builds at a time; the rest wait behind "Show N more".
+#: A report of hundreds of rows would otherwise build hundreds of widgets on
+#: every keystroke in the search box.
+COMPACT_PAGE = 100
 
 EXACT_TEXT = N_("✓ exact")
 SELECT_HINT = N_("Select a row to see where it applies and where to change it.")
 FILTER_HINT = N_("Tick more of the boxes above, or clear the search.")
 SAME_AS_ABOVE = N_("As above.")
+ROW_TOGGLE_TIP = N_("Show or hide the detail - Enter or Space")
 
 # Filter choices, one QSettings key each under this prefix.
 FILTER_KEY = "qgis2webmap/fidelityFilter/"
@@ -229,6 +235,12 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self._summary: ReportSummary | None = None
         self._facts = ReportFacts()
         self._jump: tuple[str, str] | None = None
+        self._compact = False
+        # What the list says instead of rows - not checked, checking, failed,
+        # nothing matching - as (title, sentence); None when rows are shown.
+        self._note: tuple[str, str] | None = None
+        self._compact_rows: list[_IssueRow] = []
+        self._compact_pending: list[_CompactEntry] = []
 
         layout = QVBoxLayout(self)
 
@@ -325,13 +337,27 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         splitter.setStretchFactor(0, TREE_STRETCH)
         splitter.setStretchFactor(1, DETAIL_STRETCH)
         layout.addWidget(splitter, 1)
+        self._splitter = splitter
+
+        self.compact_list = self._build_compact_list()
+        self.compact_list.setVisible(False)
+        layout.addWidget(self.compact_list, 1)
 
         self.show_not_checked()
 
     def set_compact(self, compact: bool) -> None:
         """Fit a narrow panel: the headline, Check now and the filters stack
         instead of sharing one row. The cartograph's Checks section is a
-        third of the dialog wide; the web map's Fidelity tab is all of it."""
+        third of the dialog wide; the web map's Fidelity tab is all of it.
+
+        The report itself becomes one column of readable lines, each opening
+        in place onto its sentence and its jump. A three-column tree a third
+        of the dialog wide scrolled sideways, and a pane below it meant
+        reading the report one click and one glance down at a time. The
+        filters, the search and the report are the same objects either way,
+        so switching back and forth loses nothing.
+        """
+        self._compact = compact
         self._top.setDirection(
             QBoxLayout.Direction.TopToBottom
             if compact
@@ -342,6 +368,48 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         # shows the selected row's in full, so the column goes rather than
         # being cut mid-word behind a second scroll bar.
         self.tree.setColumnHidden(DETAIL_COLUMN, compact)
+        self._splitter.setVisible(not compact)
+        self.compact_list.setVisible(compact)
+        # Built only while shown, so the web map's tab never pays for it.
+        self._render_compact()
+
+    def _build_compact_list(self) -> QScrollArea:
+        """The narrow panel's report: a note, then a column of issue lines.
+
+        Never scrolls sideways - every label wraps, and the area is told so
+        rather than trusted to - so a long layer name grows a line taller
+        instead of pushing the verdicts out of sight.
+        """
+        area = QScrollArea(self)
+        area.setWidgetResizable(True)
+        area.setFrameShape(QScrollArea.Shape.NoFrame)
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        page = QWidget(area)
+        page.setProperty("role", "checksList")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(2)
+
+        self.compact_note = QLabel("", page)
+        self.compact_note.setWordWrap(True)
+        font = QFont(self.compact_note.font())
+        font.setBold(True)
+        self.compact_note.setFont(font)
+        layout.addWidget(self.compact_note)
+        self.compact_note_text = QLabel("", page)
+        self.compact_note_text.setWordWrap(True)
+        self.compact_note_text.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        self.compact_note_text.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        layout.addWidget(self.compact_note_text)
+
+        self._compact_layout = layout
+        self._compact_body: QWidget | None = None
+        self.compact_more: QPushButton | None = None
+        layout.addStretch(1)
+        area.setWidget(page)
+        return area
 
     def _build_filters(self) -> QHBoxLayout:
         """A Filter menu - each verdict and topic, ticked or not - and a search.
@@ -487,15 +555,19 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.map_facts.setVisible(False)
         self._update_filter_counts()
         self.tree.clear()
-        self._placeholder_row(tr("Check failed"), tr("See the detail for why."))
+        why = tr(
+            "The project could not be read: {message}\n\nThe full error is in "
+            "the QGIS message log. Nothing about the map is known until a "
+            "check finishes, so none of it is shown as a verdict."
+        ).format(message=message)
+        # The narrow list has no detail pane to point at, so it says why itself.
+        self._placeholder_row(
+            tr("Check failed"), tr("See the detail for why."), compact_text=why
+        )
         self._show_detail(
             tr("The check could not finish"),
             Tone.ERROR,
-            tr(
-                "The project could not be read: {message}\n\nThe full error is in "
-                "the QGIS message log. Nothing about the map is known until a "
-                "check finishes, so none of it is shown as a verdict."
-            ).format(message=message),
+            why,
             None,
             verdict_text=tr("Not a verdict on the map"),
         )
@@ -604,21 +676,12 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         summary = self._summary
         if summary is None:
             return
-        report_filter = self.report_filter()
+        self._note = None
         self.tree.clear()
         first_problem: QTreeWidgetItem | None = None
         quiet = QBrush(self.palette().color(QPalette.ColorRole.PlaceholderText))
 
-        for group_index, group in enumerate(summary.groups):
-            facts = (
-                self._facts.map
-                if group.is_whole_map
-                else self._facts.for_layer(group.layer_id)
-            )
-            group_text = f"{_group_title(group)} {facts_line(facts)}"
-            if not report_filter.shows_group(group, group_text):
-                continue
-            rows = report_filter.rows(group, group_text)
+        for group_index, group, facts, rows in self._shown_groups():
             shown = {id(row) for row in rows}
             parent = QTreeWidgetItem(self.tree)
             parent.setText(0, _group_title(group))
@@ -673,6 +736,30 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             self.tree.setCurrentItem(target)
         else:
             self._show_detail("", None, tr(SELECT_HINT), None)
+        self._render_compact()
+
+    def _shown_groups(
+        self,
+    ) -> Iterator[tuple[int, ReportGroup, tuple[Fact, ...], tuple[ReportRow, ...]]]:
+        """The groups the filters let through, with their facts and rows.
+
+        The one place the tree and the narrow list ask the filter, so the two
+        can never disagree about what a tick or a search shows.
+        """
+        summary = self._summary
+        if summary is None:
+            return
+        report_filter = self.report_filter()
+        for group_index, group in enumerate(summary.groups):
+            facts = (
+                self._facts.map
+                if group.is_whole_map
+                else self._facts.for_layer(group.layer_id)
+            )
+            group_text = f"{_group_title(group)} {facts_line(facts)}"
+            if not report_filter.shows_group(group, group_text):
+                continue
+            yield group_index, group, facts, report_filter.rows(group, group_text)
 
     def _add_merged_items(
         self,
@@ -705,13 +792,18 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         if column == DETAIL_COLUMN:
             self.tree.scheduleDelayedItemsLayout()
 
-    def _placeholder_row(self, text: str, detail: str) -> None:
+    def _placeholder_row(
+        self, text: str, detail: str, compact_text: str | None = None
+    ) -> None:
+        """Say why there are no rows, in the tree and in the narrow list."""
         item = QTreeWidgetItem(self.tree)
         item.setText(0, text)
         item.setText(1, "")
         item.setText(2, detail)
         item.setToolTip(0, detail)
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        self._note = (text, compact_text if compact_text is not None else detail)
+        self._render_compact()
 
     def _on_current_changed(
         self, current: QTreeWidgetItem | None, _previous: QTreeWidgetItem | None
@@ -749,19 +841,163 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             labels = row.item_labels or row.subjects
             label = labels[item_index]
         title = label if group.is_whole_map else f"{_group_title(group)}: {label}"
-        text = row.detail
-        if row.is_merged:
-            text += "\n\n" + tr("Applies to: {subjects}.").format(
-                subjects="; ".join(row.subjects)
-            )
         self._show_detail(
             title,
             _tone_of(row.status),
-            text,
+            _row_text(row),
             jump_for(group, row),
             verdict_text=_verdict(row.status),
             icon=VERDICT_ICONS[row.status],
         )
+
+    # ---- narrow list -----------------------------------------------------
+
+    def compact_rows(self) -> list[_IssueRow]:
+        """The issue lines the narrow list shows now, top to bottom."""
+        return list(self._compact_rows)
+
+    def _render_compact(self) -> None:
+        """Rebuild the narrow list from the report and the filters, if shown."""
+        if not self._compact:
+            return
+        self._clear_compact()
+        note = self._note
+        self.compact_note.setText(note[0] if note else "")
+        self.compact_note.setVisible(note is not None)
+        self.compact_note_text.setText(note[1] if note else "")
+        self.compact_note_text.setVisible(note is not None)
+        if note is not None:
+            return
+        entries: list[_CompactEntry] = []
+        for _index, group, facts, rows in self._shown_groups():
+            entries.append((group, facts, None))
+            entries.extend((group, facts, row) for row in rows)
+        self._compact_pending = entries
+        body = QWidget(self.compact_list.widget())
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(2)
+        # After the note and its sentence, before the closing stretch.
+        self._compact_layout.insertWidget(2, body)
+        self._compact_body = body
+        self._add_compact_page()
+
+    def _clear_compact(self) -> None:
+        self._compact_rows = []
+        self._compact_pending = []
+        self.compact_more = None
+        body = self._compact_body
+        self._compact_body = None
+        if body is not None:
+            # Later, not now: a jump button inside it may be what is running.
+            self._compact_layout.removeWidget(body)
+            body.hide()
+            body.deleteLater()
+
+    def _add_compact_page(self) -> None:
+        """Build the next `COMPACT_PAGE` lines, and a button for the rest."""
+        body = self._compact_body
+        if body is None:
+            return
+        layout = body.layout()
+        had_focus = False
+        if self.compact_more is not None:
+            had_focus = self.compact_more.hasFocus()
+            layout.removeWidget(self.compact_more)
+            self.compact_more.hide()
+            self.compact_more.deleteLater()
+            self.compact_more = None
+        page = self._compact_pending[:COMPACT_PAGE]
+        self._compact_pending = self._compact_pending[COMPACT_PAGE:]
+        first_new = len(self._compact_rows)
+        for group, facts, row in page:
+            if row is None:
+                layout.addWidget(self._compact_group(body, group, facts))
+            else:
+                layout.addWidget(self._compact_row(body, group, row))
+        if self._compact_pending:
+            left = sum(1 for _g, _f, row in self._compact_pending if row is not None)
+            more = QPushButton(
+                plural(
+                    left or len(self._compact_pending),
+                    "Show {n} more row",
+                    "Show {n} more rows",
+                ),
+                body,
+            )
+            more.setProperty("role", "checksMore")
+            more.clicked.connect(self._add_compact_page)
+            layout.addWidget(more)
+            self.compact_more = more
+        # The button that had focus is gone; the first new line takes it, so a
+        # keyboard user carries on reading where the list grew.
+        if had_focus and first_new < len(self._compact_rows):
+            self._compact_rows[first_new].setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _compact_group(
+        self, parent: QWidget, group: ReportGroup, facts: tuple[Fact, ...]
+    ) -> QWidget:
+        """A layer's name - or Whole map - over its tally, heading its lines."""
+        heading = QWidget(parent)
+        heading.setProperty("role", "checksGroup")
+        layout = QVBoxLayout(heading)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(0)
+        title = QLabel(_group_title(group), heading)
+        title.setWordWrap(True)
+        font = QFont(title.font())
+        font.setBold(True)
+        title.setFont(font)
+        layout.addWidget(title)
+        tally = QLabel(
+            tr(EXACT_TEXT) if group.is_exact else group.tally(_verdict), heading
+        )
+        tally.setWordWrap(True)
+        tally.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        layout.addWidget(tally)
+        if facts:
+            heading.setToolTip(facts_lines(facts))
+        return heading
+
+    def _compact_row(
+        self, parent: QWidget, group: ReportGroup, row: ReportRow
+    ) -> _IssueRow:
+        """One report row as a line that opens onto its sentence and its jump."""
+        jump = jump_for(group, row)
+        outcome = _short_outcome(row.detail)
+        full = _row_text(row)
+
+        def build_detail(detail: QWidget) -> None:
+            layout = QVBoxLayout(detail)
+            layout.setContentsMargins(0, 4, 0, 2)
+            if full != outcome:
+                text = QLabel(full, detail)
+                text.setWordWrap(True)
+                text.setTextInteractionFlags(
+                    Qt.TextInteractionFlag.TextSelectableByMouse
+                )
+                layout.addWidget(text)
+            if jump is not None:
+                button = QPushButton(jump_label(jump), detail)
+                button.clicked.connect(lambda _on=False: self._emit_jump(jump))
+                layout.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
+
+        title = (
+            row.label if group.is_whole_map else f"{_group_title(group)}: {row.label}"
+        )
+        line = _IssueRow(
+            parent,
+            icon=VERDICT_ICONS[row.status],
+            verdict=_verdict(row.status),
+            tone=_tone_of(row.status),
+            subject=row.label,
+            outcome=outcome,
+            accessible_name=f"{_verdict(row.status)}: {title}",
+            build_detail=build_detail if full != outcome or jump else None,
+            on_focus=self.compact_list.ensureWidgetVisible,
+        )
+        self._compact_rows.append(line)
+        return line
 
     # ---- detail pane -----------------------------------------------------
 
@@ -790,9 +1026,11 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             self.jump_button.setText(jump_label(jump))
 
     def _on_jump(self) -> None:
-        if self._jump is None:
-            return
-        kind, target = self._jump
+        if self._jump is not None:
+            self._emit_jump(self._jump)
+
+    def _emit_jump(self, jump: tuple[str, str]) -> None:
+        kind, target = jump
         if kind == "layer":
             self.show_layer_requested.emit(target)
         else:
@@ -1015,6 +1253,158 @@ class _WrappingDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignor
             QStyle.ContentsType.CT_ItemViewItem, sized, QSize(), self._tree
         )
         return QSize(width, max(hint.height(), wrapped.height()))
+
+
+_CompactEntry = tuple[ReportGroup, tuple[Fact, ...], "ReportRow | None"]
+"""One line of the narrow list: a group's heading (no row) or one of its rows."""
+
+
+def _row_text(row: ReportRow) -> str:
+    """A row's whole sentence, and for a merged row what it applies to."""
+    text = row.detail
+    if row.is_merged:
+        text += "\n\n" + tr("Applies to: {subjects}.").format(
+            subjects="; ".join(row.subjects)
+        )
+    return text
+
+
+def _short_outcome(detail: str) -> str:
+    """A sentence's first sentence: the outcome, before the how and the why.
+
+    The narrow list shows this on every line and the rest only when a line is
+    opened, so a long report reads as a list of results, not a wall of prose.
+    """
+    first = detail.strip().split("\n", 1)[0]
+    end = first.find(". ")
+    return first[: end + 1] if end >= 0 else first
+
+
+# PyQt ships no stubs, so QFrame is `Any` to mypy; the ignore is that boundary.
+class _IssueRow(QFrame):  # type: ignore[misc, unused-ignore]
+    """One line of the narrow report: verdict, subject and outcome, opening in
+    place - on a click, Enter or Space - onto the rest of it and its jump.
+
+    A frame that takes focus rather than a button, so it reads as a line of
+    text and still answers the keyboard. The stylesheet draws it by
+    `role="checkRow"`, `:focus` and `expanded`. The detail is built the first
+    time the line is opened: most lines of a long report never are.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget,
+        *,
+        icon: str,
+        verdict: str,
+        tone: Tone,
+        subject: str,
+        outcome: str,
+        accessible_name: str,
+        build_detail: Callable[[QWidget], None] | None,
+        on_focus: Callable[[QWidget], None],
+    ) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "checkRow")
+        self.setProperty("expanded", False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(accessible_name)
+        self._build_detail = build_detail
+        self._on_focus = on_focus
+        self.detail: QWidget | None = None
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(6, 4, 6, 4)
+        self.icon = QLabel(self)
+        self.icon.setPixmap(qgis_icon(icon).pixmap(QSize(ICON_SIZE, ICON_SIZE)))
+        outer.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignTop)
+
+        body = QVBoxLayout()
+        body.setSpacing(1)
+        self.verdict = QLabel(verdict, self)
+        self.verdict.setWordWrap(True)
+        self.verdict.setProperty("role", "checkVerdict")
+        self.verdict.setProperty("tone", tone.name.lower())
+        # Full strength for anything that changes; the dim colour only for
+        # Kept, as on the strip.
+        if tone is Tone.QUIET:
+            self.verdict.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        body.addWidget(self.verdict)
+        self.subject = QLabel(subject, self)
+        self.subject.setWordWrap(True)
+        font = QFont(self.subject.font())
+        font.setBold(True)
+        self.subject.setFont(font)
+        body.addWidget(self.subject)
+        self.outcome = QLabel(outcome, self)
+        self.outcome.setWordWrap(True)
+        body.addWidget(self.outcome)
+        outer.addLayout(body, 1)
+        self._body = body
+
+        self.chevron = QLabel(self)
+        self.chevron.setVisible(build_detail is not None)
+        outer.addWidget(self.chevron, 0, Qt.AlignmentFlag.AlignTop)
+        if build_detail is not None:
+            self.setToolTip(tr(ROW_TOGGLE_TIP))
+            self.setAccessibleDescription(tr(ROW_TOGGLE_TIP))
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._show_chevron(False)
+
+    @property
+    def expandable(self) -> bool:
+        return self._build_detail is not None
+
+    def is_expanded(self) -> bool:
+        return bool(self.property("expanded"))
+
+    def set_expanded(self, expanded: bool) -> None:
+        if self._build_detail is None:
+            return
+        if expanded and self.detail is None:
+            self.detail = QWidget(self)
+            self._build_detail(self.detail)
+            self._body.addWidget(self.detail)
+        if self.detail is not None:
+            self.detail.setVisible(expanded)
+        self._show_chevron(expanded)
+        self.setProperty("expanded", expanded)
+        # A dynamic property only restyles once the style is told to look again.
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def toggle(self) -> None:
+        self.set_expanded(not self.is_expanded())
+
+    def _show_chevron(self, expanded: bool) -> None:
+        closed = (
+            "◂" if self.layoutDirection() == Qt.LayoutDirection.RightToLeft else "▸"
+        )
+        self.chevron.setText("▾" if expanded else closed)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if self.expandable and event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Space,
+        ):
+            self.toggle()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.setFocus(Qt.FocusReason.MouseFocusReason)
+            self.toggle()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def focusInEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().focusInEvent(event)
+        # Tabbing down a long list keeps the line in view.
+        self._on_focus(self)
 
 
 def _button_text(text: str) -> str:
