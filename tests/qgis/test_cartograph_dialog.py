@@ -2004,6 +2004,7 @@ class TestWorkspace:
 
         from nika_onlymap_exporter.ui.fidelity_panel import (
             COMPACT_SEARCH_WIDTH,
+            DETAIL_COLUMN,
             SEARCH_WIDTH,
         )
 
@@ -2020,14 +2021,22 @@ class TestWorkspace:
                     panel._top.direction(),
                     panel.search.minimumWidth(),
                     header.sectionResizeMode(1),
+                    panel.tree.isColumnHidden(DETAIL_COLUMN),
                 )
 
-            web = (across, across, SEARCH_WIDTH, QHeaderView.ResizeMode.Interactive)
+            web = (
+                across,
+                across,
+                SEARCH_WIDTH,
+                QHeaderView.ResizeMode.Interactive,
+                False,
+            )
             compact = (
                 down,
                 down,
                 COMPACT_SEARCH_WIDTH,
                 QHeaderView.ResizeMode.ResizeToContents,
+                True,
             )
             assert state() == web
             _choose_cartograph(dialog)

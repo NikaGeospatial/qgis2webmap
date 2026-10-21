@@ -338,6 +338,10 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
             else QBoxLayout.Direction.LeftToRight
         )
         self.search.setMinimumWidth(COMPACT_SEARCH_WIDTH if compact else SEARCH_WIDTH)
+        # No room for the sentence beside each row: the pane below the list
+        # shows the selected row's in full, so the column goes rather than
+        # being cut mid-word behind a second scroll bar.
+        self.tree.setColumnHidden(DETAIL_COLUMN, compact)
 
     def _build_filters(self) -> QHBoxLayout:
         """A Filter menu - each verdict and topic, ticked or not - and a search.
