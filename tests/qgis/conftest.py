@@ -95,6 +95,12 @@ def isolated_settings(tmp_path_factory):
     previous_format = QSettings.defaultFormat()
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
     QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, directory)
+    # Maps save to Documents/QGIS2WebMap by default, and a cartograph saves
+    # itself as soon as the dialog shows one: without this, tests would write
+    # into the developer's real Documents folder.
+    from nika_onlymap_exporter.core.save_folders import SAVE_FOLDER_KEY
+
+    QSettings().setValue(SAVE_FOLDER_KEY, f"{directory}/maps")
     yield
     QSettings.setDefaultFormat(previous_format)
 

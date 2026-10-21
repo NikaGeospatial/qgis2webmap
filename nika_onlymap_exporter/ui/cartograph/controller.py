@@ -57,6 +57,7 @@ from ...core.fidelity_summary import (
     summarise,
 )
 from ...core.print_settings import PrintSettings, apply_to_spec
+from ...core.save_folders import cartographs_folder, unused_path
 from ...core.settings import (
     DEFAULT_STATIC_DPI,
     DialogOutput,
@@ -121,18 +122,21 @@ def _reveal_label() -> str:
     return tr("Show in file manager")
 
 
-def default_cartograph_path(project_file_name: str, layout_name: str) -> Path:
+def default_cartograph_path(
+    project_file_name: str, layout_name: str, folder: Path | None = None
+) -> Path:
     """Where a layout's cartograph is written by default.
 
-    Beside the project file, named after the layout - the plan's words for it.
-    A project that has never been saved has no folder of its own to sit beside,
-    so the home directory is the fallback rather than the current working one,
-    which for a GUI application is rarely where the user would look.
+    In the Cartographs folder (`core/save_folders.py`), so every cartograph
+    sits together whether or not the project has been saved, named after the
+    project and the layout: `parcels-Survey.html`. A project never saved has
+    no name yet, so the layout's alone names it.
     """
-    base_dir = Path(project_file_name).parent if project_file_name else Path.home()
+    base_dir = folder if folder is not None else cartographs_folder()
     # "carto: Parcels" -> "carto-Parcels": a name a file manager shows as is.
     safe = re.sub(r"[^\w.-]+", "-", layout_name).strip("-.") or "cartograph"
-    return base_dir / f"{safe}.html"
+    project = re.sub(r"[^\w.-]+", "-", Path(project_file_name).stem).strip("-.")
+    return base_dir / (f"{project}-{safe}.html" if project else f"{safe}.html")
 
 
 class CartographController:
@@ -831,13 +835,12 @@ class CartographController:
             return
         stored = self.state.cartograph_file_for(name)
         suggested = default_cartograph_path(self.project.fileName(), name)
-        if not stored and self.project.fileName():
-            # Beside the saved project, named after the layout: a place the
-            # user can be assumed to want it, so the cartograph starts there.
-            stored = str(suggested)
+        if not stored:
+            # The Cartographs folder, saved or not, so the cartograph starts
+            # at once and the user never has to browse; a name another map
+            # already has gets a number instead.
+            stored = str(unused_path(suggested))
             self.state.cartograph_files[name] = stored
-        # An unsaved project has no folder of its own: the suggestion is only
-        # shown, and nothing is written until the user picks a place.
         self.file_edit.setPlaceholderText(str(suggested))
         self.file_edit.setText(stored)
 

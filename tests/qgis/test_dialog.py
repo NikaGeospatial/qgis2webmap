@@ -8,6 +8,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import OutputMode, PopupFieldMode
@@ -496,6 +498,7 @@ class TestTabCorner:
         """
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.path_edit.setText("")  # a field the user emptied
             # The button itself stays usable: its menu also holds Discord,
             # which needs no map file.
             assert dialog.share_button.isEnabled() is True
@@ -1260,6 +1263,7 @@ class TestShareBuildsWhatItNeeds:
 
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.path_edit.setText("")  # a field the user emptied
             told: list[bool] = []
             monkeypatch.setattr(
                 module.QMessageBox, "information", lambda *a, **k: told.append(True)
@@ -1544,6 +1548,7 @@ class TestLivePreviewLifecycle:
         """
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.path_edit.setText("")  # a field the user emptied
             copy = dialog.share_actions["copy_path"]
             assert copy.isEnabled() is False
 
@@ -1559,6 +1564,7 @@ class TestLivePreviewLifecycle:
         chosen hid it from everyone who had not exported yet."""
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.path_edit.setText("")  # a field the user emptied
             assert dialog._map_file() is None
             assert dialog.share_actions["publish"].isEnabled()
             for key in ("copy_path", "reveal"):
@@ -2030,23 +2036,88 @@ class TestDestinationField:
         project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_it_starts_empty_rather_than_guessing(
+    def test_a_new_map_starts_in_the_web_maps_folder(
         self, qgis_app, project, make_memory_layer
     ) -> None:
-        """A guessed path is worse than no path.
+        """A path to start with, so nobody has to browse: the Web maps folder,
+        named after the project. Nothing is written until Export."""
+        from nika_onlymap_exporter.core.save_folders import web_maps_folder
 
-        0.1.x stored only the *folder* of the last export, never the file name.
-        Reconstructing a name from it would point at a file the user never
-        wrote - and with autosave on, sit a second map beside their real one.
-        """
+        project.setTitle("")
         dialog = self._dialog(project, make_memory_layer)
         try:
-            assert dialog.path_edit.text().strip() == ""
-            # Empty is not the same as broken: the placeholder has to say the
-            # field is the user's to fill, or a blank field on first open reads
-            # as the plugin having lost something.
-            assert "hoose" in dialog.path_edit.placeholderText()
-            assert "hoose" in dialog.save_status.text()
+            path = Path(dialog.path_edit.text())
+            assert path.parent == web_maps_folder()
+            assert path.suffix == ".html"
+            assert dialog.state.map_file == str(path)
+            assert not path.exists()
+        finally:
+            dialog.close()
+
+    def test_a_taken_name_gets_a_number(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Another map's file is never offered: Export would overwrite it."""
+        from nika_onlymap_exporter.core.save_folders import web_maps_folder
+
+        project.setTitle("")
+        taken = web_maps_folder() / "untitled.html"
+        taken.parent.mkdir(parents=True)
+        taken.write_text("someone else's map")
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            assert dialog.path_edit.text() == str(
+                web_maps_folder() / f"{taken.stem} (2).html"
+            )
+        finally:
+            dialog.close()
+
+    def test_export_makes_the_save_folder_but_no_other(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """The default names a folder nothing has made yet; any other missing
+        folder is still refused, since it is probably a typo."""
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        monkeypatch.setattr(module.QMessageBox, "warning", lambda *a, **k: None)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            default = Path(dialog.path_edit.text())
+            assert not default.parent.exists()
+            assert dialog._resolve_destination() == default
+            assert default.parent.is_dir()
+            dialog.path_edit.setText(str(tmp_path / "typo" / "map.html"))
+            assert dialog._resolve_destination() is None
+            assert not (tmp_path / "typo").exists()
+        finally:
+            dialog.close()
+
+    def test_a_new_save_folder_moves_a_map_not_exported_yet(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core import save_folders
+        from nika_onlymap_exporter.ui import main_dialog
+
+        documents = tmp_path / "Documents" / "QGIS2WebMap"
+        monkeypatch.setattr(save_folders, "default_save_root", lambda: documents)
+        monkeypatch.setattr(main_dialog, "default_save_root", lambda: documents)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            name = Path(dialog.path_edit.text()).name
+            dialog._set_save_folder(tmp_path / "elsewhere")
+            assert dialog.path_edit.text() == str(
+                tmp_path / "elsewhere" / "Web maps" / name
+            )
+            assert dialog.save_folder_label.text() == str(tmp_path / "elsewhere")
+            assert not dialog.save_folder_reset.isHidden()
+            # A path the user typed is theirs: a new folder leaves it alone.
+            dialog.path_edit.setText(str(tmp_path / "mine.html"))
+            dialog._set_save_folder(tmp_path / "third")
+            assert dialog.path_edit.text() == str(tmp_path / "mine.html")
+            # "Use Documents" goes back to the default, and hides itself.
+            dialog.save_folder_reset.click()
+            assert dialog.save_folder_label.text() == str(documents)
+            assert dialog.save_folder_reset.isHidden()
         finally:
             dialog.close()
 
@@ -2135,6 +2206,7 @@ class TestDestinationField:
 
         dialog = self._dialog(project, make_memory_layer)
         try:
+            dialog.path_edit.setText("")  # a field the user emptied
             told = []
             monkeypatch.setattr(
                 module.QMessageBox,

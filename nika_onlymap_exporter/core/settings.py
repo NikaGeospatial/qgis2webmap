@@ -458,11 +458,11 @@ class DialogState:
     """Everything the dialog needs to remember between sessions."""
 
     map_name: str = ""
-    # Where the map file is written. Empty until the user chooses, and never
-    # guessed at: the only thing 0.1.x remembered was the *folder* of the last
-    # export, so a guess would name a file they never wrote. See
-    # `MainDialog._on_choose_map_file`, which seeds the picker with that folder
-    # instead - the same hint, in the one place the user confirms it.
+    # Where the map file is written. Empty in a project that has none; the
+    # dialog then offers a new file in the Web maps folder
+    # (`core/save_folders.py`), never a guess from the *folder* of the last
+    # export - the only thing 0.1.x remembered - which would name a file the
+    # user never wrote.
     map_file: str = ""
     # The Map tab's "Export as" choice. `map_file` is written in this form:
     # an `.html`, a `.zip`, or a folder.

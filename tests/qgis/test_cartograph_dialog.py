@@ -1336,36 +1336,59 @@ class TestAccessibility:
 
 
 class TestWhereItSaves:
-    def test_an_unsaved_project_writes_nothing_until_a_file_is_chosen(
+    def test_an_unsaved_project_saves_in_the_cartographs_folder_at_once(
         self, qgis_app, project, fake_cartograph_export
     ) -> None:
+        """No browsing first: the Cartographs folder, named after the layout."""
+        from nika_onlymap_exporter.core.save_folders import cartographs_folder
+
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            cartograph = dialog._cartograph
-            assert cartograph.file_edit.text() == ""
-            assert cartograph.file_edit.placeholderText().endswith("Survey.html")
-            _wait_for(qgis_app, lambda: False, timeout=1.0)
-            assert fake_cartograph_export.calls == []
-            assert "choose where" in cartograph.cartograph_status_label.text()
+            target = cartographs_folder() / "Survey.html"
+            assert dialog._cartograph.file_edit.text() == str(target)
+            assert _wait_for(qgis_app, lambda: target.exists())
         finally:
             dialog.close()
 
-    def test_a_saved_project_saves_beside_itself_at_once(
+    def test_a_saved_project_names_it_after_both(
         self, qgis_app, project, fake_cartograph_export, tmp_path
     ) -> None:
+        from nika_onlymap_exporter.core.save_folders import cartographs_folder
+
         project.setFileName(str(tmp_path / "parcels.qgz"))
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            target = tmp_path / "Survey.html"
+            target = cartographs_folder() / "parcels-Survey.html"
             assert dialog._cartograph.file_edit.text() == str(target)
             assert _wait_for(qgis_app, lambda: target.exists())
         finally:
             dialog.close()
             project.setFileName("")
+
+    def test_another_maps_file_is_never_overwritten(
+        self, qgis_app, project, fake_cartograph_export
+    ) -> None:
+        """A cartograph saves itself, so a taken name would be overwritten
+        unasked: it gets a number instead."""
+        from nika_onlymap_exporter.core.save_folders import cartographs_folder
+
+        taken = cartographs_folder() / "Survey.html"
+        taken.parent.mkdir(parents=True)
+        taken.write_text("another project's cartograph")
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            target = cartographs_folder() / "Survey (2).html"
+            assert dialog._cartograph.file_edit.text() == str(target)
+            assert _wait_for(qgis_app, lambda: target.exists())
+            assert taken.read_text() == "another project's cartograph"
+        finally:
+            dialog.close()
 
 
 class TestSavesFollowTheProject:

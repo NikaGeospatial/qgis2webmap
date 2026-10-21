@@ -112,6 +112,13 @@ from ..core.project_reader import (
     with_output_notes,
 )
 from ..core.report_facts import ReportFacts, report_facts
+from ..core.save_folders import (
+    default_save_root,
+    save_root,
+    set_save_root,
+    unused_path,
+    web_maps_folder,
+)
 from ..core.settings import (
     MAX_PRECISION,
     MIN_PRECISION,
@@ -1114,10 +1121,10 @@ class MainDialog(QDialog):
         # Qt slot does not propagate - PyQt aborts the process - so a handler
         # that runs before the widget it touches exists takes QGIS down.
         #
-        # The field is filled from the project or left empty; it is never
-        # guessed at. See `DialogState.map_file`.
-        if self.state.map_file:
-            self.path_edit.setText(self.state.map_file)
+        # The field is filled from the project, or with a new file in the Web
+        # maps folder (`core/save_folders.py`). Nothing is written there until
+        # Export.
+        self.path_edit.setText(self.state.map_file or str(self._default_map_file()))
         self._update_save_status()
         self._update_size_note()
         return page
@@ -1288,6 +1295,12 @@ class MainDialog(QDialog):
         """The chosen map file, or None while the field is empty."""
         typed = self.path_edit.text().strip() if hasattr(self, "path_edit") else ""
         return Path(typed) if typed else None
+
+    def _default_map_file(self) -> Path:
+        """A new map's file: the Web maps folder, named after the map, with
+        a number when that name is taken."""
+        suffix = self._mode_suffix(self.state.output_mode)
+        return unused_path(web_maps_folder() / f"{self._default_basename()}{suffix}")
 
     def _default_basename(self) -> str:
         """Name the file after the map, falling back to the project."""
@@ -2834,6 +2847,38 @@ class MainDialog(QDialog):
         appearance_form.addRow(tr("Theme"), self.theme_picker)
         layout.addWidget(appearance_box)
 
+        saving_box = QGroupBox(tr("Saving"), page)
+        saving_form = QFormLayout(saving_box)
+        folder_row = QHBoxLayout()
+        folder_row.setSpacing(6)
+        self.save_folder_label = QLabel(saving_box)
+        self.save_folder_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        folder_row.addWidget(self.save_folder_label, 1)
+        self.save_folder_button = QPushButton(tr("Change..."), saving_box)
+        self.save_folder_button.setProperty("role", "link")
+        self.save_folder_button.clicked.connect(self._on_change_save_folder)
+        folder_row.addWidget(self.save_folder_button)
+        self.save_folder_reset = QPushButton(tr("Use Documents"), saving_box)
+        self.save_folder_reset.setProperty("role", "link")
+        self.save_folder_reset.clicked.connect(lambda: self._set_save_folder(None))
+        folder_row.addWidget(self.save_folder_reset)
+        saving_form.addRow(tr("Save new maps in"), folder_row)
+        saving_form.addRow(
+            "",
+            _help_label(
+                tr(
+                    "Web maps and cartographs each get their own folder inside "
+                    "it, Web maps and Cartographs. Maps already saved stay "
+                    "where they are."
+                ),
+                saving_box,
+            ),
+        )
+        self._show_save_folder()
+        layout.addWidget(saving_box)
+
         about_box = QGroupBox(tr("About"), page)
         about_form = QFormLayout(about_box)
         about_form.addRow(
@@ -2847,6 +2892,29 @@ class MainDialog(QDialog):
 
         layout.addStretch(1)
         return page
+
+    def _show_save_folder(self) -> None:
+        root = save_root()
+        self.save_folder_label.setText(str(root))
+        self.save_folder_label.setToolTip(str(root))
+        self.save_folder_reset.setVisible(root != default_save_root())
+
+    def _on_change_save_folder(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(
+            self, tr("Save new maps in"), str(save_root())
+        )
+        if chosen:
+            self._set_save_folder(Path(chosen))
+
+    def _set_save_folder(self, root: Path | None) -> None:
+        """Change where new maps save. A web map not exported yet moves with
+        it; anything already written stays where it is."""
+        before = web_maps_folder()
+        set_save_root(root)
+        self._show_save_folder()
+        current = self._map_file()
+        if current is not None and current.parent == before and not current.exists():
+            self.path_edit.setText(str(self._default_map_file()))
 
     def _on_theme_changed(self) -> None:
         """Restyle in place: colours are not baked into labels the way text is."""
@@ -3878,6 +3946,14 @@ class MainDialog(QDialog):
         if destination is None:
             self._warn_no_map_file()
             return None
+        if not destination.parent.exists() and destination.parent.is_relative_to(
+            save_root()
+        ):
+            # The save folders are ours to make: the default path names them
+            # before anything has been saved there. A failure is refused just
+            # below, with the folder named.
+            with contextlib.suppress(OSError):
+                destination.parent.mkdir(parents=True, exist_ok=True)
         if not destination.parent.exists():
             QMessageBox.warning(
                 self,
