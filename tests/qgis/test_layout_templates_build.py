@@ -196,8 +196,8 @@ class TestPicker:
             self._drain(qgis_app, picker)
             assert calls[0][0] == "classic"
             assert sorted(c[0] for c in calls) == sorted(template_ids())
-            for row in range(picker.template_list.count()):
-                assert not picker.template_list.item(row).icon().isNull()
+            assert all(row.drawn for row in picker.rows.values())
+            assert len(picker.rows) == picker.template_list.count()
         finally:
             picker.reject()
 
@@ -225,9 +225,27 @@ class TestPicker:
                 picker.template_list.item(r).data(256): picker.template_list.item(r)
                 for r in range(picker.template_list.count())
             }
-            assert items["dark"].icon().isNull()
+            assert not picker.rows["dark"].drawn
             assert "could not be drawn" in items["dark"].toolTip()
-            assert not items["poster"].icon().isNull()
+            assert picker.rows["poster"].drawn
+        finally:
+            picker.reject()
+
+    def test_each_row_names_its_design_and_the_chosen_one_is_ticked(
+        self, qgis_app, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.layout_templates import get_template
+
+        calls: list[tuple[str, str, str]] = []
+        picker, _settings = self._picker(qgis_app, tmp_path, calls)
+        try:
+            for template_id, row in picker.rows.items():
+                assert row.name.text() == get_template(template_id).name
+            for r in range(picker.template_list.count()):
+                if picker.template_list.item(r).data(256) == "poster":
+                    picker.template_list.setCurrentRow(r)
+            ticked = [t for t, row in picker.rows.items() if row.tick.text()]
+            assert ticked == ["poster"]
         finally:
             picker.reject()
 

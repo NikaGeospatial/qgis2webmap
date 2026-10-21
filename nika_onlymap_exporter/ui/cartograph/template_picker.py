@@ -19,14 +19,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from qgis.PyQt.QtCore import QMargins, QSettings, QSize, Qt, QTimer
-from qgis.PyQt.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
+from qgis.PyQt.QtCore import QSettings, QSize, Qt, QTimer
+from qgis.PyQt.QtGui import QColor, QImage, QPainter, QPixmap, QShowEvent
 from qgis.PyQt.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
-    QListView,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QVBoxLayout,
@@ -35,20 +37,16 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core.layout_templates import PAGE_SIZE_ORDER, TEMPLATES, get_template
 from .. import theme
-from ..fitted_label import FittedLabel
 from ..i18n import N_, tr
 
 #: Where the last choice is kept, under this plugin's own QSettings group.
 SETTINGS_KEY = "qgis2webmap/cartograph/template"
 
-#: How wide each preview is drawn, in pixels; the card shows it scaled to fit.
-PREVIEW_WIDTH_PX = 360
-ICON_SIZE = QSize(176, 176)
-#: Room around each card in the grid, and inside it around the page.
-_GRID_GAP = 18
-_CARD_PADDING = 10
-#: The card behind each page, so white pages stand apart from each other.
-_CARD = "#e7e2e8"
+#: The box each page preview is fitted into, in each row of the list. The
+#: page is drawn at this width times the screen's pixel ratio, so it is sharp.
+PREVIEW_BOX = QSize(300, 212)
+#: Room inside each row, around the preview and the text.
+_ROW_PADDING = 12
 _PAGE_EDGE = "#b7aeb9"
 
 _PAGE_LABELS = {
@@ -65,6 +63,54 @@ _ORIENTATIONS = (
 #: `render(template_id, page_size, orientation, width_px)` -> the preview, or
 #: `None` when it cannot be drawn.
 PreviewRenderer = Callable[[str, str, str, int], "QImage | None"]
+
+
+class _TemplateRow(QFrame):
+    """One row of the list: the page, large, then the name and description.
+
+    Transparent to the mouse, so a click or a double-click reaches the list
+    under it, which owns the selection and the keyboard.
+    """
+
+    def __init__(self, name: str, description: str, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "templateRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(*(4 * [_ROW_PADDING]))
+        row.setSpacing(18)
+
+        self.preview = QLabel(self)
+        self.preview.setProperty("role", "templatePreview")
+        self.preview.setFixedSize(PREVIEW_BOX)
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row.addWidget(self.preview)
+
+        text = QVBoxLayout()
+        text.setSpacing(4)
+        name_row = QHBoxLayout()
+        self.name = QLabel(name, self)
+        self.name.setProperty("role", "templateName")
+        name_row.addWidget(self.name, 1)
+        self.tick = QLabel("", self)
+        self.tick.setProperty("role", "templateTick")
+        name_row.addWidget(self.tick)
+        text.addLayout(name_row)
+        self.description = QLabel(description, self)
+        self.description.setProperty("role", "templateDescription")
+        self.description.setWordWrap(True)
+        self.description.setAlignment(Qt.AlignmentFlag.AlignTop)
+        text.addWidget(self.description)
+        text.addStretch(1)
+        row.addLayout(text, 1)
+        self.drawn = False
+
+    def show_page(self, page: QPixmap | None) -> None:
+        self.drawn = page is not None
+        self.preview.setPixmap(page if page is not None else QPixmap())
+
+    def set_chosen(self, chosen: bool) -> None:
+        self.tick.setText("\u2713" if chosen else "")
 
 
 class TemplatePicker(QDialog):
@@ -91,59 +137,54 @@ class TemplatePicker(QDialog):
 
         saved = self._load_choice()
         layout = QVBoxLayout(self)
-        intro = FittedLabel(
-            tr(
-                "Pick a design for the print layout. Each preview shows the map "
-                "the canvas shows now; you can edit the layout in the layout "
-                "designer afterwards."
-            ),
-            self,
-        )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
+        layout.setSpacing(10)
 
-        form = QFormLayout()
+        # One slim bar: what the previews show, then the two page settings.
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        intro = QLabel(tr("Each preview shows the map the canvas shows now."), self)
+        intro.setProperty("role", "hint")
+        bar.addWidget(intro, 1)
         self.page_combo = QComboBox(self)
+        self.page_combo.setAccessibleName(tr("Page size"))
+        self.page_combo.setToolTip(tr("Page size"))
         for size in PAGE_SIZE_ORDER:
             self.page_combo.addItem(tr(_PAGE_LABELS.get(size, size)), size)
         self.orientation_combo = QComboBox(self)
+        self.orientation_combo.setAccessibleName(tr("Orientation"))
+        self.orientation_combo.setToolTip(tr("Orientation"))
         for value, label in _ORIENTATIONS:
             self.orientation_combo.addItem(tr(label), value)
-        form.addRow(tr("Page size"), self.page_combo)
-        form.addRow(tr("Orientation"), self.orientation_combo)
-        layout.addLayout(form)
+        bar.addWidget(self.page_combo)
+        bar.addWidget(self.orientation_combo)
+        layout.addLayout(bar)
 
+        # A list, one design per row across the whole width, so each page is
+        # large enough to judge before choosing it; the list scrolls.
         self.template_list = QListWidget(self)
-        self.template_list.setViewMode(QListView.ViewMode.IconMode)
-        self.template_list.setIconSize(ICON_SIZE)
-        cell = QSize(ICON_SIZE.width() + _GRID_GAP, ICON_SIZE.height() + 40)
-        self.template_list.setGridSize(cell)
-        self.template_list.setResizeMode(QListView.ResizeMode.Adjust)
-        self.template_list.setMovement(QListView.Movement.Static)
-        self.template_list.setWordWrap(True)
-        # Five across and two down, with room for a scroll bar that a
-        # larger system font may still bring in.
-        scrollbar = self.style().pixelMetric(
-            self.style().PixelMetric.PM_ScrollBarExtent
+        self.template_list.setProperty("role", "templateList")
+        self.template_list.setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
         )
-        self.template_list.setMinimumSize(
-            5 * cell.width() + scrollbar + 12, 2 * cell.height() + 12
+        self.template_list.verticalScrollBar().setSingleStep(24)
+        self.template_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
         )
+        self.template_list.setSpacing(3)
+        self.rows: dict[str, _TemplateRow] = {}
+        row_height = PREVIEW_BOX.height() + 2 * _ROW_PADDING
         for template in TEMPLATES:
-            item = QListWidgetItem(tr(template.name), self.template_list)
+            item = QListWidgetItem(self.template_list)
             item.setData(Qt.ItemDataRole.UserRole, template.id)
+            item.setData(Qt.ItemDataRole.AccessibleTextRole, tr(template.name))
             item.setToolTip(tr(template.description))
-            item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
-            # One size for every cell, whatever the name's length, so the
-            # cards line up in even columns.
-            item.setSizeHint(cell)
+            item.setSizeHint(QSize(0, row_height))
+            row = _TemplateRow(tr(template.name), tr(template.description), self)
+            self.template_list.setItemWidget(item, row)
+            self.rows[template.id] = row
         self.template_list.currentItemChanged.connect(self._on_template)
         self.template_list.itemDoubleClicked.connect(lambda _item: self.accept())
         layout.addWidget(self.template_list, 1)
-
-        self.description_label = FittedLabel("", self)
-        self.description_label.setWordWrap(True)
-        layout.addWidget(self.description_label)
 
         buttons = QDialogButtonBox(self)
         self.create_button = buttons.addButton(
@@ -158,7 +199,8 @@ class TemplatePicker(QDialog):
         self.page_combo.currentIndexChanged.connect(self._restart_previews)
         self.orientation_combo.currentIndexChanged.connect(self._restart_previews)
         theme.attach_menus(self)
-        self.adjustSize()
+        self.setMinimumSize(560, 420)
+        self.resize(780, 660)
         self._restart_previews()
 
     # ---- The choice ----------------------------------------------------------
@@ -190,12 +232,11 @@ class TemplatePicker(QDialog):
     def _restart_previews(self, *_args: object) -> None:
         """Draw every preview again, the selected one first."""
         self._timer.stop()
-        placeholder = QIcon()
+        for row in self.rows.values():
+            row.show_page(None)
         items = [
             self.template_list.item(row) for row in range(self.template_list.count())
         ]
-        for item in items:
-            item.setIcon(placeholder)
         current = self.template_list.currentItem()
         self._queue = ([current] if current else []) + [
             i for i in items if i is not current
@@ -207,14 +248,18 @@ class TemplatePicker(QDialog):
             return
         item = self._queue.pop(0)
         template_id = str(item.data(Qt.ItemDataRole.UserRole))
+        ratio = max(1.0, self.devicePixelRatioF())
         try:
             image = self._render(
-                template_id, self.page_size, self.orientation, PREVIEW_WIDTH_PX
+                template_id,
+                self.page_size,
+                self.orientation,
+                round(PREVIEW_BOX.width() * ratio),
             )
         except Exception:  # a preview must never break the picker
             image = None
         if image is not None and not image.isNull():
-            item.setIcon(QIcon(_card(image)))
+            self.rows[template_id].show_page(_page(image, ratio))
         else:
             item.setToolTip(
                 f"{tr(get_template(template_id).description)}\n"
@@ -223,14 +268,21 @@ class TemplatePicker(QDialog):
         if self._queue:
             self._timer.start()
 
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        # The remembered design may be far down the list.
+        current = self.template_list.currentItem()
+        if current is not None:
+            self.template_list.scrollToItem(
+                current, QAbstractItemView.ScrollHint.PositionAtCenter
+            )
+
     # ---- Helpers -------------------------------------------------------------
 
     def _on_template(self, current: QListWidgetItem | None, _previous: object) -> None:
-        if current is None:
-            self.description_label.setText("")
-            return
-        template = get_template(str(current.data(Qt.ItemDataRole.UserRole)))
-        self.description_label.setText(tr(template.description))
+        chosen = current.data(Qt.ItemDataRole.UserRole) if current else None
+        for template_id, row in self.rows.items():
+            row.set_chosen(template_id == chosen)
 
     def _select(self, saved: tuple[str, str, str]) -> None:
         template_id, page_size, orientation = saved
@@ -274,22 +326,20 @@ def ask_template(
     return picker.template_id, picker.page_size, picker.orientation
 
 
-def _card(image: QImage) -> QPixmap:
-    """`image` (a page) centred on a grey card with a thin edge, so ten white
-    pages read as ten pages rather than one white field."""
-    card = QPixmap(ICON_SIZE)
-    card.fill(QColor(_CARD))
-    room = ICON_SIZE.shrunkBy(QMargins(*(4 * [_CARD_PADDING])))
+def _page(image: QImage, ratio: float) -> QPixmap:
+    """`image` (a page) fitted into the preview box, with a thin edge so a
+    white page stands apart from a light row."""
+    room = QSize(
+        round(PREVIEW_BOX.width() * ratio), round(PREVIEW_BOX.height() * ratio)
+    )
     page = QPixmap.fromImage(image).scaled(
         room,
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.SmoothTransformation,
     )
-    x = (ICON_SIZE.width() - page.width()) // 2
-    y = (ICON_SIZE.height() - page.height()) // 2
-    painter = QPainter(card)
-    painter.drawPixmap(x, y, page)
+    painter = QPainter(page)
     painter.setPen(QColor(_PAGE_EDGE))
-    painter.drawRect(x, y, page.width() - 1, page.height() - 1)
+    painter.drawRect(0, 0, page.width() - 1, page.height() - 1)
     painter.end()
-    return card
+    page.setDevicePixelRatio(ratio)
+    return page

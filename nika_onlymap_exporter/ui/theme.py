@@ -1064,6 +1064,41 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     font-weight: 600;
 }}
 
+/* The template picker: one design per row, the chosen one ringed. */
+{d} QListWidget[role="templateList"] {{
+    background: {p.canvas};
+    border: none;
+    outline: none;
+}}
+{d} QListWidget[role="templateList"]::item {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 8px;
+}}
+{d} QListWidget[role="templateList"]::item:hover {{
+    background: {p.hover};
+}}
+{d} QListWidget[role="templateList"]::item:selected {{
+    background: {p.accent_soft};
+    border: 2px solid {p.accent};
+}}
+{d} QFrame[role="templateRow"] {{
+    background: transparent;
+}}
+{d} QLabel[role="templateName"] {{
+    color: {p.ink};
+    font-size: 15px;
+    font-weight: 650;
+}}
+{d} QLabel[role="templateDescription"] {{
+    color: {p.muted};
+}}
+{d} QLabel[role="templateTick"] {{
+    color: {p.ink};
+    font-size: 15px;
+    font-weight: 650;
+}}
+
 /* A one-line notice across the top: the language offer. */
 {d} QFrame[role="notice"] {{
     background: {p.accent_soft};
