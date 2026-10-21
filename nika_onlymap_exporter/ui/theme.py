@@ -1251,9 +1251,14 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QLabel[role="pageCaption"] {{
     color: {p.muted};
 }}
-{d} QToolButton[role="secondary"][zoom="true"] {{
+{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"] {{
     min-width: 0;
     padding: 2px 10px;
+}}
+/* Focused, the ring's extra pixel comes out of the padding, so the button
+   keeps its size and its label is never cut short. */
+{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:focus {{
+    padding: 1px 9px;
 }}
 {d} QLabel[role="saveName"] {{
     color: {p.ink};
