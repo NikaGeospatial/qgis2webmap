@@ -90,7 +90,8 @@ _LEGEND_MIN_W = 35.0
 _LEGEND_MAX_W = 60.0
 _LEGEND_MAX_COLUMNS = 3
 #: Rough width of one character of legend text at the default size, used only
-#: to pick a right-hand legend column wide enough for the longest layer name.
+#: to pick a right-hand legend column wide enough for the longest layer name
+#: or entry label.
 _LEGEND_CHAR_W = 1.8
 _LEGEND_SYMBOL_W = 10.0
 #: Never let a legend below the frame take more than this share of the body.
@@ -104,7 +105,7 @@ LEGEND_CHOICES = ("auto", "right", "below")
 class CanvasLayoutInput:
     """What the canvas contributes: extent size in map units, whether its CRS
     is geographic, the page preset, the project title, the visible layers'
-    names (one legend row each) and the layers' attribution credits."""
+    names and legend entries, and the layers' attribution credits."""
 
     extent_width: float
     extent_height: float
@@ -114,6 +115,9 @@ class CanvasLayoutInput:
     title: str = ""
     layer_names: Sequence[str] = ()
     credits: Sequence[str] = ()
+    # Per layer, in `layer_names` order, the labels of its legend entries
+    # (`legend_row_count`); a layer missing here is one row, its name.
+    legend_labels: Sequence[Sequence[str]] = ()
     # "auto" puts the legend wherever the frame comes out larger.
     legend: str = "auto"
 
@@ -313,8 +317,32 @@ def _fit(aspect: float, width: float, height: float) -> tuple[float, float]:
     return w, w / aspect
 
 
-def _legend_right_width(layer_names: Sequence[str]) -> float:
-    longest = max((len(name) for name in layer_names), default=0)
+def legend_row_count(
+    layer_names: Sequence[str], legend_labels: Sequence[Sequence[str]] = ()
+) -> int:
+    """The rows a legend draws for these layers: one for a layer with a
+    single entry (its symbol beside its name), and a heading plus a row per
+    entry for one with several -- a categorized or graduated layer."""
+    return sum(
+        1 + len(labels) if len(labels) > 1 else 1
+        for labels in _labels_per_layer(layer_names, legend_labels)
+    )
+
+
+def _labels_per_layer(
+    layer_names: Sequence[str], legend_labels: Sequence[Sequence[str]]
+) -> list[Sequence[str]]:
+    labels = list(legend_labels[: len(layer_names)])
+    return labels + [()] * (len(layer_names) - len(labels))
+
+
+def _legend_right_width(
+    layer_names: Sequence[str], legend_labels: Sequence[Sequence[str]] = ()
+) -> float:
+    texts = [*layer_names]
+    for labels in _labels_per_layer(layer_names, legend_labels):
+        texts.extend(labels)
+    longest = max((len(text) for text in texts), default=0)
     wanted = _LEGEND_SYMBOL_W + longest * _LEGEND_CHAR_W
     return min(_LEGEND_MAX_W, max(_LEGEND_MIN_W, wanted))
 
@@ -329,6 +357,7 @@ def _plan_for(
     footer_h = _SCALEBAR_H + ((_GAP / 2 + _ATTRIBUTION_H) if credits else 0.0)
     body_h = content_h - _HEADER_H - footer_h - 2 * _GAP
     layer_count = len(data.layer_names)
+    row_count = legend_row_count(data.layer_names, data.legend_labels)
 
     # (frame w, frame h, legend position, legend w, legend h, columns)
     options: list[tuple[float, float, str | None, float, float, int | None]] = []
@@ -336,14 +365,14 @@ def _plan_for(
         fw, fh = _fit(aspect, content_w, body_h)
         options.append((fw, fh, None, 0.0, 0.0, None))
     else:
-        legend_w = _legend_right_width(data.layer_names)
+        legend_w = _legend_right_width(data.layer_names, data.legend_labels)
         fw, fh = _fit(aspect, content_w - legend_w - _GAP, body_h)
-        right_h = min(_LEGEND_TITLE_H + layer_count * _LEGEND_ROW_H, fh)
+        right_h = min(_LEGEND_TITLE_H + row_count * _LEGEND_ROW_H, fh)
         if data.legend in ("auto", "right"):
             options.append((fw, fh, "right", legend_w, right_h, 1))
 
-        below_columns = min(_LEGEND_MAX_COLUMNS, layer_count)
-        rows = math.ceil(layer_count / below_columns)
+        below_columns = min(_LEGEND_MAX_COLUMNS, row_count)
+        rows = math.ceil(row_count / below_columns)
         below_h = min(
             _LEGEND_TITLE_H + rows * _LEGEND_ROW_H, body_h * _LEGEND_MAX_BODY_SHARE
         )

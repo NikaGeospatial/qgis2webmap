@@ -35,7 +35,12 @@ from dataclasses import dataclass
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsLayerTreeLayer,
     QgsLayoutExporter,
+    QgsLayoutItemLegend,
+    QgsLayoutUtils,
+    QgsLegendRenderer,
+    QgsLegendStyle,
     QgsMapLayer,
     QgsPointXY,
     QgsPrintLayout,
@@ -43,11 +48,11 @@ from qgis.core import (
     QgsRectangle,
 )
 from qgis.gui import QgsMapCanvas
-from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtGui import QImage
 
 from .cartograph_import import RoundTripIssue
-from .cartograph_ir import CartographSpec, FrameSpec
+from .cartograph_ir import CartographSpec, FrameSpec, LegendSpec
 from .layer_reader import read_attribution
 from .layout_builder import BuiltLayout, build_layout
 from .layout_reader import FrameMode, default_mode_for_map
@@ -67,6 +72,26 @@ FRAME_ID = MAIN_FRAME_ID
 #: What the layout is called when the project has no title.
 _UNTITLED = "map"
 _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
+#: The smallest a legend's text, symbols and spacing are drawn to fit the
+#: box its template planned, as a share of QGIS's default sizes (12 pt
+#: labels -> 3.6 pt): a small legend still says everything, a clipped one
+#: does not.
+_LEGEND_MIN_SCALE = 0.3
+_LEGEND_SCALE_STEP = 0.05
+#: Only a bound for the search; the box's width stops it long before.
+_LEGEND_MAX_COLUMNS = 12
+_LEGEND_TEXT_STYLES = (
+    QgsLegendStyle.Title,
+    QgsLegendStyle.Group,
+    QgsLegendStyle.Subgroup,
+    QgsLegendStyle.SymbolLabel,
+)
+_LEGEND_SIDES = (
+    QgsLegendStyle.Top,
+    QgsLegendStyle.Bottom,
+    QgsLegendStyle.Left,
+    QgsLegendStyle.Right,
+)
 
 
 @dataclass(frozen=True)
@@ -230,6 +255,7 @@ def _build_from_view(
             title=title,
             layer_names=tuple(layer.name() for layer in layers),
             credits=tuple(_credits(layers)),
+            legend_labels=tuple(_legend_labels(layer) for layer in layers),
             notes=project.metadata().abstract(),
             placeholders=dict(placeholders or {}),
         ),
@@ -249,7 +275,105 @@ def _build_from_view(
         frame_layers={slot.id: list(layers) for slot in plan.frames},
         add_to_project=add_to_project,
     )
+    for item in plan.items:
+        if isinstance(item, LegendSpec):
+            legend = built.items_by_id[item.id]
+            if isinstance(legend, QgsLayoutItemLegend):
+                _fit_legend(legend)
     return plan, spec, built
+
+
+def _legend_labels(layer: QgsMapLayer) -> tuple[str, ...]:
+    """The labels of the entries `layer` adds to a legend under its name --
+    one per class of a categorized or graduated layer."""
+    layer_legend = layer.legend()
+    if layer_legend is None:
+        return ()
+    node = QgsLayerTreeLayer(layer)
+    return tuple(
+        str(legend_node.data(Qt.ItemDataRole.DisplayRole) or "")
+        for legend_node in layer_legend.createLayerTreeModelLegendNodes(node)
+    )
+
+
+def _fit_legend(legend: QgsLayoutItemLegend) -> None:
+    """Make every row of `legend` fit the box its template planned, which
+    the builder keeps fixed: QGIS clips a legend at its frame, so a layer
+    with many classes would lose rows off the bottom. More columns first,
+    then smaller text, symbols and spacing -- down to `_LEGEND_MIN_SCALE` --
+    never a bigger box. A legend that already fits is left as it is."""
+    box = legend.sizeWithUnits()
+    context = QgsLayoutUtils.createRenderContextForLayout(legend.layout(), None)
+
+    def measure() -> tuple[bool, bool]:
+        """Whether the rows fit the box across, and down."""
+        size = QgsLegendRenderer(legend.model(), legend.legendSettings()).minimumSize(
+            context
+        )
+        return size.width() <= box.width(), size.height() <= box.height()
+
+    if all(measure()):
+        return
+    # A class list may run on into the next column, or columns cannot help
+    # a legend of one categorized layer.
+    legend.setSplitLayer(True)
+    base_columns = legend.columnCount()
+    defaults = _LegendSizes.read(legend)
+    steps = round((1.0 - _LEGEND_MIN_SCALE) / _LEGEND_SCALE_STEP)
+    for step in range(steps + 1):
+        defaults.apply(legend, 1.0 - step * _LEGEND_SCALE_STEP)
+        columns = base_columns
+        while True:
+            legend.setColumnCount(columns)
+            across, down = measure()
+            if across and down:
+                legend.refresh()
+                return
+            if not across or columns >= _LEGEND_MAX_COLUMNS:
+                break
+            columns += 1
+        # The most columns that still fit across, for the next size down or,
+        # at the smallest, to leave as little as possible past the edge.
+        legend.setColumnCount(max(base_columns, columns - (0 if across else 1)))
+    legend.refresh()
+
+
+@dataclass(frozen=True)
+class _LegendSizes:
+    """A legend's own text sizes, margins, symbol size and spacing, to draw
+    it at a share of them."""
+
+    text: tuple[float, ...]
+    margins: tuple[tuple[float, ...], ...]
+    symbol: tuple[float, float]
+    spacing: tuple[float, float]
+
+    @classmethod
+    def read(cls, legend: QgsLayoutItemLegend) -> _LegendSizes:
+        styles = [legend.rstyle(style) for style in _LEGEND_TEXT_STYLES]
+        return cls(
+            text=tuple(style.textFormat().size() for style in styles),
+            margins=tuple(
+                tuple(style.margin(side) for side in _LEGEND_SIDES) for style in styles
+            ),
+            symbol=(legend.symbolWidth(), legend.symbolHeight()),
+            spacing=(legend.boxSpace(), legend.columnSpace()),
+        )
+
+    def apply(self, legend: QgsLayoutItemLegend, scale: float) -> None:
+        for style_id, size, margins in zip(
+            _LEGEND_TEXT_STYLES, self.text, self.margins
+        ):
+            style = legend.rstyle(style_id)
+            text_format = style.textFormat()
+            text_format.setSize(size * scale)
+            style.setTextFormat(text_format)
+            for side, margin in zip(_LEGEND_SIDES, margins):
+                style.setMargin(side, margin * scale)
+        legend.setSymbolWidth(self.symbol[0] * scale)
+        legend.setSymbolHeight(self.symbol[1] * scale)
+        legend.setBoxSpace(self.spacing[0] * scale)
+        legend.setColumnSpace(self.spacing[1] * scale)
 
 
 def _frame(

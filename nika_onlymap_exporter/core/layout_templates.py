@@ -38,6 +38,7 @@ from .canvas_layout import (
     PLAN_PAGE_SIZES,
     CanvasLayoutInput,
     canvas_furniture,
+    legend_row_count,
     nice_interval,
     page_dimensions,
     page_spec_fields,
@@ -113,6 +114,8 @@ class TemplateInput:
     title: str = ""
     layer_names: Sequence[str] = ()
     credits: Sequence[str] = ()
+    # As `CanvasLayoutInput.legend_labels`.
+    legend_labels: Sequence[Sequence[str]] = ()
     notes: str = ""
     placeholders: Mapping[str, str] = field(default_factory=dict)
 
@@ -342,6 +345,7 @@ def _classic(page: _Page, legend: str = "auto") -> _Layout:
             title=data.title,
             layer_names=data.layer_names,
             credits=data.credits,
+            legend_labels=data.legend_labels,
             legend=legend,
         )
     )
@@ -845,7 +849,8 @@ def _dark(page: _Page) -> _Layout:
     ]
     if page.data.layer_names:
         legend_w = min(60.0 * s, frame.w * 0.3)
-        legend_h = min(frame.h * 0.4, 8.0 + 6.0 * len(page.data.layer_names))
+        rows = legend_row_count(page.data.layer_names, page.data.legend_labels)
+        legend_h = min(frame.h * 0.4, 8.0 + 6.0 * rows)
         items.append(
             LegendSpec(
                 id="legend",

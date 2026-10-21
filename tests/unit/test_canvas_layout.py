@@ -14,6 +14,7 @@ from nika_onlymap_exporter.core.canvas_layout import (
     CanvasLayoutInput,
     CanvasLayoutPlan,
     canvas_spec,
+    legend_row_count,
     nice_interval,
     page_dimensions,
     plan_canvas_layout,
@@ -166,6 +167,36 @@ class TestFurniture:
         assert wide.legend is not None and wide.legend.y >= wide.frame.y + wide.frame.h
         assert tall.legend_position == "right"
         assert tall.legend is not None and tall.legend.x >= tall.frame.x + tall.frame.w
+
+    def test_a_layer_with_classes_is_a_heading_and_a_row_each(self) -> None:
+        assert legend_row_count(("a", "b")) == 2
+        assert legend_row_count(("a", "b"), (("a",), ("x", "y", "z"))) == 1 + 4
+        # A layer missing from the labels is one row, its name.
+        assert legend_row_count(("a", "b"), (("x", "y"),)) == 3 + 1
+
+    def test_the_legend_has_room_for_every_class(self) -> None:
+        names = ("Parcels",)
+        plain = plan_canvas_layout(
+            CanvasLayoutInput(1000, 5000, False, "A4", "landscape", layer_names=names)
+        )
+        classes = plan_canvas_layout(
+            CanvasLayoutInput(
+                1000,
+                5000,
+                False,
+                "A4",
+                "landscape",
+                layer_names=names,
+                legend_labels=(
+                    ("Residential", "Mixed use and commerce", "Industrial", "Park"),
+                ),
+            )
+        )
+        assert plain.legend is not None and classes.legend is not None
+        assert classes.legend_position == plain.legend_position == "right"
+        assert classes.legend.h == pytest.approx(plain.legend.h + 4 * 6.0)
+        # Wide enough for the longest class label, not just the layer name.
+        assert classes.legend.w > plain.legend.w
 
     def test_scalebar_bottom_left_and_north_top_right(self) -> None:
         plan = plan_canvas_layout(CanvasLayoutInput(1600, 900, False, title="T"))

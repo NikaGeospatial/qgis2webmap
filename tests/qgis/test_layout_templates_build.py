@@ -162,6 +162,79 @@ class TestPreview:
         assert len(colours) > 3
 
 
+def _categorized(name: str, categories: int):
+    """The parcels as `categories` land-use classes -- one legend heading
+    and a row per class, not the single row a plain layer has."""
+    layer = build_parcels_layer()
+    layer.setName(name)
+    layer.setRenderer(
+        qgis_core.QgsCategorizedSymbolRenderer(
+            "use",
+            [
+                qgis_core.QgsRendererCategory(
+                    f"class-{i}",
+                    qgis_core.QgsFillSymbol.createSimple(
+                        {"color": f"#{(i * 37) % 256:02x}{(i * 91) % 256:02x}80"}
+                    ),
+                    f"Land use class {i + 1}",
+                )
+                for i in range(categories)
+            ],
+        )
+    )
+    return layer
+
+
+class TestTheLegendShowsEveryEntry:
+    """A categorized layer's rows all fit inside the legend's planned box --
+    nothing is cut off at the box's edge -- whatever the template."""
+
+    @pytest.mark.parametrize("orientation", ["landscape", "portrait"])
+    @pytest.mark.parametrize("template_id", template_ids())
+    @pytest.mark.parametrize(
+        "shape", [(1, 5), (3, 12)], ids=["one-layer-5-classes", "3-layers-12-classes"]
+    )
+    def test_nothing_is_clipped(self, template_id, orientation, shape, project) -> None:
+        layer_count, categories = shape
+        layers = [
+            _categorized(f"Parcels {k + 1}", categories) for k in range(layer_count)
+        ]
+        for layer in layers:
+            project.addMapLayer(layer)
+        result = cartograph_from_view(
+            _view(layers[0]),
+            UTM,
+            layers,
+            project,
+            template_id=template_id,
+            orientation=orientation,
+        )
+        legend = result.layout.itemById("legend")
+        planned = [item for item in result.plan.items if item.id == "legend"]
+        if not planned:
+            assert legend is None
+            return
+        # Every class is in the legend, none filtered out.
+        model = legend.model()
+        rows = sum(
+            len(model.layerLegendNodes(node)) for node in model.rootGroup().findLayers()
+        )
+        assert rows == layer_count * categories
+        # Still the template's own legend area...
+        box = planned[0].box
+        size = legend.sizeWithUnits()
+        assert (size.width(), size.height()) == pytest.approx((box.w, box.h), abs=0.05)
+        # ...and what QGIS draws in it fits.
+        context = qgis_core.QgsLayoutUtils.createRenderContextForLayout(
+            result.layout, None
+        )
+        needed = qgis_core.QgsLegendRenderer(
+            model, legend.legendSettings()
+        ).minimumSize(context)
+        assert needed.width() <= box.w + 0.05, template_id
+        assert needed.height() <= box.h + 0.05, template_id
+
+
 class TestPicker:
     def _picker(self, qgis_app, tmp_path, calls, fail=()):
         from qgis.PyQt.QtCore import QSettings
