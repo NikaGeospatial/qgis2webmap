@@ -136,6 +136,7 @@ TOPIC_BY_HEAD = {
     "Project layers": Topic.MAP,
     # A cartograph's print layout (`core/layout_reader.py`).
     "Page count": Topic.LAYOUT,
+    "Page background": Topic.LAYOUT,
     "Layout item": Topic.LAYOUT,
     "Map frame": Topic.LAYOUT,
     "Locator inset": Topic.LAYOUT,

@@ -477,6 +477,7 @@ def prepare_cartograph(
         width=reading.page_width,
         height=reading.page_height,
         orientation=reading.orientation,
+        bg=reading.bg,
         items=tuple(items),
         atlas=reading.atlas,
     )
@@ -844,6 +845,7 @@ def _build_static_frame(
         image_bytes=render.png_bytes,
         dpi=float(static_dpi),
         overview_of=frame.overview_of,
+        frame_bg=frame.frame_bg,
     )
 
 
@@ -911,6 +913,7 @@ def _build_live_frame(
         zoom=zoom,
         bearing=map_item.mapRotation(),
         overview_of=frame.overview_of,
+        frame_bg=frame.frame_bg,
         atlas_fit=frame.atlas_fit,
         atlas_margin=frame.atlas_margin,
         atlas_cameras=atlas_cameras,

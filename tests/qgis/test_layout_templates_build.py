@@ -8,6 +8,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
 
@@ -20,6 +22,8 @@ from nika_onlymap_exporter.core.cartograph_export import (
     prepare_cartograph,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
+from nika_onlymap_exporter.core.layout_reader import read_layout
 from nika_onlymap_exporter.core.layout_templates import template_ids
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
@@ -44,6 +48,21 @@ def parcels(project):
     layer = build_parcels_layer()
     project.addMapLayer(layer)
     return layer
+
+
+def _export(result, project, runtime, report) -> str:
+    return finish_cartograph(
+        prepare_cartograph(
+            result.layout,
+            project,
+            runtime,
+            report,
+            frame_modes=result.frame_modes,
+            raster_cache=None,
+        ),
+        project,
+        report,
+    )
 
 
 def _view(parcels):
@@ -111,6 +130,57 @@ class TestEveryTemplateBuildsAndExports:
         )
         page = result.layout.pageCollection().page(0)
         assert page.pageStyleSymbol().color().lightness() < 40
+
+    def test_dark_keeps_its_page_and_frame_colours_in_the_html(
+        self, parcels, project, runtime
+    ) -> None:
+        """The dark page and the dark frame reach the HTML, or the light
+        title sits on the runtime's pale page wherever the map has not drawn
+        -- the bug a real Grand Canyon export showed."""
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="dark"
+        )
+        report = FidelityReportBuilder()
+        reading = read_layout(result.layout, report, frame_modes=result.frame_modes)
+        assert reading.bg == "#14161a"
+        assert [frame.frame_bg for frame in reading.frames] == ["#14161a"]
+        html = _export(result, project, runtime, FidelityReportBuilder())
+        assert re.search(r'<om-cartograph [^>]*\bbg="#14161a"', html)
+        assert re.search(r'<om-frame [^>]*\bframe-bg="#14161a"', html)
+        # Light text on that dark ground reads fine: no contrast warning.
+        assert not [row for row in report.items if "contrast" in row.detail]
+
+    def test_dark_round_trips_its_colours_through_import(
+        self, parcels, project, runtime, tmp_path
+    ) -> None:
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="dark"
+        )
+        path = tmp_path / "dark.html"
+        path.write_text(_export(result, project, runtime, FidelityReportBuilder()))
+        built = import_cartograph_file(path, project)
+        reading = read_layout(
+            built.layout, FidelityReportBuilder(), frame_modes=built.frame_modes
+        )
+        assert reading.bg == "#14161a"
+        assert [frame.frame_bg for frame in reading.frames] == ["#14161a"]
+
+    @pytest.mark.parametrize(
+        "template_id", [tid for tid in template_ids() if tid != "dark"]
+    )
+    def test_a_white_page_adds_no_colours_to_the_markup(
+        self, template_id, parcels, project, runtime
+    ) -> None:
+        """QGIS's default white page and white map background are not
+        written, so every existing cartograph's markup stays as it was."""
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id=template_id
+        )
+        report = FidelityReportBuilder()
+        html = _export(result, project, runtime, report)
+        assert not re.search(r"<om-cartograph [^>]*\bbg=", html)
+        assert "frame-bg=" not in html
+        assert not [row for row in report.items if "contrast" in row.detail]
 
     def test_tabloid_is_a_real_page_size(self, parcels, project) -> None:
         result = cartograph_from_view(

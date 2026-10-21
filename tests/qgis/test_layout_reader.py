@@ -483,3 +483,179 @@ def test_a_frozen_map_scale_is_the_maps_own_scale(survey) -> None:
     label = next(item for item in reading.furniture if isinstance(item, TextSpec))
     frozen = int(re.search(r"scale 1:(\d+)", label.body).group(1))
     assert frozen == pytest.approx(survey.main_map.scale(), rel=0.01)
+
+
+def _set_page_fill(layout, color: str) -> None:
+    symbol = qgis_core.QgsFillSymbol.createSimple(
+        {"color": color, "style": "solid", "outline_style": "no"}
+    )
+    layout.pageCollection().page(0).setPageStyleSymbol(symbol)
+
+
+def _set_text_color(label, color: str) -> None:
+    from qgis.PyQt.QtGui import QColor
+
+    text_format = label.textFormat()
+    text_format.setColor(QColor(color))
+    label.setTextFormat(text_format)
+
+
+def _contrast_rows(report: FidelityReportBuilder) -> list:
+    return [item for item in report.items if "contrast" in item.detail]
+
+
+class TestBackgrounds:
+    """Page 1's fill becomes `<om-cartograph bg>` and a map item's background
+    `<om-frame frame-bg>` -- except QGIS's defaults, so ordinary layouts
+    write the markup they always did."""
+
+    def test_the_default_white_page_and_maps_carry_no_colour(self, survey) -> None:
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        assert reading.bg is None
+        assert [frame.frame_bg for frame in reading.frames] == [None, None]
+
+    def test_a_coloured_page_is_carried(self, survey) -> None:
+        _set_page_fill(survey.layout, "#224466")
+        assert read_layout(survey.layout, FidelityReportBuilder()).bg == "#224466"
+
+    def test_a_translucent_page_keeps_its_alpha(self, survey) -> None:
+        _set_page_fill(survey.layout, "34,68,102,128")
+        assert read_layout(survey.layout, FidelityReportBuilder()).bg == "#22446680"
+
+    def test_a_transparent_page_keeps_the_theme(self, survey) -> None:
+        _set_page_fill(survey.layout, "34,68,102,0")
+        assert read_layout(survey.layout, FidelityReportBuilder()).bg is None
+
+    def test_a_patterned_page_is_its_main_colour_and_says_so(self, survey) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple(
+            {"color": "#224466", "style": "dense4", "outline_style": "no"}
+        )
+        survey.layout.pageCollection().page(0).setPageStyleSymbol(symbol)
+        report = FidelityReportBuilder()
+        assert read_layout(survey.layout, report).bg == "#224466"
+        rows = [item for item in report.items if item.subject == "Page background"]
+        assert rows and rows[0].status is FidelityStatus.APPROXIMATED
+
+    def test_a_coloured_map_background_is_carried(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.main_map.setBackgroundColor(QColor("#14161a"))
+        survey.inset_map.setBackgroundEnabled(False)
+        survey.inset_map.setBackgroundColor(QColor("#14161a"))
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        bgs = {frame.map_item.uuid(): frame.frame_bg for frame in reading.frames}
+        assert bgs[survey.main_map.uuid()] == "#14161a"
+        # Switched off in QGIS: the frame shows nothing of its own.
+        assert bgs[survey.inset_map.uuid()] is None
+
+
+class TestTextContrast:
+    """A label hard to read against what it sits on in the HTML is a
+    Changed row with the fix; its colour is never touched."""
+
+    def test_light_text_on_the_default_page_is_flagged(self, survey) -> None:
+        _set_text_color(survey.title_label, "#eeeeee")
+        report = FidelityReportBuilder()
+        reading = read_layout(survey.layout, report)
+        rows = _contrast_rows(report)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.status is FidelityStatus.APPROXIMATED
+        assert row.subject == f"Text '{survey.title_label.displayName()}'"
+        assert "light text on a light page" in row.detail
+        assert "Give the page a dark background, or darken the text." in row.detail
+        label = next(item for item in reading.furniture if isinstance(item, TextSpec))
+        assert label.color == "#eeeeee"
+
+    def test_dark_text_on_the_default_page_is_not(self, survey) -> None:
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert _contrast_rows(report) == []
+
+    def test_light_text_on_a_dark_page_is_not(self, survey) -> None:
+        _set_page_fill(survey.layout, "#14161a")
+        _set_text_color(survey.title_label, "#e8e6e3")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert _contrast_rows(report) == []
+
+    def test_dark_text_on_a_dark_page_says_lighten(self, survey) -> None:
+        _set_page_fill(survey.layout, "#14161a")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        (row,) = _contrast_rows(report)
+        assert "dark text on a dark page" in row.detail
+        assert "or lighten the text." in row.detail
+
+    def test_light_text_over_a_live_map_names_the_unloaded_map(self, survey) -> None:
+        """Over a live frame the browser shows the frame's background until
+        the map draws -- and always, without WebGL."""
+        survey.title_label.attemptMove(
+            qgis_core.QgsLayoutPoint(20, 40, qgis_core.QgsUnitTypes.LayoutMillimeters)
+        )
+        survey.title_label.setZValue(survey.main_map.zValue() + 1)
+        _set_text_color(survey.title_label, "#e8e6e3")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        (row,) = _contrast_rows(report)
+        assert "light text on a light map frame background" in row.detail
+        assert "wherever the map has not drawn" in row.detail
+        assert "Give the map item a dark background" in row.detail
+
+    def test_over_a_dark_map_background_it_reads(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.title_label.attemptMove(
+            qgis_core.QgsLayoutPoint(20, 40, qgis_core.QgsUnitTypes.LayoutMillimeters)
+        )
+        survey.title_label.setZValue(survey.main_map.zValue() + 1)
+        survey.main_map.setBackgroundColor(QColor("#14161a"))
+        _set_text_color(survey.title_label, "#e8e6e3")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert _contrast_rows(report) == []
+
+    def test_over_a_static_frame_the_raster_is_not_judged(self, survey) -> None:
+        survey.title_label.attemptMove(
+            qgis_core.QgsLayoutPoint(20, 40, qgis_core.QgsUnitTypes.LayoutMillimeters)
+        )
+        survey.title_label.setZValue(survey.main_map.zValue() + 1)
+        _set_text_color(survey.title_label, "#e8e6e3")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report, frame_modes=all_static(survey.layout))
+        assert _contrast_rows(report) == []
+
+    def test_a_translucent_dark_plate_behind_the_text_counts(self, survey) -> None:
+        survey.shape.attemptMove(
+            qgis_core.QgsLayoutPoint(5, 2, qgis_core.QgsUnitTypes.LayoutMillimeters)
+        )
+        survey.shape.attemptResize(
+            qgis_core.QgsLayoutSize(200, 20, qgis_core.QgsUnitTypes.LayoutMillimeters)
+        )
+        survey.shape.setSymbol(
+            qgis_core.QgsFillSymbol.createSimple(
+                {"color": "20,22,26,209", "outline_style": "no"}
+            )
+        )
+        survey.shape.setZValue(survey.title_label.zValue() - 1)
+        _set_text_color(survey.title_label, "#e8e6e3")
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert _contrast_rows(report) == []
+
+    def test_mid_grey_is_enough_for_a_large_title_not_for_body_text(
+        self, survey
+    ) -> None:
+        """WCAG's two minimums: 3:1 for large text, 4.5:1 for body text."""
+        _set_text_color(survey.title_label, "#888888")  # about 3.4:1 here
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert len(_contrast_rows(report)) == 1
+
+        text_format = survey.title_label.textFormat()
+        text_format.setSize(24)
+        text_format.setSizeUnit(qgis_core.QgsUnitTypes.RenderPoints)
+        survey.title_label.setTextFormat(text_format)
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert _contrast_rows(report) == []
