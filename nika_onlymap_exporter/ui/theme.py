@@ -554,7 +554,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     """
     d = f"#{object_name}"
     font_family = f'font-family: "{family}";' if family else ""
-    return f"""
+    base = f"""
 {d} {{
     background: {p.canvas};
     color: {p.ink};
@@ -646,8 +646,11 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QLineEdit:hover, {d} QComboBox:hover {{
     border-color: {p.muted};
 }}
-{d} QLineEdit:focus, {d} QComboBox:focus, {d} QComboBox:on {{
+/* Open, a box keeps the thin brass outline its list continues, focused or
+   not; the keyboard focus ring itself is in the focus block at the end. */
+{d} QComboBox:on, {d} QComboBox:on:focus {{
     border: 1px solid {p.accent};
+    padding: 5px 8px;
 }}
 {d} QLineEdit:disabled, {d} QComboBox:disabled {{
     color: {p.quiet};
@@ -667,7 +670,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QComboBox QAbstractItemView::item {{
     min-height: 24px;
-    padding: 0 6px;
+    /* Room kept for the focus ring the keyboard's row wears. */
+    border: 2px solid transparent;
+    border-radius: 4px;
+    padding: 0 4px;
 }}
 {d} QComboBox QAbstractItemView {{
     background: {p.paper};
@@ -683,6 +689,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QCheckBox {{
     spacing: 8px;
     background: transparent;
+    /* Room for the focus ring, which goes round box and label together: a
+       ring on the box alone vanishes on a ticked lime box in the dark. */
+    border: 2px solid transparent;
+    border-radius: 4px;
 }}
 {d} QCheckBox::indicator, {d} QTreeView::indicator {{
     width: 14px;
@@ -707,6 +717,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QRadioButton {{
     spacing: 8px;
     background: transparent;
+    border: 2px solid transparent;
+    border-radius: 4px;
 }}
 {d} QRadioButton::indicator {{
     width: 14px;
@@ -748,7 +760,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QPushButton:focus, {d} QToolButton:focus {{
     outline: none;
-    border-color: {p.accent};
+    border-color: {p.link};
+}}
+/* A bare icon button (the column help "i"): room for the focus ring. */
+{d} QToolButton[autoRaise="true"] {{
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    padding: 0;
+}}
+{d} QToolButton[autoRaise="true"]:hover {{
+    background: {p.hover};
 }}
 
 /* The two things a user does to the map: a filled button and an outlined one.
@@ -811,7 +833,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     height: 10px;
 }}
 /* Export has no menu, so no room is kept for one. */
-{d} QToolButton[role="primary"][hasMenu="false"] {{
+{d} QToolButton[role="primary"][hasMenu="false"],
+{d} QToolButton[role="secondary"][hasMenu="false"] {{
     padding: 3px 16px;
 }}
 /* Share opens its menu from anywhere on the button: one chevron, no split. */
@@ -879,8 +902,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="cornerPart"] {{
     background: transparent;
     color: {p.ink};
-    border: none;
-    padding: 3px 9px 3px 9px;
+    /* Transparent until focused: the 2 px is the focus ring's room, taken
+       out of the padding so the parts keep their size. */
+    border: 2px solid transparent;
+    padding: 1px 7px 1px 7px;
     min-height: 20px;
     font-weight: 600;
     margin: 0;
@@ -891,7 +916,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-left-radius: 5px;
 }}
 {d} QToolButton[role="cornerPart"][position="right"] {{
-    padding: 3px 7px 3px 0px;
+    padding: 1px 5px 1px 0px;
     min-width: 10px;
     max-width: 10px;
     border-top-right-radius: 5px;
@@ -934,8 +959,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="outputPart"] {{
     background: transparent;
     color: {p.ink};
-    border: none;
-    padding: 4px 12px;
+    border: 2px solid transparent;
+    padding: 2px 10px;
     min-height: 20px;
     font-weight: 600;
     margin: 0;
@@ -961,9 +986,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="outputTitle"] {{
     background: transparent;
     color: {p.ink};
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     border-radius: 6px;
-    padding: 3px 22px 3px 6px;
+    padding: 2px 21px 2px 5px;
     min-height: 22px;
     font-size: 16px;
     font-weight: 650;
@@ -978,7 +1003,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     subcontrol-position: center right;
     width: 10px;
     height: 10px;
-    right: 7px;
+    right: 6px;
 }}
 {d} QLabel[role="betaChip"] {{
     color: {p.link};
@@ -990,6 +1015,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QFrame[role="outputRow"] {{
     background: transparent;
+    border: 2px solid transparent;
     border-radius: 5px;
     min-width: 260px;
 }}
@@ -1052,13 +1078,94 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     padding-right: 12px;
     padding-left: 26px;
 }}
+{d}[rtl="true"] QToolButton[role="primary"][hasMenu="false"],
+{d}[rtl="true"] QToolButton[role="secondary"][hasMenu="false"] {{
+    padding: 3px 16px;
+}}
+/* Nor the menu part's divider and rounded corners, which belong on its
+   outer edge - the left one, right to left. */
+{d}[rtl="true"] QToolButton[role="primary"]::menu-button,
+{d}[rtl="true"] QToolButton[role="secondary"]::menu-button {{
+    border-left: none;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}}
+{d}[rtl="true"] QToolButton[role="primary"]::menu-button {{
+    border-right: 1px solid {p.accent_hover};
+}}
+{d}[rtl="true"] QToolButton[role="primary"]:disabled::menu-button,
+{d}[rtl="true"] QToolButton[role="secondary"]::menu-button {{
+    border-right: 1px solid {p.rule};
+}}
+/* A chevron's position and its `right:` offset are mirrored by Qt, so only
+   the padding that keeps room for it needs moving. */
+{d}[rtl="true"] QToolButton[role="outputTitle"] {{
+    padding: 2px 5px 2px 21px;
+}}
+/* A corner button's chevron room moves to the left. Its other lopsided
+   padding stays: it offsets the slack Qt leaves on the right of a
+   text-beside-icon label, which Qt does not mirror. */
+{d}[rtl="true"] QToolButton[role="corner"][hasMenu="true"] {{
+    padding-right: 9px;
+    padding-left: 22px;
+}}
+/* Preview's pill: its first part sits on the right, right to left, so the
+   rounded corners and the shared middle edge swap sides. */
+{d}[rtl="true"] QToolButton[role="cornerPart"][position="left"] {{
+    padding: 1px 7px 1px 0px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d}[rtl="true"] QToolButton[role="cornerPart"][position="right"] {{
+    padding: 1px 0px 1px 5px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+{d}[rtl="true"] QToolButton[role="outputPart"][position="left"] {{
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d}[rtl="true"] QToolButton[role="outputPart"][position="right"] {{
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+/* A section header right to left: Qt mirrors the arrow but not the title,
+   which it keeps left-aligned, so the two were drawn over each other and
+   `text-align` does not move it. Laid out left to right, arrow and title
+   sit together, readable, at the far end of the header. */
+{d}[rtl="true"] QToolButton[role="sectionHeader"] {{
+    qproperty-layoutDirection: LeftToRight;
+}}
+{d}[rtl="true"] QTabBar::tab {{
+    margin-right: 0;
+    margin-left: 2px;
+}}
+{d}[rtl="true"] QHeaderView::section {{
+    border-right: none;
+    border-left: 1px solid {p.rule};
+}}
+{d}[rtl="true"] QMenu::item {{
+    padding: 4px 10px 4px 20px;
+}}
 
 /* Links that act inside the dialog. */
 {d} QPushButton[role="link"] {{
     background: transparent;
-    border: none;
+    /* Room for the focus ring, out of the padding. */
+    border: 2px solid transparent;
+    border-radius: 4px;
     color: {p.link};
-    padding: 2px 4px;
+    padding: 0px 2px;
     font-weight: 600;
 }}
 {d} QPushButton[role="link"]:hover {{
@@ -1070,6 +1177,11 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.canvas};
     border: 1px solid {p.rule};
     border-radius: 6px;
+}}
+/* The preview takes the keyboard (arrows pan it); a 1 px ring, because a
+   wider border would shrink the page view and refit it on every focus. */
+{d} QgsLayoutView[role="layoutPreview"]:focus {{
+    border-color: {p.link};
 }}
 {d} QFrame[role="layoutEmpty"] {{
     background: {p.paper};
@@ -1098,10 +1210,12 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QToolButton[role="sectionHeader"] {{
     background: transparent;
-    border: none;
+    /* Room for the focus ring, out of the padding. */
+    border: 2px solid transparent;
+    border-radius: 4px;
     color: {p.ink};
     font-weight: 600;
-    padding: 8px 2px;
+    padding: 6px 0px;
     text-align: left;
 }}
 {d} QToolButton[role="sectionHeader"]:hover {{
@@ -1109,6 +1223,79 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QLabel[role="sectionSummary"] {{
     color: {p.muted};
+}}
+
+/* The template picker's strip of names: pills that jump to a design. */
+{d} QListWidget[role="templateChips"] {{
+    background: transparent;
+    border: none;
+    outline: none;
+}}
+{d} QListWidget[role="templateChips"]::item {{
+    background: {p.field};
+    color: {p.ink};
+    border: 2px solid transparent;
+    border-radius: 13px;
+    padding: 3px 11px;
+}}
+{d} QListWidget[role="templateChips"]::item:hover {{
+    background: {p.hover};
+}}
+{d} QListWidget[role="templateChips"]::item:selected {{
+    background: {p.accent_soft};
+    color: {p.ink};
+    border-color: {p.accent};
+}}
+
+/* The page's caption, and the zoom bar's small buttons. */
+{d} QLabel[role="pageCaption"] {{
+    color: {p.muted};
+}}
+{d} QToolButton[role="secondary"][zoom="true"] {{
+    min-width: 0;
+    padding: 2px 10px;
+}}
+{d} QLabel[role="saveName"] {{
+    color: {p.ink};
+    font-weight: 600;
+}}
+
+/* Checks as lines, in the cartograph's narrow panel. */
+{d} QWidget[role="checksList"] {{
+    background: {p.paper};
+}}
+{d} QWidget[role="checksGroup"] {{
+    background: transparent;
+    border: none;
+    border-top: 1px solid {p.rule};
+}}
+{d} QFrame[role="checkRow"] {{
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 5px;
+}}
+{d} QFrame[role="checkRow"]:hover {{
+    background: {p.hover};
+}}
+{d} QFrame[role="checkRow"][expanded="true"] {{
+    background: {p.accent_soft};
+}}
+{d} QLabel[role="checkVerdict"][tone="error"],
+{d} QLabel[role="checkVerdict"][tone="warning"] {{
+    color: {p.warn};
+}}
+{d} QLabel[role="checkVerdict"][tone="info"] {{
+    color: {p.ink};
+}}
+{d} QLabel[role="checkVerdict"][tone="quiet"] {{
+    color: {p.muted};
+}}
+{d} QPushButton[role="checksMore"] {{
+    background: transparent;
+    border: none;
+    color: {p.link};
+    padding: 4px 0;
+    text-align: left;
 }}
 
 /* Map frames: a small card per map item. */
@@ -1181,7 +1368,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     selection-color: {p.ink};
 }}
 {d} QTreeView::item {{
-    padding: 3px 2px;
+    /* Room for the focus ring on the keyboard's row, out of the padding. */
+    border: 2px solid transparent;
+    padding: 1px 0px;
 }}
 {d} QTreeView::item:hover {{
     background: {p.hover};
@@ -1274,7 +1463,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-color: {p.muted};
 }}
 {d} QMenu::item {{
-    padding: 6px 22px 6px 12px;
+    /* Room for the ring the keyboard's row wears, out of the padding. */
+    border: 2px solid transparent;
+    padding: 4px 20px 4px 10px;
     border-radius: 4px;
     background: transparent;
 }}
@@ -1296,3 +1487,120 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     padding: 6px 12px 2px 12px;
 }}
 """
+    return base + focus_rules(p, object_name)
+
+
+# Keyboard focus: one 2 px ring in the link colour (or ink round an accent
+# fill), on every control the keyboard reaches. Qt stylesheets cannot draw an
+# outline outside a widget, so the ring is the widget's own border: a control
+# with a 1 px outline gets a 2 px one and gives the extra pixel back from its
+# padding, so nothing moves when focus arrives. Each entry is a selector and
+# its unfocused padding (top, right, bottom, left) and border width; a
+# right-to-left twin is written for every lopsided padding the base rules
+# mirror (see `_FOCUS_NOT_MIRRORED`). The entries run
+# from plain to specific, the order the base rules cascade in.
+FOCUS_WIDTH = 2
+_FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
+    # selector, padding, border width, sits on an accent fill
+    ("QLineEdit", (5, 8, 5, 8), 1, False),
+    ("QComboBox", (5, 8, 5, 8), 1, False),
+    ("QPushButton", (6, 14, 6, 14), 1, False),
+    ('QPushButton[role="chip"]', (4, 12, 4, 12), 1, False),
+    ('QPushButton[role="link"]', (0, 2, 0, 2), 2, False),
+    ('QToolButton[role="chip"]', (4, 12, 4, 12), 1, False),
+    ('QToolButton[role="chip"][hasMenu="true"]', (4, 26, 4, 12), 1, False),
+    ('QToolButton[role="secondary"]', (3, 30, 3, 14), 1, False),
+    ('QToolButton[role="secondary"][hasMenu="false"]', (3, 16, 3, 16), 1, False),
+    ('QToolButton[role="primary"]', (3, 30, 3, 14), 1, True),
+    ('QToolButton[role="primary"][hasMenu="false"]', (3, 16, 3, 16), 1, True),
+    ('QToolButton[role="corner"]', (3, 11, 3, 9), 1, False),
+    ('QToolButton[role="corner"][hasMenu="true"]', (3, 22, 3, 9), 1, False),
+    ('QToolButton[role="corner"][iconOnly="true"]', (3, 6, 3, 6), 1, False),
+    ('QToolButton[role="corner"][accent="true"]', (3, 3, 3, 9), 1, True),
+)
+# Lopsided only to offset the slack Qt leaves right of a text-beside-icon
+# label, which stays on the right in either direction: not mirrored.
+_FOCUS_NOT_MIRRORED = (
+    'QToolButton[role="corner"]',
+    'QToolButton[role="corner"][accent="true"]',
+)
+# Controls whose unfocused state already keeps a transparent 2 px border:
+# focus only colours it.
+_FOCUS_RECOLOURED = (
+    'QToolButton[role="sectionHeader"]',
+    'QToolButton[role="outputTitle"]',
+    'QToolButton[role="cornerPart"]',
+    'QToolButton[role="outputPart"]',
+    'QToolButton[autoRaise="true"]',
+    'QFrame[role="outputRow"]',
+    "QCheckBox",
+    "QRadioButton",
+)
+
+
+def focus_colour(p: Palette, on_accent_fill: bool = False) -> str:
+    """The focus ring's colour: link on the theme's grounds, and ink round a
+    brass or lime fill, where link would vanish (lime is the dark link).
+
+    Ink rather than the on-accent colour: in the dark that is near-black, so
+    the ring merged with the window and the button only looked smaller."""
+    return p.ink if on_accent_fill else p.link
+
+
+def focus_rules(p: Palette, object_name: str) -> str:
+    """The stylesheet's keyboard-focus block; see `_FOCUS_PADDED`."""
+    d = f"#{object_name}"
+    rules: list[str] = []
+
+    def padding(values: tuple[int, int, int, int]) -> str:
+        return " ".join(f"{max(0, v)}px" for v in values)
+
+    for selector, (top, right, bottom, left), width, on_fill in _FOCUS_PADDED:
+        give = FOCUS_WIDTH - width
+        ltr = (top - give, right - give, bottom - give, left - give)
+        colour = focus_colour(p, on_fill)
+        rules.append(
+            f"{d} {selector}:focus {{\n"
+            f"    border: {FOCUS_WIDTH}px solid {colour};\n"
+            f"    padding: {padding(ltr)};\n}}"
+        )
+        if right != left and selector not in _FOCUS_NOT_MIRRORED:
+            rtl = (ltr[0], ltr[3], ltr[2], ltr[1])
+            rules.append(
+                f'{d}[rtl="true"] {selector}:focus {{\n    padding: {padding(rtl)};\n}}'
+            )
+    recoloured = ",\n".join(f"{d} {s}:focus" for s in _FOCUS_RECOLOURED)
+    rules.append(f"{recoloured} {{\n    border-color: {p.link};\n}}")
+    rules.append(
+        f'{d} QToolButton[role="outputPart"]:checked:focus {{\n'
+        f"    border-color: {focus_colour(p, True)};\n}}"
+    )
+    # Open, a combo box keeps the outline its list continues.
+    rules.append(
+        f"{d} QComboBox:on:focus {{\n"
+        f"    border: 1px solid {p.accent};\n    padding: 5px 8px;\n}}"
+    )
+    # The current tab is the focused one: ring it, keeping its accent bar.
+    rules.append(
+        f"{d} QTabBar::tab:focus, {d} QTabBar::tab:selected:focus {{\n"
+        f"    border: {FOCUS_WIDTH}px solid {p.link};\n"
+        f"    border-bottom: 3px solid {p.accent};\n"
+        f"    padding: 6px 10px 7px 10px;\n}}"
+    )
+    # Rows: the keyboard's row in a list, tree, menu or drop-down list.
+    rows = ",\n".join(
+        (
+            f"{d} QTreeView::item:focus",
+            f'{d} QListWidget[role="templateList"]::item:focus',
+            f'{d} QListWidget[role="templateChips"]::item:focus',
+            f"{d} QMenu::item:selected",
+            f"{d} QComboBox QAbstractItemView::item:selected",
+        )
+    )
+    rules.append(f"{rows} {{\n    border: {FOCUS_WIDTH}px solid {p.link};\n}}")
+    # A Checks line in the cartograph panel: its reserved border, coloured.
+    rules.append(
+        f'{d} QFrame[role="checkRow"]:focus {{\n'
+        f"    border: {FOCUS_WIDTH}px solid {p.link};\n}}"
+    )
+    return "\n".join(rules) + "\n"

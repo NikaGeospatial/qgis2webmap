@@ -63,11 +63,18 @@ class PanelSection(QFrame):
         self.header.setText(title)
         self.header.setCheckable(True)
         self.header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Right to left, Qt draws the arrow over a header stretched across
+        # the row, so there it keeps its own width and starts the row; the
+        # summary goes to the far end after a stretch.
+        rtl = self.isRightToLeft()
         self.header.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Preferred if rtl else QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
         )
         self.header.toggled.connect(self._on_header_toggled)
-        header.addWidget(self.header, 1)
+        header.addWidget(self.header, 0 if rtl else 1)
+        if rtl:
+            header.addStretch(1)
         # Its own label rather than part of the button's text, so it can be
         # quieter and sit at the right; clicks pass through to the header.
         self._summary_text = ""
@@ -126,6 +133,7 @@ class PanelSection(QFrame):
 
     def _show(self, open_: bool) -> None:
         self.body.setVisible(open_)
-        self.header.setArrowType(
-            Qt.ArrowType.DownArrow if open_ else Qt.ArrowType.RightArrow
+        closed = (
+            Qt.ArrowType.LeftArrow if self.isRightToLeft() else Qt.ArrowType.RightArrow
         )
+        self.header.setArrowType(Qt.ArrowType.DownArrow if open_ else closed)
