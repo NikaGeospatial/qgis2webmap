@@ -7,19 +7,20 @@ description: >-
   to choose per map.
 lead_image:
   src: /images/cartograph-03-frames.png
-  alt: The Frames tab, with one map set to Live and another set to Static.
+  alt: The Map frames section, with one map set to Static and another set to Live.
 ---
 
 # Live or static frames
 
 Every map item on your print layout becomes a **frame** in the cartograph, and
-each frame is one of two kinds. You choose per map, on the **Frames** tab.
+each frame is one of two kinds. You choose per map, under **In the HTML** on
+the map's card in **Map frames** (on the cartograph's **Layout** tab).
 
 | | Live | Static |
 |---|---|---|
 | What the reader gets | A real map inside the page: pan, zoom, click a feature | A picture of the map, exactly as QGIS draws it |
 | Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-a-live-frame-draws-in) | The map's **own CRS**, untouched |
-| Styling | Translated, with the web map's [fidelity](supported-features.md) - the Fidelity tab lists what changes | Pixel-exact: whatever QGIS can draw |
+| Styling | Translated, with the web map's [fidelity](supported-features.md) - the Checks tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
 | Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default) |
 | Needs WebGL in the reader's browser | Yes - without it the frame shows a note instead of the map | No |
@@ -70,10 +71,10 @@ map:
 - carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
   or `.webp` tiles).
 
-The Fidelity tab then marks the frame **Kept**. A live frame has no basemap in
+The Checks tab then marks the frame **Kept**. A live frame has no basemap in
 a projected CRS; add an XYZ layer to the map for one.
 
-Otherwise it is redrawn in Web Mercator, and the Fidelity tab marks it
+Otherwise it is redrawn in Web Mercator, and the Checks tab marks it
 **Changed**, with the reason: shapes, and distances away from the centre,
 differ slightly from the layout. That happens for
 
@@ -88,7 +89,7 @@ differ slightly from the layout. That happens for
   by QGIS, so it looks exactly as it does in the layout designer.
 - The features should not travel. A static frame carries a picture, not
   features: nobody can open the file and read them. (To keep only some
-  attributes out of a live frame, the Layers tab's popup settings are enough.)
+  attributes out of a live frame, the popup settings in the Layers section are enough.)
 - The reader may have no WebGL - an old work laptop, a locked-down virtual
   desktop, a mail or chat preview. See below.
 
@@ -122,7 +123,7 @@ exported it is re-rendered at the print resolution.
 
 - A legend on a **live** frame works its rows out from the map as it is drawn,
   so it always agrees with it. A legend on a **static** frame has its rows
-  written in once, from the layers' styles; the Fidelity tab marks it
+  written in once, from the layers' styles; the Checks tab marks it
   **Changed**.
 - A scale bar, north arrow and grid are worked out from the frame's
   georeference, whichever kind it is.

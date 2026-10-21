@@ -20,8 +20,8 @@ credits: >-
 recipe:
   - setting: Map tab · Basemap
     value: "**Dark Matter**"
-  - setting: Map tab · Extent
-    value: "**Current canvas view** (frame Java, or the whole arc)"
+  - setting: Map tab · Open the map on
+    value: "**The current QGIS view** (frame Java, or the whole arc)"
 ---
 
 ## Run these yourself

@@ -10,8 +10,9 @@ lead_image:
 
 # Sharing a map
 
-Three ways to export, chosen under **Export as** on the Map tab. Pick one, set
-**Save to**, and press **Export** in the top-right corner of the dialog.
+Three ways to export, chosen under **Export as** on the Map tab. Pick one,
+check **Save to** - a new map starts in Documents/QGIS2WebMap/Web maps - and
+press **Export** at the top right of the dialog.
 
 ## Standalone HTML — the default
 

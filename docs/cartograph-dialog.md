@@ -2,27 +2,28 @@
 title: The Cartograph dialog, tab by tab
 seo_title: The QGIS2WebMap cartograph dialog
 description: >-
-  Every control of the Cartograph (Beta) output - the Cartograph, Frames and
-  Atlas tabs, the corner buttons and the Share menu - and what each one does to
-  the file.
+  Every control of the Cartograph (Beta) output - the live page, the print
+  layout list, the Layout, Atlas and Checks tabs, where the file saves, the
+  header buttons and the Share menu - and what each one does to the file.
 lead_image:
   src: /images/cartograph-dialog.png
-  alt: The dialog on Cartograph (Beta) - tabs Cartograph, Layers, Frames, Fidelity, Settings and Help, with Accessibility, Preview and Open in browser in the corner.
+  alt: The dialog on Cartograph (Beta) - the print layout drawn on the left, and on the right the Print layout list, the Layout, Atlas and Checks tabs, and the file name with its save status.
 ---
 
 # The Cartograph dialog, tab by tab
 
-Press **Cartograph (Beta)** beside **Make:** at the top of the plugin's dialog
-and three things change: the first tabs become **Cartograph** and **Frames**
-(plus **Atlas**), the corner holds **Accessibility · Preview · Open in
-browser**, and the Export button goes away. The web map's own tabs are
-described in [the dialog, tab by tab](the-dialog.md); **Fidelity**,
-**Settings** and **Help** are shared and work the same way.
+Choose **Cartograph** from the title menu at the top of the plugin's dialog
+(**Create: Web map ▾**) and the dialog becomes one screen: the print layout's
+page on the left and a panel of settings on the right. The header holds
+**colour vision**, **Preview HTML** and **Share**, and there is no Export
+button. The web map's tabs are described in
+[the dialog, tab by tab](the-dialog.md). The **Settings** and **Help** icons
+at the right of the header are shared and work the same way.
 
 Other ways in:
 
-- **Web → QGIS2WebMap by NIKA → Create cartograph...** opens the dialog
-  straight on Cartograph (Beta).
+- **Web → QGIS2WebMap by NIKA → Create cartograph...**, or **Ctrl+Alt+C**
+  (**Cmd+Alt+C** on macOS), opens the dialog straight on Cartograph (Beta).
 - In the layout designer, **Layout → Export as cartograph (HTML)...** does the
   same and selects the layout you have open.
 - On the web map, **Share → Make a cartograph...** builds a print layout from
@@ -32,48 +33,67 @@ Other ways in:
 
 A cartograph is **a file that is always saved**, not something an Export
 button produces. Selecting a layout saves it at once, and every change after
-that - on the Cartograph, Layers, Frames or Atlas tab, in the print layout
-itself, or to the style or data of a layer it draws - rewrites the file about
-600 ms later, through a temporary file that is swapped in, so it is never half
-written. Preview, Share and the NIKA hand-off all work on that file. The
-dialog's title names it. Closing the dialog leaves it where it is, and
-reopening the plugin on the same project picks it up again.
+that - in the panel, in the print layout itself, or to the style or data of a
+layer it draws - rewrites the file about 600 ms later, through a temporary
+file that is swapped in, so it is never half written. Preview HTML, Share and
+the NIKA hand-off all work on that file. The dialog's title names it. Closing
+the dialog leaves it where it is, and reopening the plugin on the same project
+picks it up again.
 
 Settings are stored with the project, per layout: each layout remembers its
 own file, frames, page fields and print settings.
 
 ---
 
-## Cartograph
+## The page
 
-### Source
+The left side shows the selected layout, captioned **QGIS layout ·** and its
+page size - *QGIS layout · A4 landscape*, for example. It is QGIS's own
+drawing of the print layout, live: a change in the layout designer, a
+restyled layer or a new title shows at once.
 
-- **A print layout** - the list of the project's print layouts. It follows the
-  Layout Manager as you add, rename or remove layouts. With none, the tab says
-  how to make one (**Project → Layouts → New Layout**).
-- **Current canvas (creates a print layout)** - an action rather than a mode:
-  it opens the [template picker](one-click-layout.md#choose-a-template), then
-  builds a layout named `carto: <project title>` from the map canvas in the
-  template you chose, adds it to the project and selects it in the list
-  above. Greyed out when there is no map canvas.
+It is not the HTML. The cartograph can differ in places - a north arrow the
+browser draws its own way, the page's theme - and the **Checks** tab lists
+every difference. Beside the caption, a link such as **2 changes in the HTML**
+opens Checks. To see the real cartograph, press **Preview HTML**.
+
+Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
+100% is the page at its real size on your screen. The mouse wheel zooms too,
+and dragging pans.
+
+With no print layout in the project, the page says so and offers
+**From canvas...** and **Import cartograph...** instead.
+
+---
+
+## Print layout
+
+The top of the panel. The list holds the project's print layouts and follows
+the Layout Manager as you add, rename or remove them. **Add...** beside it
+makes another:
+
+- **From canvas...** - opens the
+  [template picker](one-click-layout.md#choose-a-template), then builds a
+  layout named `carto: <project title>` from the map canvas in the template
+  you chose, adds it to the project and selects it. Greyed out when there is
+  no map canvas.
 - **Import cartograph...** - turns a cartograph HTML file back into a new QGIS
   print layout, and selects it. Whatever QGIS cannot hold is listed when the
   import finishes. See [one-click layouts](one-click-layout.md#importing-a-cartograph-back-into-qgis).
 
-![The Cartograph tab with Import cartograph... highlighted beside the Source list.](images/cartograph-import.png)
+Both are also at the end of the list itself.
 
-### Cartograph file
+![The panel's Print layout list, with the Add... menu open on From canvas... and Import cartograph....](images/cartograph-import.png)
 
-**Save to** is the file. In a saved project it starts beside the project
-file, named after the layout, with anything other than letters, digits, dots
-and hyphens turned into a hyphen - `carto: Parcels` becomes
-`carto-Parcels.html`. In a project that has never been saved, the field only
-suggests a name and nothing is written until you type a path or press
-**Choose…**. The name always ends in `.html`.
+Below the list are three tabs - **Layout**, **Atlas** and **Checks** - and,
+at the foot of the panel, [where the file saves](#where-it-saves).
 
-A cartograph is always **one standalone HTML file**. There is no Share ZIP or
-Folder type as there is for the web map: the page, its static images and the
-data of its live maps are all inside it.
+---
+
+## Layout
+
+Three sections that open and close. A closed section shows a few words about
+what is in it, such as *Default theme* or *1 live, 1 static*.
 
 ### Page
 
@@ -88,18 +108,43 @@ data of its live maps are all inside it.
   **Blueprint** or **Minimal**. It colours the page and the furniture - legend,
   scale bar, north arrow, grid - not your map data.
 
-### The status line
+### Map frames
 
-Under the form: *Not saved yet - choose where to save it above* (an unsaved
-project with no path yet), *Saved 2 s ago · 3.2 MB*, or the reason a save
-failed. See [your first cartograph](cartograph-first-export.md#4-check-where-it-saves).
+One card per map item on the layout:
 
----
+- its name - the map's ID in the layout designer - and, at the right, how many
+  items on it the cartograph changes (**No changes**, or *2 changes*; Checks
+  has the detail);
+- its CRS, or *Unknown CRS*;
+- **In the HTML** - **Live - pan and zoom**: an interactive map drawn in the
+  browser, in Web Mercator or in the map's own projected CRS
+  ([which one](live-or-static-frames.md#which-crs-a-live-frame-draws-in)).
+  **Static - an image**: a picture of the map as QGIS draws it, in its own
+  CRS;
+- the image resolution, for a static frame only: **150**, **200** (the
+  default) or **300 dpi**;
+- **Match QGIS canvas** - sets the map's extent to what the QGIS canvas
+  shows. It is an edit to your layout, so the layout designer's **Undo** takes
+  it back.
 
-## Layers
+![The Map frames section with two cards: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 200 dpi.](images/cartograph-03-frames.png)
 
-Shared with the web map and shown in both. For a cartograph it sets how the
-layers in **live** frames behave:
+A map starts **Live** when the browser can draw it where QGIS does - in
+EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers and
+image tiles - and **Static** otherwise. (The Main map in the picture was
+switched to Static by hand.)
+[Live or static frames](live-or-static-frames.md) is the whole story; the
+short version is that live costs some styling and file size, and static costs
+interactivity.
+
+The cards follow the layout: add or delete a map in the layout designer and
+the list rebuilds.
+
+### Layers
+
+The same list as the web map's Layers tab, with the same **Include**,
+**Popups** and **Labels** columns and **Set every field to**. For a
+cartograph it sets how the layers in **live** frames behave:
 
 - **Popups** and the per-field popup settings apply. A layer with Popups
   unticked, or a field set to *Do not show this field*, has those values left
@@ -115,40 +160,13 @@ Changing anything here saves the cartograph again.
 
 ---
 
-## Frames
-
-One row per map item on the layout:
-
-| Column | What it is |
-|---|---|
-| **Map item** | The map's ID in the layout designer, or its display name |
-| **CRS** | The map's CRS, or *Unknown CRS* |
-| **Frame** | **Live** - an interactive map drawn in the browser, in Web Mercator or in the map's own projected CRS ([which one](live-or-static-frames.md#which-crs-a-live-frame-draws-in)). **Static** - an image of the map as QGIS draws it, in its own CRS |
-| **DPI** | A static frame's image resolution: **150**, **200** (the default) or **300**. Greyed out for a live frame |
-| **Changes** | Fidelity rows about this map that are not *Kept*. Empty until the first save |
-| **Use canvas view** | Sets the map's extent to what the QGIS canvas shows. It is an edit to your layout, so the layout designer's **Undo** takes it back |
-
-![The Frames tab with two maps: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 200 dpi.](images/cartograph-03-frames.png)
-
-A map starts **Live** when the browser can draw it where QGIS does - in
-EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers and
-image tiles - and **Static** otherwise. (The Main map in the picture was
-switched to Static by hand.)
-[Live or static frames](live-or-static-frames.md) is the whole story; the
-short version is that live costs some styling and file size, and static costs
-interactivity.
-
-The rows follow the layout: add or delete a map in the layout designer and the
-list rebuilds.
-
----
-
 ## Atlas
 
 One page per feature of a coverage layer, in one file. The tab edits the
 layout's own atlas - the same settings as QGIS's Atlas panel - so every change
 goes on the layout's undo stack, and **Undo** in the layout designer takes it
-back. [Atlas cartographs](cartograph-atlas.md) explains the rules.
+back. The tab reads **Atlas (on)** while the atlas is on.
+[Atlas cartographs](cartograph-atlas.md) explains the rules.
 
 ![The Atlas tab: Generate an atlas ticked, the coverage layer, the map that follows it, sort, filter and file names, the page count, and the two all-pages buttons.](images/cartograph-atlas-tab.png)
 
@@ -161,7 +179,7 @@ back. [Atlas cartographs](cartograph-atlas.md) explains the rules.
 | **Filter** | An expression: only features for which it is true get a page. Blank gives every feature a page |
 | **File names** | An expression naming each page's image when all pages are exported |
 | *N pages in QGIS* | How many pages QGIS's atlas has. The cartograph can have fewer, because it skips features the map does not draw |
-| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in the Frames tab* |
+| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in the Frames tab* (Map frames, on the Layout tab) |
 | **Export all pages (PNG, ZIP)...** | Opens the cartograph, which renders every page and downloads them as one ZIP |
 | **Print all pages...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF, each page at its true size in a Chromium-based browser |
 
@@ -169,35 +187,69 @@ The two buttons stay greyed out until the saved cartograph has atlas pages.
 
 ---
 
-## Fidelity
+## Checks
 
-The same tab as for the web map, showing the cartograph's own report: every
-layout item that changed or was left out, with the verdicts **Kept**,
-**Changed**, **Rasterised**, **Not exported** and **Blocked**. It refreshes
-after each save. Before the first save it reads *Not checked yet*, and **Check
-now** on the strip saves the cartograph to check it.
+The cartograph's report: every layout item that changed or was left out on
+the way to the HTML, with the verdicts **Kept**, **Changed**, **Rasterised**,
+**Not exported** and **Blocked**. The tab's title carries the count -
+**Checks (2)** - and it refreshes after each save. Before the first save it
+reads *Not checked yet*, and **Check now** saves the cartograph to check it.
+
+Each problem is one readable line; click it to read the whole sentence and,
+where the fix is in the dialog, a button that goes there - **Show in Layers**,
+for example. **Filter** and the search box work as on the web map's
+[Fidelity tab](the-dialog.md#fidelity).
 
 Layout items are listed under **Whole map**, and the layers the frames draw
-get their own groups, as on the web map - a static frame's layers marked
-**Rasterised**, since they are part of its picture. The verdicts are explained in
+get their own groups - a static frame's layers marked **Rasterised**, since
+they are part of its picture. The verdicts are explained in
 [what a cartograph keeps](cartograph-supported-features.md).
 
 ---
 
-## The corner
+## Where it saves
 
-Three buttons in the top-right corner of the tab bar, reachable from every tab:
+The foot of the panel names the file: its name in bold, its folder under it,
+and two links - **Change...** to save it somewhere else, and **Show in
+folder**. Under them, the save status:
 
-- **Accessibility** - opens the [Colour vision](colour-vision.md) dialog:
-  simulate colour-vision deficiencies on the canvas and in the browser, and
-  check which legend classes become indistinguishable. Stays pressed while a
-  simulation is on, and its tooltip names it.
-- **Preview** - opens the saved cartograph in your default browser.
-- **Open in browser** - the same; its **arrow** opens the Share menu.
+- *Saved just now · 3.3 MB* - the file on disk matches what you see;
+- *Not saved yet* - the first save is still running;
+- a sentence starting *Could not...* - the save failed, and why. The previous
+  file is left untouched.
 
-![The corner: Accessibility, Preview, and Open in browser with its menu arrow highlighted.](images/cartograph-corner.png)
+By default a cartograph saves in **Documents/QGIS2WebMap/Cartographs**, named
+after the project and the layout - `parcels-Survey.html` for the layout
+*Survey* in `parcels.qgz`. Anything other than letters, digits, dots and
+hyphens becomes a hyphen. A project that has never been saved has no name
+yet, so the layout's name alone is used, and the cartograph still saves at
+once. If a file of that name is already there, the new one gets a number:
+`parcels-Survey (2).html`. To use another folder for every new map, see
+**Settings → Saving** in [the dialog, tab by tab](the-dialog.md#settings).
 
-Both open the file through a small server on your own machine
+A cartograph is always **one standalone HTML file**. There is no Share ZIP or
+Folder type as there is for the web map: the page, its static images and the
+data of its live maps are all inside it.
+
+---
+
+## The header
+
+At the top right, reachable whatever the panel shows:
+
+- **Colour vision** (the contrast icon) - opens the
+  [Colour vision](colour-vision.md) dialog: simulate colour-vision deficiencies
+  on the canvas and in the browser, and check which legend classes become
+  indistinguishable. Stays pressed while a simulation is on, and its tooltip
+  names it.
+- **Preview HTML** - opens the saved cartograph in your default browser.
+- **Share** - opens the [Share menu](#the-share-menu).
+
+Then the **Settings** and **Help** icons, as on the web map.
+
+![The header on Cartograph: the colour vision icon, Preview HTML and Share, then the Settings and Help icons.](images/cartograph-corner.png)
+
+The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
 live map from a file path. Nothing leaves your computer.
 
@@ -205,13 +257,11 @@ live map from a file path. Nothing leaves your computer.
 
 ## The Share menu
 
-The arrow beside **Open in browser**:
-
 | Row | What it does | Available |
 |---|---|---|
 | **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
 | **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
-| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser | Once the file exists |
+| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview HTML does | Once the file exists |
 | **Publish with NIKA hosting... (waitlist)** | Hosting is not live yet; opens a short waitlist form | Always |
 | **Enhance with NIKA AI...** | Opens the [hand-off dialog](enhance-with-ai.md#hand-off-to-nika) with a prompt asking an AI agent to improve the cartograph | Once the file exists |
 | **Ask NIKA for a critique...** | The same dialog, with a prompt asking for a cartographer's critique | Once the file exists |
@@ -227,9 +277,8 @@ Export PDF and Export PNG are **derived** from the cartograph rather than being
 the export: the browser makes them from the saved file. Both are covered in
 [printing a cartograph](printing-a-cartograph.md).
 
-There is deliberately no Share ZIP, no Folder, and no Fidelity row. A
-cartograph travels as its one file, and the Fidelity tab is always one click
-away.
+There is deliberately no Share ZIP, no Folder, and no report row. A cartograph
+travels as its one file, and the Checks tab is always one click away.
 
 ---
 
@@ -248,9 +297,9 @@ export as the dialog, once, with these parameters:
 | **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on a static map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |
 | **Cartograph** | Where to write the `.html` |
 
-Every Fidelity row is written to the log. Print settings, the Cartograph tab's
-page fields, per-map choices from the Frames tab and the Layers tab's popup
-and label choices are not used: the algorithm takes only its own parameters.
+Every check is written to the log. Print settings, the Page fields, per-map
+choices from Map frames and the Layers section's popup and label choices are
+not used: the algorithm takes only its own parameters.
 
 On a computer that has never downloaded the OnlyMap runtime, the algorithm
 stops and says so - it cannot show the licence in a batch run. Save one

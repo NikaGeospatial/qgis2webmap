@@ -20,8 +20,8 @@ credits: >-
 recipe:
   - setting: Map tab · Basemap
     value: "**Positron**"
-  - setting: Map tab · Extent
-    value: "**Current canvas view** (frame the island first)"
+  - setting: Map tab · Open the map on
+    value: "**The current QGIS view** (frame the island first)"
   - setting: Layers tab · "MRT lines"
     value: "**Popups off** — station clicks then always land on the station"
 ---

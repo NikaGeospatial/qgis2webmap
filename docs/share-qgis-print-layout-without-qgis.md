@@ -58,7 +58,8 @@ Be deliberate about this before you send it:
   shapes, and the attributes its popups show. Anyone with the file can open it
   in a text editor and read that data.
 
-To keep attributes out, use the **Layers** tab, as for a web map: untick
+To keep attributes out, use the **Layers** section of the **Layout** tab - the
+same list as the web map's Layers tab: untick
 **Popups** on a layer, or set a field to *Do not show this field*, and those
 values are not written into the file at all. A field the map draws with - the
 one a categorised style or a label reads - stays, since it is visible on the

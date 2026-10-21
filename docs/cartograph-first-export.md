@@ -3,8 +3,8 @@ title: Your first cartograph
 seo_title: Export a QGIS print layout to a cartograph
 description: >-
   A walkthrough from a QGIS print layout to a single HTML cartograph you can
-  email and print - choosing the source, the file, live or static frames, and
-  reading the Fidelity tab.
+  email and print - choosing the layout, where it saves, live or static
+  frames, and reading the checks.
 
 # Opt-in HowTo markup, read by `_layouts/default.html`. Kept in front matter
 # because the Help tab renders this file with HTML disabled. Keep the wording
@@ -24,40 +24,42 @@ howto:
       text: >-
         Choose Web, then QGIS2WebMap by NIKA, then Create cartograph. From the
         layout designer, choose Layout, then Export as cartograph (HTML). Or
-        open the plugin and press Cartograph (Beta) at the top of the dialog.
-    - name: Choose the source
-      anchor: 3-choose-the-source
+        open the plugin and choose Cartograph from the title menu at the top
+        of the dialog.
+    - name: Choose the print layout
+      anchor: 3-choose-the-print-layout
       text: >-
-        On the Cartograph tab, pick the print layout from the Source list, or
-        choose Current canvas to have one built from the map canvas.
+        At the top of the panel, pick the layout from the Print layout list,
+        or choose Add, then From canvas, to have one built from the map
+        canvas.
     - name: Check where it saves
       anchor: 4-check-where-it-saves
       text: >-
-        The Save to field names the cartograph file - in a saved project,
-        beside it and named after the layout; in an unsaved one, choose a
-        place first. The file is rewritten about half a second after every
-        change, and the line under the form says when it was last saved and
-        how large it is.
+        The foot of the panel names the cartograph file. By default it is in
+        Documents, QGIS2WebMap, Cartographs, named after the project and the
+        layout, and it saves at once, even in a project that was never saved.
+        The file is rewritten about half a second after every change, and the
+        line under its name says when it was last saved and how large it is.
     - name: Choose live or static frames
       anchor: 5-choose-live-or-static-frames
       text: >-
-        On the Frames tab, each map on the layout is Live (an interactive map,
-        in Web Mercator or the map's own projected CRS) or Static (a
-        pixel-exact image in the layout's own CRS, at the DPI you choose).
+        In Map frames, on the Layout tab, each map on the layout is Live (an
+        interactive map, in Web Mercator or the map's own projected CRS) or
+        Static (a pixel-exact image in the layout's own CRS, at the DPI you
+        choose).
     - name: Preview it
       anchor: 6-preview-it
       text: >-
-        Press Preview, or Open in browser, to open the saved cartograph in
-        your browser.
-    - name: Read the Fidelity tab
-      anchor: 7-read-the-fidelity-tab
+        Press Preview HTML to open the saved cartograph in your browser.
+    - name: Read the checks
+      anchor: 7-read-the-checks
       text: >-
-        Before you send the file, read the Fidelity tab. It lists every layout
+        Before you send the file, open the Checks tab. It lists every layout
         item that changed or was left out on the way to the cartograph.
 
 lead_image:
   src: /images/cartograph-01-source.png
-  alt: The Cartograph tab with the Source list highlighted, showing the print layout "Parcel survey".
+  alt: The Cartograph screen - the print layout "Parcel survey" drawn on the left, and the Print layout list highlighted at the top of the panel.
 ---
 
 # Your first cartograph
@@ -77,14 +79,14 @@ updates itself.
 Two limits worth knowing before you start:
 
 - **Only page 1 is exported.** A layout with more pages still saves, with page 1
-  only, and the Fidelity tab marks the rest **Not exported**. An
+  only, and the Checks tab marks the rest **Not exported**. An
   [atlas](cartograph-atlas.md) is the way to get many pages.
 - **Some items have no cartograph equivalent** - HTML frames, attribute
   tables, polylines and polygons drawn on the page, among others. They are left
   out and named. [What a cartograph keeps](cartograph-supported-features.md)
   has the full list.
 
-No layout at all? Skip to step 3 and choose **Current canvas**.
+No layout at all? Skip to step 3 and choose **Add... → From canvas...**.
 
 ## 2. Open the Cartograph output
 
@@ -95,56 +97,61 @@ Any of these opens the plugin on Cartograph (Beta):
   also selects the layout you have open.
 - Press **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) - the dialog opens on
   Cartograph (Beta).
-- Open the plugin as usual (**Ctrl+Alt+W**, **Cmd+Alt+W** on macOS) and press
-  **Cartograph (Beta)** beside **Make:** at the top.
+- Open the plugin as usual (**Ctrl+Alt+W**, **Cmd+Alt+W** on macOS), click
+  the title at the top left - **Create: Web map ▾** - and choose
+  **Cartograph**.
 
-![The top of the dialog, with Cartograph (Beta) highlighted beside Make:.](images/cartograph-make-switch.png)
+![The title menu open at the top of the dialog: Web map, an interactive map to pan, zoom and click, and Cartograph (Beta), a print layout with live maps, to read or print.](images/cartograph-make-switch.png)
 
 The dialog remembers which of the two you used last, per project.
 
-## 3. Choose the source
+## 3. Choose the print layout
 
-On the **Cartograph** tab, under **Source**:
+The screen splits in two: the page on the left, and a panel on the right. At
+the top of the panel, under **Print layout**:
 
-- **A print layout** - pick it from the list. Every print layout in the
-  project is there, and the list follows the Layout Manager: add, rename or
-  delete a layout and it updates.
-- **Current canvas (creates a print layout)** - pick one of ten
+- **Pick a layout from the list.** Every print layout in the project is
+  there, and the list follows the Layout Manager: add, rename or delete a
+  layout and it updates.
+- **Or press Add... → From canvas...** - pick one of ten
   [templates](one-click-layout.md#choose-a-template), and a new layout called
   `carto: <project title>` is built from what the map canvas shows, added to
   the project and selected.
 
-![The Cartograph tab, with the Source list highlighted.](images/cartograph-01-source.png)
+![The Cartograph screen, with the Print layout list highlighted.](images/cartograph-01-source.png)
 
-**Import cartograph...**, beside the list, goes the other way: it turns a
-cartograph file back into a QGIS print layout.
+The page on the left is now the layout, captioned with its size -
+*QGIS layout · A4 landscape*. It is QGIS's own drawing of the layout and
+follows every change you make. Zoom with the bar under it or the mouse wheel,
+and drag to pan.
+
+**Add... → Import cartograph...** goes the other way: it turns a cartograph
+file back into a QGIS print layout.
 
 ## 4. Check where it saves
 
-**Save to** under **Cartograph file** is where the cartograph lives. In a
-saved project it starts beside the project file, named after the layout -
-`Parcel-survey.html` for a layout called *Parcel survey* - and the first save
-happens as soon as the layout is selected. Press **Choose…** to put it
-somewhere else.
+The foot of the panel names the cartograph file: the file name in bold, its
+folder under it, and **Change...** and **Show in folder** beside them. By
+default it is in **Documents/QGIS2WebMap/Cartographs**, named after the
+project and the layout - `parcel-survey-Parcel-survey.html` for a layout
+called *Parcel survey* in `parcel-survey.qgz`. If that name is taken, the new
+file gets a number, such as `(2)`.
 
-In a project that has **never been saved**, there is no folder to put it
-beside: the field only suggests a name, greyed out, and nothing is written
-until you type a path or press **Choose…**.
+The first save happens as soon as the layout is selected - even in a project
+that has never been saved. Press **Change...** to put the file somewhere else.
 
 There is **no Export button**, on purpose. The cartograph is a file that is
-always up to date: about half a second after any change - on these tabs, in
-the layout itself, on the Layers tab, or to a layer's style or data in QGIS -
-the plugin rewrites it. The line under the form says how
-it went:
+always up to date: about half a second after any change - in the panel, in
+the layout itself, or to a layer's style or data in QGIS - the plugin
+rewrites it. The line under the file name says how it went:
 
 | It says | It means |
 |---|---|
-| *Not saved yet - choose where to save it above* | The project has never been saved, so there is no file yet. Type a path in **Save to** or press **Choose…** |
-| *Not saved yet* | The first save is still running, or no layout is selected |
-| *Saved 2 s ago · 3.2 MB* | The file on disk matches what you see |
+| *Not saved yet* | The first save is still running |
+| *Saved just now · 3.3 MB* | The file on disk matches what you see |
 | A sentence starting *Could not...* | The save failed, and why. The previous file is left untouched |
 
-![The Cartograph tab, with the line "Saved 2 s ago · 3.2 MB" highlighted under the form.](images/cartograph-02-saved.png)
+![The foot of the panel: the file name in bold, its folder, Change... and Show in folder, and the line "Saved 4 s ago · 3.3 MB" highlighted.](images/cartograph-02-saved.png)
 
 A save writes to a temporary file and swaps it in, so closing QGIS mid-save
 never leaves half a file behind. The first save on a computer may ask to
@@ -152,18 +159,18 @@ download the OnlyMap runtime, the same one-off download the web map uses.
 
 ## 5. Choose live or static frames
 
-The **Frames** tab has one row per map on the layout:
+On the **Layout** tab, open **Map frames**. Each map on the layout has a
+card:
 
-| Column | What it is |
-|---|---|
-| **Map item** | The map's ID from the layout designer |
-| **CRS** | The map's CRS |
-| **Frame** | **Live** or **Static** |
-| **DPI** | Resolution of a static frame's image: 150, 200 (the default) or 300. Greyed out for a live frame |
-| **Changes** | How many Fidelity rows about this map are not *Kept* |
-| **Use canvas view** | Sets this map's extent to what the QGIS canvas shows |
+- its name, and how many items on it change in the cartograph;
+- its CRS;
+- **In the HTML** - **Live - pan and zoom** or **Static - an image**;
+- for a static frame, the image resolution: 150, 200 (the default) or
+  300 dpi;
+- **Match QGIS canvas**, which sets this map's extent to what the QGIS canvas
+  shows.
 
-![The Frames tab, with the Frame column highlighted: the Locator map is Live and the Main map is Static.](images/cartograph-03-frames.png)
+![The Map frames section: the Locator card set to Live, and the Main map card set to Static at 200 dpi.](images/cartograph-03-frames.png)
 
 A map starts **Live**, an interactive map in the page, when the browser can
 draw it where QGIS does: in **EPSG:3857** or **EPSG:4326**, or in a projected
@@ -177,22 +184,24 @@ graphics card.
 
 ## 6. Preview it
 
-**Preview** in the top-right corner opens the saved cartograph in your default
-browser. So does **Open in browser** beside it; its arrow opens the
+**Preview HTML**, at the top right of the dialog, opens the saved cartograph
+in your default browser. The page on the left is QGIS's drawing of the layout;
+this is the real HTML. **Share** beside it opens the
 [Share menu](cartograph-dialog.md#the-share-menu), with PDF and PNG export,
 the layout template and the NIKA hand-off.
 
-Nothing opens until there is a saved file. If you press Preview before the
-first save, the bar at the foot of the dialog says so.
+Nothing opens until there is a saved file. If you press Preview HTML before
+the first save, the bar at the foot of the dialog says so.
 
-## 7. Read the Fidelity tab
+## 7. Read the checks
 
-The **Fidelity** tab lists every layout item that did not come across exactly,
+The **Checks** tab lists every layout item that did not come across exactly,
 with one of the same verdicts the web map uses - **Kept**, **Changed**,
-**Rasterised**, **Not exported**, **Blocked**. It fills after each save; the strip at the foot
-of the dialog sums it up whichever tab you are on.
+**Rasterised**, **Not exported**, **Blocked**. It fills after each save, and
+its title carries the count - **Checks (5)**, say. The link beside the page's
+caption, such as **5 changes in the HTML**, opens it too.
 
-![The Fidelity tab for a cartograph: a static map frame, its legend, the north arrow and a title with a frozen expression are marked Changed, and the layer the static frame draws is marked Rasterised.](images/cartograph-fidelity-tab.png)
+![The Checks tab for a cartograph, titled Checks (5): a static map frame, its legend, the north arrow and a title with a frozen expression are marked Changed.](images/cartograph-fidelity-tab.png)
 
 Typical rows for a first cartograph:
 

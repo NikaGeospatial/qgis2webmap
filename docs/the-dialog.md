@@ -2,11 +2,12 @@
 title: The dialog, tab by tab
 seo_title: The QGIS2WebMap export dialog
 description: >-
-  Every control in the QGIS2WebMap export dialog - Map, Layers, Appearance,
-  Fidelity and Help - and what each one changes for whoever opens your map.
+  Every control in the QGIS2WebMap export dialog - the header, the Map,
+  Layers, Appearance and Fidelity tabs, Settings and Help - and what each one
+  changes for whoever opens your map.
 lead_image:
   src: /images/dialog-tabs.png
-  alt: The export dialog's tab bar - Map, Layers, Appearance, Fidelity, Help.
+  alt: The top of the export dialog - Create, Web map, then Preview with its Live switch, Share and Export, the Settings and Help icons, and the tabs Map, Layers, Appearance and Fidelity.
 ---
 
 # The dialog, tab by tab
@@ -21,34 +22,44 @@ The dialog is **non-modal**: QGIS stays usable behind it. Reorder, rename or
 restyle layers in the Layers panel and the plugin follows immediately. There is
 no refresh button because there is nothing to refresh.
 
-Six tabs, and two things that stay on screen whichever tab you are on: the
-[fidelity strip](#the-fidelity-strip) and the [button row](#the-button-row).
+Four tabs - **Map**, **Layers**, **Appearance** and **Fidelity** - under a
+[header](#the-header) that stays on screen whichever tab you are on, with the
+[fidelity strip](#the-fidelity-strip) at the foot.
+
+The dialog opens at 1152 × 768 pixels, or smaller to fit your screen. Every
+control can be reached with the keyboard, and the one with keyboard focus
+always shows a visible outline. In Arabic the whole dialog is laid out right
+to left.
 
 Settings are remembered **per project**, stored in the `.qgz` alongside it, so
 they travel with the project rather than following you between projects. The
 exceptions are remembered per machine instead, because they are habits rather
-than properties of a map: the last folder you exported to, and the Settings tab's
-choices.
-The [Settings tab](#settings) gathers the per-machine ones you can change.
+than properties of a map: the last folder you exported to, and the choices on
+the [Settings](#settings) page, which gathers the per-machine ones you can
+change.
 
 ---
 
-## Make: Web map or Cartograph
+## Create: Web map or Cartograph
 
-Above the tabs, **Make:** chooses what the dialog makes:
+The dialog's title, at the top left, says what it makes:
+**Create: Web map ▾**. Click it for a menu of the two outputs, each with a
+one-line description:
 
-- **Web map** - an interactive map of the whole project, which is what the
-  rest of this page describes.
-- **Cartograph (Beta)** - a QGIS print layout as one printable HTML page. The
-  Map and Appearance tabs give way to **Cartograph**, **Frames** and **Atlas**,
-  and the corner changes. See
+- **Web map** - an interactive map to pan, zoom and click. It covers the
+  whole project, and is what the rest of this page describes.
+- **Cartograph** (Beta) - a print layout with live maps, to read or print, as
+  one HTML page. The tabs give way to the layout's page and a panel beside
+  it, and the header's actions change. See
   [the Cartograph dialog, tab by tab](cartograph-dialog.md).
 
-![The top of the dialog: Make:, with Web map and Cartograph (Beta), the latter highlighted.](images/cartograph-make-switch.png)
+![The title menu open at the top of the dialog: Web map, an interactive map to pan, zoom and click, and Cartograph (Beta), a print layout with live maps, to read or print.](images/cartograph-make-switch.png)
 
-Layers, Fidelity, Settings and Help stay in both; Fidelity shows the report of
-whichever output is chosen. Switching back and forth loses nothing you typed
-on either side, and the choice is remembered with the project.
+**Ctrl+Alt+W** opens the dialog on Web map and **Ctrl+Alt+C** on Cartograph.
+The layer settings and the checks are shared: the cartograph shows the same
+Layers list, and its Checks tab is this page's Fidelity report for the
+cartograph. Switching back and forth loses nothing you typed on either side,
+and the choice is remembered with the project.
 
 ---
 
@@ -71,8 +82,8 @@ Setting a name here does not by itself draw it on the map. That is the
 
 ### Export
 
-Choose **what to make** and **where it goes**, then press **Export** in the
-top-right corner.
+Choose **what to make** and **where it goes**, then press **Export** at the
+top right of the dialog.
 
 **Export as:**
 
@@ -83,10 +94,14 @@ top-right corner.
 - **Folder** — `index.html`, `onlymap.js` and a README side by side, to copy to a
   web server. A folder has to be served; it does not open by double-clicking.
 
-**Save to** is where the export is written. Type a path or press **Choose**,
-which opens beside your project file, named after it. Switching the type keeps
-the name: `peaks.html` becomes `peaks.zip` or a `peaks` folder. Pressing Export
-writes there without asking again.
+**Save to** is where the export is written. A new map starts with a place
+already filled in: **Documents/QGIS2WebMap/Web maps**, named after the map -
+`Peaks.html` for a map called *Peaks*. The folder is created when you press
+Export, and if a file of that name is already there, the new one gets a
+number: `Peaks (2).html`. Type another path or press **Choose...** to change
+it; to use another folder for every new map, see [Settings](#settings).
+Switching the type keeps the name: `peaks.html` becomes `peaks.zip` or a
+`peaks` folder. Pressing Export writes there without asking again.
 
 For a Standalone HTML export, a line underneath gives measured size advice: how
 large your map's data actually is, and when the file would become slow to open
@@ -96,7 +111,7 @@ A second line says what is on disk:
 
 | It says | It means |
 |---|---|
-| *Choose where to save, then press Export.* | No path set yet. Nothing has been written |
+| *Choose where to save, then press Export.* | The field was cleared. Nothing has been written |
 | *Not written yet.* | The path is set; nothing is there until you export |
 | *Last written 20 min ago* | Written earlier. Export again if the project has moved on |
 
@@ -328,7 +343,9 @@ Worth reading before you send a map on.
 
 ## Settings
 
-Things that are true of every project, rather than of one map:
+The **Settings** icon (sliders) at the right of the header opens this page in
+place of the tabs; the back arrow, or the icon again, returns to them. It
+holds things that are true of every project, rather than of one map:
 
 - **NIKA account** — who this copy of QGIS is signed in as. Publishing to NIKA
   needs an account; exporting a file never does.
@@ -341,20 +358,27 @@ Things that are true of every project, rather than of one map:
   dialog offers it — nothing is downloaded until you press it. Switching
   reopens the dialog in the new language; QGIS does not need a restart.
 - **Appearance** — the dialog's theme: Follow QGIS, Light or Dark.
+- **Saving** — **Save new maps in**: the folder new maps start in,
+  `Documents/QGIS2WebMap` unless you change it. Web maps go in its
+  `Web maps` folder and cartographs in its `Cartographs` folder. **Change...**
+  picks another folder, and **Use Documents** goes back to the default. Maps
+  already saved stay where they are.
 - **About** — the plugin version and the OnlyMap runtime it is pinned to.
 
 ---
 
 ## Help
 
-The same guides you are reading now, bundled into the plugin and rendered
-offline. **Open the full documentation** opens this site in your browser.
+The **Help** icon (?) beside Settings opens the same guides you are reading
+now, bundled into the plugin and rendered offline, in place of the tabs. The
+back arrow returns to them. **Open the full documentation** opens this site in
+your browser, and **Join the community** opens the NIKA Discord.
 
 ---
 
 ## The fidelity strip
 
-Between the tabs and the buttons, always visible, whichever tab you are on:
+Under the tabs, always visible, whichever tab you are on:
 
 - `3 things change on export.` — or
 - `1 layer cannot be exported.` — or
@@ -366,24 +390,25 @@ message. **What changes?** jumps to the Fidelity tab.
 
 ---
 
-## The button row
+## The header
 
 ### Preview, Share and Export
 
-All three sit in the **top-right corner of the tab bar**, so they are within
-reach whichever tab you are reading.
+All three sit at the **top right of the dialog**, beside the title, so they
+are within reach whichever tab you are reading. The **Settings** and **Help**
+icons come after them.
 
 **Preview** builds the map and opens it in your default browser. Nothing else
 in the plugin opens a browser, and a preview never writes your map file - only
 Export does.
 
-The **dot** at Preview's right end is the live switch; hover it to see which way it
-is set. **Off** (a grey ring), Preview opens the map as it is now - press it
-again after changing something. **On** (red), Preview serves the map from your
-own machine and the tab updates by itself as you change settings, keeping your
-position on the map. While that runs the button reads **Live**; press it again,
-or close the tab, to stop. The switch stays red - it is a habit, remembered on
-this machine - so the next press starts a live preview again.
+Beside Preview is the labelled **Live** switch. **Off**, Preview opens the map
+as it is now - press it again after changing something. **On**, the preview
+keeps updating: Preview serves the map from your own machine and the browser
+tab updates by itself as you change settings, keeping your position on the
+map. While that runs the button reads **Stop live**; press it, or close the
+tab, to stop. The switch stays on - it is a habit, remembered on this machine -
+so the next press starts a live preview again.
 
 If a live preview cannot be served — a firewall, a locked-down machine — it
 opens as a file instead and tells you so.
@@ -403,11 +428,12 @@ opens the menu:
 | **Make a cartograph...** | Builds a print layout from the current map view and switches to [Cartograph (Beta)](one-click-layout.md) |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
-**Copy file path and Show in file manager need a Save to path first.** Until
-you have set one on the Map tab they are greyed out, and each says so if you
-hover it. The other rows are always available. The two NIKA rows also need a
-map file, and say so if there is no Save to path yet; like Show in file
-manager, they write the map first when it is missing or out of date.
+**Copy file path and Show in file manager need a Save to path.** A new map
+has one from the start; if you clear the field on the Map tab they are greyed
+out, and each says so if you hover it. The other rows are always available.
+The two NIKA rows also need a map file, and say so if there is no Save to path;
+like Show in file manager, they write the map first when it is missing or out
+of date.
 
 **Show in file manager writes the map first** when it is missing or out of
 date, so it never points at something stale. Copy file path only copies the

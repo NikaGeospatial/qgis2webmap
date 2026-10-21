@@ -37,13 +37,15 @@ howto:
     - name: Preview
       anchor: 5-preview
       text: >-
-        Press Preview to build the map and open it in your browser. Switch on
-        the red dot at its right end to keep the tab updating as you change settings.
+        Press Preview to build the map and open it in your browser. Turn on
+        the Live switch beside it to keep the tab updating as you change
+        settings.
     - name: Share it
       anchor: 6-share-it
       text: >-
         On the Map tab choose Export as - Standalone HTML, Share ZIP or
-        Folder - and where to save it, then press Export.
+        Folder. Save to already names a file in Documents, QGIS2WebMap, Web
+        maps; change it if you like, then press Export.
     - name: Check the Fidelity tab
       anchor: 7-check-the-fidelity-tab
       text: >-
@@ -52,7 +54,7 @@ howto:
 
 lead_image:
   src: /images/export-05-live-preview.png
-  alt: The export dialog's corner - the live dot switched on and Preview reading Live, with Share and Export beside it.
+  alt: The top right of the export dialog - Preview with the Live switch turned on beside it, then Share and Export.
 ---
 
 # Your first export
@@ -87,7 +89,7 @@ The plugin exports **the layers already open in this QGIS project**. There is no
 file to browse for and no source to pick - build the map you want in QGIS, and
 the plugin exports what you built.
 
-![The Layers tab with one layer expanded, and the Include, Popups and Labels columns numbered one to three.](images/export-04-layers-expanded.png)
+![The Layers tab, with the Include, Popups and Labels boxes of the Parcels layer numbered one to three.](images/export-04-layers-expanded.png)
 
 On the **Layers** tab, each layer has three tick boxes:
 
@@ -125,13 +127,13 @@ break the drawing.
 **Preview** builds the map and opens it in your default browser. Nothing opens a
 browser on its own - only this button does.
 
-Click the **dot** at Preview's right end to switch live preview on; it turns red.
+Turn on the **Live** switch beside Preview to keep the preview updating.
 Preview then serves the map from your own machine and the tab updates by itself
 as you change settings, keeping your position on the map. Change a colour or
-switch a layer off and watch it happen. While it runs the button reads **Live** -
-press it again, or close the tab, to stop. With the dot off, Preview simply opens
-the map as it is now. Either way, a preview never writes your map file; Export
-does that.
+switch a layer off and watch it happen. While it runs the button reads
+**Stop live** - press it, or close the tab, to stop. With the switch off,
+Preview simply opens the map as it is now. Either way, a preview never writes
+your map file; Export does that.
 
 If the preview cannot be served - a firewall or a locked-down machine - it opens
 as a file automatically and tells you so. Nothing is lost.
@@ -143,8 +145,10 @@ On the Map tab, under **Export**:
 1. Pick **Export as**: **Standalone HTML** (one file, opens by double-click),
    **Share ZIP** (for email, when a filter blocks `.html`) or **Folder** (for a
    web server).
-2. Set **Save to** - press **Choose** and it offers a name beside your project.
-3. Press **Export**, in the top-right corner of the dialog.
+2. Check **Save to**. A new map is already set to
+   **Documents/QGIS2WebMap/Web maps**, named after the map; the folder is
+   made when you export. Press **Choose...** to put it somewhere else.
+3. Press **Export**, at the top right of the dialog.
 
 ![The Export section on the Map tab, with the three types and the Save to field.](images/export-02-formats.png)
 
@@ -160,7 +164,7 @@ changed on the way out of QGIS - symbology that could not be translated exactly,
 settings that will not appear, layers that were left out. Nothing is dropped
 silently.
 
-![The Fidelity tab with the Not exported and Changed verdicts highlighted.](images/export-06-fidelity-report.png)
+![The Fidelity tab: under Whole map, the basemap is marked Changed because its tiles are fetched from carto.com, and the Parcels layer is exact.](images/export-06-fidelity-report.png)
 
 That report before the export, rather than a surprise after it, is the main
 difference from [qgis2web](qgis2web-comparison.md) if you are choosing between

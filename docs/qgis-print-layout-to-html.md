@@ -7,7 +7,7 @@ description: >-
   needed to open it.
 lead_image:
   src: /images/cartograph-dialog.png
-  alt: The export dialog switched to Cartograph (Beta), with a print layout chosen as the source and the line "Saved 2 s ago · 3.2 MB" under the form.
+  alt: The export dialog on Cartograph (Beta) - the print layout drawn on the left, and the panel with the layout chosen, its settings, and the file name and save status at its foot.
 ---
 
 # QGIS print layout to HTML
@@ -37,7 +37,7 @@ answer clicks inside the printed page.
   the map as QGIS drew it, in the layout's own CRS. See
   [live or static frames](live-or-static-frames.md).
 - **An honest report.** Anything that does not come across exactly is listed
-  on the Fidelity tab before you send the file - see
+  on the Checks tab before you send the file - see
   [what a cartograph keeps](cartograph-supported-features.md).
 - **A round trip.** A cartograph can be imported back into QGIS as a print
   layout, and a cartograph can be made from the map canvas in one click - see
@@ -60,7 +60,7 @@ screenshots.
 The cartograph output is new, and the [list of what it keeps](cartograph-supported-features.md)
 is narrower than everything a print layout can hold: one page per layout (an
 atlas aside), no HTML frames or attribute tables, and some label styling is
-simplified. Nothing is dropped silently - the Fidelity tab names every change -
+simplified. Nothing is dropped silently - the Checks tab names every change -
 but read it before you send a cartograph to a client.
 
 Report anything odd on [our Discord](https://discord.gg/RujwMpednf).

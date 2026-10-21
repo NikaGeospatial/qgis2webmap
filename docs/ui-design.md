@@ -25,15 +25,80 @@ This file records what we do differently and why, so the reasoning survives.
 4. **Never offer an export we know is broken.** Export is disabled with a stated
    reason rather than producing a bad artifact.
 
-## Tabs
+## The header: what it makes, and what you do to it
+
+One row at the top, for both outputs:
+
+```
+Create: [Web map ▾]                Preview [Live]  Share ▾  Export   ⚙  ?
+```
+
+- **The output is the title.** It used to be a segmented
+  `Make: [Web map | Cartograph (Beta)]` on a row of its own above the tabs. It
+  read as a second, louder tab bar. Esri, Google, other QGIS plugins and the
+  design tools we looked at do not switch a whole set of tabs with a segmented
+  control; they use a title that opens a short menu, the way Figma, Notion and
+  Google Docs change the file or workspace under the same window. So the
+  title opens a menu of the two outputs, each with a one-line description,
+  and Cartograph carries a **Beta** chip. Ctrl+Alt+W and Ctrl+Alt+C open the
+  dialog straight on either one.
+- **The output's actions sit beside it**, at the right, so they are in reach
+  from every tab: Preview (with a labelled Live switch), Share and Export for
+  the web map; colour vision, Preview HTML and Share for the cartograph.
+- **Settings and Help are icons, not tabs.** They are about the plugin, not
+  the map, and as tabs they sat beside Map and Layers as if they were part of
+  the work. Each opens a page in place of the main screen, with a back arrow.
+
+## Web map tabs
 
 | Tab | Contents |
 |---|---|
-| **Map** | Map name, Map file, size readout, save status |
+| **Map** | Map name, Export as and Save to, size readout, save status, basemap, data |
 | **Layers** | One list, per-layer settings inline, popup fields in a non-reflowing expander |
 | **Appearance** | Widgets — on by default, live toggles |
 | **Fidelity** | Populated *before* export: suppressed settings, licence-cap violations, approximated symbology |
-| **Help** | About, privacy statement, documentation links |
+
+Settings (account, language, theme, save folder, about) and Help (the bundled
+guides) are pages opened from the header.
+
+## Cartograph: the page and a panel
+
+The cartograph was seven tabs - Cartograph, Layers, Frames, Atlas, Fidelity,
+Settings, Help - with no picture of the page anywhere. Every layout tool we
+compared leads with the page: QGIS's own layout designer, ArcGIS Pro's layout
+view, Felt's print mode, Canva. They put the page in the middle and the
+settings in a panel beside it, split into tabs for the longer tasks.
+
+So the cartograph is one screen:
+
+- **Left: the live page.** It is QGIS's own layout canvas, so a change in the
+  layout designer or to a layer shows at once. It is labelled
+  *QGIS layout · A4 landscape* because it is QGIS's drawing, not the HTML;
+  the two can differ, and saying so beats a preview that quietly disagrees
+  with the file. A link beside the caption counts the differences and opens
+  Checks. A zoom bar says what the wheel and a drag already do.
+- **Right: the panel.** The layout list with an **Add...** menu (From
+  canvas, Import) at the top, where ArcGIS Pro keeps *New layout*. Then three
+  tabs, the split QGIS's layout designer and ArcGIS Pro make beside their
+  page: **Layout** (Page, Map frames and Layers as sections that open and
+  close), **Atlas**, and **Checks**, whose title carries the count. Map
+  frames are cards rather than the old six-column table, which scrolled
+  sideways a third of the dialog wide.
+- **The file at the foot of the panel**, name first and in bold, its folder
+  under it. The file saves itself, so where it goes is a detail to change,
+  not a question to answer before anything works.
+
+The default window grew from 960 × 640 to 1152 × 768 so the page and the
+panel both have room; `_resize_to_fit_screen` still shrinks it to the screen.
+
+## Keyboard and right-to-left
+
+- **Focus is always visible.** Every control that takes keyboard focus draws
+  a focus ring, including the header's icon buttons, the menu rows and the
+  zoom bar, so the dialog can be used without a mouse.
+- **Arabic is laid out right to left**, the whole dialog mirrored, not only
+  the text - including the directional styling: arrows, the rounded ends of
+  joined buttons, and the chevrons of the panel's sections.
 
 ## Map name
 
@@ -118,15 +183,21 @@ the plugin's main act had disappeared. Exporting is what the plugin is for, so
 it is the one filled button.
 
 Switching the type keeps the chosen name (`peaks.html` becomes `peaks.zip` or a
-`peaks` folder). The Save to field starts empty and is never guessed at:
-earlier versions remembered only the *folder* of the last export, so a
-reconstructed file name would name a file the user never wrote.
+`peaks` folder). A new map's Save to starts in its own folder,
+`Documents/QGIS2WebMap/Web maps/<map name>.html`, with ` (2)` added when the
+name is taken, and the folder is made on Export. It used to start empty,
+because earlier versions remembered only the *folder* of the last export and a
+reconstructed file name would name a file the user never wrote. A fixed,
+visible default has neither problem: it names a new file, says where, and
+never lands on someone else's. Cartographs get the same treatment in
+`Cartographs`; the root is a per-user setting (Settings → Saving).
 
-## Preview, Export and Share, in the tab corner
+## Preview, Export and Share, in the header
 
-All three live in the tab bar's top-right corner, reachable from whichever tab
-is open. They are the things a user does *to* the map, and the tab they happen
-to be reading when they decide to do one is not the dialog's business.
+All three live at the right of the header, reachable from whichever tab is
+open. They are the things a user does *to* the map, and the tab they happen
+to be reading when they decide to do one is not the dialog's business. (They
+were in the tab bar's corner before the header took the output switch.)
 
 This reverses an earlier call. The corner previously held a help link, placed
 there because "this dialog cannot afford another row" — the same constraint that
@@ -135,7 +206,8 @@ behind the Windows taskbar with no way to reach it. That reasoning still holds
 and this does not break it: the two controls moved *up* out of the bottom row,
 which emptied rather than grew. The dialog is no taller than it was.
 
-Every Share row is disabled until Save to is set, and each says why on hover.
+The Share rows that act on the file are disabled while Save to is empty, and
+each says why on hover.
 A row that needs the file writes it first, so Copy file path or Show in file
 manager never point at something stale.
 

@@ -74,8 +74,9 @@ Ask in the same words you would use with a colleague:
 The plugin writes the request for you. In the dialog's **Share** menu, choose
 **Enhance with NIKA AI...** or **Ask NIKA for a critique...** - on a web map
 and on a [cartograph](cartograph-dialog.md#the-share-menu) alike. A web map
-needs a **Save to** path on the Map tab, and is written first if it is missing
-or out of date, so the prompt never points at a stale file. A cartograph is
+needs a **Save to** path on the Map tab - a new map has one from the start -
+and is written first if it is missing or out of date, so the prompt never
+points at a stale file. A cartograph is
 always saved already.
 
 The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
@@ -98,7 +99,7 @@ The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
    - **Task** - **Critique** asks for a cartographer's review, ranked by
      impact, and asks the agent to change nothing until you confirm.
      **Enhance** asks it to improve the map or page without changing its data,
-     fixing what the Fidelity tab marked *Changed*. The menu row you chose
+     fixing what the Fidelity or Checks tab marked *Changed*. The menu row you chose
      preselects it.
    - **Files** - the map or cartograph file, ticked. **Change files...** picks
      others from the same folder; anything from elsewhere is left out, because

@@ -89,13 +89,13 @@ sends even less:
   of the free licence's attribution condition, so it prints and appears in an
   exported PNG too. It is text on the page, not a request.
 
-Opening a cartograph from the plugin's **Preview** or **Open in browser** serves
+Opening a cartograph from the plugin's **Preview HTML** or **Open in browser** serves
 it from a small server on your own machine (`127.0.0.1`), which nothing outside
 your computer can reach.
 
 What a cartograph **contains** differs by frame. A static frame holds an image
 of the map. A live frame holds the features it draws, with the attributes its
-popups show - the Layers tab's popup settings decide which -
+popups show - the popup settings in the Layers list decide which -
 see [what travels in the file](share-qgis-print-layout-without-qgis.md#what-travels-in-the-file).
 
 The [hand-off to NIKA](enhance-with-ai.md#hand-off-to-nika) sends nothing

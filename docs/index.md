@@ -113,8 +113,8 @@ sections:
     cards:
       - title: The dialog, tab by tab
         text: >-
-          Every control on the Map, Layers, Appearance, Fidelity and Help tabs,
-          and what each one changes for the recipient.
+          Every control on the Map, Layers, Appearance and Fidelity tabs, and
+          what each one changes for the recipient.
         url: /the-dialog.html
       - title: What gets exported
         text: >-
@@ -193,8 +193,8 @@ the established plugin.
 
 ## Print layouts too
 
-Press **Cartograph (Beta)** at the top of the dialog, or choose **Create
-cartograph...** from the same Web menu, and the plugin turns a QGIS print layout
+Choose **Cartograph** from the title menu at the top of the dialog, or
+**Create cartograph...** from the same Web menu, and the plugin turns a QGIS print layout
 into a **cartograph**: one HTML page that opens by double-click, prints at the
 layout's page size, and keeps each map live or pixel-exact. See
 [QGIS print layout to HTML](qgis-print-layout-to-html.md).

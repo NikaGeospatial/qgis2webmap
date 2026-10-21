@@ -7,7 +7,7 @@ description: >-
   cartograph back as a layout.
 lead_image:
   src: /images/cartograph-one-click.png
-  alt: The Cartograph tab after one click on Current canvas - the new layout "carto: Parcel survey" is selected, and the status bar says it was created from the canvas.
+  alt: The Cartograph screen after Add, From canvas - the new layout "carto: Parcel survey" is drawn on the left and selected in the Print layout list, and the bar at the foot says it was created from the canvas.
 ---
 
 # One-click layouts and the round trip
@@ -21,17 +21,17 @@ go the other way, back into QGIS as a layout.
 
 1. Set the canvas to the view you want on the page: the extent, the layers,
    even a rotation.
-2. On the **Cartograph** tab, click **Current canvas (creates a print
-   layout)**. On the web map, **Share → Make a cartograph...** does the same and
-   switches the dialog to Cartograph (Beta).
+2. On Cartograph, press **Add...** beside the **Print layout** list and
+   choose **From canvas...**. On the web map, **Share → Make a cartograph...**
+   does the same and switches the dialog to Cartograph (Beta).
 3. Pick a [template](#choose-a-template), a page size and an orientation, and
    click **Create layout**.
 
 The plugin builds a print layout called **`carto: <project title>`**
 (`carto: map` for a project with no title, and `carto: map (2)` if the name
-is taken), adds it to the project, and selects it as the cartograph's source.
+is taken), adds it to the project, and selects it in the Print layout list.
 
-![The Cartograph tab after one click: the Source list shows "carto: Parcel survey", and the status bar reports the new layout.](images/cartograph-one-click.png)
+![The Cartograph screen after From canvas: the Print layout list shows "carto: Parcel survey", and the new layout is drawn on the left.](images/cartograph-one-click.png)
 
 ## Choose a template
 
@@ -40,7 +40,12 @@ service set and the recurring designs of its map gallery. Each preview is the
 real page drawn with the map the canvas shows now, so what you pick is what
 you get.
 
-![The template picker: page size and orientation at the top, and ten previews of the current map - Classic, Legend below, Map only, Report figure, Field / survey map, Poster, Map with locator, Story map, Infographic and Dark full-bleed.](images/cartograph-templates.png)
+The picker shows **Page size** and **Orientation** at the top, then a strip
+of the ten template names, then the designs themselves as a scrolling list of
+large previews, one per row. Click a name in the strip to jump to its
+preview. **Create layout** builds the one selected.
+
+![The template picker: page size and orientation at the top, the strip of ten template names, and the first large previews of the current map - Classic and Legend below.](images/cartograph-templates.png)
 
 - **Classic** - title, map, legend beside it (or below, whichever leaves the
   map larger), scale bar and north arrow. The layout described
@@ -113,14 +118,15 @@ and change anything - move the legend, restyle the title, add a logo. The
 cartograph follows: each change in the layout designer saves the cartograph
 again about half a second later.
 
-**The first save** happens as soon as the new layout is selected: in a saved
-project its cartograph is `carto-<project title>.html`, beside the project
-file. In a project that has never been saved, nothing is written until you
-choose where on the Cartograph tab.
+**The first save** happens as soon as the new layout is selected, saved
+project or not: its cartograph goes in **Documents/QGIS2WebMap/Cartographs**,
+named after the project and the layout - `parcels-carto-Parcel-survey.html`
+for `parcels.qgz`. **Change...** at the foot of the panel puts it somewhere
+else.
 
 ## Importing a cartograph back into QGIS
 
-**Import cartograph...** on the Cartograph tab reads a cartograph HTML file -
+**Add... → Import cartograph...** on Cartograph reads a cartograph HTML file -
 one this plugin made, one edited by hand, or one edited by an AI agent - and
 builds a new print layout from it:
 
@@ -138,8 +144,8 @@ builds a new print layout from it:
 - an atlas comes back as the layout's atlas, when a layer with the same name is
   in the project.
 
-The new layout is selected as the source, so the cartograph you see is now
-made from it.
+The new layout is selected in the Print layout list, so the cartograph you
+see is now made from it.
 
 **The map data is not imported.** A live frame's features travel inside the
 cartograph, but a QGIS layout cannot hold data - its maps draw the project's

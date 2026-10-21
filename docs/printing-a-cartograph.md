@@ -75,7 +75,7 @@ of 300 dpi, a 3 mm bleed, crop marks and the safe-zone guide.
   so a page smaller than the layout cuts off whatever falls outside it.
 - **Resolution** - **150**, **300** or **600 dpi**: how finely live frames are
   rendered when the page is printed, and the resolution of a PDF made by QGIS.
-  A static frame keeps the DPI set for it on the Frames tab.
+  A static frame keeps the DPI set for it in Map frames.
 - **Bleed** - **None**, **3 mm**, **5 mm** or **1/8 in**. The printed sheet
   grows by that much on every side, so a slightly-off cut shows no white edge:
   A3 with a 3 mm bleed prints on a 303 × 426 mm sheet. Items keep their
@@ -131,12 +131,12 @@ Both choices are **greyed out, with the reason in their tooltip**, when:
   names the version you have.
 - **Any frame is live.** QGIS draws the layout, not the browser, so it cannot
   draw a live frame as the cartograph shows it. Set every frame to **Static**
-  on the Frames tab.
+  in Map frames, on the Layout tab.
 
 A saved CMYK choice that this QGIS cannot honour shows as RGB, with a line
 saying why - it is never swapped silently.
 
-Because QGIS prints the layout, the Cartograph tab's **Title** and **Theme**
+Because QGIS prints the layout, the Page section's **Title** and **Theme**
 do not apply to a CMYK or ICC PDF; the layout's own text and colours do.
 
 ## Printing an atlas

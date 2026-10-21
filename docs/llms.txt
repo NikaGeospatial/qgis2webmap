@@ -53,8 +53,8 @@ notes below are the things that are commonly assumed wrong.
 
 ## Cartographs (Beta)
 
-The plugin has a second output, chosen with "Make: Web map | Cartograph (Beta)"
-at the top of its dialog: a **cartograph**, which is a QGIS **print layout**
+The plugin has a second output, chosen from the title menu at the top of its
+dialog ("Create: Web map ▾", then Cartograph, marked Beta): a **cartograph**, which is a QGIS **print layout**
 (or, in one click, the map canvas) as one printable HTML page drawn by
 OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 
@@ -62,9 +62,10 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
   is exported; extra pages are reported as Not exported. An atlas is the way to get
   one page per feature, all in the same file.
 - **There is no Export button.** The cartograph is a file that saves as soon
-  as a layout is selected (in a saved project) and rewrites itself about
-  600 ms after any change, in the dialog, the layout or the layers. Its output is
-  always one standalone HTML file - no Share ZIP or Folder type.
+  as a layout is selected - by default in Documents/QGIS2WebMap/Cartographs,
+  even before the project is saved - and rewrites itself about 600 ms after
+  any change, in the dialog, the layout or the layers. Its output is always
+  one standalone HTML file - no Share ZIP or Folder type.
 - **Each map frame is live or static, per map.** Live: an interactive map,
   always drawn in Web Mercator. Static: a pixel-exact image in the layout's own
   CRS, at 150/200/300 dpi (200 by default). Default: live for EPSG:3857/4326, static otherwise.
@@ -84,22 +85,23 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
   the Atlas tab exports them all as one PNG ZIP or prints them as one
   multi-page PDF.
 - **A live frame carries its layers' features** in the file, with the
-  attributes its popups show (the Layers tab's Popups and per-field settings
+  attributes its popups show (the Layers list's Popups and per-field settings
   apply; Include does not - the layout's map item chooses the layers). A
   static frame carries only an image, and a static-only page reads even with
   JavaScript off.
 - **The round trip exists**: a cartograph can be imported back into QGIS as a
   print layout, and saved as a `.qpt` template. The map data inside it is not
   imported - the layout draws the project's own layers.
-- Whatever does not translate exactly is on the same Fidelity tab, with the
-  same verdicts: Kept, Changed, Rasterised, Not exported, Blocked.
+- Whatever does not translate exactly is on the cartograph's Checks tab, with
+  the same verdicts as the web map's Fidelity tab: Kept, Changed, Rasterised,
+  Not exported, Blocked.
 
 ## Guides
 
 - [Install the plugin](https://qgis2webmap.nikaplanet.com/installation.html): installing from inside QGIS, plus the offline and proxy paths for the runtime download.
 - [Export a QGIS project to a web map](https://qgis2webmap.nikaplanet.com/qgis-to-web-map.html): the short end-to-end answer to the most common question.
 - [Your first export](https://qgis2webmap.nikaplanet.com/first-export.html): the full walkthrough, from a styled project to a file you can send.
-- [The dialog, tab by tab](https://qgis2webmap.nikaplanet.com/the-dialog.html): every control on Map, Layers, Appearance, Fidelity and Help.
+- [The dialog, tab by tab](https://qgis2webmap.nikaplanet.com/the-dialog.html): the header and every control on Map, Layers, Appearance and Fidelity, plus Settings and Help.
 - [What gets exported](https://qgis2webmap.nikaplanet.com/supported-features.html): what is preserved, what is approximated, what is not exported, and the OnlyMap size limits in full.
 - [Sharing a map](https://qgis2webmap.nikaplanet.com/sharing.html): choosing between Standalone HTML, Share ZIP and Folder.
 - [Share a QGIS map with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-map-without-qgis.html): the same problem stated the way a non-GIS colleague states it.
@@ -107,7 +109,7 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 - [Enhance a map with AI](https://qgis2webmap.nikaplanet.com/enhance-with-ai.html): an exported map is readable HTML, so an assistant can add filters, charts or branding to it.
 - [QGIS print layout to HTML](https://qgis2webmap.nikaplanet.com/qgis-print-layout-to-html.html): what a cartograph is and how it compares with a PDF from QGIS.
 - [Your first cartograph](https://qgis2webmap.nikaplanet.com/cartograph-first-export.html): from a print layout to a printable HTML file.
-- [The Cartograph dialog](https://qgis2webmap.nikaplanet.com/cartograph-dialog.html): the Cartograph, Frames and Atlas tabs, the corner and the Share menu.
+- [The Cartograph dialog](https://qgis2webmap.nikaplanet.com/cartograph-dialog.html): the live page, the Print layout list, the Layout, Atlas and Checks tabs, where the file saves, and the Share menu.
 - [Live or static frames](https://qgis2webmap.nikaplanet.com/live-or-static-frames.html): interactive Web Mercator map or pixel-exact image, per map.
 - [Atlas cartographs](https://qgis2webmap.nikaplanet.com/cartograph-atlas.html): one page per feature in one file, and what an atlas needs.
 - [One-click layouts](https://qgis2webmap.nikaplanet.com/one-click-layout.html): a print layout from the map canvas, and importing a cartograph back into QGIS.

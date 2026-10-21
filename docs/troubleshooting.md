@@ -287,28 +287,27 @@ works with no connection at all, set **Basemap** to **None** — the default.
 
 ## Cartographs
 
-### "Not saved yet", and Preview does nothing
+### "Not saved yet", and Preview HTML does nothing
 
-In a saved project, a cartograph is written as soon as a layout is selected.
-In a project that has **never been saved**, there is no folder to put it
-beside, so nothing is written until you say where: the status line reads *Not
-saved yet - choose where to save it above*, and Preview and the Share menu's
-file rows wait for a file. Type a path in **Save to**, or press **Choose…**, and
-it saves about half a second later.
+A cartograph is written as soon as a layout is selected - by default into
+**Documents/QGIS2WebMap/Cartographs**, whether or not the project has been
+saved. Until that first save finishes, the line at the foot of the panel reads
+*Not saved yet*, and Preview HTML and the Share menu's file rows wait for the
+file. It normally takes a moment.
 
-If it still does not save, the status line says why:
+If it does not save, that line says why:
 
 | It says | What to do |
 |---|---|
 | *The OnlyMap runtime is needed to save a cartograph. Nothing was written.* | The one-off runtime download was declined or failed. See [the runtime download](#the-runtime-download), then change any setting to try again |
-| *Could not save the cartograph: ...* | The place in **Save to** cannot be written to. **Choose…** another |
+| *Could not save the cartograph: ...* | The folder cannot be written to - a read-only or disconnected drive, say. Press **Change...** at the foot of the panel and pick another place, or choose another folder for new maps in **Settings → Saving** |
 | *Could not build the cartograph: ...* | Something in the layout could not be read. The detail is in **View → Panels → Log Messages**, `QGIS2WebMap` tab |
 
-### The Source list is empty
+### The Print layout list is empty
 
 The project has no print layouts. Create one from **Project → Layouts → New
-Layout** and add a map to it, or click **Current canvas (creates a print
-layout)** to have one built. See [one-click layouts](one-click-layout.md).
+Layout** and add a map to it, or press **Add... → From canvas...** to have
+one built. See [one-click layouts](one-click-layout.md).
 
 ### A live frame is blank in the browser
 
@@ -320,8 +319,8 @@ grids and scale text still use the map's real extent, the map's legend is left
 out, and the page still prints. Try another
 browser, or turn on hardware acceleration in the browser's settings.
 
-For a page that must work everywhere, set the frame to **Static** on the Frames
-tab. A page with only static frames needs no WebGL at all. See
+For a page that must work everywhere, set the frame to **Static** in **Map
+frames**, on the Layout tab. A page with only static frames needs no WebGL at all. See
 [live or static frames](live-or-static-frames.md).
 
 ### A preview pane shows "This cartograph needs JavaScript"
@@ -347,9 +346,9 @@ printed.
 
 ### The atlas is Blocked: the map is static
 
-The Fidelity tab says *This map follows the atlas, but it is a static frame*.
+The Checks tab says *This map follows the atlas, but it is a static frame*.
 A static frame is one picture, so it would show the same place on every page.
-On the **Frames** tab, set the map the atlas controls to **Live**. If it then
+In **Map frames**, on the Layout tab, set the map the atlas controls to **Live**. If it then
 says the coverage layer is missing, add that layer to the map's layers - tick
 **Hide coverage layer** in the layout's atlas settings if it should not show.
 See [atlas cartographs](cartograph-atlas.md).
@@ -363,7 +362,7 @@ Hover the choice to see why. Two causes:
   6.8 or newer, or send the print shop an RGB PDF and let them convert it.
 - **A frame is live.** CMYK and ICC PDFs are made by QGIS from the layout, and
   QGIS cannot draw a live frame as the cartograph shows it. Set every frame to
-  **Static** on the Frames tab.
+  **Static** in Map frames, on the Layout tab.
 
 See [CMYK and print-shop profiles](printing-a-cartograph.md#cmyk-and-print-shop-profiles).
 
@@ -376,7 +375,7 @@ your print shop gave you.
 ### Only page 1 came out
 
 A cartograph is one page per layout; pages 2 and after are marked **Not
-exported** on the Fidelity tab and left out. Make each page its own layout, or use an
+exported** on the Checks tab and left out. Make each page its own layout, or use an
 [atlas](cartograph-atlas.md) for a page per feature.
 
 ## Still stuck

@@ -7,29 +7,37 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [0.3.0] - Unreleased
 
 ### Added
-- **Cartograph (Beta): print layouts as printable HTML.** A **Make: Web map |
-  Cartograph** switch at the top of the dialog turns a QGIS print layout into
-  one HTML page that opens by double-click and prints at true page size from
-  Chromium-based browsers.
+- **Cartograph (Beta): print layouts as printable HTML.** Choose
+  **Cartograph** from the dialog's title menu (**Create: Web map ▾**) to turn
+  a QGIS print layout into one HTML page that opens by double-click and
+  prints at true page size from Chromium-based browsers.
   **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) opens the dialog straight on it.
+  - **One screen**: the layout's page, live, on the left (*QGIS layout ·
+    A4 landscape*, with a zoom bar and a link to the changes in the HTML), and a
+    panel on the right - the Print layout list with an **Add...** menu, then
+    the **Layout**, **Atlas** and **Checks** tabs, then the file and its save
+    status.
   - Map items become **live frames** (pan, zoom, popups; in Web Mercator, or
     in the map's own CRS - projected, or geographic such as EPSG:4326 - when
     its layers allow) or **static frames** (a pixel-exact image in the
     layout's own CRS). Maps in EPSG:3857/4326, and other maps that draw in
-    their own CRS, default to live, others to static; the Frames tab
-    switches each one and sets its DPI.
+    their own CRS, default to live, others to static; each map's card in
+    **Map frames** switches it and sets its DPI.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
-    pictures carry over; the Fidelity tab lists everything that changes or
-    is left out.
+    pictures carry over; the **Checks** tab lists everything that changes or
+    is left out, and its title shows the count.
   - **The file saves itself** about a second after each change - in the
-    dialog, the layout, a layer's style or the Layers tab. Title, attribution
-    and theme on the Cartograph tab.
-  - **Current canvas** builds a `carto:` print layout from the map view in
+    dialog, the layout, a layer's style or the Layers list - by default to
+    `Documents/QGIS2WebMap/Cartographs/<project>-<layout>.html`, even before
+    the project is saved. Title, attribution and theme in the Layout tab's
+    Page section.
+  - **Add... → From canvas...** builds a `carto:` print layout from the map view in
     one of ten **layout templates** - Classic, Legend below, Map only, Report
     figure, Field / survey map, Poster, Map with locator, Story map,
-    Infographic and Dark full-bleed - each previewed with the current map,
-    on A4, A3, Letter, Tabloid and more. **Import cartograph** turns a
+    Infographic and Dark full-bleed - each shown as a large preview of the
+    current map in a scrolling list, on A4, A3, Letter, Tabloid and more.
+    **Import cartograph** turns a
     cartograph back into a QGIS layout.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
     margin, fixed and predefined scales; every page as one PNG ZIP, or
@@ -46,6 +54,25 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Hand off to NIKA**, for web maps and cartographs: **Enhance with NIKA
   AI...** and **Ask NIKA for a critique...** open a dialog with a ready prompt
   for NIKA desktop or any other agent.
+
+### Changed
+- **The dialog's title says what it makes**: **Create: Web map ▾** opens a
+  menu of the two outputs, each with a one-line description. Preview, Share
+  and Export moved up beside it.
+- **Settings and Help are icons in the header**, not tabs. Each opens its
+  page in place of the main screen, with a back arrow. The web map's tabs are
+  now Map, Layers, Appearance and Fidelity.
+- **The live-preview switch is labelled**: a **Live** toggle beside Preview
+  replaces the unlabelled dot.
+- **New maps have somewhere to save from the start**:
+  `Documents/QGIS2WebMap/Web maps/<map name>.html`, with ` (2)` added when the
+  name is taken; the folder is made on Export. **Settings → Saving** changes
+  the folder for every new map.
+- **The dialog opens larger**, at 1152 × 768, still shrinking to fit the
+  screen.
+- **Keyboard focus is visible on every control**, and in Arabic the
+  dialog's directional styling - arrows, rounded ends, section chevrons - is
+  mirrored along with its right-to-left layout.
 
 ## [0.2.1] - 2026-10-13
 

@@ -18,8 +18,9 @@ them. The **Colour vision** dialog shows you the map as they see it, and
 checks the legend for you: which classes collapse into each other, and for
 whom.
 
-Open it with **Accessibility** in the corner of the dialog, on Cartograph
-(Beta). It floats beside the dialog and stays open while you work.
+Open it with the **colour vision** button (the contrast icon) at the top
+right of the dialog, on Cartograph (Beta). It floats beside the dialog and
+stays open while you work.
 
 ![The Colour vision dialog, simulating deuteranopia.](images/cartograph-colour-vision.png)
 
@@ -41,7 +42,7 @@ It applies to two places, each with its own tick box:
 - **Browser preview** - reopens the cartograph in your browser with the same
   simulation applied to the whole page.
 
-While a simulation is on, the **Accessibility** button stays pressed and its
+While a simulation is on, the colour vision button stays pressed and its
 tooltip names the condition. Closing the dialog leaves the canvas as you set
 it - choose **Normal vision** to switch it off. A preview mode you had set in
 QGIS yourself before opening the dialog is left alone.

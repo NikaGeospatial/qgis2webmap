@@ -7,14 +7,14 @@ description: >-
   it, changes it or leaves it out.
 lead_image:
   src: /images/cartograph-fidelity-tab.png
-  alt: The Fidelity tab for a cartograph, listing layout items marked Changed with the reason for each.
+  alt: The Checks tab for a cartograph, listing layout items marked Changed with the reason for each.
 ---
 
 # What a cartograph keeps
 
 A print layout can hold far more than a web page can draw the same way. The
 plugin translates a deliberate set of layout items, and everything it cannot
-translate exactly is named on the **Fidelity** tab - nothing is dropped
+translate exactly is named on the **Checks** tab - nothing is dropped
 silently.
 
 The verdicts are the same ones the [web map](supported-features.md) uses:
@@ -49,13 +49,13 @@ QGIS drew, so its layers come across as they look.
 
 | In the layout | In the cartograph |
 |---|---|
-| Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen on the Frames tab. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
+| Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen in Map frames. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
 | Map item, **live** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or vector tiles ([which CRS a live frame draws in](live-or-static-frames.md#which-crs-a-live-frame-draws-in)) |
 | Map rotation | **Kept** |
 | A layer drawn in more than one live frame | **Kept** in each - its features are written into the file once |
 | A raster from a file on disk (GeoTIFF) in a live frame | **Kept** - carried inside the cartograph, as in a single-file web map, up to 100 MB of imagery per map; a raster in two maps is carried once. The map is drawn in Web Mercator |
 | Overview (locator inset showing another map's extent) | **Kept** |
-| Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Fidelity tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
+| Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Checks tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
 
 ## Grids
 
@@ -110,7 +110,7 @@ QGIS drew, so its layers come across as they look.
 ## Not exported
 
 These layout items have no cartograph equivalent yet. Each is named on the
-Fidelity tab by its type:
+Checks tab by its type:
 
 - polygons and polylines drawn on the page, and markers;
 - HTML frames and attribute tables;

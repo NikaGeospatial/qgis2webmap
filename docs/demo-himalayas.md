@@ -43,8 +43,8 @@ recipe:
     value: "**Voyager**"
   - setting: Map tab · Ground surface
     value: "**Global relief**"
-  - setting: Map tab · Extent
-    value: "**Current canvas view** (frame Everest–Kangchenjunga first)"
+  - setting: Map tab · Open the map on
+    value: "**The current QGIS view** (frame Everest–Kangchenjunga first)"
 ---
 
 ## Run these yourself

@@ -24,7 +24,7 @@ On the cartograph's **Atlas** tab:
    before gets QGIS's defaults: it fits each feature, with a 10% margin.
 4. Optionally, **Sort by** a field (tick **Descending** to reverse it), a
    **Filter** expression, and a **File names** expression for exported pages.
-5. On the **Frames** tab, make sure the map that follows the atlas is
+5. In **Map frames**, on the **Layout** tab, make sure the map that follows the atlas is
    **Live**, and that it **draws the coverage layer**. To keep the layer from
    showing, tick **Hide coverage layer** in the layout's atlas settings rather
    than removing it from the map.
@@ -33,7 +33,8 @@ On the cartograph's **Atlas** tab:
 
 These are the layout's own atlas settings - the same ones as the layout
 designer's Atlas panel, which works just as well - so every change is on the
-layout's undo stack. The tab shows how many pages QGIS's atlas has, and, when
+layout's undo stack. While the atlas is on, the tab reads **Atlas (on)**. It
+shows how many pages QGIS's atlas has, and, when
 the cartograph will not page, a warning line saying why and what to change.
 
 The cartograph saves itself as usual. One file holds every page.
@@ -46,8 +47,9 @@ and it finds the features in that map's own data - so the coverage layer has
 to be in it.
 
 When either is missing, nothing half-works: no atlas is written, and the
-Fidelity tab marks it **Blocked** with the fix - *Set the atlas map to Live in
-the Frames tab*, or *Add the coverage layer ... to map ...'s layers*.
+Checks tab marks it **Blocked** with the fix - *Set the atlas map to Live in
+the Frames tab* (the map's card in **Map frames**), or *Add the coverage layer
+... to map ...'s layers*.
 
 ## Turning the pages
 
@@ -73,11 +75,11 @@ the scale bar is worked out again, and labels using the feature's fields,
 | A **point** coverage layer | Kept: QGIS centres each point at the map's scale, in any scaling mode |
 | **Hide coverage layer** | Kept on live frames |
 | **Only show the current atlas feature** | Not kept - every feature of the layer is drawn. Marked **Changed** |
-| **Filter with** | Kept when the expression has a cartograph equivalent; otherwise left out, so every feature gets a page. Named on the Fidelity tab |
+| **Filter with** | Kept when the expression has a cartograph equivalent; otherwise left out, so every feature gets a page. Named on the Checks tab |
 | **Sort by** | Kept when it sorts by a field. An expression cannot be kept, and pages follow the layer's own order |
 | **Output filename expression** | Kept when it can be translated; otherwise pages are named `page-1`, `page-2`, ... |
 | **Page name** | Kept when it can be translated; otherwise the pager shows page numbers |
-| A label expression that depends on the atlas feature in another way | Reads the same on every page. Named on the Fidelity tab |
+| A label expression that depends on the atlas feature in another way | Reads the same on every page. Named on the Checks tab |
 
 The cartograph can have **fewer pages** than QGIS's atlas. It skips features
 the map does not draw - a category switched off in the layer's style, for
