@@ -42,6 +42,9 @@ from qgis.PyQt.QtWidgets import (
 
 from ..i18n import tr
 
+#: The layout list's narrowest, beside its Add... button in the panel.
+PICKER_MIN_WIDTH = 120
+
 # What a row of the layout list is, in its `Qt.UserRole` data.
 LAYOUT, FROM_CANVAS, IMPORT = "layout", "canvas", "import"
 _KIND = Qt.ItemDataRole.UserRole
@@ -61,6 +64,11 @@ class LayoutPicker(QComboBox):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setPlaceholderText(tr("No print layouts yet"))
+        # A long layout name shortens rather than widening the panel past
+        # the dialog's edge; the full name is in the open list. An explicit
+        # minimum, because a styled combo box otherwise reports its longest
+        # item as the least it can take.
+        self.setMinimumWidth(PICKER_MIN_WIDTH)
         self._last_layout_index = -1
         self._canvas_reason = ""
         self.activated.connect(self._on_activated)

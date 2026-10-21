@@ -30,7 +30,6 @@ from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QPushButton,
     QVBoxLayout,
@@ -80,9 +79,14 @@ class AtlasTab(QWidget):
         self.enabled_check.toggled.connect(self._on_enabled)
         page.addWidget(self.enabled_check)
 
-        # Untitled: it sits in the panel's Atlas tab, under that name already.
-        settings = QGroupBox(self)
+        # No box: it sits in the panel's Atlas tab, under that name already,
+        # and an untitled box kept an empty title's gap above its fields.
+        settings = QWidget(self)
         form = QFormLayout(settings)
+        form.setContentsMargins(0, 4, 0, 4)
+        # Labels above their fields: the tab is a side panel a third of the
+        # dialog wide, where label and field side by side ran off its edge.
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.coverage_combo = QgsMapLayerComboBox(settings)
         self.coverage_combo.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)
         self.coverage_combo.setAllowEmptyLayer(True)
@@ -129,7 +133,8 @@ class AtlasTab(QWidget):
         self.problem_label.setProperty("role", "warning")
         page.addWidget(self.problem_label)
 
-        buttons = QHBoxLayout()
+        # One above the other, for the same narrow panel.
+        buttons = QVBoxLayout()
         self.zip_button = QPushButton(tr("Export all pages (PNG, ZIP)..."), self)
         self.zip_button.setToolTip(
             tr("Opens the cartograph and downloads every page as one ZIP")
@@ -145,7 +150,6 @@ class AtlasTab(QWidget):
         )
         self.print_button.clicked.connect(lambda: self._open_all_pages("print"))
         buttons.addWidget(self.print_button)
-        buttons.addStretch(1)
         page.addLayout(buttons)
         page.addStretch(1)
 

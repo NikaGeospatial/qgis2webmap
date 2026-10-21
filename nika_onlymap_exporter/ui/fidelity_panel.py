@@ -268,7 +268,8 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.check_button = QPushButton(tr("Check now"), self)
         self.check_button.clicked.connect(self.check_requested.emit)
         top.addWidget(self.check_button)
-        top.addLayout(self._build_filters())
+        self._filters_row = self._build_filters()
+        top.addLayout(self._filters_row)
         layout.addLayout(top)
         self._top = top
 
@@ -358,6 +359,13 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         so switching back and forth loses nothing.
         """
         self._compact = compact
+        # The Filter button and the search box stack too: side by side they
+        # were wider than the narrowest panel, which cut the panel off.
+        self._filters_row.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if compact
+            else QBoxLayout.Direction.LeftToRight
+        )
         self._top.setDirection(
             QBoxLayout.Direction.TopToBottom
             if compact

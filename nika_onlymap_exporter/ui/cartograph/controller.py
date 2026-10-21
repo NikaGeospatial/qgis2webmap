@@ -156,7 +156,10 @@ def _panel_scroll(content: QWidget) -> QScrollArea:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.Shape.NoFrame)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # As needed rather than never: every tab is laid out to fit the panel,
+    # but a larger system font or a long translation can still widen it,
+    # and a scroll bar is better than controls cut off at the edge.
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     # Not a Tab stop of its own: the controls inside are, and a focused
     # scroll area shows no sign of having the focus.
     scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)

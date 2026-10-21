@@ -2100,6 +2100,49 @@ class TestPanel:
     """The panel beside the page: the layout list with its Add... button,
     then the Layout, Atlas and Checks tabs, and its first width."""
 
+    def test_every_tab_fits_the_narrowest_panel(self, qgis_app, project) -> None:
+        """Nothing runs off the panel's edge at its minimum width: the Atlas
+        form and the Checks filters once did, cutting their controls off."""
+        from qgis.PyQt.QtWidgets import QScrollArea
+
+        from nika_onlymap_exporter.ui.cartograph.controller import PANEL_MIN_WIDTH
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.resize(900, 600)
+            dialog.show()
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            for section in cartograph.sections.values():
+                section.set_open(True)
+            workspace = cartograph.workspace
+            workspace.setSizes([workspace.width() - PANEL_MIN_WIDTH, PANEL_MIN_WIDTH])
+            qgis_app.processEvents()
+            panel = workspace.widget(1)
+            assert panel.minimumSizeHint().width() <= PANEL_MIN_WIDTH
+            tabs = cartograph.panel_tabs
+            for index in range(tabs.count()):
+                tabs.setCurrentIndex(index)
+                qgis_app.processEvents()
+                page = tabs.widget(index)
+                if isinstance(page, QScrollArea):
+                    needed = page.widget().minimumSizeHint().width()
+                    room = page.viewport().width()
+                else:
+                    needed, room = page.minimumSizeHint().width(), page.width()
+                assert needed <= room, tabs.tabText(index)
+            # Measured with the test's font, the Atlas form fits either way;
+            # with a wider system font, side-by-side labels ran off the edge.
+            from qgis.PyQt.QtWidgets import QFormLayout
+
+            atlas = cartograph.atlas_tab
+            form = atlas.settings_box.layout()
+            assert form.rowWrapPolicy() == QFormLayout.RowWrapPolicy.WrapAllRows
+            assert atlas.zip_button.y() < atlas.print_button.y()
+        finally:
+            dialog.close()
+
     def test_the_tabs_are_layout_atlas_checks(self, qgis_app, project) -> None:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)

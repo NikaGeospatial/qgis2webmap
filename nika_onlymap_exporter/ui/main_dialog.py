@@ -243,6 +243,9 @@ PREVIEW_IDLE_STOP_SECONDS = 20.0
 # the live-preview flag: "where I keep my maps" is a property of the person, not
 # of the project, so it should follow them into the next one.
 LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
+# The narrowest a drop-down gets in the cartograph's panel, which may make
+# it shorten its text.
+COMPACT_COMBO_WIDTH = 120
 
 # Which QGIS theme icon each Share row wears. A table rather than nine literals
 # at the call sites, so a test can check every name against the icons this QGIS
@@ -1672,6 +1675,11 @@ class MainDialog(QDialog):
             if compact
             else QBoxLayout.Direction.LeftToRight
         )
+        # Its longest choice is wider than the panel; there it may shorten
+        # its text rather than push the panel off the dialog's edge. An
+        # explicit minimum, because a styled combo box reports its longest
+        # item as its minimum whatever its size policy says.
+        self.bulk_mode_combo.setMinimumWidth(COMPACT_COMBO_WIDTH if compact else 0)
         header = self.layer_tree.header()
         for column in (1, 2, 3):
             header.setSectionResizeMode(
