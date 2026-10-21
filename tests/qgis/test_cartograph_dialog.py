@@ -2188,8 +2188,42 @@ class TestPanel:
         dialog = _dialog(project)
         try:
             screen = dialog.screen().availableGeometry()
-            assert dialog.width() == min(1152, max(720, screen.width() - 80))
-            assert dialog.height() == min(768, max(320, screen.height() - 80))
+            assert dialog.width() == min(1152, max(720, int(screen.width() * 0.88)))
+            assert dialog.height() == min(768, max(320, int(screen.height() * 0.85)))
+        finally:
+            dialog.close()
+
+    def test_the_share_menu_names_nika_rows_for_what_they_do(
+        self, qgis_app, project
+    ) -> None:
+        """Same order and words as the web map's: file and export rows, then
+        the hand-offs, then the waitlist - and a greyed row says what it
+        needs instead of looking broken."""
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            rows, section = [], None
+            for action in cartograph.cartograph_share_button.menu().actions():
+                if action.isSeparator():
+                    section = action.text() or None
+                    continue
+                rows.append((section, action.text()))
+            texts = [text for _section, text in rows]
+            assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
+            assert ("NIKA hand-off", "Prepare critique prompt...") in rows
+            assert ("NIKA hosting", "Join NIKA hosting waitlist ↗") in rows
+            assert texts.index("Export PDF...") < texts.index(
+                "Prepare enhancement prompt..."
+            )
+            assert texts[-1] == "Join NIKA hosting waitlist ↗"
+            actions = cartograph.cartograph_share_actions
+            assert actions["publish"].isEnabled()
+            # No layout yet: greyed, with what it needs.
+            assert not actions["export_pdf"].isEnabled()
+            assert "print layout" in actions["export_pdf"].toolTip()
+            assert not actions["export_qpt"].isEnabled()
+            assert actions["export_qpt"].toolTip() == "Choose a print layout first"
         finally:
             dialog.close()
 

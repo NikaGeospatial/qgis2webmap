@@ -275,6 +275,9 @@ MINIMUM_DIALOG_WIDTH = 720
 # room side by side; `_resize_to_fit_screen` still shrinks it to the screen.
 DEFAULT_DIALOG_WIDTH = 1152
 DEFAULT_DIALOG_HEIGHT = 768
+# The most of the screen's work area (taskbars excluded) it opens across.
+OPENING_SHARE_W = 0.88
+OPENING_SHARE_H = 0.85
 
 # How much of the progress bar the reading stage owns. Reading every feature of
 # every layer dominates the wall clock; writing and packaging share the rest, so
@@ -902,10 +905,18 @@ class MainDialog(QDialog):
                 available = screen.availableGeometry()
 
         if available is not None:
-            # A margin so the window is visibly inside the work area rather than
-            # flush against its edges, which reads as clipped.
-            width = min(width, max(MINIMUM_DIALOG_WIDTH, available.width() - 80))
-            height = min(height, max(MINIMUM_DIALOG_HEIGHT, available.height() - 80))
+            # A share of the work area rather than all of it, so QGIS stays
+            # visible around the dialog on a laptop; on a large screen the
+            # default above is the smaller and wins. The opening size only -
+            # a window the user resizes is theirs.
+            width = min(
+                width,
+                max(MINIMUM_DIALOG_WIDTH, int(available.width() * OPENING_SHARE_W)),
+            )
+            height = min(
+                height,
+                max(MINIMUM_DIALOG_HEIGHT, int(available.height() * OPENING_SHARE_H)),
+            )
 
         self.resize(width, height)
 
@@ -2846,34 +2857,6 @@ class MainDialog(QDialog):
             self.on_reveal_map_file,
         )
 
-        menu.addSection(tr("Publish"))
-        add(
-            "publish",
-            tr("Publish with NIKA hosting... (waitlist)"),
-            tr(
-                "Hosting is not live yet. This opens a short form so we can see how "
-                "many people want it."
-            ),
-            self.on_publish,
-        )
-
-        # Not available yet, and present anyway, greyed out: a row that is
-        # missing reads as a decision not to have it. Each says what it will do
-        # and that it is coming soon.
-        menu.addSection(tr("NIKA"))
-        add(
-            "enhance",
-            tr("Enhance with NIKA AI..."),
-            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
-            lambda: self.on_handoff("enhance"),
-        )
-        add(
-            "critique",
-            tr("Ask NIKA for a critique..."),
-            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
-            lambda: self.on_handoff("critique"),
-        )
-
         add(
             "cartograph",
             tr("Make a cartograph..."),
@@ -2882,6 +2865,41 @@ class MainDialog(QDialog):
                 "to the Cartograph (Beta) output"
             ),
             self._switch_to_cartograph,
+        )
+
+        # What NIKA offers, after everything that works on the file itself,
+        # each named for what it does today: the hand-offs prepare a prompt
+        # for the user to take to NIKA - nothing is sent anywhere - and the
+        # hosting row joins a waitlist, it does not publish.
+        menu.addSection(tr("NIKA hand-off"))
+        add(
+            "enhance",
+            tr("Prepare enhancement prompt..."),
+            tr(
+                "Opens a prompt for improving this map, to copy into NIKA or "
+                "another AI assistant. Nothing is sent from here."
+            ),
+            lambda: self.on_handoff("enhance"),
+        )
+        add(
+            "critique",
+            tr("Prepare critique prompt..."),
+            tr(
+                "Opens a prompt asking for a critique of this map, to copy into "
+                "NIKA or another AI assistant. Nothing is sent from here."
+            ),
+            lambda: self.on_handoff("critique"),
+        )
+        menu.addSection(tr("NIKA hosting"))
+        add(
+            "publish",
+            tr("Join NIKA hosting waitlist ↗"),
+            tr(
+                "Hosting is not live yet. This opens a short form in your browser "
+                "so we can see how many people want it - it does not publish "
+                "the map."
+            ),
+            self.on_publish,
         )
 
         menu.addSeparator()
@@ -2894,8 +2912,6 @@ class MainDialog(QDialog):
             )
         )
         discord.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(DISCORD_URL)))
-        coming = menu.addAction(tr("More ways to share are coming soon"))
-        coming.setEnabled(False)
         return menu
 
     def open_on_cartograph(self, layout_name: str | None = None) -> None:

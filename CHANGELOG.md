@@ -51,9 +51,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - **Export as cartograph (HTML)...** in the layout designer's Layout menu,
     **Create cartograph...** in the Web menu, and the **Export print layout
     to cartograph (Beta)** Processing algorithm.
-- **Hand off to NIKA**, for web maps and cartographs: **Enhance with NIKA
-  AI...** and **Ask NIKA for a critique...** open a dialog with a ready prompt
-  for NIKA desktop or any other agent.
+- **Hand off to NIKA**, for web maps and cartographs: **Prepare
+  enhancement prompt...** and **Prepare critique prompt...** (under **NIKA
+  hand-off** in Share) open a dialog with a ready prompt for NIKA desktop or
+  any other agent; nothing is sent from the plugin. The hosting row is now
+  **Join NIKA hosting waitlist ↗**, and the disabled "coming soon" row is gone.
 
 ### Changed
 - **The dialog's title says what it makes**: **Create: Web map ▾** opens a

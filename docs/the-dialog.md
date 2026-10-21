@@ -423,9 +423,9 @@ opens the menu:
 |---|---|
 | **Copy file path** | Puts the map file's path on the clipboard |
 | **Show in file manager** | Opens the folder the map file is in |
-| **Publish with NIKA hosting** | Hosting is not live yet; this opens a short waitlist form |
-| **Enhance with NIKA AI...**, **Ask NIKA for a critique...** | Opens the [Hand off to NIKA](enhance-with-ai.md#hand-off-to-nika) dialog with a prompt to paste into NIKA desktop or another AI agent |
 | **Make a cartograph...** | Builds a print layout from the current map view and switches to [Cartograph (Beta)](one-click-layout.md) |
+| **NIKA hand-off: Prepare enhancement prompt...**, **Prepare critique prompt...** | Opens the [Hand off to NIKA](enhance-with-ai.md#hand-off-to-nika) dialog with a prompt to copy into NIKA desktop or another AI agent. Nothing is sent from the plugin |
+| **NIKA hosting: Join NIKA hosting waitlist ↗** | Hosting is not live yet; this opens a short waitlist form in your browser. It does not publish the map |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
 **Copy file path and Show in file manager need a Save to path.** A new map

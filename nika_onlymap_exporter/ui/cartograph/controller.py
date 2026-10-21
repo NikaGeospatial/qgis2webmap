@@ -1430,6 +1430,10 @@ class CartographController:
         menu.setToolTipsVisible(True)
         self.cartograph_share_actions: dict[str, QAction] = {}
 
+        # Each row's own wording, put back once a greyed-out row is
+        # available again; while it is not, its tooltip says what it needs.
+        self._cartograph_share_tips: dict[str, str] = {}
+
         def add(key: str, label: str, tip: str, slot, shortcut: str = "") -> QAction:
             action = QAction(label, self.dialog)
             action.setToolTip(tip)
@@ -1438,6 +1442,7 @@ class CartographController:
             action.triggered.connect(slot)
             menu.addAction(action)
             self.cartograph_share_actions[key] = action
+            self._cartograph_share_tips[key] = tip
             return action
 
         add(
@@ -1458,32 +1463,6 @@ class CartographController:
             tr("Opens the cartograph in your browser"),
             self.on_open_in_browser,
             "Ctrl+O",
-        )
-
-        menu.addSection(tr("Publish"))
-        add(
-            "publish",
-            tr("Publish with NIKA hosting... (waitlist)"),
-            tr(
-                "Hosting is not live yet. This opens a short form so we can see "
-                "how many people want it."
-            ),
-            self.dialog.on_publish,
-        )
-
-        # The hand-off dialog (issue #3 S4), shared with the web map's menu.
-        menu.addSection(tr("NIKA"))
-        add(
-            "enhance",
-            tr("Enhance with NIKA AI..."),
-            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
-            lambda: self.on_handoff("enhance"),
-        )
-        add(
-            "critique",
-            tr("Ask NIKA for a critique..."),
-            tr("Opens a hand-off dialog with a prompt to paste into NIKA"),
-            lambda: self.on_handoff("critique"),
         )
 
         menu.addSection(tr("Export"))
@@ -1513,6 +1492,41 @@ class CartographController:
             self.on_print_settings,
         )
 
+        # NIKA after everything that works on the file, each named for what
+        # it does today, as in the web map's menu: the hand-offs prepare a
+        # prompt for the user to take to NIKA, and the hosting row joins a
+        # waitlist rather than publishing. The hand-off dialog is issue #3 S4.
+        menu.addSection(tr("NIKA hand-off"))
+        add(
+            "enhance",
+            tr("Prepare enhancement prompt..."),
+            tr(
+                "Opens a prompt for improving this cartograph, to copy into NIKA "
+                "or another AI assistant. Nothing is sent from here."
+            ),
+            lambda: self.on_handoff("enhance"),
+        )
+        add(
+            "critique",
+            tr("Prepare critique prompt..."),
+            tr(
+                "Opens a prompt asking for a critique of this cartograph, to copy "
+                "into NIKA or another AI assistant. Nothing is sent from here."
+            ),
+            lambda: self.on_handoff("critique"),
+        )
+        menu.addSection(tr("NIKA hosting"))
+        add(
+            "publish",
+            tr("Join NIKA hosting waitlist ↗"),
+            tr(
+                "Hosting is not live yet. This opens a short form in your browser "
+                "so we can see how many people want it - it does not publish "
+                "the cartograph."
+            ),
+            self.dialog.on_publish,
+        )
+
         return menu
 
     def _update_share_enabled(self) -> None:
@@ -1528,13 +1542,23 @@ class CartographController:
             "enhance",
             "critique",
         ):
-            action = self.cartograph_share_actions.get(key)
-            if action is not None:
-                action.setEnabled(exists)
+            self._set_share_row(
+                key,
+                exists,
+                tr("Available once the cartograph has saved - choose a print layout"),
+            )
         for key in ("export_qpt", "print_settings"):
-            action = self.cartograph_share_actions.get(key)
-            if action is not None:
-                action.setEnabled(self._current_layout is not None)
+            self._set_share_row(
+                key, self._current_layout is not None, tr("Choose a print layout first")
+            )
+
+    def _set_share_row(self, key: str, available: bool, needs: str) -> None:
+        """Grey a row out with what it needs, or give it back its own words."""
+        action = self.cartograph_share_actions.get(key)
+        if action is None:
+            return
+        action.setEnabled(available)
+        action.setToolTip(self._cartograph_share_tips[key] if available else needs)
 
     def on_copy_path(self) -> None:
         path = self._current_path()

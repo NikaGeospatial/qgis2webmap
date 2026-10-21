@@ -72,7 +72,8 @@ Ask in the same words you would use with a colleague:
 ## Hand off to NIKA
 
 The plugin writes the request for you. In the dialog's **Share** menu, choose
-**Enhance with NIKA AI...** or **Ask NIKA for a critique...** - on a web map
+**Prepare enhancement prompt...** or **Prepare critique prompt...**, under
+**NIKA hand-off** - on a web map
 and on a [cartograph](cartograph-dialog.md#the-share-menu) alike. A web map
 needs a **Save to** path on the Map tab - a new map has one from the start -
 and is written first if it is missing or out of date, so the prompt never

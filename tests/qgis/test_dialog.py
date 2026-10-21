@@ -728,16 +728,54 @@ class TestShareIsADropdown:
         finally:
             dialog.close()
 
-    def test_discord_is_always_there_and_more_is_promised(
+    def test_discord_is_always_there_and_nothing_looks_like_a_dead_command(
         self, qgis_app, project, make_memory_layer
     ):
+        """No disabled "coming soon" row: it read as a command that failed."""
         dialog = self._dialog(project, make_memory_layer)
         try:
-            actions = [a for a in dialog.share_button.menu().actions() if a.text()]
-            discord, coming = actions[-2], actions[-1]
-            assert "Discord" in discord.text() and discord.isEnabled()
-            assert "coming soon" in coming.text().lower()
-            assert not coming.isEnabled()
+            actions = [
+                a
+                for a in dialog.share_button.menu().actions()
+                if a.text() and not a.isSeparator()
+            ]
+            assert "Discord" in actions[-1].text() and actions[-1].isEnabled()
+            assert not any("coming soon" in a.text().lower() for a in actions)
+        finally:
+            dialog.close()
+
+    @staticmethod
+    def _rows(menu):
+        """(section or None, text) for each row, sections as Qt adds them."""
+        rows, section = [], None
+        for action in menu.actions():
+            if action.isSeparator():
+                section = action.text() or None
+                continue
+            rows.append((section, action.text()))
+        return rows
+
+    def test_nika_rows_say_what_they_do_after_the_file_actions(
+        self, qgis_app, project, make_memory_layer
+    ):
+        """Hand-offs prepare a prompt and the hosting row joins a waitlist -
+        neither publishes or sends anything - and both come after the rows
+        that act on the file."""
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            rows = self._rows(dialog.share_button.menu())
+            texts = [text for _section, text in rows]
+            assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
+            assert ("NIKA hand-off", "Prepare critique prompt...") in rows
+            assert ("NIKA hosting", "Join NIKA hosting waitlist ↗") in rows
+            assert texts.index("Copy file path") < texts.index(
+                "Prepare enhancement prompt..."
+            )
+            assert texts.index("Prepare critique prompt...") < texts.index(
+                "Join NIKA hosting waitlist ↗"
+            )
+            assert dialog.share_actions["publish"].isEnabled()
+            assert dialog.share_actions["publish"].shortcut().isEmpty()
         finally:
             dialog.close()
 
