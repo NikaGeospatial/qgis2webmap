@@ -285,6 +285,7 @@ class CartographController:
         self.page_preview = self.page_pane.preview
         self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
         self.page_preview.import_requested.connect(self.on_import_cartograph)
+        self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
         self.page_pane.shown.connect(
             lambda: QTimer.singleShot(0, self.fit_panel_to_window)
         )
@@ -489,6 +490,7 @@ class CartographController:
             title = tr("Checks ({n})").format(n=summary.change_count)
         self.panel_tabs.setTabText(index, title)
         self.panel_tabs.setTabToolTip(index, tip)
+        self.page_pane.set_change_count(summary.change_count if summary else 0)
 
     def _update_section_summaries(self, *_args: object) -> None:
         """The few words each closed section, and the Atlas tab, show."""
@@ -1274,7 +1276,9 @@ class CartographController:
         )
         self.accessibility_button.clicked.connect(self.on_accessibility)
 
-        self.cartograph_preview_button = button(tr("Preview"), "preview")
+        # "HTML", because the page beside the panel is QGIS's drawing: this
+        # is the button that shows the cartograph itself.
+        self.cartograph_preview_button = button(tr("Preview HTML"), "preview")
         self.cartograph_preview_button.setToolTip(
             tr("Open the cartograph in your browser.")
         )

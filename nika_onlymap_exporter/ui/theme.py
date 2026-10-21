@@ -916,9 +916,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-left-radius: 5px;
 }}
 {d} QToolButton[role="cornerPart"][position="right"] {{
-    padding: 1px 5px 1px 0px;
-    min-width: 10px;
-    max-width: 10px;
+    /* Room for its "Live: on" / "Live: off" label beside the dot. */
+    padding: 1px 9px 1px 2px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
 }}
@@ -984,7 +983,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 /* The dialog's title, `Web map ▾`: what it makes, and the menu that changes
    it. Flat until pointed at, like a heading that happens to open. */
 {d} QToolButton[role="outputTitle"] {{
-    background: transparent;
+    /* Filled like a field, so it reads as a choice to open rather than a
+       title; the border stays clear for the focus ring. */
+    background: {p.field};
     color: {p.ink};
     border: 2px solid transparent;
     border-radius: 6px;
@@ -1004,6 +1005,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     width: 10px;
     height: 10px;
     right: 6px;
+}}
+{d} QLabel[role="createLabel"] {{
+    color: {p.muted};
+    font-size: 14px;
 }}
 {d} QLabel[role="betaChip"] {{
     color: {p.link};
@@ -1121,7 +1126,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-right-radius: 5px;
 }}
 {d}[rtl="true"] QToolButton[role="cornerPart"][position="right"] {{
-    padding: 1px 0px 1px 5px;
+    padding: 1px 2px 1px 9px;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
     border-top-left-radius: 5px;
@@ -1245,6 +1250,25 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.accent_soft};
     color: {p.ink};
     border-color: {p.accent};
+}}
+
+/* Settings and Help: a plain back arrow, then the page's title. */
+{d} QToolButton[role="asideBack"] {{
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+}}
+{d} QToolButton[role="asideBack"]:hover {{
+    background: {p.hover};
+}}
+{d} QToolButton[role="asideBack"]:focus {{
+    border-color: {p.link};
+}}
+{d} QLabel[role="asideHeading"] {{
+    color: {p.ink};
+    font-size: 16px;
+    font-weight: 650;
 }}
 
 /* The page's caption, and the zoom bar's small buttons. */

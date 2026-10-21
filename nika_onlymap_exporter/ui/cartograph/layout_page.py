@@ -40,7 +40,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..i18n import tr
+from ..i18n import plural, tr
 
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
@@ -300,12 +300,14 @@ class PagePane(QWidget):
     """
 
     shown = pyqtSignal()
+    changes_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
+        self._change_count = 0
         self.caption = QLabel(self)
         self.caption.setProperty("role", "pageCaption")
         self.caption.setToolTip(
@@ -314,7 +316,20 @@ class PagePane(QWidget):
                 "in places - see Checks - and Preview shows it in the browser."
             )
         )
-        column.addWidget(self.caption)
+        caption_row = QHBoxLayout()
+        caption_row.setSpacing(8)
+        caption_row.addWidget(self.caption)
+        caption_row.addStretch(1)
+        # Beside the caption, so the page and how the HTML differs from it
+        # are read together: the differences themselves are in Checks.
+        self.changes_link = QPushButton(self)
+        self.changes_link.setProperty("role", "link")
+        self.changes_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.changes_link.setToolTip(tr("See them in Checks"))
+        self.changes_link.clicked.connect(self.changes_requested)
+        self.changes_link.setVisible(False)
+        caption_row.addWidget(self.changes_link)
+        column.addLayout(caption_row)
         self.preview = LayoutPreview(self)
         column.addWidget(self.preview, 1)
 
@@ -343,6 +358,14 @@ class PagePane(QWidget):
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
 
+    def set_change_count(self, count: int) -> None:
+        """How many things the HTML changes from this page; none hides it."""
+        self._change_count = count
+        self.changes_link.setText(
+            plural(count, "{n} change in the HTML", "{n} changes in the HTML")
+        )
+        self._show_page_parts()
+
     def _bar_button(self, text: str, name: str) -> QToolButton:
         button = QToolButton(self.zoom_bar)
         button.setText(text)
@@ -365,6 +388,7 @@ class PagePane(QWidget):
     def _show_page_parts(self) -> None:
         showing = self.preview.showing_page()
         self.caption.setVisible(showing)
+        self.changes_link.setVisible(showing and self._change_count > 0)
         self.zoom_bar.setVisible(showing)
         self._show_zoom()
 

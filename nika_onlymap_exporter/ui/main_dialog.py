@@ -44,11 +44,13 @@ from qgis.core import (
     QgsWkbTypes,
 )
 from qgis.gui import QgsColorButton
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QObject, QSettings, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
     QPalette,
+    QShowEvent,
     QTextDocument,
 )
 from qgis.PyQt.QtWidgets import (
@@ -268,9 +270,11 @@ SHARE_MENU_ICONS = {
 MINIMUM_DIALOG_HEIGHT = 320
 MINIMUM_DIALOG_WIDTH = 720
 
-# What the dialog opens at when the screen has room for it.
-DEFAULT_DIALOG_WIDTH = 960
-DEFAULT_DIALOG_HEIGHT = 640
+# What the dialog opens at when the screen has room for it. A fifth larger
+# than the 960x640 it was, so the cartograph's page and its panel both have
+# room side by side; `_resize_to_fit_screen` still shrinks it to the screen.
+DEFAULT_DIALOG_WIDTH = 1152
+DEFAULT_DIALOG_HEIGHT = 768
 
 # How much of the progress bar the reading stage owns. Reading every feature of
 # every layer dominates the wall clock; writing and packaging share the rest, so
@@ -866,6 +870,19 @@ class MainDialog(QDialog):
         """
         palette = getattr(self, "theme", None)
         return f"color: {palette.warn if palette else '#c0392b'};"
+
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        if not getattr(self, "_shown_once", False):
+            self._shown_once = True
+            # The keyboard starts on the screen itself, not its first control:
+            # Qt's own choice put the focus ring round "Map" or "Fit page" on
+            # opening, which read as something selected. Tab reaches them.
+            QTimer.singleShot(0, self._park_focus)
+
+    def _park_focus(self) -> None:
+        if hasattr(self, "views") and not sip.isdeleted(self.views):
+            self.views.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _resize_to_fit_screen(self) -> None:
         """Open at a comfortable size, but never taller than the screen allows.
@@ -2466,8 +2483,13 @@ class MainDialog(QDialog):
         row_layout.setContentsMargins(0, 0, 0, 6)
         row_layout.setSpacing(8)
 
+        # "Create:" before it, so the title reads as the choice it is.
+        self.create_label = QLabel(tr("Create:"), row)
+        self.create_label.setProperty("role", "createLabel")
+        row_layout.addWidget(self.create_label, 0, Qt.AlignmentFlag.AlignVCenter)
         self.output_switcher = OutputSwitcher(self.state.output, row)
         self.output_switcher.chosen.connect(self._apply_output)
+        self.create_label.setBuddy(self.output_switcher)
         row_layout.addWidget(self.output_switcher)
         row_layout.addWidget(
             self.output_switcher.beta_chip, 0, Qt.AlignmentFlag.AlignVCenter
@@ -2506,15 +2528,19 @@ class MainDialog(QDialog):
         column = QVBoxLayout(aside)
         column.setContentsMargins(0, 0, 0, 0)
         top = QHBoxLayout()
+        # One header: a plain back arrow, then the page's name as its title.
+        # A boxed "Back" beside a bare word read as two unrelated things.
         self.aside_back = QToolButton(aside)
-        self.aside_back.setProperty("role", "corner")
+        self.aside_back.setProperty("role", "asideBack")
         self.aside_back.setProperty("lineIcon", "back")
-        self.aside_back.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.aside_back.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.aside_back.setText(tr("Back"))
+        self.aside_back.setToolTip(tr("Back"))
+        self.aside_back.setAccessibleName(tr("Back"))
         self.aside_back.clicked.connect(self._close_aside)
         top.addWidget(self.aside_back)
         self.aside_heading = QLabel(aside)
-        self.aside_heading.setProperty("role", "panelHeading")
+        self.aside_heading.setProperty("role", "asideHeading")
         top.addWidget(self.aside_heading)
         top.addStretch(1)
         column.addLayout(top)
@@ -2531,6 +2557,9 @@ class MainDialog(QDialog):
         self.aside_heading.setText(tr("Settings") if settings else tr("Help"))
         self.settings_button.setChecked(settings)
         self.help_button.setChecked(not settings)
+        # The output's own actions mean nothing on these pages.
+        self._web_corner.setVisible(False)
+        self._cartograph.build_corner().setVisible(False)
         self.views.setCurrentWidget(self._aside)
 
     def _close_aside(self) -> None:
@@ -2538,6 +2567,8 @@ class MainDialog(QDialog):
         self.settings_button.setChecked(False)
         self.help_button.setChecked(False)
         web = self.state.output is DialogOutput.WEB_MAP
+        self._web_corner.setVisible(web)
+        self._cartograph.build_corner().setVisible(not web)
         self.views.setCurrentWidget(self.tabs if web else self._cartograph_workspace)
 
     def active_actions(self) -> QWidget:
@@ -2688,11 +2719,16 @@ class MainDialog(QDialog):
         self.live_switch.setProperty("role", "cornerPart")
         self.live_switch.setProperty("position", "right")
         self.live_switch.setCheckable(True)
-        self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        # Labelled, not a bare dot: the dot alone said nothing until hovered,
+        # and it switches a mode that outlives the session.
+        self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.live_switch.setChecked(
             QSettings().value(LIVE_PREVIEW_KEY, False, type=bool)
         )
         self.live_switch.toggled.connect(self._on_live_toggled)
+        self.live_switch.setText(
+            tr("Live: on") if self.live_switch.isChecked() else tr("Live: off")
+        )
         group.addWidget(self.live_switch)
         layout.addWidget(self._preview_group)
 
@@ -2738,6 +2774,7 @@ class MainDialog(QDialog):
         live = self.live_switch.isChecked()
 
         self.live_switch.setProperty("lineIcon", "live" if live else "live-off")
+        self.live_switch.setText(tr("Live: on") if live else tr("Live: off"))
         self.live_switch.setToolTip(
             tr(
                 "Live preview is on: Preview keeps the browser tab updating as you "
@@ -2752,7 +2789,7 @@ class MainDialog(QDialog):
 
         button = self.preview_button
         button.setProperty("live", running)
-        button.setText(tr("Live") if running else tr("Preview"))
+        button.setText(tr("Stop live") if running else tr("Preview"))
         button.setToolTip(
             tr("Live preview is running. Press to stop it.")
             if running

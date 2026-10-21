@@ -462,8 +462,12 @@ class TestTabCorner:
             corner = dialog.active_actions()
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            # The live switch is a bare dot inside Preview, where an arrow sits.
-            assert labels == ["Preview", "", "Share", "Export"]
+            # The live switch sits inside Preview, labelled with its state:
+            # a bare dot said nothing until hovered.
+            assert labels == ["Preview", "Live: off", "Share", "Export"]
+            dialog.live_switch.setChecked(True)
+            assert dialog.live_switch.text() == "Live: on"
+            dialog.live_switch.setChecked(False)
         finally:
             dialog.close()
 
@@ -483,7 +487,7 @@ class TestTabCorner:
             dialog._server = PreviewServer(tmp_path)
             dialog._watch_timer.start()  # a live preview, not a one-off served one
             dialog._show_preview_state()
-            assert button.text() == "Live"
+            assert button.text() == "Stop live"
             assert button.property("live") is True
 
             button.click()  # the second press stops it
@@ -611,7 +615,7 @@ class TestLiveSwitch:
             dialog._server = PreviewServer(tmp_path)
             dialog._watch_timer.start()  # a live preview, not a one-off served one
             dialog._show_preview_state()
-            assert dialog.preview_button.text() == "Live"
+            assert dialog.preview_button.text() == "Stop live"
 
             dialog.preview_button.click()
             assert dialog._server is None
@@ -965,7 +969,7 @@ class TestAutosaveIsGatedOnALiveSession:
             dialog.live_switch.setChecked(True)
             dialog.preview_button.click()
             wait_for(lambda: dialog._server is not None and dialog._job is None)
-            assert dialog.preview_button.text() == "Live"
+            assert dialog.preview_button.text() == "Stop live"
 
             dialog.state.map_name = "changed"
             dialog._poll_for_changes()

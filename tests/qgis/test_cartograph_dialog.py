@@ -2100,6 +2100,99 @@ class TestPanel:
     """The panel beside the page: the layout list with its Add... button,
     then the Layout, Atlas and Checks tabs, and its first width."""
 
+    def test_settings_hide_the_outputs_actions_and_back_restores_them(
+        self, qgis_app, project
+    ) -> None:
+        """Preview, Share and Export mean nothing on Settings or Help."""
+        dialog = _dialog(project)
+        try:
+            dialog.show()
+            corner = dialog.active_actions()
+            assert corner.isVisibleTo(dialog)
+            dialog.settings_button.click()
+            assert not dialog._web_corner.isVisibleTo(dialog)
+            assert not dialog._cartograph.build_corner().isVisibleTo(dialog)
+            assert dialog.aside_heading.text() == "Settings"
+            assert dialog.aside_back.property("role") == "asideBack"
+            assert dialog.aside_back.accessibleName() == "Back"
+            dialog.aside_back.click()
+            assert dialog._web_corner.isVisibleTo(dialog)
+            _choose_cartograph(dialog)
+            dialog.help_button.click()
+            assert not dialog._cartograph.build_corner().isVisibleTo(dialog)
+            dialog.aside_back.click()
+            assert dialog._cartograph.build_corner().isVisibleTo(dialog)
+            assert not dialog._web_corner.isVisibleTo(dialog)
+        finally:
+            dialog.close()
+
+    def test_the_title_reads_create_and_the_preview_says_html(
+        self, qgis_app, project
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            assert dialog.create_label.text() == "Create:"
+            assert dialog.create_label.buddy() is dialog.output_switcher
+            preview = dialog._cartograph.cartograph_preview_button
+            assert preview.text() == "Preview HTML"
+        finally:
+            dialog.close()
+
+    def test_the_change_count_beside_the_page_opens_checks(
+        self, qgis_app, project
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            dialog.show()
+            _choose_cartograph(dialog)
+            pane = dialog._cartograph.page_pane
+            pane.set_change_count(0)
+            assert not pane.changes_link.isVisibleTo(dialog)
+            pane.set_change_count(2)
+            assert pane.changes_link.isVisibleTo(dialog)
+            assert pane.changes_link.text() == "2 changes in the HTML"
+            pane.set_change_count(1)
+            assert pane.changes_link.text() == "1 change in the HTML"
+            dialog._cartograph.panel_tabs.setCurrentIndex(0)
+            pane.changes_link.click()
+            assert dialog._cartograph.panel_tabs.currentWidget() is (
+                dialog._cartograph.checks_page
+            )
+        finally:
+            dialog.close()
+
+    def test_no_control_is_ringed_when_the_dialog_opens(
+        self, qgis_app, project
+    ) -> None:
+        """The focus starts on the screen, not on its first control, whose
+        ring read as something selected."""
+        dialog = _dialog(project)
+        try:
+            dialog.show()
+            dialog.activateWindow()
+            _wait_for(qgis_app, lambda: False, timeout=0.2)
+            assert dialog.views.hasFocus() or dialog.focusWidget() is dialog.views
+        finally:
+            dialog.close()
+
+    def test_the_dialog_opens_a_fifth_larger_when_the_screen_allows(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.ui.main_dialog import (
+            DEFAULT_DIALOG_HEIGHT,
+            DEFAULT_DIALOG_WIDTH,
+        )
+
+        assert (DEFAULT_DIALOG_WIDTH, DEFAULT_DIALOG_HEIGHT) == (1152, 768)
+        dialog = _dialog(project)
+        try:
+            screen = dialog.screen().availableGeometry()
+            assert dialog.width() == min(1152, max(720, screen.width() - 80))
+            assert dialog.height() == min(768, max(320, screen.height() - 80))
+        finally:
+            dialog.close()
+
     def test_every_tab_fits_the_narrowest_panel(self, qgis_app, project) -> None:
         """Nothing runs off the panel's edge at its minimum width: the Atlas
         form and the Checks filters once did, cutting their controls off."""
