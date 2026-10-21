@@ -284,3 +284,56 @@ class TestPicker:
             )
         finally:
             stale.reject()
+
+    def test_the_page_settings_have_visible_labels(self, qgis_app, tmp_path) -> None:
+        calls: list[tuple[str, str, str]] = []
+        picker, _settings = self._picker(qgis_app, tmp_path, calls)
+        try:
+            texts = [
+                label.text()
+                for label in picker.findChildren(type(picker.selected_label))
+            ]
+            assert "Page size" in texts
+            assert "Orientation" in texts
+        finally:
+            picker.reject()
+
+    def test_a_chip_click_selects_and_scrolls_to_it(self, qgis_app, tmp_path) -> None:
+        from nika_onlymap_exporter.core.layout_templates import get_template
+
+        calls: list[tuple[str, str, str]] = []
+        picker, _settings = self._picker(qgis_app, tmp_path, calls)
+        try:
+            chip = None
+            for r in range(picker.chip_list.count()):
+                item = picker.chip_list.item(r)
+                if item.data(256) == "story-map":
+                    chip = item
+                    break
+            assert chip is not None
+            picker.chip_list.setCurrentItem(chip)
+            assert picker.template_id == "story-map"
+            current = picker.template_list.currentItem()
+            assert current is not None
+            assert current.data(256) == "story-map"
+            assert get_template("story-map").name in picker.selected_label.text()
+        finally:
+            picker.reject()
+
+    def test_selecting_a_row_updates_the_chip_and_the_selected_line(
+        self, qgis_app, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.layout_templates import get_template
+
+        calls: list[tuple[str, str, str]] = []
+        picker, _settings = self._picker(qgis_app, tmp_path, calls)
+        try:
+            for r in range(picker.template_list.count()):
+                if picker.template_list.item(r).data(256) == "poster":
+                    picker.template_list.setCurrentRow(r)
+            chip_current = picker.chip_list.currentItem()
+            assert chip_current is not None
+            assert chip_current.data(256) == "poster"
+            assert get_template("poster").name in picker.selected_label.text()
+        finally:
+            picker.reject()

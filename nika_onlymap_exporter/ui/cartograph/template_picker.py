@@ -29,6 +29,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QVBoxLayout,
@@ -139,25 +140,66 @@ class TemplatePicker(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # One slim bar: what the previews show, then the two page settings.
-        bar = QHBoxLayout()
-        bar.setSpacing(8)
+        # The intro sentence on its own line, so a long translated "Page
+        # size" / "Orientation" label below never squeezes it for room.
         intro = QLabel(tr("Each preview shows the map the canvas shows now."), self)
         intro.setProperty("role", "hint")
-        bar.addWidget(intro, 1)
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        # A compact labelled row for the two page settings: the labels are
+        # persistent (not just a tooltip) and may wrap in a long translation.
+        bar = QHBoxLayout()
+        bar.setSpacing(6)
+        page_label = QLabel(tr("Page size"), self)
+        page_label.setProperty("role", "hint")
+        page_label.setWordWrap(True)
+        bar.addWidget(page_label)
         self.page_combo = QComboBox(self)
         self.page_combo.setAccessibleName(tr("Page size"))
         self.page_combo.setToolTip(tr("Page size"))
         for size in PAGE_SIZE_ORDER:
             self.page_combo.addItem(tr(_PAGE_LABELS.get(size, size)), size)
+        bar.addWidget(self.page_combo)
+        orientation_label = QLabel(tr("Orientation"), self)
+        orientation_label.setProperty("role", "hint")
+        orientation_label.setWordWrap(True)
+        bar.addWidget(orientation_label)
         self.orientation_combo = QComboBox(self)
         self.orientation_combo.setAccessibleName(tr("Orientation"))
         self.orientation_combo.setToolTip(tr("Orientation"))
         for value, label in _ORIENTATIONS:
             self.orientation_combo.addItem(tr(label), value)
-        bar.addWidget(self.page_combo)
         bar.addWidget(self.orientation_combo)
+        bar.addStretch(1)
         layout.addLayout(bar)
+
+        # An overview strip of all ten names: with only ~2 large-preview rows
+        # visible at a time, this is how the rest are found and jumped to.
+        # A QListWidget in a wrapping, left-to-right flow gives chip-like
+        # items, a scrollbar if they overflow, and keyboard navigation for
+        # free - no hand-rolled flow layout needed.
+        self.chip_list = QListWidget(self)
+        self.chip_list.setProperty("role", "templateChips")
+        self.chip_list.setFlow(QListView.Flow.LeftToRight)
+        self.chip_list.setWrapping(True)
+        self.chip_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.chip_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.chip_list.setSpacing(4)
+        self.chip_list.setFrameShape(QFrame.Shape.NoFrame)
+        self.chip_list.setMaximumHeight(96)
+        self.chip_list.setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        for template in TEMPLATES:
+            chip = QListWidgetItem(tr(template.name), self.chip_list)
+            chip.setData(Qt.ItemDataRole.UserRole, template.id)
+        self.chip_list.currentItemChanged.connect(self._on_chip)
+        layout.addWidget(self.chip_list)
+
+        self.selected_label = QLabel("", self)
+        self.selected_label.setProperty("role", "hint")
+        layout.addWidget(self.selected_label)
 
         # A list, one design per row across the whole width, so each page is
         # large enough to judge before choosing it; the list scrolls.
@@ -199,8 +241,8 @@ class TemplatePicker(QDialog):
         self.page_combo.currentIndexChanged.connect(self._restart_previews)
         self.orientation_combo.currentIndexChanged.connect(self._restart_previews)
         theme.attach_menus(self)
-        self.setMinimumSize(560, 420)
-        self.resize(780, 660)
+        self.setMinimumSize(560, 480)
+        self.resize(780, 720)
         self._restart_previews()
 
     # ---- The choice ----------------------------------------------------------
@@ -283,6 +325,35 @@ class TemplatePicker(QDialog):
         chosen = current.data(Qt.ItemDataRole.UserRole) if current else None
         for template_id, row in self.rows.items():
             row.set_chosen(template_id == chosen)
+        self._sync_chip(chosen)
+        name = tr(get_template(chosen).name) if chosen else ""
+        self.selected_label.setText(tr("Selected: {name}").format(name=name))
+
+    def _sync_chip(self, template_id: str | None) -> None:
+        """Keep the overview strip's highlighted chip matching the row list,
+        including when the row list changed from scrolling or the keyboard."""
+        for row in range(self.chip_list.count()):
+            item = self.chip_list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == template_id:
+                if self.chip_list.currentItem() is not item:
+                    self.chip_list.setCurrentItem(item)
+                return
+
+    def _on_chip(self, current: QListWidgetItem | None, _previous: object) -> None:
+        """A chip click or arrow key: select that design in the row list and
+        scroll it into view."""
+        if current is None:
+            return
+        template_id = current.data(Qt.ItemDataRole.UserRole)
+        for row in range(self.template_list.count()):
+            item = self.template_list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == template_id:
+                if self.template_list.currentItem() is not item:
+                    self.template_list.setCurrentItem(item)
+                self.template_list.scrollToItem(
+                    item, QAbstractItemView.ScrollHint.PositionAtCenter
+                )
+                return
 
     def _select(self, saved: tuple[str, str, str]) -> None:
         template_id, page_size, orientation = saved
