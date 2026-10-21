@@ -452,6 +452,20 @@ def paint_line_icons(root: QWidget, palette: Palette) -> None:
         button.setIcon(line_icon(name, colour, palette.quiet))
 
 
+# Every attacher, until Qt destroys it. Its parent is often a widget Qt made
+# (a combo box's list window), whose Python wrapper Python may collect at any
+# time - taking the attacher's Python half with it while Qt still calls its
+# `eventFilter`, which crashed the interpreter.
+_ATTACHERS: dict[int, _MenuAttacher] = {}
+
+
+def _keep(attacher: _MenuAttacher) -> _MenuAttacher:
+    key = id(attacher)
+    _ATTACHERS[key] = attacher
+    attacher.destroyed.connect(lambda *_args, key=key: _ATTACHERS.pop(key, None))
+    return attacher
+
+
 def attach_menu(menu: QMenu, button: QWidget) -> None:
     """Make `menu` open as part of `button`. Safe to call more than once."""
     if menu.property("attached"):
@@ -466,7 +480,7 @@ def attach_menu(menu: QMenu, button: QWidget) -> None:
         | Qt.WindowType.FramelessWindowHint
         | Qt.WindowType.NoDropShadowWindowHint
     )
-    attacher = _MenuAttacher(menu, button)
+    attacher = _keep(_MenuAttacher(menu, button))
     menu.installEventFilter(attacher)
     button.installEventFilter(attacher)
     button.setProperty("menuOpen", False)
@@ -478,7 +492,7 @@ def attach_list(combo: QComboBox) -> None:
     if popup is combo.window() or popup.property("attached"):
         return
     popup.setProperty("attached", True)
-    popup.installEventFilter(_MenuAttacher(popup, combo, match_width=True))
+    popup.installEventFilter(_keep(_MenuAttacher(popup, combo, match_width=True)))
 
 
 def attach_menus(dialog: QWidget) -> None:

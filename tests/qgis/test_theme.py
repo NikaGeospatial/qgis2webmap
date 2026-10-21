@@ -178,6 +178,40 @@ class TestAttachedMenus:
     def _dialog(self, project, make_memory_layer):
         return TestScope()._dialog(project, make_memory_layer)
 
+    def test_a_list_still_attaches_after_python_lets_go_of_its_window(self, qgis_app):
+        """The list window is Qt's own, so Python drops its wrapper as soon
+        as nothing refers to it. The attacher once went with it while Qt kept
+        calling its filter - an interpreter crash on the list's next event."""
+        import gc
+
+        from qgis.PyQt.QtCore import QObject
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        from nika_onlymap_exporter.ui import theme
+
+        combo = QComboBox()
+        combo.addItems(["one", "two"])
+        combo.resize(240, 30)
+        theme.attach_list(combo)
+        gc.collect()
+        # Still the attacher, Python half and all - not a bare QObject that
+        # Qt has kept and Python has forgotten.
+        attachers = [
+            child
+            for child in combo.view().window().findChildren(QObject)
+            if isinstance(child, theme._MenuAttacher)
+        ]
+        assert len(attachers) == 1
+        try:
+            combo.show()
+            combo.showPopup()
+            for _ in range(3):
+                qgis_app.processEvents()
+            assert combo.view().window().width() == combo.width()
+        finally:
+            combo.hidePopup()
+            combo.close()
+
     def test_a_menu_opens_flush_under_its_button(
         self, qgis_app, project, make_memory_layer
     ):
