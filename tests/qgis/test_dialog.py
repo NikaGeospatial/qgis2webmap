@@ -410,12 +410,19 @@ class TestShortWindows:
         try:
             dialog.show()
             dialog.resize(960, MINIMUM_DIALOG_HEIGHT)
-            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-            dialog.tabs.setCurrentIndex(titles.index(tab))
+            if tab == "Settings":
+                # Not a tab: the header's Settings button opens it.
+                dialog.settings_button.click()
+                page = dialog._settings_page
+            else:
+                titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+                dialog.tabs.setCurrentIndex(titles.index(tab))
+                page = dialog.tabs.currentWidget()
             qgis_app.processEvents()
+            assert page.isVisible()
             crushed = [
                 f"{type(w).__name__} {w.height()} < {w.minimumSizeHint().height()}"
-                for w in dialog.tabs.currentWidget().findChildren(
+                for w in page.findChildren(
                     (QAbstractButton, QComboBox, QGroupBox, QLabel, QLineEdit)
                 )
                 if w.isVisibleTo(dialog)
@@ -1669,10 +1676,17 @@ class TestDialogConstruction:
             project.addMapLayer(make_memory_layer(name, features=[("a", [1.0, 2.0])]))
         return MainDialog(FakeIface(), None)
 
-    def test_builds_all_five_tabs(self, qgis_app, project, make_memory_layer) -> None:
+    def test_builds_four_tabs_and_the_settings_and_help_buttons(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Settings and Help are the person's, not the map's: header icons,
+        not tabs."""
         dialog = self._dialog(project, make_memory_layer)
         titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-        assert titles == ["Map", "Layers", "Appearance", "Fidelity", "Settings", "Help"]
+        assert titles == ["Map", "Layers", "Appearance", "Fidelity"]
+        assert dialog.settings_button.accessibleName() == "Settings"
+        assert dialog.help_button.accessibleName() == "Help"
+        assert set(dialog._pages) >= {"Settings", "Help"}
         dialog.close()
 
     def test_lists_the_project_layers(

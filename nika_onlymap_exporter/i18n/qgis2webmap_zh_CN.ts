@@ -5,11 +5,13 @@
     <name>qgis2webmap</name>
     <message>
       <location filename="../core/fidelity_summary.py" line="555" />
+      <location filename="../ui/cartograph/controller.py" line="396" />
       <source>{n} thing changes</source>
       <translation>{n} 项有变化</translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="555" />
+      <location filename="../ui/cartograph/controller.py" line="396" />
       <source>{n} things change</source>
       <translation>{n} 项有变化</translation>
     </message>
@@ -21,6 +23,7 @@
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="364" />
+      <location filename="../ui/cartograph/controller.py" line="394" />
       <source>Nothing to report.</source>
       <translation>没有需要报告的内容。</translation>
     </message>
@@ -61,21 +64,22 @@
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="601" />
-      <location filename="../ui/fidelity_panel.py" line="247" />
-      <location filename="../ui/fidelity_panel.py" line="438" />
+      <location filename="../ui/cartograph/controller.py" line="392" />
+      <location filename="../ui/fidelity_panel.py" line="250" />
+      <location filename="../ui/fidelity_panel.py" line="453" />
       <source>Not checked yet.</source>
       <translation>尚未检查。</translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="601" />
-      <location filename="../ui/fidelity_panel.py" line="253" />
-      <location filename="../ui/fidelity_panel.py" line="439" />
+      <location filename="../ui/fidelity_panel.py" line="256" />
+      <location filename="../ui/fidelity_panel.py" line="454" />
       <source>Check now</source>
       <translation>立即检查</translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="603" />
-      <location filename="../ui/fidelity_panel.py" line="452" />
+      <location filename="../ui/fidelity_panel.py" line="467" />
       <source>Checking what the export changes...</source>
       <translation>正在检查导出会改变什么...</translation>
     </message>
@@ -91,7 +95,7 @@
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="616" />
-      <location filename="../ui/fidelity_panel.py" line="506" />
+      <location filename="../ui/fidelity_panel.py" line="521" />
       <source>Check again</source>
       <translation>重新检查</translation>
     </message>
@@ -358,7 +362,6 @@
     <message>
       <location filename="../processing/export_layout.py" line="78" />
       <location filename="../processing/export_layout.py" line="143" />
-      <location filename="../ui/main_dialog.py" line="2454" />
       <location filename="../ui/output_switcher.py" line="47" />
       <source>Cartograph</source>
       <translation>图版</translation>
@@ -392,7 +395,6 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="112" />
-      <location filename="../ui/main_dialog.py" line="2456" />
       <source>Frames</source>
       <translation>画框</translation>
     </message>
@@ -503,25 +505,25 @@ Anything that cannot be translated exactly is reported in the log rather than dr
     </message>
     <message>
       <location filename="../processing/export_project.py" line="137" />
-      <location filename="../ui/main_dialog.py" line="2020" />
+      <location filename="../ui/main_dialog.py" line="2043" />
       <source>Legend</source>
       <translation>图例</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="138" />
-      <location filename="../ui/main_dialog.py" line="2021" />
+      <location filename="../ui/main_dialog.py" line="2044" />
       <source>Layer switcher</source>
       <translation>图层切换器</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="139" />
-      <location filename="../ui/main_dialog.py" line="2022" />
+      <location filename="../ui/main_dialog.py" line="2045" />
       <source>Zoom controls</source>
       <translation>缩放控件</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="140" />
-      <location filename="../ui/main_dialog.py" line="2023" />
+      <location filename="../ui/main_dialog.py" line="2046" />
       <source>Scale bar</source>
       <translation>比例尺</translation>
     </message>
@@ -696,7 +698,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="189" />
-      <location filename="../ui/main_dialog.py" line="559" />
+      <location filename="../ui/main_dialog.py" line="561" />
       <source>Colour vision</source>
       <translation>色觉</translation>
     </message>
@@ -732,7 +734,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="263" />
-      <location filename="../ui/main_dialog.py" line="2979" />
+      <location filename="../ui/main_dialog.py" line="3077" />
       <source>Close</source>
       <translation>关闭</translation>
     </message>
@@ -778,7 +780,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="241" />
-      <location filename="../ui/main_dialog.py" line="1603" />
+      <location filename="../ui/main_dialog.py" line="1608" />
       <source>Layer</source>
       <translation>图层</translation>
     </message>
@@ -860,7 +862,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/atlas_tab.py" line="83" />
-      <location filename="../ui/main_dialog.py" line="2475" />
+      <location filename="../ui/cartograph/controller.py" line="330" />
       <source>Atlas</source>
       <translation>图集</translation>
     </message>
@@ -896,9 +898,9 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/atlas_tab.py" line="113" />
-      <location filename="../ui/fidelity_panel.py" line="339" />
-      <location filename="../ui/fidelity_panel.py" line="560" />
-      <location filename="../ui/fidelity_panel.py" line="580" />
+      <location filename="../ui/fidelity_panel.py" line="354" />
+      <location filename="../ui/fidelity_panel.py" line="575" />
+      <location filename="../ui/fidelity_panel.py" line="595" />
       <source>Filter</source>
       <translation>筛选</translation>
     </message>
@@ -983,463 +985,508 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>已保存的图版还没有图集页面</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="122" />
-      <location filename="../ui/main_dialog.py" line="406" />
+      <location filename="../ui/cartograph/controller.py" line="127" />
+      <location filename="../ui/main_dialog.py" line="408" />
       <source>Show in file manager</source>
       <translation>在文件管理器中显示</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="106" />
-      <location filename="../ui/main_dialog.py" line="2107" />
-      <location filename="../ui/main_dialog.py" line="2116" />
+      <location filename="../ui/cartograph/controller.py" line="111" />
+      <location filename="../ui/main_dialog.py" line="2130" />
+      <location filename="../ui/main_dialog.py" line="2139" />
       <source>Default</source>
       <translation>默认</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="107" />
-      <location filename="../ui/main_dialog.py" line="2840" />
+      <location filename="../ui/cartograph/controller.py" line="112" />
+      <location filename="../ui/main_dialog.py" line="2938" />
       <source>Dark</source>
       <translation>深色</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="108" />
+      <location filename="../ui/cartograph/controller.py" line="113" />
       <source>Sepia</source>
       <translation>深褐色</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="109" />
+      <location filename="../ui/cartograph/controller.py" line="114" />
       <source>Blueprint</source>
       <translation>蓝图</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="110" />
+      <location filename="../ui/cartograph/controller.py" line="115" />
       <source>Minimal</source>
       <translation>极简</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="119" />
-      <location filename="../ui/main_dialog.py" line="403" />
+      <location filename="../ui/cartograph/controller.py" line="124" />
+      <location filename="../ui/main_dialog.py" line="405" />
       <source>Reveal in Finder</source>
       <translation>在访达中显示</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="121" />
-      <location filename="../ui/main_dialog.py" line="405" />
+      <location filename="../ui/cartograph/controller.py" line="126" />
+      <location filename="../ui/main_dialog.py" line="407" />
       <source>Show in Explorer</source>
       <translation>在资源管理器中显示</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="496" />
-      <location filename="../ui/main_dialog.py" line="682" />
-      <location filename="../ui/main_dialog.py" line="2490" />
+      <location filename="../ui/cartograph/controller.py" line="579" />
+      <location filename="../ui/main_dialog.py" line="684" />
+      <location filename="../ui/main_dialog.py" line="2588" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1609" />
+      <location filename="../ui/cartograph/controller.py" line="1634" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>在此描述地图：它展示了什么，数据来自哪里。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1610" />
+      <location filename="../ui/cartograph/controller.py" line="1635" />
       <source>Key figure</source>
       <translation>关键数据</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1611" />
+      <location filename="../ui/cartograph/controller.py" line="1636" />
       <source>What the number means</source>
       <translation>该数字的含义</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1612" />
+      <location filename="../ui/cartograph/controller.py" line="1637" />
       <source>Author</source>
       <translation>作者</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="199" />
+      <location filename="../ui/cartograph/controller.py" line="203" />
       <source>There is no map canvas to build from.</source>
       <translation>没有可用于构建的地图画布。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="260" />
+      <location filename="../ui/cartograph/controller.py" line="268" />
       <source>Layout</source>
       <translation>布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="270" />
+      <location filename="../ui/cartograph/controller.py" line="278" />
       <source>This project has no print layouts yet. Build one from the canvas, or import a cartograph.</source>
       <translation>此项目还没有打印布局。从画布创建一个，或导入图版。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="294" />
+      <location filename="../ui/cartograph/controller.py" line="304" />
+      <location filename="../ui/cartograph/print_settings_dialog.py" line="215" />
+      <source>Page</source>
+      <translation>页面</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="311" />
       <source>The project title</source>
       <translation>项目标题</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="296" />
+      <location filename="../ui/cartograph/controller.py" line="313" />
       <source>Shown wherever the layout uses the project title. Blank keeps it.</source>
       <translation>凡布局中使用项目标题的地方都会显示此内容。留空则保持不变。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="299" />
+      <location filename="../ui/cartograph/controller.py" line="316" />
       <source>Title</source>
       <translation>标题</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="301" />
+      <location filename="../ui/cartograph/controller.py" line="318" />
       <source>Optional, e.g. data sources</source>
       <translation>可选，例如数据来源</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="303" />
+      <location filename="../ui/cartograph/controller.py" line="320" />
       <source>Attribution</source>
       <translation>版权信息</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="308" />
-      <location filename="../ui/main_dialog.py" line="2847" />
+      <location filename="../ui/cartograph/controller.py" line="325" />
+      <location filename="../ui/main_dialog.py" line="2945" />
       <source>Theme</source>
       <translation>主题</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="313" />
+      <location filename="../ui/cartograph/controller.py" line="328" />
+      <source>Map frames</source>
+      <translation>地图画框</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="333" />
+      <source>Checks</source>
+      <translation>检查</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="334" />
+      <location filename="../ui/main_dialog.py" line="742" />
+      <location filename="../ui/main_dialog.py" line="2555" />
+      <source>Layers</source>
+      <translation>图层</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="354" />
       <source>Choose where the cartograph is saved</source>
       <translation>选择图版的保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="402" />
-      <location filename="../ui/cartograph/controller.py" line="430" />
-      <location filename="../ui/cartograph/controller.py" line="415" />
+      <location filename="../ui/cartograph/controller.py" line="484" />
+      <location filename="../ui/cartograph/controller.py" line="512" />
+      <location filename="../ui/cartograph/controller.py" line="497" />
       <source>Import cartograph</source>
       <translation>导入图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="408" />
+      <location filename="../ui/cartograph/controller.py" line="490" />
       <source>Cartograph (*.html *.htm)</source>
       <translation>图版 (*.html *.htm)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="507" />
+      <location filename="../ui/cartograph/controller.py" line="590" />
       <source>Save cartograph as</source>
       <translation>图版另存为</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="507" />
-      <location filename="../ui/main_dialog.py" line="1402" />
+      <location filename="../ui/cartograph/controller.py" line="590" />
+      <location filename="../ui/main_dialog.py" line="1407" />
       <source>Web page (*.html)</source>
       <translation>网页 (*.html)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="523" />
-      <source>One row per map on the selected layout. Live frames render in the browser and need a CRS the runtime can map; Static frames export a raster image at the DPI you choose.</source>
-      <translation>所选布局中每张地图对应一行。实时画框会在浏览器中渲染，需要运行时能够映射的 CRS；静态画框则按你选择的 DPI 导出一张栅格图像。</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="543" />
-      <source>This layout has no maps on it yet.</source>
-      <translation>此布局还没有任何地图。</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="691" />
-      <location filename="../ui/cartograph/controller.py" line="644" />
+      <location filename="../ui/cartograph/controller.py" line="714" />
+      <location filename="../ui/cartograph/frames_list.py" line="119" />
       <source>Use canvas view</source>
       <translation>使用画布视图</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="955" />
+      <location filename="../ui/cartograph/controller.py" line="980" />
       <source>The OnlyMap runtime is needed to save a cartograph. Nothing was written.</source>
       <translation>保存图版需要 OnlyMap 运行时。未写入任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1147" />
+      <location filename="../ui/cartograph/controller.py" line="1172" />
       <source>Accessibility</source>
       <translation>无障碍</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1150" />
-      <location filename="../ui/cartograph/controller.py" line="1192" />
+      <location filename="../ui/cartograph/controller.py" line="1175" />
+      <location filename="../ui/cartograph/controller.py" line="1217" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>色觉：模拟并检查图例的颜色</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1154" />
-      <location filename="../ui/main_dialog.py" line="2570" />
-      <location filename="../ui/main_dialog.py" line="2645" />
+      <location filename="../ui/cartograph/controller.py" line="1179" />
+      <location filename="../ui/main_dialog.py" line="2668" />
+      <location filename="../ui/main_dialog.py" line="2743" />
       <source>Preview</source>
       <translation>预览</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1156" />
+      <location filename="../ui/cartograph/controller.py" line="1181" />
       <source>Open the cartograph in your browser.</source>
       <translation>在浏览器中打开图版。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1160" />
-      <location filename="../ui/main_dialog.py" line="2589" />
+      <location filename="../ui/cartograph/controller.py" line="1185" />
+      <location filename="../ui/main_dialog.py" line="2687" />
       <source>Share</source>
       <translation>分享</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1318" />
-      <location filename="../ui/main_dialog.py" line="2691" />
+      <location filename="../ui/cartograph/controller.py" line="1343" />
+      <location filename="../ui/main_dialog.py" line="2789" />
       <source>Copy file path</source>
       <translation>复制文件路径</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1319" />
+      <location filename="../ui/cartograph/controller.py" line="1344" />
       <source>Copies the cartograph's path</source>
       <translation>复制图版的路径</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1325" />
+      <location filename="../ui/cartograph/controller.py" line="1350" />
       <source>Shows the cartograph in your file manager</source>
       <translation>在文件管理器中显示图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1330" />
+      <location filename="../ui/cartograph/controller.py" line="1355" />
       <source>Open in browser</source>
       <translation>在浏览器中打开</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1331" />
+      <location filename="../ui/cartograph/controller.py" line="1356" />
       <source>Opens the cartograph in your browser</source>
       <translation>在浏览器中打开图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1336" />
-      <location filename="../ui/main_dialog.py" line="2702" />
+      <location filename="../ui/cartograph/controller.py" line="1361" />
+      <location filename="../ui/main_dialog.py" line="2800" />
       <source>Publish</source>
       <translation>发布</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1339" />
-      <location filename="../ui/main_dialog.py" line="2705" />
+      <location filename="../ui/cartograph/controller.py" line="1364" />
+      <location filename="../ui/main_dialog.py" line="2803" />
       <source>Publish with NIKA hosting... (waitlist)</source>
       <translation>使用 NIKA 托管发布...（候补名单）</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1340" />
-      <location filename="../ui/main_dialog.py" line="2706" />
+      <location filename="../ui/cartograph/controller.py" line="1365" />
+      <location filename="../ui/main_dialog.py" line="2804" />
       <source>Hosting is not live yet. This opens a short form so we can see how many people want it.</source>
       <translation>托管服务尚未上线。这会打开一个简短表单，帮助我们了解有多少人需要它。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1348" />
-      <location filename="../ui/main_dialog.py" line="2716" />
+      <location filename="../ui/cartograph/controller.py" line="1373" />
+      <location filename="../ui/main_dialog.py" line="2814" />
       <source>NIKA</source>
       <translation>NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1351" />
-      <location filename="../ui/main_dialog.py" line="2719" />
+      <location filename="../ui/cartograph/controller.py" line="1376" />
+      <location filename="../ui/main_dialog.py" line="2817" />
       <source>Enhance with NIKA AI...</source>
       <translation>用 NIKA AI 增强...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1352" />
-      <location filename="../ui/cartograph/controller.py" line="1358" />
-      <location filename="../ui/main_dialog.py" line="2720" />
-      <location filename="../ui/main_dialog.py" line="2726" />
+      <location filename="../ui/cartograph/controller.py" line="1377" />
+      <location filename="../ui/cartograph/controller.py" line="1383" />
+      <location filename="../ui/main_dialog.py" line="2818" />
+      <location filename="../ui/main_dialog.py" line="2824" />
       <source>Opens a hand-off dialog with a prompt to paste into NIKA</source>
       <translation>打开交接对话框，提供可粘贴到 NIKA 的提示词</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1357" />
-      <location filename="../ui/main_dialog.py" line="2725" />
+      <location filename="../ui/cartograph/controller.py" line="1382" />
+      <location filename="../ui/main_dialog.py" line="2823" />
       <source>Ask NIKA for a critique...</source>
       <translation>请 NIKA 点评...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1362" />
-      <location filename="../ui/main_dialog.py" line="939" />
-      <location filename="../ui/main_dialog.py" line="2602" />
+      <location filename="../ui/cartograph/controller.py" line="1387" />
+      <location filename="../ui/main_dialog.py" line="944" />
+      <location filename="../ui/main_dialog.py" line="2700" />
       <source>Export</source>
       <translation>导出</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1365" />
+      <location filename="../ui/cartograph/controller.py" line="1390" />
       <source>Export PDF...</source>
       <translation>导出 PDF...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1366" />
+      <location filename="../ui/cartograph/controller.py" line="1391" />
       <source>Opens the cartograph and prints it at true page size</source>
       <translation>打开图版并按真实页面大小打印</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1372" />
+      <location filename="../ui/cartograph/controller.py" line="1397" />
       <source>Export PNG...</source>
       <translation>导出 PNG...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1373" />
+      <location filename="../ui/cartograph/controller.py" line="1398" />
       <source>300 dpi image of the first page</source>
       <translation>首页的 300 dpi 图像</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1378" />
+      <location filename="../ui/cartograph/controller.py" line="1403" />
       <source>Export QGIS layout template (.qpt)...</source>
       <translation>导出 QGIS 布局模板 (.qpt)...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1379" />
+      <location filename="../ui/cartograph/controller.py" line="1404" />
       <source>Round trip back into QGIS</source>
       <translation>回传到 QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1384" />
+      <location filename="../ui/cartograph/controller.py" line="1409" />
       <source>Print settings...</source>
       <translation>打印设置...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1385" />
+      <location filename="../ui/cartograph/controller.py" line="1410" />
       <source>Page size, bleed, crop marks and colour profile for Export PDF</source>
       <translation>“导出 PDF”所用的页面大小、出血、裁切标记和颜色配置文件</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1558" />
-      <location filename="../ui/cartograph/controller.py" line="1547" />
-      <location filename="../ui/cartograph/controller.py" line="1567" />
+      <location filename="../ui/cartograph/controller.py" line="1583" />
+      <location filename="../ui/cartograph/controller.py" line="1572" />
+      <location filename="../ui/cartograph/controller.py" line="1592" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="322" />
       <source>Export PDF</source>
       <translation>导出 PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1560" />
+      <location filename="../ui/cartograph/controller.py" line="1585" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1593" />
+      <location filename="../ui/cartograph/controller.py" line="1618" />
       <source>Save layout template as</source>
       <translation>布局模板另存为</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1595" />
+      <location filename="../ui/cartograph/controller.py" line="1620" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>QGIS 布局模板 (*.qpt)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="340" />
+      <location filename="../ui/cartograph/controller.py" line="410" />
+      <source>On</source>
+      <translation>开</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="410" />
+      <source>Off</source>
+      <translation>关</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="422" />
       <source>There is no map canvas to build a layout from.</source>
       <translation>没有可用于构建布局的地图画布。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="423" />
+      <location filename="../ui/cartograph/controller.py" line="505" />
       <source>Imported as the print layout "{name}".</source>
       <translation>已导入为打印布局“{name}”。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="536" />
-      <source>Map item</source>
-      <translation>地图项</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="536" />
-      <source>CRS</source>
-      <translation>CRS</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="536" />
-      <source>Frame</source>
-      <translation>画框</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="536" />
-      <source>DPI</source>
-      <translation>DPI</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="536" />
-      <source>Changes</source>
-      <translation>更改</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="607" />
-      <location filename="../ui/main_dialog.py" line="2645" />
-      <source>Live</source>
-      <translation>实时</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="608" />
-      <source>Static</source>
-      <translation>静态</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="638" />
-      <source>Items on this frame the cartograph changes or leaves out; see the Fidelity tab</source>
-      <translation>图版在此画框上更改或省略的项目；详见“保真度”标签页</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="646" />
-      <source>Set this map item's extent to what the QGIS map canvas shows</source>
-      <translation>将此地图项的范围设置为 QGIS 地图画布当前显示的内容</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="1022" />
+      <location filename="../ui/cartograph/controller.py" line="1047" />
       <source>Could not build the cartograph: {message}</source>
       <translation>无法生成图版：{message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1265" />
+      <location filename="../ui/cartograph/controller.py" line="1290" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a layout and a file on the Cartograph tab.</source>
       <translation>暂时没有可预览的内容——图版尚未保存。请在“图版”标签页中选择一个布局和一个文件。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1548" />
+      <location filename="../ui/cartograph/controller.py" line="1573" />
       <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static on the Frames tab, or choose RGB in Print settings.</source>
       <translation>CMYK 或 ICC 配置文件 PDF 由 QGIS 根据打印布局生成，只有当所有画框都是静态时才能生效。请在“画框”标签页中将实时画框设为静态，或在“打印设置”中选择 RGB。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1569" />
-      <location filename="../ui/cartograph/controller.py" line="1602" />
+      <location filename="../ui/cartograph/controller.py" line="1594" />
+      <location filename="../ui/cartograph/controller.py" line="1627" />
       <source>Saved {path}</source>
       <translation>已保存：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="386" />
+      <location filename="../ui/cartograph/controller.py" line="468" />
       <source>Created the print layout "{name}" from the canvas. Edit it in the layout designer any time; the cartograph follows.</source>
       <translation>已根据画布创建打印布局“{name}”。可随时在布局设计器中编辑它；图版会随之更新。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1417" />
-      <location filename="../ui/main_dialog.py" line="3713" />
+      <location filename="../ui/cartograph/controller.py" line="1442" />
+      <location filename="../ui/main_dialog.py" line="3816" />
       <source>Copied {path}</source>
       <translation>已复制：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1424" />
-      <location filename="../ui/main_dialog.py" line="3733" />
+      <location filename="../ui/cartograph/controller.py" line="1449" />
+      <location filename="../ui/main_dialog.py" line="3836" />
       <source>Opened {path}</source>
       <translation>已打开：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="602" />
-      <source>Unknown CRS</source>
-      <translation>未知的 CRS</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="968" />
+      <location filename="../ui/cartograph/controller.py" line="993" />
       <source>The OnlyMap runtime could not be loaded, so nothing was written: {error}</source>
       <translation>无法加载 OnlyMap 运行时，因此未写入任何内容：{error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="988" />
+      <location filename="../ui/cartograph/controller.py" line="1013" />
       <source>Could not save the cartograph: {error}</source>
       <translation>无法保存图版：{error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="375" />
+      <location filename="../ui/cartograph/controller.py" line="457" />
       <source>Could not build a layout from the canvas: {error}</source>
       <translation>无法根据画布构建布局：{error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="433" />
+      <location filename="../ui/cartograph/controller.py" line="515" />
       <source>Some parts could not be carried into QGIS:</source>
       <translation>部分内容无法带入 QGIS：</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="313" />
+      <location filename="../ui/cartograph/controller.py" line="667" />
+      <source>Unknown CRS</source>
+      <translation>未知的 CRS</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="281" />
+      <location filename="../ui/cartograph/frames_list.py" line="281" />
+      <source>{n} live</source>
+      <translation>{n} 个实时</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="282" />
+      <location filename="../ui/cartograph/frames_list.py" line="282" />
+      <source>{n} static</source>
+      <translation>{n} 个静态</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="90" />
+      <source>Items on this frame the cartograph changes or leaves out; see the Fidelity tab</source>
+      <translation>图版在此画框上更改或省略的项目；详见“保真度”标签页</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="105" />
+      <location filename="../ui/main_dialog.py" line="2743" />
+      <source>Live</source>
+      <translation>实时</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="106" />
+      <source>Static</source>
+      <translation>静态</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="121" />
+      <source>Set this map item's extent to what the QGIS map canvas shows</source>
+      <translation>将此地图项的范围设置为 QGIS 地图画布当前显示的内容</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="192" />
+      <source>One row per map on the selected layout. Live frames render in the browser and need a CRS the runtime can map; Static frames export a raster image at the DPI you choose.</source>
+      <translation>所选布局中每张地图对应一行。实时画框会在浏览器中渲染，需要运行时能够映射的 CRS；静态画框则按你选择的 DPI 导出一张栅格图像。</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="208" />
+      <source>This layout has no maps on it yet.</source>
+      <translation>此布局还没有任何地图。</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="277" />
+      <source>No maps</source>
+      <translation>没有地图</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="161" />
+      <source>{n} change</source>
+      <translation>{n} 处更改</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="161" />
+      <source>{n} changes</source>
+      <translation>{n} 处更改</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="163" />
+      <source>No changes</source>
+      <translation>无更改</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/frames_list.py" line="284" />
+      <source>{live}, {static}</source>
+      <translation>{live}，{static}</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/layout_page.py" line="316" />
       <source>Saves to {path}</source>
       <translation>保存到 {path}</translation>
     </message>
@@ -1476,8 +1523,8 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>根据地图画布显示的内容创建一个，或打开图版。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="280" />
-      <location filename="../ui/main_dialog.py" line="2859" />
+      <location filename="../ui/cartograph/layout_page.py" line="283" />
+      <location filename="../ui/main_dialog.py" line="2957" />
       <source>Change...</source>
       <translation>更改...</translation>
     </message>
@@ -1572,18 +1619,13 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>将这些设置以指定名称保存，供所有项目使用</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/print_settings_dialog.py" line="215" />
-      <source>Page</source>
-      <translation>页面</translation>
-    </message>
-    <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="226" />
       <source>Custom...</source>
       <translation>自定义...</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="228" />
-      <location filename="../ui/main_dialog.py" line="2128" />
+      <location filename="../ui/main_dialog.py" line="2151" />
       <source>Size</source>
       <translation>大小</translation>
     </message>
@@ -1800,270 +1842,270 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>无法绘制预览。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="119" />
+      <location filename="../ui/fidelity_panel.py" line="122" />
       <source>✓ exact</source>
       <translation>✓ 完全一致</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="120" />
+      <location filename="../ui/fidelity_panel.py" line="123" />
       <source>Select a row to see where it applies and where to change it.</source>
       <translation>选择一行，查看它的适用范围以及在哪里修改。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="121" />
+      <location filename="../ui/fidelity_panel.py" line="124" />
       <source>Tick more of the boxes above, or clear the search.</source>
       <translation>请勾选上方更多选项，或清除搜索。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="122" />
+      <location filename="../ui/fidelity_panel.py" line="125" />
       <source>As above.</source>
       <translation>同上。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="136" />
+      <location filename="../ui/fidelity_panel.py" line="139" />
       <source>Cannot be carried into the map at all.</source>
       <translation>完全无法带入地图。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="137" />
+      <location filename="../ui/fidelity_panel.py" line="140" />
       <source>Cannot be represented, and was left out.</source>
       <translation>无法表示，已省略。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="138" />
+      <location filename="../ui/fidelity_panel.py" line="141" />
       <source>Exported, but approximated - the detail says how.</source>
       <translation>已导出，但为近似效果——详情中有说明。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="141" />
+      <location filename="../ui/fidelity_panel.py" line="144" />
       <source>Drawn into the map as an image.</source>
       <translation>以图像形式绘制到地图中。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="142" />
+      <location filename="../ui/fidelity_panel.py" line="145" />
       <source>Survives exactly as set in QGIS. Hidden by default so the changes stand out; nothing is left out of the report.</source>
       <translation>与 QGIS 中的设置完全一致。默认隐藏，以便突出变化；报告不会遗漏任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="155" />
+      <location filename="../ui/fidelity_panel.py" line="158" />
       <source>Kept</source>
       <translation>保留</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="156" />
+      <location filename="../ui/fidelity_panel.py" line="159" />
       <source>Changed</source>
       <translation>已更改</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="157" />
+      <location filename="../ui/fidelity_panel.py" line="160" />
       <source>Rasterised</source>
       <translation>已栅格化</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="158" />
+      <location filename="../ui/fidelity_panel.py" line="161" />
       <source>Not exported</source>
       <translation>未导出</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="159" />
+      <location filename="../ui/fidelity_panel.py" line="162" />
       <source>Blocked</source>
       <translation>已阻止</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="160" />
+      <location filename="../ui/fidelity_panel.py" line="163" />
       <source>Symbology</source>
       <translation>符号系统</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="161" />
-      <location filename="../ui/main_dialog.py" line="1603" />
+      <location filename="../ui/fidelity_panel.py" line="164" />
+      <location filename="../ui/main_dialog.py" line="1608" />
       <source>Labels</source>
       <translation>标注</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="162" />
+      <location filename="../ui/fidelity_panel.py" line="165" />
       <source>Popups &amp; fields</source>
       <translation>弹窗和字段</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="163" />
-      <location filename="../ui/main_dialog.py" line="1030" />
+      <location filename="../ui/fidelity_panel.py" line="166" />
+      <location filename="../ui/main_dialog.py" line="1035" />
       <source>Data</source>
       <translation>数据</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="164" />
+      <location filename="../ui/fidelity_panel.py" line="167" />
       <source>Map settings</source>
       <translation>地图设置</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="165" />
+      <location filename="../ui/fidelity_panel.py" line="168" />
       <source>Layout items</source>
       <translation>布局项</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="166" />
+      <location filename="../ui/fidelity_panel.py" line="169" />
       <source>Other</source>
       <translation>其他</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="167" />
+      <location filename="../ui/fidelity_panel.py" line="170" />
       <source>Whole map</source>
       <translation>整张地图</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="206" />
+      <location filename="../ui/fidelity_panel.py" line="209" />
       <source>Show in Layers</source>
       <translation>在“图层”中显示</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="863" />
+      <location filename="../ui/fidelity_panel.py" line="878" />
       <source>Export anyway</source>
       <translation>仍然导出</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="864" />
+      <location filename="../ui/fidelity_panel.py" line="879" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
       <translation>你可以仍然导出，地图将不包含这一项；也可以先查看报告。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="868" />
+      <location filename="../ui/fidelity_panel.py" line="883" />
       <source>You can export anyway and the map is made without them, or review the report first.</source>
       <translation>你可以仍然导出，地图将不包含这些项；也可以先查看报告。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="886" />
+      <location filename="../ui/fidelity_panel.py" line="901" />
       <source>Part of this map will not work</source>
       <translation>此地图的部分内容将无法正常工作</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="901" />
+      <location filename="../ui/fidelity_panel.py" line="916" />
       <source>Review on the Fidelity tab</source>
       <translation>在“保真度”标签页中查看</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="207" />
+      <location filename="../ui/fidelity_panel.py" line="210" />
       <source>Go to {tab} tab</source>
       <translation>前往“{tab}”标签页</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="233" />
+      <location filename="../ui/fidelity_panel.py" line="236" />
       <source>What survives the export, and what does not - checked before you export, so nothing is left to discover later.</source>
       <translation>导出后哪些内容会保留、哪些不会——在导出前就检查好，事后不会有意外。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="282" />
+      <location filename="../ui/fidelity_panel.py" line="286" />
       <source>Out of date - something changed since this check, so the rows below describe the map as it was.</source>
       <translation>已过期——此次检查后有内容发生变化，下方各行描述的是之前的地图。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="348" />
+      <location filename="../ui/fidelity_panel.py" line="363" />
       <source>Show</source>
       <translation>显示</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="368" />
-      <location filename="../ui/main_dialog.py" line="2882" />
+      <location filename="../ui/fidelity_panel.py" line="383" />
+      <location filename="../ui/main_dialog.py" line="2980" />
       <source>About</source>
       <translation>关于</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="380" />
+      <location filename="../ui/fidelity_panel.py" line="395" />
       <source>Search the report</source>
       <translation>搜索报告</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="445" />
+      <location filename="../ui/fidelity_panel.py" line="460" />
       <source>Not checked yet</source>
       <translation>尚未检查</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="445" />
+      <location filename="../ui/fidelity_panel.py" line="460" />
       <source>Opening this tab reads the project to check.</source>
       <translation>打开此标签页会读取项目进行检查。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="465" />
+      <location filename="../ui/fidelity_panel.py" line="480" />
       <source>The check could not finish.</source>
       <translation>检查未能完成。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="466" />
+      <location filename="../ui/fidelity_panel.py" line="481" />
       <source>Try again</source>
       <translation>重试</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="471" />
+      <location filename="../ui/fidelity_panel.py" line="486" />
       <source>Check failed</source>
       <translation>检查失败</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="471" />
+      <location filename="../ui/fidelity_panel.py" line="486" />
       <source>See the detail for why.</source>
       <translation>原因请见详情。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="473" />
+      <location filename="../ui/fidelity_panel.py" line="488" />
       <source>The check could not finish</source>
       <translation>检查未能完成</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="298" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>What</source>
       <translation>内容</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="298" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>Result</source>
       <translation>结果</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="298" />
+      <location filename="../ui/fidelity_panel.py" line="302" />
       <source>Detail</source>
       <translation>详情</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="457" />
+      <location filename="../ui/fidelity_panel.py" line="472" />
       <source>Checking...</source>
       <translation>正在检查...</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="458" />
+      <location filename="../ui/fidelity_panel.py" line="473" />
       <source>Reading the project to see what the export changes.</source>
       <translation>正在读取项目，查看导出会改变什么。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="481" />
+      <location filename="../ui/fidelity_panel.py" line="496" />
       <source>Not a verdict on the map</source>
       <translation>并非对地图的结论</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="636" />
+      <location filename="../ui/fidelity_panel.py" line="651" />
       <source>Nothing matches these filters</source>
       <translation>没有符合这些筛选条件的内容</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="637" />
+      <location filename="../ui/fidelity_panel.py" line="652" />
       <source>The report has rows the filters above hide. Tick more of them, or clear the search.</source>
       <translation>报告中有被上方筛选条件隐藏的行。请勾选更多选项，或清除搜索。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="711" />
+      <location filename="../ui/fidelity_panel.py" line="726" />
       <source>Nothing about this layer changes on the way out.</source>
       <translation>此图层导出后没有任何变化。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="889" />
+      <location filename="../ui/fidelity_panel.py" line="904" />
       <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
       <translation>有 {n} 项无法按 QGIS 中的设置带入地图：</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="889" />
+      <location filename="../ui/fidelity_panel.py" line="904" />
       <source>{n} things cannot be carried into the map as set up in QGIS:</source>
       <translation>有 {n} 项无法按 QGIS 中的设置带入地图：</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="475" />
+      <location filename="../ui/fidelity_panel.py" line="490" />
       <source>The project could not be read: {message}
 
 The full error is in the QGIS message log. Nothing about the map is known until a check finishes, so none of it is shown as a verdict.</source>
@@ -2072,32 +2114,32 @@ The full error is in the QGIS message log. Nothing about the map is known until 
 完整错误信息在 QGIS 消息日志中。检查完成前对地图一无所知，因此不会显示任何结论。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="575" />
+      <location filename="../ui/fidelity_panel.py" line="590" />
       <source>Filter - {n} row hidden</source>
       <translation>筛选 - 已隐藏 {n} 行</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="575" />
+      <location filename="../ui/fidelity_panel.py" line="590" />
       <source>Filter - {n} rows hidden</source>
       <translation>筛选 - 已隐藏 {n} 行</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="577" />
+      <location filename="../ui/fidelity_panel.py" line="592" />
       <source>Filter - some rows hidden</source>
       <translation>筛选 - 部分行已隐藏</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="495" />
+      <location filename="../ui/fidelity_panel.py" line="510" />
       <source>Map: {facts}</source>
       <translation>地图：{facts}</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="645" />
+      <location filename="../ui/fidelity_panel.py" line="660" />
       <source>Nothing matches these filters.</source>
       <translation>没有符合这些筛选条件的内容。</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="735" />
+      <location filename="../ui/fidelity_panel.py" line="750" />
       <source>Applies to: {subjects}.</source>
       <translation>适用于：{subjects}。</translation>
     </message>
@@ -2334,7 +2376,7 @@ The full error is in the QGIS message log. Nothing about the map is known until 
     </message>
     <message>
       <location filename="../ui/language_picker.py" line="83" />
-      <location filename="../ui/main_dialog.py" line="2838" />
+      <location filename="../ui/main_dialog.py" line="2936" />
       <source>Follow QGIS</source>
       <translation>跟随 QGIS</translation>
     </message>
@@ -2374,12 +2416,12 @@ The full error is in the QGIS message log. Nothing about the map is known until 
       <translation>无法下载{language}。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="182" />
+      <location filename="../ui/main_dialog.py" line="184" />
       <source>OpenStreetMap's tile servers refuse maps opened straight from a file, so recipients who double-click this map may see 'Access blocked' tiles. Choose Liberty - the same OpenStreetMap data - or another basemap, or export as a Folder for a website.</source>
       <translation>OpenStreetMap 的瓦片服务器会拒绝直接从文件打开的地图，因此双击打开此地图的接收者可能会看到“Access blocked”瓦片。请选择 Liberty（同样的 OpenStreetMap 数据）或其他底图，或导出为“文件夹”用于网站。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="563" />
+      <location filename="../ui/main_dialog.py" line="565" />
       <source># Help
 
 The bundled guides could not be found in this installation.
@@ -2394,622 +2436,623 @@ They are also online at &lt;{url}&gt;.
 </translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="195" />
+      <location filename="../ui/main_dialog.py" line="197" />
       <source>Standalone HTML - one file, opens by double-click</source>
       <translation>独立 HTML - 单个文件，双击即可打开</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="196" />
+      <location filename="../ui/main_dialog.py" line="198" />
       <source>Share ZIP - a zip to email or upload</source>
       <translation>分享用 ZIP - 用于邮件发送或上传的 ZIP</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="197" />
+      <location filename="../ui/main_dialog.py" line="199" />
       <source>Folder - for publishing to a web server</source>
       <translation>文件夹 - 用于发布到网站服务器</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="203" />
+      <location filename="../ui/main_dialog.py" line="205" />
       <source>Value only, no label</source>
       <translation>仅显示值，不显示标签</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="204" />
+      <location filename="../ui/main_dialog.py" line="206" />
       <source>Label beside value - always show</source>
       <translation>标签在值旁边 - 始终显示</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="205" />
+      <location filename="../ui/main_dialog.py" line="207" />
       <source>Label beside value - only if it has data</source>
       <translation>标签在值旁边 - 仅在有数据时</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="206" />
+      <location filename="../ui/main_dialog.py" line="208" />
       <source>Label above value - always show</source>
       <translation>标签在值上方 - 始终显示</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="207" />
+      <location filename="../ui/main_dialog.py" line="209" />
       <source>Label above value - only if it has data</source>
       <translation>标签在值上方 - 仅在有数据时</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="208" />
+      <location filename="../ui/main_dialog.py" line="210" />
       <source>Do not show this field</source>
       <translation>不显示此字段</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="286" />
+      <location filename="../ui/main_dialog.py" line="288" />
       <source>Top centre - clear of the controls</source>
       <translation>顶部居中 - 避开控件</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="287" />
+      <location filename="../ui/main_dialog.py" line="289" />
       <source>Bottom centre - clear of the controls</source>
       <translation>底部居中 - 避开控件</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="288" />
+      <location filename="../ui/main_dialog.py" line="290" />
       <source>Top left - shared with the layer switcher</source>
       <translation>左上 - 与图层切换器共用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="289" />
+      <location filename="../ui/main_dialog.py" line="291" />
       <source>Top right - shared with the legend</source>
       <translation>右上 - 与图例共用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="290" />
+      <location filename="../ui/main_dialog.py" line="292" />
       <source>Bottom left - shared with zoom and scale</source>
       <translation>左下 - 与缩放和比例尺共用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="291" />
+      <location filename="../ui/main_dialog.py" line="293" />
       <source>Bottom right - shared with the credit</source>
       <translation>右下 - 与版权信息共用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="299" />
+      <location filename="../ui/main_dialog.py" line="301" />
       <source>None - the export stays offline and contacts nobody</source>
       <translation>无 - 地图离线可用，不连接任何服务器</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="300" />
+      <location filename="../ui/main_dialog.py" line="302" />
       <source>OpenStreetMap</source>
       <translation>OpenStreetMap</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="301" />
+      <location filename="../ui/main_dialog.py" line="303" />
       <source>Positron - pale, for data on top</source>
       <translation>Positron - 浅色，便于突出数据</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="302" />
+      <location filename="../ui/main_dialog.py" line="304" />
       <source>Dark Matter - dark background</source>
       <translation>Dark Matter - 深色背景</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="303" />
+      <location filename="../ui/main_dialog.py" line="305" />
       <source>Voyager - general purpose</source>
       <translation>Voyager - 通用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="304" />
+      <location filename="../ui/main_dialog.py" line="306" />
       <source>Liberty - detailed street map</source>
       <translation>Liberty - 详细街道图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="305" />
+      <location filename="../ui/main_dialog.py" line="307" />
       <source>Bright - high contrast</source>
       <translation>Bright - 高对比度</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="312" />
+      <location filename="../ui/main_dialog.py" line="314" />
       <source>Flat - no elevation</source>
       <translation>平面 - 无高程</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="313" />
+      <location filename="../ui/main_dialog.py" line="315" />
       <source>Global relief - tilts the map so it shows</source>
       <translation>全球地形 - 倾斜地图以显示地形</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="319" />
+      <location filename="../ui/main_dialog.py" line="321" />
       <source>Normal</source>
       <translation>正常</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="320" />
+      <location filename="../ui/main_dialog.py" line="322" />
       <source>Small</source>
       <translation>小</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="321" />
+      <location filename="../ui/main_dialog.py" line="323" />
       <source>Large</source>
       <translation>大</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="322" />
+      <location filename="../ui/main_dialog.py" line="324" />
       <source>Extra large</source>
       <translation>特大</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="323" />
+      <location filename="../ui/main_dialog.py" line="325" />
       <source>Largest - for presentations and big screens</source>
       <translation>最大 - 用于演示和大屏幕</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="327" />
+      <location filename="../ui/main_dialog.py" line="329" />
       <source>The data - every feature is visible</source>
       <translation>数据范围 - 所有要素可见</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="328" />
+      <location filename="../ui/main_dialog.py" line="330" />
       <source>The current QGIS view</source>
       <translation>当前 QGIS 视图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="431" />
+      <location filename="../ui/main_dialog.py" line="433" />
       <source>{n} day ago</source>
       <translation>{n} 天前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="431" />
+      <location filename="../ui/main_dialog.py" line="433" />
       <source>{n} days ago</source>
       <translation>{n} 天前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="422" />
+      <location filename="../ui/main_dialog.py" line="424" />
       <source>just now</source>
       <translation>刚刚</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="430" />
+      <location filename="../ui/main_dialog.py" line="432" />
       <source>{n} hour ago</source>
       <translation>{n} 小时前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="430" />
+      <location filename="../ui/main_dialog.py" line="432" />
       <source>{n} hours ago</source>
       <translation>{n} 小时前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="469" />
+      <location filename="../ui/main_dialog.py" line="471" />
       <source>What these columns do</source>
       <translation>这些列的作用</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="545" />
+      <location filename="../ui/main_dialog.py" line="547" />
       <source>Overview</source>
       <translation>概览</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="546" />
+      <location filename="../ui/main_dialog.py" line="548" />
       <source>Your first export</source>
       <translation>第一次导出</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="547" />
+      <location filename="../ui/main_dialog.py" line="549" />
       <source>The dialog, tab by tab</source>
       <translation>对话框各标签页说明</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="548" />
+      <location filename="../ui/main_dialog.py" line="550" />
       <source>Sharing a map</source>
       <translation>分享地图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="549" />
+      <location filename="../ui/main_dialog.py" line="551" />
       <source>Enhance a map with AI</source>
       <translation>用 AI 增强地图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="550" />
+      <location filename="../ui/main_dialog.py" line="552" />
       <source>Putting a map online</source>
       <translation>将地图发布到网上</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="551" />
+      <location filename="../ui/main_dialog.py" line="553" />
       <source>What gets exported</source>
       <translation>会导出哪些内容</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="552" />
+      <location filename="../ui/main_dialog.py" line="554" />
       <source>Troubleshooting</source>
       <translation>故障排除</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="553" />
+      <location filename="../ui/main_dialog.py" line="555" />
       <source>Privacy</source>
       <translation>隐私</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="554" />
+      <location filename="../ui/main_dialog.py" line="556" />
       <source>Your first cartograph</source>
       <translation>你的第一份图版</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="555" />
+      <location filename="../ui/main_dialog.py" line="557" />
       <source>The Cartograph dialog, tab by tab</source>
       <translation>“图版”对话框逐个标签页讲解</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="556" />
+      <location filename="../ui/main_dialog.py" line="558" />
       <source>Live or static frames</source>
       <translation>实时画框还是静态画框</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="557" />
+      <location filename="../ui/main_dialog.py" line="559" />
       <source>Atlas cartographs</source>
       <translation>图集图版</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="558" />
+      <location filename="../ui/main_dialog.py" line="560" />
       <source>Printing a cartograph</source>
       <translation>打印图版</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="560" />
+      <location filename="../ui/main_dialog.py" line="562" />
       <source>What a cartograph keeps</source>
       <translation>图版会保留什么</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1460" />
+      <location filename="../ui/main_dialog.py" line="1465" />
       <source>{size} MB - {n} layer</source>
       <translation>{size} MB - {n} 个图层</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1460" />
+      <location filename="../ui/main_dialog.py" line="1465" />
       <source>{size} MB - {n} layers</source>
       <translation>{size} MB - {n} 个图层</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="739" />
-      <location filename="../ui/main_dialog.py" line="2454" />
+      <location filename="../ui/main_dialog.py" line="741" />
       <source>Map</source>
       <translation>地图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="740" />
-      <source>Layers</source>
-      <translation>图层</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="742" />
-      <location filename="../ui/main_dialog.py" line="2456" />
-      <location filename="../ui/main_dialog.py" line="2834" />
+      <location filename="../ui/main_dialog.py" line="744" />
+      <location filename="../ui/main_dialog.py" line="2932" />
       <source>Appearance</source>
       <translation>外观</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="745" />
+      <location filename="../ui/main_dialog.py" line="747" />
+      <location filename="../ui/main_dialog.py" line="2557" />
       <source>Fidelity</source>
       <translation>保真度</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="747" />
-      <source>Help</source>
-      <translation>帮助</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="764" />
-      <source>Settings</source>
-      <translation>设置</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="899" />
+      <location filename="../ui/main_dialog.py" line="904" />
       <source>&lt;b&gt;Source:&lt;/b&gt; the layers already open in this QGIS project. There is nothing to browse for - choose which of them to include on the Layers tab.</source>
       <translation>&lt;b&gt;来源：&lt;/b&gt;此 QGIS 项目中已打开的图层。无需浏览文件——在“图层”标签页选择要包含的图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="917" />
+      <location filename="../ui/main_dialog.py" line="922" />
       <source>The title shown on the exported map. Leave blank to use the project title.</source>
       <translation>导出地图上显示的标题。留空则使用项目标题。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="923" />
+      <location filename="../ui/main_dialog.py" line="928" />
       <source>Map name</source>
       <translation>地图名称</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="960" />
+      <location filename="../ui/main_dialog.py" line="965" />
       <source>Choose where the export is written</source>
       <translation>选择导出内容的保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="964" />
+      <location filename="../ui/main_dialog.py" line="969" />
       <source>Choose...</source>
       <translation>选择...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="995" />
+      <location filename="../ui/main_dialog.py" line="1000" />
       <source>Basemap</source>
       <translation>底图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1004" />
+      <location filename="../ui/main_dialog.py" line="1009" />
       <source>Show behind the map</source>
       <translation>在地图下方显示</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1022" />
+      <location filename="../ui/main_dialog.py" line="1027" />
       <source>Ground surface</source>
       <translation>地表</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1039" />
+      <location filename="../ui/main_dialog.py" line="1044" />
       <source>Open the map on</source>
       <translation>打开地图时显示</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1056" />
+      <location filename="../ui/main_dialog.py" line="1061" />
       <source>Export only the features in this view</source>
       <translation>仅导出此视图中的要素</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1078" />
+      <location filename="../ui/main_dialog.py" line="1083" />
       <source>Maintain full precision</source>
       <translation>保留全部精度</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1088" />
+      <location filename="../ui/main_dialog.py" line="1093" />
       <source>Rounding coordinates makes the file smaller and is irreversible. Around 6 decimal places is roughly 0.1 m at the equator.</source>
       <translation>对坐标取整可减小文件，但不可恢复。约 6 位小数在赤道处约为 0.1 米。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1094" />
+      <location filename="../ui/main_dialog.py" line="1099" />
       <source>Coordinate precision</source>
       <translation>坐标精度</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1174" />
+      <location filename="../ui/main_dialog.py" line="1179" />
       <source>Export makes a zip to email or upload, carrying {n} layer.</source>
       <translation>导出会生成一个用于邮件发送或上传的 ZIP，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1174" />
+      <location filename="../ui/main_dialog.py" line="1179" />
       <source>Export makes a zip to email or upload, carrying {n} layers.</source>
       <translation>导出会生成一个用于邮件发送或上传的 ZIP，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1404" />
+      <location filename="../ui/main_dialog.py" line="1409" />
       <source>Zip archive (*.zip)</source>
       <translation>ZIP 压缩包 (*.zip)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1406" />
-      <location filename="../ui/main_dialog.py" line="957" />
+      <location filename="../ui/main_dialog.py" line="1411" />
+      <location filename="../ui/main_dialog.py" line="962" />
       <source>Save to</source>
       <translation>保存到</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1589" />
+      <location filename="../ui/main_dialog.py" line="1594" />
       <source>Layers come from the QGIS Layers panel and follow it live - reorder or rename them there and this list updates. Expand a layer to choose how each of its fields appears in popups.</source>
       <translation>图层来自 QGIS 的“图层”面板并实时同步——在那里重新排序或重命名，此列表会随之更新。展开图层可选择每个字段在弹窗中的显示方式。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1616" />
+      <location filename="../ui/main_dialog.py" line="1621" />
       <source>&lt;b&gt;Include&lt;/b&gt; - untick to leave the layer out of the map entirely. Its data is not written, so the file gets smaller.&lt;br&gt;&lt;b&gt;Popups&lt;/b&gt; - untick and clicking a feature does nothing. The attribute values are left out of the file entirely, so this is also how you keep data out of a map you are sending someone.&lt;br&gt;&lt;b&gt;Labels&lt;/b&gt; - untick to drop the text QGIS draws beside features. The features themselves still appear.&lt;br&gt;Unticking Popups or Labels only affects that layer; the map still works, with less on it. Expand a layer to hide single fields instead - those values leave the file too, unless the map draws with them.</source>
       <translation>&lt;b&gt;包含&lt;/b&gt; - 取消勾选可将该图层完全排除在地图之外。其数据不会写入，文件因此更小。&lt;br&gt;&lt;b&gt;弹窗&lt;/b&gt; - 取消勾选后，点击要素不会有任何反应。属性值会完全排除在文件之外，所以这也是让数据不进入你要发送的地图的方法。&lt;br&gt;&lt;b&gt;标注&lt;/b&gt; - 取消勾选可去掉 QGIS 在要素旁绘制的文字。要素本身仍会显示。&lt;br&gt;取消勾选“弹窗”或“标注”只影响该图层；地图照常工作，只是内容更少。展开图层可隐藏单个字段——这些值也会离开文件，除非地图需要用它们来绘制。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1647" />
+      <location filename="../ui/main_dialog.py" line="1652" />
       <source>Apply to all layers</source>
       <translation>应用到所有图层</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1649" />
+      <location filename="../ui/main_dialog.py" line="1654" />
       <source>Give every popup field in every layer this setting, replacing the choices below.</source>
       <translation>将此设置应用到所有图层的所有弹窗字段，替换下方的选择。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1825" />
+      <location filename="../ui/main_dialog.py" line="1848" />
       <source>This layer only</source>
       <translation>仅此图层</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1843" />
+      <location filename="../ui/main_dialog.py" line="1866" />
       <source>Precision: same as map</source>
       <translation>精度：与地图相同</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1844" />
+      <location filename="../ui/main_dialog.py" line="1867" />
       <source>Precision: keep it all</source>
       <translation>精度：全部保留</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1866" />
+      <location filename="../ui/main_dialog.py" line="1889" />
       <source>Highlight: same as map</source>
       <translation>高亮：与地图相同</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1867" />
+      <location filename="../ui/main_dialog.py" line="1890" />
       <source>Highlight colour for this layer only.</source>
       <translation>仅用于此图层的高亮颜色。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1896" />
+      <location filename="../ui/main_dialog.py" line="1919" />
       <source>Points</source>
       <translation>点</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1902" />
+      <location filename="../ui/main_dialog.py" line="1925" />
       <source>Show each point's value of this field beside it, with a halo, without clicking. Replaces the layer's QGIS labels.</source>
       <translation>在每个点旁边显示该字段的值并带光晕，无需点击。会替换该图层的 QGIS 标注。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1907" />
+      <location filename="../ui/main_dialog.py" line="1930" />
       <source>Names: off</source>
       <translation>名称：关闭</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1916" />
+      <location filename="../ui/main_dialog.py" line="1939" />
       <source>Cluster dense points</source>
       <translation>聚合密集的点</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1918" />
+      <location filename="../ui/main_dialog.py" line="1941" />
       <source>Points that would pile up when zoomed out merge into count bubbles that split as you zoom in. Untick to show every point.</source>
       <translation>缩小时会堆叠的点会合并为计数气泡，放大时再分开。取消勾选可显示每个点。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2016" />
+      <location filename="../ui/main_dialog.py" line="2039" />
       <source>Map controls</source>
       <translation>地图控件</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2047" />
+      <location filename="../ui/main_dialog.py" line="2070" />
       <source>Caption</source>
       <translation>页眉</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2050" />
+      <location filename="../ui/main_dialog.py" line="2073" />
       <source>Map title</source>
       <translation>地图标题</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2065" />
+      <location filename="../ui/main_dialog.py" line="2088" />
       <source>Project description</source>
       <translation>项目描述</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2086" />
+      <location filename="../ui/main_dialog.py" line="2109" />
       <source>Position</source>
       <translation>位置</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2102" />
+      <location filename="../ui/main_dialog.py" line="2125" />
       <source>Control colours</source>
       <translation>控件颜色</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2112" />
+      <location filename="../ui/main_dialog.py" line="2135" />
       <source>Background</source>
       <translation>背景</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2121" />
+      <location filename="../ui/main_dialog.py" line="2144" />
       <source>Text and icons</source>
       <translation>文字和图标</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2153" />
+      <location filename="../ui/main_dialog.py" line="2176" />
       <source>Behaviour</source>
       <translation>行为</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2156" />
+      <location filename="../ui/main_dialog.py" line="2179" />
       <source>Open popups on hover instead of click</source>
       <translation>悬停时打开弹窗，而不是点击</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2159" />
+      <location filename="../ui/main_dialog.py" line="2182" />
       <source>Hover replaces click rather than adding to it: bound together, a click on an already-open popup appears to do nothing.</source>
       <translation>悬停会取代点击，而不是与之并存：两者同时启用时，点击已打开的弹窗看起来没有任何反应。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2181" />
+      <location filename="../ui/main_dialog.py" line="2204" />
       <source>Default (white, see-through)</source>
       <translation>默认（白色，半透明）</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2183" />
+      <location filename="../ui/main_dialog.py" line="2206" />
       <source>Shown when the cursor is over a feature. Keep some transparency: a solid colour hides whatever the feature is drawn on top of.</source>
       <translation>光标悬停在要素上时显示。请保留一些透明度：纯色会遮住要素下方的内容。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2367" />
+      <location filename="../ui/main_dialog.py" line="2390" />
       <source>Checking the project...</source>
       <translation>正在检查项目...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2398" />
+      <location filename="../ui/main_dialog.py" line="2421" />
       <source>That layer is no longer in the project.</source>
       <translation>该图层已不在项目中。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2605" />
+      <location filename="../ui/main_dialog.py" line="2470" />
+      <location filename="../ui/main_dialog.py" line="2522" />
+      <source>Settings</source>
+      <translation>设置</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2471" />
+      <location filename="../ui/main_dialog.py" line="2522" />
+      <source>Help</source>
+      <translation>帮助</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2504" />
+      <source>Back</source>
+      <translation>返回</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2703" />
       <source>Write the map in the type and place chosen on the Map tab</source>
       <translation>按“地图”标签页中选择的类型和位置写入地图</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2692" />
+      <location filename="../ui/main_dialog.py" line="2790" />
       <source>Copies the map file's path to the clipboard</source>
       <translation>将地图文件路径复制到剪贴板</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2698" />
+      <location filename="../ui/main_dialog.py" line="2796" />
       <source>Shows the map file in your file manager</source>
       <translation>在文件管理器中显示地图文件</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2732" />
+      <location filename="../ui/main_dialog.py" line="2830" />
       <source>Make a cartograph...</source>
       <translation>创建图版...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2733" />
+      <location filename="../ui/main_dialog.py" line="2831" />
       <source>Builds a print layout from the current map view and switches to the Cartograph (Beta) output</source>
       <translation>根据当前地图视图创建打印布局，并切换到“图版 (Beta)”输出</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2741" />
+      <location filename="../ui/main_dialog.py" line="2839" />
       <source>Ask on Discord ↗</source>
       <translation>在 Discord 上提问 ↗</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2743" />
+      <location filename="../ui/main_dialog.py" line="2841" />
       <source>Open the QGIS2WebMap channel on the NIKA Discord in your browser. Ask a question, suggest something, or report a bug - no GitHub account needed.</source>
       <translation>在浏览器中打开 NIKA Discord 上的 QGIS2WebMap 频道。提问、提建议或报告错误——无需 GitHub 账户。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2750" />
+      <location filename="../ui/main_dialog.py" line="2848" />
       <source>More ways to share are coming soon</source>
       <translation>更多分享方式即将推出</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2798" />
+      <location filename="../ui/main_dialog.py" line="2896" />
       <source>NIKA account</source>
       <translation>NIKA 账户</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2803" />
+      <location filename="../ui/main_dialog.py" line="2901" />
       <source>Account</source>
       <translation>账户</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2816" />
+      <location filename="../ui/main_dialog.py" line="2914" />
       <source>Language</source>
       <translation>语言</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2820" />
+      <location filename="../ui/main_dialog.py" line="2918" />
       <source>Show this dialog in</source>
       <translation>对话框显示语言</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2850" />
+      <location filename="../ui/main_dialog.py" line="2948" />
       <source>Saving</source>
       <translation>保存</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2863" />
+      <location filename="../ui/main_dialog.py" line="2961" />
       <source>Use Documents</source>
       <translation>使用“文档”</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2867" />
-      <location filename="../ui/main_dialog.py" line="2904" />
+      <location filename="../ui/main_dialog.py" line="2965" />
+      <location filename="../ui/main_dialog.py" line="3002" />
       <source>Save new maps in</source>
       <translation>新地图保存到</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2885" />
+      <location filename="../ui/main_dialog.py" line="2983" />
       <source>Plugin version</source>
       <translation>插件版本</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2888" />
+      <location filename="../ui/main_dialog.py" line="2986" />
       <location filename="../ui/runtime_setup.py" line="248" />
       <location filename="../ui/runtime_setup.py" line="202" />
       <location filename="../ui/runtime_setup.py" line="263" />
@@ -3017,110 +3060,110 @@ They are also online at &lt;{url}&gt;.
       <translation>OnlyMap 运行时</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2947" />
+      <location filename="../ui/main_dialog.py" line="3045" />
       <source>Open the full documentation</source>
       <translation>打开完整文档</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2951" />
+      <location filename="../ui/main_dialog.py" line="3049" />
       <source>Join the community</source>
       <translation>加入社区</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2953" />
+      <location filename="../ui/main_dialog.py" line="3051" />
       <source>Open the NIKA Discord in your browser. Problems, suggestions and bug reports all go to the QGIS2WebMap channel - no GitHub account needed.</source>
       <translation>在浏览器中打开 NIKA 的 Discord。问题、建议和错误报告都发到 QGIS2WebMap 频道——无需 GitHub 账户。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3002" />
+      <location filename="../ui/main_dialog.py" line="3100" />
       <location filename="../ui/runtime_setup.py" line="243" />
       <source>Cancel</source>
       <translation>取消</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3086" />
+      <location filename="../ui/main_dialog.py" line="3184" />
       <source>Stopping...</source>
       <translation>正在停止...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3104" />
+      <location filename="../ui/main_dialog.py" line="3202" />
       <source>Stopped. Nothing was written.</source>
       <translation>已停止。未写入任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3129" />
+      <location filename="../ui/main_dialog.py" line="3227" />
       <source>Something went wrong</source>
       <translation>出现错误</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3239" />
-      <location filename="../ui/main_dialog.py" line="3230" />
+      <location filename="../ui/main_dialog.py" line="3337" />
+      <location filename="../ui/main_dialog.py" line="3328" />
       <source>Live preview stopped.</source>
       <translation>实时预览已停止。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3305" />
-      <location filename="../ui/main_dialog.py" line="3303" />
-      <location filename="../ui/main_dialog.py" line="3292" />
+      <location filename="../ui/main_dialog.py" line="3403" />
+      <location filename="../ui/main_dialog.py" line="3401" />
+      <location filename="../ui/main_dialog.py" line="3390" />
       <source>Updating the preview...</source>
       <translation>正在更新预览...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3544" />
+      <location filename="../ui/main_dialog.py" line="3647" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>构建地图需要 OnlyMap 运行时。未写入任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3560" />
-      <location filename="../ui/main_dialog.py" line="3784" />
-      <location filename="../ui/main_dialog.py" line="3491" />
+      <location filename="../ui/main_dialog.py" line="3663" />
+      <location filename="../ui/main_dialog.py" line="3887" />
+      <location filename="../ui/main_dialog.py" line="3594" />
       <source>Reading the project...</source>
       <translation>正在读取项目...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3630" />
-      <location filename="../ui/main_dialog.py" line="3581" />
+      <location filename="../ui/main_dialog.py" line="3733" />
+      <location filename="../ui/main_dialog.py" line="3684" />
       <source>Building the preview...</source>
       <translation>正在构建预览...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3649" />
+      <location filename="../ui/main_dialog.py" line="3752" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>实时预览无法在本机启动，因此预览以文件形式打开。修改后请刷新标签页。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3770" />
+      <location filename="../ui/main_dialog.py" line="3873" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>托管服务尚未上线——候补名单表单已在浏览器中打开。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3907" />
-      <location filename="../ui/main_dialog.py" line="3843" />
+      <location filename="../ui/main_dialog.py" line="4010" />
+      <location filename="../ui/main_dialog.py" line="3946" />
       <source>Writing the map...</source>
       <translation>正在写入地图...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3918" />
+      <location filename="../ui/main_dialog.py" line="4021" />
       <source>This will be a large single file</source>
       <translation>这将是一个很大的单一文件</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3921" />
+      <location filename="../ui/main_dialog.py" line="4024" />
       <source>The map file inlines all the data into the one HTML file, which is why it is this big. Exporting as Share ZIP on the Map tab packages the same map to send more easily.</source>
       <translation>地图文件把所有数据都内嵌在一个 HTML 文件中，所以才这么大。在“地图”标签页中导出为“分享用 ZIP”会打包同一张地图，更便于发送。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3928" />
+      <location filename="../ui/main_dialog.py" line="4031" />
       <source>Write it anyway</source>
       <translation>仍然写入</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3973" />
+      <location filename="../ui/main_dialog.py" line="4076" />
       <source>Choose where to save first</source>
       <translation>请先选择保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3974" />
+      <location filename="../ui/main_dialog.py" line="4077" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -3129,364 +3172,369 @@ Fill in Save to on the Map tab, then try again.</source>
 请在“地图”标签页填写“保存到”，然后重试。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3998" />
-      <location filename="../ui/main_dialog.py" line="3860" />
+      <location filename="../ui/main_dialog.py" line="4101" />
+      <location filename="../ui/main_dialog.py" line="3963" />
       <source>Cannot export</source>
       <translation>无法导出</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="424" />
+      <location filename="../ui/main_dialog.py" line="426" />
       <source>{n} s ago</source>
       <translation>{n} 秒前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="427" />
+      <location filename="../ui/main_dialog.py" line="429" />
       <source>{n} min ago</source>
       <translation>{n} 分钟前</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="927" />
+      <location filename="../ui/main_dialog.py" line="932" />
       <source>Shown on the map and in the browser tab. Leave blank to use the project title.</source>
       <translation>显示在地图上和浏览器标签页中。留空则使用项目标题。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="945" />
+      <location filename="../ui/main_dialog.py" line="950" />
       <source>Export as</source>
       <translation>导出为</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1043" />
+      <location filename="../ui/main_dialog.py" line="1048" />
       <source>Where the map is positioned when someone opens it. They can still pan and zoom anywhere afterwards.</source>
       <translation>别人打开地图时地图所在的位置。之后仍可随意平移和缩放。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1064" />
+      <location filename="../ui/main_dialog.py" line="1069" />
       <source>Leaves out everything outside the current QGIS view. This is the practical way to bring a very large layer under the free plan's 25,000-feature limit. The Fidelity tab reports how many features each layer loses.</source>
       <translation>排除当前 QGIS 视图以外的所有内容。这是让超大图层符合免费方案 25,000 个要素上限的实用方法。“保真度”标签页会列出每个图层损失的要素数量。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1081" />
+      <location filename="../ui/main_dialog.py" line="1086" />
       <source>{n} decimal place</source>
       <translation>{n} 位小数</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1081" />
+      <location filename="../ui/main_dialog.py" line="1086" />
       <source>{n} decimal places</source>
       <translation>{n} 位小数</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1100" />
+      <location filename="../ui/main_dialog.py" line="1105" />
       <source>Rounding makes the file smaller and cannot be undone. 6 places is about 0.1 m at the equator.</source>
       <translation>取整可减小文件且无法撤销。6 位小数在赤道处约为 0.1 米。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1180" />
+      <location filename="../ui/main_dialog.py" line="1185" />
       <source>Export makes a folder for a web server, carrying {n} layer.</source>
       <translation>导出会生成一个用于网站服务器的文件夹，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1180" />
+      <location filename="../ui/main_dialog.py" line="1185" />
       <source>Export makes a folder for a web server, carrying {n} layers.</source>
       <translation>导出会生成一个用于网站服务器的文件夹，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1186" />
+      <location filename="../ui/main_dialog.py" line="1191" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layer.</source>
       <translation>导出会生成一个双击即可打开的 HTML 文件，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1186" />
+      <location filename="../ui/main_dialog.py" line="1191" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layers.</source>
       <translation>导出会生成一个双击即可打开的 HTML 文件，包含 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1396" />
+      <location filename="../ui/main_dialog.py" line="1401" />
       <source>Export folder for hosting</source>
       <translation>导出用于托管的文件夹</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1428" />
+      <location filename="../ui/main_dialog.py" line="1433" />
       <source>Choose where to save, then press Export.</source>
       <translation>选择保存位置，然后点击“导出”。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1437" />
+      <location filename="../ui/main_dialog.py" line="1442" />
       <source>Not written yet.</source>
       <translation>尚未写入。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1551" />
+      <location filename="../ui/main_dialog.py" line="1556" />
       <source>The map file inlines every feature, so it carries all the data itself. Past about {limit} MB it gets slow to open and awkward to move around.</source>
       <translation>地图文件内嵌所有要素，因此自带全部数据。超过约 {limit} MB 后，打开会变慢，也不便传输。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1603" />
+      <location filename="../ui/main_dialog.py" line="1608" />
       <source>Include</source>
       <translation>包含</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1603" />
+      <location filename="../ui/main_dialog.py" line="1608" />
       <source>Popups</source>
       <translation>弹窗</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1638" />
+      <location filename="../ui/main_dialog.py" line="1643" />
       <source>Set every field to</source>
       <translation>将所有字段设为</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1831" />
+      <location filename="../ui/main_dialog.py" line="1854" />
       <source>Popups: same as map</source>
       <translation>弹窗：与地图相同</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1832" />
+      <location filename="../ui/main_dialog.py" line="1855" />
       <source>Popups: on hover</source>
       <translation>弹窗：悬停时</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1833" />
+      <location filename="../ui/main_dialog.py" line="1856" />
       <source>Popups: on click</source>
       <translation>弹窗：点击时</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1847" />
+      <location filename="../ui/main_dialog.py" line="1870" />
       <source>Precision: {n} decimal place</source>
       <translation>精度：{n} 位小数</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1847" />
+      <location filename="../ui/main_dialog.py" line="1870" />
       <source>Precision: {n} decimal places</source>
       <translation>精度：{n} 位小数</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2008" />
+      <location filename="../ui/main_dialog.py" line="2031" />
       <source>These are on by default - an exported map should be useful without configuring anything.</source>
       <translation>默认全部开启——导出的地图应当无需任何配置即可使用。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2057" />
+      <location filename="../ui/main_dialog.py" line="2080" />
       <source>Draws the map name over the map. The legend drops its own heading while this is on, so the title is not shown twice.</source>
       <translation>在地图上绘制地图名称。开启时图例会省略自己的标题，避免标题重复显示。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2072" />
+      <location filename="../ui/main_dialog.py" line="2095" />
       <source>The abstract from Project Properties &gt; Metadata. Nothing appears if the project has none.</source>
       <translation>来自“项目属性 &gt; 元数据”中的摘要。如果项目没有摘要，则不显示任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2090" />
+      <location filename="../ui/main_dialog.py" line="2113" />
       <source>All four corners already hold map controls - switcher top left, legend top right, zoom and scale bottom left, credit bottom right. The centres are the only clear space.</source>
       <translation>四个角都已放置地图控件——左上为切换器，右上为图例，左下为缩放和比例尺，右下为版权信息。只有中间位置是空的。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2132" />
+      <location filename="../ui/main_dialog.py" line="2155" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
       <translation>同时缩放图例、图层切换器、缩放控件、比例尺和标题。版权信息保持固定，以免署名缩小到无法辨认。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2143" />
+      <location filename="../ui/main_dialog.py" line="2166" />
       <source>Applies to the legend, layer switcher, zoom controls and scale bar. Leave both unset to keep the map's own styling.</source>
       <translation>应用于图例、图层切换器、缩放控件和比例尺。两项都不设置则保留地图本身的样式。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2168" />
+      <location filename="../ui/main_dialog.py" line="2191" />
       <source>Hover replaces click rather than adding to it.</source>
       <translation>悬停会取代点击，而不是与之并存。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2178" />
+      <location filename="../ui/main_dialog.py" line="2201" />
       <source>Highlight under the cursor</source>
       <translation>光标下的高亮</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2632" />
+      <location filename="../ui/main_dialog.py" line="2730" />
       <source>Live preview is on: Preview keeps the browser tab updating as you change settings. Click to turn it off.</source>
       <translation>实时预览已开启：预览会随你更改设置而持续更新浏览器标签页。点击即可关闭。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2637" />
+      <location filename="../ui/main_dialog.py" line="2735" />
       <source>Live preview is off: Preview opens the map as it is now. Click to keep the tab updating as you change settings.</source>
       <translation>实时预览已关闭：预览会打开地图的当前状态。点击后，标签页会随你更改设置而持续更新。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2647" />
+      <location filename="../ui/main_dialog.py" line="2745" />
       <source>Live preview is running. Press to stop it.</source>
       <translation>实时预览正在运行。按下即可停止。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2649" />
+      <location filename="../ui/main_dialog.py" line="2747" />
       <source>Open the map in your browser.</source>
       <translation>在浏览器中打开地图。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2807" />
+      <location filename="../ui/main_dialog.py" line="2905" />
       <source>Publishing maps to NIKA needs an account. Exporting a file never does.</source>
       <translation>向 NIKA 发布地图需要账户。导出文件从不需要。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2824" />
+      <location filename="../ui/main_dialog.py" line="2922" />
       <source>English is built in. Other languages are a small download the first time you pick one. Follow QGIS uses the language QGIS is set to, when it is one of these.</source>
       <translation>英语为内置语言。其他语言在你首次选择时需要少量下载。“跟随 QGIS”会在 QGIS 设置的语言属于以下之一时使用该语言。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2839" />
+      <location filename="../ui/main_dialog.py" line="2937" />
       <source>Light</source>
       <translation>浅色</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2871" />
+      <location filename="../ui/main_dialog.py" line="2969" />
       <source>Web maps and cartographs each get their own folder inside it, Web maps and Cartographs. Maps already saved stay where they are.</source>
       <translation>网络地图和图版各自在其中有单独的文件夹：Web maps 和 Cartographs。已保存的地图保持原位。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3030" />
+      <location filename="../ui/main_dialog.py" line="3128" />
       <source>Still working on the last request.</source>
       <translation>仍在处理上一个请求。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3249" />
+      <location filename="../ui/main_dialog.py" line="3347" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>预览标签页已关闭，预览服务器已停止。点击“预览”可重新启动。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3364" />
+      <location filename="../ui/main_dialog.py" line="3462" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>请向项目添加矢量或栅格图层以进行导出。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3627" />
+      <location filename="../ui/main_dialog.py" line="3730" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>实时预览已打开。在这里的更改会自动更新标签页。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3853" />
+      <location filename="../ui/main_dialog.py" line="3956" />
       <source>Finishing...</source>
       <translation>正在完成...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3960" />
+      <location filename="../ui/main_dialog.py" line="4063" />
       <source>Folder not found</source>
       <translation>未找到文件夹</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3994" />
+      <location filename="../ui/main_dialog.py" line="4097" />
       <source>No layer in the selection could be read.</source>
       <translation>所选图层均无法读取。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4003" />
+      <location filename="../ui/main_dialog.py" line="4106" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>请在 QGIS 中修正这些问题后再次导出。“保真度”标签页列出了所有检查项。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="375" />
+      <location filename="../ui/main_dialog.py" line="377" />
       <source>&lt;p&gt;Details are in the QGIS message log, under &lt;b&gt;{tag}&lt;/b&gt;.&lt;/p&gt;&lt;p&gt;Tell us about it in the QGIS2WebMap channel on &lt;a href="{discord}"&gt;our Discord&lt;/a&gt;, or &lt;a href="{issues}"&gt;open a GitHub issue&lt;/a&gt;. Please include the log.&lt;/p&gt;</source>
       <translation>&lt;p&gt;详细信息在 QGIS 消息日志的 &lt;b&gt;{tag}&lt;/b&gt; 下。&lt;/p&gt;&lt;p&gt;请在&lt;a href="{discord}"&gt;我们的 Discord&lt;/a&gt; 的 QGIS2WebMap 频道告诉我们，或&lt;a href="{issues}"&gt;在 GitHub 提交 issue&lt;/a&gt;。请附上日志。&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1446" />
+      <location filename="../ui/main_dialog.py" line="1451" />
       <source>The map file cannot be read from here.</source>
       <translation>无法从这里读取地图文件。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1516" />
+      <location filename="../ui/main_dialog.py" line="1521" />
       <source>Choose where to save on the Map tab first</source>
       <translation>请先在“地图”标签页选择保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3097" />
+      <location filename="../ui/main_dialog.py" line="3195" />
       <source>Export failed</source>
       <translation>导出失败</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3115" />
+      <location filename="../ui/main_dialog.py" line="3213" />
       <source>Live preview could not be updated ({message}) - see the QGIS log.</source>
       <translation>无法更新实时预览（{message}）——请查看 QGIS 日志。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3301" />
+      <location filename="../ui/main_dialog.py" line="3399" />
       <source>Live preview updated.</source>
       <translation>实时预览已更新。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3367" />
+      <location filename="../ui/main_dialog.py" line="3465" />
       <source>Tick at least one layer to include.</source>
       <translation>请至少勾选一个要包含的图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3372" />
+      <location filename="../ui/main_dialog.py" line="3470" />
       <source>{n} layer will be exported.</source>
       <translation>将导出 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3372" />
+      <location filename="../ui/main_dialog.py" line="3470" />
       <source>{n} layers will be exported.</source>
       <translation>将导出 {n} 个图层。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3592" />
-      <location filename="../ui/main_dialog.py" line="3618" />
+      <location filename="../ui/main_dialog.py" line="3695" />
+      <location filename="../ui/main_dialog.py" line="3721" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>预览已打开。更改后再次按预览即可 - 你在地图上的位置会保留。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3821" />
+      <location filename="../ui/main_dialog.py" line="3924" />
       <source>Choose Folder or Share ZIP</source>
       <translation>请选择文件夹或分享用 ZIP</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3888" />
+      <location filename="../ui/main_dialog.py" line="3991" />
       <source>Exported, with warnings</source>
       <translation>已导出，但有警告</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1199" />
+      <location filename="../ui/main_dialog.py" line="1204" />
       <source>To: {path}</source>
       <translation>保存到：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1474" />
+      <location filename="../ui/main_dialog.py" line="1479" />
       <source>Last written {ago} - {detail}. The project has changed since; Export writes it again.</source>
       <translation>上次写入于 {ago} - {detail}。此后项目已更改；“导出”会重新写入。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1481" />
+      <location filename="../ui/main_dialog.py" line="1486" />
       <source>Last written {ago} - {detail}</source>
       <translation>上次写入于 {ago} - {detail}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1567" />
+      <location filename="../ui/main_dialog.py" line="1572" />
       <source>This map's data is {size} MB, past the {limit} MB where a single file starts to be unwieldy. The map file is still written - exporting as Share ZIP is the practical way to send something this size.</source>
       <translation>此地图的数据为 {size} MB，超过了 {limit} MB，单个文件会变得难以处理。地图文件仍会写入——导出为“分享用 ZIP”是发送这种大小文件的实用方式。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1909" />
+      <location filename="../ui/main_dialog.py" line="1932" />
       <source>Names: {field}</source>
       <translation>名称：{field}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2889" />
+      <location filename="../ui/main_dialog.py" line="2987" />
       <source>not pinned</source>
       <translation>未固定</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3435" />
+      <location filename="../ui/main_dialog.py" line="3477" />
+      <source>{n} of {total} included</source>
+      <translation>已包含 {n}/{total}</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="3538" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>正在读取“{name}”（第 {done} 个，共 {total} 个）</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3895" />
+      <location filename="../ui/main_dialog.py" line="3998" />
       <source>The Fidelity tab lists the detail.</source>
       <translation>详情请见“保真度”标签页。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3905" />
+      <location filename="../ui/main_dialog.py" line="4008" />
       <source>Export complete</source>
       <translation>导出完成</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3961" />
+      <location filename="../ui/main_dialog.py" line="4064" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -3495,18 +3543,18 @@ Pick somewhere that exists, or create it first.</source>
 请选择一个已存在的位置，或先创建它。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1579" />
+      <location filename="../ui/main_dialog.py" line="1584" />
       <source>This map's data is {size} MB.</source>
       <translation>此地图的数据为 {size} MB。</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3861" />
-      <location filename="../ui/main_dialog.py" line="3999" />
+      <location filename="../ui/main_dialog.py" line="3964" />
+      <location filename="../ui/main_dialog.py" line="4102" />
       <source>This map cannot be exported yet:</source>
       <translation>此地图暂时无法导出：</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3891" />
+      <location filename="../ui/main_dialog.py" line="3994" />
       <source>The exported map has known limitations:</source>
       <translation>导出的地图存在已知限制：</translation>
     </message>

@@ -89,6 +89,18 @@ LINE_ICONS = {
         '<circle cx="8" cy="8" r="6"/>'
         '<path d="M8 7.2v3.8"/><circle cx="8" cy="4.9" r="0.4" fill="{c}"/>'
     ),
+    "settings": (
+        '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>'
+        '<circle cx="10" cy="4.5" r="1.6" fill="{c}"/>'
+        '<circle cx="5.5" cy="8" r="1.6" fill="{c}"/>'
+        '<circle cx="9" cy="11.5" r="1.6" fill="{c}"/>'
+    ),
+    "help": (
+        '<circle cx="8" cy="8" r="6"/>'
+        '<path d="M6.2 6.3a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.9"/>'
+        '<circle cx="8" cy="11.4" r="0.4" fill="{c}"/>'
+    ),
+    "back": '<path d="M9.8 3.5 5.3 8l4.5 4.5"/>',
 }
 
 
@@ -1062,6 +1074,44 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QLabel[role="panelHeading"] {{
     color: {p.ink};
     font-weight: 600;
+}}
+
+/* The cartograph panel's sections: a quiet header line that opens. */
+{d} QFrame[role="panelSection"] {{
+    background: transparent;
+    border: none;
+    border-top: 1px solid {p.rule};
+}}
+{d} QToolButton[role="sectionHeader"] {{
+    background: transparent;
+    border: none;
+    color: {p.ink};
+    font-weight: 600;
+    padding: 8px 2px;
+    text-align: left;
+}}
+{d} QToolButton[role="sectionHeader"]:hover {{
+    color: {p.link};
+}}
+{d} QLabel[role="sectionSummary"] {{
+    color: {p.muted};
+}}
+
+/* Map frames: a small card per map item. */
+{d} QFrame[role="frameCard"] {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+}}
+{d} QLabel[role="frameName"] {{
+    color: {p.ink};
+    font-weight: 600;
+}}
+{d} QLabel[role="frameIssues"] {{
+    color: {p.warn};
+}}
+{d} QLabel[role="frameIssues"][muted="true"] {{
+    color: {p.muted};
 }}
 
 /* The template picker: one design per row, the chosen one ringed. */

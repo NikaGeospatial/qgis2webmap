@@ -351,8 +351,9 @@ class TestTheCacheRoundTrips:
 
 
 class TestTheDialogSeatsIt:
-    def test_the_settings_tab_carries_the_account(self, qgis_app, project):
-        """True of every project, so it sits with the other settings."""
+    def test_the_settings_page_carries_the_account(self, qgis_app, project):
+        """True of every project, so it sits with the other settings - on the
+        Settings page the header's Settings button opens."""
         from nika_onlymap_exporter.ui.account_button import AccountButton
         from nika_onlymap_exporter.ui.main_dialog import MainDialog
 
@@ -363,11 +364,10 @@ class TestTheDialogSeatsIt:
         dialog = MainDialog(FakeIface(), None)
         try:
             assert isinstance(dialog.account_button, AccountButton)
-            settings = next(
-                dialog.tabs.widget(i)
-                for i in range(dialog.tabs.count())
-                if dialog.tabs.tabText(i) == "Settings"
-            )
+            dialog.settings_button.click()
+            assert dialog.views.currentWidget() is dialog._aside
+            settings = dialog._aside_stack.currentWidget()
+            assert settings is dialog._settings_page
             assert dialog.account_button in settings.findChildren(AccountButton)
         finally:
             dialog.close()

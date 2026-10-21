@@ -36,13 +36,14 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
+    QScrollArea,
+    QSplitter,
     QToolButton,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -75,7 +76,9 @@ from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import layout_map_items
+from .frames_list import FrameRow, FramesList
 from .layout_page import LayoutPicker, LayoutPreview, SaveLocation
+from .panel_section import PanelSection
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -98,9 +101,11 @@ DPI_CHOICES = (150, 200, 300)
 
 # The runtime's built-in themes (`core/cartograph_ir.CARTOGRAPH_THEMES`), in
 # the order the Theme box offers them.
-# The settings beside the page preview: wide enough for a path's tail and a
-# theme name, narrow enough that the page keeps most of the tab.
-PANEL_WIDTH = 300
+# The panel beside the page preview: wide enough for the layer list's four
+# columns and a path's tail, narrow enough that the page keeps most of the
+# screen. The user can drag it wider; never narrower than the minimum.
+PANEL_WIDTH = 380
+PANEL_MIN_WIDTH = 320
 
 _THEME_LABELS = (
     ("default", N_("Default")),
@@ -151,7 +156,6 @@ class CartographController:
         self._layout_changed_connected = False
         self._manager_connected = False
         self._frame_rows: dict[str, dict[str, QComboBox]] = {}
-        self._frame_tree_rows: dict[str, QTreeWidgetItem] = {}
 
         self._job: BackgroundJob | None = None
         self._last_saved_at: float | None = None
@@ -238,23 +242,27 @@ class CartographController:
     # ---- Cartograph tab -----------------------------------------------
 
     def build_cartograph_tab(self) -> QWidget:
-        """The page on the left, live; the layout and its settings beside it.
+        """The Cartograph output's whole screen: the page, live, and one
+        panel beside it - the layout list, then its settings in sections.
 
-        See `layout_page` for why the tab is split this way.
+        It replaces seven tabs. See `panel_section` for why the settings sit
+        in one panel, and `layout_page` for the page. Layers and Checks are
+        the dialog's own widgets, shared with the web map; the dialog moves
+        them into their sections (`layers_section`, `checks_section`) while
+        Cartograph is on screen.
         """
-        page = QWidget(self.dialog)
-        row = QHBoxLayout(page)
-        row.setSpacing(16)
+        splitter = QSplitter(Qt.Orientation.Horizontal, self.dialog)
+        splitter.setChildrenCollapsible(False)
 
-        self.page_preview = LayoutPreview(page)
+        self.page_preview = LayoutPreview(splitter)
         self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
         self.page_preview.import_requested.connect(self.on_import_cartograph)
-        row.addWidget(self.page_preview, 1)
+        splitter.addWidget(self.page_preview)
 
-        panel = QWidget(page)
-        panel.setFixedWidth(PANEL_WIDTH)
+        panel = QWidget(splitter)
+        panel.setMinimumWidth(PANEL_MIN_WIDTH)
         column = QVBoxLayout(panel)
-        column.setContentsMargins(0, 0, 0, 0)
+        column.setContentsMargins(12, 0, 0, 0)
         column.setSpacing(6)
 
         layout_heading = QLabel(tr("Layout"), panel)
@@ -277,55 +285,129 @@ class CartographController:
         self.layout_empty_note.setProperty("role", "hint")
         self.layout_empty_note.setVisible(False)
         column.addWidget(self.layout_empty_note)
-        column.addSpacing(10)
+        column.addSpacing(6)
 
-        # Everything below the list belongs to a layout; with none there is
-        # nothing to set, so it is hidden rather than left to type into.
-        self._layout_settings = QWidget(panel)
-        settings_column = QVBoxLayout(self._layout_settings)
-        settings_column.setContentsMargins(0, 0, 0, 0)
-        settings_column.setSpacing(6)
-        page_fields = QWidget(self._layout_settings)
-        page_form = QFormLayout(page_fields)
+        # The sections scroll; the layout list above and the file line below
+        # stay put, so where it saves is always in view.
+        sections_scroll = QScrollArea(panel)
+        sections_scroll.setWidgetResizable(True)
+        sections_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        sections_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        sections = QWidget(sections_scroll)
+        sections_column = QVBoxLayout(sections)
+        sections_column.setContentsMargins(0, 0, 6, 0)
+        sections_column.setSpacing(2)
+
+        self.page_section = PanelSection(
+            "page", tr("Page"), sections, open_by_default=True
+        )
+        page_form = QFormLayout()
         page_form.setContentsMargins(0, 0, 0, 0)
         page_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         page_form.setVerticalSpacing(4)
-        self.title_edit = QLineEdit(page_fields)
+        self.title_edit = QLineEdit(self.page_section.body)
         self.title_edit.setPlaceholderText(tr("The project title"))
         self.title_edit.setToolTip(
             tr("Shown wherever the layout uses the project title. Blank keeps it.")
         )
         self.title_edit.textEdited.connect(self._on_page_edited)
         page_form.addRow(tr("Title"), self.title_edit)
-        self.attribution_edit = QLineEdit(page_fields)
+        self.attribution_edit = QLineEdit(self.page_section.body)
         self.attribution_edit.setPlaceholderText(tr("Optional, e.g. data sources"))
         self.attribution_edit.textEdited.connect(self._on_page_edited)
         page_form.addRow(tr("Attribution"), self.attribution_edit)
-        self.theme_combo = QComboBox(page_fields)
+        self.theme_combo = QComboBox(self.page_section.body)
         for theme_id, label in _THEME_LABELS:
             self.theme_combo.addItem(tr(label), theme_id)
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
-        settings_column.addWidget(page_fields)
-        settings_column.addStretch(1)
+        self.page_section.body_layout.addLayout(page_form)
 
-        self.file_edit = SaveLocation(self._layout_settings)
+        self.frames_section = PanelSection("frames", tr("Map frames"), sections)
+        self.frames_section.body_layout.addWidget(self.build_frames_tab())
+        self.atlas_section = PanelSection("atlas", tr("Atlas"), sections)
+        self.atlas_section.body_layout.addWidget(self.build_atlas_tab())
+        self.atlas_tab.changed.connect(self._update_section_summaries)
+        self.checks_section = PanelSection("checks", tr("Checks"), sections)
+        self.layers_section = PanelSection("layers", tr("Layers"), sections)
+        self.sections = {
+            "page": self.page_section,
+            "frames": self.frames_section,
+            "atlas": self.atlas_section,
+            "checks": self.checks_section,
+            "layers": self.layers_section,
+        }
+        for section in self.sections.values():
+            sections_column.addWidget(section)
+        sections_column.addStretch(1)
+        sections_scroll.setWidget(sections)
+        column.addWidget(sections_scroll, 1)
+        # Takes the sections' room while they are hidden, so the layout list
+        # stays at the top of an empty panel instead of drifting down it.
+        self._panel_filler = QWidget(panel)
+        self._panel_filler.setVisible(False)
+        column.addWidget(self._panel_filler, 1)
+
+        self.file_edit = SaveLocation(panel)
         self.file_edit.setPlaceholderText(tr("Choose where the cartograph is saved"))
         self.file_edit.textEdited.connect(self._on_file_edited)
         self.file_edit.change_requested.connect(self._on_choose_file)
-        settings_column.addWidget(self.file_edit)
-        self.cartograph_status_label = FittedLabel("", self._layout_settings)
+        column.addWidget(self.file_edit)
+        self.cartograph_status_label = FittedLabel("", panel)
         self.cartograph_status_label.setWordWrap(True)
         self.cartograph_status_label.setProperty("role", "hint")
-        settings_column.addWidget(self.cartograph_status_label)
-        column.addWidget(self._layout_settings, 1)
-        # Hidden one by one, not as a block: the block's stretch is what keeps
-        # the layout list at the top of the panel.
-        self._layout_only = (page_fields, self.file_edit, self.cartograph_status_label)
+        column.addWidget(self.cartograph_status_label)
+        # Everything below the list belongs to a layout; with none there is
+        # nothing to set, so it is hidden rather than left to type into.
+        self._layout_only = (
+            sections_scroll,
+            self.file_edit,
+            self.cartograph_status_label,
+        )
         self._update_status_label()
 
-        row.addWidget(panel)
-        return page
+        splitter.addWidget(panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([10_000, PANEL_WIDTH])
+        self.workspace = splitter
+        return splitter
+
+    def open_section(self, key: str) -> None:
+        """Open a section and bring it into view - a jump from elsewhere,
+        such as a check's "Show in Layers"."""
+        section = self.sections[key]
+        section.set_open(True)
+        scroll = self._layout_only[0]
+        if isinstance(scroll, QScrollArea):
+            QTimer.singleShot(0, lambda: scroll.ensureWidgetVisible(section, 0, 0))
+
+    def _update_checks_summary(self) -> None:
+        if not hasattr(self, "checks_section"):
+            return
+        summary = self._last_summary
+        if summary is None:
+            text = tr("Not checked yet.")
+        elif not summary.change_count:
+            text = tr("Nothing to report.")
+        else:
+            text = plural(
+                summary.change_count, "{n} thing changes", "{n} things change"
+            )
+        self.checks_section.set_summary(text)
+
+    def _update_section_summaries(self, *_args: object) -> None:
+        """The few words each closed section shows about itself."""
+        if not hasattr(self, "sections"):
+            return
+        self.page_section.set_summary(self.theme_combo.currentText())
+        frames = self.frames_list.summary()
+        self.frames_section.set_summary(frames)
+        atlas = getattr(self, "atlas_tab", None)
+        on = atlas is not None and atlas.enabled_check.isChecked()
+        self.atlas_section.set_summary(tr("On") if on else tr("Off"))
 
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
@@ -464,6 +546,7 @@ class CartographController:
         page.title = self.title_edit.text().strip()
         page.attribution = self.attribution_edit.text().strip()
         page.theme = self.theme_combo.currentData() or "default"
+        self._update_section_summaries()
         self._on_cartograph_setting_changed()
 
     def _load_page_fields(self) -> None:
@@ -516,38 +599,22 @@ class CartographController:
     # ---- Frames tab -----------------------------------------------------
 
     def build_frames_tab(self) -> QWidget:
-        page = QWidget(self.dialog)
-        layout = QVBoxLayout(page)
-
-        note = FittedLabel(
-            tr(
-                "One row per map on the selected layout. Live frames render in "
-                "the browser and need a CRS the runtime can map; Static frames "
-                "export a raster image at the DPI you choose."
-            ),
-            page,
+        """Map frames: a card per map item - see `frames_list`."""
+        self.frames_list = FramesList(DPI_CHOICES, self.dialog)
+        self.frames_list.mode_changed.connect(
+            lambda item_id, _mode: self._on_frame_mode_changed(
+                item_id,
+                self._frame_rows[item_id]["mode"],
+                self._frame_rows[item_id]["dpi"],
+            )
         )
-        note.setWordWrap(True)
-        layout.addWidget(note)
-
-        self.frames_tree = QTreeWidget(page)
-        self.frames_tree.setColumnCount(6)
-        self.frames_tree.setHeaderLabels(
-            [tr("Map item"), tr("CRS"), tr("Frame"), tr("DPI"), tr("Changes"), ""]
+        self.frames_list.dpi_changed.connect(
+            lambda item_id, _dpi: self._on_frame_dpi_changed(
+                item_id, self._frame_rows[item_id]["dpi"]
+            )
         )
-        self.frames_tree.setRootIsDecorated(False)
-        self.frames_tree.setUniformRowHeights(True)
-        layout.addWidget(self.frames_tree)
-
-        self.frames_empty_note = FittedLabel(
-            tr("This layout has no maps on it yet."), page
-        )
-        self.frames_empty_note.setWordWrap(True)
-        self.frames_empty_note.setVisible(False)
-        layout.addWidget(self.frames_empty_note)
-
-        layout.addStretch(1)
-        return page
+        self.frames_list.match_canvas_requested.connect(self._match_canvas)
+        return self.frames_list
 
     # ---- Atlas tab -------------------------------------------------------
 
@@ -581,80 +648,36 @@ class CartographController:
         self.atlas_tab.show_outcome(problems, pages_written="<om-atlas" in html)
 
     def _rebuild_frames_rows(self) -> None:
-        self.frames_tree.clear()
         self._frame_rows.clear()
-        self._frame_tree_rows.clear()
         if self._current_layout is None:
-            self.frames_empty_note.setVisible(False)
+            self.frames_list.set_frames(None)
             return
 
-        items = layout_map_items(self._current_layout)
-        self.frames_empty_note.setVisible(not items)
         choices = self.state.frame_choices(self.state.cartograph_layout)
-
-        for frame_item in items:
+        rows = []
+        for frame_item in layout_map_items(self._current_layout):
             choice = choices.get(frame_item.item_id)
             if choice is None:
                 choice = FrameChoice(mode=frame_item.default_mode)
                 choices[frame_item.item_id] = choice
-
-            row = QTreeWidgetItem(
-                [frame_item.name, frame_item.crs_authid or tr("Unknown CRS"), "", ""]
-            )
-            self.frames_tree.addTopLevelItem(row)
-
-            mode_combo = QComboBox(self.frames_tree)
-            mode_combo.addItem(tr("Live"), "live")
-            mode_combo.addItem(tr("Static"), "static")
-            mode_combo.setCurrentIndex(0 if choice.mode == "live" else 1)
-            self.frames_tree.setItemWidget(row, 2, mode_combo)
-
-            dpi_combo = QComboBox(self.frames_tree)
-            # Wide enough for "300" whatever the style's arrow takes.
-            dpi_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-            dpi_combo.setMinimumContentsLength(4)
-            for dpi in DPI_CHOICES:
-                dpi_combo.addItem(str(dpi), dpi)
-            found = dpi_combo.findData(choice.dpi)
-            dpi_combo.setCurrentIndex(found if found >= 0 else 0)
-            dpi_combo.setEnabled(choice.mode == "static")
-            self.frames_tree.setItemWidget(row, 3, dpi_combo)
-
-            item_id = frame_item.item_id
-            mode_combo.currentIndexChanged.connect(
-                lambda _index, item_id=item_id, mode=mode_combo, dpi=dpi_combo: (
-                    self._on_frame_mode_changed(item_id, mode, dpi)
+            rows.append(
+                FrameRow(
+                    item_id=frame_item.item_id,
+                    name=frame_item.name,
+                    crs=frame_item.crs_authid or tr("Unknown CRS"),
+                    mode=choice.mode,
+                    dpi=choice.dpi,
+                    issues=self._frame_issue_counts.get(frame_item.item_id),
                 )
             )
-            dpi_combo.currentIndexChanged.connect(
-                lambda _index, item_id=item_id, dpi_combo=dpi_combo: (
-                    self._on_frame_dpi_changed(item_id, dpi_combo)
-                )
-            )
-            issues = self._frame_issue_counts.get(item_id)
-            row.setText(4, "" if issues is None else str(issues))
-            row.setToolTip(
-                4,
-                tr(
-                    "Items on this frame the cartograph changes or leaves out; "
-                    "see the Fidelity tab"
-                ),
-            )
-            match = QToolButton(self.frames_tree)
-            match.setText(tr("Use canvas view"))
-            match.setToolTip(
-                tr("Set this map item's extent to what the QGIS map canvas shows")
-            )
-            match.setEnabled(self._map_canvas() is not None)
-            match.clicked.connect(
-                lambda _checked=False, item_id=item_id: self._match_canvas(item_id)
-            )
-            self.frames_tree.setItemWidget(row, 5, match)
-            self._frame_rows[item_id] = {"mode": mode_combo, "dpi": dpi_combo}
-            self._frame_tree_rows[item_id] = row
-
-        for column in range(6):
-            self.frames_tree.resizeColumnToContents(column)
+        self.frames_list.set_frames(rows)
+        self.frames_list.set_canvas_available(self._map_canvas() is not None)
+        for row in rows:
+            card = self.frames_list.card(row.item_id)
+            self._frame_rows[row.item_id] = {
+                "mode": card.mode_combo,
+                "dpi": card.dpi_combo,
+            }
 
     def _map_canvas(self):
         iface = getattr(self.dialog, "iface", None)
@@ -698,7 +721,7 @@ class CartographController:
     ) -> None:
         mode = mode_combo.currentData()
         self.state.frame_choices(self.state.cartograph_layout)[item_id].mode = mode
-        dpi_combo.setEnabled(mode == "static")
+        self._update_section_summaries()
         self._on_cartograph_setting_changed()
 
     def _on_frame_dpi_changed(self, item_id: str, dpi_combo: QComboBox) -> None:
@@ -767,6 +790,7 @@ class CartographController:
         self.page_preview.show_layout(layout)
         for widget in self._layout_only:
             widget.setVisible(layout is not None)
+        self._panel_filler.setVisible(layout is None)
 
         if layout is not None:
             try:
@@ -788,6 +812,7 @@ class CartographController:
             self._forget_last_save()
         self._update_status_label()
         self._update_share_enabled()
+        self._update_section_summaries()
         save_state(self.project, self.state)
         if switching:
             if self.state.output is DialogOutput.CARTOGRAPH:
@@ -1078,9 +1103,8 @@ class CartographController:
                 )
         self._frame_issue_counts = counts
         for item_id, count in counts.items():
-            row = self._frame_tree_rows.get(item_id)
-            if row is not None:
-                row.setText(4, str(count))
+            if item_id in self._frame_rows:
+                self.frames_list.set_issue_count(item_id, count)
 
     @property
     def has_report(self) -> bool:
@@ -1096,6 +1120,7 @@ class CartographController:
             return
         panel = self.dialog.fidelity_panel
         strip = self.dialog.fidelity_strip
+        self._update_checks_summary()
         if self._last_summary is None:
             panel.show_not_checked()
             strip.show_message(

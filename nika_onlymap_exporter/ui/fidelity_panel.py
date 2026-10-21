@@ -42,6 +42,7 @@ from qgis.PyQt.QtGui import QBrush, QFont, QPalette, QPixmap
 from qgis.PyQt.QtWidgets import (
     QAbstractButton,
     QAction,
+    QBoxLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -115,6 +116,8 @@ TREE_STRETCH = 5
 DETAIL_STRETCH = 1
 DETAIL_MIN_HEIGHT = 60
 SEARCH_WIDTH = 220
+#: The search box in the cartograph's narrow panel (`set_compact`).
+COMPACT_SEARCH_WIDTH = 120
 
 EXACT_TEXT = N_("✓ exact")
 SELECT_HINT = N_("Select a row to see where it applies and where to change it.")
@@ -255,6 +258,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         top.addWidget(self.check_button)
         top.addLayout(self._build_filters())
         layout.addLayout(top)
+        self._top = top
 
         # The whole map in one line: what the map is, not what changes in it.
         # Shown on the Whole map row, the way each layer's facts sit on its
@@ -323,6 +327,17 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         layout.addWidget(splitter, 1)
 
         self.show_not_checked()
+
+    def set_compact(self, compact: bool) -> None:
+        """Fit a narrow panel: the headline, Check now and the filters stack
+        instead of sharing one row. The cartograph's Checks section is a
+        third of the dialog wide; the web map's Fidelity tab is all of it."""
+        self._top.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if compact
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self.search.setMinimumWidth(COMPACT_SEARCH_WIDTH if compact else SEARCH_WIDTH)
 
     def _build_filters(self) -> QHBoxLayout:
         """A Filter menu - each verdict and topic, ticked or not - and a search.

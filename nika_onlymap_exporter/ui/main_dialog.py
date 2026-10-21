@@ -53,6 +53,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
+    QBoxLayout,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -71,6 +72,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QStackedWidget,
     QTabWidget,
     QTextBrowser,
     QToolButton,
@@ -743,8 +745,9 @@ class MainDialog(QDialog):
         # Held, not found by title: the title is translated.
         self._fidelity_page = self._build_fidelity_tab()
         self.tabs.addTab(self._fidelity_page, tr("Fidelity"))
+        # Settings and Help are not tabs: they are the person's, not the
+        # map's, so they open from icons in the header (`_show_aside`).
         self._help_page = self._build_help_tab()
-        self.tabs.addTab(self._help_page, tr("Help"))
         # Tabs by their English names, for jumps that must survive translation.
         self._pages = {
             "Map": self._map_tab_widget,
@@ -753,35 +756,37 @@ class MainDialog(QDialog):
             "Fidelity": self._fidelity_page,
             "Help": self._help_page,
         }
+        self._layers_page = self.tabs.widget(1)
         # The web map's actions. They sit in the header beside the output's
         # name, with the Cartograph output's own; `_apply_output` shows the
         # one that matches.
         self._web_corner = self._build_tab_corner()
-        # Before Help, where people look for settings.
-        self.tabs.insertTab(
-            self.tabs.indexOf(self._help_page),
-            _scrollable(self._build_settings_tab()),
-            tr("Settings"),
-        )
+        self._settings_page = _scrollable(self._build_settings_tab())
+        self._pages["Settings"] = self._settings_page
         self._fidelity_is_stale = True
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
-        # The Cartograph output's own two tabs, built now and swapped in by
-        # `_apply_output` - never added and removed by rebuilding, so a user's
-        # in-progress edit on one is never lost by flipping the switch and
-        # flipping it back.
-        # Not scrollable: its page preview scrolls and zooms by itself.
-        self._cartograph_tab_widget = self._cartograph.build_cartograph_tab()
-        self._frames_tab_widget = _scrollable(self._cartograph.build_frames_tab())
-        self._atlas_tab_widget = _scrollable(self._cartograph.build_atlas_tab())
+        # The Cartograph output's whole screen - the page and its panel -
+        # built now and swapped in by `_apply_output`, never rebuilt, so a
+        # user's in-progress edit is never lost by switching outputs and back.
+        self._cartograph_workspace = self._cartograph.build_cartograph_tab()
+
+        # What fills the dialog: the web map's tabs, the cartograph's
+        # workspace, or Settings / Help with a way back.
+        self.views = QStackedWidget(self)
+        self.views.addWidget(self.tabs)
+        self.views.addWidget(self._cartograph_workspace)
+        self.views.addWidget(self._build_aside())
 
         layout.addWidget(self._build_header())
-        layout.addWidget(self.tabs)
+        layout.addWidget(self.views)
         # Puts Map/Appearance or Cartograph/Frames on screen to match what was
         # last saved, without marking a project that only opened the dialog as
         # changed - see `_apply_output`'s `persist` argument.
         self._apply_output(self.state.output, persist=False)
         layout.addWidget(self._build_fidelity_strip())
+        # The cartograph's Checks section says the same in its header.
+        self.fidelity_strip.setVisible(self.state.output is DialogOutput.WEB_MAP)
         self._show_active_fidelity()
         layout.addWidget(self._build_progress_row())
         layout.addLayout(self._build_button_row())
@@ -1656,7 +1661,25 @@ class MainDialog(QDialog):
         bulk.addStretch(1)
         bulk.addWidget(self.layers_info_button)
         layout.addLayout(bulk)
+        self._bulk_row = bulk
         return page
+
+    def _set_layers_compact(self, compact: bool) -> None:
+        """Fit the cartograph's narrow panel: the bulk action stacks, and the
+        three tick columns take only the room their headings need."""
+        self._bulk_row.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if compact
+            else QBoxLayout.Direction.LeftToRight
+        )
+        header = self.layer_tree.header()
+        for column in (1, 2, 3):
+            header.setSectionResizeMode(
+                column,
+                QHeaderView.ResizeMode.ResizeToContents
+                if compact
+                else QHeaderView.ResizeMode.Interactive,
+            )
 
     def _project_content_changed(self) -> None:
         """A layer was restyled or its edits saved in QGIS. Everything read
@@ -2399,10 +2422,23 @@ class MainDialog(QDialog):
 
     def _show_tab(self, title: str) -> None:
         """Open a tab by its English name. Titles on screen are translated, so
-        the pages are looked up rather than the text."""
+        the pages are looked up rather than the text.
+
+        Settings and Help open beside the map; on the cartograph, Layers and
+        Fidelity are sections of its panel, so those open instead.
+        """
         page = self._pages.get(title)
-        if page is not None:
-            self.tabs.setCurrentWidget(page)
+        if page is None:
+            return
+        if page in (self._settings_page, self._help_page):
+            self._show_aside(page)
+            return
+        self._close_aside()
+        carto_sections = {"Layers": "layers", "Fidelity": "checks"}
+        if self.state.output is DialogOutput.CARTOGRAPH and title in carto_sections:
+            self._cartograph.open_section(carto_sections[title])
+            return
+        self.tabs.setCurrentWidget(page)
 
     # ---- Help tab -------------------------------------------------------
 
@@ -2431,7 +2467,69 @@ class MainDialog(QDialog):
         # Both always in the row, one hidden: a hidden widget takes no room.
         row_layout.addWidget(self._web_corner)
         row_layout.addWidget(self._cartograph.build_corner())
+        self.settings_button = self._aside_button("settings", tr("Settings"), row)
+        self.help_button = self._aside_button("help", tr("Help"), row)
+        row_layout.addWidget(self.settings_button)
+        row_layout.addWidget(self.help_button)
         return row
+
+    def _aside_button(self, icon: str, name: str, parent: QWidget) -> QToolButton:
+        """An icon in the header that opens Settings or Help, and closes it
+        again when pressed a second time."""
+        button = QToolButton(parent)
+        button.setProperty("role", "corner")
+        button.setProperty("iconOnly", True)
+        button.setProperty("lineIcon", icon)
+        button.setCheckable(True)
+        button.setToolTip(name)
+        button.setAccessibleName(name)
+        page = self._settings_page if icon == "settings" else self._help_page
+        button.clicked.connect(
+            lambda checked, page=page: (
+                self._show_aside(page) if checked else self._close_aside()
+            )
+        )
+        return button
+
+    def _build_aside(self) -> QWidget:
+        """Settings or Help in place of the map's own screen, with Back."""
+        aside = QWidget(self)
+        column = QVBoxLayout(aside)
+        column.setContentsMargins(0, 0, 0, 0)
+        top = QHBoxLayout()
+        self.aside_back = QToolButton(aside)
+        self.aside_back.setProperty("role", "corner")
+        self.aside_back.setProperty("lineIcon", "back")
+        self.aside_back.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.aside_back.setText(tr("Back"))
+        self.aside_back.clicked.connect(self._close_aside)
+        top.addWidget(self.aside_back)
+        self.aside_heading = QLabel(aside)
+        self.aside_heading.setProperty("role", "panelHeading")
+        top.addWidget(self.aside_heading)
+        top.addStretch(1)
+        column.addLayout(top)
+        self._aside_stack = QStackedWidget(aside)
+        self._aside_stack.addWidget(self._settings_page)
+        self._aside_stack.addWidget(self._help_page)
+        column.addWidget(self._aside_stack, 1)
+        self._aside = aside
+        return aside
+
+    def _show_aside(self, page: QWidget) -> None:
+        self._aside_stack.setCurrentWidget(page)
+        settings = page is self._settings_page
+        self.aside_heading.setText(tr("Settings") if settings else tr("Help"))
+        self.settings_button.setChecked(settings)
+        self.help_button.setChecked(not settings)
+        self.views.setCurrentWidget(self._aside)
+
+    def _close_aside(self) -> None:
+        """Back to the output's own screen."""
+        self.settings_button.setChecked(False)
+        self.help_button.setChecked(False)
+        web = self.state.output is DialogOutput.WEB_MAP
+        self.views.setCurrentWidget(self.tabs if web else self._cartograph_workspace)
 
     def active_actions(self) -> QWidget:
         """The header's actions for the output on screen."""
@@ -2440,39 +2538,46 @@ class MainDialog(QDialog):
         return self._cartograph.build_corner()
 
     def _apply_output(self, output: DialogOutput, persist: bool = True) -> None:
-        """Swap in the tabs and corner for `output`.
+        """Put `output`'s screen and actions on show.
 
-        Map/Appearance and Cartograph/Frames trade places at tab indices 0 and
-        2, with Layers staying put at 1 between them - both outputs configure
-        layers the same way, per the plan. Each of the four tab widgets is
-        built exactly once (`__init__`), so swapping never rebuilds one or
+        The web map is tabs; the cartograph is its page and one panel (see
+        `CartographController.build_cartograph_tab`). Layers and the checks
+        are shared, so they move between a tab and a panel section. Every
+        widget is built once (`__init__`), so switching never rebuilds one or
         loses whatever the user had typed into it.
         """
         self.state.output = output
         web = output is DialogOutput.WEB_MAP
-        first_widget = self._map_tab_widget if web else self._cartograph_tab_widget
-        first_label = tr("Map") if web else tr("Cartograph")
-        second_widget = self._appearance_tab_widget if web else self._frames_tab_widget
-        second_label = tr("Appearance") if web else tr("Frames")
-
-        # Removing the open tab moves the selection on to its neighbour; keep
-        # it on whichever tab took the open one's place instead.
-        current = self.tabs.currentIndex()
-        if self.tabs.widget(0) is not first_widget:
-            self.tabs.removeTab(0)
-            self.tabs.insertTab(0, first_widget, first_label)
-        if self.tabs.widget(2) is not second_widget:
-            self.tabs.removeTab(2)
-            self.tabs.insertTab(2, second_widget, second_label)
-        if current in (0, 2):
-            self.tabs.setCurrentIndex(current)
-        # Atlas is the cartograph's alone, after Frames; the web map has no
-        # third output tab to trade it with.
-        atlas_index = self.tabs.indexOf(self._atlas_tab_widget)
-        if web and atlas_index >= 0:
-            self.tabs.removeTab(atlas_index)
-        elif not web and atlas_index < 0:
-            self.tabs.insertTab(3, self._atlas_tab_widget, tr("Atlas"))
+        # Layers and the checks are one set of widgets for both outputs: tabs
+        # on the web map, sections of the panel on the cartograph.
+        if web:
+            if self.tabs.indexOf(self._layers_page) < 0:
+                self.tabs.insertTab(1, self._layers_page, tr("Layers"))
+            if self.tabs.indexOf(self._fidelity_page) < 0:
+                self.tabs.insertTab(3, self._fidelity_page, tr("Fidelity"))
+            # Back on whichever tab was open: taking Layers or Fidelity out
+            # moved the selection on to a neighbour.
+            open_tab = getattr(self, "_web_tab_before_cartograph", None)
+            if open_tab is not None and self.tabs.indexOf(open_tab) >= 0:
+                self.tabs.setCurrentWidget(open_tab)
+        else:
+            if self.tabs.indexOf(self._layers_page) >= 0:
+                self._web_tab_before_cartograph = self.tabs.currentWidget()
+            for page, section in (
+                (self._layers_page, self._cartograph.layers_section),
+                (self._fidelity_page, self._cartograph.checks_section),
+            ):
+                index = self.tabs.indexOf(page)
+                if index >= 0:
+                    self.tabs.removeTab(index)
+                section.body_layout.addWidget(page)
+                page.show()
+        self._set_layers_compact(not web)
+        self.fidelity_panel.set_compact(not web)
+        if hasattr(self, "fidelity_strip"):
+            self.fidelity_strip.setVisible(web)
+        if hasattr(self, "views"):
+            self._close_aside()
 
         if hasattr(self, "status_label"):
             self.status_label.setText(
@@ -3162,7 +3267,7 @@ class MainDialog(QDialog):
             self._show_fidelity_tab()
 
     def _show_fidelity_tab(self) -> None:
-        self.tabs.setCurrentWidget(self._fidelity_page)
+        self._show_tab("Fidelity")
 
     def _update_fidelity_strip(self, report) -> None:
         """Summarise the report in one line, problems first."""
@@ -3375,6 +3480,11 @@ class MainDialog(QDialog):
             )
 
         self._update_export_summary(len(selected))
+        self._cartograph.layers_section.set_summary(
+            tr("{n} of {total} included").format(n=len(selected), total=len(available))
+            if available
+            else ""
+        )
 
     def _set_ready(self, ready: bool, message: str) -> None:
         self.preview_button.setEnabled(ready)

@@ -245,8 +245,11 @@ class LayoutPreview(QStackedWidget):
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
         # Around the page, the dialog's own window colour rather than the
-        # designer's grey; the theme sets it on the palette.
-        self.view.setBackgroundBrush(self.palette().color(QPalette.ColorRole.Window))
+        # designer's grey; the theme sets it on the palette. The window's
+        # palette, which the theme sets, not this widget's inherited copy.
+        self.view.setBackgroundBrush(
+            self.window().palette().color(QPalette.ColorRole.Window)
+        )
         self._fit_timer.start()
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override

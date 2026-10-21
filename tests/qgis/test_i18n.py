@@ -218,15 +218,16 @@ class TestTheDialog:
         dialog = _dialog(project, make_memory_layer)
         try:
             titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-            assert titles == [
-                "Mapa",
-                "Camadas",
-                "Aparência",
-                "Fidelidade",
-                "Configurações",
-                "Ajuda",
-            ]
+            assert titles == ["Mapa", "Camadas", "Aparência", "Fidelidade"]
+            # Settings and Help are header icons: named for a screen reader.
+            assert dialog.settings_button.accessibleName() == "Configurações"
+            assert dialog.settings_button.toolTip() == "Configurações"
+            assert dialog.help_button.accessibleName() == "Ajuda"
             # Found by the page, not the title, so it still works translated.
+            dialog._show_tab("Settings")
+            assert dialog.aside_heading.text() == "Configurações"
+            dialog._show_tab("Help")
+            assert dialog.aside_heading.text() == "Ajuda"
             dialog._show_fidelity_tab()
             assert dialog.tabs.currentWidget() is dialog._fidelity_page
             assert dialog.language_picker.currentData() == "auto"
@@ -304,13 +305,15 @@ class TestTheDialog:
         finally:
             dialog.close()
 
-    def test_the_tabs_put_settings_before_help(
+    def test_the_header_puts_settings_before_help(
         self, qgis_app, project, make_memory_layer
     ):
+        """Last in the header, Settings then Help, where people look for them."""
         dialog = _dialog(project, make_memory_layer)
         try:
-            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
-            assert titles[-2:] == ["Settings", "Help"]
+            row = dialog.settings_button.parentWidget().layout()
+            settings = row.indexOf(dialog.settings_button)
+            assert row.indexOf(dialog.help_button) == settings + 1 == row.count() - 1
         finally:
             dialog.close()
 
