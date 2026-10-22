@@ -255,6 +255,67 @@ class TestReadProject:
         result = read_project(project, FidelityReportBuilder())
         assert [layer.name for layer in result.layers] == ["bottom", "top"]
 
+    def test_custom_layer_order_sets_the_draw_order(
+        self, project, make_memory_layer
+    ) -> None:
+        """ "Control rendering order" overrides the panel; QGIS is the oracle."""
+        a = make_memory_layer("a", features=[("x", [0.0, 0.0])])
+        b = make_memory_layer("b", features=[("x", [1.0, 1.0])])
+        c = make_memory_layer("c", features=[("x", [2.0, 2.0])])
+        for layer in (a, b, c):
+            project.addMapLayer(layer)
+        root = project.layerTreeRoot()
+        root.setHasCustomLayerOrder(True)
+        root.setCustomLayerOrder([b, c, a])  # top-first
+
+        expected = [layer.name() for layer in reversed(root.layerOrder())]
+        assert expected == ["a", "c", "b"]
+        result = read_project(project, FidelityReportBuilder())
+        assert [layer.name for layer in result.layers] == expected
+
+    def test_custom_order_keeps_group_and_visibility(
+        self, project, make_memory_layer
+    ) -> None:
+        a = make_memory_layer("a", features=[("x", [0.0, 0.0])])
+        b = make_memory_layer("b", features=[("x", [1.0, 1.0])])
+        project.addMapLayer(a, False)
+        project.addMapLayer(b, False)
+        root = project.layerTreeRoot()
+        group = root.addGroup("Roads")
+        group.addLayer(a)
+        root.addLayer(b)
+        root.findLayer(a.id()).setItemVisibilityChecked(False)
+        root.setHasCustomLayerOrder(True)
+        root.setCustomLayerOrder([a, b])
+
+        result = read_project(project, FidelityReportBuilder())
+        assert [layer.name for layer in result.layers] == ["b", "a"]
+        by_name = {layer.name: layer for layer in result.layers}
+        assert by_name["a"].group_path == ("Roads",)
+        assert by_name["a"].visible is False
+        assert by_name["b"].visible is True
+
+    def test_wide_polygon_does_not_open_on_the_dateline(
+        self, project, make_memory_layer
+    ) -> None:
+        from qgis.core import QgsFeature, QgsGeometry, QgsVectorLayer
+
+        layer = QgsVectorLayer(
+            "Polygon?crs=EPSG:4326&field=name:string", "wide", "memory"
+        )
+        feature = QgsFeature(layer.fields())
+        feature.setAttributes(["w"])
+        feature.setGeometry(
+            QgsGeometry.fromWkt("POLYGON((-100 -10,100 -10,100 10,-100 10,-100 -10))")
+        )
+        layer.dataProvider().addFeatures([feature])
+        project.addMapLayer(layer)
+
+        result = read_project(project, FidelityReportBuilder())
+        assert result.extent is not None
+        assert result.extent.crosses_antimeridian is False
+        assert (result.extent.west, result.extent.east) == (-100.0, 100.0)
+
     def test_extent_is_antimeridian_aware(self, project, make_memory_layer) -> None:
         """The finding that motivated `extent_math` — end to end."""
         layer = make_memory_layer(

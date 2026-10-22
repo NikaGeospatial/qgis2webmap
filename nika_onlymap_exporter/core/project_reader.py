@@ -8,7 +8,9 @@ Two things here are worth reading before changing anything.
 layer first, and the topmost layer draws *last*. OnlyMap stacks `<om-layer>`
 children in document order, so the first child draws first, at the bottom.
 Reversing is therefore correct, and forgetting to is the classic way to produce
-an upside-down map where the basemap-ish polygon covers everything.
+an upside-down map where the basemap-ish polygon covers everything. When the
+project turns on "Control rendering order", that custom order replaces the
+panel's.
 
 **Extent comes from the data, not the canvas.** The canvas extent seems like the
 obvious choice - it is what the author was looking at - but for antimeridian-
@@ -334,6 +336,14 @@ def read_project(
     else:
         # findLayers() is top-first; the map draws bottom-first.
         tree_layers = list(reversed(root.findLayers()))
+        if root.hasCustomLayerOrder():
+            # "Control rendering order" is on: the canvas draws in that order,
+            # not the panel's. Sorted rather than rebuilt so the tree nodes
+            # keep carrying groups and visibility, and a layer the order does
+            # not list (a broken one) stays first and is still reported.
+            top_first = [layer.id() for layer in root.customLayerOrder()]
+            rank = {layer_id: index for index, layer_id in enumerate(top_first)}
+            tree_layers.sort(key=lambda node: -rank.get(node.layerId(), len(rank)))
         effective_selected_ids = selected_layer_ids
 
     layers = []
