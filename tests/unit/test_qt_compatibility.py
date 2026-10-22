@@ -24,6 +24,8 @@ import re
 import tokenize
 from pathlib import Path
 
+import pytest
+
 PACKAGE = Path(__file__).resolve().parents[2] / "nika_onlymap_exporter"
 
 
@@ -86,14 +88,27 @@ REQUIRED_SCOPES = {
 }
 
 
+@pytest.fixture(scope="module")
+def code_by_path() -> dict[Path, str]:
+    """Each package file with comments and strings blanked, tokenised once.
+
+    Read-only and shared by every source-policy test below, so the same ~95
+    files are not re-read and re-tokenised per test.
+    """
+    return {
+        path: code_only(path.read_text(encoding="utf-8")) for path in python_sources()
+    }
+
+
 class TestNoUnscopedEnums:
     """PyQt6 removed `Qt.RichText` in favour of `Qt.TextFormat.RichText`."""
 
-    def test_every_enum_is_reached_through_its_scope(self) -> None:
+    def test_every_enum_is_reached_through_its_scope(
+        self, code_by_path: dict[Path, str]
+    ) -> None:
         offenders: list[str] = []
 
-        for path in python_sources():
-            source = code_only(path.read_text(encoding="utf-8"))
+        for path, source in code_by_path.items():
             for owner, names in REQUIRED_SCOPES.items():
                 for name in names:
                     # `Owner.Name` where Name is NOT followed by a further
@@ -113,22 +128,21 @@ class TestNoUnscopedEnums:
 
 
 class TestNoRemovedApi:
-    def test_exec_underscore_is_not_used(self) -> None:
+    def test_exec_underscore_is_not_used(self, code_by_path: dict[Path, str]) -> None:
         """PyQt6 removed `exec_()`; `exec()` works on both."""
         offenders: list[str] = []
-        for path in python_sources():
-            source = code_only(path.read_text(encoding="utf-8"))
+        for path, source in code_by_path.items():
             for match in re.finditer(r"\.exec_\s*\(", source):
                 line = source[: match.start()].count("\n") + 1
                 offenders.append(f"{path.relative_to(PACKAGE.parent)}:{line}")
 
         assert not offenders, f"exec_() was removed in PyQt6: {offenders}"
 
-    def test_qregexp_is_not_used(self) -> None:
+    def test_qregexp_is_not_used(self, code_by_path: dict[Path, str]) -> None:
         """PyQt6 dropped `QRegExp` entirely in favour of `QRegularExpression`."""
         offenders = [
             str(path.relative_to(PACKAGE.parent))
-            for path in python_sources()
-            if "QRegExp" in code_only(path.read_text(encoding="utf-8"))
+            for path, source in code_by_path.items()
+            if "QRegExp" in source
         ]
         assert not offenders, f"QRegExp was removed in PyQt6: {offenders}"
