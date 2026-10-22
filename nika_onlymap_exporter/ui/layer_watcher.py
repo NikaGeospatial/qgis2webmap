@@ -122,7 +122,7 @@ class LayerTreeWatcher(QObject):
 
 class LayerContentWatcher(QObject):
     """Emits `changed` once per event-loop turn when a layer is restyled or its
-    edits are committed.
+    content changes (edits, even uncommitted ones, filters, schema or source).
 
     The tree watcher above sees where layers ARE; nothing saw what they LOOK
     like. Restyling a layer in QGIS moved nothing in the tree, so the Fidelity
@@ -138,6 +138,21 @@ class LayerContentWatcher(QObject):
 
     `styleChanged` covers symbology, labels, opacity and scale range alike.
 
+    The features themselves are read through the layer's edit buffer, so what
+    an export contains changes before anything is committed. These are the
+    signals that move it, probed on QGIS 3.44 and 4.2 (a layer type without one
+    simply skips it - rasters have no fields or subset string):
+
+    | Signal | Fires on |
+    |---|---|
+    | `attributeValueChanged` | a value edited, not yet committed |
+    | `geometryChanged` | a geometry edited, not yet committed |
+    | `featureAdded` / `featureDeleted` | a feature added or removed in the buffer |
+    | `afterRollBack` | edits discarded |
+    | `subsetStringChanged` | the layer's filter replaced |
+    | `dataSourceChanged` | the layer pointed at another source |
+    | `attributeAdded` / `attributeDeleted` / `updatedFields` | schema changes |
+
     Unlike the tree, these are signals on each LAYER, so the set of connections
     follows the project: layers added later are connected when they arrive and
     disconnected when they go, and `disconnect_all` undoes every one of them.
@@ -145,7 +160,21 @@ class LayerContentWatcher(QObject):
 
     changed = pyqtSignal()
 
-    LAYER_SIGNALS = ("styleChanged", "rendererChanged", "afterCommitChanges")
+    LAYER_SIGNALS = (
+        "styleChanged",
+        "rendererChanged",
+        "afterCommitChanges",
+        "attributeValueChanged",
+        "geometryChanged",
+        "featureAdded",
+        "featureDeleted",
+        "afterRollBack",
+        "subsetStringChanged",
+        "dataSourceChanged",
+        "attributeAdded",
+        "attributeDeleted",
+        "updatedFields",
+    )
 
     def __init__(self, project: QgsProject | None = None, parent=None) -> None:
         super().__init__(parent)

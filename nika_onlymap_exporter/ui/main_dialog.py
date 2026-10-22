@@ -766,6 +766,7 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature: str | None = None
+        self._cached_canvas_extent = None
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
         self._pending_license_key: str | None = None
@@ -3782,7 +3783,17 @@ class MainDialog(QDialog):
         not have to care which happened.
         """
         signature = self.state.data_snapshot()
-        if self._cached_export is not None and self._cached_signature == signature:
+        # Read on the GUI thread, where the canvas lives, and hand the plain
+        # value to the worker. Calling `iface.mapCanvas()` from the thread would
+        # be touching a widget from the wrong side. It is also part of what the
+        # cache is keyed on: None unless an extent setting uses the view, so a
+        # pan only costs a re-read when the export actually depends on it.
+        canvas_extent = self._canvas_extent()
+        if (
+            self._cached_export is not None
+            and self._cached_signature == signature
+            and self._cached_canvas_extent == canvas_extent
+        ):
             # The read is reused, but the settings it carries are the ones it
             # was taken with: a colour or control changed since would never
             # reach the page. Today's settings replace them.
@@ -3792,10 +3803,7 @@ class MainDialog(QDialog):
             then(current, self._cached_report)
             return True
 
-        # Read on the GUI thread, where the canvas lives, and hand the plain
-        # value to the worker. Calling `iface.mapCanvas()` from the thread would
-        # be touching a widget from the wrong side.
-        self._pending_canvas_extent = self._canvas_extent()
+        self._pending_canvas_extent = canvas_extent
         self._pending_license_key = self._license_key()
 
         def work(progress: Progress):
@@ -3816,6 +3824,7 @@ class MainDialog(QDialog):
             self._cached_export = export
             self._cached_report = report
             self._cached_signature = signature
+            self._cached_canvas_extent = canvas_extent
             self._show_fidelity(report, signature)
             self._update_size_note()
             then(export, report)
@@ -3832,6 +3841,7 @@ class MainDialog(QDialog):
         self._cached_export = None
         self._cached_report = None
         self._cached_signature = None
+        self._cached_canvas_extent = None
         # Tells a read or write already running that it started on the old
         # project, so it must not record itself as current when it lands.
         self._project_generation += 1
