@@ -56,6 +56,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QT_VERSION_STR, QPointF
 from qgis.PyQt.QtGui import QPolygonF
 
+from ..core.atomic_write import staged_beside
 from ..core.print_settings import (
     PROFILE_CMYK,
     PROFILE_ICC,
@@ -172,19 +173,32 @@ def _export(
         ) from exc
 
     title = page.title if page is not None else ""
-    with (
-        _ProjectTitle(project, title),
-        _ProjectColour(project, settings.profile, colour_space, warnings),
-    ):
-        exporter = QgsLayoutExporter(copy)
-        result = exporter.exportToPdf(str(path), export_settings)
-    if result != QgsLayoutExporter.ExportResult.Success:
-        detail = exporter.errorMessage() if hasattr(exporter, "errorMessage") else ""
+    # Written beside the destination and moved over it only on success, so a
+    # failed export never leaves a torn PDF where a previous one was.
+    try:
+        with (
+            _ProjectTitle(project, title),
+            _ProjectColour(project, settings.profile, colour_space, warnings),
+            staged_beside(path) as staged,
+        ):
+            exporter = QgsLayoutExporter(copy)
+            result = exporter.exportToPdf(str(staged), export_settings)
+            if result != QgsLayoutExporter.ExportResult.Success:
+                detail = (
+                    exporter.errorMessage() if hasattr(exporter, "errorMessage") else ""
+                )
+                raise PrintPdfError(
+                    tr("QGIS could not write {path}: {error}").format(
+                        path=path, error=detail or _result_name(result)
+                    )
+                )
+    except OSError as exc:
+        # The final move onto `path` fails when `path` is a folder, say.
         raise PrintPdfError(
             tr("QGIS could not write {path}: {error}").format(
-                path=path, error=detail or _result_name(result)
+                path=path, error=exc.strerror or exc
             )
-        )
+        ) from exc
     return PrintPdfResult(path=path, warnings=tuple(warnings))
 
 

@@ -19,6 +19,7 @@ from print_fixtures import (
 )
 from qgis.core import (
     Qgis,
+    QgsLayoutExporter,
     QgsLayoutItemPage,
     QgsLayoutItemPolyline,
     QgsUnitTypes,
@@ -333,3 +334,39 @@ class TestPageFields:
         assert b"SOURCE TITLE" in (tmp_path / "plain.pdf").read_bytes() or (
             "SOURCE TITLE".encode("utf-16-be") in (tmp_path / "plain.pdf").read_bytes()
         )
+
+
+class TestAtomicWrite:
+    def test_a_failed_export_leaves_the_previous_pdf_untouched(
+        self, survey, tmp_path, monkeypatch
+    ) -> None:
+        out = tmp_path / "print.pdf"
+        export_print_pdf(survey.layout, PrintSettings(bleed="none"), out)
+        before = out.read_bytes()
+
+        class TornExporter(QgsLayoutExporter):
+            """Writes a truncated file to the path it is given, then fails."""
+
+            def exportToPdf(self, path, settings):  # noqa: N802 - the Qt name
+                with open(path, "wb") as handle:
+                    handle.write(b"%PDF-torn")
+                return QgsLayoutExporter.ExportResult.FileError
+
+        monkeypatch.setattr(print_pdf, "QgsLayoutExporter", TornExporter)
+        with pytest.raises(PrintPdfError):
+            export_print_pdf(survey.layout, PrintSettings(bleed="none"), out)
+
+        assert out.read_bytes() == before
+        assert not list(tmp_path.glob(".print.pdf.*"))
+
+    def test_a_successful_export_replaces_the_previous_pdf(
+        self, survey, tmp_path
+    ) -> None:
+        out = tmp_path / "print.pdf"
+        out.write_bytes(b"%PDF-stale")
+
+        export_print_pdf(survey.layout, PrintSettings(bleed="none"), out)
+
+        written = out.read_bytes()
+        assert written.startswith(b"%PDF-") and written != b"%PDF-stale"
+        assert not list(tmp_path.glob(".print.pdf.*"))
