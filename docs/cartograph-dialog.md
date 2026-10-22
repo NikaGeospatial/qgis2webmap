@@ -85,6 +85,11 @@ Both are also at the end of the list itself.
 
 ![The panel's Print layout list, with the Add... menu open on From canvas... and Import cartograph....](images/cartograph-import.png)
 
+**New layout from template...**, on its own line under the list, is the same
+as **From canvas...**: it opens the template picker, which remembers the design
+you chose last time, and builds another layout. The layout shown is kept as it
+is. Greyed out when there is no map canvas.
+
 Below the list are three tabs - **Layout**, **Atlas** and **Checks** - and,
 at the foot of the panel, [where the file saves](#where-it-saves).
 
