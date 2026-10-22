@@ -244,6 +244,26 @@ class TestStructuralParsing:
         result = _translate('[% array_get(array("a","b"), 0) [0] %]')
         assert result.frozen_expressions == ('array_get(array("a","b"), 0) [0]',)
 
+    @pytest.mark.parametrize(
+        ("text", "expression"),
+        [
+            ("[% 'x[y' %]", "'x[y'"),
+            ("[% 'x]y' %]", "'x]y'"),
+            ("[% 'it''s [' %]", "'it''s ['"),
+            ("[% 'a\\'[' %]", "'a\\'['"),
+            ('[% "a[b" %]', '"a[b"'),
+            ("[% '[' || array(1,2)[0] %]", "'[' || array(1,2)[0]"),
+        ],
+    )
+    def test_brackets_inside_quotes_do_not_nest(self, text, expression) -> None:
+        result = _translate(text)
+        assert result.frozen_expressions == (expression,)
+
+    def test_a_bracket_in_one_block_does_not_swallow_the_next(self) -> None:
+        result = _translate("[% '[' %] and [% ']' %] [% now() %]")
+        assert result.frozen_expressions == ("'['", "']'")
+        assert result.template.endswith("{{date}}")
+
     def test_unterminated_block_is_literal_text(self) -> None:
         text = "Loose bracket [% @map_scale without a close"
         result = _translate(text)

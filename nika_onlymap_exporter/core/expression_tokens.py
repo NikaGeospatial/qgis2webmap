@@ -170,7 +170,11 @@ def _split_expression_blocks(text: str) -> list[tuple[str, str]]:
     A block starts at `[%` and ends at the next `%]` that is not nested inside
     a bracketed sub-expression (e.g. an array index `arr[0]` inside the
     expression) -- plain `[`/`]` characters between the markers add to a depth
-    counter so they cannot be mistaken for the block's own delimiters. A block
+    counter so they cannot be mistaken for the block's own delimiters. Brackets
+    inside a quoted string (`'x[y'`, `'it''s'`, `'a\\'b'`) or a quoted
+    identifier (`"a[b"`) are text, not nesting, as in QGIS's own
+    `QgsExpression.replaceExpressionText`, which still ends a block at any
+    `%]`, quoted or not. A block
     with no matching close is not a block at all: everything from its `[%`
     onward is literal text, exactly as a user who typed a stray `[%` with no
     intention of writing an expression would expect to see it rendered.
@@ -183,14 +187,24 @@ def _split_expression_blocks(text: str) -> list[tuple[str, str]]:
         if text[i : i + 2] == "[%":
             j = i + 2
             depth = 0
+            quote = ""
             close = -1
             while j < n:
                 if depth == 0 and text[j : j + 2] == "%]":
                     close = j
                     break
-                if text[j] == "[":
+                char = text[j]
+                if quote:
+                    # `''` inside a string is two quotes: closes and reopens.
+                    if char == "\\":
+                        j += 1  # a backslash escapes the next character
+                    elif char == quote:
+                        quote = ""
+                elif char in ("'", '"'):
+                    quote = char
+                elif char == "[":
                     depth += 1
-                elif text[j] == "]" and depth > 0:
+                elif char == "]" and depth > 0:
                     depth -= 1
                 j += 1
             if close == -1:
