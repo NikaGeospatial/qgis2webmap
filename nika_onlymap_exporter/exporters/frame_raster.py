@@ -128,18 +128,49 @@ def _render_region(
 ) -> bytes:
     converter = QgsLayoutMeasurementConverter()
     converter.setDpi(layout.renderContext().dpi())
-    position = converter.convert(
-        map_item.positionWithUnits(), QgsUnitTypes.LayoutMillimeters
-    )
     size = converter.convert(map_item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters)
 
-    pixel_size = QSize(
-        round(size.width() / 25.4 * dpi), round(size.height() / 25.4 * dpi)
-    )
-    region = QRectF(position.x(), position.y(), size.width(), size.height())
-    image = QgsLayoutExporter(layout).renderRegionToImage(region, pixel_size, dpi)
+    # The raster is the item in its own local space, w x h; the cartograph
+    # rotates the placed frame itself, so a rotated item rendered by its
+    # scene position would be cropped and then turned a second time. Rendered
+    # unrotated about its centre, and put back exactly afterwards.
+    rotation = map_item.itemRotation()
+    original_position = map_item.positionWithUnits()
+    # The item has to be drawn to be rendered: a hidden frame is exported
+    # hidden but still needs its raster for when it is shown.
+    hidden_ancestors = _hidden_chain(map_item)
+    try:
+        for hidden in hidden_ancestors:
+            hidden.setVisible(True)
+        if rotation:
+            map_item.setItemRotation(0, True)
+        position = converter.convert(
+            map_item.positionWithUnits(), QgsUnitTypes.LayoutMillimeters
+        )
+        pixel_size = QSize(
+            round(size.width() / 25.4 * dpi), round(size.height() / 25.4 * dpi)
+        )
+        region = QRectF(position.x(), position.y(), size.width(), size.height())
+        image = QgsLayoutExporter(layout).renderRegionToImage(region, pixel_size, dpi)
+    finally:
+        if rotation:
+            map_item.setItemRotation(rotation, False)
+            map_item.attemptMove(original_position)
+        for hidden in hidden_ancestors:
+            hidden.setVisible(False)
 
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     image.save(buffer, "PNG")
     return bytes(buffer.data())
+
+
+def _hidden_chain(item: QgsLayoutItem) -> list[QgsLayoutItem]:
+    """`item` and the groups it sits in, those of them that are hidden."""
+    chain: list[QgsLayoutItem] = []
+    current: QgsLayoutItem | None = item
+    while current is not None:
+        if not current.isVisible():
+            chain.append(current)
+        current = current.parentGroup()
+    return chain

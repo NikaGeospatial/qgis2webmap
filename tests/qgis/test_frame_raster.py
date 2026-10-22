@@ -150,3 +150,58 @@ class TestStaticFrameRender:
 
         assert with_grid.png_bytes == without_grid.png_bytes
         assert with_overview.png_bytes == without_overview.png_bytes
+
+
+class TestRotatedItem:
+    """An item rotated on the page is rasterised in its own local space; the
+    cartograph turns the placed frame, so the raster must not turn with it."""
+
+    @staticmethod
+    def _image(render):
+        from qgis.PyQt.QtCore import QByteArray
+        from qgis.PyQt.QtGui import QImage
+
+        return QImage.fromData(QByteArray(render.png_bytes))
+
+    def test_a_rotated_item_renders_the_same_pixels_as_unrotated(self, survey) -> None:
+        upright = self._image(
+            render_static_frame(survey.layout, survey.main_map, dpi=50)
+        )
+        survey.main_map.setItemRotation(30)
+        before = (survey.main_map.pos(), survey.main_map.itemRotation())
+        turned = self._image(
+            render_static_frame(survey.layout, survey.main_map, dpi=50)
+        )
+        assert turned == upright
+        assert (survey.main_map.pos(), survey.main_map.itemRotation()) == before
+
+    def test_the_rotated_raster_fills_its_own_rectangle(self, survey) -> None:
+        survey.main_map.setItemRotation(45)
+        image = self._image(render_static_frame(survey.layout, survey.main_map, dpi=50))
+        size = survey.main_map.sizeWithUnits()
+        assert image.width() == round(size.width() / 25.4 * 50)
+        assert image.height() == round(size.height() / 25.4 * 50)
+        opaque = [
+            (x, y)
+            for x in range(image.width())
+            for y in range(image.height())
+            if image.pixelColor(x, y).alpha() > 0
+        ]
+        xs, ys = zip(*opaque)
+        assert (min(xs), min(ys), max(xs), max(ys)) == (
+            0,
+            0,
+            image.width() - 1,
+            image.height() - 1,
+        )
+
+    def test_a_hidden_map_still_gets_its_raster_and_stays_hidden(self, survey) -> None:
+        upright = self._image(
+            render_static_frame(survey.layout, survey.main_map, dpi=50)
+        )
+        survey.main_map.setVisible(False)
+        hidden = self._image(
+            render_static_frame(survey.layout, survey.main_map, dpi=50)
+        )
+        assert hidden == upright
+        assert not survey.main_map.isVisible()
