@@ -6,6 +6,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import bisect
+import re
+
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import (
@@ -15,9 +18,11 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererKind,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.layer_reader import read_layer
 from nika_onlymap_exporter.core.manifest_builder import (
     fill_expression,
     line_color_expression,
+    numeric_expression,
 )
 from nika_onlymap_exporter.core.renderer_translator import (
     HAIRLINE_PIXELS,
@@ -25,6 +30,7 @@ from nika_onlymap_exporter.core.renderer_translator import (
     translate_renderer,
     translate_symbol,
 )
+from nika_onlymap_exporter.core.runtime_legend import derive_runtime_legend
 
 qgis_core = pytest.importorskip("qgis.core")
 QtGui = pytest.importorskip("qgis.PyQt.QtGui")
@@ -661,3 +667,479 @@ class TestOutlines:
         expression = line_color_expression(spec, GeometryKind.POLYGON)
         assert expression.endswith("00'"), expression
         assert "#232323'" not in expression
+
+
+# --------------------------------------------------------------------------
+# QGIS as the oracle for which class a feature gets
+# --------------------------------------------------------------------------
+
+_TOKEN = re.compile(
+    r"\s*(?:(?P<num>-?\d+(?:\.\d+)?(?:e-?\d+)?)|(?P<str>'(?:[^'\\]|\\.)*')"
+    r"|\$(?P<field>\w+)|(?P<word>[A-Za-z_]\w*)|(?P<op>===|==|>=|<=|&&|\|\||[?:,\[\]()=<>]))"
+)
+
+
+def _tokens(source: str) -> list[tuple[str, str]]:
+    tokens, position = [], 0
+    while position < len(source.rstrip()):
+        match = _TOKEN.match(source, position)
+        assert match, f"cannot tokenise {source[position:]!r}"
+        position = match.end()
+        kind = match.lastgroup or ""
+        tokens.append((kind, match.group(kind)))
+    return tokens
+
+
+class _Evaluator:
+    """The subset of the runtime's accessor language the translator writes.
+
+    A ternary chain of `==`, `>=`, `<=` joined by `&&`, and a d3 threshold
+    `scale`. Equality is JavaScript's loose one for the cases that occur: NULL
+    equals only NULL, and a number equals a string that parses to it.
+    """
+
+    def __init__(self, source: str, properties: dict) -> None:
+        self.tokens, self.at, self.properties = _tokens(source), 0, properties
+
+    def peek(self) -> str:
+        return self.tokens[self.at][1] if self.at < len(self.tokens) else ""
+
+    def take(self) -> tuple[str, str]:
+        self.at += 1
+        return self.tokens[self.at - 1]
+
+    def expect(self, text: str) -> None:
+        assert self.take()[1] == text
+
+    def ternary(self):
+        condition = self.logical_or()
+        if self.peek() != "?":
+            return condition
+        self.take()
+        then = self.ternary()
+        self.expect(":")
+        otherwise = self.ternary()
+        return then if condition else otherwise
+
+    def logical_or(self):
+        left = self.logical_and()
+        while self.peek() == "||":
+            self.take()
+            right = self.logical_and()
+            left = left or right
+        return left
+
+    def logical_and(self):
+        left = self.comparison()
+        while self.peek() == "&&":
+            self.take()
+            right = self.comparison()
+            left = left and right
+        return left
+
+    def comparison(self):
+        left = self.primary()
+        if self.peek() not in ("==", "===", ">=", "<=", "<", ">"):
+            return left
+        op = self.take()[1]
+        right = self.primary()
+        if op in ("==", "==="):
+            return self.loose_equals(left, right)
+        if left is None or right is None:
+            return False
+        return {">=": left >= right, "<=": left <= right}[op]
+
+    @staticmethod
+    def loose_equals(left, right) -> bool:
+        if left is None or right is None:
+            return left is right
+        if isinstance(left, str) != isinstance(right, str):
+            text, number = (left, right) if isinstance(left, str) else (right, left)
+            try:
+                return float(text or 0) == number
+            except ValueError:
+                return False
+        return left == right
+
+    def array(self) -> list:
+        self.expect("[")
+        items = []
+        while self.peek() != "]":
+            items.append(self.primary())
+            if self.peek() == ",":
+                self.take()
+        self.expect("]")
+        return items
+
+    def primary(self):
+        kind, text = self.take()
+        if kind == "num":
+            return float(text)
+        if kind == "str":
+            return text[1:-1].replace("\\'", "'").replace("\\\\", "\\")
+        if kind == "field":
+            return self.properties.get(text)
+        if text == "null":
+            return None
+        if text == "[":
+            self.at -= 1
+            return self.array()
+        if text == "scale":
+            return self.scale()
+        raise AssertionError(f"unsupported token {text!r}")
+
+    def scale(self):
+        self.expect("(")
+        value = self.primary()
+        self.expect(",")
+        self.expect("threshold")
+        self.expect(",")
+        outputs = self.array()
+        self.expect(",")
+        self.expect("domain")
+        self.expect("=")
+        domain = self.array()
+        self.expect(")")
+        if value is None:
+            return None
+        return outputs[bisect.bisect_right(domain, float(value))]
+
+
+def evaluate(source: str, properties: dict):
+    evaluator = _Evaluator(source, properties)
+    result = evaluator.ternary()
+    assert evaluator.at == len(evaluator.tokens), f"trailing input in {source!r}"
+    return result
+
+
+def _oracle_layer(field_type: str, values: list, renderer_for) -> object:
+    layer = qgis_core.QgsVectorLayer(
+        f"Point?crs=EPSG:4326&field=n:integer&field=v:{field_type}", "oracle", "memory"
+    )
+    features = []
+    for number, value in enumerate(values):
+        feature = qgis_core.QgsFeature(layer.fields())
+        feature.setAttributes([number, value])
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(number, 0))
+        )
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.setRenderer(renderer_for())
+    return layer
+
+
+def _qgis_colours(layer) -> dict[int, str | None]:
+    """The colour QGIS itself draws each feature with, `None` when it draws none."""
+    renderer = layer.renderer()
+    context = qgis_core.QgsRenderContext()
+    context.setExpressionContext(qgis_core.QgsExpressionContext())
+    renderer.startRender(context, layer.fields())
+    colours = {}
+    for feature in layer.getFeatures():
+        context.expressionContext().setFeature(feature)
+        symbol = renderer.symbolForFeature(feature, context)
+        drawn = symbol is not None and renderer.willRenderFeature(feature, context)
+        colours[feature["n"]] = symbol.color().name() if drawn else None
+    renderer.stopRender(context)
+    return colours
+
+
+def _exported_colours(layer) -> dict[int, str | None]:
+    """The colour the exported data and style give each feature, by evaluating
+    the style expression on the properties that actually ship."""
+    exported = read_layer(layer, FidelityReportBuilder())
+    expression = fill_expression(exported.renderer, exported.geometry_kind)
+    colours = {number: None for number in _qgis_colours(layer)}
+    for feature in exported.geojson["features"]:
+        properties = feature["properties"]
+        colours[properties["n"]] = evaluate(expression, properties).strip("'")
+    return colours
+
+
+RED, GREEN, BLUE, GREY = "#ff0000", "#00ff00", "#0000ff", "#111111"
+
+# (field type, feature values, [(category value, colour, enabled)]).
+CATEGORIZED_CASES = {
+    "plain": (
+        "string",
+        ["a", "b", "c", None, ""],
+        [("a", RED, True), ("b", GREEN, True)],
+    ),
+    "unmatched-and-null-undrawn": (
+        "string",
+        ["a", "x", None, ""],
+        [("a", RED, True)],
+    ),
+    "catch-all-takes-everything-else": (
+        "string",
+        ["a", "x", None, ""],
+        [("a", RED, True), ("", BLUE, True)],
+    ),
+    "catch-all-is-not-literal-empty-string": (
+        "string",
+        ["a", "b", "c"],
+        [("a", RED, True), ("", BLUE, True)],
+    ),
+    "disabled-catch-all-excludes-unmatched": (
+        "string",
+        ["a", "x", None, ""],
+        [("a", RED, True), ("", BLUE, False)],
+    ),
+    "null-class-is-the-catch-all": (
+        "string",
+        ["a", "x", None, ""],
+        [("a", RED, True), (None, BLUE, True)],
+    ),
+    "disabled-null-class-excludes-null": (
+        "string",
+        ["a", "x", None, ""],
+        [("a", RED, True), (None, BLUE, False)],
+    ),
+    "disabled-class-hides-its-values": (
+        "string",
+        ["a", "b", None],
+        [("a", RED, False), ("b", GREEN, True)],
+    ),
+    "disabled-class-is-not-caught-by-catch-all": (
+        "string",
+        ["a", "b", None],
+        [("a", RED, False), ("", BLUE, True)],
+    ),
+    "later-category-replaces-earlier": (
+        "string",
+        ["a", "b"],
+        [("a", RED, True), ("a", GREEN, False)],
+    ),
+    "later-enabled-category-replaces-disabled": (
+        "string",
+        ["a", "b"],
+        [("a", RED, False), ("a", GREEN, True)],
+    ),
+    "last-empty-class-wins": (
+        "string",
+        ["a", "x", None],
+        [("", RED, True), (None, GREEN, True), ("a", BLUE, True)],
+    ),
+    "grouped-values": (
+        "string",
+        ["a", "b", "c", None],
+        [(["a", "b"], RED, True), ("c", GREEN, True)],
+    ),
+    "grouped-values-with-catch-all": (
+        "string",
+        ["a", "b", "c", None],
+        [(["a", "b"], RED, True), ("", BLUE, True)],
+    ),
+    "grouped-values-disabled": (
+        "string",
+        ["a", "b", "c"],
+        [(["a", "b"], RED, False), ("c", GREEN, True)],
+    ),
+    "grouped-value-overridden-by-later-single": (
+        "string",
+        ["a", "b", "c"],
+        [(["a", "b"], RED, True), ("a", GREEN, False)],
+    ),
+    "case-matters": ("string", ["a", "A"], [("a", RED, True)]),
+    "integers": ("integer", [1, 2, 3, None], [(1, RED, True), (2, GREEN, True)]),
+    "integer-zero-is-not-null": ("integer", [0, 2, None], [(0, RED, True)]),
+    "doubles": (
+        "double",
+        [1.0, 2.5, 3.0, None],
+        [(1, RED, True), (2.5, GREEN, True), (3.0, BLUE, True)],
+    ),
+    "integer-field-null-catch-all": (
+        "integer",
+        [1, 2, None],
+        [(1, RED, True), (None, GREEN, True)],
+    ),
+}
+
+
+def _categorized(cases_key: str):
+    field_type, values, categories = CATEGORIZED_CASES[cases_key]
+
+    def renderer():
+        return qgis_core.QgsCategorizedSymbolRenderer(
+            "v",
+            [
+                qgis_core.QgsRendererCategory(
+                    value, marker_symbol(colour, 2.0 + number), str(value), on
+                )
+                for number, (value, colour, on) in enumerate(categories)
+            ],
+        )
+
+    return _oracle_layer(field_type, values, renderer)
+
+
+class TestCategorizedMatchesQgis:
+    @pytest.mark.parametrize("case", CATEGORIZED_CASES)
+    def test_every_feature_gets_the_class_qgis_gives_it(self, project, case) -> None:
+        layer = _categorized(case)
+
+        assert _exported_colours(layer) == _qgis_colours(layer)
+
+    @pytest.mark.parametrize("case", CATEGORIZED_CASES)
+    def test_a_size_accessor_picks_the_same_class(self, project, case) -> None:
+        _assert_sizes_follow_colours(_categorized(case))
+
+    def test_a_catch_all_is_the_fallback_not_an_equality(self, project) -> None:
+        layer = _categorized("catch-all-takes-everything-else")
+        exported = read_layer(layer, FidelityReportBuilder())
+        expression = fill_expression(exported.renderer, exported.geometry_kind)
+
+        assert expression == f"$v == 'a' ? '{RED}' : '{BLUE}'"
+
+    def test_grouped_values_keep_the_legend_derivable(self, project) -> None:
+        layer = _categorized("grouped-values")
+        exported = read_layer(layer, FidelityReportBuilder())
+        legend = derive_runtime_legend(
+            fill_expression(exported.renderer, exported.geometry_kind)
+        )
+
+        assert legend is not None
+        assert legend.labels == ("a", "b", "c")
+
+
+# (field type, feature values, [(lower, upper, colour, enabled)]).
+_EDGES = [-1.0, 0.0, 5.0, 10.0, 10.0000001, 15.0, 20.0, 25.0, 30.0, 100.0, None]
+GRADUATED_CASES = {
+    "touching-ranges-boundary-stays-low": (
+        "double",
+        _EDGES,
+        [(0, 10, RED, True), (10, 20, GREEN, True)],
+    ),
+    "gap-between-ranges-draws-nothing": (
+        "double",
+        _EDGES,
+        [(0, 10, RED, True), (15, 20, GREEN, True)],
+    ),
+    "disabled-range-is-not-drawn": (
+        "double",
+        _EDGES,
+        [(0, 10, RED, False), (10, 20, GREEN, True)],
+    ),
+    "disabled-range-in-the-middle": (
+        "double",
+        _EDGES,
+        [(0, 10, RED, True), (10, 20, GREEN, False), (20, 30, BLUE, True)],
+    ),
+    "unsorted-ranges-first-match-wins": (
+        "double",
+        _EDGES,
+        [(10, 20, GREEN, True), (0, 10, RED, True)],
+    ),
+    "overlapping-ranges-first-match-wins": (
+        "double",
+        [0.1, 0.2, 0.5, 0.9],
+        [(0, 0.5, RED, True), (0.2, 1, GREEN, True)],
+    ),
+    "single-range": ("double", _EDGES, [(0, 10, RED, True)]),
+    "reversed-range-matches-nothing": (
+        "double",
+        [5.0, 15.0],
+        [(10, 0, RED, True), (10, 20, GREEN, True)],
+    ),
+    "integers-on-the-boundary": (
+        "integer",
+        [0, 5, 10, 11, 20, 21, None],
+        [(0, 10, RED, True), (10, 20, GREEN, True)],
+    ),
+    "tiny-threshold-is-not-rounded-to-zero": (
+        "double",
+        [0.0, 5e-8, 1e-7, 1.5e-7, 1.0, 20.0],
+        [(0, 1e-7, RED, True), (1e-7, 20, GREEN, True)],
+    ),
+    "adjacent-doubles-are-told-apart": (
+        "double",
+        [0.3, 0.30000000000000004, 0.29999999999999993],
+        [(0, 0.3, RED, True), (0.3, 1, GREEN, True)],
+    ),
+    "negative-values": (
+        "double",
+        [-30.0, -20.0, -10.5, -10.0, -0.0],
+        [(-30, -20, RED, True), (-20, -10, GREEN, True)],
+    ),
+}
+
+
+def _graduated(case_key: str):
+    field_type, values, ranges = GRADUATED_CASES[case_key]
+
+    def renderer():
+        return qgis_core.QgsGraduatedSymbolRenderer(
+            "v",
+            [
+                qgis_core.QgsRendererRange(
+                    low, high, marker_symbol(colour, 2.0 + number), "", on
+                )
+                for number, (low, high, colour, on) in enumerate(ranges)
+            ],
+        )
+
+    return _oracle_layer(field_type, values, renderer)
+
+
+def _assert_sizes_follow_colours(layer) -> None:
+    exported = read_layer(layer, FidelityReportBuilder())
+    renderer = exported.renderer
+    classes = renderer.categories or renderer.classes
+    radius_by_colour = {
+        f"#{c.symbol.fill_color.r:02x}{c.symbol.fill_color.g:02x}"
+        f"{c.symbol.fill_color.b:02x}": c.symbol.radius
+        for c in classes
+    }
+    expression = numeric_expression(renderer, "radius")
+    if expression is None:
+        return
+    colours = _exported_colours(layer)
+    for feature in exported.geojson["features"]:
+        properties = feature["properties"]
+        assert evaluate(expression, properties) == pytest.approx(
+            radius_by_colour[colours[properties["n"]]], abs=1e-6
+        ), properties
+
+
+class TestGraduatedMatchesQgis:
+    @pytest.mark.parametrize("case", GRADUATED_CASES)
+    def test_every_feature_gets_the_class_qgis_gives_it(self, project, case) -> None:
+        layer = _graduated(case)
+
+        assert _exported_colours(layer) == _qgis_colours(layer)
+
+    @pytest.mark.parametrize("case", GRADUATED_CASES)
+    def test_a_size_accessor_picks_the_same_class(self, project, case) -> None:
+        """Sizes classify through the same chain the colours do."""
+        _assert_sizes_follow_colours(_graduated(case))
+
+    def test_touching_ranges_stay_a_threshold_scale_with_a_legend(
+        self, project
+    ) -> None:
+        layer = _graduated("touching-ranges-boundary-stays-low")
+        exported = read_layer(layer, FidelityReportBuilder())
+        expression = fill_expression(exported.renderer, exported.geometry_kind)
+
+        assert expression.startswith("scale($v, threshold, ")
+        legend = derive_runtime_legend(expression)
+        assert legend is not None and legend.labels == ("< 10", "\u2265 10")
+
+    def test_a_threshold_is_written_in_full_precision(self, project) -> None:
+        layer = _graduated("tiny-threshold-is-not-rounded-to-zero")
+        exported = read_layer(layer, FidelityReportBuilder())
+        expression = fill_expression(exported.renderer, exported.geometry_kind)
+
+        assert "domain=[1.0000000000000001e-07]" in expression or (
+            "domain=[1.0000000000000002e-07]" in expression
+        ), expression
+
+    def test_disabled_range_is_reported(self, project) -> None:
+        layer = _graduated("disabled-range-is-not-drawn")
+        report = FidelityReportBuilder()
+        read_layer(layer, report)
+
+        assert any(
+            "range is switched off" in i.detail
+            for i in report.by_status(FidelityStatus.APPROXIMATED)
+        )

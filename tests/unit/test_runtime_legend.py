@@ -170,6 +170,26 @@ class TestFitLegendRows:
         )
         assert LegendRowSpec(layer="soil", match="Clay", label="Heavy clay") in rows
 
+    def test_a_grouped_class_reads_as_one_row_and_the_catch_all_as_none(self) -> None:
+        categories = (
+            CategorySpec(
+                value="Clay", label="Heavy soil", symbol=BLUE, extra_values=("Loam",)
+            ),
+            CategorySpec(value=None, label="", symbol=BLUE, is_default=True),
+        )
+        layer = _layer(
+            "soil",
+            GeometryKind.POINT,
+            RendererSpec(
+                kind=RendererKind.CATEGORIZED, field_name="soil", categories=categories
+            ),
+        )
+        rows = fit_legend_rows([LegendRowSpec(layer="soil", order=0)], [layer])
+
+        assert LegendRowSpec(layer="soil", match="Clay", label="Heavy soil") in rows
+        assert LegendRowSpec(layer="soil", match="Loam", hide=True) in rows
+        assert not any(r.match is None and r.hide for r in rows)
+
     def test_hand_edited_rows_are_rekeyed_on_the_runtime_label(self) -> None:
         """The reader keys a renamed or hidden class on its QGIS label; the
         runtime only matches its own."""

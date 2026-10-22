@@ -506,6 +506,28 @@ def _class_color(symbol: SymbolSpec, geometry: GeometryKind) -> Color | None:
     return symbol.fill_color
 
 
+def _categorized_chain(
+    renderer: RendererSpec, outputs: list[str], fallback: str
+) -> str:
+    """`$field == 'a' ? out : $field == 'b' ? out : <fallback>`
+
+    `outputs[i]` is what `renderer.categories[i]` yields. There is one equality
+    clause per value, so a grouped class repeats its output for each of its
+    values. The class QGIS calls "all other values" has no clause: its output is
+    the trailing fallback, which is what every unmatched feature gets. `fallback`
+    is only used when there is no such class - and then the reader has already
+    dropped the features that would reach it.
+    """
+    field = renderer.field_name or ""
+    parts = [
+        f"${field} == {value_literal(value)} ? {output}"
+        for category, output in zip(renderer.categories, outputs)
+        for value in category.explicit_values
+    ]
+    defaults = [o for c, o in zip(renderer.categories, outputs) if c.is_default]
+    return " : ".join([*parts, defaults[0] if defaults else fallback])
+
+
 def _categorized_expression(
     renderer: RendererSpec,
     class_color: Callable[[SymbolSpec], Color | None],
@@ -517,13 +539,41 @@ def _categorized_expression(
     "other" row, and without it features outside every class would be undrawn
     with no explanation.
     """
+    return _categorized_chain(
+        renderer,
+        [color_literal(class_color(c.symbol)) for c in renderer.categories],
+        color_literal(fallback),
+    )
+
+
+def _graduated_chain(renderer: RendererSpec, outputs: list[str]) -> str:
+    """The expression picking `outputs[i]` for a value in `renderer.classes[i]`.
+
+    QGIS tests the ranges in order, each as `lower <= value <= upper`, and the
+    first to match wins. For ranges that ascend without overlapping that is a
+    d3 threshold scale, whose breaks fall just above each upper bound so that a
+    value equal to it stays in the lower class. Anything else is spelled out as
+    the ordered tests QGIS runs. Values QGIS leaves undrawn (NULL, in a gap or
+    outside every range) are dropped by the reader, so the scale never colours
+    them.
+    """
     field = renderer.field_name or ""
+    classes = renderer.classes
+    ascending = all(c.lower <= c.upper for c in classes) and all(
+        later.lower >= earlier.upper for earlier, later in zip(classes, classes[1:])
+    )
+    if ascending:
+        breaks = [math.nextafter(c.upper, math.inf) for c in classes[:-1]]
+        outputs_literal = "[" + ", ".join(outputs) + "]"
+        domain_literal = "[" + ", ".join(_data_number(b) for b in breaks) + "]"
+        return f"scale(${field}, threshold, {outputs_literal}, domain={domain_literal})"
+
     parts = [
-        f"${field} == {value_literal(category.value)} "
-        f"? {color_literal(class_color(category.symbol))}"
-        for category in renderer.categories
+        f"${field} >= {_data_number(c.lower)} && ${field} <= {_data_number(c.upper)} "
+        f"? {output}"
+        for c, output in zip(classes[:-1], outputs)
     ]
-    return " : ".join(parts) + f" : {color_literal(fallback)}"
+    return " : ".join([*parts, outputs[-1]])
 
 
 def _graduated_expression(
@@ -540,13 +590,9 @@ def _graduated_expression(
     A d3 threshold scale takes N colours and N-1 interior breaks, so the breaks
     are the upper bound of every class except the last.
     """
-    field = renderer.field_name or ""
-    colors = [color_literal(class_color(c.symbol)) for c in renderer.classes]
-    breaks = [c.upper for c in renderer.classes[:-1]]
-
-    colors_literal = "[" + ", ".join(colors) + "]"
-    domain_literal = "[" + ", ".join(_number(b) for b in breaks) + "]"
-    return f"scale(${field}, threshold, {colors_literal}, domain={domain_literal})"
+    return _graduated_chain(
+        renderer, [color_literal(class_color(c.symbol)) for c in renderer.classes]
+    )
 
 
 def _number(value: float) -> str:
@@ -554,6 +600,19 @@ def _number(value: float) -> str:
     if value == int(value):
         return str(int(value))
     return repr(round(value, 6))
+
+
+def _data_number(value: float) -> str:
+    """A data value or class break that parses back to exactly `value`.
+
+    `_number` rounds to six decimals, which is fine for a size or a zoom but turns
+    a threshold of 1e-7 into 0. A float's `repr` is the shortest text that
+    round-trips; the `+` of a large exponent is dropped because the runtime's
+    legend pattern does not take it.
+    """
+    if value == int(value) and abs(value) < 1e15:
+        return str(int(value))
+    return repr(value).replace("e+", "e")
 
 
 def _zoom_range_attribute(layer: ExportLayer) -> tuple[str, str] | None:
@@ -640,19 +699,13 @@ def numeric_expression(
     if len(set(numbers)) < 2:
         return None
 
-    field = renderer.field_name or ""
     if renderer.kind is RendererKind.CATEGORIZED:
         default = fallback if fallback is not None else numbers[-1]
-        parts = [
-            f"${field} == {value_literal(category.value)} ? {_number(number)}"
-            for category, number in zip(renderer.categories, numbers)
-        ]
-        return " : ".join(parts) + f" : {_number(default)}"
+        return _categorized_chain(
+            renderer, [_number(n) for n in numbers], _number(default)
+        )
 
-    breaks = [klass.upper for klass in renderer.classes[:-1]]
-    sizes_literal = "[" + ", ".join(_number(n) for n in numbers) + "]"
-    domain_literal = "[" + ", ".join(_number(b) for b in breaks) + "]"
-    return f"scale(${field}, threshold, {sizes_literal}, domain={domain_literal})"
+    return _graduated_chain(renderer, [_number(n) for n in numbers])
 
 
 def icon_expression(renderer: RendererSpec) -> str | None:
@@ -675,22 +728,17 @@ def icon_expression(renderer: RendererSpec) -> str | None:
         return None
 
     if renderer.kind is RendererKind.CATEGORIZED:
-        field = renderer.field_name or ""
-        parts = [
-            f"${field} == {value_literal(category.value)} "
-            f"? {value_literal(category.symbol.icon_name)}"
-            for category in renderer.categories
-        ]
         # The trailing fallback is the first class's icon rather than a blank:
         # deck.gl draws nothing at all for an icon name it cannot resolve, so a
         # feature outside every class would silently vanish from the map.
-        return " : ".join(parts) + f" : {value_literal(names[0])}"
+        return _categorized_chain(
+            renderer,
+            [value_literal(name) for name in names],
+            value_literal(names[0]),
+        )
 
     if renderer.kind is RendererKind.GRADUATED:
-        field = renderer.field_name or ""
-        icons = "[" + ", ".join(value_literal(name) for name in names) + "]"
-        breaks = "[" + ", ".join(_number(k.upper) for k in renderer.classes[:-1]) + "]"
-        return f"scale(${field}, threshold, {icons}, domain={breaks})"
+        return _graduated_chain(renderer, [value_literal(name) for name in names])
 
     return value_literal(names[0])
 
@@ -1756,7 +1804,10 @@ def _legend_entries(layer: ExportLayer, indent: str) -> list[str]:
     rows: list[tuple[str, SymbolSpec]] = []
 
     if renderer.kind is RendererKind.CATEGORIZED:
-        rows = [(c.label or str(c.value), c.symbol) for c in renderer.categories]
+        rows = [
+            (c.label or ("" if c.value is None else str(c.value)), c.symbol)
+            for c in renderer.categories
+        ]
     elif renderer.kind is RendererKind.GRADUATED:
         rows = [(k.label, k.symbol) for k in renderer.classes]
 

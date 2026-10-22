@@ -341,18 +341,50 @@ NATIVELY_ROUND_MARKER_SHAPES = frozenset({"circle"})
 
 @dataclass(frozen=True)
 class CategorySpec:
-    """One class of a categorized renderer."""
+    """One class of a categorized renderer.
+
+    QGIS lets one class own several values (a grouped category), carried in
+    `extra_values` after the first, and gives the empty/NULL value the meaning
+    "every other value". That catch-all is `is_default`: it is not matched by
+    equality, it is what the expression falls back to.
+    """
 
     value: str | int | float | None
     label: str
     symbol: SymbolSpec
+    extra_values: tuple[str | int | float, ...] = ()
+    is_default: bool = False
+
+    @property
+    def explicit_values(self) -> tuple[str | int | float, ...]:
+        """Every value this class matches by equality, in QGIS order."""
+        first = () if self.value is None else (self.value,)
+        return first + self.extra_values
 
     def snapshot(self) -> dict[str, Any]:
         return {
             "value": self.value,
             "label": self.label,
             "symbol": self.symbol.snapshot(),
+            "extraValues": list(self.extra_values),
+            "isDefault": self.is_default,
         }
+
+
+@dataclass(frozen=True)
+class ValueRange:
+    """One range of a graduated renderer as QGIS holds it, drawn or not.
+
+    `GraduatedClassSpec` lists only the ranges that are drawn; this keeps all of
+    them, in QGIS order, because a switched-off range still claims its values.
+    """
+
+    lower: float
+    upper: float
+    drawn: bool
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"lower": self.lower, "upper": self.upper, "drawn": self.drawn}
 
 
 @dataclass(frozen=True)
@@ -394,6 +426,15 @@ class RendererSpec:
     # matching features from the exported data - an expression alone cannot hide
     # them, and leaving them in draws them in the "other" fallback colour.
     hidden_values: tuple[str | int | float | None, ...] = ()
+    # Whether a categorized layer's features that match no class are undrawn.
+    # True unless an enabled catch-all class exists: QGIS draws nothing for a
+    # value outside every class, and the expression's trailing colour would
+    # otherwise draw it grey.
+    unmatched_hidden: bool = False
+    # Every range of a graduated layer, switched off or not, in QGIS order. The
+    # reader needs them to drop what QGIS leaves undrawn - NULLs, values in a gap,
+    # values in a switched-off range - because a threshold scale colours them all.
+    value_ranges: tuple[ValueRange, ...] = ()
 
     @property
     def representative_symbol(self) -> SymbolSpec | None:
@@ -428,6 +469,8 @@ class RendererSpec:
             "rampName": self.ramp_name,
             "unsupportedReason": self.unsupported_reason,
             "hiddenValues": list(self.hidden_values),
+            "unmatchedHidden": self.unmatched_hidden,
+            "valueRanges": [r.snapshot() for r in self.value_ranges],
         }
 
 

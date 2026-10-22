@@ -22,6 +22,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
@@ -40,6 +41,7 @@ from .export_ir import (
     RendererKind,
     RendererSpec,
     SymbolSpec,
+    ValueRange,
 )
 from .fidelity_report import FidelityReportBuilder
 
@@ -627,6 +629,75 @@ def _unreferenceable_field(
     )
 
 
+@dataclass(frozen=True)
+class _ResolvedCategory:
+    """What QGIS actually uses one category for.
+
+    `values` are the explicit values it still owns after later categories have
+    taken theirs, `catch_all` whether it owns the empty/NULL "all other values"
+    slot. A category with neither is never consulted.
+    """
+
+    values: tuple[str | int | float, ...]
+    catch_all: bool
+
+    @property
+    def used(self) -> bool:
+        return bool(self.values) or self.catch_all
+
+
+def category_key(value: object) -> str:
+    """The string QGIS hashes a category or feature value under.
+
+    NULL and the empty string share the key `""`: QGIS treats both as the
+    catch-all slot. A whole-number float keys as the integer, as Qt prints it.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _category_values(value: Any) -> list[str | int | float | None]:
+    """A category's values: several for a grouped class, `None` for the catch-all."""
+    items = list(value) if isinstance(value, (list, tuple)) else [value]
+    scalars = (_python_value(item) for item in items)
+    return [None if scalar == "" else scalar for scalar in scalars]
+
+
+def _resolve_categories(categories: list[Any]) -> list[_ResolvedCategory]:
+    """Settle which category owns each value, as QGIS's lookup table does.
+
+    QGIS keys its table on the value's string, a later category overwriting an
+    earlier one with the same key - enabled or not. The caller keeps `categories`
+    alive: the symbols the list owns are freed with it.
+    """
+    owner: dict[str, int] = {}
+    for index, category in enumerate(categories):
+        for value in _category_values(category.value()):
+            owner[category_key(value)] = index
+
+    resolved = []
+    for index, category in enumerate(categories):
+        values: list[str | int | float] = []
+        seen: set[str] = set()
+        catch_all = False
+        for value in _category_values(category.value()):
+            key = category_key(value)
+            if owner[key] != index or key in seen:
+                continue
+            seen.add(key)
+            if value is None:
+                catch_all = True
+            else:
+                values.append(value)
+        resolved.append(_ResolvedCategory(tuple(values), catch_all))
+    return resolved
+
+
 def _translate_categorized(
     renderer: QgsCategorizedSymbolRenderer,
     report: FidelityReportBuilder,
@@ -635,32 +706,45 @@ def _translate_categorized(
 ) -> RendererSpec:
     categories: list[CategorySpec] = []
     hidden: list[str | int | float | None] = []
+    switched_off = 0
+    has_catch_all = False
 
-    for index, category in enumerate(renderer.categories()):
+    qgis_categories = renderer.categories()
+    resolved_categories = _resolve_categories(qgis_categories)
+    for index, (category, resolved) in enumerate(
+        zip(qgis_categories, resolved_categories)
+    ):
+        if not resolved.used:
+            # A later category with the same value replaced this one, so QGIS
+            # never reaches it.
+            continue
         if not category.renderState():
             # An unchecked class in QGIS means "do not draw these features". The
             # value is recorded so the reader can drop the matching features -
             # omitting the class from the expression only sends them to the
             # "other" fallback colour, which draws exactly what the author hid.
-            hidden.append(_python_value(category.value()))
+            hidden.extend(resolved.values)
+            switched_off += 1
             continue
         symbol = translate_symbol(
             category.symbol(), report, f"{subject}, class {index + 1}", layer_id
         )
+        has_catch_all = has_catch_all or resolved.catch_all
         categories.append(
             CategorySpec(
-                value=_python_value(category.value()),
+                value=resolved.values[0] if resolved.values else None,
                 label=category.label(),
                 symbol=symbol,
+                extra_values=resolved.values[1:],
+                is_default=resolved.catch_all,
             )
         )
 
-    if hidden:
-        count = len(hidden)
+    if switched_off:
         report.approximated(
             subject,
-            f"{count} categor{'y is' if count == 1 else 'ies are'} switched "
-            "off in QGIS; matching features are omitted from the export.",
+            f"{switched_off} categor{'y is' if switched_off == 1 else 'ies are'} "
+            "switched off in QGIS; matching features are omitted from the export.",
             layer_id,
         )
 
@@ -682,6 +766,7 @@ def _translate_categorized(
         categories=tuple(categories),
         ramp_name=_ramp_name(renderer),
         hidden_values=tuple(hidden),
+        unmatched_hidden=not has_catch_all,
     )
 
 
@@ -692,8 +777,20 @@ def _translate_graduated(
     layer_id: str,
 ) -> RendererSpec:
     classes: list[GraduatedClassSpec] = []
+    value_ranges: list[ValueRange] = []
 
     for index, value_range in enumerate(renderer.ranges()):
+        value_ranges.append(
+            ValueRange(
+                lower=float(value_range.lowerValue()),
+                upper=float(value_range.upperValue()),
+                drawn=bool(value_range.renderState()),
+            )
+        )
+        if not value_range.renderState():
+            # Not exported as a class, but still in `value_ranges`: it claims its
+            # values, so the features in it are dropped rather than recoloured.
+            continue
         symbol = translate_symbol(
             value_range.symbol(), report, f"{subject}, range {index + 1}", layer_id
         )
@@ -712,6 +809,15 @@ def _translate_graduated(
     )
     if fallback is not None:
         return fallback
+
+    switched_off = sum(1 for r in value_ranges if not r.drawn)
+    if switched_off:
+        report.approximated(
+            subject,
+            f"{switched_off} range{' is' if switched_off == 1 else 's are'} "
+            "switched off in QGIS; matching features are omitted from the export.",
+            layer_id,
+        )
 
     classification = classification_of(renderer)
     if classification is ClassificationMethod.UNKNOWN:
@@ -742,6 +848,7 @@ def _translate_graduated(
         classes=tuple(classes),
         classification=classification,
         ramp_name=_ramp_name(renderer),
+        value_ranges=tuple(value_ranges),
     )
 
 
@@ -753,7 +860,8 @@ def class_symbols(renderer: QgsFeatureRenderer | None) -> list[QgsSymbol]:
     rasterising is to let QGIS render the original object. So the atlas needs
     both, paired up, and pairing them positionally is only safe if this walk
     applies exactly the same skip rules `_translate_categorized` does. It does:
-    a category with `renderState()` false is dropped in both.
+    a category with `renderState()` false, or one a later category with the same
+    value replaces, is dropped in both - as is a range with `renderState()` false.
 
     Kept here, next to those rules, rather than in the atlas module, so the two
     cannot drift apart unnoticed. `tests/qgis/test_renderer_translator.py` pins
@@ -782,17 +890,20 @@ def class_symbols(renderer: QgsFeatureRenderer | None) -> list[QgsSymbol]:
         return [symbol.clone()] if symbol is not None else []
 
     if isinstance(renderer, QgsCategorizedSymbolRenderer):
+        categories = renderer.categories()
         return [
             category.symbol().clone()
-            for category in renderer.categories()
-            if category.renderState() and category.symbol() is not None
+            for category, resolved in zip(categories, _resolve_categories(categories))
+            if resolved.used
+            and category.renderState()
+            and category.symbol() is not None
         ]
 
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
         return [
             value_range.symbol().clone()
             for value_range in renderer.ranges()
-            if value_range.symbol() is not None
+            if value_range.renderState() and value_range.symbol() is not None
         ]
 
     return []

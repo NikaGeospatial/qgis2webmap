@@ -151,10 +151,23 @@ def derive_runtime_legend(expression: str | None) -> RuntimeLegend | None:
     return RuntimeLegend("categories", tuple(labels))
 
 
-def _qgis_labels(layer: ExportLayer) -> tuple[str, ...]:
+def _qgis_labels(layer: ExportLayer) -> tuple[str | None, ...]:
+    """One label per row the runtime derives, in its order.
+
+    The runtime lists a category once per value and has no row for the
+    catch-all, which is the expression's fallback. A grouped class's values
+    after the first are `None`: `fit_legend_rows` hides those rows, so the group
+    reads as the one row QGIS shows.
+    """
     renderer = layer.renderer
     if renderer.kind is RendererKind.CATEGORIZED:
-        return tuple(category.label for category in renderer.categories)
+        labels: list[str | None] = []
+        for category in renderer.categories:
+            labels.extend(
+                category.label if position == 0 else None
+                for position in range(len(category.explicit_values))
+            )
+        return tuple(labels)
     if renderer.kind is RendererKind.GRADUATED:
         return tuple(klass.label for klass in renderer.classes)
     return ()
@@ -203,7 +216,11 @@ def fit_legend_rows(
         qgis_labels = _qgis_labels(layer)
         if runtime is None or len(runtime.labels) != len(qgis_labels):
             continue
-        runtime_by_qgis = dict(zip(qgis_labels, runtime.labels))
+        runtime_by_qgis = {
+            label: runtime_label
+            for label, runtime_label in zip(qgis_labels, runtime.labels)
+            if label is not None
+        }
         targeted: set[str] = set()
         for index, row in enumerate(fitted):
             if row.layer != layer.layer_id or row.match is None:
@@ -212,7 +229,12 @@ def fit_legend_rows(
             targeted.add(match)
             fitted[index] = replace(row, match=match)
         for qgis_label, runtime_label in zip(qgis_labels, runtime.labels):
-            if (
+            if qgis_label is None:
+                # The rest of a grouped class: its first value's row speaks for it.
+                fitted.append(
+                    LegendRowSpec(layer=layer.layer_id, match=runtime_label, hide=True)
+                )
+            elif (
                 qgis_label
                 and qgis_label != runtime_label
                 and runtime_label not in targeted

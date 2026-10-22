@@ -47,7 +47,7 @@ from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, should_bake
-from .renderer_translator import translate_renderer
+from .renderer_translator import category_key, translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -283,24 +283,72 @@ def drop_hidden_features(
     collection: dict[str, Any],
     renderer: RendererSpec,
 ) -> dict[str, Any]:
-    """Remove features belonging to categories switched off in QGIS.
+    """Remove the features QGIS would not draw.
 
-    The comparison is on the string form of the value: a category value arrives
-    from QGIS as a Python scalar while the GeoJSON property may have been
-    serialised as a number or a string, and `'1' != 1` would silently keep the
-    features the author hid.
+    Those are the ones in a category or range switched off, and the ones no
+    category or range claims: QGIS draws nothing for them, but a colour
+    expression always yields a colour, so left in they would be drawn in the
+    "other" fallback or clamped into the nearest class.
+
+    A categorized value is compared as QGIS keys it - its string, NULL and the
+    empty string alike - because a category value arrives from QGIS as a Python
+    scalar while the GeoJSON property may have been serialised as a number or a
+    string, and `'1' != 1` would silently keep the features the author hid.
     """
-    if not renderer.hidden_values or not renderer.field_name:
+    if not renderer.field_name:
         return collection
 
-    hidden = {"" if v is None else str(v) for v in renderer.hidden_values}
-    field = renderer.field_name
+    if renderer.kind is RendererKind.GRADUATED and renderer.value_ranges:
+        field = renderer.field_name
+        ranges = renderer.value_ranges
+
+        def drawn(properties: dict[str, Any]) -> bool:
+            value = _as_number(properties.get(field))
+            if value is None:
+                return False
+            for value_range in ranges:
+                if value_range.lower <= value <= value_range.upper:
+                    return value_range.drawn
+            return False
+
+    elif renderer.kind is RendererKind.CATEGORIZED and (
+        renderer.hidden_values or renderer.unmatched_hidden
+    ):
+        field = renderer.field_name
+        hidden = {category_key(v) for v in renderer.hidden_values}
+        matched = {
+            category_key(v)
+            for category in renderer.categories
+            for v in category.explicit_values
+        }
+
+        def drawn(properties: dict[str, Any]) -> bool:
+            key = category_key(properties.get(field))
+            if key in matched:
+                return True
+            return key not in hidden and not renderer.unmatched_hidden
+
+    else:
+        return collection
+
     kept = [
         feature
         for feature in collection.get("features") or ()
-        if str((feature.get("properties") or {}).get(field, "")) not in hidden
+        if drawn(feature.get("properties") or {})
     ]
     return {**collection, "features": kept}
+
+
+def _as_number(value: object) -> float | None:
+    """A property as the number QGIS compares against a range, `None` for NULL."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def drawing_fields(

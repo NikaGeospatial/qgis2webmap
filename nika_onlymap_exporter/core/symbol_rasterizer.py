@@ -32,7 +32,6 @@ from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QRect, QSize, Qt
 from qgis.PyQt.QtGui import QImage, QPainter
 
 from .export_ir import (
-    CategorySpec,
     GeometryKind,
     GraduatedClassSpec,
     IconAtlasSpec,
@@ -212,9 +211,8 @@ def _with_icons(
     """
     if renderer.kind is RendererKind.CATEGORIZED:
         categories = tuple(
-            CategorySpec(
-                value=category.value,
-                label=category.label,
+            replace(
+                category,
                 symbol=replace(category.symbol, icon_name=name, icon_size=size),
             )
             for category, (name, size) in zip(renderer.categories, assignments)
