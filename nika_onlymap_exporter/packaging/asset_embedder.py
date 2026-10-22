@@ -28,6 +28,9 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
+import threading
+from collections import OrderedDict
 
 # Below this, compressing the data costs readability and saves little. Above it,
 # the file is heading towards being awkward to email and the trade flips.
@@ -38,6 +41,53 @@ DATA_COMPRESSION_THRESHOLD_BYTES = 2 * 1024 * 1024
 GZIP_SCRIPT_TYPE = "application/x-om-gzip"
 
 GZIP_LEVEL = 9
+
+
+class _CompressionCache:
+    """Small byte-bounded LRU of finished `gzip_base64` results.
+
+    Compression is a pure function of the input bytes and the level, so the
+    result is keyed by a sha256 of the bytes plus the level and is safe to
+    reuse: the same unchanged runtime assets are compressed on every export in
+    a session, which took ~1.3 s of a ~1.5 s small build. Bounded by the size
+    of the stored text, not the entry count, so a large layer payload cannot
+    pin memory; one result bigger than the whole budget is simply not kept.
+    """
+
+    def __init__(self, max_bytes: int) -> None:
+        self._max_bytes = max_bytes
+        self._entries: OrderedDict[tuple[bytes, int, int], str] = OrderedDict()
+        self._size = 0
+        self._lock = threading.Lock()
+
+    def get(self, key: tuple[bytes, int, int]) -> str | None:
+        with self._lock:
+            value = self._entries.get(key)
+            if value is not None:
+                self._entries.move_to_end(key)
+            return value
+
+    def put(self, key: tuple[bytes, int, int], value: str) -> None:
+        if len(value) > self._max_bytes:
+            return
+        with self._lock:
+            if key in self._entries:
+                return
+            self._entries[key] = value
+            self._size += len(value)
+            while self._size > self._max_bytes:
+                _, evicted = self._entries.popitem(last=False)
+                self._size -= len(evicted)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+            self._size = 0
+
+
+# Two runtimes (map + Cartograph) plus a few recent layer payloads fit; the
+# base64 text is ASCII, so len() is its size in bytes.
+_GZIP_CACHE = _CompressionCache(max_bytes=32 * 1024 * 1024)
 
 
 def gzip_base64(data: bytes) -> str:
@@ -51,7 +101,13 @@ def gzip_base64(data: bytes) -> str:
     the export time into a file whose whole point is that it carries no
     incidental data about its author.
     """
-    return base64.b64encode(gzip.compress(data, GZIP_LEVEL, mtime=0)).decode("ascii")
+    key = (hashlib.sha256(data).digest(), len(data), GZIP_LEVEL)
+    cached = _GZIP_CACHE.get(key)
+    if cached is not None:
+        return cached
+    encoded = base64.b64encode(gzip.compress(data, GZIP_LEVEL, mtime=0)).decode("ascii")
+    _GZIP_CACHE.put(key, encoded)
+    return encoded
 
 
 def should_compress_data(total_data_bytes: int) -> bool:

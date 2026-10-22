@@ -34,6 +34,7 @@ from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
 from nika_onlymap_exporter.packaging.asset_embedder import (
     DATA_COMPRESSION_THRESHOLD_BYTES,
     GZIP_SCRIPT_TYPE,
+    _CompressionCache,
     build_bootstrap,
     gzip_base64,
     should_compress_data,
@@ -130,6 +131,55 @@ class TestCompression:
 
         raw = base64.b64decode(gzip_base64(b"x" * 100))
         assert raw[4:8] == b"\x00\x00\x00\x00"
+
+    def test_cached_result_is_byte_identical_to_uncached(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import base64
+
+        import nika_onlymap_exporter.packaging.asset_embedder as embedder
+
+        data = b'{"type":"FeatureCollection"}' * 200
+        # The reference is built with the library directly, not via the cache.
+        expected = base64.b64encode(gzip.compress(data, 9, mtime=0)).decode("ascii")
+        monkeypatch.setattr(embedder, "_GZIP_CACHE", _CompressionCache(1 << 20))
+        first = gzip_base64(data)
+        calls: list[int] = []
+        real_compress = gzip.compress
+        monkeypatch.setattr(
+            embedder.gzip,
+            "compress",
+            lambda *a, **k: calls.append(1) or real_compress(*a, **k),
+        )
+        second = gzip_base64(data)
+        assert first == second == expected
+        assert calls == [], "the second call must come from the cache"
+
+    def test_cache_is_invalidated_when_the_input_changes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import base64
+
+        import nika_onlymap_exporter.packaging.asset_embedder as embedder
+
+        monkeypatch.setattr(embedder, "_GZIP_CACHE", _CompressionCache(1 << 20))
+        before = gzip_base64(b"runtime v1 " * 50)
+        after = gzip_base64(b"runtime v2 " * 50)
+        assert before != after
+        assert gzip.decompress(base64.b64decode(after)) == b"runtime v2 " * 50
+
+    def test_cache_stays_within_its_byte_budget(self) -> None:
+        cache = _CompressionCache(max_bytes=100)
+        for index in range(10):
+            cache.put((bytes([index]), 1, 9), "x" * 40)
+        assert cache._size <= 100
+        assert len(cache._entries) == 2
+        # Least recently used goes first; the newest survive.
+        assert cache.get((bytes([0]), 1, 9)) is None
+        assert cache.get((bytes([9]), 1, 9)) == "x" * 40
+        # One result bigger than the whole budget is not kept at all.
+        cache.put((b"big", 1, 9), "y" * 101)
+        assert cache.get((b"big", 1, 9)) is None
 
     def test_small_data_stays_readable(self) -> None:
         assert should_compress_data(1024) is False
