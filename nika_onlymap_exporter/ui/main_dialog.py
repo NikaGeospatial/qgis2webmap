@@ -1750,6 +1750,11 @@ class MainDialog(QDialog):
         # last-section stretch fought it and the columns came out 13 px wider
         # than the narrow Cartograph panel, with a sideways scrollbar.
         self.layer_tree.header().setStretchLastSection(False)
+        # The checkbox columns are as wide as their headings; at the
+        # dialog's minimum size on Qt 5 fonts that left the layer column at
+        # Qt's 50 px floor and the whole tree 5 px too wide. The names elide
+        # instead, so every checkbox and heading stays whole.
+        self.layer_tree.header().setMinimumSectionSize(32)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         layout.addWidget(self.layer_tree)
 

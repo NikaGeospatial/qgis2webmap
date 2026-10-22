@@ -169,6 +169,22 @@ def _panel_scroll(content: QWidget) -> QScrollArea:
     return scroll
 
 
+class _PanelColumn(QWidget):
+    """The panel's column, as tall as it must be rather than would like.
+
+    Qt 5's `QScrollArea` sizes a widget whose layout wraps text by its
+    preferred height for the width, so on QGIS 3 the column outgrew a normal
+    window and scrolled as a whole beside its own scrolling tabs. Its minimum
+    is what decides whether the column needs to scroll; Qt 6 already uses it.
+    """
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt override
+        layout = self.layout()
+        if layout is None:
+            return super().heightForWidth(width)
+        return max(layout.minimumHeightForWidth(width), layout.minimumSize().height())
+
+
 class CartographController:
     """Owns the Cartograph output's widgets, state and autosave job."""
 
@@ -315,7 +331,7 @@ class CartographController:
         panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         panel_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         panel_scroll.setMinimumWidth(PANEL_MIN_WIDTH)
-        panel = QWidget()
+        panel = _PanelColumn()
         panel.setMinimumWidth(PANEL_MIN_WIDTH)
         column = QVBoxLayout(panel)
         column.setContentsMargins(12, 0, 0, 0)
@@ -731,7 +747,7 @@ class CartographController:
     def _on_file_edited(self, text: str) -> None:
         # Whatever the footer said about the old file ("Opened ...") is not
         # about this one.
-        self.dialog.status_label.setText("")
+        self._clear_footer()
         if self.state.cartograph_layout:
             self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
         self._on_cartograph_setting_changed()
@@ -1033,7 +1049,7 @@ class CartographController:
         # A page asked for the layout left behind; this one did not ask, and
         # the footer's last message was about that layout's file.
         self._open_after_save = []
-        self.dialog.status_label.setText("")
+        self._clear_footer()
 
     def on_project_content_changed(self) -> None:
         """A layer was restyled or its edits saved in QGIS: the cartograph
@@ -1262,7 +1278,7 @@ class CartographController:
             entry for entry in self._open_after_save if build_number < entry[1]
         ]
         if ready:
-            self.dialog.status_label.setText("")  # no longer "saving first"
+            self._clear_footer()  # no longer "saving first"
         for query in ready:
             self._open_url(self._page_url(path, query))
         self._update_status_label()
@@ -1544,12 +1560,20 @@ class CartographController:
             return
         self._open_saved(path)
 
+    def _clear_footer(self) -> None:
+        """Empty the dialog's footer message. Not there yet while the dialog
+        is still being built - a project saved on Cartograph selects its
+        layout from inside `MainDialog.__init__`."""
+        footer = getattr(self.dialog, "status_label", None)
+        if footer is not None:
+            footer.setText("")
+
     def _cancel_waiting_pages(self) -> None:
         """Drop the pages waiting on a save that will not come, and the
         footer's promise that they open when it does."""
         if self._open_after_save:
             self._open_after_save = []
-            self.dialog.status_label.setText("")
+            self._clear_footer()
 
     def _open_saved(self, path: Path, query: str = "") -> None:
         """Open the cartograph in the browser as it is with every edit made
@@ -1562,7 +1586,7 @@ class CartographController:
             # The running build carries every edit so far.
             needed = self._builds_started
         elif self._edits_saved >= self._edits_made:
-            self.dialog.status_label.setText("")
+            self._clear_footer()
             self._open_url(self._page_url(path, query))
             return
         else:
