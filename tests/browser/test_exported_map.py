@@ -67,6 +67,41 @@ def require_webgl(page):
         pytest.skip("no WebGL2 context in this browser/environment")
 
 
+def wait_until_drawn(page, timeout: int = 30_000) -> None:
+    """Block until the runtime says the map has finished drawing.
+
+    `ready` is the runtime's own signal that the renderer is up and every
+    declared data URL has settled; `whenSettled` additionally waits for deck's
+    layers to report loaded and for one further painted frame. A mounted canvas
+    proves neither. `whenSettled` resolves `{settled: false}` on its own
+    timeout, which this treats as "not yet" so the failure is Playwright's loud
+    timeout rather than a silent early return.
+    """
+    page.wait_for_function(
+        """() => {
+            const map = document.querySelector('om-map');
+            if (!map) return false;
+            return map.ready
+              .then(() => map.whenSettled({ timeout: 20000 }))
+              .then((result) => result.settled === true);
+        }""",
+        timeout=timeout,
+    )
+
+
+def next_frames(page, count: int = 2) -> None:
+    """Let the browser paint `count` frames, so a pointer event queued by the
+    last mouse move has been delivered and handled before the DOM is read."""
+    page.evaluate(
+        """(count) => new Promise((resolve) => {
+            const step = (left) =>
+              left === 0 ? resolve() : requestAnimationFrame(() => step(left - 1));
+            step(count);
+        })""",
+        count,
+    )
+
+
 class TestItOpens:
     def test_the_map_mounts(self, page, exported_map) -> None:
         """The first gate: a recipient double-clicks the file and sees a map."""
@@ -509,7 +544,7 @@ class TestExtrusion:
         )
         open_map(page, extruded_map)
         require_webgl(page)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
         assert errors == []
 
     def test_the_layer_is_extruded_and_tilted(self, page, extruded_map) -> None:
@@ -601,7 +636,7 @@ class TestHighlightColour:
         open_map(page, highlighted_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
 
         assert self._prop(page) == [29, 233, 200, 128]
 
@@ -616,7 +651,7 @@ class TestHighlightColour:
         open_map(page, highlighted_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
 
         value = self._prop(page)
         assert not isinstance(value, str), f"deck.gl will ignore {value!r}"
@@ -643,8 +678,7 @@ class TestIconMarkers:
         page.on("pageerror", lambda error: errors.append(str(error)))
         open_map(page, icon_map)
         require_webgl(page)
-        page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
         assert errors == [], f"console errors: {errors}"
 
     def test_the_runtime_accepts_every_icon_attribute(self, page, icon_map) -> None:
@@ -660,7 +694,7 @@ class TestIconMarkers:
         )
         open_map(page, icon_map)
         require_webgl(page)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
         unknown = [w for w in warnings if "Unknown attribute" in w]
         assert unknown == [], f"the runtime rejected an attribute: {unknown}"
 
@@ -784,10 +818,11 @@ class TestPopupsDoNotStack:
         open_map(page, stacked_popups_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
 
         box = page.locator("om-map canvas").first.bounding_box()
         worst = 0
+        opened = False
         # Sweep the middle of the canvas, where the shared coordinate sits.
         for gx in range(10, 23):
             for gy in range(6, 17):
@@ -795,8 +830,13 @@ class TestPopupsDoNotStack:
                     box["x"] + box["width"] * gx / 32,
                     box["y"] + box["height"] * gy / 22,
                 )
-                page.wait_for_timeout(60)
-                worst = max(worst, len(self._visible(page)))
+                next_frames(page)
+                count = len(self._visible(page))
+                opened = opened or count > 0
+                worst = max(worst, count)
+        # A sweep that never opens a popup would pass the bound below for
+        # the wrong reason, so the reads must have been able to see one.
+        assert opened, "no popup ever opened, so the stacking bound proves nothing"
         assert worst <= 1, f"{worst} popups were open at once"
 
     def test_hovering_empty_space_closes_the_popup(
@@ -808,7 +848,7 @@ class TestPopupsDoNotStack:
         open_map(page, stacked_popups_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
 
         box = page.locator("om-map canvas").first.bounding_box()
         opened = False
@@ -818,7 +858,7 @@ class TestPopupsDoNotStack:
                     box["x"] + box["width"] * gx / 32,
                     box["y"] + box["height"] * gy / 22,
                 )
-                page.wait_for_timeout(60)
+                next_frames(page)
                 if self._visible(page):
                     opened = True
                     break
@@ -827,7 +867,12 @@ class TestPopupsDoNotStack:
         assert opened, "no popup ever opened, so the close cannot be tested"
 
         page.mouse.move(box["x"] + 5, box["y"] + box["height"] - 5)
-        page.wait_for_timeout(600)
+        page.wait_for_function(
+            """() => ![...document.querySelectorAll('om-overlay')]
+                 .some(o => getComputedStyle(o).visibility !== 'hidden'
+                         && o.getBoundingClientRect().width > 0)""",
+            timeout=10_000,
+        )
         assert self._visible(page) == []
 
 
@@ -889,7 +934,7 @@ class TestItDrawsAcrossTheAntimeridian:
         open_map(page, antimeridian_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)  # let the first render settle
+        wait_until_drawn(page)
 
         result = page.evaluate(COUNT_RED_PIXELS)
         assert result["width"] > 0 and result["height"] > 0
@@ -920,6 +965,9 @@ class TestTheRuntimeHasNoComplaints:
         open_map(page, exported_map)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+        # Then a window on purpose: a silent console is an absence claim, and a
+        # warning emitted late (after the first settled frame) must still land.
         page.wait_for_timeout(2000)
 
         complaints = [
@@ -953,7 +1001,7 @@ class TestLabelsActuallyDraw:
         open_map(page, artifact)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
         return page.evaluate(COUNT_RED_PIXELS)["red"]
 
     def test_labels_put_text_on_the_map(self, page, labelled_map) -> None:
@@ -980,7 +1028,7 @@ class TestDashedLinesReallyDash:
         open_map(page, artifact)
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
-        page.wait_for_timeout(1500)
+        wait_until_drawn(page)
         return page.evaluate(COUNT_RED_PIXELS)["red"]
 
     def test_a_dashed_line_draws_less_than_a_solid_one(
@@ -1070,6 +1118,9 @@ class TestGhostPopups:
         # No click. This is the pointer merely crossing the other layer, which
         # deck reports for every pointer movement.
         self._pick(page, "airports", "hover")
+        # A sleep on purpose: this proves a popup does NOT change. There is no
+        # event for "the runtime looked at that hover and ignored it", so the
+        # only way to assert the absence is to give it a window to misbehave.
         page.wait_for_timeout(600)
 
         text = self._popup_text(page, "rivers-popup")
