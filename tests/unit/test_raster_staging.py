@@ -26,6 +26,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     FidelityStatus,
     GeometryKind,
+    NoDataRule,
     OutputMode,
     RasterSpec,
     RendererKind,
@@ -135,9 +136,13 @@ class FakeConverter:
         self.skip = skip
         self.output = output
         self.calls: list[tuple[str, str]] = []
+        self.crs_calls: list[str | None] = []
 
-    def __call__(self, source, destination, on_progress, should_cancel) -> CogResult:
+    def __call__(
+        self, source, destination, on_progress, should_cancel, source_crs_wkt=None
+    ) -> CogResult:
         self.calls.append((source, destination))
+        self.crs_calls.append(source_crs_wkt)
         if on_progress is not None:
             on_progress(50, 100)
             on_progress(100, 100)
@@ -160,7 +165,9 @@ class FakeConverter:
 
 
 class FailingConverter:
-    def __call__(self, source, destination, on_progress, should_cancel) -> CogResult:
+    def __call__(
+        self, source, destination, on_progress, should_cancel, source_crs_wkt=None
+    ) -> CogResult:
         raise MissingCrsError("ortho.tif has no coordinate reference system.")
 
 
@@ -285,10 +292,11 @@ class TestStandaloneTier:
         result = scan(project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML)
         assert result.can_export is True
 
-    def test_the_scanner_refuses_an_estimate_over_the_limit(
+    def test_the_scanner_only_warns_about_an_estimate_over_the_limit(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """One rule, two call sites, the same words."""
+        """The source size is an estimate, so it advises; the converted raster
+        is what decides."""
         import nika_onlymap_exporter.packaging.dependency_scanner as scanner_module
 
         monkeypatch.setattr(scanner_module, "STANDALONE_RASTER_MAX_BYTES", 1)
@@ -297,8 +305,54 @@ class TestStandaloneTier:
         assert reason is not None
         assert "'Elevation'" in reason
         assert "Folder" in reason
-        result = scan(project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML)
-        assert result.blocking_reasons[0] == reason
+        report = FidelityReportBuilder()
+        result = scan(project, report, OutputMode.STANDALONE_HTML)
+        assert result.can_export is True
+        assert result.blocking_reasons == ()
+        assert any(
+            i.status is FidelityStatus.APPROXIMATED and i.detail == reason
+            for i in report.items
+        )
+
+    def test_a_big_source_that_converts_small_exports_with_progress_and_cancel(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The control flow of the post-conversion limit: the estimate trips,
+        the export carries on, the converter is handed the progress and cancel
+        hooks, and only the converted size is held against the limit."""
+        import nika_onlymap_exporter.packaging.dependency_scanner as scanner_module
+
+        monkeypatch.setattr(scanner_module, "STANDALONE_RASTER_MAX_BYTES", 1)
+        project = project_with(raster_layer(write_source(tmp_path)))
+        assert scan(
+            project, FidelityReportBuilder(), OutputMode.STANDALONE_HTML
+        ).can_export
+
+        seen: list[tuple[int, int | None]] = []
+        cancel = lambda: False  # noqa: E731
+        handed: list[object] = []
+
+        class Spy(FakeConverter):
+            def __call__(self, source, destination, on_progress, should_cancel, *rest):
+                handed.append(should_cancel)
+                return super().__call__(
+                    source, destination, on_progress, should_cancel, *rest
+                )
+
+        result = stage_rasters(
+            project,
+            tmp_path / "artifact",
+            OutputMode.STANDALONE_HTML,
+            FidelityReportBuilder(),
+            on_progress=lambda done, total: seen.append((done, total)),
+            should_cancel=cancel,
+            converter=Spy(),
+        )
+
+        assert result.can_export is True
+        assert result.embedded
+        assert handed == [cancel]
+        assert seen and seen[-1] == (100, 100)
 
     def test_a_vector_only_project_keeps_the_single_file_tier(self) -> None:
         assert standalone_raster_reason(project_with(vector_layer())) is None
@@ -503,16 +557,34 @@ class FakeBaker:
     def __init__(self, output: bytes = b"RGBA-BYTES") -> None:
         self.output = output
         self.calls: list[tuple[str, str, str]] = []
+        self.crs_calls: list[str | None] = []
+        self.nodata_calls: list[tuple] = []
 
-    def __call__(self, source: str, style_qml: str, destination: str) -> str:
+    def __call__(
+        self,
+        source: str,
+        style_qml: str,
+        destination: str,
+        assigned_crs_wkt: str | None = None,
+        nodata_rules: tuple = (),
+    ) -> str:
         self.calls.append((source, style_qml, destination))
+        self.crs_calls.append(assigned_crs_wkt)
+        self.nodata_calls.append(nodata_rules)
         Path(destination).parent.mkdir(parents=True, exist_ok=True)
         Path(destination).write_bytes(self.output)
         return destination
 
 
 class FailingBaker:
-    def __call__(self, source: str, style_qml: str, destination: str) -> str:
+    def __call__(
+        self,
+        source: str,
+        style_qml: str,
+        destination: str,
+        assigned_crs_wkt: str | None = None,
+        nodata_rules: tuple = (),
+    ) -> str:
         raise StyleBakeError("QGIS could not write the styled copy of this raster.")
 
 
@@ -525,6 +597,71 @@ def baked_layer(source: Path) -> ExportLayer:
     return dataclasses.replace(
         layer, raster=dataclasses.replace(layer.raster, style_qml=QML)
     )
+
+
+class TestAssignedCrs:
+    """A CRS the author assigned in QGIS has to reach whichever step reopens
+    the file, since the file's own header is not what QGIS draws by."""
+
+    WKT = 'PROJCS["assigned"]'
+
+    @staticmethod
+    def assigned(layer: ExportLayer, qml: str | None) -> ExportLayer:
+        assert layer.raster is not None
+        return dataclasses.replace(
+            layer,
+            raster=dataclasses.replace(
+                layer.raster, assigned_crs_wkt=TestAssignedCrs.WKT, style_qml=qml
+            ),
+        )
+
+    def test_an_unstyled_raster_hands_the_crs_to_the_converter(
+        self, tmp_path: Path
+    ) -> None:
+        converter = FakeConverter()
+        stage_rasters(
+            project_with(self.assigned(raster_layer(write_source(tmp_path)), None)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=converter,
+        )
+        assert converter.crs_calls == [self.WKT]
+
+    def test_a_baked_raster_hands_it_to_the_baker_only(self, tmp_path: Path) -> None:
+        baker, converter = FakeBaker(), FakeConverter()
+        stage_rasters(
+            project_with(self.assigned(raster_layer(write_source(tmp_path)), QML)),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=converter,
+            baker=baker,
+        )
+        # The baked file already carries it; assigning it again would relabel
+        # pixels that are in the right place.
+        assert baker.crs_calls == [self.WKT]
+        assert converter.crs_calls == [None]
+
+
+class TestNoDataRules:
+    def test_the_authors_masking_reaches_the_baker(self, tmp_path: Path) -> None:
+        rules = (NoDataRule(band=1, use_source=False, ranges=((0.0, 5.0),)),)
+        layer = baked_layer(write_source(tmp_path))
+        assert layer.raster is not None
+        layer = dataclasses.replace(
+            layer, raster=dataclasses.replace(layer.raster, nodata_rules=rules)
+        )
+        baker = FakeBaker()
+        stage_rasters(
+            project_with(layer),
+            tmp_path / "artifact",
+            OutputMode.FOLDER,
+            FidelityReportBuilder(),
+            converter=FakeConverter(),
+            baker=baker,
+        )
+        assert baker.nodata_calls == [rules]
 
 
 class TestStyleBaking:

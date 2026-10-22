@@ -629,6 +629,21 @@ class LabelingSpec:
 
 
 @dataclass(frozen=True)
+class NoDataRule:
+    """How QGIS masks one band of a raster, where that departs from the file.
+
+    A layer's no-data settings live on the layer, not in its style, so they do
+    not travel in `RasterSpec.style_qml`; the bake restates them. Ranges are
+    inclusive at both ends, QGIS's default for the "from / to" fields.
+    """
+
+    band: int
+    #: False when the author switched the file's own no-data value off.
+    use_source: bool = True
+    ranges: tuple[tuple[float, float], ...] = ()
+
+
+@dataclass(frozen=True)
 class RasterSpec:
     """A raster layer's pixels and the few facts needed to draw them.
 
@@ -674,6 +689,11 @@ class RasterSpec:
     src: str | None = None
     band_count: int = 1
     source_crs: str | None = None
+    #: The CRS (WKT) the author assigned in QGIS when it differs from the one
+    #: the file declares - none, or a wrong one. Packaging reopens the file,
+    #: so without this it would place the raster by its own header and not
+    #: where QGIS draws it. `None` when the file's CRS stands.
+    assigned_crs_wkt: str | None = None
     # WGS84, so it can join the project extent union without a second
     # reprojection. `None` when the source CRS could not be transformed.
     extent: Extent | None = None
@@ -718,6 +738,10 @@ class RasterSpec:
     #: the file's own colours, and re-encoding an orthophoto to RGBA would cost
     #: size and quality to reproduce what the runtime draws correctly anyway.
     style_qml: str | None = None
+    #: No-data masking the author set in QGIS that the file does not say, per
+    #: band; empty when the file's own values stand. Applied by the bake, which
+    #: is why a layer with any is baked even when it is an RGB composite.
+    nodata_rules: tuple[NoDataRule, ...] = ()
 
     @property
     def reference(self) -> str:
@@ -737,6 +761,8 @@ class RasterSpec:
             "src": self.src,
             "bandCount": self.band_count,
             "sourceCrs": self.source_crs,
+            "crsAssigned": self.assigned_crs_wkt is not None,
+            "nodataRules": len(self.nodata_rules),
             "bands": list(self.bands) if self.bands else None,
             # The QML itself is thousands of bytes of XML and would swamp a
             # snapshot meant to be read in a diff. Whether the colours are baked

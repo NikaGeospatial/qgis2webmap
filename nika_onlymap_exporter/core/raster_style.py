@@ -64,15 +64,38 @@ def renderer_kind(renderer: Any) -> str:
     return str(type_fn() or "").lower()
 
 
-def should_bake(renderer: Any) -> bool:
-    """Whether this renderer's colours have to be rendered into the pixels.
+def hue_saturation_active(hue_filter: Any) -> bool:
+    """Whether a layer's hue/saturation filter changes any pixel.
+
+    Duck-typed for the same reason as `renderer_kind`. Also the one filter
+    `QgsRasterFileWriter` cannot run: in QGIS 4.2 a non-neutral one crashes the
+    writer, so `packaging.raster_bake` renders such a layer with the map
+    renderer instead.
+    """
+    return hue_filter is not None and bool(
+        hue_filter.saturation()
+        or hue_filter.colorizeOn()
+        or hue_filter.invertColors()
+        or int(hue_filter.grayscaleMode())
+    )
+
+
+def should_bake(renderer: Any, alters_pixels: bool = False) -> bool:
+    """Whether this layer's appearance has to be rendered into the pixels.
 
     True for everything except an RGB composite, INCLUDING the no-renderer case.
     A raster QGIS will not give a renderer for is one we cannot claim to
     reproduce, and baking what QGIS actually draws is the answer that cannot be
     wrong; `raster_bake` degrades to carrying the data if the render fails.
+
+    `alters_pixels` is the one reason a composite is baked too: QGIS changes
+    what it draws without changing the file - a transparent colour or alpha
+    band, user no-data values, brightness, contrast, hue or saturation - and
+    the runtime reads the file, so it cannot see any of it. The caller works
+    that out from the layer (`layer_reader.alters_pixels`); this module stays
+    free of `qgis.core`.
     """
-    return renderer_kind(renderer) != CARRIED_AS_DATA
+    return alters_pixels or renderer_kind(renderer) != CARRIED_AS_DATA
 
 
 def composite_bands(renderer: Any) -> tuple[int, ...] | None:

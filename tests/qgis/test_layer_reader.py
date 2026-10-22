@@ -700,3 +700,211 @@ class TestTileServices:
         report = FidelityReportBuilder()
         assert read_layer(layer, report) is None
         assert any(i.status is FidelityStatus.UNSUPPORTED for i in report.items)
+
+
+def _write_raster(path, bands: int, crs: str | None, west=500000.0, north=5700000.0):
+    """A 4x4 Byte GeoTIFF whose pixel (0, 0) is the colour (10, 20, 30), with a
+    gradient elsewhere, so a pixel-level comparison has something to compare."""
+    gdal = pytest.importorskip("osgeo.gdal")
+    gdal.UseExceptions()
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        str(path), 4, 4, bands, gdal.GDT_Byte
+    )
+    dataset.SetGeoTransform([west, 100.0, 0.0, north, 0.0, -100.0])
+    if crs is not None:
+        dataset.SetProjection(qgis_core.QgsCoordinateReferenceSystem(crs).toWkt())
+    for band in range(bands):
+        values = bytes(10 + 10 * band + 13 * index for index in range(16))
+        dataset.GetRasterBand(band + 1).WriteRaster(0, 0, 4, 4, values)
+    dataset = None
+    return path
+
+
+def _rendered(layer, size: int = 4) -> list[tuple[int, int, int, int]]:
+    """What QGIS itself paints for the layer, one RGBA tuple per pixel."""
+    from qgis.core import QgsMapRendererSequentialJob, QgsMapSettings
+    from qgis.PyQt.QtCore import QSize
+    from qgis.PyQt.QtGui import QColor
+
+    settings = QgsMapSettings()
+    settings.setLayers([layer])
+    settings.setDestinationCrs(layer.crs())
+    settings.setExtent(layer.extent())
+    settings.setOutputSize(QSize(size, size))
+    settings.setBackgroundColor(QColor(0, 0, 0, 0))
+    job = QgsMapRendererSequentialJob(settings)
+    job.start()
+    job.waitForFinished()
+    image = job.renderedImage()
+    return [image.pixelColor(x, y).getRgb() for y in range(size) for x in range(size)]
+
+
+def _file_pixels(path, size: int = 4) -> list[tuple[int, int, int, int]]:
+    """RGBA of a baked GeoTIFF, read back with GDAL."""
+    from osgeo import gdal
+
+    dataset = gdal.Open(str(path))
+    assert dataset.RasterCount == 4, "a bake is RGBA"
+    planes = [
+        dataset.GetRasterBand(band).ReadRaster(0, 0, size, size) for band in range(1, 5)
+    ]
+    return [tuple(plane[i] for plane in planes) for i in range(size * size)]
+
+
+def _assert_same_picture(actual, expected, tolerance: int = 3) -> None:
+    assert len(actual) == len(expected)
+    for index, (got, want) in enumerate(zip(actual, expected)):
+        assert abs(got[3] - want[3]) <= tolerance, (index, got, want)
+        if want[3] > 0:
+            assert all(abs(a - b) <= tolerance for a, b in zip(got[:3], want[:3])), (
+                index,
+                got,
+                want,
+            )
+
+
+class TestRasterAppearanceMatchesQgis:
+    """What the baked raster shows is what QGIS paints, compared pixel by pixel.
+
+    The reference is QGIS's own map renderer on the same layer, not a model of
+    it, so a pipe filter the bake forgot shows up as a different colour.
+    """
+
+    @staticmethod
+    def _tint(layer) -> None:
+        layer.brightnessFilter().setBrightness(60)
+        layer.brightnessFilter().setContrast(25)
+        layer.hueSaturationFilter().setSaturation(40)
+
+    @staticmethod
+    def _hide_one_colour(layer) -> None:
+        from qgis.core import QgsRasterTransparency
+
+        pixel = QgsRasterTransparency.TransparentThreeValuePixel()
+        pixel.red, pixel.green, pixel.blue = 10, 20, 30
+        pixel.percentTransparent = 100
+        transparency = QgsRasterTransparency()
+        transparency.setTransparentThreeValuePixelList([pixel])
+        layer.renderer().setRasterTransparency(transparency)
+
+    @staticmethod
+    def _user_nodata(layer) -> None:
+        from qgis.core import QgsRasterRange
+
+        for band in (1, 2, 3):
+            layer.dataProvider().setUserNoDataValue(band, [QgsRasterRange(10, 40)])
+
+    @pytest.mark.parametrize(
+        ("bands", "configure"),
+        [
+            pytest.param(1, "_tint", id="grey-brightness-contrast-saturation"),
+            pytest.param(3, "_tint", id="rgb-brightness-contrast-saturation"),
+            pytest.param(3, "_hide_one_colour", id="rgb-transparent-colour"),
+            pytest.param(3, "_user_nodata", id="rgb-user-nodata"),
+        ],
+    )
+    def test_the_baked_pixels_are_what_qgis_paints(
+        self, qgis_app, tmp_path, bands, configure
+    ) -> None:
+        from nika_onlymap_exporter.packaging.raster_bake import bake
+
+        layer = qgis_core.QgsRasterLayer(
+            str(_write_raster(tmp_path / "src.tif", bands, "EPSG:32631")), "r", "gdal"
+        )
+        assert layer.isValid()
+        getattr(self, configure)(layer)
+        expected = _rendered(layer)
+        assert len(set(expected)) > 4, "the oracle must not be a flat picture"
+
+        spec = read_raster(layer, FidelityReportBuilder()).raster
+        # An RGB composite is only baked when QGIS draws something its bands
+        # cannot say; the point of the case.
+        assert spec.style_qml is not None
+
+        baked = bake(
+            spec.path,
+            spec.style_qml,
+            str(tmp_path / "baked.tif"),
+            spec.assigned_crs_wkt,
+            spec.nodata_rules,
+        )
+
+        _assert_same_picture(_file_pixels(baked), expected)
+
+    def test_a_plain_composite_still_travels_as_bands(self, qgis_app, tmp_path) -> None:
+        layer = qgis_core.QgsRasterLayer(
+            str(_write_raster(tmp_path / "src.tif", 3, "EPSG:32631")), "r", "gdal"
+        )
+        spec = read_raster(layer, FidelityReportBuilder()).raster
+        assert spec.style_qml is None and spec.bands == (1, 2, 3)
+
+    @pytest.mark.parametrize("bands", [1, 3])
+    @pytest.mark.parametrize("declared", [None, "EPSG:32632"])
+    def test_a_crs_assigned_in_qgis_places_the_exported_raster(
+        self, qgis_app, tmp_path, bands, declared
+    ) -> None:
+        import hashlib
+
+        from osgeo import gdal
+
+        from nika_onlymap_exporter.core.export_ir import (
+            ExportProject,
+            Extent,
+            OutputMode,
+        )
+        from nika_onlymap_exporter.packaging.raster_staging import stage_rasters
+
+        source = _write_raster(tmp_path / "src.tif", bands, declared)
+        before = hashlib.sha256(source.read_bytes()).hexdigest()
+        layer = qgis_core.QgsRasterLayer(str(source), "r", "gdal")
+        assigned = qgis_core.QgsCoordinateReferenceSystem("EPSG:32631")
+        layer.setCrs(assigned)
+
+        exported = read_raster(layer, FidelityReportBuilder())
+        project = ExportProject(
+            title="t",
+            layers=(exported,),
+            extent=Extent(west=0.0, south=0.0, east=10.0, north=10.0),
+        )
+        result = stage_rasters(
+            project, tmp_path / "out", OutputMode.FOLDER, FidelityReportBuilder()
+        )
+
+        assert result.can_export, result.blocking_reasons
+        dataset = gdal.Open(str(result.files[0]))
+        # The COG is Web Mercator; its corner must be where QGIS draws the
+        # layer's, not where the file's own header (none, or zone 32) puts it.
+        wanted = qgis_core.QgsCoordinateTransform(
+            assigned,
+            qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"),
+            qgis_core.QgsProject.instance(),
+        ).transform(qgis_core.QgsPointXY(500000.0, 5700000.0))
+        origin_x, _, _, origin_y, _, _ = dataset.GetGeoTransform()
+        assert abs(origin_x - wanted.x()) < 500 and abs(origin_y - wanted.y()) < 500
+        # Nothing of the user's was touched to get there.
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == before
+
+    def test_a_bake_writes_the_assigned_crs_into_the_file(
+        self, qgis_app, tmp_path
+    ) -> None:
+        from osgeo import gdal, osr
+
+        from nika_onlymap_exporter.packaging.raster_bake import bake
+
+        source = _write_raster(tmp_path / "src.tif", 1, None)
+        layer = qgis_core.QgsRasterLayer(str(source), "r", "gdal")
+        layer.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:32631"))
+        spec = read_raster(layer, FidelityReportBuilder()).raster
+        assert spec.assigned_crs_wkt is not None
+
+        baked = bake(
+            spec.path,
+            spec.style_qml,
+            str(tmp_path / "baked.tif"),
+            spec.assigned_crs_wkt,
+        )
+
+        reference = osr.SpatialReference()
+        reference.ImportFromWkt(gdal.Open(baked).GetProjection())
+        assert reference.GetAuthorityCode(None) == "32631"
+        assert gdal.Open(baked).GetGeoTransform()[0] == 500000.0

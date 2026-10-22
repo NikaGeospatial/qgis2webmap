@@ -41,7 +41,7 @@ from __future__ import annotations
 import contextlib
 import os
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -631,8 +631,14 @@ def to_cog(
     on_progress: ProgressCallback | None = None,
     should_cancel: CancelCheck | None = None,
     creation_options: tuple[str, ...] = (),
+    source_crs_wkt: str | None = None,
 ) -> CogResult:
     """Convert a raster to a COG at `destination`, reprojecting if needed.
+
+    `source_crs_wkt` is a CRS the author assigned in QGIS, which wins over what
+    the file declares (none, or a wrong one). It is applied to a virtual view of
+    the source, so the source file is never touched, and it also turns off
+    `skip_if_ready`: a copy of the file would carry the wrong CRS.
 
     Never writes beside the source. The destination is supplied by the caller
     precisely so that nothing lands in the user's data directory: exporting a
@@ -669,6 +675,10 @@ def to_cog(
             f"{source_text} was opened but holds no raster bands, so there is "
             "nothing to convert."
         )
+
+    if source_crs_wkt:
+        probe = replace(probe, has_crs=True, epsg=_epsg_of_wkt(source_crs_wkt))
+        skip_if_ready = False
 
     verdict = verdict_from_probe(probe)
 
@@ -719,9 +729,16 @@ def to_cog(
     output = None
     try:
         with _gdal_exceptions(gdal):
+            # Kept alive until the COG is written: it is a view of the source,
+            # not a copy.
+            view = (
+                gdal.Translate("", source_text, format="VRT", outputSRS=source_crs_wkt)
+                if source_crs_wkt
+                else None
+            )
             output = gdal.Translate(
                 destination_text,
-                source_text,
+                source_text if view is None else view,
                 format="COG",
                 creationOptions=list(options),
                 callback=bridge if bridge.needed else None,
@@ -764,6 +781,16 @@ def to_cog(
         overview_count=result_probe.overview_count,
         warnings=tuple(warnings),
     )
+
+
+def _epsg_of_wkt(wkt: str) -> int | None:
+    """The EPSG code a WKT names, or `None` when it has none."""
+    from osgeo import osr
+
+    reference = osr.SpatialReference()
+    reference.ImportFromWkt(wkt)
+    code = reference.GetAuthorityCode(None)
+    return int(code) if code is not None and str(code).isdigit() else None
 
 
 class _ProgressBridge:

@@ -39,6 +39,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from ..core.export_ir import NoDataRule
+from ..core.raster_style import hue_saturation_active
+
+# Pixels rendered per strip when the map renderer, not the file writer, makes
+# the copy. A strip is RGBA, so this bounds the working memory at about 64 MB
+# however large the raster is.
+_STRIP_PIXELS = 16 * 1024 * 1024
+
 
 class StyleBakeError(RuntimeError):
     """The style could not be rendered into the pixels.
@@ -57,11 +65,17 @@ def _qgis() -> Any:
     """
     try:
         from qgis.core import (
+            QgsCoordinateReferenceSystem,
             QgsCoordinateTransformContext,
+            QgsMapRendererCustomPainterJob,
+            QgsMapSettings,
             QgsRasterFileWriter,
             QgsRasterLayer,
-            QgsRasterPipe,
+            QgsRasterRange,
+            QgsRectangle,
         )
+        from qgis.PyQt.QtCore import QSize
+        from qgis.PyQt.QtGui import QColor, QImage, QPainter
         from qgis.PyQt.QtXml import QDomDocument
     except ImportError as exc:  # pragma: no cover - QGIS is present in the plugin
         raise StyleBakeError(
@@ -70,8 +84,16 @@ def _qgis() -> Any:
             "styling."
         ) from exc
     return SimpleNamespace(
+        Color=QColor,
+        CoordinateReferenceSystem=QgsCoordinateReferenceSystem,
+        Image=QImage,
+        MapRendererJob=QgsMapRendererCustomPainterJob,
+        MapSettings=QgsMapSettings,
+        Painter=QPainter,
         RasterLayer=QgsRasterLayer,
-        RasterPipe=QgsRasterPipe,
+        RasterRange=QgsRasterRange,
+        Rectangle=QgsRectangle,
+        Size=QSize,
         RasterFileWriter=QgsRasterFileWriter,
         TransformContext=QgsCoordinateTransformContext,
         Document=QDomDocument,
@@ -94,16 +116,123 @@ def _parsed(result: Any) -> bool:
     return bool(result)
 
 
-def bake(source: str, style_qml: str, destination: str) -> str:
+def _render_strips(qgis: Any, layer: Any, destination: str) -> None:
+    """Paint `layer` with QGIS's own map renderer, one strip at a time, into an
+    RGBA GeoTIFF at the raster's native size.
+
+    Used instead of `QgsRasterFileWriter` for a layer with a hue/saturation
+    filter, which crashes that writer. The renderer is the reference the
+    exported picture is held to, so nothing here is a model of it.
+    """
+    try:
+        from osgeo import gdal
+    except ImportError as exc:  # pragma: no cover - GDAL ships with QGIS
+        raise StyleBakeError(
+            "GDAL's Python bindings are needed to render this raster's colours "
+            "and could not be loaded, so the layer is drawn from its values "
+            "instead of its styling."
+        ) from exc
+
+    provider = layer.dataProvider()
+    width, height = int(provider.xSize()), int(provider.ySize())
+    extent = provider.extent()
+    pixel_width = extent.width() / width
+    pixel_height = extent.height() / height
+    if abs(pixel_width - pixel_height) > 1e-6 * pixel_width:
+        raise StyleBakeError(
+            "This raster's pixels are not square, which the renderer cannot "
+            "reproduce one-to-one with its hue and saturation settings, so the "
+            "layer is drawn from its values instead of its styling."
+        )
+
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        destination, width, height, 4, gdal.GDT_Byte, ["BIGTIFF=IF_SAFER"]
+    )
+    if dataset is None:
+        raise StyleBakeError(
+            "The styled copy of this raster could not be created, so it is "
+            "drawn from its values instead of its styling."
+        )
+    dataset.SetGeoTransform(
+        [extent.xMinimum(), pixel_width, 0.0, extent.yMaximum(), 0.0, -pixel_height]
+    )
+    dataset.SetProjection(layer.crs().toWkt())
+    for band, interpretation in enumerate(
+        (
+            gdal.GCI_RedBand,
+            gdal.GCI_GreenBand,
+            gdal.GCI_BlueBand,
+            gdal.GCI_AlphaBand,
+        ),
+        start=1,
+    ):
+        dataset.GetRasterBand(band).SetColorInterpretation(interpretation)
+
+    rows = max(1, _STRIP_PIXELS // width)
+    for top in range(0, height, rows):
+        count = min(rows, height - top)
+        settings = qgis.MapSettings()
+        settings.setLayers([layer])
+        settings.setDestinationCrs(layer.crs())
+        settings.setExtent(
+            qgis.Rectangle(
+                extent.xMinimum(),
+                extent.yMaximum() - (top + count) * pixel_height,
+                extent.xMaximum(),
+                extent.yMaximum() - top * pixel_height,
+            )
+        )
+        settings.setOutputSize(qgis.Size(width, count))
+        settings.setBackgroundColor(qgis.Color(0, 0, 0, 0))
+        image = qgis.Image(
+            qgis.Size(width, count), qgis.Image.Format.Format_ARGB32_Premultiplied
+        )
+        image.fill(0)
+        painter = qgis.Painter(image)
+        qgis.MapRendererJob(settings, painter).renderSynchronously()
+        painter.end()
+        rgba = image.convertToFormat(qgis.Image.Format.Format_RGBA8888)
+        pixels = rgba.constBits()
+        pixels.setsize(rgba.sizeInBytes())
+        dataset.WriteRaster(
+            0,
+            top,
+            width,
+            count,
+            bytes(pixels),
+            band_list=[1, 2, 3, 4],
+            buf_pixel_space=4,
+            buf_line_space=4 * width,
+            buf_band_space=1,
+        )
+    dataset.FlushCache()
+    dataset = None
+
+
+def bake(
+    source: str,
+    style_qml: str,
+    destination: str,
+    assigned_crs_wkt: str | None = None,
+    nodata_rules: tuple[NoDataRule, ...] = (),
+) -> str:
     """Render `source` under `style_qml` into an RGBA GeoTIFF at `destination`.
 
     The result is a plain GeoTIFF, not a COG: `to_cog` runs next and is the one
     place that knows about tiling, overviews and compression. Writing two
     half-converted things would be two places to keep in step.
 
-    The output is in the SOURCE's CRS. Reprojection to Web Mercator is
-    `to_cog`'s job and stays there, so this function changes exactly one thing
-    about the raster - what colour its pixels are.
+    The output is in the layer's CRS: the file's own, or `assigned_crs_wkt` when
+    the author assigned one in QGIS that the file lacks. Reprojection to Web
+    Mercator is `to_cog`'s job and stays there, so this function changes exactly
+    one thing about the raster - what colour its pixels are.
+
+    `nodata_rules` restate the no-data masking the author set on the layer,
+    which is not part of its style and so is not in `style_qml`.
+
+    What is rendered is the layer's whole pipe, not just its renderer: the QML
+    carries the brightness/contrast, hue/saturation and resampling filters too,
+    and drawing without them was a visibly different picture.
     """
     qgis = _qgis()
 
@@ -128,35 +257,51 @@ def bake(source: str, style_qml: str, destination: str) -> str:
             f"{message or 'no reason given'}."
         )
 
-    renderer = layer.renderer()
-    if renderer is None:
+    if assigned_crs_wkt:
+        crs = qgis.CoordinateReferenceSystem.fromWkt(assigned_crs_wkt)
+        if not crs.isValid():
+            raise StyleBakeError(
+                "The coordinate reference system assigned to the layer could "
+                "not be read back, so it is drawn from its values instead of "
+                "its styling."
+            )
+        layer.setCrs(crs)
+
+    for rule in nodata_rules:
+        layer.dataProvider().setUseSourceNoDataValue(rule.band, rule.use_source)
+        layer.dataProvider().setUserNoDataValue(
+            rule.band, [qgis.RasterRange(low, high) for low, high in rule.ranges]
+        )
+
+    if layer.renderer() is None:
         raise StyleBakeError(
             "The layer has no renderer to draw with, so it is drawn from its "
             "values instead of its styling."
         )
-    renderer = renderer.clone()
+    provider = layer.dataProvider()
+    # The layer's own pipe, not one assembled from its provider and renderer:
+    # the brightness/contrast, hue/saturation, resampling and no-data stages
+    # all shape what QGIS draws. The layer is this function's private copy, so
+    # changing its renderer's opacity touches nothing of the user's.
+    pipe = layer.pipe()
     # Layer opacity rides on `<om-layer opacity>`; baking it here as well would
     # apply it twice.
-    renderer.setOpacity(1.0)
+    layer.renderer().setOpacity(1.0)
 
-    provider = layer.dataProvider()
-    pipe = qgis.RasterPipe()
-    if not pipe.set(provider.clone()) or not pipe.set(renderer):
-        raise StyleBakeError(
-            "QGIS declined to assemble a render pipeline for this raster, so "
-            "it is drawn from its values instead of its styling."
+    error = 0
+    if hue_saturation_active(layer.hueSaturationFilter()):
+        _render_strips(qgis, layer, destination)
+    else:
+        writer = qgis.RasterFileWriter(destination)
+        writer.setOutputFormat("GTiff")
+        error = writer.writeRaster(
+            pipe,
+            provider.xSize(),
+            provider.ySize(),
+            provider.extent(),
+            layer.crs(),
+            qgis.TransformContext(),
         )
-
-    writer = qgis.RasterFileWriter(destination)
-    writer.setOutputFormat("GTiff")
-    error = writer.writeRaster(
-        pipe,
-        provider.xSize(),
-        provider.ySize(),
-        provider.extent(),
-        layer.crs(),
-        qgis.TransformContext(),
-    )
     # QgsRasterFileWriter.NoError is 0. Compared numerically rather than by the
     # enum so this module needs no QGIS import at module scope.
     if int(error) != 0:

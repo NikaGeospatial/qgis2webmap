@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from ..core.export_ir import ExportLayer, ExportProject, OutputMode
+from ..core.export_ir import ExportLayer, ExportProject, NoDataRule, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
 from .dependency_scanner import (
     STANDALONE_RASTER_MAX_BYTES,
@@ -172,7 +172,8 @@ class RasterStagingResult:
 # `to_cog` with the arguments this module always passes, so a test can
 # substitute the GDAL half without reproducing its full signature.
 Converter = Callable[
-    [str, str, "ProgressCallback | None", "CancelCheck | None"], CogResult
+    [str, str, "ProgressCallback | None", "CancelCheck | None", "str | None"],
+    CogResult,
 ]
 
 
@@ -181,23 +182,36 @@ def _convert(
     destination: str,
     on_progress: ProgressCallback | None,
     should_cancel: CancelCheck | None,
+    source_crs_wkt: str | None,
 ) -> CogResult:
     return to_cog(
-        source, destination, on_progress=on_progress, should_cancel=should_cancel
+        source,
+        destination,
+        on_progress=on_progress,
+        should_cancel=should_cancel,
+        source_crs_wkt=source_crs_wkt,
     )
 
 
-#: Renders a QGIS style into a raster's pixels. Source path, QML, destination;
-#: returns the path written. Injectable for the same reason `Converter` is: the
-#: unit tier has neither QGIS nor a raster, and the decisions worth testing here
-#: are about what happens when it succeeds and when it fails.
-Baker = Callable[[str, str, str], str]
+#: Renders a QGIS style into a raster's pixels. Source path, QML, destination
+#: the CRS the author assigned in QGIS, if any, and the no-data masking they
+#: set; returns the path written.
+#: Injectable for the same reason `Converter` is: the unit tier has neither QGIS
+#: nor a raster, and the decisions worth testing here are about what happens
+#: when it succeeds and when it fails.
+Baker = Callable[[str, str, str, "str | None", "tuple[NoDataRule, ...]"], str]
 
 
-def _bake(source: str, style_qml: str, destination: str) -> str:
+def _bake(
+    source: str,
+    style_qml: str,
+    destination: str,
+    assigned_crs_wkt: str | None,
+    nodata_rules: tuple[NoDataRule, ...],
+) -> str:
     from .raster_bake import bake
 
-    return bake(source, style_qml, destination)
+    return bake(source, style_qml, destination, assigned_crs_wkt, nodata_rules)
 
 
 def stage_rasters(
@@ -359,7 +373,11 @@ def _stage_one(
         if raster.style_qml is not None:
             try:
                 source = baker(
-                    raster.path, raster.style_qml, str(Path(bake_dir) / "styled.tif")
+                    raster.path,
+                    raster.style_qml,
+                    str(Path(bake_dir) / "styled.tif"),
+                    raster.assigned_crs_wkt,
+                    raster.nodata_rules,
                 )
                 baked = True
             except StyleBakeError as exc:
@@ -372,7 +390,15 @@ def _stage_one(
                 )
 
         try:
-            result = converter(source, str(target), on_progress, should_cancel)
+            # A baked file already carries the assigned CRS; the author's CRS
+            # is only still owed to a file that went through unchanged.
+            result = converter(
+                source,
+                str(target),
+                on_progress,
+                should_cancel,
+                None if baked else raster.assigned_crs_wkt,
+            )
         except CogError as exc:
             # Every `CogError` message is written to be shown to a user and
             # carries its own next step, so it is passed through rather than

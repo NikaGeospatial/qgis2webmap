@@ -35,6 +35,7 @@ from .export_ir import (
     Extent,
     GeometryKind,
     LabelingSpec,
+    NoDataRule,
     PopupSpec,
     RasterSpec,
     RendererKind,
@@ -46,7 +47,7 @@ from .export_ir import (
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
-from .raster_style import composite_bands, should_bake
+from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import category_key, translate_renderer
 from .symbol_rasterizer import build_icon_atlas
 
@@ -483,6 +484,69 @@ def raster_extent(layer: QgsRasterLayer) -> Extent | None:
     )
 
 
+def raster_nodata_rules(layer: QgsRasterLayer) -> tuple[NoDataRule, ...]:
+    """The no-data masking QGIS applies on top of the file, band by band.
+
+    Only what departs from the file: user ranges, and a source no-data value
+    the author switched off. Neither is part of the layer's style.
+    """
+    provider = layer.dataProvider()
+    if provider is None:
+        return ()
+    rules: list[NoDataRule] = []
+    for band in range(1, int(provider.bandCount()) + 1):
+        ranges = tuple(
+            (float(found.min()), float(found.max()))
+            for found in provider.userNoDataValues(band)
+        )
+        source_off = provider.sourceHasNoDataValue(band) and not (
+            provider.useSourceNoDataValue(band)
+        )
+        if ranges or source_off:
+            rules.append(
+                NoDataRule(
+                    band=band,
+                    use_source=not source_off,
+                    ranges=ranges,
+                )
+            )
+    return tuple(rules)
+
+
+def alters_pixels(layer: QgsRasterLayer) -> bool:
+    """Whether QGIS draws this raster differently from what its file holds, in
+    a way a colour composite's bands cannot carry.
+
+    The runtime reads the file, so anything QGIS applies on top of it is lost
+    unless it is rendered into the pixels: a transparent colour, an alpha band,
+    user no-data values or a no-data value the author switched off, and the
+    brightness/contrast and hue/saturation filters of the layer's pipe.
+    """
+    renderer = layer.renderer()
+    if renderer is not None:
+        transparency_fn = getattr(renderer, "rasterTransparency", None)
+        transparency = transparency_fn() if callable(transparency_fn) else None
+        if transparency is not None and (
+            transparency.transparentSingleValuePixelList()
+            or transparency.transparentThreeValuePixelList()
+        ):
+            return True
+        alpha_fn = getattr(renderer, "alphaBand", None)
+        if callable(alpha_fn) and int(alpha_fn()) > 0:
+            return True
+
+    if raster_nodata_rules(layer):
+        return True
+
+    pipe = layer.pipe()
+    if pipe is None:
+        return False
+    brightness = pipe.brightnessFilter()
+    if brightness is not None and (brightness.brightness() or brightness.contrast()):
+        return True
+    return hue_saturation_active(pipe.hueSaturationFilter())
+
+
 def raster_style(layer: QgsRasterLayer) -> tuple[tuple[int, ...] | None, str | None]:
     """How this raster's colours reach the map: as bands, or as baked pixels.
 
@@ -499,7 +563,7 @@ def raster_style(layer: QgsRasterLayer) -> tuple[tuple[int, ...] | None, str | N
     renderer_fn = getattr(layer, "renderer", None)
     renderer = renderer_fn() if callable(renderer_fn) else None
 
-    if not should_bake(renderer):
+    if not should_bake(renderer, alters_pixels(layer)):
         return (composite_bands(renderer), None)
 
     document = QDomDocument()
@@ -771,11 +835,17 @@ def read_raster(
     bands, style_qml = raster_style(layer)
     extent = raster_extent(layer)
     crs = layer.crs()
+    # Set when the author assigned a CRS in QGIS that the file does not carry
+    # (none, or a different one): packaging reopens the file, which would put
+    # the raster where its own header says rather than where QGIS draws it.
+    assigned_crs = crs.isValid() and crs != provider.crs()
 
     raster = RasterSpec(
         path=path,
         band_count=band_count,
         source_crs=crs.authid() if crs.isValid() else None,
+        assigned_crs_wkt=crs.toWkt() if assigned_crs else None,
+        nodata_rules=raster_nodata_rules(layer),
         extent=extent,
         pixel_width=int(provider.xSize()),
         pixel_height=int(provider.ySize()),
