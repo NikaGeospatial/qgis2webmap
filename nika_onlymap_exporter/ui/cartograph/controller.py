@@ -191,7 +191,10 @@ class CartographController:
         # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
         # the hand-off prompt's print-safety line.
         self._last_page_label: str | None = None
-        self._print_after_save = False
+        # Builds started so far, and the pages to open once the build numbered
+        # at least so much has saved: (query, build number). See `_open_saved`.
+        self._builds_started = 0
+        self._open_after_save: list[tuple[str, int]] = []
         self._loading_page = False
         self._colour_vision: AccessibilityDialog | None = None
         self._legend_entries: tuple[LegendEntry, ...] = ()
@@ -205,6 +208,7 @@ class CartographController:
         self._selected_name: str | None = None
         self._shut_down = False
         self._preview_server: PreviewServer | None = None
+        self._preview_server_error = ""
 
         # Rendered static frames are kept between saves; a closed project's
         # are no use to the next one and only hold memory.
@@ -806,9 +810,7 @@ class CartographController:
         path = self._current_path()
         if path is None or not path.exists():
             return
-        self._open_url(
-            self._served_url(path, f"atlas={kind}") or QUrl.fromLocalFile(str(path))
-        )
+        self._open_saved(path, f"atlas={kind}")
 
     def _show_atlas_outcome(self, report: FidelityReportBuilder, html: str) -> None:
         from ...core.export_ir import FidelityStatus
@@ -1008,6 +1010,8 @@ class CartographController:
         self._last_error = ""
         self._last_summary = None
         self._frame_issue_counts = {}
+        # A page asked for the layout left behind; this one did not ask.
+        self._open_after_save = []
 
     def on_project_content_changed(self) -> None:
         """A layer was restyled or its edits saved in QGIS: the cartograph
@@ -1067,9 +1071,11 @@ class CartographController:
 
     def _start_build(self) -> None:
         if self._current_layout is None:
+            self._open_after_save = []
             return
         path_text = self.file_edit.text().strip()
         if not path_text:
+            self._open_after_save = []
             return
         if self._job is not None or self.dialog._job is not None:
             # A build, or a web-map job, is already reading the project - and
@@ -1080,6 +1086,7 @@ class CartographController:
 
         runtime = self._load_runtime()
         if runtime is None:
+            self._open_after_save = []
             self._update_status_label()
             return
 
@@ -1135,10 +1142,17 @@ class CartographController:
 
         job = BackgroundJob(work, self.dialog)
         self._job = job
+        built_for = self.state.cartograph_layout
+        self._builds_started += 1
+        build_number = self._builds_started
         job.succeeded.connect(
-            lambda finished: self._on_build_succeeded(path, finished, report)
+            lambda finished: self._on_build_succeeded(
+                path, finished, report, built_for, build_number
+            )
         )
-        job.failed.connect(self._on_build_failed)
+        job.failed.connect(
+            lambda message, details: self._on_build_failed(message, details, built_for)
+        )
         job.finished.connect(job.deleteLater)
         job.start()
 
@@ -1177,18 +1191,28 @@ class CartographController:
         path: Path,
         finished: cartograph_export.FinishedCartograph,
         report: FidelityReportBuilder,
+        built_for: str | None = None,
+        build_number: int = 0,
     ) -> None:
         self._job = None
         if self._shut_down:
             return
         html = finished.html
+        current = self._is_current_build(path, built_for)
         try:
             self._write_atomic(path, html)
         except OSError as exc:
+            if not current:
+                return
             self._last_error = tr("Could not save the cartograph: {error}").format(
                 error=str(exc)
             )
             self._update_status_label()
+            return
+        if not current:
+            # Saved for a layout (or file) no longer on screen: its own file is
+            # up to date, but the status, Checks and a pending print belong to
+            # what is selected now, whose own build follows.
             return
         self._last_error = ""
         self._last_saved_at = time.time()
@@ -1200,17 +1224,22 @@ class CartographController:
             self._collect_legend_entries(self._pending_spec, finished.projects)
             if self._colour_vision is not None:
                 self._colour_vision.refresh()
-        if self._print_after_save:
-            self._print_after_save = False
-            self._open_url(
-                self._served_url(path, "print=1") or QUrl.fromLocalFile(str(path))
-            )
+        ready = [
+            query for query, needed in self._open_after_save if build_number >= needed
+        ]
+        self._open_after_save = [
+            entry for entry in self._open_after_save if build_number < entry[1]
+        ]
+        for query in ready:
+            self._open_url(self._page_url(path, query))
         self._update_status_label()
         self._update_share_enabled()
         if self.state.output is DialogOutput.CARTOGRAPH:
             self.show_fidelity()
 
-    def _on_build_failed(self, message: str, details: str) -> None:
+    def _on_build_failed(
+        self, message: str, details: str, built_for: str | None = None
+    ) -> None:
         self._job = None
         if self._shut_down:
             return
@@ -1219,10 +1248,20 @@ class CartographController:
         QgsMessageLog.logMessage(
             details, "QGIS2WebMap", level=Qgis.MessageLevel.Warning
         )
+        if built_for is not None and built_for != self.state.cartograph_layout:
+            return
+        # The page waiting on this save would open without the latest edits.
+        self._open_after_save = []
         self._last_error = tr("Could not build the cartograph: {message}").format(
             message=message
         )
         self._update_status_label()
+
+    def _is_current_build(self, path: Path, built_for: str | None) -> bool:
+        """Whether a finished build is for the layout and file now selected."""
+        if built_for is not None and built_for != self.state.cartograph_layout:
+            return False
+        return self._current_path() == path
 
     @staticmethod
     def _write_atomic(path: Path, content: str) -> None:
@@ -1410,7 +1449,7 @@ class CartographController:
         if path is None or not path.exists():
             return
         query = f"cvd={condition}" if condition else ""
-        self._open_url(self._served_url(path, query) or QUrl.fromLocalFile(str(path)))
+        self._open_saved(path, query)
 
     def release_canvas_effects(self) -> None:
         """Undo a colour-vision preview this plugin put on the QGIS canvas.
@@ -1470,9 +1509,48 @@ class CartographController:
                 )
             )
             return
-        self._open_url(self._served_url(path) or QUrl.fromLocalFile(str(path)))
+        self._open_saved(path)
 
-    def _served_url(self, path: Path, query: str = "") -> QUrl | None:
+    def _open_saved(self, path: Path, query: str = "") -> None:
+        """Open the cartograph in the browser as it is with every edit made
+        so far: now if it is saved, otherwise once the save carrying the
+        latest edits lands. A failed save or another layout cancels it."""
+        if self._autosave_timer.isActive():
+            # Edits not yet in any build: wait for the next one to start.
+            needed = self._builds_started + 1
+        elif self._job is not None:
+            # The running build carries every edit so far.
+            needed = self._builds_started
+        else:
+            self._open_url(self._page_url(path, query))
+            return
+        self._open_after_save.append((query, needed))
+        self.dialog.status_label.setText(
+            tr("Saving the latest changes first - it opens when saved.")
+        )
+
+    def _page_url(self, path: Path, query: str = "") -> QUrl:
+        """`path` served locally, or the file itself when the server cannot
+        start - with `query` either way, since it is what tells the page to
+        print, export or page through the atlas."""
+        url = self._served_url(path)
+        if url is None:
+            url = QUrl.fromLocalFile(str(path))
+            # Some systems open a file link without its query, which would
+            # leave a print or export silently undone: say what went wrong.
+            self.dialog.status_label.setText(
+                tr(
+                    "Could not start the local preview server ({error}), so the "
+                    "cartograph opened from its file. If it does not print or "
+                    "download, check that local connections to {host} are "
+                    "allowed, then try again."
+                ).format(error=self._preview_server_error, host=BIND_HOST)
+            )
+        if query:
+            url.setQuery(query)
+        return url
+
+    def _served_url(self, path: Path) -> QUrl | None:
         """Serve `path`'s folder locally, same as the web map's preview path.
 
         `QWebEngineView` cannot create a WebGL context inside QGIS (see
@@ -1485,13 +1563,22 @@ class CartographController:
             if self._preview_server is None or self._preview_server.root != root:
                 if self._preview_server is not None:
                     self._preview_server.stop()
-                self._preview_server = PreviewServer(root)
-                self._preview_server.start()
-            url = QUrl(f"http://{BIND_HOST}:{self._preview_server.port}/{path.name}")
-            if query:
-                url.setQuery(query)
+                    self._preview_server = None
+                server = PreviewServer(root)
+                server.start()
+                # Kept only once running: a server that failed to bind would
+                # otherwise be reused, unstarted, by the next action.
+                self._preview_server = server
+            url = QUrl()
+            url.setScheme("http")
+            url.setHost(BIND_HOST)
+            url.setPort(self._preview_server.port)
+            # Set as a decoded path, so a `#` or `?` in the name is encoded
+            # rather than read as a fragment or query.
+            url.setPath(f"/{path.name}")
             return url
-        except OSError:
+        except OSError as exc:
+            self._preview_server_error = str(exc)
             return None
 
     @staticmethod
@@ -1646,8 +1733,13 @@ class CartographController:
         path = self._current_path()
         if path is None:
             return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
-        self.dialog.status_label.setText(tr("Opened {path}").format(path=path.parent))
+        # The folder may not exist until the first save makes it: open the
+        # nearest one that does, and say which.
+        folder = path.parent
+        while not folder.exists() and folder != folder.parent:
+            folder = folder.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        self.dialog.status_label.setText(tr("Opened {path}").format(path=folder))
 
     def on_handoff(self, task: str, cvd_findings: str | None = None) -> None:
         """Share > Enhance / Critique: the hand-off dialog on the saved file.
@@ -1690,9 +1782,7 @@ class CartographController:
         if settings is not None and settings.uses_qgis_exporter:
             self._export_pdf_through_qgis(settings, path)
             return
-        self._open_url(
-            self._served_url(path, "print=1") or QUrl.fromLocalFile(str(path))
-        )
+        self._open_saved(path, "print=1")
 
     # ---- Print settings ----------------------------------------------------
 
@@ -1755,8 +1845,10 @@ class CartographController:
             else:
                 # The browser must print the file with these settings in it,
                 # so print once the save that applies them has landed.
-                self._print_after_save = True
                 self.schedule_autosave()
+                path = self._current_path()
+                if path is not None:
+                    self._open_saved(path, "print=1")
         else:
             self.schedule_autosave()
 
@@ -1801,10 +1893,7 @@ class CartographController:
         path = self._current_path()
         if path is None or not path.exists():
             return
-        self._open_url(
-            self._served_url(path, "export=png&dpi=300")
-            or QUrl.fromLocalFile(str(path))
-        )
+        self._open_saved(path, "export=png&dpi=300")
 
     def on_export_qpt(self) -> None:
         if self._current_layout is None:

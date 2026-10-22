@@ -2582,6 +2582,18 @@ class MainDialog(QDialog):
         self._cartograph.build_corner().setVisible(not web)
         self.views.setCurrentWidget(self.tabs if web else self._cartograph_workspace)
 
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt API
+        """Esc on Settings or Help goes Back, as the arrow does; only on the
+        output's own screen does it close the dialog. (Close stays Close.)"""
+        if (
+            event.key() == Qt.Key.Key_Escape
+            and self.views.currentWidget() is self._aside
+        ):
+            self._close_aside()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def active_actions(self) -> QWidget:
         """The header's actions for the output on screen."""
         if self.state.output is DialogOutput.WEB_MAP:

@@ -11,6 +11,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import sys
 import time
 import types
 
@@ -576,6 +577,165 @@ class TestBuildThreadsAndJobs:
         finally:
             dialog.close()
 
+    def test_a_build_landing_after_a_switch_saves_only_its_own_layout(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        """Layout A's save finishing once B is selected writes A's file and
+        nothing of B's: not B's status line, Checks, or a print A asked for."""
+        import threading
+
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        gate = threading.Event()
+        gate.set()
+        finish = export_module.finish_cartograph_full
+
+        def gated(*args, **kwargs):
+            gate.wait(20)
+            return finish(*args, **kwargs)
+
+        monkeypatch.setattr(export_module, "finish_cartograph_full", gated)
+        _add_layout(project, "A", [("Map", "EPSG:4326")])
+        _add_layout(project, "B", [("Map", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            cartograph.layout_combo.setCurrentText("A")
+            a = tmp_path / "a.html"
+            cartograph.file_edit.setText(str(a))
+            cartograph._on_file_edited(str(a))
+            assert _wait_for(qgis_app, lambda: a.exists())
+            assert _wait_for(
+                qgis_app, lambda: not cartograph._autosave_timer.isActive()
+            )
+
+            gate.clear()
+            fake_cartograph_export.html_text["value"] = "<html>A again</html>"
+            cartograph._run_autosave()
+            assert cartograph._job is not None
+            cartograph.on_export_png()  # waits for A's save, then is dropped
+            cartograph.layout_combo.setCurrentText("B")
+            b_path = cartograph._current_path()
+            cartograph._autosave_timer.stop()  # B's own save is not the point
+            gate.set()
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            cartograph._autosave_timer.stop()
+
+            assert a.read_text() == "<html>A again</html>"
+            assert not b_path.exists()
+            assert cartograph._last_saved_at is None
+            assert cartograph._last_summary is None
+            assert cartograph.cartograph_status_label.text().startswith("Not saved")
+            assert opened == []
+        finally:
+            gate.set()
+            dialog.close()
+
+    def test_an_export_right_after_an_edit_opens_the_saved_edit(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            target = cartograph._current_path()
+            opened = []
+            monkeypatch.setattr(
+                cartograph,
+                "_open_url",
+                lambda url: opened.append((url.query(), target.read_text())),
+            )
+            fake_cartograph_export.html_text["value"] = "<html>edited</html>"
+            cartograph.schedule_autosave()  # an edit, still in its debounce
+            cartograph.on_export_png()
+            assert opened == []
+            assert "opens when saved" in dialog.status_label.text()
+            assert _wait_for(qgis_app, lambda: opened)
+            assert opened == [("export=png&dpi=300", "<html>edited</html>")]
+        finally:
+            dialog.close()
+
+    def test_print_settings_export_waits_past_a_build_already_running(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        """The build in flight predates the new settings; only the save that
+        applies them may be printed."""
+        import threading
+
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
+
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        gate = threading.Event()
+        finish = export_module.finish_cartograph_full
+
+        def gated(*args, **kwargs):
+            gate.wait(20)
+            return finish(*args, **kwargs)
+
+        monkeypatch.setattr(export_module, "finish_cartograph_full", gated)
+        try:
+            cartograph = dialog._cartograph
+            calls = fake_cartograph_export.calls
+            opened = []
+            monkeypatch.setattr(
+                cartograph,
+                "_open_url",
+                lambda url: opened.append((url.query(), len(calls))),
+            )
+            monkeypatch.setattr(
+                print_settings_dialog,
+                "ask_print_settings",
+                lambda *a, **k: (
+                    print_settings_dialog.ACTION_EXPORT,
+                    PrintSettings(bleed="5mm"),
+                ),
+            )
+            builds = len(calls)
+            cartograph._run_autosave()  # in flight, without the bleed
+            cartograph.on_print_settings()
+            gate.set()
+            assert _wait_for(qgis_app, lambda: opened)
+            # Opened by the second build, the one started after the settings.
+            assert opened == [("print=1", builds + 2)]
+        finally:
+            gate.set()
+            dialog.close()
+
+    def test_a_failed_save_cancels_the_page_waiting_on_it(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            fake_cartograph_export.should_fail["value"] = True
+            cartograph.schedule_autosave()
+            cartograph.on_export_pdf()
+            assert _wait_for(
+                qgis_app,
+                lambda: (
+                    cartograph.cartograph_status_label.text().startswith(
+                        "Could not build"
+                    )
+                    or "Could not build" in cartograph.cartograph_status_label.text()
+                ),
+            )
+            fake_cartograph_export.should_fail["value"] = False
+            builds = len(fake_cartograph_export.calls)
+            cartograph.schedule_autosave()  # a later, unrelated save
+            assert _wait_for(
+                qgis_app, lambda: len(fake_cartograph_export.calls) > builds
+            )
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            assert opened == []
+        finally:
+            dialog.close()
+
     def test_an_unexpected_error_lands_on_the_status_line(
         self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
     ) -> None:
@@ -738,6 +898,9 @@ class TestCartographShareMenu:
         target = tmp_path / "survey.html"
         target.write_text("<html>pre-existing</html>")
         cartograph.file_edit.setText(str(target))
+        # Saved and idle: no edit is waiting to be written, so the share
+        # actions open the file now rather than after a save.
+        cartograph._autosave_timer.stop()
         cartograph._update_share_enabled()
         return dialog, target
 
@@ -856,6 +1019,106 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "plan two.html",
+            "plan \u00fcber \u5730\u56fe.html",
+            "plan #2.html",
+            "plan 100%.html",
+            pytest.param(
+                "plan ?.html",
+                marks=pytest.mark.skipif(
+                    sys.platform == "win32", reason="Windows forbids ? in names"
+                ),
+            ),
+        ],
+    )
+    def test_every_action_reaches_the_served_file(
+        self, qgis_app, project, tmp_path, monkeypatch, name
+    ) -> None:
+        import urllib.request
+
+        dialog, _target = self._ready_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            target = tmp_path / name
+            target.write_text("<html>plan</html>", encoding="utf-8")
+            cartograph.file_edit.setText(str(target))
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            cartograph.on_open_in_browser()
+            cartograph.on_export_png()
+            cartograph._open_all_pages("zip")
+            assert [url.query() for url in opened] == [
+                "",
+                "export=png&dpi=300",
+                "atlas=zip",
+            ]
+            for url in opened:
+                assert url.scheme() == "http"
+                assert url.path() == f"/{name}"
+                assert not url.hasFragment()
+                encoded = bytes(url.toEncoded()).decode("ascii")
+                with urllib.request.urlopen(encoded, timeout=10) as response:
+                    assert response.read() == b"<html>plan</html>"
+        finally:
+            dialog.close()
+
+    def test_every_action_keeps_its_query_without_the_server(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph import controller
+
+        def refuse(_self) -> str:
+            raise OSError("no port")
+
+        monkeypatch.setattr(controller.PreviewServer, "start", refuse)
+        dialog, target = self._ready_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            cartograph.on_open_in_browser()
+            cartograph.on_export_pdf()
+            cartograph.on_export_png()
+            cartograph._open_cvd_preview("deutan")
+            cartograph._open_all_pages("zip")
+            # Twice: a server that failed once is not reused unstarted.
+            cartograph._open_all_pages("print")
+            assert [url.toLocalFile() for url in opened] == [str(target)] * 6
+            assert [url.query() for url in opened] == [
+                "",
+                "print=1",
+                "export=png&dpi=300",
+                "cvd=deutan",
+                "atlas=zip",
+                "atlas=print",
+            ]
+            status = dialog.status_label.text()
+            assert "Could not start the local preview server (no port)" in status
+            assert "127.0.0.1" in status
+        finally:
+            dialog.close()
+
+    def test_reveal_before_the_folder_exists_opens_the_nearest_one(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, _target = self._ready_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            cartograph.file_edit.setText(str(tmp_path / "not yet" / "x.html"))
+            opened = []
+            monkeypatch.setattr(
+                "nika_onlymap_exporter.ui.cartograph.controller.QDesktopServices.openUrl",
+                lambda url: opened.append(url.toLocalFile()),
+            )
+            cartograph.on_reveal()
+            assert opened == [str(tmp_path)]
+            assert dialog.status_label.text() == f"Opened {tmp_path}"
+        finally:
+            dialog.close()
+
     def test_reveal_opens_the_parent_folder(
         self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
@@ -951,13 +1214,15 @@ class TestPrintSettings:
                 "ask_print_settings",
                 lambda *a, **k: (print_settings_dialog.ACTION_SAVE, chosen),
             )
-            before = target.stat().st_mtime_ns
             dialog._cartograph.on_print_settings()
+            # The settings themselves, not any new save: an autosave already
+            # under way when the layout opened can land first.
             assert _wait_for(
-                qgis_app, lambda: target.stat().st_mtime_ns != before, timeout=60
+                qgis_app,
+                lambda: 'bleed="3"' in target.read_text(encoding="utf-8"),
+                timeout=60,
             )
             html = target.read_text(encoding="utf-8")
-            assert 'bleed="3"' in html
             assert 'crop-marks=""' in html
             assert dialog.state.cartograph_print["survey-utm"] == chosen.to_json()
         finally:
@@ -988,6 +1253,35 @@ class TestPrintSettings:
             assert _wait_for(qgis_app, lambda: opened, timeout=60)
             assert opened[0].query() == "print=1"
             assert 'bleed="5"' in target.read_text(encoding="utf-8")
+        finally:
+            dialog.close()
+
+    def test_print_after_save_keeps_its_query_without_the_server(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.ui.cartograph import (
+            controller,
+            print_settings_dialog,
+        )
+
+        def refuse(_self) -> str:
+            raise OSError("no port")
+
+        monkeypatch.setattr(controller.PreviewServer, "start", refuse)
+        dialog, target = self._real_dialog(qgis_app, project, tmp_path)
+        try:
+            opened = []
+            monkeypatch.setattr(dialog._cartograph, "_open_url", opened.append)
+            monkeypatch.setattr(
+                print_settings_dialog,
+                "ask_print_settings",
+                lambda *a, **k: (print_settings_dialog.ACTION_EXPORT, PrintSettings()),
+            )
+            dialog._cartograph.on_print_settings()
+            assert _wait_for(qgis_app, lambda: opened, timeout=60)
+            assert opened[0].toLocalFile() == str(target)
+            assert opened[0].query() == "print=1"
         finally:
             dialog.close()
 
@@ -1492,6 +1786,7 @@ class TestAccessibility:
             opened = []
             monkeypatch.setattr(dialog._cartograph, "_open_url", opened.append)
             dialog._cartograph._open_cvd_preview("tritanopia")
+            assert _wait_for(qgis_app, lambda: opened, timeout=60)
             assert opened[0].query() == "cvd=tritanopia"
         finally:
             dialog.close()
@@ -1677,6 +1972,178 @@ class TestAtlasTab:
             dialog.close()
             project.setFileName("")
 
+    @pytest.mark.parametrize("sort", ["lot", 'lower("lot")'])
+    def test_sort_direction_and_expression_are_separate_undoable_edits(
+        self, qgis_app, project, tmp_path, sort
+    ) -> None:
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            atlas = built.atlas
+            atlas.setSortFeatures(True)
+            atlas.setSortExpression(sort)
+            tab = dialog._cartograph.atlas_tab
+            undo = built.layout.undoStack().stack()
+            steps = undo.count()
+            tab.show_layout(built.layout)
+            # Showing is not editing.
+            assert tab.sort_edit.currentField()[0] == sort
+            assert (atlas.sortFeatures(), atlas.sortExpression()) == (True, sort)
+            assert atlas.sortAscending() and undo.count() == steps
+
+            tab.descending_check.setChecked(True)
+            assert (atlas.sortFeatures(), atlas.sortExpression()) == (True, sort)
+            assert not atlas.sortAscending()
+            undo.undo()
+            assert atlas.sortAscending() and atlas.sortExpression() == sort
+            assert not tab.descending_check.isChecked()
+            undo.redo()
+            assert not atlas.sortAscending()
+            assert tab.descending_check.isChecked()
+
+            tab.sort_edit.setExpression('upper("size")')
+            tab.sort_edit.fieldChanged.emit(tab.sort_edit.expression())
+            assert atlas.sortExpression() == 'upper("size")'
+            assert not atlas.sortAscending()
+            undo.undo()
+            assert atlas.sortExpression() == sort
+            assert tab.sort_edit.currentField()[0] == sort
+
+            # A plain field picked in the widget is stored bare, as QGIS does.
+            tab.sort_edit.setField("area")
+            tab.sort_edit.fieldChanged.emit("area")
+            assert atlas.sortExpression() == "area"
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_the_direction_shown_is_the_one_stored_even_unsorted(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            atlas = built.atlas
+            atlas.setSortFeatures(False)
+            atlas.setSortAscending(False)
+            tab = dialog._cartograph.atlas_tab
+            tab.show_layout(built.layout)
+            # Unsorted: the direction is kept but there is nothing to apply it to.
+            assert tab.descending_check.isChecked()
+            assert not tab.descending_check.isEnabled()
+            tab.sort_edit.setField("lot")
+            tab.sort_edit.fieldChanged.emit("lot")
+            assert tab.descending_check.isEnabled()
+            assert (atlas.sortFeatures(), atlas.sortAscending()) == (True, False)
+            assert tab.descending_check.isChecked()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_the_followed_map_undoes_and_redoes_whole(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from atlas_fixtures import add_map
+        from qgis.core import QgsLayoutItemMap
+
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            main = built.main_map
+            inset = add_map(built.layout, [built.parcels], x=170, w=40, h=40)
+            inset.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Fixed)
+            inset.setAtlasMargin(0.3)
+            tab = dialog._cartograph.atlas_tab
+            tab.show_layout(built.layout)
+            undo = built.layout.undoStack().stack()
+            saves = []
+            tab.changed.connect(lambda: saves.append(1))
+
+            def state():
+                return (
+                    main.atlasDriven(),
+                    inset.atlasDriven(),
+                    inset.atlasScalingMode(),
+                    round(inset.atlasMargin(), 6),
+                    tab.map_combo.currentData(),
+                )
+
+            fixed = QgsLayoutItemMap.AtlasScalingMode.Fixed
+            auto = QgsLayoutItemMap.AtlasScalingMode.Auto
+            # An unrelated edit first: an Undo that missed the maps would
+            # take this back instead.
+            tab.filter_edit.setExpression("\"lot\" <> 'A-1'")
+            tab.filter_edit.fieldChanged.emit(tab.filter_edit.expression())
+            before = (True, False, fixed, 0.3, main.uuid())
+            assert state() == before
+
+            tab.map_combo.setCurrentIndex(tab.map_combo.findData(inset.uuid()))
+            after = (False, True, auto, 0.1, inset.uuid())
+            assert state() == after
+            saves.clear()
+            undo.undo()
+            assert state() == before
+            assert built.atlas.filterFeatures()
+            assert saves, "an Undo is saved like any edit"
+            undo.redo()
+            assert state() == after
+
+            tab.map_combo.setCurrentIndex(tab.map_combo.findData(""))
+            assert state()[:2] == (False, False)
+            assert tab.map_combo.currentData() == ""
+            undo.undo()
+            assert state() == after
+            undo.undo()
+            undo.undo()
+            assert not built.atlas.filterFeatures()
+            assert state() == before
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_another_tabs_undo_step_is_not_an_atlas_change(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from qgis.core import QgsLayoutPoint, QgsUnitTypes
+
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            tab = dialog._cartograph.atlas_tab
+            undo = built.layout.undoStack()
+            emitted = []
+            tab.changed.connect(lambda: emitted.append(1))
+            label = built.label
+            undo.beginCommand(label, "Move label")
+            label.attemptMove(QgsLayoutPoint(20, 5, QgsUnitTypes.LayoutMillimeters))
+            undo.endCommand()
+            undo.stack().undo()
+            undo.stack().redo()
+            assert emitted == []
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_the_all_pages_buttons_say_why_only_while_greyed_out(
+        self, qgis_app, project
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            tab = dialog._cartograph.atlas_tab
+            buttons = (tab.zip_button, tab.print_button)
+            greyed = ["The saved cartograph has no atlas pages yet"] * 2
+            ready = [
+                "Opens the cartograph and downloads every page as one ZIP",
+                "Opens the cartograph with every page ready to print - choose "
+                "Save as PDF for one multi-page PDF",
+            ]
+            for pages_written, tips in (
+                (False, greyed),
+                (True, ready),
+                (False, greyed),
+            ):
+                tab.show_outcome((), pages_written=pages_written)
+                assert [b.isEnabled() for b in buttons] == [pages_written] * 2
+                assert [b.toolTip() for b in buttons] == tips
+        finally:
+            dialog.close()
+
     def test_a_static_atlas_map_shows_why_it_will_not_page(
         self, qgis_app, project, tmp_path
     ) -> None:
@@ -1718,6 +2185,8 @@ class TestAtlasTab:
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
             tab.zip_button.click()
             tab.print_button.click()
+            # Both, in order, even when a save is still landing.
+            assert _wait_for(qgis_app, lambda: len(opened) == 2, timeout=60)
             assert [url.query() for url in opened] == ["atlas=zip", "atlas=print"]
         finally:
             dialog.close()
@@ -2130,6 +2599,29 @@ class TestWorkspace:
             from qgis.PyQt.QtCore import Qt
 
             assert current.data(0, Qt.ItemDataRole.UserRole) == layer.id()
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize("output", ["web", "cartograph"])
+    def test_escape_on_settings_or_help_goes_back_not_away(
+        self, qgis_app, project, output
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        dialog = _dialog(project)
+        try:
+            if output == "cartograph":
+                _choose_cartograph(dialog)
+            dialog.show()
+            home = dialog.views.currentWidget()
+            for button in (dialog.settings_button, dialog.help_button):
+                button.click()
+                QTest.keyClick(dialog, Qt.Key.Key_Escape)
+                assert dialog.isVisible()
+                assert dialog.views.currentWidget() is home
+            QTest.keyClick(dialog, Qt.Key.Key_Escape)
+            assert not dialog.isVisible()
         finally:
             dialog.close()
 

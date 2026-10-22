@@ -16,14 +16,17 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import contextlib
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
 from qgis.core import (
     QgsLayoutItemMap,
+    QgsLayoutUndoObjectInterface,
     QgsMapLayerProxyModel,
     QgsPrintLayout,
 )
-from qgis.gui import QgsFieldComboBox, QgsFieldExpressionWidget, QgsMapLayerComboBox
+from qgis.gui import QgsFieldExpressionWidget, QgsMapLayerComboBox
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import (
@@ -40,6 +43,10 @@ from ...core.layout_reader import atlas_page_count
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
 from .frames import layout_map_items
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    # QtWidgets on Qt 5, QtGui on Qt 6.
+    from qgis.PyQt.QtGui import QUndoStack
 
 #: The margin a map gets when this tab first makes it follow the atlas: QGIS's
 #: own default in the Item Properties panel.
@@ -59,6 +66,13 @@ class AtlasTab(QWidget):
         super().__init__(parent)
         self._layout: QgsPrintLayout | None = None
         self._loading = False
+        # True while this tab pushes its own undo command, so only an Undo or
+        # Redo made elsewhere (Ctrl+Z, the layout designer) re-reads the atlas.
+        self._editing = False
+        self._watched_stack: QUndoStack | None = None
+        # The atlas as last shown or edited here; an undo-stack move that
+        # leaves it alone (another tab's own command) is not an atlas change.
+        self._shown: tuple[object, ...] = ()
         # `open_all_pages("zip" | "print")`: the controller opens the saved
         # cartograph with this plugin's `?atlas=` trigger.
         self._open_all_pages = open_all_pages
@@ -101,12 +115,12 @@ class AtlasTab(QWidget):
         form.addRow(tr("Map that follows it"), self.map_combo)
 
         sort_row = QHBoxLayout()
-        self.sort_combo = QgsFieldComboBox(settings)
-        self.sort_combo.setAllowEmptyFieldName(True)
-        self.sort_combo.fieldChanged.connect(self._on_sort)
-        sort_row.addWidget(self.sort_combo, 1)
+        self.sort_edit = QgsFieldExpressionWidget(settings)
+        self.sort_edit.setAllowEmptyFieldName(True)
+        self.sort_edit.fieldChanged.connect(self._on_sort_expression)
+        sort_row.addWidget(self.sort_edit, 1)
         self.descending_check = QCheckBox(tr("Descending"), settings)
-        self.descending_check.toggled.connect(self._on_sort)
+        self.descending_check.toggled.connect(self._on_sort_direction)
         sort_row.addWidget(self.descending_check)
         form.addRow(tr("Sort by"), sort_row)
 
@@ -136,19 +150,21 @@ class AtlasTab(QWidget):
         # One above the other, for the same narrow panel.
         buttons = QVBoxLayout()
         self.zip_button = QPushButton(tr("Export all pages (PNG, ZIP)..."), self)
-        self.zip_button.setToolTip(
-            tr("Opens the cartograph and downloads every page as one ZIP")
-        )
         self.zip_button.clicked.connect(lambda: self._open_all_pages("zip"))
         buttons.addWidget(self.zip_button)
         self.print_button = QPushButton(tr("Print all pages..."), self)
-        self.print_button.setToolTip(
-            tr(
+        self.print_button.clicked.connect(lambda: self._open_all_pages("print"))
+        # What each button says once there are pages; `show_outcome` swaps in
+        # why it is greyed out, and back.
+        self._ready_tips = {
+            self.zip_button: tr(
+                "Opens the cartograph and downloads every page as one ZIP"
+            ),
+            self.print_button: tr(
                 "Opens the cartograph with every page ready to print - choose "
                 "Save as PDF for one multi-page PDF"
-            )
-        )
-        self.print_button.clicked.connect(lambda: self._open_all_pages("print"))
+            ),
+        }
         buttons.addWidget(self.print_button)
         page.addLayout(buttons)
         page.addStretch(1)
@@ -161,6 +177,7 @@ class AtlasTab(QWidget):
     def show_layout(self, layout: QgsPrintLayout | None) -> None:
         """Show `layout`'s atlas, without the display counting as an edit."""
         self._layout = layout
+        self._watch_undo(layout)
         self._loading = True
         try:
             has_layout = layout is not None
@@ -170,15 +187,16 @@ class AtlasTab(QWidget):
             self.settings_box.setEnabled(self.enabled_check.isChecked())
             coverage = atlas.coverageLayer() if atlas is not None else None
             self.coverage_combo.setLayer(coverage)
-            for widget in (self.sort_combo, self.filter_edit, self.filename_edit):
+            for widget in (self.sort_edit, self.filter_edit, self.filename_edit):
                 widget.setLayer(coverage)
             if atlas is not None:
-                self.sort_combo.setField(
+                self.sort_edit.setExpression(
                     atlas.sortExpression() if atlas.sortFeatures() else ""
                 )
-                self.descending_check.setChecked(
-                    atlas.sortFeatures() and not atlas.sortAscending()
-                )
+                # The stored direction, sorted or not, as QGIS shows it - and
+                # only editable while there is a sort for it to apply to.
+                self.descending_check.setChecked(not atlas.sortAscending())
+                self.descending_check.setEnabled(atlas.sortFeatures())
                 self.filter_edit.setExpression(
                     atlas.filterExpression() if atlas.filterFeatures() else ""
                 )
@@ -186,6 +204,7 @@ class AtlasTab(QWidget):
             self._fill_maps()
         finally:
             self._loading = False
+        self._shown = _atlas_state(layout)
         self._update_count()
 
     def show_outcome(self, problems: tuple[str, ...], pages_written: bool) -> None:
@@ -193,10 +212,36 @@ class AtlasTab(QWidget):
         does not, and whether the all-pages buttons have pages to work on."""
         self.problem_label.setText("\n".join(problems))
         self.problem_label.setVisible(bool(problems))
-        for button in (self.zip_button, self.print_button):
+        for button, ready_tip in self._ready_tips.items():
             button.setEnabled(pages_written)
-            if not pages_written:
-                button.setToolTip(tr("The saved cartograph has no atlas pages yet"))
+            button.setToolTip(
+                ready_tip
+                if pages_written
+                else tr("The saved cartograph has no atlas pages yet")
+            )
+
+    def _watch_undo(self, layout: QgsPrintLayout | None) -> None:
+        """Follow `layout`'s undo stack, so an Undo or Redo of an atlas edit
+        made anywhere shows here and is saved."""
+        stack = layout.undoStack().stack() if layout is not None else None
+        if stack is self._watched_stack:
+            return
+        if self._watched_stack is not None:
+            # Gone with its layout, or already disconnected: nothing to undo.
+            with contextlib.suppress(TypeError, RuntimeError):
+                self._watched_stack.indexChanged.disconnect(self._on_undo_redo)
+        self._watched_stack = stack
+        if stack is not None:
+            stack.indexChanged.connect(self._on_undo_redo)
+
+    def _on_undo_redo(self, _index: int) -> None:
+        layout = self._layout
+        if self._editing or layout is None or sip.isdeleted(layout):
+            return
+        if _atlas_state(layout) == self._shown:
+            return
+        self.show_layout(layout)
+        self.changed.emit()
 
     def _fill_maps(self) -> None:
         self.map_combo.clear()
@@ -226,8 +271,18 @@ class AtlasTab(QWidget):
 
     # ---- Editing -----------------------------------------------------------
 
-    def _edit(self, description: str, apply: Callable[[QgsPrintLayout], None]) -> None:
-        """One undoable change to the layout's atlas, then `changed`."""
+    def _edit(
+        self,
+        description: str,
+        apply: Callable[[QgsPrintLayout], None],
+        touches: Callable[[QgsPrintLayout], Sequence[QgsLayoutUndoObjectInterface]]
+        | None = None,
+    ) -> None:
+        """One undoable change to the layout's atlas, then `changed`.
+
+        `touches` names the layout objects `apply` changes when that is not
+        the atlas; their before-states are what Undo restores, in one step.
+        """
         layout = self._layout
         if self._loading or layout is None:
             return
@@ -237,9 +292,23 @@ class AtlasTab(QWidget):
             self._layout = None
             return
         stack = layout.undoStack()
-        stack.beginCommand(layout.atlas(), description)
-        apply(layout)
-        stack.endCommand()
+        objects = [layout.atlas()] if touches is None else touches(layout)
+        # A macro only when it groups: an empty one would still be an Undo step.
+        grouped = len(objects) > 1
+        self._editing = True
+        try:
+            if grouped:
+                stack.beginMacro(description)
+            for target in objects:
+                stack.beginCommand(target, description)
+            apply(layout)
+            for _target in objects:
+                stack.endCommand()
+            if grouped:
+                stack.endMacro()
+        finally:
+            self._editing = False
+        self._shown = _atlas_state(layout)
         self._update_count()
         self.changed.emit()
 
@@ -250,7 +319,7 @@ class AtlasTab(QWidget):
         )
 
     def _on_coverage(self, layer) -> None:
-        for widget in (self.sort_combo, self.filter_edit, self.filename_edit):
+        for widget in (self.sort_edit, self.filter_edit, self.filename_edit):
             widget.setLayer(layer)
 
         def apply(layout: QgsPrintLayout) -> None:
@@ -262,29 +331,44 @@ class AtlasTab(QWidget):
     def _on_map(self, _index: int) -> None:
         chosen = self.map_combo.currentData()
 
+        def switching(layout: QgsPrintLayout) -> list[QgsLayoutItemMap]:
+            return [
+                item
+                for item in layout.items()
+                if isinstance(item, QgsLayoutItemMap)
+                and item.atlasDriven() != (item.uuid() == chosen)
+            ]
+
         def apply(layout: QgsPrintLayout) -> None:
-            for item in layout.items():
-                if not isinstance(item, QgsLayoutItemMap):
-                    continue
+            for item in switching(layout):
                 follows = item.uuid() == chosen
-                if follows and not item.atlasDriven():
+                if follows:
                     item.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Auto)
                     item.setAtlasMargin(DEFAULT_ATLAS_MARGIN)
                 item.setAtlasDriven(follows)
 
-        self._edit(tr("Change Atlas Map"), apply)
+        self._edit(tr("Change Atlas Map"), apply, touches=switching)
 
-    def _on_sort(self, *_args: object) -> None:
-        field_name = self.sort_combo.currentField()
-        descending = self.descending_check.isChecked()
+    # Expression and direction are separate edits, as in QGIS: flipping the
+    # direction never rewrites the expression, whatever the picker holds.
+    def _on_sort_expression(self, *_args: object) -> None:
+        # A plain field as its bare name, like QGIS's own atlas panel stores it.
+        expression = self.sort_edit.currentField()[0].strip()
 
         def apply(layout: QgsPrintLayout) -> None:
             atlas = layout.atlas()
-            atlas.setSortFeatures(bool(field_name))
-            atlas.setSortExpression(field_name)
-            atlas.setSortAscending(not descending)
+            atlas.setSortFeatures(bool(expression))
+            atlas.setSortExpression(expression)
 
         self._edit(tr("Change Atlas Sort"), apply)
+        if not self._loading:
+            self.descending_check.setEnabled(bool(expression))
+
+    def _on_sort_direction(self, descending: bool) -> None:
+        self._edit(
+            tr("Change Atlas Sort"),
+            lambda layout: layout.atlas().setSortAscending(not descending),
+        )
 
     def _on_filter(self, *_args: object) -> None:
         expression = self.filter_edit.expression().strip()
@@ -302,3 +386,26 @@ class AtlasTab(QWidget):
             tr("Change Atlas Filename"),
             lambda layout: layout.atlas().setFilenameExpression(expression),
         )
+
+
+def _atlas_state(layout: QgsPrintLayout | None) -> tuple[object, ...]:
+    """Everything this tab shows of `layout`'s atlas, comparable."""
+    if layout is None:
+        return ()
+    atlas = layout.atlas()
+    coverage = atlas.coverageLayer()
+    return (
+        atlas.enabled(),
+        coverage.id() if coverage is not None else "",
+        atlas.sortFeatures(),
+        atlas.sortExpression(),
+        atlas.sortAscending(),
+        atlas.filterFeatures(),
+        atlas.filterExpression(),
+        atlas.filenameExpression(),
+        tuple(
+            item.uuid()
+            for item in layout.items()
+            if isinstance(item, QgsLayoutItemMap) and item.atlasDriven()
+        ),
+    )
