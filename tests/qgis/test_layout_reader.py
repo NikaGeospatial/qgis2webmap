@@ -790,7 +790,7 @@ class TestFurnitureStyling:
 
 class TestItemState:
     """What QGIS does with an item's own switches: hidden stays hidden, an
-    item excluded from exports is not exported, opacity is reported."""
+    item excluded from exports is not exported, opacity is carried."""
 
     def test_a_hidden_label_and_a_locked_one_keep_their_state(self, survey) -> None:
         survey.title_label.setVisible(False)
@@ -832,16 +832,42 @@ class TestItemState:
         assert len(reading.frames) == 1
         assert not [i for i in reading.furniture if isinstance(i, LegendSpec)]
 
-    def test_opacity_is_reported_on_furniture_too(self, survey) -> None:
+    def test_item_opacity_is_carried_and_reported_as_preserved(self, survey) -> None:
         survey.title_label.setItemOpacity(0.4)
+        survey.main_map.setItemOpacity(0.5)
         report = FidelityReportBuilder()
-        read_layout(survey.layout, report)
+        reading = read_layout(survey.layout, report)
+        (text,) = [i for i in reading.furniture if isinstance(i, TextSpec)]
+        assert text.opacity == 0.4
+        assert [frame.opacity for frame in reading.frames].count(0.5) == 1
+        grids = [i for i in reading.furniture if isinstance(i, GraticuleSpec)]
+        assert grids and all(grid.opacity == 0.5 for grid in grids)
         assert any(
             item.subject.startswith("Opacity of")
-            and item.status is FidelityStatus.APPROXIMATED
+            and item.status is FidelityStatus.PRESERVED
             and "40%" in item.detail
             for item in report.items
         )
+        assert not any(
+            item.subject.startswith("Opacity of")
+            and item.status is FidelityStatus.APPROXIMATED
+            for item in report.items
+        )
+
+    def test_an_opaque_item_reports_nothing_about_opacity(self, survey) -> None:
+        report = FidelityReportBuilder()
+        reading = read_layout(survey.layout, report)
+        assert all(i.opacity == 1.0 for i in reading.furniture)
+        assert not any(i.subject.startswith("Opacity of") for i in report.items)
+
+    def test_a_group_s_opacity_is_not_folded_into_its_members(self, survey) -> None:
+        # QGIS paints a member at its own opacity whatever its group's is.
+        group = survey.layout.groupItems([survey.title_label, survey.legend])
+        group.setItemOpacity(0.5)
+        survey.title_label.setItemOpacity(0.5)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        (text,) = [i for i in reading.furniture if isinstance(i, TextSpec)]
+        assert text.opacity == 0.5
 
 
 @pytest.mark.parametrize(

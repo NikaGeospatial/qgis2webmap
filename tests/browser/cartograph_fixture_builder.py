@@ -79,6 +79,8 @@ def main(out_dir: Path) -> int:
         expected["atlas_ranked"] = _write_atlas_ranked(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["shared"] = _write_shared(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["opacity"] = _write_opacity(QgsProject.instance(), out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
     finally:
         app.exitQgis()
@@ -479,6 +481,129 @@ def _write_shared(project, out_dir: Path) -> dict:
     )
     (out_dir / "shared-live.html").write_text(html, encoding="utf-8")
     return {"features": layer.featureCount(), "marker": "block 7"}
+
+
+def _write_opacity(project, out_dir: Path) -> dict:
+    """Translucent items over a solid blue backdrop, and QGIS's own render.
+
+    A 50% label, a live and a static map at 50%, and two red squares in a
+    50% group, one itself at 50%, the other opaque (QGIS does not compose the
+    group's opacity onto its members, so the opaque one stays opaque). `qgis_png` is
+    `QgsLayoutExporter.renderPageToImage` at 96 dpi; `probes` are the page
+    positions, in mm, to compare the browser against it.
+    """
+    from qgis.core import (
+        QgsCoordinateReferenceSystem,
+        QgsFeature,
+        QgsFillSymbol,
+        QgsGeometry,
+        QgsLayoutExporter,
+        QgsLayoutItemLabel,
+        QgsLayoutItemMap,
+        QgsLayoutItemShape,
+        QgsLayoutPoint,
+        QgsLayoutSize,
+        QgsPrintLayout,
+        QgsRectangle,
+        QgsUnitTypes,
+        QgsVectorLayer,
+    )
+    from qgis.PyQt.QtCore import QSize
+    from qgis.PyQt.QtGui import QColor
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    mm = QgsUnitTypes.LayoutMillimeters
+    mercator = QgsCoordinateReferenceSystem("EPSG:3857")
+    project.setCrs(mercator)
+    layer = QgsVectorLayer("Polygon?crs=EPSG:3857", "block", "memory")
+    feature = QgsFeature()
+    # 1 km square on a 10 x 6 km extent: 50 m per mm on a 200 x 120 mm map.
+    feature.setGeometry(
+        QgsGeometry.fromRect(QgsRectangle(11555000, 143000, 11556000, 144000))
+    )
+    layer.dataProvider().addFeatures([feature])
+    layer.updateExtents()
+    layer.renderer().setSymbol(
+        QgsFillSymbol.createSimple({"color": "#00ff00", "outline_style": "no"})
+    )
+    project.addMapLayer(layer)
+
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("opacity")
+
+    def place(item, x, y, w, h):
+        layout.addLayoutItem(item)
+        item.attemptMove(QgsLayoutPoint(x, y, mm))
+        item.attemptResize(QgsLayoutSize(w, h, mm))
+
+    def shape(x, y, w, h, colour):
+        item = QgsLayoutItemShape(layout)
+        item.setShapeType(QgsLayoutItemShape.Shape.Rectangle)
+        place(item, x, y, w, h)
+        item.setSymbol(
+            QgsFillSymbol.createSimple({"color": colour, "outline_style": "no"})
+        )
+        return item
+
+    shape(0, 0, 297, 210, "#0000ff")
+    label = QgsLayoutItemLabel(layout)
+    label.setText("Half")
+    label.setBackgroundEnabled(True)
+    label.setBackgroundColor(QColor("#ff0000"))
+    place(label, 10, 10, 100, 30)
+    label.setItemOpacity(0.5)
+
+    def draw_map(x, y, w, h):
+        item = QgsLayoutItemMap(layout)
+        place(item, x, y, w, h)
+        item.setCrs(mercator)
+        item.setLayers([layer])
+        item.setExtent(QgsRectangle(11550500, 140500, 11560500, 146500))
+        item.refresh()
+        item.setItemOpacity(0.5)
+        return item
+
+    live_map = draw_map(10, 60, 200, 120)
+    static_map = draw_map(220, 60, 67, 40)
+    square_a = shape(220, 10, 30, 30, "#ff0000")
+    square_b = shape(255, 10, 30, 30, "#ff0000")
+    group = layout.groupItems([square_a, square_b])
+    group.setItemOpacity(0.5)
+    square_a.setItemOpacity(0.5)
+
+    page_mm = layout.pageCollection().page(0).pageSize()
+    width_px = round(page_mm.width() / 25.4 * 96)
+    height_px = round(page_mm.height() / 25.4 * 96)
+    image = QgsLayoutExporter(layout).renderPageToImage(0, QSize(width_px, height_px))
+    image.save(str(out_dir / "opacity-qgis.png"))
+
+    html = export_layout_to_cartograph(
+        layout,
+        project,
+        _runtime(),
+        FidelityReportBuilder(),
+        frame_modes={live_map.uuid(): "live", static_map.uuid(): "static"},
+    )
+    (out_dir / "opacity-live.html").write_text(html, encoding="utf-8")
+    return {
+        "page_mm": [page_mm.width(), page_mm.height()],
+        "live_frame": _frame_id(layout, live_map),
+        "probes": {
+            "label": [95, 25],
+            "live_map_polygon": [110, 120],
+            "live_map_background": [30, 75],
+            "static_map_polygon": [253.5, 80],
+            "static_map_background": [225, 65],
+            "group_member_at_half": [235, 25],
+            "group_member_opaque": [270, 25],
+            "backdrop": [150, 195],
+        },
+    }
 
 
 def _frame_id(layout, map_item) -> str:

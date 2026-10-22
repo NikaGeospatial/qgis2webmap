@@ -505,7 +505,7 @@ class _Builder:
     def _finish_item(
         self, item: QgsLayoutItem, spec_item: CartographItem, index: int
     ) -> None:
-        """What every placed item shares: id, rotation, z, lock, visibility.
+        """What every placed item shares: id, rotation, z, lock, opacity, visibility.
 
         `setItemRotation` turns the item about its centre -- the runtime's
         `transform-origin: center` -- so the box is placed unrotated first.
@@ -517,6 +517,7 @@ class _Builder:
         # the page. +1 keeps every item above the page itself (z 0).
         item.setZValue(spec_item.z if spec_item.z is not None else index + 1)
         item.setLocked(spec_item.locked)
+        item.setItemOpacity(spec_item.opacity)
         if spec_item.hidden:
             item.setVisibility(False)
         self.items_by_id[spec_item.id] = item

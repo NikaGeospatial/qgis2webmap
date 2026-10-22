@@ -583,13 +583,17 @@ def _attr(name: str, value: object) -> str:
     return f' {name}="{html.escape(str(value), quote=True)}"'
 
 
-def _style(box: Box) -> str:
-    return (
+def _style(box: Box, opacity: float = 1.0) -> str:
+    style = (
         f"left:{_format_mm(box.x)}mm;"
         f"top:{_format_mm(box.y)}mm;"
         f"width:{_format_mm(box.w)}mm;"
         f"height:{_format_mm(box.h)}mm"
     )
+    # Only a translucent item names it, so an opaque item's markup is unchanged.
+    if opacity < 1.0:
+        style += f";opacity:{_format_num(opacity)}"
+    return style
 
 
 def _placement_attrs(
@@ -600,9 +604,12 @@ def _placement_attrs(
     z: int | None = None,
     locked: bool = False,
     hidden: bool = False,
+    opacity: float = 1.0,
 ) -> str:
     """The attributes every placed element shares: `id x y w h` plus the
-    optional `rotation z locked hidden`, and the matching inline `style`."""
+    optional `rotation z locked hidden`, and the matching inline `style`.
+    `opacity` has no attribute in the runtime's vocabulary; it travels in the
+    `style` only, as CSS the runtime leaves alone."""
     parts = [
         _attr("id", item_id),
         _attr("x", _format_mm(box.x)),
@@ -618,7 +625,7 @@ def _placement_attrs(
         parts.append(_attr("locked", True))
     if hidden:
         parts.append(_attr("hidden", True))
-    parts.append(_attr("style", _style(box)))
+    parts.append(_attr("style", _style(box, opacity)))
     return "".join(parts)
 
 
@@ -781,6 +788,7 @@ def _render_frame(item: FrameSpec, markup_by_frame: Mapping[str, str]) -> str:
         z=item.z,
         locked=item.locked,
         hidden=item.hidden,
+        opacity=item.opacity,
     )
     attrs = [placement]
     if item.mode == "static":
@@ -853,6 +861,7 @@ def _render_graticule(item: GraticuleSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("for", item.for_),
         _attr("crs", item.crs),
@@ -882,6 +891,7 @@ def _render_legend(item: LegendSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("for", item.for_),
         _attr("title", item.title),
@@ -928,6 +938,7 @@ def _render_scalebar(item: ScalebarSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("for", item.for_),
     ]
@@ -952,6 +963,7 @@ def _render_north(item: NorthSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("for", item.for_),
     ]
@@ -970,6 +982,7 @@ def _render_text(item: TextSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("kind", item.kind),
     ]
@@ -995,6 +1008,7 @@ def _render_image(item: ImageSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
         _attr("src", item.src),
     ]
@@ -1012,6 +1026,7 @@ def _render_shape(item: ShapeSpec) -> str:
             z=item.z,
             locked=item.locked,
             hidden=item.hidden,
+            opacity=item.opacity,
         ),
     ]
     if item.kind != "rect":

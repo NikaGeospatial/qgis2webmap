@@ -479,11 +479,27 @@ def _as_lonlat(value: object) -> tuple[float, float] | None:
     return None
 
 
+_STYLE_OPACITY_RE = re.compile(r"(?:^|;)\s*opacity\s*:\s*([0-9.]+)\s*(?:;|$)")
+
+
+def _style_opacity(style: str | None) -> float:
+    """The `opacity:` the writer puts in an item's inline `style` (the
+    runtime has no attribute for it), or 1.0. Out of range is clamped."""
+    match = _STYLE_OPACITY_RE.search(style or "")
+    if match is None:
+        return 1.0
+    try:
+        return min(max(float(match.group(1)), 0.0), 1.0)
+    except ValueError:
+        return 1.0
+
+
 class _Placement(TypedDict):
     rotation: float
     z: int | None
     locked: bool
     hidden: bool
+    opacity: float
 
 
 class _FrameShared(TypedDict):
@@ -693,6 +709,7 @@ class _Converter:
             "z": attrs.integer("z"),
             "locked": attrs.flag("locked"),
             "hidden": attrs.flag("hidden"),
+            "opacity": _style_opacity(attrs.text("style")),
         }
 
     # -- each element ------------------------------------------------------

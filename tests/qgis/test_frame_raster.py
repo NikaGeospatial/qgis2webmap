@@ -205,3 +205,23 @@ class TestRotatedItem:
         )
         assert hidden == upright
         assert not survey.main_map.isVisible()
+
+
+class TestTranslucentItem:
+    """The opacity travels as the placed frame's CSS opacity, so the raster
+    must be of the opaque map: otherwise it is drawn translucent twice."""
+
+    def test_a_translucent_item_renders_the_same_pixels_as_an_opaque_one(
+        self, survey
+    ) -> None:
+        from qgis.PyQt.QtCore import QByteArray
+        from qgis.PyQt.QtGui import QImage
+
+        def image() -> QImage:
+            render = render_static_frame(survey.layout, survey.main_map, dpi=50)
+            return QImage.fromData(QByteArray(render.png_bytes))
+
+        opaque = image()
+        survey.main_map.setItemOpacity(0.5)
+        assert image() == opaque
+        assert survey.main_map.itemOpacity() == 0.5

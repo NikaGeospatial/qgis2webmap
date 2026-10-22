@@ -6,6 +6,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
@@ -227,6 +228,33 @@ class TestWriterRoundTrip:
         result = parse_cartograph_html(_write(spec))
         assert result.spec == spec
         assert result.issues == ()
+
+    def test_item_opacity_round_trips_on_every_item_kind(self) -> None:
+        full = _full_spec()
+        spec = replace(full, items=tuple(replace(i, opacity=0.35) for i in full.items))
+        result = parse_cartograph_html(_write(spec))
+        assert result.spec == spec
+        assert result.issues == ()
+
+    @pytest.mark.parametrize(
+        ("style", "expected"),
+        [
+            ("left:1mm;opacity:0.4", 0.4),
+            ("opacity: 0.4 ; left:1mm", 0.4),
+            ("opacity:7", 1.0),
+            ("opacity:abc", 1.0),
+            ("left:1mm", 1.0),
+            ("fill-opacity:0.2", 1.0),
+        ],
+    )
+    def test_style_opacity_is_read_tolerantly(
+        self, style: str, expected: float
+    ) -> None:
+        page = _page(
+            f'<om-text id="t" x="0" y="0" w="10" h="5" style="{style}">x</om-text>'
+        )
+        (text,) = parse_cartograph_html(page).spec.items
+        assert text.opacity == expected
 
     def test_static_frame_image_is_decoded_to_bytes(self) -> None:
         result = parse_cartograph_html(_write(_full_spec()))

@@ -447,6 +447,7 @@ def _furniture_spec(**atlas_kw) -> CartographSpec:
                 color="#123456",
                 z=9,
                 rotation=15.0,
+                opacity=0.4,
             ),
             TextSpec(
                 id="credit",
@@ -511,6 +512,11 @@ class TestFurniture:
         assert label.itemRotation() == pytest.approx(15)
         centre = label.mapToScene(label.rect().center())
         assert (centre.x(), centre.y()) == pytest.approx((110, 11), abs=1e-6)
+
+    def test_item_opacity_reaches_the_layout_item(self, project) -> None:
+        built = build_layout(_furniture_spec(), project)
+        assert built.items_by_id["title"].itemOpacity() == pytest.approx(0.4)
+        assert built.items_by_id["credit"].itemOpacity() == 1.0
 
     def test_z_lock_and_visibility(self, project) -> None:
         built = build_layout(_furniture_spec(), project)

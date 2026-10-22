@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import gzip
 import re
+from dataclasses import replace
 from xml.etree import ElementTree
 
 import pytest
@@ -271,6 +272,23 @@ class TestPlacementAgreement:
         assert om_frame is not None
         assert om_frame.get("h") == "117.24"
         assert "999999" not in doc
+
+
+class TestItemOpacity:
+    def _styles(self, spec: CartographSpec) -> dict[str, str]:
+        root = _parse_sheet(write_cartograph_html(spec, _runtime()))
+        return {e.get("id", ""): e.get("style", "") for e in root.iter() if e.get("id")}
+
+    def test_a_translucent_item_names_its_opacity_in_its_style(self) -> None:
+        base = _static_spec()
+        spec = replace(base, items=tuple(replace(i, opacity=0.5) for i in base.items))
+        styles = self._styles(spec)
+        assert styles and all(s.endswith(";opacity:0.5") for s in styles.values())
+
+    def test_an_opaque_item_is_written_exactly_as_before(self) -> None:
+        styles = self._styles(_static_spec())
+        assert styles and not any("opacity" in s for s in styles.values())
+        assert styles["bar"] == "left:10mm;top:180mm;width:70mm;height:9mm"
 
 
 class TestStaticFrame:

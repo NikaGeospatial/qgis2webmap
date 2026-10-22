@@ -136,12 +136,17 @@ def _render_region(
     # unrotated about its centre, and put back exactly afterwards.
     rotation = map_item.itemRotation()
     original_position = map_item.positionWithUnits()
+    # The item's opacity travels as the placed frame's own CSS opacity
+    # (`FrameSpec.opacity`); left on the map here it would be baked into the
+    # picture as well, and the frame would be drawn translucent twice.
+    opacity = map_item.itemOpacity()
     # The item has to be drawn to be rendered: a hidden frame is exported
     # hidden but still needs its raster for when it is shown.
     hidden_ancestors = _hidden_chain(map_item)
     try:
         for hidden in hidden_ancestors:
             hidden.setVisible(True)
+        map_item.setItemOpacity(1.0)
         if rotation:
             map_item.setItemRotation(0, True)
         position = converter.convert(
@@ -153,6 +158,7 @@ def _render_region(
         region = QRectF(position.x(), position.y(), size.width(), size.height())
         image = QgsLayoutExporter(layout).renderRegionToImage(region, pixel_size, dpi)
     finally:
+        map_item.setItemOpacity(opacity)
         if rotation:
             map_item.setItemRotation(rotation, False)
             map_item.attemptMove(original_position)

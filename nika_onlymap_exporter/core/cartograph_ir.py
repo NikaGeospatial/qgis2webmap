@@ -86,6 +86,11 @@ def _check_finite(value: float, field_name: str) -> None:
         raise ValueError(f"{field_name}={value!r} must be a finite number")
 
 
+def _check_opacity(value: float) -> None:
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"opacity={value!r} must be within [0, 1]")
+
+
 _TOKEN_RUN_RE = re.compile(r"[^a-z0-9]+")
 _NON_WORD_RE = re.compile(r"[^A-Za-z0-9]+")
 
@@ -264,6 +269,7 @@ class FrameSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     # Live frame camera. `src` names an external map document; when absent,
     # the writer embeds a pre-rendered `<om-map>` child for this frame id.
@@ -299,6 +305,7 @@ class FrameSpec:
     georeference: FrameGeoreference | None = None
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         _check_choice(self.mode, FRAME_MODES, "mode")
         _check_finite(self.rotation, "rotation")
         _check_finite(self.bearing, "bearing")
@@ -358,8 +365,10 @@ class GraticuleSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         if not self.for_:
             raise ValueError("GraticuleSpec.for_ must name the frame it grids")
         _check_choice(self.kind, GRATICULE_KINDS, "kind")
@@ -424,8 +433,10 @@ class LegendSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         if not self.for_:
             raise ValueError("LegendSpec.for_ must name the frame it legends")
         if self.columns is not None and self.columns <= 0:
@@ -462,8 +473,10 @@ class ScalebarSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         if not self.for_:
             raise ValueError("ScalebarSpec.for_ must name the frame it measures")
         _check_choice(self.units, SCALEBAR_UNITS, "units")
@@ -491,8 +504,10 @@ class NorthSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         if not self.for_:
             raise ValueError("NorthSpec.for_ must name the frame it points from")
         _check_choice(self.kind, NORTH_KINDS, "kind")
@@ -517,8 +532,10 @@ class TextSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         _check_choice(self.kind, TEXT_KINDS, "kind")
         _check_choice(self.align, TEXT_ALIGNS, "align")
         if self.font_size is not None and self.font_size <= 0:
@@ -537,8 +554,10 @@ class ImageSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         if not self.src:
             raise ValueError("ImageSpec.src must not be empty")
         _check_choice(self.fit, IMAGE_FITS, "fit")
@@ -561,8 +580,10 @@ class ShapeSpec:
     z: int | None = None
     locked: bool = False
     hidden: bool = False
+    opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        _check_opacity(self.opacity)
         _check_choice(self.kind, SHAPE_KINDS, "kind")
         if self.fill_opacity is not None and not (0.0 <= self.fill_opacity <= 1.0):
             raise ValueError(

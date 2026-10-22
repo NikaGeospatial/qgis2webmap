@@ -25,8 +25,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     **Map frames** switches it and sets its DPI.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
-    pictures carry over; the **Checks** tab lists everything that changes or
-    is left out, and its title shows the count.
+    pictures carry over, at the item opacity set in QGIS; the **Checks** tab
+    lists everything that changes or is left out, and its title shows the count.
   - **The file saves itself** about a second after each change - in the
     dialog, the layout, a layer's style or the Layers list - by default to
     `Documents/QGIS2WebMap/Cartographs/<project>-<layout>.html`, even before

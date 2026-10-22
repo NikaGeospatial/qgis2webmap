@@ -618,3 +618,93 @@ def test_a_static_cartograph_reads_without_javascript(browser, fixtures: Path) -
         assert box is not None and box["width"] > 100
     finally:
         context.close()
+
+
+_SAMPLE_PIXELS = """
+async ([png, points]) => {
+  const image = new Image();
+  image.src = 'data:image/png;base64,' + png;
+  await image.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0);
+  return points.map(([x, y]) =>
+    [...context.getImageData(Math.round(x), Math.round(y), 1, 1).data].slice(0, 3));
+}
+"""
+
+
+class TestItemOpacity:
+    """A 50% item draws at half alpha over a known backdrop, as QGIS's own
+    render of the layout does: a label, a live map (real WebGL), a static map
+    (the raster must not carry the opacity as well), and a group member."""
+
+    def _sample(self, page, png: bytes, points: list[list[float]]) -> list[list[int]]:
+        encoded = base64.b64encode(png).decode()
+        return page.evaluate(_SAMPLE_PIXELS, [encoded, points])
+
+    def test_it_matches_qgis_at_the_same_pixels(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["opacity"]
+        page.set_viewport_size({"width": 1500, "height": 1000})
+        _open(page, fixtures / "opacity-live.html")
+        probes = want["probes"]
+
+        def browser_pixels() -> dict[str, list[int]]:
+            geometry = page.evaluate(
+                """(frameId) => {
+                  const frame = document.getElementById(frameId);
+                  const box = frame.getBoundingClientRect();
+                  const perMm = box.width / Number(frame.getAttribute('w'));
+                  return [box.left - Number(frame.getAttribute('x')) * perMm,
+                          box.top - Number(frame.getAttribute('y')) * perMm, perMm];
+                }""",
+                want["live_frame"],
+            )
+            left, top, per_mm = geometry
+            points = [[left + x * per_mm, top + y * per_mm] for x, y in probes.values()]
+            colours = self._sample(page, page.screenshot(), points)
+            return dict(zip(probes, colours, strict=True))
+
+        # Blue, then green at half over it: the polygon is drawn when it shows.
+        deadline = time.monotonic() + 30
+        got = browser_pixels()
+        while got["live_map_polygon"][1] < 100 and time.monotonic() < deadline:
+            page.wait_for_timeout(500)
+            got = browser_pixels()
+
+        qgis_png = (fixtures / "opacity-qgis.png").read_bytes()
+        px_per_mm = 96 / 25.4
+        from_qgis = dict(
+            zip(
+                probes,
+                self._sample(
+                    page,
+                    qgis_png,
+                    [[x * px_per_mm, y * px_per_mm] for x, y in probes.values()],
+                ),
+                strict=True,
+            )
+        )
+        # What half alpha of each colour over the blue backdrop must be.
+        half = {
+            "backdrop": [0, 0, 255],
+            "label": [128, 0, 128],
+            "live_map_background": [128, 128, 255],
+            "live_map_polygon": [0, 128, 128],
+            "static_map_background": [128, 128, 255],
+            "static_map_polygon": [0, 128, 128],
+            "group_member_at_half": [128, 0, 128],
+            "group_member_opaque": [255, 0, 0],
+        }
+        for name, colour in half.items():
+            # The runtime's live map canvas is a pale off-white, not QGIS's
+            # pure white; at half alpha that is a difference of up to 12.
+            slack = 16 if name == "live_map_background" else 10
+            assert from_qgis[name] == pytest.approx(colour, abs=3), f"QGIS {name}"
+            assert got[name] == pytest.approx(colour, abs=slack), f"browser {name}"
+            assert got[name] == pytest.approx(from_qgis[name], abs=slack), name

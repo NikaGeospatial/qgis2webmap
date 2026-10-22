@@ -20,9 +20,9 @@ here is read back with `positionWithUnits()`/`sizeWithUnits()`/`extent()`
 a `FidelityItem` with the layout item's id and a plain-English reason, per
 `core/fidelity_report.py`'s non-negotiable.
 
-Two gaps against issue #1's table, both because `core/cartograph_ir.py`'s
+One gap against issue #1's table, because `core/cartograph_ir.py`'s
 dataclasses (frozen before this module existed, and shared with the writer
-and its tests) have no attribute for them yet:
+and its tests) have no attribute for it yet:
 
 - **Group membership** is flattened with no `data-group` marker -- the
   runtime vocabulary mirrored into `cartograph_ir.py` carries no such
@@ -30,13 +30,13 @@ and its tests) have no attribute for them yet:
   (verified headlessly: `positionWithUnits()` is already absolute for a
   grouped item, not group-relative), so the *layout* survives; only the
   grouping relationship itself is recorded as approximated.
-- **Per-item opacity** has no field on any `CartographItem` dataclass either
-  (`ShapeSpec.fill_opacity` is a fill property, not the whole item's). An
-  item with `opacity() != 1.0` is exported at full opacity and recorded as
-  approximated.
 
-Both are reported as findings, not silently special-cased -- see
+It is reported as a finding, not silently special-cased -- see
 `_record_unrepresentable_item_properties`.
+
+**Per-item opacity** is carried: each item's `opacity` (its own
+`itemOpacity()`) is written as `opacity:` in the item's
+inline style, and recorded as preserved.
 
 **Atlas** (issue #1 section 2's `QgsLayoutAtlas` row, corrected against the
 runtime's "Atlas" section) is read into `LayoutReading.atlas` when the
@@ -240,6 +240,7 @@ class MapFrameReading:
     z: int | None
     locked: bool
     hidden: bool
+    opacity: float
     overview_of: str | None
     # Set on a live frame the atlas refits (`<om-frame atlas-fit atlas-margin>`).
     atlas_fit: str | None = None
@@ -431,6 +432,7 @@ def _read_layout(
                 z=round(item.zValue()),
                 locked=item.isLocked(),
                 hidden=not item.isVisible(),
+                opacity=_item_opacity(item),
                 overview_of=None,  # resolved in the second pass below
                 frame_bg=_map_background(item),
                 frame_stroke=_map_frame_stroke(item),
@@ -489,6 +491,7 @@ def _read_layout(
                             graticule,
                             locked=item.isLocked(),
                             hidden=not item.isVisible(),
+                            opacity=_item_opacity(item),
                         )
                     )
             continue
@@ -535,7 +538,12 @@ def _read_layout(
         if spec is not None:
             _record_unrepresentable_item_properties(item, report)
             furniture.append(
-                replace(spec, locked=item.isLocked(), hidden=not item.isVisible())
+                replace(
+                    spec,
+                    locked=item.isLocked(),
+                    hidden=not item.isVisible(),
+                    opacity=_item_opacity(item),
+                )
             )
 
     _record_low_contrast_text(text_subjects, frames, furniture, page_bg, report)
@@ -615,13 +623,24 @@ def _is_excluded_from_exports(item: QgsLayoutItem) -> bool:
     return excluded or (group is not None and _is_excluded_from_exports(group))
 
 
+def _item_opacity(item: QgsLayoutItem) -> float:
+    """The opacity the item is painted at, 0-1.
+
+    Its own `itemOpacity()` only: QGIS does not compose a group's opacity onto
+    its members when it paints (checked against `renderPageToImage`), so the
+    group's is not folded in.
+    """
+    return round(min(max(item.itemOpacity(), 0.0), 1.0), 4)
+
+
 def _record_unrepresentable_item_properties(
     item: QgsLayoutItem, report: FidelityReportBuilder
 ) -> None:
-    """The two gaps the module docstring explains: groups and opacity.
+    """The one gap the module docstring explains: groups.
 
-    Both are properties `core/cartograph_ir.py` has no field for yet, so they
-    cannot be approximated into the output -- only reported as missing.
+    `core/cartograph_ir.py` has no field for group membership, so it cannot be
+    approximated into the output -- only reported as missing. Opacity is
+    carried (`_item_opacity`) and so is not a gap.
     """
     label = _name(item)
     if item.parentGroup() is not None:
@@ -631,11 +650,11 @@ def _record_unrepresentable_item_properties(
             "export -- the item keeps its own position, but the grouping "
             "relationship itself is not preserved.",
         )
-    if item.itemOpacity() != 1.0:
-        report.approximated(
+    opacity = _item_opacity(item)
+    if opacity < 1.0:
+        report.preserved(
             f"Opacity of {label}",
-            f"QGIS opacity {item.itemOpacity() * 100:.0f}% is not representable "
-            "on this item type in v0.1; it was exported fully opaque.",
+            f"QGIS opacity {opacity * 100:.0f}% is kept on the exported item.",
         )
 
 

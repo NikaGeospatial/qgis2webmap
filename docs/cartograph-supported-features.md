@@ -43,7 +43,7 @@ QGIS drew, so its layers come across as they look.
 | Locked and hidden items | **Kept** - a hidden item stays hidden, in print too |
 | An item set to be excluded from exports | **Not exported** - left out, as QGIS leaves it out of its own exports |
 | Item groups | **Changed** - each item keeps its place; the grouping itself is not kept |
-| Item opacity below 100% | **Changed** - drawn fully opaque |
+| Item opacity below 100% | **Kept** - the item (and a map's grids) is drawn at that opacity |
 | An item with no size | **Not exported** |
 
 ## Maps
