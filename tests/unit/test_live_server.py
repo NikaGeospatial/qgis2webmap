@@ -379,3 +379,106 @@ class TestIdleDetection:
         idle = server.idle_seconds
         assert idle is not None
         assert idle < 0.05, "the clock should time the latest close, not the first"
+
+
+class TestExposure:
+    """The server publishes the artifact, not whatever sits around it."""
+
+    def test_a_directory_is_not_listed(self, served) -> None:
+        server, tmp_path = served
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "sibling-name.txt").write_text("x", encoding="utf-8")
+        for path in ("/sub/", "/sub", "/"):
+            status, body = _get(server, path)
+            assert status == 404
+            assert b"sibling-name" not in body
+
+    def test_a_symlink_out_of_the_directory_is_refused(self, served) -> None:
+        server, tmp_path = served
+        outside = tmp_path.parent / "outside-secret.txt"
+        outside.write_text("private", encoding="utf-8")
+        (tmp_path / "link.txt").symlink_to(outside)
+        (tmp_path / "linkdir").symlink_to(tmp_path.parent, target_is_directory=True)
+
+        for path in ("/link.txt", f"/linkdir/{outside.name}"):
+            status, body = _get(server, path)
+            assert status == 404
+            assert b"private" not in body
+        status, _, body = _get_range(server, "/link.txt", "bytes=0-3")
+        assert status == 404
+        assert b"priv" not in body
+
+    def test_a_symlink_inside_the_directory_still_works(self, served) -> None:
+        server, tmp_path = served
+        (tmp_path / "alias.html").symlink_to(tmp_path / "index.html")
+        assert _get(server, "/alias.html")[0] == 200
+
+    def test_single_file_mode_serves_only_that_file(self, tmp_path) -> None:
+        (tmp_path / "sheet.html").write_text("<p>sheet</p>", encoding="utf-8")
+        (tmp_path / "other.html").write_text("<p>other</p>", encoding="utf-8")
+        server = PreviewServer(tmp_path, only="sheet.html")
+        server.start()
+        try:
+            assert server.only == "sheet.html"
+            assert _get(server, "/sheet.html") == (200, b"<p>sheet</p>")
+            for path in ("/other.html", "/", "/sub/../other.html"):
+                status, body = _get(server, path)
+                assert status == 404
+                assert b"other" not in body
+            # The reload stream is not a file and stays available.
+            connection = http.client.HTTPConnection("127.0.0.1", server.port, timeout=5)
+            try:
+                connection.request("GET", RELOAD_PATH)
+                assert connection.getresponse().status == 200
+            finally:
+                connection.close()
+        finally:
+            server.stop()
+
+    def test_single_file_mode_still_answers_ranges(self, tmp_path) -> None:
+        (tmp_path / "sheet.html").write_bytes(bytes(range(100)))
+        server = PreviewServer(tmp_path, only="sheet.html")
+        server.start()
+        try:
+            status, _, body = _get_range(server, "/sheet.html", "bytes=10-19")
+            assert status == 206
+            assert body == bytes(range(10, 20))
+        finally:
+            server.stop()
+
+
+class TestDisconnects:
+    def test_a_hangup_mid_response_prints_nothing(self, tmp_path, capfd) -> None:
+        """`socketserver` calls the SERVER's `handle_error`, so that is where a
+        browser hanging up has to be swallowed."""
+        (tmp_path / "big.bin").write_bytes(b"x" * 20_000_000)
+        server = PreviewServer(tmp_path)
+        server.start()
+        try:
+            for _ in range(5):
+                raw = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+                raw.sendall(b"GET /big.bin HTTP/1.1\r\nHost: x\r\n\r\n")
+                raw.recv(1024)
+                # RST rather than FIN, so the server's next write fails.
+                raw.setsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_LINGER,
+                    b"\x01\x00\x00\x00\x00\x00\x00\x00",
+                )
+                raw.close()
+            time.sleep(0.5)
+        finally:
+            server.stop()
+        assert "Traceback" not in capfd.readouterr().err
+
+    def test_other_errors_still_surface(self, tmp_path, capfd) -> None:
+        server = PreviewServer(tmp_path)
+        server.start()
+        try:
+            try:
+                raise ValueError("a real fault")
+            except ValueError:
+                server._httpd.handle_error(None, ("127.0.0.1", 1))  # type: ignore[union-attr]
+        finally:
+            server.stop()
+        assert "a real fault" in capfd.readouterr().err

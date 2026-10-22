@@ -1630,11 +1630,17 @@ class CartographController:
         """
         try:
             root = path.parent.resolve()
-            if self._preview_server is None or self._preview_server.root != root:
+            if (
+                self._preview_server is None
+                or self._preview_server.root != root
+                or self._preview_server.only != path.name
+            ):
                 if self._preview_server is not None:
                     self._preview_server.stop()
                     self._preview_server = None
-                server = PreviewServer(root)
+                # Only this one file: the cartograph is self-contained, and its
+                # folder may be somewhere like Documents.
+                server = PreviewServer(root, only=path.name)
                 server.start()
                 # Kept only once running: a server that failed to bind would
                 # otherwise be reused, unstarted, by the next action.

@@ -11,8 +11,8 @@ inlined runtime every few seconds, or nothing. A server can simply push.
 `file://` path is exercised after export by the real artifact, which is a better
 check than a preview copy of it.
 
-Scope is deliberately small: bound to loopback, one directory, read-only, no
-directory listing, and it dies with the dialog.
+Scope is deliberately small: bound to loopback, one directory (or one file in it),
+read-only, no directory listing, no symlink out of it, and it dies with the dialog.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -21,6 +21,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import os
 import queue
 import re
 import selectors
@@ -88,6 +89,25 @@ class _PreviewHTTPServer(ThreadingHTTPServer):
             self._wake_writer.send(b"x")
         self._stopped.wait(timeout)
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        """Swallow the traceback when a browser hangs up mid-response.
+
+        `socketserver` prints an unhandled exception from a handler thread to
+        stderr, which in QGIS means a multi-line traceback in the Python
+        console. A disconnect is not an error here: a preview page is megabytes,
+        and a user who navigates away, hits reload, or closes the tab during the
+        load severs the socket by definition. Reporting it would make ordinary
+        browsing look like a plugin fault, in the same console `log_message` is
+        kept quiet for.
+
+        Anything else still surfaces, because a real failure in the handler is
+        worth seeing.
+        """
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)  # type: ignore[arg-type]
+
     def server_close(self) -> None:
         super().server_close()
         self._wake_reader.close()
@@ -122,29 +142,34 @@ class _BoundedReader:
 class _PreviewHandler(SimpleHTTPRequestHandler):
     """Serves the preview directory, plus the reload event stream."""
 
+    # Set on the bound subclass in `PreviewServer.start`: the real path of the
+    # served directory, and the one file name allowed in it (or `None` for the
+    # whole directory).
+    root_real: str = ""
+    only_name: str | None = None
+
+    def _may_serve(self, path: str) -> bool:
+        """Whether `path` is a plain file this server was asked to publish.
+
+        Directories are never served, so there is no listing and no implicit
+        `index.html`. The real path (symlinks resolved) must stay inside the
+        served directory, so a link planted there cannot reach outside it. In
+        single-file mode only that one file qualifies, which keeps a parent
+        folder such as `~/Documents` from being browsable.
+        """
+        real = os.path.realpath(path)
+        if os.path.commonpath([real, self.root_real]) != self.root_real:
+            return False
+        if self.only_name is not None and real != os.path.join(
+            self.root_real, self.only_name
+        ):
+            return False
+        return os.path.isfile(real)
+
     # Kept quiet: the QGIS Python console is not an access log, and a request
     # per asset per reload would bury anything the user needs to see.
     def log_message(self, format: str, *args: object) -> None:
         pass
-
-    def handle_error(self, request: object, client_address: object) -> None:
-        """Swallow the traceback when a browser hangs up mid-response.
-
-        `socketserver` prints an unhandled exception from a handler thread to
-        stderr, which in QGIS means a multi-line traceback in the Python
-        console. A disconnect is not an error here: a preview page is megabytes,
-        and a user who navigates away, hits reload, or closes the tab during the
-        load severs the socket by definition. Reporting it would make ordinary
-        browsing look like a plugin fault, in the same console `log_message` is
-        kept quiet for.
-
-        Anything else still surfaces, because a real failure in the handler is
-        worth seeing.
-        """
-        exc = sys.exc_info()[1]
-        if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
-            return
-        super().handle_error(request, client_address)  # type: ignore[misc]
 
     def do_GET(self) -> None:
         if self.path.split("?", 1)[0] == RELOAD_PATH:
@@ -163,13 +188,16 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
 
         Only the single-range forms are handled (`N-M`, `N-`, `-K`); a
         multi-range request gets the whole file, which is what the stock
-        handler did for every request. Path handling is the stock handler's,
-        so a range can no more leave the preview directory than a plain GET.
+        handler did for every request. Both go through `_may_serve`, so a
+        range can no more leave the preview directory than a plain GET.
         """
         byte_range = self.headers.get("Range", "")
         match = _SINGLE_RANGE.fullmatch(byte_range.strip())
         path = self.translate_path(self.path)
-        if match is None or not Path(path).is_file():
+        if not self._may_serve(path):
+            self.send_error(404, "File not found")
+            return None
+        if match is None:
             return super().send_head()
 
         size = Path(path).stat().st_size
@@ -246,8 +274,10 @@ class PreviewServer:
     and `stop()` when the dialog closes.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, only: str | None = None) -> None:
+        """`only` limits serving to that one file name inside `root`."""
         self._root = Path(root).resolve()
+        self._only = only
         self._httpd: _PreviewHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._clients: list[queue.Queue[str]] = []
@@ -273,6 +303,11 @@ class PreviewServer:
         return self._root
 
     @property
+    def only(self) -> str | None:
+        """The single file name being served, or `None` for the whole directory."""
+        return self._only
+
+    @property
     def port(self) -> int:
         if self._httpd is None:
             raise RuntimeError("the preview server is not running")
@@ -294,8 +329,12 @@ class PreviewServer:
 
         self._stopping = False
         root = self._root
+        only = self._only
 
         class _Bound(_PreviewHandler):
+            root_real = os.path.realpath(root)
+            only_name = only
+
             def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, directory=str(root), **kwargs)  # type: ignore[arg-type]
 
