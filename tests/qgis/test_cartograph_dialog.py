@@ -1416,7 +1416,7 @@ class TestPrintSettings:
             monkeypatch.setattr(
                 print_pdf,
                 "export_print_pdf",
-                lambda layout, settings, path: (
+                lambda layout, settings, path, page=None: (
                     calls.append((layout.name(), path))
                     or print_pdf.PrintPdfResult(path=path, warnings=())
                 ),
