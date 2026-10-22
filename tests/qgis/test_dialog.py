@@ -654,17 +654,18 @@ class TestLiveSwitch:
 
 
 class TestRasterExports:
-    """Rasters too large for one HTML file are a refusal, not a warning."""
+    """A raster whose source is large is the user's call; the converted size
+    decides whether it fits, during the export."""
 
-    def test_standalone_with_a_raster_is_refused_without_a_write_anyway(
+    def test_standalone_with_a_large_raster_source_asks_instead_of_refusing(
         self, qgis_app, project, make_memory_layer, make_raster_layer, monkeypatch
     ) -> None:
         import time
 
         import nika_onlymap_exporter.packaging.dependency_scanner as scanner
 
-        # Past the size a single page can carry: "write it anyway" would only
-        # end in the writer's refusal.
+        # The source is past the size a single page can carry, but that is an
+        # estimate: the converted raster may fit, so the dialog asks.
         monkeypatch.setattr(scanner, "STANDALONE_RASTER_MAX_BYTES", 1)
 
         from nika_onlymap_exporter.core.export_ir import OutputMode
@@ -697,12 +698,10 @@ class TestRasterExports:
             while not (warnings or offered) and time.monotonic() < deadline:
                 qgis_app.processEvents()
                 time.sleep(0.02)
-            assert offered == [], "offered to write a file that cannot work"
-            assert warnings, "the refusal was never shown"
-            title, text = warnings[0]
-            assert "Folder or Share ZIP" in title
-            assert "'elevation'" in text
-            assert "Folder or Share ZIP" in text
+            assert warnings == [], "refused on an estimate"
+            assert offered, "the user was never asked"
+            assert "'elevation'" in offered[0]
+            assert "Folder or Share ZIP" in offered[0]
         finally:
             dialog.close()
 

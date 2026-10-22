@@ -152,7 +152,6 @@ from ..packaging.dependency_scanner import (
     data_bytes_by_layer,
     measure_data_bytes,
     standalone_ineligible_reason,
-    standalone_raster_reason,
 )
 from ..packaging.runtime_manager import read_lock
 from ..writers.onlymap_writer import (
@@ -4134,14 +4133,9 @@ class MainDialog(QDialog):
         # tab where it can inform the choice, and this is the last reminder
         # before it costs anything. The user's choice stands either way.
         if mode is OutputMode.STANDALONE_HTML:
-            # A raster is not a size problem with a "write it anyway": no single
-            # file can carry one, so the writer would refuse after the user had
-            # said yes. Refused here, with the format that does work.
-            raster = standalone_raster_reason(export)
-            if raster is not None:
-                QMessageBox.warning(self, tr("Choose Folder or Share ZIP"), raster)
-                self._export_then = None
-                return
+            # A raster's size here is the source file's, an estimate: the
+            # converted raster is measured against the page limit during the
+            # export, so this is the user's call like any large single file.
             reason = standalone_ineligible_reason(export)
             if reason is not None and not self._confirm_oversized_single_file(reason):
                 self._export_then = None

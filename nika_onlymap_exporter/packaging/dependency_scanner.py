@@ -174,9 +174,11 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
     of the rule is how a dialog and an exporter start disagreeing.
 
     See `STANDALONE_RASTER_MAX_BYTES`: rasters travel inside the page up to a
-    size, and only past it does this return a reason. The message names the
-    rasters because a project can hold twenty layers and "there is a raster
-    somewhere" is not something a user can act on.
+    size, and only past it does this return a reason. The size is the source
+    file's, an estimate: the converted raster is measured against the same
+    limit after the conversion, and that is the check that refuses. The message
+    names the rasters because a project can hold twenty layers and "there is a
+    raster somewhere" is not something a user can act on.
     """
     if raster_bytes(project) <= STANDALONE_RASTER_MAX_BYTES:
         return None
@@ -194,10 +196,11 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
     )
     return (
         f"The raster imagery in {listed} is about "
-        f"{format_megabytes(raster_bytes(project))}, too large to pack into a "
-        "single HTML file (the limit is "
-        f"{format_megabytes(STANDALONE_RASTER_MAX_BYTES)}). Choose Folder or "
-        "Share ZIP as the export format instead."
+        f"{format_megabytes(raster_bytes(project))} before conversion, which "
+        "may be too large to pack into a single HTML file (the limit is "
+        f"{format_megabytes(STANDALONE_RASTER_MAX_BYTES)}, checked again on "
+        "the converted raster). Folder or Share ZIP as the export format "
+        "carry it without that limit."
     )
 
 
@@ -290,16 +293,15 @@ def scan(
         )
 
     if mode is OutputMode.STANDALONE_HTML:
-        # Blocking, not warning. The failure it prevents is a map that draws
-        # the wrong pixels without reporting anything, which no amount of
-        # warning text at export time makes acceptable -- and the remedy is one
-        # change of output mode, which the message names.
+        # Advisory, not blocking: the size here is the SOURCE file's, and a
+        # source that compresses well converts to a COG that fits comfortably,
+        # so refusing on it would turn away an export that works. The limit
+        # that decides is `raster_staging`'s, on the converted file.
         raster_reason = standalone_raster_reason(project)
         if raster_reason is not None:
-            blocking.append(raster_reason)
             for layer in project.exportable_layers:
                 if layer.raster is not None:
-                    report.blocked(
+                    report.approximated(
                         f"Layer '{layer.name}'", raster_reason, layer.layer_id
                     )
 
