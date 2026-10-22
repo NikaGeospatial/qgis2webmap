@@ -59,6 +59,7 @@ from qgis.PyQt.QtGui import (
     QGuiApplication,
     QKeyEvent,
     QPalette,
+    QResizeEvent,
     QShowEvent,
     QTextDocument,
     QTextFrame,
@@ -454,32 +455,105 @@ def _ago(when: float) -> str:
     return plural(int(hours / 24), "{n} day ago", "{n} days ago")
 
 
-def _fit_row_to_widget(item: QTreeWidgetItem, widget: QWidget) -> None:
-    """Make a tree row as tall as the controls placed in it.
+class _ReflowRow(QWidget):
+    """A tree row that stacks its controls once the tree is too narrow for them
+    side by side.
 
-    A tree sizes a row for its text, and an item widget is squeezed into that
-    rect: the themed combo boxes are taller than a line of text, so their
-    bottom edge was cut off. Polished first, so the height is the themed one.
-
-    The width is real because Qt drops a size hint with a negative width. The
-    extra height is the theme's `QTreeView::item` padding (3 px above and
-    below), which the tree takes out of the widget's rect.
+    The Cartograph panel is about 240 px wide and a settings row of three
+    combos needs twice that, so the right-hand controls ran off the edge and
+    the row looked blank. Stacked, each control gets the row's full width.
     """
-    widget.ensurePolished()
-    for child in widget.findChildren(QWidget):
-        child.ensurePolished()
-    # Qt5 keeps the layout's hint from before the polish, which left the row
-    # 6 px shorter than the themed combos in it; the tallest control is the
-    # floor whatever the layout remembers.
-    layout = widget.layout()
-    if layout is not None:
-        layout.invalidate()
-    hint = widget.sizeHint()
-    tallest = max(
-        (child.sizeHint().height() for child in widget.findChildren(QWidget)),
-        default=0,
-    )
-    item.setSizeHint(0, QSize(hint.width(), max(hint.height(), tallest) + 8))
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._item: QTreeWidgetItem | None = None
+        self._stacked = False
+        self._side_by_side_width = 0
+
+    def _box(self) -> QBoxLayout | None:
+        layout = self.layout()
+        return layout if isinstance(layout, QBoxLayout) else None
+
+    def fit(self, item: QTreeWidgetItem) -> None:
+        """Size the row from its own layout, side by side, then reflow."""
+        self._item = item
+        box = self._box()
+        self.ensurePolished()
+        for child in self.findChildren(QWidget):
+            child.ensurePolished()
+        if box is not None:
+            self._set_stacked(False)
+            self._side_by_side_width = box.sizeHint().width()
+        self._update_item_hint()
+
+    def _set_stacked(self, stacked: bool) -> None:
+        box = self._box()
+        if box is None:
+            return
+        self._stacked = stacked
+        box.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        box.setSpacing(4 if stacked else 8)
+        box.invalidate()
+
+    def _update_item_hint(self) -> None:
+        """Make the tree row as tall as the controls placed in it.
+
+        A tree sizes a row for its text, and an item widget is squeezed into
+        that rect: the themed combo boxes are taller than a line of text, so
+        their bottom edge was cut off. Polished first, so the height is the
+        themed one.
+
+        Taken from the row's own layout, never from every descendant: a combo
+        box's hidden popup list reports a height near 190 px, which made a row
+        of one 30 px combo 200 px tall and mostly blank.
+
+        The width is real because Qt drops a size hint with a negative width.
+        The extra height is the theme's `QTreeView::item` padding (3 px above
+        and below), which the tree takes out of the widget's rect.
+        """
+        # A refresh deletes the item and this row while a deferred update can
+        # still be queued for them.
+        if self._item is None or sip.isdeleted(self._item) or sip.isdeleted(self):
+            return
+        box = self._box()
+        hint = self.sizeHint()
+        height = hint.height()
+        if box is not None:
+            # Qt5 keeps the layout's hint from before the polish, which left
+            # the row 6 px shorter than the themed combos in it; the tallest
+            # control is the floor whatever the layout remembers. Direct
+            # members only, so a hidden popup list does not count.
+            controls = [box.itemAt(i).widget() for i in range(box.count())]
+            visible_heights = [c.sizeHint().height() for c in controls if c]
+            if self._stacked:
+                height = max(height, sum(visible_heights))
+            else:
+                height = max(height, max(visible_heights, default=0))
+        self._item.setSizeHint(0, QSize(max(hint.width(), 1), height + 8))
+        tree = self._item.treeWidget()
+        if tree is not None:
+            tree.doItemsLayout()
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        if self._item is None or self._box() is None or self._side_by_side_width <= 0:
+            return
+        stacked = self.width() < self._side_by_side_width
+        if stacked != self._stacked:
+            self._set_stacked(stacked)
+            # Deferred: a size hint changed while the tree is laying this very
+            # widget out is taken for the old height, and the controls overlap.
+            QTimer.singleShot(0, self._update_item_hint)
+
+
+def _fit_row_to_widget(item: QTreeWidgetItem, widget: QWidget) -> None:
+    """Size a tree row from the controls placed in it; see `_ReflowRow`."""
+    if isinstance(widget, _ReflowRow):
+        widget.fit(item)
 
 
 def _info_button(text: str, parent: QWidget) -> QToolButton:
@@ -1756,6 +1830,9 @@ class MainDialog(QDialog):
         # instead, so every checkbox and heading stays whole.
         self.layer_tree.header().setMinimumSectionSize(32)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
+        # Always reserved: a scrollbar appearing as a layer opens took its
+        # width from the tree and slid the checkbox columns sideways.
+        self.layer_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         layout.addWidget(self.layer_tree)
 
         # What the three columns do, in terms of what the *recipient* loses.
@@ -1880,6 +1957,17 @@ class MainDialog(QDialog):
         if not hasattr(self, "layer_tree"):
             return
 
+        # Rebuilt on every project change, which would otherwise fold what the
+        # user had just opened.
+        expanded_ids = {
+            item.data(0, Qt.ItemDataRole.UserRole)
+            for item in (
+                self.layer_tree.topLevelItem(index)
+                for index in range(self.layer_tree.topLevelItemCount())
+            )
+            if item is not None and item.isExpanded()
+        }
+
         self.layer_tree.blockSignals(True)
         self.layer_tree.clear()
 
@@ -1904,6 +1992,7 @@ class MainDialog(QDialog):
                 )
 
             self._add_field_rows(item, layer, settings)
+            item.setExpanded(layer.id() in expanded_ids)
 
         self.layer_tree.blockSignals(False)
         # These drop-downs are rebuilt on every layer change, long after
@@ -1948,7 +2037,7 @@ class MainDialog(QDialog):
             # and an inherited tristate box here would mean nothing.
             child.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
 
-            row = QWidget(self.layer_tree)
+            row = _ReflowRow(self.layer_tree)
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)
@@ -2000,7 +2089,7 @@ class MainDialog(QDialog):
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.setData(0, Qt.ItemDataRole.UserRole, LAYER_OPTIONS_ROLE)
 
-        row = QWidget(self.layer_tree)
+        row = _ReflowRow(self.layer_tree)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
@@ -2070,7 +2159,7 @@ class MainDialog(QDialog):
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.setData(0, Qt.ItemDataRole.UserRole, LAYER_OPTIONS_ROLE)
 
-        row = QWidget(self.layer_tree)
+        row = _ReflowRow(self.layer_tree)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)

@@ -3613,3 +3613,144 @@ def test_default_name_avoids_windows_device_names(
 
     path = default_cartograph_path(project, layout, tmp_path)
     assert path == tmp_path / expected
+
+
+class TestLayerDisclosure:
+    """The arrow on a layer in the Layers list, on the web map and inside the
+    Cartograph panel, at a compact and a normal dialog size."""
+
+    @staticmethod
+    def _open(qgis_app, project, make_memory_layer, mode, size):
+        # Added first, so listed above it: the layer under test sits at the
+        # bottom, where its settings start below the visible part of a short
+        # list.
+        for name in ("Rivers", "Roads", "Towns"):
+            project.addMapLayer(make_memory_layer(name))
+        project.addMapLayer(
+            make_memory_layer(
+                "Viewpoints",
+                fields="name:string&field=value:integer",
+                features=[("a", [1.0, 2.0])],
+            )
+        )
+        if mode == "cartograph":
+            _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        dialog.resize(*size)
+        dialog.show()
+        if mode == "cartograph":
+            _choose_cartograph(dialog)
+            dialog._cartograph.open_section("layers")
+        else:
+            dialog.tabs.setCurrentWidget(dialog._layers_page)
+        for _ in range(5):
+            qgis_app.processEvents()
+        return dialog
+
+    @pytest.mark.parametrize("mode", ["web", "cartograph"])
+    @pytest.mark.parametrize("size", [(720, 320), (1000, 700)])
+    @pytest.mark.parametrize("how", ["mouse", "right", "plus"])
+    def test_expanding_shows_whole_compact_rows(
+        self, qgis_app, project, make_memory_layer, mode, size, how
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QBoxLayout, QComboBox, QWidget
+
+        dialog = self._open(qgis_app, project, make_memory_layer, mode, size)
+        try:
+            tree = dialog.layer_tree
+            layer = tree.topLevelItem(tree.topLevelItemCount() - 1)
+            assert layer.text(0) == "Viewpoints"
+            assert not layer.isExpanded()
+            tree.scrollToItem(layer)  # as a user scrolls to the layer first
+            for _ in range(3):
+                qgis_app.processEvents()
+            if how == "mouse" and not tree.viewport().height():
+                pytest.skip("Qt 5 gives the list no height in a 320 px dialog")
+            if how == "mouse":
+                # The branch arrow sits in the indentation left of the item's rect.
+                rect = tree.visualItemRect(layer)
+                QTest.mouseClick(
+                    tree.viewport(),
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.NoModifier,
+                    QPoint(rect.left() - tree.indentation() // 2, rect.center().y()),
+                )
+            else:
+                tree.setCurrentItem(layer)
+                tree.setFocus()
+                QTest.keyClick(
+                    tree, Qt.Key.Key_Right if how == "right" else Qt.Key.Key_Plus
+                )
+            for _ in range(5):
+                qgis_app.processEvents()
+            assert layer.isExpanded()
+            viewport = tree.viewport().rect()
+            first_row = tree.visualItemRect(layer.child(0))
+            # Qt 5 gives the list no height at all in a 320 px dialog.
+            if viewport.height() > 0:
+                assert viewport.contains(first_row.topLeft()), "first row in view"
+            for index in range(layer.childCount()):
+                child = layer.child(index)
+                row = tree.itemWidget(child, 0)
+                if row is None:
+                    continue
+                controls = [w for w in row.findChildren(QWidget) if w.isVisibleTo(row)]
+                # A combo's popup list reports ~190 px; the row is the
+                # controls it holds, one line each when stacked.
+                heights = [
+                    c.sizeHint().height() for c in controls if c.parentWidget() is row
+                ]
+                stacked = row.layout().direction() == QBoxLayout.Direction.TopToBottom
+                needed = sum(heights) if stacked else max(heights)
+                assert needed <= row.height() <= needed + 24, (
+                    index,
+                    row.height(),
+                    needed,
+                )
+                for combo in row.findChildren(QComboBox):
+                    left = combo.mapTo(tree.viewport(), combo.rect().topLeft()).x()
+                    right = left + combo.width()
+                    # Squeezed to a stub ("Pop") is as cut off as one that
+                    # runs past the edge.
+                    assert combo.width() >= min(
+                        combo.sizeHint().width(), viewport.width() - 60
+                    ), (index, combo.width(), combo.sizeHint().width())
+                    assert left >= 0 and right <= viewport.right() + 1, (
+                        index,
+                        left,
+                        right,
+                        viewport.width(),
+                    )
+        finally:
+            dialog.close()
+
+    def test_columns_stay_put_when_the_scrollbar_would_appear(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._open(qgis_app, project, make_memory_layer, "web", (1000, 700))
+        try:
+            tree = dialog.layer_tree
+            width = tree.viewport().width()
+            tree.expandAll()  # taller than the tree, so a scrollbar is needed
+            for _ in range(5):
+                qgis_app.processEvents()
+            assert tree.verticalScrollBar().maximum() > 0
+            assert tree.viewport().width() == width
+        finally:
+            dialog.close()
+
+    def test_expansion_survives_a_layer_refresh(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._open(qgis_app, project, make_memory_layer, "web", (1000, 700))
+        try:
+            tree = dialog.layer_tree
+            tree.expandItem(tree.topLevelItem(0))
+            dialog.refresh_layers()
+            for _ in range(3):
+                qgis_app.processEvents()
+            assert tree.topLevelItem(0).isExpanded()
+        finally:
+            dialog.close()

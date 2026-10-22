@@ -141,6 +141,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **QGIS 3 could close while the Fidelity tab sized its rows.**
 - **Message boxes were unreadable on QGIS 3** after switching to the dark theme.
 - **Layer-row drop-downs were cut off, and menus opened too narrow, on QGIS 3.**
+- **Opening a layer on the Layers list showed mostly blank space.** Its settings
+  rows are sized to their controls, stack when the list is narrow (as in the
+  Cartograph panel), the list keeps its scrollbar so the tick columns stay put,
+  and an opened layer stays open when the list refreshes.
 
 ### Changed
 - **Release announcements check plugins.qgis.org every 30 minutes**, reading
