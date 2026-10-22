@@ -242,10 +242,11 @@ class TestSave:
         from nika_onlymap_exporter.ui import handoff_dialog
 
         warned = []
+        (tmp_path / "is-a-folder.md").mkdir()
         monkeypatch.setattr(
             handoff_dialog.QFileDialog,
             "getSaveFileName",
-            lambda *a: (str(tmp_path / "missing" / "p.md"), ""),
+            lambda *a: (str(tmp_path / "is-a-folder.md"), ""),
         )
         monkeypatch.setattr(
             handoff_dialog.QMessageBox, "warning", lambda *a: warned.append(a[2])

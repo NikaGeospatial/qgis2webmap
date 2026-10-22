@@ -54,6 +54,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ..core.atomic_write import write_text_atomic
 from ..core.handoff_prompt import (
     HandoffRequest,
     OutputKind,
@@ -516,7 +517,7 @@ class HandoffDialog(QDialog):
         if target.suffix.lower() != ".md":
             target = target.with_name(target.name + ".md")
         try:
-            target.write_text(self.prompt(), encoding="utf-8")
+            write_text_atomic(target, self.prompt())
         except OSError as error:
             QMessageBox.warning(
                 self,
