@@ -198,8 +198,8 @@ class TestFillExpression:
         )
         expression = fill_expression(renderer, GeometryKind.LINE)
         assert (
-            expression
-            == "scale($flow, threshold, ['#ff0000', '#0000ff'], domain=[50.00000000000001])"
+            expression == "scale($flow, threshold, ['#ff0000', '#0000ff'], "
+            "domain=[50.00000000000001])"
         )
 
     def test_categorized_marker_strokes_get_their_own_expression(self) -> None:
@@ -253,8 +253,8 @@ class TestFillExpression:
         )
         expression = fill_expression(renderer, GeometryKind.POLYGON)
         assert (
-            expression
-            == "scale($pop, threshold, ['#ff0000', '#0000ff'], domain=[50.00000000000001])"
+            expression == "scale($pop, threshold, ['#ff0000', '#0000ff'], "
+            "domain=[50.00000000000001])"
         )
 
     def test_a_rounded_line_carries_its_caps_and_joins(self) -> None:
@@ -1901,8 +1901,8 @@ class TestIconLayer:
         it every class draws at one size and the map's whole point is lost."""
         markup = build_layer_element(make_icon_layer(GRADUATED_ICONS))
         assert (
-            'get-icon-size="scale($pop, threshold, [12, 20], domain=[100.00000000000001])"'
-            in markup
+            'get-icon-size="scale($pop, threshold, [12, 20], '
+            'domain=[100.00000000000001])"' in markup
         )
 
     def test_one_size_stays_a_constant(self) -> None:
