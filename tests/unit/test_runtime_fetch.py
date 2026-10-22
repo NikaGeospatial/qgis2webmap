@@ -519,6 +519,94 @@ class TestStaleCacheIsRefetched:
         assert provider.is_cached()
 
 
+class TestIncompleteCacheIsRepaired:
+    """A cache that is listed as present but cannot be loaded is repaired.
+
+    `is_cached()` must not say yes to a cache missing its stylesheet, or one
+    whose bytes differ from the lock, and `load()` then re-fetches it. The
+    downloads are doubles: no test reaches the network.
+    """
+
+    def lock_for(self, monkeypatch, js: bytes, css: bytes) -> None:
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.0",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(js)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(css)},
+                },
+            },
+        )
+
+    def provider_with_cache(self, tmp_path, monkeypatch, js, css, cached):
+        """A provider whose downloads are `js` and `css`, and whose cache holds
+        `cached` (a mapping of file name to bytes)."""
+        self.lock_for(monkeypatch, js, css)
+        monkeypatch.setattr(
+            rm, "download_tarball", lambda *a, **k: npm_tarball(js, css)
+        )
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        cache = provider.cached_dir()
+        cache.mkdir(parents=True)
+        for name, data in cached.items():
+            (cache / name).write_bytes(data)
+        return provider
+
+    def test_a_cache_missing_its_stylesheet_is_repaired_on_load(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        js, css = b"// runtime", b"/* css */"
+        provider = self.provider_with_cache(
+            tmp_path, monkeypatch, js, css, {rm.RUNTIME_JS: js}
+        )
+
+        assert not provider.is_cached()
+        bundle = provider.load()
+
+        assert bundle.css == css
+        assert (provider.cached_dir() / rm.RUNTIME_CSS).read_bytes() == css
+        assert provider.is_cached()
+
+    def test_a_cache_with_a_corrupt_file_is_repaired_on_load(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Present is not intact: the bytes must match the lock."""
+        js, css = b"// runtime", b"/* css */"
+        provider = self.provider_with_cache(
+            tmp_path,
+            monkeypatch,
+            js,
+            css,
+            {rm.RUNTIME_JS: b"// trunc", rm.RUNTIME_CSS: css},
+        )
+
+        assert not provider.is_cached()
+        bundle = provider.load()
+
+        assert bundle.javascript == js
+        assert provider.is_cached()
+
+    def test_a_cache_without_a_lock_for_its_version_counts_when_complete(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """No pins to check against, so presence is all there is to check.
+
+        This is how a runtime with no lock file has always been treated; it
+        must keep working.
+        """
+        monkeypatch.setattr(rm, "read_lock", lambda: {})
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        cache = provider.cached_dir()
+        cache.mkdir(parents=True)
+        (cache / rm.RUNTIME_JS).write_bytes(b"// anything")
+        (cache / rm.RUNTIME_CSS).write_bytes(b"/* anything */")
+
+        assert provider.is_cached()
+
+
 @pytest.mark.skipif(not NETWORK, reason="set ONLYMAP_NETWORK_TESTS=1 to run")
 class TestAgainstTheRealRegistry:
     """The pinned build must actually be published and match its hashes.

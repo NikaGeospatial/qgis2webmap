@@ -573,25 +573,37 @@ class FetchingRuntime:
         return cached_runtime_dir(self._version, self._cache_dir)
 
     def is_cached(self) -> bool:
-        """Whether this version is fully on disk, by the current lock's terms.
+        """Whether this version is fully on disk and intact, by the lock's terms.
 
-        Checks the core files unconditionally, plus the cartograph files when
-        `runtime-lock.json` pins them. The second half is what makes a cache
-        written by an older plugin version - before the cartograph feature
-        added those entries to the lock - count as *not* cached: `load()` then
-        re-fetches and re-verifies it instead of silently running without
-        cartograph support or crashing when a writer asks for it.
+        Checks the core files (JavaScript and stylesheet) unconditionally, plus
+        the cartograph files when `runtime-lock.json` pins them. The second half
+        is what makes a cache written by an older plugin version - before the
+        cartograph feature added those entries to the lock - count as *not*
+        cached: `load()` then re-fetches and re-verifies it instead of silently
+        running without cartograph support or crashing when a writer asks for
+        it. When the lock pins this version, each file's bytes must also match
+        its pinned SHA-256, so a truncated or edited file is re-fetched rather
+        than loaded. Custom runtimes (`ONLYMAP_RUNTIME_DIR`) never reach this
+        check; they are read by `LocalRuntime` as they are.
         """
         directory = self.cached_dir()
-        if not (directory / RUNTIME_JS).is_file():
-            return False
-
         lock = read_lock()
-        if lock.get("version") != self._version:
-            return True
-        pinned = lock.get("files") or {}
-        for name in (RUNTIME_CARTOGRAPH_JS, RUNTIME_CARTOGRAPH_CSS):
-            if name in pinned and not (directory / name).is_file():
+        # Only a lock for this exact version can say what its bytes must be.
+        pinned = (
+            (lock.get("files") or {}) if lock.get("version") == self._version else {}
+        )
+        required = [RUNTIME_JS, RUNTIME_CSS]
+        required += [
+            name
+            for name in (RUNTIME_CARTOGRAPH_JS, RUNTIME_CARTOGRAPH_CSS)
+            if name in pinned
+        ]
+        for name in required:
+            path = directory / name
+            if not path.is_file():
+                return False
+            expected = (pinned.get(name) or {}).get("sha256")
+            if expected and sha256_of(path.read_bytes()) != expected:
                 return False
         return True
 
@@ -677,7 +689,7 @@ class FetchingRuntime:
                 + "\n".join(mismatches)
             )
 
-        if destination.exists():  # pragma: no cover - only on a re-fetch
+        if destination.exists():  # a re-fetch of an incomplete or corrupt cache
             _remove_tree(destination)
         staging.rename(destination)
         return destination
