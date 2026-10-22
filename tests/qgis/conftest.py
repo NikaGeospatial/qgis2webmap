@@ -89,18 +89,14 @@ def isolated_settings(tmp_path_factory):
     Ini format because it is the only one `setPath` redirects; the native
     backend on each platform ignores it.
     """
+    from hermetic import isolate_settings
     from qgis.PyQt.QtCore import QSettings
 
-    directory = str(tmp_path_factory.mktemp("qsettings"))
     previous_format = QSettings.defaultFormat()
-    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
-    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, directory)
     # Maps save to Documents/QGIS2WebMap by default, and a cartograph saves
     # itself as soon as the dialog shows one: without this, tests would write
     # into the developer's real Documents folder.
-    from nika_onlymap_exporter.core.save_folders import SAVE_FOLDER_KEY
-
-    QSettings().setValue(SAVE_FOLDER_KEY, f"{directory}/maps")
+    isolate_settings(tmp_path_factory.mktemp("qsettings"))
     yield
     QSettings.setDefaultFormat(previous_format)
 

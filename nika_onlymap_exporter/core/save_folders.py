@@ -19,6 +19,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from qgis.PyQt.QtCore import QSettings, QStandardPaths
@@ -28,11 +29,19 @@ SAVE_FOLDER_KEY = "qgis2webmap/saveFolder"
 ROOT_NAME = "QGIS2WebMap"
 WEB_MAPS = "Web maps"
 CARTOGRAPHS = "Cartographs"
+#: Replaces Documents/QGIS2WebMap as the default root for a whole process -
+#: a managed machine's shared drive, or a test run that must not touch the
+#: user's own Documents (see tests/hermetic.py).
+SAVE_ROOT_ENV = "QGIS2WEBMAP_SAVE_ROOT"
 
 
 def default_save_root() -> Path:
     """Documents/QGIS2WebMap. Qt knows where Documents really is - a
-    translated name, or a folder OneDrive moved - so it is asked first."""
+    translated name, or a folder OneDrive moved - so it is asked first.
+    `QGIS2WEBMAP_SAVE_ROOT`, when set, wins over both."""
+    override = os.environ.get(SAVE_ROOT_ENV)
+    if override:
+        return Path(override)
     documents = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.DocumentsLocation
     )

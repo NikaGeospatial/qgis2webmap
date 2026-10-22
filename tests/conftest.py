@@ -20,17 +20,20 @@ import pytest
 
 
 @pytest.fixture(scope="session")
-def qgis_app():
+def qgis_app(tmp_path_factory):
     """A headless QGIS application, started once per test session.
 
     GUI enabled so widget tests can construct real dialogs; the tiers set
-    `QT_QPA_PLATFORM=offscreen` to keep that headless.
+    `QT_QPA_PLATFORM=offscreen` to keep that headless. Its profile, settings
+    and default save folder are in the session's temporary directory
+    (`tests/hermetic.py`), never the developer's own.
     """
     qgis_core = pytest.importorskip(
         "qgis.core", reason="PyQGIS is unavailable; skipping the QGIS test tiers"
     )
-    app = qgis_core.QgsApplication([], True)
-    qgis_core.QgsApplication.initQgis()
+    from hermetic import start_qgis
+
+    app = start_qgis(tmp_path_factory.mktemp("qgis"))
     yield app
 
     # Destroy every widget still alive before shutting QGIS down.
