@@ -86,6 +86,10 @@ from .status import page_label, status_text
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
 
+    # QtWidgets on Qt 5, QtGui on Qt 6.
+    from qgis.core import QgsPrintLayout
+    from qgis.PyQt.QtGui import QUndoStack
+
     from ...core.canvas_cartograph import LayerRevisions
     from ...core.cvd import Condition, LegendEntry
     from ...core.export_ir import ExportProject
@@ -204,6 +208,10 @@ class CartographController:
 
         self._current_layout = None
         self._layout_changed_connected = False
+        self._watched_stack: QUndoStack | None = None
+        # True while this controller's own export reads (and briefly changes)
+        # the layout: what that emits is not an edit.
+        self._exporting = False
         self._manager_connected = False
         self._frame_rows: dict[str, dict[str, QComboBox]] = {}
 
@@ -236,6 +244,11 @@ class CartographController:
         self._layer_revisions: LayerRevisions | None = None
         self._built_layers_signature = self._layers_signature()
         self._selected_name: str | None = None
+        # The project's print layouts as last listed, to tell which one a
+        # rename was about; and old name -> new name for builds begun under a
+        # name that has since changed.
+        self._listed_layouts: list[tuple[QgsPrintLayout, str]] = []
+        self._renamed: dict[str, str] = {}
         self._shut_down = False
         self._preview_server: PreviewServer | None = None
         self._preview_server_error = ""
@@ -962,7 +975,12 @@ class CartographController:
             manager.layoutRenamed.connect(self._on_layout_renamed)
             self._manager_connected = True
 
-        names = [pl.name() for pl in manager.printLayouts()]
+        listed = manager.printLayouts()
+        names = [pl.name() for pl in listed]
+        self._listed_layouts = list(zip(listed, names))
+        # A name taken again by another layout is no longer a renamed one.
+        for name in names:
+            self._renamed.pop(name, None)
 
         self.layout_combo.blockSignals(True)
         self.layout_combo.set_layouts(names)
@@ -980,8 +998,27 @@ class CartographController:
     def _on_layouts_changed(self, *_args: object) -> None:
         self.refresh_layouts()
 
-    def _on_layout_renamed(self, *_args: object) -> None:
+    def _on_layout_renamed(self, layout: object, new_name: str) -> None:
+        """Follow a renamed layout by identity: what the state, the selection
+        and the builds under way kept under its old name moves with it."""
+        old = next(
+            (name for known, name in self._listed_layouts if known == layout), None
+        )
+        if old is not None and old != new_name:
+            self.state.rename_cartograph_layout(old, new_name)
+            if self._selected_name == old:
+                self._selected_name = new_name
+            self._renamed = {
+                was: (new_name if now == old else now)
+                for was, now in self._renamed.items()
+            }
+            self._renamed[old] = new_name
+            save_state(self.project, self.state)
         self.refresh_layouts()
+
+    def _current_name_of(self, built_for: str | None) -> str | None:
+        """The name a layout a build began for has now."""
+        return self._renamed.get(built_for, built_for) if built_for else built_for
 
     def _disconnect_layout_manager(self) -> None:
         if not self._manager_connected:
@@ -998,6 +1035,12 @@ class CartographController:
             with contextlib.suppress(Exception):
                 self._current_layout.changed.disconnect(self._on_layout_content_changed)
         self._layout_changed_connected = False
+        if self._watched_stack is not None:
+            with contextlib.suppress(TypeError, RuntimeError):
+                self._watched_stack.indexChanged.disconnect(
+                    self._on_layout_content_changed
+                )
+        self._watched_stack = None
 
     def _select_layout(self, name: str) -> None:
         # The same layout again (the tab re-shown, the list refreshed) keeps
@@ -1024,6 +1067,13 @@ class CartographController:
                 # safer than failing to open the dialog over it. Autosave
                 # still fires on every control this tab itself offers.
                 self._layout_changed_connected = False
+
+            # The designer's edits (a label's text, a moved map) never emit
+            # `changed`; they are undo commands, so the stack's index is what
+            # moves: for an edit, an added or removed item (also a command), an
+            # undo and a redo.
+            self._watched_stack = layout.undoStack().stack()
+            self._watched_stack.indexChanged.connect(self._on_layout_content_changed)
 
         self._rebuild_frames_rows()
         self.atlas_tab.show_layout(layout)
@@ -1069,7 +1119,9 @@ class CartographController:
             self._current_layout.refresh()
             self.schedule_autosave()
 
-    def _on_layout_content_changed(self) -> None:
+    def _on_layout_content_changed(self, *_args: object) -> None:
+        if self._exporting:
+            return
         if self._current_layout is not None:
             current_ids = {
                 item.item_id for item in layout_map_items(self._current_layout)
@@ -1152,6 +1204,7 @@ class CartographController:
         # The layout half here, on the GUI thread: it hides and renders the
         # layout's own items, and the layout may be open in its designer.
         # Only the layer-reading half goes to the worker.
+        self._exporting = True
         try:
             prepared = cartograph_export.prepare_cartograph(
                 layout,
@@ -1165,6 +1218,8 @@ class CartographController:
         except Exception as exc:
             self._on_build_failed(str(exc), traceback.format_exc())
             return
+        finally:
+            self._exporting = False
         prepared = dataclasses.replace(
             prepared, spec=self._apply_page_fields(prepared.spec)
         )
@@ -1306,7 +1361,10 @@ class CartographController:
         QgsMessageLog.logMessage(
             details, "QGIS2WebMap", level=Qgis.MessageLevel.Warning
         )
-        if built_for is not None and built_for != self.state.cartograph_layout:
+        if (
+            built_for is not None
+            and self._current_name_of(built_for) != self.state.cartograph_layout
+        ):
             return
         # The page waiting on this save would open without the latest edits.
         self._cancel_waiting_pages()
@@ -1317,7 +1375,10 @@ class CartographController:
 
     def _is_current_build(self, path: Path, built_for: str | None) -> bool:
         """Whether a finished build is for the layout and file now selected."""
-        if built_for is not None and built_for != self.state.cartograph_layout:
+        if (
+            built_for is not None
+            and self._current_name_of(built_for) != self.state.cartograph_layout
+        ):
             return False
         return self._current_path() == path
 

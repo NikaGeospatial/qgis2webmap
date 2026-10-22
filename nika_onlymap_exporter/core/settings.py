@@ -533,6 +533,22 @@ class DialogState:
     def cartograph_file_for(self, layout_name: str) -> str:
         return self.cartograph_files.get(layout_name, "")
 
+    def rename_cartograph_layout(self, old: str, new: str) -> None:
+        """Carry everything kept under a layout's name to its new name, so a
+        rename in QGIS loses neither its file, frames, page nor print settings."""
+        if old == new:
+            return
+        if old in self.cartograph_files:
+            self.cartograph_files[new] = self.cartograph_files.pop(old)
+        if old in self.cartograph_frames:
+            self.cartograph_frames[new] = self.cartograph_frames.pop(old)
+        if old in self.cartograph_print:
+            self.cartograph_print[new] = self.cartograph_print.pop(old)
+        if old in self.cartograph_page:
+            self.cartograph_page[new] = self.cartograph_page.pop(old)
+        if self.cartograph_layout == old:
+            self.cartograph_layout = new
+
     def snapshot(self) -> str:
         """A deterministic string that changes whenever any setting does.
 

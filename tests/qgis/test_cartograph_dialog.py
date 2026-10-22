@@ -3344,3 +3344,214 @@ class TestPanel:
             assert self._panel_width(dialog) == 500
         finally:
             dialog.close()
+
+
+class TestDesignerEditsAutosave:
+    """The layout designer's edits are undo commands: they never emit the
+    layout's `changed`, so the controller follows the undo stack and added
+    items as well."""
+
+    def _ready(self, project, qgis_app):
+        from qgis.core import QgsLayoutItemLabel, QgsLayoutItemMap
+
+        layout = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        label = QgsLayoutItemLabel(layout)
+        layout.addLayoutItem(label)
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        cartograph = dialog._cartograph
+        map_item = next(i for i in layout.items() if isinstance(i, QgsLayoutItemMap))
+        cartograph._autosave_timer.stop()
+        return dialog, cartograph, layout, label, map_item
+
+    @staticmethod
+    def _command(layout, item, change) -> None:
+        layout.undoStack().beginCommand(item, "designer edit")
+        change()
+        layout.undoStack().endCommand()
+
+    @staticmethod
+    def _counts(cartograph, action) -> tuple[int, bool]:
+        cartograph._autosave_timer.stop()
+        before = cartograph._edits_made
+        action()
+        return cartograph._edits_made - before, cartograph._autosave_timer.isActive()
+
+    def test_a_label_text_edit_and_a_map_move_count(self, qgis_app, project) -> None:
+        dialog, cartograph, layout, label, map_item = self._ready(project, qgis_app)
+        try:
+            made, started = self._counts(
+                cartograph,
+                lambda: self._command(layout, label, lambda: label.setText("New")),
+            )
+            assert made >= 1 and started
+            made, started = self._counts(
+                cartograph,
+                lambda: self._command(
+                    layout, map_item, lambda: map_item.attemptMoveBy(5, 5)
+                ),
+            )
+            assert made >= 1 and started
+        finally:
+            dialog.close()
+
+    def test_adding_removing_undoing_and_redoing_each_count(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.core import QgsLayoutItemLabel
+
+        dialog, cartograph, layout, _label, _map = self._ready(project, qgis_app)
+        try:
+            extra = QgsLayoutItemLabel(layout)
+            for step, action in (
+                ("add", lambda: layout.addLayoutItem(extra)),
+                ("remove", lambda: layout.removeLayoutItem(extra)),
+                ("undo", lambda: layout.undoStack().stack().undo()),
+                ("redo", lambda: layout.undoStack().stack().redo()),
+            ):
+                made, started = self._counts(cartograph, action)
+                assert made >= 1 and started, step
+        finally:
+            dialog.close()
+
+    def test_a_burst_of_edits_is_one_build(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        dialog, cartograph, layout, label, _map = self._ready(project, qgis_app)
+        try:
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            cartograph._autosave_timer.stop()
+            for index in range(5):
+                self._command(layout, label, lambda i=index: label.setText(f"t{i}"))
+            assert _wait_for(qgis_app, lambda: target.exists())
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            assert len(fake_cartograph_export.calls) == 1
+        finally:
+            dialog.close()
+
+    def test_the_controllers_own_export_is_not_an_edit(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        dialog, cartograph, layout, label, _map = self._ready(project, qgis_app)
+        try:
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            prepare = export_module.prepare_cartograph
+
+            def mutating(*args, **kwargs):
+                # An export that touches the layout through the undo stack.
+                self._command(layout, label, lambda: label.setText("scratch"))
+                layout.changed.emit()
+                return prepare(*args, **kwargs)
+
+            monkeypatch.setattr(export_module, "prepare_cartograph", mutating)
+            cartograph._autosave_timer.stop()
+            before = cartograph._edits_made
+            cartograph._run_autosave()
+            assert _wait_for(qgis_app, lambda: target.exists())
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            assert cartograph._edits_made == before
+            assert not cartograph._autosave_timer.isActive()
+        finally:
+            dialog.close()
+
+
+class TestRenamingALayout:
+    """A rename in QGIS keeps what was set under the old name."""
+
+    def _two(self, project):
+        _add_layout(project, "First", [("Map", "EPSG:4326")])
+        second = _add_layout(project, "Second", [("Map", "EPSG:4326")])
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        cartograph = dialog._cartograph
+        cartograph.layout_combo.setCurrentText("Second")
+        return dialog, cartograph, second
+
+    def test_the_second_layout_keeps_its_settings_and_selection(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import FrameChoice, load_state
+
+        dialog, cartograph, second = self._two(project)
+        try:
+            target = tmp_path / "second.html"
+            cartograph.file_edit.setText(str(target))
+            cartograph._on_file_edited(str(target))
+            cartograph.title_edit.setText("Kept title")
+            cartograph.title_edit.textEdited.emit("Kept title")
+            state = dialog.state
+            state.frame_choices("Second")["Map"] = FrameChoice(mode="static", dpi=300)
+            state.cartograph_print["Second"] = '{"bleed": "3mm"}'
+            cartograph._autosave_timer.stop()
+
+            second.setName("Renamed")
+
+            assert cartograph.layout_combo.current_layout() == "Renamed"
+            assert state.cartograph_layout == "Renamed"
+            assert cartograph.file_edit.text() == str(target)
+            assert state.cartograph_files["Renamed"] == str(target)
+            assert state.page_choice("Renamed").title == "Kept title"
+            assert state.frame_choices("Renamed")["Map"].dpi == 300
+            assert state.cartograph_print["Renamed"] == '{"bleed": "3mm"}'
+            for kept in (
+                state.cartograph_files,
+                state.cartograph_frames,
+                state.cartograph_print,
+                state.cartograph_page,
+            ):
+                assert "Second" not in kept
+            # Reopening the project reads them back under the new name.
+            reopened = load_state(project)
+            assert reopened.cartograph_layout == "Renamed"
+            assert reopened.cartograph_files["Renamed"] == str(target)
+            assert reopened.cartograph_print["Renamed"] == '{"bleed": "3mm"}'
+            assert reopened.page_choice("Renamed").title == "Kept title"
+            assert reopened.frame_choices("Renamed")["Map"].dpi == 300
+        finally:
+            dialog.close()
+
+    def test_a_build_in_flight_still_lands_and_runs_the_queued_page(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        import threading
+
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        gate = threading.Event()
+        finish = export_module.finish_cartograph_full
+
+        def gated(*args, **kwargs):
+            gate.wait(20)
+            return finish(*args, **kwargs)
+
+        monkeypatch.setattr(export_module, "finish_cartograph_full", gated)
+        dialog, cartograph, second = self._two(project)
+        try:
+            opened = []
+            monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            target = tmp_path / "second.html"
+            target.write_text("<html>earlier save</html>")
+            cartograph.file_edit.setText(str(target))
+            cartograph._on_file_edited(str(target))
+            cartograph._autosave_timer.stop()
+            cartograph._run_autosave()
+            assert cartograph._job is not None
+            cartograph.on_export_png()  # queued behind the build
+
+            second.setName("Renamed")
+            gate.set()
+
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            cartograph._autosave_timer.stop()
+            assert target.exists()
+            assert cartograph._last_saved_at is not None
+            assert cartograph._edits_saved >= 1
+            assert _wait_for(qgis_app, lambda: opened)
+            assert cartograph.layout_combo.current_layout() == "Renamed"
+        finally:
+            gate.set()
+            dialog.close()
