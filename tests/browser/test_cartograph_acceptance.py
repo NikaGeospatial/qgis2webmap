@@ -11,6 +11,11 @@ The fixtures come from `cartograph_fixture_builder.py`, run with QGIS's
 Python (named by `QGIS_PYTHON`); this tier's interpreter has Playwright but no
 PyQGIS. Without `QGIS_PYTHON` or the runtime, the whole module skips.
 
+CI's browser job has no QGIS, so the QGIS job builds the fixtures once and
+uploads them; the browser job downloads them and names the directory in
+`CARTOGRAPH_FIXTURES_DIR`, which is used instead of building. Unset, the
+QGIS-backed build above is unchanged.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -41,6 +46,12 @@ MM_PER_PT = 25.4 / 72
 
 @pytest.fixture(scope="module")
 def fixtures(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    prebuilt = os.environ.get("CARTOGRAPH_FIXTURES_DIR")
+    if prebuilt:
+        directory = Path(prebuilt)
+        if not (directory / "expected.json").exists():
+            pytest.fail(f"CARTOGRAPH_FIXTURES_DIR has no expected.json: {directory}")
+        return directory
     qgis_python = os.environ.get("QGIS_PYTHON")
     if not qgis_python:
         pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixtures")

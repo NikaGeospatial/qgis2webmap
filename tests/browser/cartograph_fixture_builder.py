@@ -8,7 +8,9 @@ acceptance check meet through files):
         tests/browser/cartograph_fixture_builder.py OUT_DIR
 
 `tests/browser/test_cartograph_acceptance.py` runs this itself when
-`QGIS_PYTHON` names that interpreter. It writes:
+`QGIS_PYTHON` names that interpreter. CI's QGIS job runs it once and uploads
+the directory; the browser job (no QGIS) points `CARTOGRAPH_FIXTURES_DIR` at the
+download instead. It writes:
 
 - `survey-static.html`: issue #1's acceptance layout (UTM 48N, 500 m grid,
   locator inset, legend, scale bar, north arrow, a `@map_scale` title) on an

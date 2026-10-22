@@ -124,6 +124,17 @@ jobs:
       - name: Fetch the pinned OnlyMap runtime
         run: |
           echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> $GITHUB_ENV
+      # The browser job has no QGIS, so the real-QGIS Cartograph acceptance
+      # fixtures (and what QGIS says the browser must show) are built here once
+      # and handed over as an artifact. Before the tests so a failing test does
+      # not also take the browser tier's input down with it.
+      - name: Build the Cartograph browser-acceptance fixtures
+        run: python3 tests/browser/cartograph_fixture_builder.py cartograph-fixtures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cartograph-fixtures
+          path: cartograph-fixtures/
+          if-no-files-found: error
       # `-rs` keeps any remaining skip visible. A skip here is a gate that did
       # not run, which must not read as a pass.
       - run: python3 -m pytest tests/qgis tests/fixtures -q -rs --durations=25
@@ -145,6 +156,14 @@ jobs:
     # registry first - through the plugin's own download-and-verify path, not a
     # curl, so the code that reaches the network on a user's machine is exercised
     # here too.
+    #
+    # The Cartograph acceptance tests need real-QGIS output. This job has no QGIS,
+    # so it runs them against the fixtures the qgis job built and uploaded
+    # (CARTOGRAPH_FIXTURES_DIR) rather than skipping them.
+    needs: qgis
+    # Still run when a qgis test failed (the fixtures are uploaded before the
+    # tests); the download below fails loudly if they are missing.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,6 +172,10 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: .github/workflows/checks.yml
+      - uses: actions/download-artifact@v4
+        with:
+          name: cartograph-fixtures
+          path: cartograph-fixtures
       - run: pip install pytest pytest-playwright
       # Browser builds are tied to the Playwright release that downloads them,
       # so its version is the cache key. System libraries are not cached:
@@ -179,6 +202,7 @@ jobs:
              -o junit_duration_report=total
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CARTOGRAPH_FIXTURES_DIR: ${{ github.workspace }}/cartograph-fixtures
       - uses: actions/upload-artifact@v4
         if: always()
         with:
