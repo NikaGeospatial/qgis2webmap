@@ -20,6 +20,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -273,6 +274,23 @@ MM_TO_PIXELS = 96.0 / 25.4
 
 
 @dataclass(frozen=True)
+class GroundSize:
+    """A size on the ground, which the web map scales with the zoom.
+
+    `units` is a deck.gl unit name: `meters` (true metres, at the feature's
+    latitude) or `common` (Web Mercator world units, which is what QGIS's map
+    units are in EPSG:3857). The runtime reads them from `radius-units` and its
+    siblings, one per attribute.
+    """
+
+    value: float
+    units: str
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"value": self.value, "units": self.units}
+
+
+@dataclass(frozen=True)
 class SymbolSpec:
     """One resolved symbol, flattened to what a web renderer can express.
 
@@ -310,6 +328,14 @@ class SymbolSpec:
     # overwhelming majority of layers, which need no atlas at all.
     icon_name: str | None = None
     icon_size: float | None = None
+    # The same sizes as true ground sizes, where the symbol gave them in map
+    # units or metres on the ground and the runtime can express that exactly.
+    # `radius` (the marker's), `stroke_width` and `icon_size` stay the pixel
+    # approximation alongside: clustering and label offsets still need pixels,
+    # and a layer whose classes disagree falls back to them.
+    radius_ground: GroundSize | None = None
+    stroke_width_ground: GroundSize | None = None
+    icon_size_ground: GroundSize | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -329,7 +355,34 @@ class SymbolSpec:
             "offsetY": round(self.offset_y, 6),
             "iconName": self.icon_name,
             "iconSize": (None if self.icon_size is None else round(self.icon_size, 4)),
+            "radiusGround": _ground_snapshot(self.radius_ground),
+            "strokeWidthGround": _ground_snapshot(self.stroke_width_ground),
+            "iconSizeGround": _ground_snapshot(self.icon_size_ground),
         }
+
+
+def _ground_snapshot(size: GroundSize | None) -> dict[str, Any] | None:
+    return None if size is None else size.snapshot()
+
+
+def uniform_ground_units(
+    symbols: Sequence[SymbolSpec], ground_field: str, pixel_field: str
+) -> str | None:
+    """The one deck.gl unit every symbol's `ground_field` is in, or `None`.
+
+    A layer carries one `*-units` attribute per size, so its classes can share a
+    ground size only if all of them have one in the same unit. A class whose
+    pixel size is zero (no outline, say) is a zero in any unit and agrees with
+    all of them.
+    """
+    units: set[str] = set()
+    for symbol in symbols:
+        size: GroundSize | None = getattr(symbol, ground_field)
+        if size is not None:
+            units.add(size.units)
+        elif getattr(symbol, pixel_field) not in (0, 0.0):
+            return None
+    return units.pop() if len(units) == 1 else None
 
 
 # Marker shapes a circle-based renderer draws correctly without an icon atlas.

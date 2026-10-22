@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import replace
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .export_ir import (
     Color,
@@ -46,6 +46,7 @@ from .export_ir import (
     RendererSpec,
     SymbolSpec,
     TileSpec,
+    uniform_ground_units,
 )
 from .label_points import (
     LABEL_PROPERTY,
@@ -627,6 +628,10 @@ def _number(value: float) -> str:
     """Render a number without a pointless trailing `.0`."""
     if value == int(value):
         return str(int(value))
+    # Six decimals would round a ground size in deck.gl's `common` units (a
+    # 10 m width is 0.000128 of them) to three digits.
+    if 0 < abs(value) < 0.001:
+        return repr(float(f"{value:.6g}"))
     return repr(round(value, 6))
 
 
@@ -693,6 +698,43 @@ def _class_symbols(renderer: RendererSpec) -> list[SymbolSpec]:
     if renderer.kind is RendererKind.GRADUATED:
         return [klass.symbol for klass in renderer.classes]
     return []
+
+
+def _ground_view(
+    renderer: RendererSpec, pixel_field: str, ground_field: str
+) -> tuple[RendererSpec, str]:
+    """`renderer` with `pixel_field` swapped for its ground size, and the unit.
+
+    When every class has `ground_field` in one deck.gl unit the sizes are the
+    ground values and the unit is that one; otherwise the renderer comes back
+    unchanged, in `pixels`. Swapping the field lets the per-class expression
+    builders below run on either without knowing the difference.
+    """
+    symbols = _class_symbols(renderer) or [
+        s for s in (renderer.representative_symbol,) if s is not None
+    ]
+    units = uniform_ground_units(symbols, ground_field, pixel_field)
+    if units is None:
+        return renderer, "pixels"
+
+    def grounded(symbol: SymbolSpec) -> SymbolSpec:
+        size = getattr(symbol, ground_field)
+        changes: dict[str, Any] = {pixel_field: 0.0 if size is None else size.value}
+        return replace(symbol, **changes)
+
+    return (
+        replace(
+            renderer,
+            symbol=grounded(renderer.symbol) if renderer.symbol else None,
+            categories=tuple(
+                replace(c, symbol=grounded(c.symbol)) for c in renderer.categories
+            ),
+            classes=tuple(
+                replace(c, symbol=grounded(c.symbol)) for c in renderer.classes
+            ),
+        ),
+        units,
+    )
 
 
 def numeric_expression(
@@ -1063,13 +1105,21 @@ def build_layer_element(
     if symbol.stroke_width:
         # A per-class width when the classes disagree, the representative
         # symbol's constant when they do not.
-        width = numeric_expression(
-            renderer, "stroke_width", fallback=symbol.stroke_width
+        # A width given on the ground (map units, metres) is emitted as that
+        # distance, so it zooms with the map as in QGIS.
+        width_renderer, width_units = _ground_view(
+            renderer, "stroke_width", "stroke_width_ground"
         )
-        attributes.append(("get-line-width", width or _number(symbol.stroke_width)))
+        width_symbol = width_renderer.representative_symbol or symbol
+        width = numeric_expression(
+            width_renderer, "stroke_width", fallback=width_symbol.stroke_width
+        )
+        attributes.append(
+            ("get-line-width", width or _number(width_symbol.stroke_width))
+        )
         # Without this deck.gl treats the width as metres and lines vanish at
         # most zoom levels.
-        attributes.append(("line-width-units", "pixels"))
+        attributes.append(("line-width-units", width_units))
         # A floor on the drawn width, because deck.gl hit-tests against what it
         # drew: a QGIS hairline exports as a sub-pixel line that is technically
         # visible and practically impossible to click, so its popup may as well
@@ -1110,17 +1160,20 @@ def build_layer_element(
         # The size each cell was measured at, so a marker comes out the size
         # QGIS drew it. Per class when the classes disagree, which is what makes
         # a graduated-by-size layer of icons work.
-        size = numeric_expression(layer.renderer, "icon_size", fallback=None)
+        icon_renderer, icon_units = _ground_view(
+            layer.renderer, "icon_size", "icon_size_ground"
+        )
+        size = numeric_expression(icon_renderer, "icon_size", fallback=None)
         if size is None:
             first = next(
-                (s.icon_size for s in _class_symbols(layer.renderer) if s.icon_size),
-                symbol.icon_size,
+                (s.icon_size for s in _class_symbols(icon_renderer) if s.icon_size),
+                (icon_renderer.representative_symbol or symbol).icon_size,
             )
             size = _number(first or 0.0)
         attributes.append(("get-icon-size", size))
         # Without this deck.gl reads the size as metres and the markers balloon
         # on zoom in and vanish on zoom out - the same trap as line widths.
-        attributes.append(("icon-size-units", "pixels"))
+        attributes.append(("icon-size-units", icon_units))
         if symbol.offset_x or symbol.offset_y:
             attributes.append(
                 (
@@ -1132,9 +1185,17 @@ def build_layer_element(
         # QGIS graduated-by-size is the common case this rescues: every class
         # used to export at the representative symbol's radius, so a map whose
         # whole point was "bigger dot means more" came out uniform.
-        radius = numeric_expression(renderer, "radius", fallback=symbol.radius)
-        attributes.append(("get-point-radius", radius or _number(symbol.radius)))
-        attributes.append(("point-radius-units", "pixels"))
+        radius_renderer, radius_units = _ground_view(
+            renderer, "radius", "radius_ground"
+        )
+        radius_symbol = radius_renderer.representative_symbol or symbol
+        radius = numeric_expression(
+            radius_renderer, "radius", fallback=radius_symbol.radius
+        )
+        attributes.append(
+            ("get-point-radius", radius or _number(radius_symbol.radius or 0.0))
+        )
+        attributes.append(("point-radius-units", radius_units))
 
     # Raised polygons, from either the layer's 3D view properties or a 2.5D
     # renderer. `extruded` is a `GeoJsonLayer` prop, so this needs no separate

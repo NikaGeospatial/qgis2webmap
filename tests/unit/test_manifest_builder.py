@@ -29,6 +29,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     GeometryKind,
     GraduatedClassSpec,
+    GroundSize,
     IconAtlasSpec,
     LabelingSpec,
     PopupFieldMode,
@@ -1077,6 +1078,105 @@ class TestRepresentativeSymbol:
         )
         layer = make_layer(geometry_kind=GeometryKind.POLYGON, renderer=renderer)
         assert "get-line-width=" in build_layer_element(layer)
+
+
+class TestGroundSizes:
+    """Sizes given on the ground are emitted in the runtime's ground units."""
+
+    @staticmethod
+    def _graduated(*symbols: SymbolSpec) -> RendererSpec:
+        return RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="v",
+            classes=tuple(
+                GraduatedClassSpec(float(i), float(i + 1), str(i), symbol)
+                for i, symbol in enumerate(symbols)
+            ),
+        )
+
+    def test_a_radius_and_width_on_the_ground_are_in_meters(self) -> None:
+        symbol = SymbolSpec(
+            fill_color=RED,
+            radius=9.0,
+            radius_ground=GroundSize(50.0, "meters"),
+            stroke_width=2.0,
+            stroke_width_ground=GroundSize(10.0, "meters"),
+        )
+        markup = build_layer_element(
+            make_layer(renderer=RendererSpec(kind=RendererKind.SINGLE, symbol=symbol))
+        )
+        assert 'get-point-radius="50"' in markup
+        assert 'point-radius-units="meters"' in markup
+        assert 'get-line-width="10"' in markup
+        assert 'line-width-units="meters"' in markup
+
+    def test_each_size_keeps_its_own_unit(self) -> None:
+        """A radius on the ground and a stroke in millimetres, on one marker."""
+        symbol = SymbolSpec(
+            fill_color=RED,
+            radius=9.0,
+            radius_ground=GroundSize(50.0, "meters"),
+            stroke_width=2.0,
+        )
+        markup = build_layer_element(
+            make_layer(renderer=RendererSpec(kind=RendererKind.SINGLE, symbol=symbol))
+        )
+        assert 'point-radius-units="meters"' in markup
+        assert 'get-line-width="2"' in markup
+        assert 'line-width-units="pixels"' in markup
+
+    def test_web_mercator_sizes_keep_their_small_digits(self) -> None:
+        symbol = SymbolSpec(
+            fill_color=RED,
+            radius=4.0,
+            radius_ground=GroundSize(0.00063883, "common"),
+        )
+        markup = build_layer_element(
+            make_layer(renderer=RendererSpec(kind=RendererKind.SINGLE, symbol=symbol))
+        )
+        assert 'get-point-radius="0.00063883"' in markup
+        assert 'point-radius-units="common"' in markup
+
+    def test_classes_on_the_ground_get_a_per_class_expression(self) -> None:
+        classes = [
+            SymbolSpec(
+                fill_color=RED,
+                radius=3.0 * (i + 1),
+                radius_ground=GroundSize(10.0 * (i + 1), "meters"),
+            )
+            for i in range(2)
+        ]
+        markup = build_layer_element(make_layer(renderer=self._graduated(*classes)))
+        assert 'point-radius-units="meters"' in markup
+        assert re.search(r'get-point-radius="[^"]*10[^"]*20', markup)
+
+    def test_classes_in_different_units_keep_their_pixel_sizes(self) -> None:
+        """One `*-units` per layer: a mix cannot be emitted on the ground."""
+        classes = [
+            SymbolSpec(
+                fill_color=RED, radius=3.0, radius_ground=GroundSize(10.0, "meters")
+            ),
+            SymbolSpec(fill_color=RED, radius=6.0),
+        ]
+        markup = build_layer_element(make_layer(renderer=self._graduated(*classes)))
+        assert 'point-radius-units="pixels"' in markup
+        assert "meters" not in markup
+
+    def test_an_icon_layer_sizes_its_icons_on_the_ground(self) -> None:
+        symbol = SymbolSpec(
+            icon_name="i0",
+            icon_size=20.0,
+            icon_size_ground=GroundSize(140.0, "meters"),
+        )
+        layer = make_layer(
+            renderer=RendererSpec(kind=RendererKind.SINGLE, symbol=symbol),
+            icon_atlas=IconAtlasSpec(
+                data_uri="data:image/png;base64,AAAA", mapping={"i0": {}}
+            ),
+        )
+        markup = build_layer_element(layer)
+        assert 'get-icon-size="140"' in markup
+        assert 'icon-size-units="meters"' in markup
 
 
 class TestTemplateTokenSafety:

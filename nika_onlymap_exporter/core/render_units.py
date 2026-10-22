@@ -16,16 +16,24 @@ sizes in pixels, so such a size is fixed at what it measures at one reference
 scale, described by `MapUnitScale`, and the caller says so in the fidelity
 report. Percentages and unknown units are not convertible at all.
 
+**Except where the runtime can hold the size itself.** deck.gl takes each size
+in `meters` (true ground metres, scaled with the zoom) or `common` (Web Mercator
+world units), so a size in metres on the ground, or in map units of a CRS whose
+unit is a fixed distance, is passed through as a `GroundSize` and zooms exactly
+as in QGIS. Only map units of a geographic CRS - degrees are not a constant
+distance - keep the reference-scale approximation.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
-from .export_ir import MM_TO_PIXELS
+from .export_ir import MM_TO_PIXELS, GroundSize
 
 # Screen pixels per unit, at the 96 dpi CSS assumes. `Qgis.RenderUnit` by
 # value, as `_CAPITALIZATION_BY_VALUE` below does, so PyQt5 and PyQt6 agree:
@@ -38,6 +46,27 @@ METERS_IN_MAP_UNITS = 7
 
 # One CSS pixel in metres on the screen: the web's pixel is 1/96 inch.
 CSS_PIXEL_METRES = 0.0254 / 96.0
+
+
+# deck.gl's `common` unit in Web Mercator is a pixel at zoom 0 of its 512 pixel
+# world, so a projected metre of EPSG:3857 - 1 / circumference of the world - is
+# this many.
+_WEB_MERCATOR_CIRCUMFERENCE = 2.0 * math.pi * 6_378_137.0
+COMMON_UNITS_PER_WEB_MERCATOR_METRE = 512.0 / _WEB_MERCATOR_CIRCUMFERENCE
+
+
+@dataclass(frozen=True)
+class GroundUnits:
+    """What one map unit of a layer's CRS is on the ground, where that is fixed.
+
+    `metres_per_map_unit` is `None` for a geographic CRS: a degree of longitude
+    is a different distance at every latitude. `web_mercator` marks EPSG:3857,
+    whose map unit is a projected metre that stretches with latitude - exactly
+    what deck.gl's `common` unit does, and not what its `meters` do.
+    """
+
+    metres_per_map_unit: float | None
+    web_mercator: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,3 +113,25 @@ def to_pixels(
         return float(value) / scale.metres_per_pixel
     factor = _PIXELS_PER_UNIT.get(key)
     return None if factor is None else float(value) * factor
+
+
+def ground_size(
+    value: float, unit: Any, ground: GroundUnits | None = None
+) -> GroundSize | None:
+    """`value` in QGIS `unit` as a size the runtime scales with the zoom, or `None`.
+
+    `None` for every unit with a fixed size on screen, and for map units whose
+    ground distance is not fixed (`ground` is `None` or geographic). Metres on
+    the ground need no CRS: QGIS resolves them against the map, and so does the
+    runtime, per feature.
+    """
+    key = unit_key(unit)
+    if key == METERS_IN_MAP_UNITS:
+        return GroundSize(float(value), "meters")
+    if key != MAP_UNITS or ground is None:
+        return None
+    if ground.web_mercator:
+        return GroundSize(float(value) * COMMON_UNITS_PER_WEB_MERCATOR_METRE, "common")
+    if ground.metres_per_map_unit:
+        return GroundSize(float(value) * ground.metres_per_map_unit, "meters")
+    return None

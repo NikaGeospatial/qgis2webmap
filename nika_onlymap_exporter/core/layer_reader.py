@@ -50,7 +50,9 @@ from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
     category_key,
+    ground_units,
     reference_render_context,
+    report_ground_sizes,
     translate_renderer,
 )
 from .symbol_rasterizer import build_icon_atlas
@@ -1088,7 +1090,9 @@ def read_layer(
         name,
         layer_id,
         reference_render_context(layer),
+        ground_units(layer),
     )
+    report_ground_sizes(renderer, icon_atlas is not None, kind, report, name, layer_id)
 
     labeling = translate_labeling(layer, report) if with_labels else LabelingSpec()
     if (

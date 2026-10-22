@@ -15,6 +15,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ClassificationMethod,
     FidelityStatus,
     GeometryKind,
+    GroundSize,
     RendererKind,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
@@ -24,7 +25,10 @@ from nika_onlymap_exporter.core.manifest_builder import (
     line_color_expression,
     numeric_expression,
 )
-from nika_onlymap_exporter.core.render_units import MapUnitScale
+from nika_onlymap_exporter.core.render_units import (
+    COMMON_UNITS_PER_WEB_MERCATOR_METRE,
+    MapUnitScale,
+)
 from nika_onlymap_exporter.core.renderer_translator import (
     HAIRLINE_PIXELS,
     MM_TO_PIXELS,
@@ -1263,6 +1267,228 @@ class TestSymbolUnits:
         report = FidelityReportBuilder()
         translate_symbol(symbol, report, "s")
         assert any("from data per feature" in i.detail for i in report.items)
+
+
+class TestGroundSizes:
+    """Map-unit sizes the runtime can hold become true ground sizes.
+
+    The oracle is QGIS's own conversion: the pixels a 100 m marker covers at two
+    scales, from `QgsRenderContext.convertToPainterUnits`. A ground size must
+    equal that at every scale, which is what zooming with the map means.
+    """
+
+    @staticmethod
+    def _layer(make_memory_layer, crs: str):
+        layer = make_memory_layer(
+            "pts", crs=crs, features=[("a", [0.0, 0.0]), ("b", [7000.0, 4900.0])]
+        )
+        layer.updateExtents()
+        return layer
+
+    @staticmethod
+    def _marker(unit_name: str, size: float = 100.0, stroke_unit: str = "Millimeters"):
+        symbol = qgis_core.QgsMarkerSymbol.createSimple(
+            {"name": "circle", "size": str(size), "outline_width": "10"}
+        )
+        symbol_layer = symbol.symbolLayer(0)
+        symbol_layer.setSizeUnit(getattr(qgis_core.Qgis.RenderUnit, unit_name))
+        symbol_layer.setStrokeWidthUnit(getattr(qgis_core.Qgis.RenderUnit, stroke_unit))
+        return symbol
+
+    def _translate(self, layer, symbol):
+        layer.setRenderer(qgis_core.QgsSingleSymbolRenderer(symbol))
+        report = FidelityReportBuilder()
+        return translate_renderer(layer, report).symbol, report
+
+    @staticmethod
+    def _approximated_sizes(report) -> list:
+        return [
+            i
+            for i in report.items
+            if i.status is FidelityStatus.APPROXIMATED and "map units" in i.detail
+        ]
+
+    @pytest.mark.parametrize("crs", ["EPSG:3857", "EPSG:32648", "EPSG:4326"])
+    def test_metres_on_the_ground_are_metres_in_any_crs(
+        self, qgis_app, make_memory_layer, crs
+    ) -> None:
+        layer = self._layer(make_memory_layer, crs)
+        spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
+        assert spec.radius_ground == GroundSize(50.0, "meters")
+        assert self._approximated_sizes(report) == []
+
+    def test_a_metre_crs_reads_map_units_as_metres(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        spec, report = self._translate(layer, self._marker("MapUnits"))
+        assert spec.radius_ground == GroundSize(50.0, "meters")
+        assert self._approximated_sizes(report) == []
+
+    def test_a_foot_crs_converts_map_units_to_metres(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        # US survey feet (EPSG:2263, New York Long Island)
+        layer = self._layer(make_memory_layer, "EPSG:2263")
+        spec, _ = self._translate(layer, self._marker("MapUnits"))
+        factor = qgis_core.QgsUnitTypes.fromUnitToUnitFactor(
+            layer.crs().mapUnits(), qgis_core.Qgis.DistanceUnit.Meters
+        )
+        assert spec.radius_ground.units == "meters"
+        assert spec.radius_ground.value == pytest.approx(50.0 * factor)
+        assert factor == pytest.approx(0.3048, rel=1e-3)
+
+    def test_web_mercator_map_units_are_deck_common_units(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:3857")
+        spec, _ = self._translate(layer, self._marker("MapUnits"))
+        assert spec.radius_ground.units == "common"
+        assert spec.radius_ground.value == pytest.approx(
+            50.0 * COMMON_UNITS_PER_WEB_MERCATOR_METRE
+        )
+
+    def test_degrees_stay_approximated_and_are_reported(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer(
+            "pts", crs="EPSG:4326", features=[("a", [0.0, 0.0]), ("b", [1.0, 1.0])]
+        )
+        layer.updateExtents()
+        spec, report = self._translate(layer, self._marker("MapUnits", size=0.01))
+        assert spec.radius_ground is None
+        assert spec.radius > 0
+        assert self._approximated_sizes(report)
+
+    def test_each_size_is_judged_on_its_own_unit(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """A radius in metres beside a stroke in millimetres, on one marker."""
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
+        assert spec.radius_ground == GroundSize(50.0, "meters")
+        assert spec.stroke_width_ground is None
+        assert spec.stroke_width == pytest.approx(10 * MM_TO_PIXELS)
+        assert self._approximated_sizes(report) == []
+
+    def test_a_stroke_on_the_ground_is_kept_too(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        spec, _ = self._translate(
+            layer, self._marker("Millimeters", stroke_unit="MetersInMapUnits")
+        )
+        assert spec.stroke_width_ground == GroundSize(10.0, "meters")
+        assert spec.radius_ground is None
+
+    def test_a_road_width_on_the_ground_scales_like_qgis(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer(
+            "roads",
+            geometry="LineString",
+            crs="EPSG:32648",
+            features=[("a", [0.0, 0.0, 7000.0, 4900.0])],
+        )
+        symbol = qgis_core.QgsLineSymbol.createSimple({"line_width": "10"})
+        symbol.symbolLayer(0).setWidthUnit(qgis_core.Qgis.RenderUnit.MetersInMapUnits)
+        spec, _ = self._translate(layer, symbol)
+        assert spec.stroke_width_ground == GroundSize(10.0, "meters")
+
+    @pytest.mark.parametrize("metres_per_pixel", [1.0, 7.0, 40.0])
+    def test_the_ground_size_covers_the_pixels_qgis_draws_at_every_scale(
+        self, qgis_app, make_memory_layer, metres_per_pixel
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        spec, _ = self._translate(layer, self._marker("MetersInMapUnits"))
+        oracle = _unit_oracle_context(metres_per_pixel)
+        qgis_radius = (
+            oracle.convertToPainterUnits(
+                100.0, qgis_core.Qgis.RenderUnit.MetersInMapUnits
+            )
+            / 2.0
+        )
+        assert spec.radius_ground.value / metres_per_pixel == pytest.approx(
+            qgis_radius, rel=1e-4
+        )
+
+    def test_classes_in_different_units_fall_back_and_say_so(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        layer.setRenderer(
+            qgis_core.QgsCategorizedSymbolRenderer(
+                "name",
+                [
+                    qgis_core.QgsRendererCategory(
+                        "a", self._marker("MetersInMapUnits"), "a"
+                    ),
+                    qgis_core.QgsRendererCategory(
+                        "b", self._marker("Millimeters"), "b"
+                    ),
+                ],
+            )
+        )
+        report = FidelityReportBuilder()
+        spec = translate_renderer(layer, report)
+        assert [c.symbol.radius_ground for c in spec.categories] == [None, None]
+        assert any(
+            "different units" in i.detail
+            for i in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_classes_all_on_the_ground_keep_it(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        layer.setRenderer(
+            qgis_core.QgsCategorizedSymbolRenderer(
+                "name",
+                [
+                    qgis_core.QgsRendererCategory(
+                        "a", self._marker("MetersInMapUnits", 100), "a"
+                    ),
+                    qgis_core.QgsRendererCategory(
+                        "b", self._marker("MapUnits", 300), "b"
+                    ),
+                ],
+            )
+        )
+        spec = translate_renderer(layer, FidelityReportBuilder())
+        assert [c.symbol.radius_ground for c in spec.categories] == [
+            GroundSize(50.0, "meters"),
+            GroundSize(150.0, "meters"),
+        ]
+
+    def test_the_layer_says_once_that_sizes_zoom(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._layer(make_memory_layer, "EPSG:32648")
+        layer.setRenderer(
+            qgis_core.QgsSingleSymbolRenderer(self._marker("MetersInMapUnits"))
+        )
+        report = FidelityReportBuilder()
+        read_layer(layer, report)
+        assert any(
+            "marker size" in i.detail and "zoom" in i.detail
+            for i in report.by_status(FidelityStatus.PRESERVED)
+        )
+
+    def test_the_25d_renderer_reads_no_sizes(self, qgis_app, make_memory_layer) -> None:
+        """Its roof and wall colours are all it takes, so no scale is needed."""
+        layer = make_memory_layer(
+            "buildings",
+            geometry="Polygon",
+            crs="EPSG:32648",
+            features=[("a", [0.0, 0.0, 100.0, 100.0])],
+        )
+        renderer = qgis_core.Qgs25DRenderer()
+        layer.setRenderer(renderer)
+        report = FidelityReportBuilder()
+        spec = translate_renderer(layer, report)
+        assert spec.symbol.radius_ground is None
+        assert spec.symbol.stroke_width_ground is None
+        assert self._approximated_sizes(report) == []
 
 
 class TestSymbolOpacity:

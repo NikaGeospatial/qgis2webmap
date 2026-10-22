@@ -20,8 +20,12 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererKind,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.render_units import (
+    COMMON_UNITS_PER_WEB_MERCATOR_METRE,
+)
 from nika_onlymap_exporter.core.renderer_translator import (
     class_symbols,
+    ground_units,
     reference_render_context,
     translate_renderer,
 )
@@ -359,3 +363,94 @@ class TestMapUnitMarkers:
         assert render_symbol(in_map_units) is None or (
             render_symbol(in_map_units).width() > 3 * expected.width()
         )
+
+    @staticmethod
+    def _ground_layer(
+        make_memory_layer, unit_name, crs="EPSG:3857", stroke_unit=None, stroke=0.5
+    ):
+        layer = make_memory_layer(
+            "pts", crs=crs, features=[("a", [0.0, 0.0]), ("b", [7000.0, 4900.0])]
+        )
+        layer.updateExtents()
+        star = marker("star", size=56.0)
+        symbol_layer = star.symbolLayer(0)
+        symbol_layer.setStrokeWidth(stroke)
+        symbol_layer.setSizeUnit(getattr(qgis_core.Qgis.RenderUnit, unit_name))
+        symbol_layer.setStrokeWidthUnit(
+            getattr(qgis_core.Qgis.RenderUnit, stroke_unit or unit_name)
+        )
+        layer.setRenderer(qgis_core.QgsSingleSymbolRenderer(star))
+        return layer
+
+    @staticmethod
+    def _atlas_with_ground(layer):
+        report = FidelityReportBuilder()
+        spec = translate_renderer(layer, report)
+        atlas, renderer = build_icon_atlas(
+            layer.renderer(),
+            spec,
+            GeometryKind.POINT,
+            report,
+            layer.name(),
+            layer.id(),
+            reference_render_context(layer),
+            ground_units(layer),
+        )
+        return atlas, renderer, report
+
+    def test_icons_of_metres_markers_zoom_with_the_map(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """The icon is `icon_size` px at 7 m/px, so it is 7 x that on the ground."""
+        layer = self._ground_layer(make_memory_layer, "MetersInMapUnits")
+        atlas, renderer, _ = self._atlas_with_ground(layer)
+        assert atlas is not None
+        symbol = renderer.symbol
+        assert symbol.icon_size_ground.units == "meters"
+        assert symbol.icon_size_ground.value == pytest.approx(
+            symbol.icon_size * 7.0, rel=1e-3
+        )
+
+    def test_icons_of_web_mercator_map_unit_markers_are_in_common_units(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._ground_layer(make_memory_layer, "MapUnits")
+        _, renderer, _ = self._atlas_with_ground(layer)
+        symbol = renderer.symbol
+        assert symbol.icon_size_ground.units == "common"
+        assert symbol.icon_size_ground.value == pytest.approx(
+            symbol.icon_size * 7.0 * COMMON_UNITS_PER_WEB_MERCATOR_METRE, rel=1e-3
+        )
+
+    def test_a_screen_unit_outline_keeps_the_icon_at_its_reference_size(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """The picture would scale its millimetre outline too, which QGIS does not."""
+        layer = self._ground_layer(
+            make_memory_layer, "MetersInMapUnits", stroke_unit="Millimeters"
+        )
+        _, renderer, report = self._atlas_with_ground(layer)
+        assert renderer.symbol.icon_size_ground is None
+        assert any(
+            "picture" in item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_a_millimetre_marker_has_no_ground_size(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = self._ground_layer(make_memory_layer, "Millimeters")
+        _, renderer, report = self._atlas_with_ground(layer)
+        assert renderer.symbol.icon_size_ground is None
+        assert not any(
+            "picture" in item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_a_hairline_outline_keeps_the_icon_at_its_reference_size(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """A zero-width outline is one device pixel at any zoom in QGIS."""
+        layer = self._ground_layer(make_memory_layer, "MetersInMapUnits", stroke=0.0)
+        _, renderer, _ = self._atlas_with_ground(layer)
+        assert renderer.symbol.icon_size_ground is None

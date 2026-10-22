@@ -34,11 +34,14 @@ from qgis.PyQt.QtGui import QImage, QPainter
 from .export_ir import (
     GeometryKind,
     GraduatedClassSpec,
+    GroundSize,
     IconAtlasSpec,
     RendererKind,
     RendererSpec,
+    SymbolSpec,
 )
-from .renderer_translator import class_symbols
+from .render_units import GroundUnits
+from .renderer_translator import class_symbols, symbol_pixels_per_ground_unit
 from .symbol_atlas import (
     SUPERSAMPLE,
     appearance_key,
@@ -233,7 +236,7 @@ def _compose_sheet(images: list[QImage], plan: Any) -> QImage:
 
 def _with_icons(
     renderer: RendererSpec,
-    assignments: list[tuple[str, float]],
+    assignments: list[tuple[str, float, GroundSize | None]],
 ) -> RendererSpec:
     """Re-emit the spec with each class carrying its atlas name and drawn size.
 
@@ -244,9 +247,14 @@ def _with_icons(
         categories = tuple(
             replace(
                 category,
-                symbol=replace(category.symbol, icon_name=name, icon_size=size),
+                symbol=replace(
+                    category.symbol,
+                    icon_name=name,
+                    icon_size=size,
+                    icon_size_ground=ground,
+                ),
             )
-            for category, (name, size) in zip(renderer.categories, assignments)
+            for category, (name, size, ground) in zip(renderer.categories, assignments)
         )
         return replace(renderer, categories=categories)
 
@@ -256,16 +264,27 @@ def _with_icons(
                 lower=klass.lower,
                 upper=klass.upper,
                 label=klass.label,
-                symbol=replace(klass.symbol, icon_name=name, icon_size=size),
+                symbol=replace(
+                    klass.symbol,
+                    icon_name=name,
+                    icon_size=size,
+                    icon_size_ground=ground,
+                ),
             )
-            for klass, (name, size) in zip(renderer.classes, assignments)
+            for klass, (name, size, ground) in zip(renderer.classes, assignments)
         )
         return replace(renderer, classes=classes)
 
     if renderer.symbol is not None and assignments:
-        name, size = assignments[0]
+        name, size, ground = assignments[0]
         return replace(
-            renderer, symbol=replace(renderer.symbol, icon_name=name, icon_size=size)
+            renderer,
+            symbol=replace(
+                renderer.symbol,
+                icon_name=name,
+                icon_size=size,
+                icon_size_ground=ground,
+            ),
         )
 
     return renderer
@@ -300,6 +319,7 @@ def build_icon_atlas(
     layer_name: str,
     layer_id: str,
     context: Any | None = None,
+    ground: GroundUnits | None = None,
 ) -> tuple[IconAtlasSpec | None, RendererSpec]:
     """Rasterise a layer's markers, or explain why it kept its circles.
 
@@ -370,12 +390,23 @@ def build_icon_atlas(
     # Each class points at its cell, and asks for the height that cell was
     # measured at. The sheet is supersampled, so the drawn size is the cell's
     # side divided back down.
-    assignments = [
-        (
-            icon_name(cells[appearance_key(spec)]),
-            plan.placements[cells[appearance_key(spec)]].side / SUPERSAMPLE,
-        )
+    sizes = [
+        plan.placements[cells[appearance_key(spec)]].side / SUPERSAMPLE
         for spec in layer_symbols(renderer)
+    ]
+    grounds = _icon_ground_sizes(
+        qgis_symbols,
+        sizes,
+        layer_symbols(renderer),
+        context,
+        ground,
+        report,
+        subject,
+        layer_id,
+    )
+    assignments = [
+        (icon_name(cells[appearance_key(spec)]), size, size_on_ground)
+        for spec, size, size_on_ground in zip(layer_symbols(renderer), sizes, grounds)
     ]
 
     # Rasterised rather than kept: they look exactly as in QGIS, but they are
@@ -396,6 +427,45 @@ def build_icon_atlas(
         supersample=SUPERSAMPLE,
     )
     return atlas, _with_icons(renderer, assignments)
+
+
+def _icon_ground_sizes(
+    qgis_symbols: list[QgsSymbol],
+    sizes: list[float],
+    specs: list[SymbolSpec],
+    context: Any | None,
+    ground: GroundUnits | None,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> list[GroundSize | None]:
+    """Each icon's height on the ground, when the whole layer's icons can zoom.
+
+    An icon is drawn at `sizes` pixels at the reference scale; a marker whose
+    sizes are all on the ground measures `size / pixels-per-unit` of it, which
+    the runtime then scales with the map. All the layer's classes must have one
+    (in one unit) because the layer has one `icon-size-units`; otherwise every
+    icon keeps its reference size, and the report says so.
+    """
+    grounds: list[GroundSize | None] = []
+    for symbol, size in zip(qgis_symbols, sizes):
+        scale = symbol_pixels_per_ground_unit(symbol, context, ground)
+        grounds.append(None if scale is None else GroundSize(size / scale[1], scale[0]))
+    if (
+        all(g is not None for g in grounds)
+        and len({g.units for g in grounds if g}) == 1
+    ):
+        return grounds
+    if any(s.radius_ground or s.stroke_width_ground for s in specs):
+        report.approximated(
+            subject,
+            "A marker's size is given on the ground, but its picture also has "
+            "a size in screen units (or the classes differ), and the web map "
+            "can scale a picture only as a whole. The markers keep the size "
+            "they have where the layer fills the opening view.",
+            layer_id,
+        )
+    return [None] * len(grounds)
 
 
 def _report_uncarried_markers(
