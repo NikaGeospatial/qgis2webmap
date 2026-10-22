@@ -777,6 +777,11 @@ class TestRasterAppearanceMatchesQgis:
         layer.hueSaturationFilter().setSaturation(40)
 
     @staticmethod
+    def _brighten(layer) -> None:
+        layer.brightnessFilter().setBrightness(60)
+        layer.brightnessFilter().setContrast(25)
+
+    @staticmethod
     def _hide_one_colour(layer) -> None:
         from qgis.core import QgsRasterTransparency
 
@@ -797,6 +802,8 @@ class TestRasterAppearanceMatchesQgis:
     @pytest.mark.parametrize(
         ("bands", "configure"),
         [
+            pytest.param(1, "_brighten", id="grey-brightness-contrast"),
+            pytest.param(3, "_brighten", id="rgb-brightness-contrast"),
             pytest.param(1, "_tint", id="grey-brightness-contrast-saturation"),
             pytest.param(3, "_tint", id="rgb-brightness-contrast-saturation"),
             pytest.param(3, "_hide_one_colour", id="rgb-transparent-colour"),
