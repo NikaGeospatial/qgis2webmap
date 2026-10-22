@@ -29,6 +29,7 @@ from nika_onlymap_exporter.core.print_settings import (
     PROFILE_ICC,
     PrintSettings,
 )
+from nika_onlymap_exporter.core.settings import PageChoice
 from nika_onlymap_exporter.exporters import print_pdf
 from nika_onlymap_exporter.exporters.print_pdf import (
     PrintPdfError,
@@ -286,3 +287,49 @@ class TestColour:
                 survey.layout, PrintSettings(profile=PROFILE_CMYK), tmp_path / "x.pdf"
             )
         assert not (tmp_path / "x.pdf").exists()
+
+
+class TestPageFields:
+    """The Cartograph tab's page fields reach the QGIS PDF like the browser's."""
+
+    def test_the_page_title_is_the_copys_project_title(self, survey) -> None:
+        copy = build_print_layout(
+            survey.layout,
+            PrintSettings(bleed="none"),
+            page_choice=PageChoice(title="NEW TITLE"),
+        )
+        texts = [i.currentText() for i in copy.items() if hasattr(i, "currentText")]
+        assert any(text.startswith("NEW TITLE --") for text in texts)
+        # The user's own layout keeps reading the project's title.
+        assert not survey.title_label.currentText().startswith("NEW TITLE")
+
+    def test_the_pdf_title_follows_and_the_project_title_comes_back(
+        self, survey, project, tmp_path
+    ) -> None:
+        project.setTitle("SOURCE TITLE")
+        out = tmp_path / "titled.pdf"
+        result = export_print_pdf(
+            survey.layout,
+            PrintSettings(bleed="none"),
+            out,
+            PageChoice(title="NEW TITLE", attribution="Credit", theme="dark"),
+        )
+        data = out.read_bytes()
+        assert "NEW TITLE".encode("utf-16-be") in data or b"NEW TITLE" in data
+        assert "SOURCE TITLE".encode("utf-16-be") not in data
+        assert project.title() == "SOURCE TITLE"
+        assert any("attribution" in warning for warning in result.warnings)
+        assert any("theme" in warning for warning in result.warnings)
+
+    def test_blank_page_fields_change_nothing(self, survey, project, tmp_path) -> None:
+        project.setTitle("SOURCE TITLE")
+        result = export_print_pdf(
+            survey.layout,
+            PrintSettings(bleed="none"),
+            tmp_path / "plain.pdf",
+            PageChoice(),
+        )
+        assert not any("attribution" in w or "theme" in w for w in result.warnings)
+        assert b"SOURCE TITLE" in (tmp_path / "plain.pdf").read_bytes() or (
+            "SOURCE TITLE".encode("utf-16-be") in (tmp_path / "plain.pdf").read_bytes()
+        )

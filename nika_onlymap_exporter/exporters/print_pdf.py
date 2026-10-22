@@ -15,6 +15,9 @@ So this module:
   their place from the trim corner -- the runtime's own rule for `bleed`;
 - draws the crop marks as eight `QgsLayoutItemPolyline` strokes in the
   bleed, with the runtime's geometry (`core.print_settings.crop_mark_segments`);
+- applies the Cartograph tab's page title to the copy (labels reading
+  `[% @project_title %]` and the PDF's own title), as the browser output does;
+  the page attribution and theme have no QGIS equivalent and are reported;
 - sets the project's colour model / colour space for the export and puts
   back exactly what was there afterwards (and the project's dirty flag),
   since those are project-wide settings that a print must not leave behind.
@@ -37,6 +40,7 @@ from pathlib import Path
 
 from qgis.core import (
     Qgis,
+    QgsExpressionContextUtils,
     QgsLayout,
     QgsLayoutExporter,
     QgsLayoutItem,
@@ -59,6 +63,7 @@ from ..core.print_settings import (
     crop_mark_segments,
     qt_supports_colour_management,
 )
+from ..core.settings import PageChoice
 from ..ui.i18n import tr
 
 #: Crop-mark stroke, matching the runtime's `stroke-width="0.15"` in mm.
@@ -100,7 +105,10 @@ def colour_management_support() -> tuple[bool, str]:
 
 
 def export_print_pdf(
-    layout: QgsLayout, settings: PrintSettings, path: Path
+    layout: QgsLayout,
+    settings: PrintSettings,
+    path: Path,
+    page: PageChoice | None = None,
 ) -> PrintPdfResult:
     """Write `layout` page 1 as a print PDF at `path`. GUI thread only.
 
@@ -116,13 +124,17 @@ def export_print_pdf(
     # do the colour settings; a print is not an edit, so the flag goes back.
     was_dirty = project.isDirty()
     try:
-        return _export(project, layout, settings, path)
+        return _export(project, layout, settings, path, page)
     finally:
         project.setDirty(was_dirty)
 
 
 def _export(
-    project: QgsProject, layout: QgsLayout, settings: PrintSettings, path: Path
+    project: QgsProject,
+    layout: QgsLayout,
+    settings: PrintSettings,
+    path: Path,
+    page: PageChoice | None,
 ) -> PrintPdfResult:
     warnings: list[str] = []
     colour_space = None
@@ -133,7 +145,7 @@ def _export(
         if settings.profile == PROFILE_ICC:
             colour_space = _load_icc(Path(settings.icc_path))
 
-    copy = build_print_layout(layout, settings, warnings)
+    copy = build_print_layout(layout, settings, warnings, page)
 
     export_settings = QgsLayoutExporter.PdfExportSettings()
     export_settings.dpi = settings.dpi
@@ -159,7 +171,11 @@ def _export(
             )
         ) from exc
 
-    with _ProjectColour(project, settings.profile, colour_space, warnings):
+    title = page.title if page is not None else ""
+    with (
+        _ProjectTitle(project, title),
+        _ProjectColour(project, settings.profile, colour_space, warnings),
+    ):
         exporter = QgsLayoutExporter(copy)
         result = exporter.exportToPdf(str(path), export_settings)
     if result != QgsLayoutExporter.ExportResult.Success:
@@ -173,15 +189,21 @@ def _export(
 
 
 def build_print_layout(
-    layout: QgsLayout, settings: PrintSettings, warnings: list[str] | None = None
+    layout: QgsLayout,
+    settings: PrintSettings,
+    warnings: list[str] | None = None,
+    page_choice: PageChoice | None = None,
 ) -> QgsLayout:
     """A throwaway copy of `layout` laid out for print: page 1 only, the
     page grown by the bleed with every item moved in by it, crop marks in
-    the bleed. `layout` itself is not modified."""
+    the bleed. `layout` itself is not modified. `page_choice` is the
+    Cartograph tab's page fields, applied to the copy as far as QGIS can."""
     warnings = warnings if warnings is not None else []
     copy = layout.clone()
     if copy is None:
         raise PrintPdfError(tr("QGIS could not copy the layout for printing."))
+    if page_choice is not None:
+        _apply_page_choice(copy, page_choice, warnings)
     pages = copy.pageCollection()
     if pages.pageCount() == 0:
         raise PrintPdfError(tr("The layout has no pages."))
@@ -218,6 +240,29 @@ def build_print_layout(
     if settings.crop_marks_effective:
         _add_crop_marks(copy, trim_w, trim_h, bleed_mm)
     return copy
+
+
+def _apply_page_choice(
+    copy: QgsLayout, page_choice: PageChoice, warnings: list[str]
+) -> None:
+    """The page title as the layout's `@project_title` (a layout variable
+    outranks the project's), and a warning for each page field QGIS cannot
+    show. The browser output applies all three."""
+    if page_choice.title:
+        QgsExpressionContextUtils.setLayoutVariable(
+            copy, "project_title", page_choice.title
+        )
+    if page_choice.attribution:
+        warnings.append(
+            tr(
+                "The page attribution is not in the QGIS PDF; add it to the "
+                "layout as a label."
+            )
+        )
+    if page_choice.theme not in ("", "default"):
+        warnings.append(
+            tr("The page theme is for the browser; the QGIS PDF is not themed.")
+        )
 
 
 def _movable_items(layout: QgsLayout) -> list[QgsLayoutItem]:
@@ -286,6 +331,24 @@ def _load_icc(path: Path) -> object:
             ).format(path=path)
         )
     return colour_space
+
+
+class _ProjectTitle:
+    """Set the project's title for one export, then put it back: the PDF's
+    own Title metadata is the project's, and a layout cannot override it."""
+
+    def __init__(self, project: QgsProject, title: str) -> None:
+        self.project = project
+        self.title = title
+        self.old_title = project.title()
+
+    def __enter__(self) -> None:
+        if self.title:
+            self.project.setTitle(self.title)
+
+    def __exit__(self, *_exc: object) -> None:
+        if self.title:
+            self.project.setTitle(self.old_title)
 
 
 class _ProjectColour:

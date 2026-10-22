@@ -1976,7 +1976,12 @@ class CartographController:
         if not chosen:
             return
         try:
-            result = export_print_pdf(self._current_layout, settings, Path(chosen))
+            result = export_print_pdf(
+                self._current_layout,
+                settings,
+                Path(chosen),
+                self.state.page_choice(self.state.cartograph_layout),
+            )
         except PrintPdfError as exc:
             QMessageBox.warning(self.dialog, tr("Export PDF"), str(exc))
             return
