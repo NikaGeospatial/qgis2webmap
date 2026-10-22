@@ -1430,6 +1430,12 @@ def ground_size_maps(tmp_path_factory):
     Built by `ground_size_fixture_builder.py` with real QGIS, since this tier's
     interpreter has none; `QGIS_PYTHON` names QGIS's.
     """
+    prebuilt = os.environ.get("GROUND_SIZE_FIXTURES_DIR")
+    if prebuilt:
+        expected = Path(prebuilt) / "expected.json"
+        if not expected.exists():
+            pytest.fail(f"GROUND_SIZE_FIXTURES_DIR has no expected.json: {prebuilt}")
+        return Path(prebuilt), json.loads(expected.read_text())
     qgis_python = os.environ.get("QGIS_PYTHON")
     if not qgis_python:
         pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixtures")
@@ -1444,7 +1450,7 @@ def ground_size_maps(tmp_path_factory):
     )
     expected = out_dir / "expected.json"
     assert expected.exists(), completed.stdout + completed.stderr
-    return json.loads(expected.read_text())
+    return out_dir, json.loads(expected.read_text())
 
 
 class TestSizesOnTheGroundZoomWithTheMap:
@@ -1462,9 +1468,10 @@ class TestSizesOnTheGroundZoomWithTheMap:
     def test_the_circle_has_the_radius_qgis_draws(
         self, page, ground_size_maps, case
     ) -> None:
-        expected = ground_size_maps[case]
+        fixtures, maps = ground_size_maps
+        expected = maps[case]
         page.set_viewport_size({"width": 1000, "height": 800})
-        open_map(page, Path(expected["entry"]))
+        open_map(page, fixtures / expected["entry"])
         require_webgl(page)
         page.wait_for_selector("om-map canvas", timeout=30_000)
         wait_until_drawn(page)

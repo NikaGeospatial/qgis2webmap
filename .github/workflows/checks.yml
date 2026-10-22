@@ -135,6 +135,15 @@ jobs:
           name: cartograph-fixtures
           path: cartograph-fixtures/
           if-no-files-found: error
+      # The same hand-over for the ground-size browser test: what QGIS draws
+      # for a 100 m marker at two zooms, and the exported maps.
+      - name: Build the ground-size browser fixtures
+        run: python3 tests/browser/ground_size_fixture_builder.py ground-size-fixtures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ground-size-fixtures
+          path: ground-size-fixtures/
+          if-no-files-found: error
       # `-rs` keeps any remaining skip visible. A skip here is a gate that did
       # not run, which must not read as a pass.
       - run: python3 -m pytest tests/qgis tests/fixtures -q -rs --durations=25
@@ -176,6 +185,10 @@ jobs:
         with:
           name: cartograph-fixtures
           path: cartograph-fixtures
+      - uses: actions/download-artifact@v4
+        with:
+          name: ground-size-fixtures
+          path: ground-size-fixtures
       - run: pip install pytest pytest-playwright
       # Browser builds are tied to the Playwright release that downloads them,
       # so its version is the cache key. System libraries are not cached:
@@ -203,6 +216,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
           CARTOGRAPH_FIXTURES_DIR: ${{ github.workspace }}/cartograph-fixtures
+          GROUND_SIZE_FIXTURES_DIR: ${{ github.workspace }}/ground-size-fixtures
       - uses: actions/upload-artifact@v4
         if: always()
         with:

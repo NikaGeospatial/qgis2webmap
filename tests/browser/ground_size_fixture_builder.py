@@ -12,7 +12,9 @@ circle through the real exporter, and `expected.json`: for each web zoom, the
 radius in CSS pixels that QGIS draws the same circle at - measured from a real
 render of the layer, not computed - at the scale the web map shows at that zoom.
 
-Each case's `entry` in `expected.json` is its standalone map.
+Each case's `entry` in `expected.json` is its standalone map, relative to
+OUT_DIR. CI's QGIS job runs this once and uploads the directory; the browser
+job (no QGIS) points `GROUND_SIZE_FIXTURES_DIR` at the download.
 
 - `utm-metres`: EPSG:32630, size in `MetersInMapUnits`
 - `mercator-metres`: EPSG:3857, size in `MetersInMapUnits`, which QGIS draws as
@@ -171,7 +173,7 @@ def _write_case(name: str, crs: str, unit_name: str, out_dir: Path) -> dict:
             "ground_metres_per_pixel": ground_per_pixel,
         }
     return {
-        "entry": str(result.entry_path),
+        "entry": str(Path(result.entry_path).relative_to(out_dir)),
         "lon": LON,
         "lat": LAT,
         "radius_m": RADIUS_M,
