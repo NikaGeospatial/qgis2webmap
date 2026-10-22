@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import http.client
 import queue
+import socket
 import threading
 import time
 
@@ -29,6 +30,20 @@ def served(tmp_path):
         yield server, tmp_path
     finally:
         server.stop()
+
+
+def _non_loopback_address() -> str | None:
+    """This machine's address on its default route, if it has one. A UDP
+    `connect` only picks the route; nothing is sent."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))  # TEST-NET-1, never routed for real
+        address = probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+    return None if address.startswith("127.") or address == "0.0.0.0" else address
 
 
 def _get(server: PreviewServer, path: str, timeout: float = 5.0):
@@ -54,9 +69,18 @@ class TestServing:
         assert server.url.startswith("http://127.0.0.1:")
 
     def test_it_binds_loopback_only(self, served) -> None:
-        """Binding 0.0.0.0 would publish the user's map data to their network."""
+        """Binding 0.0.0.0 would publish the user's map data to their network.
+
+        The socket itself, not the advertised URL: a server listening on every
+        interface would still advertise 127.0.0.1.
+        """
         server, _ = served
-        assert server.url.startswith("http://127.0.0.1:")
+        assert server._httpd.socket.getsockname()[0] == "127.0.0.1"
+        lan = _non_loopback_address()
+        if lan is None:
+            return  # No other interface to try from; the bound address stands.
+        with pytest.raises(OSError):
+            socket.create_connection((lan, server.port), timeout=2).close()
 
     def test_each_server_gets_its_own_port(self, tmp_path) -> None:
         """Two projects previewed at once must not fight over a port."""
