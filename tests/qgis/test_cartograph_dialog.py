@@ -630,6 +630,11 @@ class TestBuildThreadsAndJobs:
             assert cartograph._last_summary is None
             assert cartograph.cartograph_status_label.text().startswith("Not saved")
             assert opened == []
+            # B's own save does not run the export asked of A either.
+            cartograph._run_autosave()
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            assert b_path.exists()
+            assert opened == []
         finally:
             gate.set()
             dialog.close()
