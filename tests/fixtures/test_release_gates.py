@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import zipfile
+from dataclasses import dataclass
 
 import pytest
 
@@ -80,8 +81,41 @@ class TestEveryFixtureReads:
         assert first == second
 
 
+@dataclass(frozen=True)
+class StandaloneArtifact:
+    """The serialized output of one standalone export, safe to share across tests.
+
+    Holds only immutable values - never a QgsProject - because `fixture_project`
+    clears the QgsProject singleton after every test.
+    """
+
+    html: str
+    network_dependencies: tuple
+    is_offline: bool
+
+
+@pytest.fixture(scope="module")
+def standalone_cache(tmp_path_factory):
+    """Standalone exports keyed by fixture name, filled by the first test to ask."""
+    return {}, tmp_path_factory
+
+
 class TestEveryFixtureExports:
     """The gates that need a real artifact on disk."""
+
+    def standalone(self, standalone_cache, project, name, runtime_available):
+        """One standalone export per fixture project, shared by the HTML gates."""
+        cache, tmp_path_factory = standalone_cache
+        if name not in cache:
+            result, _ = self.artifact(
+                project, runtime_available, tmp_path_factory.mktemp(name)
+            )
+            cache[name] = StandaloneArtifact(
+                html=result.entry_path.read_text(encoding="utf-8"),
+                network_dependencies=tuple(result.network_dependencies),
+                is_offline=result.is_offline,
+            )
+        return cache[name]
 
     def artifact(self, project, runtime_available, tmp_path, **kwargs):
         export = read_project(project, FidelityReportBuilder())
@@ -89,16 +123,16 @@ class TestEveryFixtureExports:
         return writer.write(export, tmp_path, **kwargs), export
 
     def test_standalone_html_makes_no_network_request(
-        self, fixture_project, runtime_available, tmp_path
+        self, fixture_project, runtime_available, standalone_cache
     ) -> None:
         """The promise the README makes in its second paragraph."""
         project, name = fixture_project
-        result, _ = self.artifact(project, runtime_available, tmp_path)
+        built = self.standalone(standalone_cache, project, name, runtime_available)
 
-        assert result.network_dependencies == (), name
-        assert result.is_offline, name
+        assert built.network_dependencies == (), name
+        assert built.is_offline, name
 
-        html = result.entry_path.read_text(encoding="utf-8")
+        html = built.html
         # The runtime is a minified bundle full of URL-ish strings, so check the
         # authored part of the document rather than the whole file.
         authored = html.split("<script type=")[0]
@@ -106,22 +140,22 @@ class TestEveryFixtureExports:
             assert not re.search(pattern, authored), f"{name}: remote asset reference"
 
     def test_no_source_paths_or_credentials_reach_the_artifact(
-        self, fixture_project, runtime_available, tmp_path
+        self, fixture_project, runtime_available, standalone_cache
     ) -> None:
         project, name = fixture_project
-        result, _ = self.artifact(project, runtime_available, tmp_path)
-        html = result.entry_path.read_text(encoding="utf-8")
+        built = self.standalone(standalone_cache, project, name, runtime_available)
+        html = built.html
         authored = html.split("<script type=")[0]
 
         for leak in ("/home/", "/Users/", "C:\\\\", "password=", "memory?crs="):
             assert leak not in authored, f"{name}: {leak!r} reached the artifact"
 
     def test_the_credit_component_ships(
-        self, fixture_project, runtime_available, tmp_path
+        self, fixture_project, runtime_available, standalone_cache
     ) -> None:
         project, name = fixture_project
-        result, _ = self.artifact(project, runtime_available, tmp_path)
-        html = result.entry_path.read_text(encoding="utf-8")
+        built = self.standalone(standalone_cache, project, name, runtime_available)
+        html = built.html
 
         assert 'class="om-credit"' in html, name
         assert "OnlyMap" in html, name
