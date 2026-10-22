@@ -164,8 +164,10 @@ PLUM_DARK = Palette(
     hover="#3d2a46",
     rule="#56425e",
     ink="#f5f2e7",
-    muted="#a39aa5",
-    quiet="#817683",
+    # Lifted together so help text stands out from the dark plum; quiet
+    # stays a step below muted so disabled text still reads as disabled.
+    muted="#c4bcc6",
+    quiet="#a69ba8",
     accent="#abf051",
     accent_hover="#bdf76f",
     on_accent="#0e0511",
@@ -270,7 +272,8 @@ def apply(dialog: QWidget) -> Palette:
     dialog.setProperty(
         "rtl", dialog.layoutDirection() == Qt.LayoutDirection.RightToLeft
     )
-    dialog.setStyleSheet(stylesheet(palette, dialog.objectName(), family))
+    sheet = stylesheet(palette, dialog.objectName(), family)
+    dialog.setStyleSheet(sheet)
 
     # Rounded fields are taller than a bare label, and a form aligns labels to
     # the top of the row by default, so each label sat above its field's line.
@@ -288,13 +291,13 @@ def apply(dialog: QWidget) -> Palette:
         layout = box.layout()
         if layout is not None:
             layout.setContentsMargins(14, 12, 14, 12)
-    _dress_child_dialogs(dialog, palette)
+    _dress_child_dialogs(dialog, palette, qpalette, sheet)
     return palette
 
 
 class _ChildDialogDresser(QObject):
-    """Gives every dialog opened from ours - message boxes above all - the
-    theme's background on the box itself.
+    """Gives every dialog opened from ours - message boxes above all, and the
+    Colour vision window - the theme on the box itself, again on every switch.
 
     The scoped `QDialog` rule reaches them through the cascade, and Qt5 lets
     that go stale: after switching from Follow QGIS to Dark, every message box
@@ -302,24 +305,46 @@ class _ChildDialogDresser(QObject):
     as it appears, the background cannot go stale.
     """
 
-    def __init__(self, dialog: QWidget, paper: str) -> None:
+    def __init__(
+        self, dialog: QWidget, paper: str, qpalette: QPalette, sheet: str
+    ) -> None:
         super().__init__(dialog)
         self.paper = paper
+        self.qpalette = qpalette
+        self.sheet = sheet
+
+    def dress(self, child: QDialog) -> None:
+        # The whole theme, on the window itself: Qt 5 never restyles a child
+        # window's widgets from its parent's new stylesheet, so an open
+        # Colour vision table kept the old theme's background under the new
+        # theme's text - light on white after a switch to Dark. Its rules are
+        # scoped to the main dialog, which this window sits under.
+        child.setStyleSheet(f"{self.sheet}\nQDialog {{ background: {self.paper}; }}")
+        # The palette too: Qt does not hand a palette on to a child window.
+        child.setPalette(self.qpalette)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
         if event.type() == QEvent.Type.ChildPolished:
             child = event.child()
             if isinstance(child, QDialog):
-                child.setStyleSheet(f"QDialog {{ background: {self.paper}; }}")
+                self.dress(child)
         return False
 
 
-def _dress_child_dialogs(dialog: QWidget, palette: Palette) -> None:
+def _dress_child_dialogs(
+    dialog: QWidget, palette: Palette, qpalette: QPalette, sheet: str
+) -> None:
     dresser = dialog.findChild(_ChildDialogDresser)
     if dresser is None:
-        dresser = _ChildDialogDresser(dialog, palette.paper)
+        dresser = _ChildDialogDresser(dialog, palette.paper, qpalette, sheet)
         dialog.installEventFilter(dresser)
     dresser.paper = palette.paper
+    dresser.qpalette = qpalette
+    dresser.sheet = sheet
+    # A dialog already open (Colour vision is kept between openings) takes
+    # the new theme now, not only dialogs opened after the switch.
+    for child in dialog.findChildren(QDialog):
+        dresser.dress(child)
 
 
 class _MenuAttacher(QObject):
@@ -916,8 +941,6 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-left-radius: 5px;
 }}
 {d} QToolButton[role="cornerPart"][position="right"] {{
-    /* Room for its "Live: on" / "Live: off" label beside the dot. */
-    padding: 1px 9px 1px 2px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
 }}
@@ -1161,6 +1184,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d}[rtl="true"] QMenu::item {{
     padding: 4px 10px 4px 20px;
+}}
+{d}[rtl="true"] QMenu::indicator:non-exclusive {{
+    margin-left: 0px;
+    margin-right: 6px;
 }}
 
 /* Links that act inside the dialog. */
@@ -1438,9 +1465,12 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 
 /* ---- Tables and the help pane: square, they are for reading ----------- */
-{d} QTreeView, {d} QTextBrowser {{
+{d} QTreeView, {d} QTableView, {d} QTextBrowser {{
+    /* Set here, not left to the palette: a table in a window of its own
+       (Colour vision) builds its palette from QGIS's, not the dialog's. */
     background: {p.paper};
     alternate-background-color: {p.field};
+    gridline-color: {p.rule};
     border: 1px solid {p.rule};
     border-radius: 0;
     outline: none;
@@ -1455,7 +1485,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QTreeView::item:hover {{
     background: {p.hover};
 }}
-{d} QTreeView::item:selected {{
+{d} QTreeView::item:selected, {d} QTableView::item:selected {{
     background: {p.accent_soft};
     color: {p.ink};
 }}
@@ -1555,6 +1585,21 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 }}
 {d} QMenu::item:disabled {{
     color: {p.quiet};
+}}
+/* A menu's tick boxes (Checks > Filter) are the dialog's own checkboxes:
+   Qt's bare tick looked foreign and showed nothing at all when off. */
+{d} QMenu::indicator:non-exclusive {{
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    border: 1px solid {p.muted};
+    border-radius: 4px;
+    background: {p.paper};
+}}
+{d} QMenu::indicator:non-exclusive:checked {{
+    background: {p.accent};
+    border-color: {p.accent};
+    image: url({p.icon("check")});
 }}
 {d} QMenu::separator {{
     height: 1px;

@@ -304,6 +304,43 @@ class TestThemeChoice:
             QSettings().remove(theme.THEME_KEY)
             dialog.close()
 
+    def test_an_open_colour_vision_window_follows_a_switch(
+        self, qgis_app, project, make_memory_layer
+    ):
+        """It is kept between openings, so it is already open when the
+        theme changes; its table cells used to keep QGIS's light base under
+        the new theme's light text."""
+        from qgis.PyQt.QtCore import QSettings
+        from qgis.PyQt.QtGui import QPalette
+        from qgis.PyQt.QtWidgets import QTableWidgetItem
+
+        from nika_onlymap_exporter.ui import theme
+        from nika_onlymap_exporter.ui.cartograph.accessibility_dialog import (
+            AccessibilityDialog,
+        )
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            picker = dialog.theme_picker
+            picker.setCurrentIndex(picker.findData("light"))
+            window = AccessibilityDialog(lambda: (), parent=dialog)
+            window.table.setRowCount(1)
+            window.table.setItem(0, 0, QTableWidgetItem("Contours"))
+            window.show()
+            for choice in ("dark", "light", "dark"):
+                picker.setCurrentIndex(picker.findData(choice))
+                qgis_app.processEvents()
+                base = window.table.palette().color(QPalette.ColorRole.Base).name()
+                assert base == dialog.theme.paper, (choice, base)
+                cell = window.table.visualItemRect(window.table.item(0, 0))
+                image = window.table.viewport().grab().toImage()
+                behind = image.pixelColor(cell.right() - 2, cell.center().y()).name()
+                assert _contrast(dialog.theme.ink, behind) >= 4.5, (choice, behind)
+            window.close()
+        finally:
+            QSettings().remove(theme.THEME_KEY)
+            dialog.close()
+
 
 class TestMessageBoxes:
     """A box the dialog opens is its child, so it inherits the text colour."""
