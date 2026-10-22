@@ -741,6 +741,60 @@ class TestBuildThreadsAndJobs:
         finally:
             dialog.close()
 
+    def test_a_failed_disk_write_never_opens_the_older_file(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        """The disk refusing the save, not the worker: the waiting export is
+        dropped, a second click saves again rather than opening the old file,
+        and once the disk takes it the export opens the new one."""
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            target = cartograph._current_path()
+            write = cartograph._write_atomic
+            disk = {"full": True}
+
+            def write_or_fail(path, content):
+                if disk["full"]:
+                    raise OSError("No space left on device")
+                write(path, content)
+
+            monkeypatch.setattr(cartograph, "_write_atomic", write_or_fail)
+            opened = []
+            monkeypatch.setattr(
+                cartograph,
+                "_open_url",
+                lambda url: opened.append((url.query(), target.read_text())),
+            )
+            status = cartograph.cartograph_status_label
+
+            def settled():
+                return cartograph._job is None and not (
+                    cartograph._autosave_timer.isActive()
+                )
+
+            fake_cartograph_export.html_text["value"] = "<html>edited</html>"
+            cartograph.schedule_autosave()
+            cartograph.on_export_png()  # waits for the save, which fails
+            assert _wait_for(qgis_app, lambda: "No space left" in status.text())
+            assert _wait_for(qgis_app, settled)
+            assert cartograph._open_after_save == []
+
+            cartograph.on_export_png()  # idle, but the file is the old one
+            assert opened == []
+            assert _wait_for(qgis_app, settled)
+            assert "No space left" in status.text()
+            assert opened == []
+
+            disk["full"] = False
+            cartograph.on_export_png()
+            assert _wait_for(qgis_app, lambda: opened)
+            assert opened == [("export=png&dpi=300", "<html>edited</html>")]
+            cartograph.on_export_png()  # current now: opens at once
+            assert len(opened) == 2
+        finally:
+            dialog.close()
+
     def test_an_unexpected_error_lands_on_the_status_line(
         self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
     ) -> None:
@@ -906,6 +960,7 @@ class TestCartographShareMenu:
         # Saved and idle: no edit is waiting to be written, so the share
         # actions open the file now rather than after a save.
         cartograph._autosave_timer.stop()
+        cartograph._edits_saved = cartograph._edits_made
         cartograph._update_share_enabled()
         return dialog, target
 

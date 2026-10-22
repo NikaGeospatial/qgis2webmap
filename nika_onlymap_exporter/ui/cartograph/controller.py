@@ -195,6 +195,11 @@ class CartographController:
         # at least so much has saved: (query, build number). See `_open_saved`.
         self._builds_started = 0
         self._open_after_save: list[tuple[str, int]] = []
+        # Saves asked for, and how many of them the file on disk carries: the
+        # file is current only when the two meet. A failed save (worker or
+        # disk) leaves it behind, so an action never opens an older file.
+        self._edits_made = 0
+        self._edits_saved = 0
         self._loading_page = False
         self._colour_vision: AccessibilityDialog | None = None
         self._legend_entries: tuple[LegendEntry, ...] = ()
@@ -1057,6 +1062,7 @@ class CartographController:
     def schedule_autosave(self) -> None:
         """Debounce a rebuild ~600 ms after the last change. Restarting an
         already-running `QTimer` is what gives a burst of edits one write."""
+        self._edits_made += 1
         self._autosave_timer.start()
 
     def _run_autosave(self) -> None:
@@ -1145,9 +1151,10 @@ class CartographController:
         built_for = self.state.cartograph_layout
         self._builds_started += 1
         build_number = self._builds_started
+        edits = self._edits_made
         job.succeeded.connect(
             lambda finished: self._on_build_succeeded(
-                path, finished, report, built_for, build_number
+                path, finished, report, built_for, build_number, edits
             )
         )
         job.failed.connect(
@@ -1193,6 +1200,7 @@ class CartographController:
         report: FidelityReportBuilder,
         built_for: str | None = None,
         build_number: int = 0,
+        edits: int | None = None,
     ) -> None:
         self._job = None
         if self._shut_down:
@@ -1204,6 +1212,9 @@ class CartographController:
         except OSError as exc:
             if not current:
                 return
+            # The pages waiting on this save would open the file it failed
+            # to replace.
+            self._open_after_save = []
             self._last_error = tr("Could not save the cartograph: {error}").format(
                 error=str(exc)
             )
@@ -1215,6 +1226,9 @@ class CartographController:
             # what is selected now, whose own build follows.
             return
         self._last_error = ""
+        self._edits_saved = max(
+            self._edits_saved, self._edits_made if edits is None else edits
+        )
         self._last_saved_at = time.time()
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
@@ -1521,9 +1535,14 @@ class CartographController:
         elif self._job is not None:
             # The running build carries every edit so far.
             needed = self._builds_started
-        else:
+        elif self._edits_saved >= self._edits_made:
             self._open_url(self._page_url(path, query))
             return
+        else:
+            # The last save failed, so the file is older than the edits: save
+            # again and open that. Failing again says why, and opens nothing.
+            self.schedule_autosave()
+            needed = self._builds_started + 1
         self._open_after_save.append((query, needed))
         self.dialog.status_label.setText(
             tr("Saving the latest changes first - it opens when saved.")
