@@ -198,3 +198,7 @@ variable. Nothing is dropped without being named.
 `.qpt` file - the layout designer's own template format, which keeps every
 item exactly. Load it into another project from **Project → Layout
 Manager**, under *New from template*.
+
+The suggested file name is the layout's name with characters a file system
+rejects (such as `/`) replaced by dashes. If the file cannot be written, the
+export shows an error instead of reporting success.
