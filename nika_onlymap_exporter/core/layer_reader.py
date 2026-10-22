@@ -199,6 +199,12 @@ def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
     coordinates - so it has to be transformed back, not forward. Getting this
     the wrong way round silently returns nothing, which looks exactly like an
     empty layer.
+
+    Membership is exact: the provider's spatial index pre-filters by bounding
+    box, then `ExactIntersect` keeps only features whose geometry really meets
+    the rectangle. Without it a diagonal line or a polygon around a hole
+    survives on its bounding box alone. Features are kept or dropped whole;
+    nothing is cut.
     """
     from qgis.core import (
         QgsCoordinateTransform,
@@ -215,7 +221,8 @@ def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
         )
         rect = transform.transformBoundingBox(rect)
 
-    return QgsFeatureRequest().setFilterRect(rect)
+    request = QgsFeatureRequest().setFilterRect(rect)
+    return request.setFlags(QgsFeatureRequest.Flag.ExactIntersect)
 
 
 def export_geojson(

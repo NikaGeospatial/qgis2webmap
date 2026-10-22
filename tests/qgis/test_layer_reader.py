@@ -58,6 +58,47 @@ class TestClipToExtent:
         names = [f["properties"]["name"] for f in collection["features"]]
         assert names == ["inside"]
 
+    @pytest.mark.parametrize(
+        ("geometry_type", "wkt"),
+        [
+            ("LineString", "LINESTRING(-10 -10,10 10)"),
+            ("LineString", "LINESTRING(-10 10,10 -10)"),
+            (
+                "Polygon",
+                "POLYGON((-10 -10,10 -10,10 10,-10 10,-10 -10),"
+                "(-8 -8,8 -8,8 8,-8 8,-8 -8))",
+            ),
+            ("Polygon", "POLYGON((-10 -10,10 -10,10 10,-10 10,-10 -10))"),
+            ("Point", "POINT(40 40)"),
+        ],
+        ids=["diagonal-miss", "diagonal-hit", "hole-miss", "solid-hit", "far-point"],
+    )
+    def test_membership_is_exact_not_bounding_box(
+        self, qgis_app, geometry_type, wkt
+    ) -> None:
+        """A diagonal line and a polygon around a hole share the view's bbox only.
+
+        The oracle is QGIS's own `QgsGeometry.intersects` on the same rectangle.
+        """
+        from qgis.core import QgsFeature, QgsGeometry, QgsRectangle, QgsVectorLayer
+
+        layer = QgsVectorLayer(
+            f"{geometry_type}?crs=EPSG:4326&field=name:string", "s", "memory"
+        )
+        feature = QgsFeature(layer.fields())
+        feature.setAttributes(["only"])
+        feature.setGeometry(QgsGeometry.fromWkt(wkt))
+        layer.dataProvider().addFeatures([feature])
+        layer.updateExtents()
+
+        view = QgsRectangle(-6, 5, -5, 6)
+        expected = QgsGeometry.fromWkt(wkt).intersects(QgsGeometry.fromRect(view))
+
+        collection = export_geojson(
+            layer, FidelityReportBuilder(), clip_extent=self._extent(-6, 5, -5, 6)
+        )
+        assert (len(collection["features"]) == 1) is expected
+
     def test_without_a_clip_every_feature_is_exported(
         self, qgis_app, make_memory_layer
     ) -> None:
