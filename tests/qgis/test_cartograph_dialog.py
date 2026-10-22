@@ -3271,6 +3271,45 @@ class TestPanel:
         finally:
             dialog.close()
 
+    def test_new_layout_from_template_is_always_in_sight(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        calls = self._stand_ins(monkeypatch)
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            button = cartograph.new_from_template_button
+            # Named for what it does: another layout, never a change of the
+            # one shown.
+            assert button.text() == "New layout from template..."
+            assert "kept as it is" in button.toolTip()
+            assert button.isEnabled() and not button.isHidden()
+            assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
+            # The keyboard reaches it: Space presses the focused button.
+            button.setFocus()
+            QTest.keyClick(button, Qt.Key.Key_Space)
+            assert calls == ["canvas"]
+        finally:
+            dialog.close()
+
+    def test_new_layout_from_template_without_a_canvas_says_why(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        self._stand_ins(monkeypatch)
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            button = dialog._cartograph.new_from_template_button
+            assert not button.isEnabled()
+            assert "no map canvas" in button.toolTip()
+        finally:
+            dialog.close()
+
     def test_show_in_folder_reveals_the_cartograph(
         self, qgis_app, project, monkeypatch
     ) -> None:

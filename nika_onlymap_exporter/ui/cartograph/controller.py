@@ -43,6 +43,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QToolButton,
@@ -281,6 +282,12 @@ class CartographController:
         )
         self.page_preview.canvas_button.setEnabled(has_canvas)
         self.add_from_canvas_action.setEnabled(has_canvas)
+        self.new_from_template_button.setEnabled(has_canvas)
+        self.new_from_template_button.setToolTip(
+            self._new_from_template_tip
+            if has_canvas
+            else tr("There is no map canvas to build from.")
+        )
         self.refresh_layouts()
 
     def hiding(self) -> None:
@@ -390,6 +397,22 @@ class CartographController:
         self.add_layout_button.setMenu(add_menu)
         picker_row.addWidget(self.add_layout_button)
         column.addLayout(picker_row)
+        # The design picker, always in sight. It makes ANOTHER layout from the
+        # canvas; the layout shown above is not changed.
+        self.new_from_template_button = QToolButton(panel)
+        self.new_from_template_button.setText(tr("New layout from template..."))
+        self.new_from_template_button.setProperty("role", "secondary")
+        self.new_from_template_button.setProperty("hasMenu", False)
+        self._new_from_template_tip = tr(
+            "Pick a design and build another print layout from what the "
+            "map canvas shows. The layout shown here is kept as it is."
+        )
+        self.new_from_template_button.setToolTip(self._new_from_template_tip)
+        self.new_from_template_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.new_from_template_button.clicked.connect(self.create_from_canvas)
+        column.addWidget(self.new_from_template_button)
 
         self.layout_empty_note = FittedLabel(
             tr(
