@@ -65,6 +65,21 @@ def start_qgis(scratch: Path, gui: bool = True):
     return app
 
 
+def stop_qgis() -> None:
+    """Close every widget, then QGIS: the order `tests/conftest.py` explains.
+    Widgets freed after `exitQgis` segfault the process on its way out."""
+    from qgis.core import QgsApplication, QgsProject
+    from qgis.PyQt.QtWidgets import QApplication
+
+    for widget in QApplication.topLevelWidgets():
+        widget.close()
+        widget.deleteLater()
+    QApplication.sendPostedEvents(None, 0)
+    QApplication.processEvents()
+    QgsProject.instance().clear()
+    QgsApplication.exitQgis()
+
+
 def isolate_settings(directory: Path) -> None:
     """Fresh `QSettings` in `directory`, with the save folder inside it.
 
@@ -91,7 +106,9 @@ def isolate_settings(directory: Path) -> None:
 def qgis_app(tmp_path_factory):
     """A probe's QGIS, started inside the run's temporary directory."""
     pytest.importorskip("qgis.core")
-    return start_qgis(tmp_path_factory.mktemp("qgis"))
+    app = start_qgis(tmp_path_factory.mktemp("qgis"))
+    yield app
+    stop_qgis()
 
 
 @pytest.fixture
