@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 import time
 import types
+from pathlib import Path
 
 import pytest
 
@@ -1849,6 +1850,68 @@ class TestCanvasAndImport:
             (new_name,) = after - before
             assert dialog._cartograph.layout_combo.currentText() == new_name
             assert len(dialog._cartograph._frame_rows) == 2
+        finally:
+            dialog.close()
+
+
+class TestLayoutTemplateExport:
+    """Export the selected layout as a .qpt, with an honest success message."""
+
+    def _dialog_on(self, project, layout_name):
+        _add_layout(project, layout_name, [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        dialog._cartograph.refresh_layouts()
+        combo = dialog._cartograph.layout_combo
+        index = combo.findText(layout_name)
+        assert index >= 0
+        combo.setCurrentIndex(index)
+        combo.activated.emit(index)
+        assert dialog.state.cartograph_layout == layout_name
+        return dialog
+
+    def test_the_suggested_file_name_is_a_safe_file_name(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        dialog = self._dialog_on(project, "Survey /2026")
+        try:
+            suggested = []
+            monkeypatch.setattr(
+                QFileDialog,
+                "getSaveFileName",
+                lambda *a, **k: (suggested.append(a[2]) or "", ""),
+            )
+            dialog._cartograph.on_export_qpt()
+            assert Path(suggested[0]).name == "Survey-2026.qpt"
+        finally:
+            dialog.close()
+
+    def test_a_failed_save_is_reported_not_announced_as_saved(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+
+        dialog = self._dialog_on(project, "Survey")
+        try:
+            # A folder that does not exist: the layout cannot be written there.
+            target = tmp_path / "no-such-folder" / "Survey.qpt"
+            monkeypatch.setattr(
+                QFileDialog, "getSaveFileName", lambda *a, **k: (str(target), "")
+            )
+            warnings = []
+            monkeypatch.setattr(
+                QMessageBox,
+                "warning",
+                lambda *a, **k: warnings.append(a[2]) or 0,
+            )
+            dialog.status_label.setText("")
+            dialog._cartograph.on_export_qpt()
+            assert len(warnings) == 1
+            assert str(target) in warnings[0]
+            assert "Saved" not in dialog.status_label.text()
+            assert not target.exists()
         finally:
             dialog.close()
 

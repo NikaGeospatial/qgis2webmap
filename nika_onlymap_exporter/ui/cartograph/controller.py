@@ -147,10 +147,19 @@ def default_cartograph_path(
     no name yet, so the layout's alone names it.
     """
     base_dir = folder if folder is not None else cartographs_folder()
-    # "carto: Parcels" -> "carto-Parcels": a name a file manager shows as is.
-    safe = re.sub(r"[^\w.-]+", "-", layout_name).strip("-.") or "cartograph"
-    project = re.sub(r"[^\w.-]+", "-", Path(project_file_name).stem).strip("-.")
+    safe = _file_name_part(layout_name) or "cartograph"
+    project = _file_name_part(Path(project_file_name).stem)
     return base_dir / (f"{project}-{safe}.html" if project else f"{safe}.html")
+
+
+def _file_name_part(name: str) -> str:
+    """A name as one part of a file name, safe on Windows, macOS and Linux.
+
+    Separators, reserved and control characters become a dash, and dots and
+    dashes are trimmed from both ends: "carto: Parcels" -> "carto-Parcels",
+    "Survey /2026" -> "Survey-2026", and "..." -> "" (the caller's fallback).
+    """
+    return re.sub(r"[^\w.-]+", "-", name).strip("-.")
 
 
 def _panel_scroll(content: QWidget) -> QScrollArea:
@@ -1987,7 +1996,7 @@ class CartographController:
             return
         start = str(
             Path(self.project.fileName() or str(Path.home())).with_name(
-                f"{self.state.cartograph_layout or 'layout'}.qpt"
+                f"{_file_name_part(self.state.cartograph_layout or '') or 'layout'}.qpt"
             )
         )
         chosen, _ = QFileDialog.getSaveFileName(
@@ -1999,8 +2008,15 @@ class CartographController:
         if not chosen:
             return
         from qgis.core import QgsReadWriteContext
+        from qgis.PyQt.QtWidgets import QMessageBox
 
-        self._current_layout.saveAsTemplate(chosen, QgsReadWriteContext())
+        if not self._current_layout.saveAsTemplate(chosen, QgsReadWriteContext()):
+            QMessageBox.warning(
+                self.dialog,
+                tr("Save layout template as"),
+                tr("Could not save the layout template to {path}.").format(path=chosen),
+            )
+            return
         self.dialog.status_label.setText(tr("Saved {path}").format(path=chosen))
 
 
