@@ -21,6 +21,11 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from nika_onlymap_exporter.core.manifest_builder import RASTER_TEXTURE_TEMPLATES
@@ -1372,3 +1377,121 @@ class TestWidgetColoursAreReadable:
             }"""
         )
         assert alpha > 0.5
+
+
+MEASURE_RED_CIRCLE = """
+async ([lon, lat, zoom]) => {
+  const el = document.querySelector('om-map');
+  el.flyTo([lon, lat], zoom);
+  const settled = await el.whenSettled({ timeout: 20000 });
+  if (!settled.settled) throw new Error('the map did not settle');
+  // Ground metres per CSS pixel where the circle is, from the map's own
+  // projection: two points 200 px apart through the middle, haversine apart.
+  const box = el.getBoundingClientRect();
+  const cx = box.width / 2, cy = box.height / 2;
+  const a = el.unproject([cx, cy]), b = el.unproject([cx + 200, cy]);
+  const rad = (d) => (d * Math.PI) / 180;
+  const h = Math.sin(rad(b[1] - a[1]) / 2) ** 2 +
+    Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(rad(b[0] - a[0]) / 2) ** 2;
+  const metres = 2 * 6371008.8 * Math.asin(Math.sqrt(h));
+  const url = await el.snapshot();
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let red = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] > 180 && data[i + 1] < 80 && data[i + 2] < 80 && data[i + 3] > 200) {
+      red++;
+    }
+  }
+  // The snapshot may be at a device pixel ratio; the radius is in CSS pixels.
+  const ratio = img.width / box.width;
+  return {
+    radius: Math.sqrt(red / Math.PI) / ratio,
+    metresPerPixel: metres / 200,
+  };
+}
+"""
+
+
+@pytest.fixture(scope="module")
+def ground_size_maps(tmp_path_factory):
+    """Maps with a 100 m circle in three CRS/unit cases, and what QGIS draws.
+
+    Built by `ground_size_fixture_builder.py` with real QGIS, since this tier's
+    interpreter has none; `QGIS_PYTHON` names QGIS's.
+    """
+    qgis_python = os.environ.get("QGIS_PYTHON")
+    if not qgis_python:
+        pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixtures")
+    out_dir = tmp_path_factory.mktemp("ground-sizes")
+    builder = Path(__file__).resolve().parent / "ground_size_fixture_builder.py"
+    completed = subprocess.run(
+        [qgis_python, str(builder), str(out_dir)],
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    expected = out_dir / "expected.json"
+    assert expected.exists(), completed.stdout + completed.stderr
+    return json.loads(expected.read_text())
+
+
+class TestSizesOnTheGroundZoomWithTheMap:
+    """A 100 m circle covers the pixels QGIS draws for it at every zoom.
+
+    The exporter used to freeze a size in map units or metres on the ground at
+    one pixel size, so the circle stayed the same on screen while the map zoomed
+    under it. The expectation is QGIS itself: the circle radius measured on a
+    render of the same layer at the scale the web map shows at that zoom.
+    """
+
+    @pytest.mark.parametrize(
+        "case", ["utm-metres", "mercator-metres", "mercator-map-units"]
+    )
+    def test_the_circle_has_the_radius_qgis_draws(
+        self, page, ground_size_maps, case
+    ) -> None:
+        expected = ground_size_maps[case]
+        page.set_viewport_size({"width": 1000, "height": 800})
+        open_map(page, Path(expected["entry"]))
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+
+        radii = {}
+        for zoom, qgis in expected["zooms"].items():
+            measured = page.evaluate(
+                MEASURE_RED_CIRCLE, [expected["lon"], expected["lat"], int(zoom)]
+            )
+            # The map must really be at the zoom's scale before the circle can
+            # be compared with QGIS's at that scale.
+            assert measured["metresPerPixel"] == pytest.approx(
+                qgis["ground_metres_per_pixel"], rel=0.01
+            )
+            assert measured["radius"] == pytest.approx(
+                qgis["radius_px"], rel=0.03, abs=1.5
+            )
+            # And it is the ground distance QGIS means, by the map's own scale.
+            assert measured["radius"] == pytest.approx(
+                expected["ground_radius_m"] / measured["metresPerPixel"],
+                rel=0.03,
+                abs=1.5,
+            )
+            radii[zoom] = measured["radius"]
+
+        # Two zooms apart is four times the size, which no fixed pixel size does.
+        low, high = sorted(radii, key=int)
+        assert radii[high] / radii[low] == pytest.approx(
+            2 ** (int(high) - int(low)), rel=0.04
+        )

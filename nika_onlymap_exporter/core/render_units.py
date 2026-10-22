@@ -63,10 +63,13 @@ class GroundUnits:
     is a different distance at every latitude. `web_mercator` marks EPSG:3857,
     whose map unit is a projected metre that stretches with latitude - exactly
     what deck.gl's `common` unit does, and not what its `meters` do.
+    `ellipsoidal` is whether the project measures on an ellipsoid, without which
+    QGIS cannot turn metres on the ground into degrees and draws them wrongly.
     """
 
     metres_per_map_unit: float | None
     web_mercator: bool = False
+    ellipsoidal: bool = True
 
 
 @dataclass(frozen=True)
@@ -123,15 +126,20 @@ def ground_size(
     `None` for every unit with a fixed size on screen, and for map units whose
     ground distance is not fixed (`ground` is `None` or geographic). Metres on
     the ground need no CRS: QGIS resolves them against the map, and so does the
-    runtime, per feature.
+    runtime, per feature - except in Web Mercator, where QGIS draws them at the
+    projected metre's size (it corrects for latitude only in a geographic CRS),
+    so the size follows it.
     """
     key = unit_key(unit)
-    if key == METERS_IN_MAP_UNITS:
-        return GroundSize(float(value), "meters")
-    if key != MAP_UNITS or ground is None:
+    if key not in (MAP_UNITS, METERS_IN_MAP_UNITS):
         return None
-    if ground.web_mercator:
+    if ground is not None and ground.web_mercator:
         return GroundSize(float(value) * COMMON_UNITS_PER_WEB_MERCATOR_METRE, "common")
-    if ground.metres_per_map_unit:
+    if key == METERS_IN_MAP_UNITS:
+        geographic = ground is not None and ground.metres_per_map_unit is None
+        if geographic and not ground.ellipsoidal:
+            return None
+        return GroundSize(float(value), "meters")
+    if ground is not None and ground.metres_per_map_unit:
         return GroundSize(float(value) * ground.metres_per_map_unit, "meters")
     return None

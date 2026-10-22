@@ -1308,13 +1308,48 @@ class TestGroundSizes:
             if i.status is FidelityStatus.APPROXIMATED and "map units" in i.detail
         ]
 
-    @pytest.mark.parametrize("crs", ["EPSG:3857", "EPSG:32648", "EPSG:4326"])
-    def test_metres_on_the_ground_are_metres_in_any_crs(
+    @pytest.mark.parametrize("crs", ["EPSG:32648", "EPSG:2263"])
+    def test_metres_on_the_ground_are_metres(
         self, qgis_app, make_memory_layer, crs
     ) -> None:
         layer = self._layer(make_memory_layer, crs)
         spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
         assert spec.radius_ground == GroundSize(50.0, "meters")
+        assert self._approximated_sizes(report) == []
+
+    def test_metres_in_degrees_are_metres_on_the_projects_ellipsoid(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """QGIS can turn metres into degrees only on an ellipsoid."""
+        project = qgis_core.QgsProject.instance()
+        layer = self._layer(make_memory_layer, "EPSG:4326")
+        try:
+            # The project ignores an ellipsoid until it has a CRS.
+            project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:4326"))
+            project.setEllipsoid("EPSG:7030")
+            assert project.ellipsoid() == "EPSG:7030"
+            spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
+            assert spec.radius_ground == GroundSize(50.0, "meters")
+            assert self._approximated_sizes(report) == []
+
+            project.setEllipsoid("NONE")
+            spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
+            assert spec.radius_ground is None
+            assert self._approximated_sizes(report)
+        finally:
+            project.clear()
+
+    def test_metres_on_the_ground_follow_the_projected_metre_in_web_mercator(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        """QGIS corrects for latitude only in a geographic CRS, so 100 m is 100
+        projected metres in EPSG:3857 - and that is what the web map must draw."""
+        layer = self._layer(make_memory_layer, "EPSG:3857")
+        spec, report = self._translate(layer, self._marker("MetersInMapUnits"))
+        assert spec.radius_ground.units == "common"
+        assert spec.radius_ground.value == pytest.approx(
+            50.0 * COMMON_UNITS_PER_WEB_MERCATOR_METRE
+        )
         assert self._approximated_sizes(report) == []
 
     def test_a_metre_crs_reads_map_units_as_metres(

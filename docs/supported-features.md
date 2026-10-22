@@ -164,7 +164,7 @@ profile - a server, a container, or CI.
 | Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
 | Rule-based, embedded-symbol renderers | Not yet, reported by name |
 | Sizes in pixels, points, millimetres or inches | Yes - converted to screen pixels, so an 8 px marker stays 8 px |
-| Sizes in map units or metres on the ground | Approximated - fixed at the size they have where the layer fills the opening view, and reported |
+| Sizes in map units or metres on the ground | Yes - marker size, line and outline width, and rasterised marker icons keep their distance on the ground and zoom with the map as in QGIS. Map units of a geographic CRS (degrees) are approximated - fixed at the size they have where the layer fills the opening view, and reported; so is a marker picture that also has a size in screen units, or classes that mix units |
 | Symbol opacity | Yes - multiplied with the colour's own transparency, and with the layer opacity once |
 | Sizes or opacity set from data per feature | Not yet - drawn at the symbol's static value, reported |
 | Dashed and dotted lines | Yes - the line style dropdown and custom dash patterns alike |

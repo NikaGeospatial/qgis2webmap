@@ -89,8 +89,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Symbol sizes and opacity.** Marker size, outline width and offset now follow
   their unit (pixels, points, millimetres, inches) instead of all being read as
   millimetres, and symbol opacity is applied to the exported colours once.
-  Sizes in map units or metres on the ground are fixed at one reference scale
-  and reported; sizes set from data per feature are reported too.
+  Sizes in map units or metres on the ground keep their ground size and zoom
+  with the map as in QGIS (marker size, line and outline width, and the icons of
+  rasterised markers), except in a geographic CRS, where a degree has no fixed
+  size and they stay fixed at one reference scale and reported; sizes set from
+  data per feature are reported too.
 - **Labels.** Glyphs are collected from every label, not the first 5,000.
   Rule-based labelling with one unfiltered rule is translated and any other is
   reported; obstacle-only labelling no longer draws labels.

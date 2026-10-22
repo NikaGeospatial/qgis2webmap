@@ -50,12 +50,23 @@ def test_the_reference_scale_is_a_denominator() -> None:
 METRIC = GroundUnits(metres_per_map_unit=1.0)
 FEET = GroundUnits(metres_per_map_unit=0.3048)
 DEGREES = GroundUnits(metres_per_map_unit=None)
+DEGREES_NO_ELLIPSOID = GroundUnits(metres_per_map_unit=None, ellipsoidal=False)
 MERCATOR = GroundUnits(metres_per_map_unit=None, web_mercator=True)
 
 
-def test_metres_on_the_ground_are_metres_whatever_the_crs() -> None:
-    for ground in (None, METRIC, DEGREES, MERCATOR):
+def test_metres_on_the_ground_are_metres_in_any_crs_but_web_mercator() -> None:
+    for ground in (None, METRIC, FEET, DEGREES):
         assert ground_size(100.0, 7, ground) == GroundSize(100.0, "meters")
+
+
+def test_metres_in_degrees_need_an_ellipsoid_to_mean_anything() -> None:
+    """Without one QGIS guesses a planar size, which no map can reproduce."""
+    assert ground_size(100.0, 7, DEGREES_NO_ELLIPSOID) is None
+
+
+def test_metres_on_the_ground_follow_the_projected_metre_in_web_mercator() -> None:
+    """QGIS draws them at that size; it corrects for latitude only in degrees."""
+    assert ground_size(100.0, 7, MERCATOR) == ground_size(100.0, 1, MERCATOR)
 
 
 def test_map_units_of_a_metric_or_foot_crs_are_metres() -> None:

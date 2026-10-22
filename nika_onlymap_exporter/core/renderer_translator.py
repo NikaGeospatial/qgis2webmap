@@ -811,7 +811,7 @@ def reference_scale(layer: QgsVectorLayer) -> MapUnitScale | None:
 
 def ground_units(layer: QgsVectorLayer) -> GroundUnits | None:
     """What a map unit of the layer's CRS is on the ground, where that is fixed."""
-    from qgis.core import Qgis, QgsUnitTypes
+    from qgis.core import Qgis, QgsProject, QgsUnitTypes
 
     try:
         crs = layer.crs()
@@ -821,7 +821,10 @@ def ground_units(layer: QgsVectorLayer) -> GroundUnits | None:
             return GroundUnits(metres_per_map_unit=None, web_mercator=True)
         map_units = crs.mapUnits()
         if map_units == Qgis.DistanceUnit.Degrees:
-            return GroundUnits(metres_per_map_unit=None)
+            return GroundUnits(
+                metres_per_map_unit=None,
+                ellipsoidal=QgsProject.instance().ellipsoid() != "NONE",
+            )
         factor = QgsUnitTypes.fromUnitToUnitFactor(map_units, Qgis.DistanceUnit.Meters)
     except (AttributeError, TypeError, ValueError):  # pragma: no cover
         return None
@@ -998,6 +1001,9 @@ def reference_render_context(layer: QgsVectorLayer) -> Any | None:
     context.setExtent(layer.extent())
     area = QgsDistanceArea()
     area.setSourceCrs(layer.crs(), QgsProject.instance().transformContext())
+    # Metres on the ground become degrees only on an ellipsoid; QGIS measures on
+    # the project's, and guesses wrongly without one.
+    area.setEllipsoid(QgsProject.instance().ellipsoid())
     context.setDistanceArea(area)
     return context
 

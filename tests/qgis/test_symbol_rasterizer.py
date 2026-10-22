@@ -402,7 +402,7 @@ class TestMapUnitMarkers:
         self, qgis_app, make_memory_layer
     ) -> None:
         """The icon is `icon_size` px at 7 m/px, so it is 7 x that on the ground."""
-        layer = self._ground_layer(make_memory_layer, "MetersInMapUnits")
+        layer = self._ground_layer(make_memory_layer, "MetersInMapUnits", "EPSG:32648")
         atlas, renderer, _ = self._atlas_with_ground(layer)
         assert atlas is not None
         symbol = renderer.symbol
@@ -411,10 +411,11 @@ class TestMapUnitMarkers:
             symbol.icon_size * 7.0, rel=1e-3
         )
 
-    def test_icons_of_web_mercator_map_unit_markers_are_in_common_units(
-        self, qgis_app, make_memory_layer
+    @pytest.mark.parametrize("unit_name", ["MapUnits", "MetersInMapUnits"])
+    def test_icons_of_web_mercator_markers_are_in_common_units(
+        self, qgis_app, make_memory_layer, unit_name
     ) -> None:
-        layer = self._ground_layer(make_memory_layer, "MapUnits")
+        layer = self._ground_layer(make_memory_layer, unit_name)
         _, renderer, _ = self._atlas_with_ground(layer)
         symbol = renderer.symbol
         assert symbol.icon_size_ground.units == "common"
@@ -427,7 +428,10 @@ class TestMapUnitMarkers:
     ) -> None:
         """The picture would scale its millimetre outline too, which QGIS does not."""
         layer = self._ground_layer(
-            make_memory_layer, "MetersInMapUnits", stroke_unit="Millimeters"
+            make_memory_layer,
+            "MetersInMapUnits",
+            "EPSG:32648",
+            stroke_unit="Millimeters",
         )
         _, renderer, report = self._atlas_with_ground(layer)
         assert renderer.symbol.icon_size_ground is None
@@ -451,6 +455,8 @@ class TestMapUnitMarkers:
         self, qgis_app, make_memory_layer
     ) -> None:
         """A zero-width outline is one device pixel at any zoom in QGIS."""
-        layer = self._ground_layer(make_memory_layer, "MetersInMapUnits", stroke=0.0)
+        layer = self._ground_layer(
+            make_memory_layer, "MetersInMapUnits", "EPSG:32648", stroke=0.0
+        )
         _, renderer, _ = self._atlas_with_ground(layer)
         assert renderer.symbol.icon_size_ground is None
