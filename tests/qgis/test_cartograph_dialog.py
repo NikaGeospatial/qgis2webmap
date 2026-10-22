@@ -3555,7 +3555,6 @@ class TestRenamingALayout:
         finally:
             gate.set()
             dialog.close()
-||||||| parent of d856a52 (Suffix Windows device names in cartograph file names)
 
 
 @pytest.mark.parametrize(
