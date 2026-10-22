@@ -555,6 +555,78 @@ class TestZGeometryReachesLabelling:
         assert labels["features"][0]["geometry"]["coordinates"] == [1.0, 1.0]
 
 
+class TestFeatureIds:
+    """A GeoPackage's key column is the feature id, and the exported `id`."""
+
+    @staticmethod
+    def _keyed_layer(tmp_path):
+        from osgeo import ogr, osr
+
+        path = str(tmp_path / "people.gpkg")
+        source = ogr.GetDriverByName("GPKG").CreateDataSource(path)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        table = source.CreateLayer(
+            "people", srs, ogr.wkbPoint, options=["FID=person_id"]
+        )
+        table.CreateField(ogr.FieldDefn("name", ogr.OFTString))
+        for fid, name in ((987654321, "a"), (987654400, "b")):
+            row = ogr.Feature(table.GetLayerDefn())
+            row.SetFID(fid)
+            row.SetField("name", name)
+            row.SetGeometry(ogr.CreateGeometryFromWkt("POINT (1 1)"))
+            table.CreateFeature(row)
+        source = None
+        layer = qgis_core.QgsVectorLayer(f"{path}|layername=people", "people", "ogr")
+        assert layer.isValid() and layer.primaryKeyAttributes()
+        return layer
+
+    @staticmethod
+    def _ids(exported) -> list[int]:
+        return [f["id"] for f in exported.geojson["features"]]
+
+    def test_the_key_of_a_layer_without_popups_does_not_travel(
+        self, qgis_app, tmp_path
+    ) -> None:
+        exported = read_layer(
+            self._keyed_layer(tmp_path), FidelityReportBuilder(), with_popup=False
+        )
+        assert self._ids(exported) == [1, 2]
+        assert dict(exported.feature_ids) == {987654321: 1, 987654400: 2}
+        assert "9876543" not in repr(exported.geojson)
+
+    def test_a_key_field_set_to_do_not_show_does_not_travel(
+        self, qgis_app, tmp_path
+    ) -> None:
+        exported = read_layer(
+            self._keyed_layer(tmp_path),
+            FidelityReportBuilder(),
+            field_modes={"person_id": PopupFieldMode.HIDDEN.value},
+        )
+        assert self._ids(exported) == [1, 2]
+        assert [f["properties"] for f in exported.geojson["features"]] == [
+            {"name": "a"},
+            {"name": "b"},
+        ]
+
+    def test_a_key_the_user_keeps_in_the_popup_stays_the_id(
+        self, qgis_app, tmp_path
+    ) -> None:
+        exported = read_layer(self._keyed_layer(tmp_path), FidelityReportBuilder())
+        assert self._ids(exported) == [987654321, 987654400]
+        assert exported.feature_ids == ()
+
+    def test_a_layer_with_no_key_column_keeps_its_ids(self, qgis_app) -> None:
+        layer = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:4326&field=name:string", "mem", "memory"
+        )
+        feature = qgis_core.QgsFeature(layer.fields())
+        feature.setGeometry(qgis_core.QgsGeometry.fromWkt("POINT (1 1)"))
+        layer.dataProvider().addFeatures([feature])
+        exported = read_layer(layer, FidelityReportBuilder(), with_popup=False)
+        assert exported.feature_ids == ()
+
+
 class TestTileServices:
     """An XYZ layer travels as a live reference, the way a basemap does.
 

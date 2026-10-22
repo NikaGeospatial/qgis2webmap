@@ -896,6 +896,11 @@ class ExportLayer:
     attribution: str | None = None
     feature_count: int = 0
     geojson: dict[str, Any] | None = None
+    # `(QGIS feature id, exported id)` pairs, set only when the exported ids
+    # were replaced because the id would have disclosed a field the user kept
+    # out of the file (see `layer_reader.renumber_feature_ids`). Whatever is
+    # keyed by QGIS's feature id - the atlas cameras - is looked up here.
+    feature_ids: tuple[tuple[int, int], ...] = ()
     group_path: tuple[str, ...] = ()
     dependencies: tuple[AssetDependency, ...] = ()
     # None keeps the manifest's own default. Per layer for the same reason as

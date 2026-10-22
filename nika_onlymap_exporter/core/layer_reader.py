@@ -352,6 +352,36 @@ def keep_only_fields(
     return {**collection, "features": stripped}
 
 
+def primary_key_is_excluded(layer: QgsVectorLayer, keep: set[str]) -> bool:
+    """Whether a primary-key column is among the fields left out of the file.
+
+    QGIS uses a provider's primary key as the feature id (a GeoPackage's `fid`,
+    or whatever column it was created with), and the GeoJSON `id` is that
+    number, so an excluded key column would still travel as the feature id.
+    """
+    fields = layer.fields()
+    return any(
+        fields.at(index).name() not in keep for index in layer.primaryKeyAttributes()
+    )
+
+
+def renumber_feature_ids(
+    collection: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[tuple[int, int], ...]]:
+    """Give each feature a sequential id (1, 2, ...) in place of its QGIS one.
+
+    Returns the collection and the `(old id, new id)` pairs. Picking and
+    highlighting only need ids to be unique within the layer.
+    """
+    features = []
+    pairs = []
+    for number, feature in enumerate(collection.get("features") or (), start=1):
+        if "id" in feature:
+            pairs.append((feature["id"], number))
+        features.append({**feature, "id": number})
+    return {**collection, "features": features}, tuple(pairs)
+
+
 # Raster providers whose pixels are a file on this machine, which is the only
 # case packaging can turn into a Cloud Optimized GeoTIFF. Everything else - wms,
 # wcs, xyz, arcgismapserver - is a live service: there is no file to convert,
@@ -961,6 +991,9 @@ def read_layer(
     if popup.enabled:
         keep |= {field.name for field in popup.visible_fields}
     geojson = keep_only_fields(geojson, keep)
+    feature_ids: tuple[tuple[int, int], ...] = ()
+    if primary_key_is_excluded(layer, keep):
+        geojson, feature_ids = renumber_feature_ids(geojson)
 
     # After the strip so only surviving fields are considered; drawing fields
     # are protected because accessors reference them by their real name.
@@ -999,6 +1032,7 @@ def read_layer(
         attribution=read_attribution(layer),
         feature_count=feature_count,
         geojson=geojson,
+        feature_ids=feature_ids,
         group_path=group_path,
         dependencies=(describe_source(layer),),
         cluster_allowed=cluster,

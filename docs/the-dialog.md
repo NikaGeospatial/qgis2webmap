@@ -195,6 +195,8 @@ Two of these matter beyond tidiness:
 - Unticking **Popups** is how you keep attribute data out of a map you are
   sending someone. The values are not hidden — they never reach the file, so
   there is nothing to recover by opening it in a text editor.
+  This includes a GeoPackage's key column: left out of the file, the features
+  are numbered 1, 2, 3 instead of carrying the key as their id.
 - Unticking **Include** or **Popups** makes the file smaller, which matters
   because the map file carries all of its data inside it.
 

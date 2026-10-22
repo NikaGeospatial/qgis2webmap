@@ -559,16 +559,19 @@ def finish_cartograph_full(
             and not _atlas_layer_survived(export_project, requirement, report)
         ):
             spec = _without_atlas(spec)
-        if source.plane is not None and _draws_in_plane(
-            source.plane, export_project, report
-        ):
-            spec = _with_plane_camera(spec, source.frame_id, source.plane)
+        plane = source.plane
+        if requirement is not None and requirement.frame_id == source.frame_id:
+            spec, plane = _with_exported_feature_ids(
+                spec, plane, source.frame_id, export_project, requirement.layer_id
+            )
+        if plane is not None and _draws_in_plane(plane, export_project, report):
+            spec = _with_plane_camera(spec, source.frame_id, plane)
             export_project = replace(
                 export_project,
                 settings=replace(
                     export_project.settings,
-                    map_crs=source.plane.crs,
-                    map_crs_def=source.plane.crs_def,
+                    map_crs=plane.crs,
+                    map_crs_def=plane.crs_def,
                 ),
             )
         verdict = writer.license_policy.evaluate(export_project)
@@ -715,6 +718,44 @@ _IMAGE_TILE_RE = re.compile(r"\.(png|jpe?g|webp|gif|avif)(\?|$)", re.IGNORECASE)
 
 def is_image_tile_template(url: str) -> bool:
     return _IMAGE_TILE_RE.search(url) is not None
+
+
+def _with_exported_feature_ids(
+    spec: CartographSpec,
+    plane: ProjectedPlane | None,
+    frame_id: str,
+    export_project: ExportProject,
+    layer_id: str,
+) -> tuple[CartographSpec, ProjectedPlane | None]:
+    """The atlas cameras re-keyed to the coverage layer's exported ids.
+
+    QGIS's atlas pages are keyed by QGIS's feature id, which the exported
+    GeoJSON carries as `id` - unless the layer's ids were replaced to keep a
+    hidden key column out of the file (`ExportLayer.feature_ids`).
+    """
+    layer = next(
+        (c for c in export_project.exportable_layers if c.layer_id == layer_id), None
+    )
+    if layer is None or not layer.feature_ids:
+        return spec, plane
+    new_ids = dict(layer.feature_ids)
+
+    def renumbered(cameras: tuple[AtlasCamera, ...]) -> tuple[AtlasCamera, ...]:
+        return tuple(
+            replace(camera, feature_id=new_ids[camera.feature_id])
+            for camera in cameras
+            if camera.feature_id in new_ids
+        )
+
+    items = tuple(
+        replace(item, atlas_cameras=renumbered(item.atlas_cameras))
+        if isinstance(item, FrameSpec) and item.id == frame_id
+        else item
+        for item in spec.items
+    )
+    if plane is not None:
+        plane = replace(plane, atlas_cameras=renumbered(plane.atlas_cameras))
+    return replace(spec, items=items), plane
 
 
 def _with_plane_camera(

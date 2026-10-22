@@ -55,13 +55,15 @@ def _sheet(html: str) -> ET.Element:
     return ET.fromstring(f"<root>{match.group(1)}</root>")
 
 
-def _export(atlas_layout, runtime, report=None) -> str:
+def _export(atlas_layout, runtime, report=None, layer_settings=None) -> str:
     # Not `report or ...`: an empty builder is falsy (it has a __len__).
     report = FidelityReportBuilder() if report is None else report
     prepared = prepare_cartograph(
         atlas_layout.layout, atlas_layout.project, runtime, report, raster_cache=None
     )
-    return finish_cartograph(prepared, atlas_layout.project, report)
+    return finish_cartograph(
+        prepared, atlas_layout.project, report, layer_settings=layer_settings
+    )
 
 
 class TestAtlasSpec:
@@ -283,6 +285,70 @@ class TestAtlasCameras:
         cameras = self._cameras(html)
         lon, lat, _zoom = cameras["2"]
         assert (lon, lat) == pytest.approx(self._lonlat(5200.0, 300.0), abs=1e-7)
+
+    def test_a_hidden_key_column_leaves_the_ids_and_the_cameras_still_agree(
+        self, atlas_layout, fake_runtime, tmp_path
+    ) -> None:
+        """A GeoPackage's key column is its feature id, and so the exported
+        `id`. Hidden from the file, it is replaced by 1, 2, 3 - and the cameras,
+        which QGIS keys by its own id, must follow or no page would move."""
+        import json
+
+        from osgeo import ogr, osr
+        from qgis.core import QgsLayoutItemMap, QgsVectorLayer
+
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        path = str(tmp_path / "parcels.gpkg")
+        source = ogr.GetDriverByName("GPKG").CreateDataSource(path)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(3857)
+        table = source.CreateLayer(
+            "parcels", srs, ogr.wkbPolygon, options=["FID=parcel_pk"]
+        )
+        table.CreateField(ogr.FieldDefn("lot", ogr.OFTString))
+        centres = []
+        for offset, feature in enumerate(atlas_layout.parcels.getFeatures()):
+            row = ogr.Feature(table.GetLayerDefn())
+            row.SetFID(987000 + offset)
+            row.SetField("lot", feature.attribute("lot"))
+            row.SetGeometry(
+                ogr.CreateGeometryFromWkb(bytes(feature.geometry().asWkb()))
+            )
+            table.CreateFeature(row)
+            centres.append(feature.geometry().boundingBox().center())
+        source = None
+        keyed = QgsVectorLayer(f"{path}|layername=parcels", "keyed", "ogr")
+        assert keyed.isValid() and keyed.primaryKeyAttributes()
+        atlas_layout.project.addMapLayer(keyed)
+        atlas_layout.main_map.setLayers([keyed])
+        atlas_layout.atlas.setCoverageLayer(keyed)
+        atlas_layout.main_map.setAtlasScalingMode(
+            QgsLayoutItemMap.AtlasScalingMode.Fixed
+        )
+
+        html = _export(
+            atlas_layout,
+            fake_runtime,
+            layer_settings={keyed.id(): LayerSettings(popup=False)},
+        )
+
+        assert "987" not in html
+        assert "parcel_pk" not in html
+        cameras = self._cameras(html)
+        assert sorted(cameras) == ["1", "2", "3"]
+        data = re.search(
+            r'<script type="application/json">\s*(\{.*?\})\s*</script>', html, re.S
+        )
+        assert data is not None
+        features = json.loads(data.group(1))["features"]
+        assert [f["id"] for f in features] == [1, 2, 3]
+        for feature in features:
+            lon, lat, _zoom = cameras[str(feature["id"])]
+            centre = centres[feature["id"] - 1]
+            assert (lon, lat) == pytest.approx(
+                self._lonlat(centre.x(), centre.y()), abs=1e-7
+            )
 
     def test_auto_scaling_over_polygons_is_left_to_the_runtime(
         self, atlas_layout, fake_runtime

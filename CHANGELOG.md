@@ -95,6 +95,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   QGIS labels ("0–1 m", not "< 1"). **Checks** lists what the browser still
   draws differently in a legend or scale bar instead of calling it
   preserved.
+- **XYZ tile addresses with credentials are blocked.** A `user:password@`
+  in the address, and more key-style parameters (Azure `subscription-key`,
+  AWS `X-Amz-Signature`/`-Credential`/`-Security-Token`, `sig`, `signature`,
+  `password` and others, in any capitalisation), now stop the export like
+  `api_key` did; the credential is kept out of the model and the reports.
+- **A field name can no longer inject HTML into a popup.** A column the map
+  draws with keeps its name, which is now written as text in the popup.
+- **A hidden key column no longer travels as the feature id.** When a
+  GeoPackage's key column is left out of the file (Popups unticked, or the
+  field set to *Do not show this field*), features are numbered 1, 2, 3 in
+  the export instead; atlas pages follow the new numbers.
 
 ## [0.2.1] - 2026-10-13
 
