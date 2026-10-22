@@ -308,10 +308,9 @@ underscores (a space, a parenthesis, an accented letter) cannot be referenced
 by the web popup template, so it is renamed in the exported data —
 `Last Known Eruption` becomes `Last_Known_Eruption`, `Höhe` becomes `H_he` —
 while the popup label keeps the original spelling. The Fidelity tab lists
-every rename. The one exception is a field the map draws with (a category
-field, a label field, an extrusion height): renaming it would break the map,
-so its popup entry shows the raw placeholder instead and the Fidelity tab
-says so — rename the column in QGIS if that popup matters.
+every rename. A field the map draws with (a category field, a label field,
+an extrusion height) keeps its own name in the data, since the map reads it
+there; the popup reads a second copy of its value under the safe name.
 
 Expand a layer on the **Layers** tab to set how each of its fields appears:
 

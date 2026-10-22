@@ -101,7 +101,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `password` and others, in any capitalisation), now stop the export like
   `api_key` did; the credential is kept out of the model and the reports.
 - **A field name can no longer inject HTML into a popup.** A column the map
-  draws with keeps its name, which is now written as text in the popup.
+  draws with keeps its name in the data, and its popup reads a copy of
+  the value under a safe name, so the popup shows the value instead of a raw
+  placeholder; names are also written as text, never markup.
 - **A hidden key column no longer travels as the feature id.** When a
   GeoPackage's key column is left out of the file (Popups unticked, or the
   field set to *Do not show this field*), features are numbered 1, 2, 3 in

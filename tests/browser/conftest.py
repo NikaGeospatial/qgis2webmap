@@ -779,3 +779,61 @@ def ghost_popup_map(runtime, tmp_path_factory):
     destination = tmp_path_factory.mktemp("ghost")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
+
+
+HOSTILE_NAME = 'x</span><img src=x onerror="window.reviewSentinel=1">'
+
+
+@pytest.fixture(scope="session")
+def hostile_field_map(runtime, tmp_path_factory):
+    """A label field whose name is markup, shipped as the reader would.
+
+    The field draws the labels, so it keeps its name and the popup reads a
+    copy: `rename_untemplatable_fields` is what makes that data, so the
+    fixture runs it rather than hand-writing the result.
+    """
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.popup_translator import (
+        rename_untemplatable_fields,
+    )
+
+    data = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [0.87, 51.15]},
+                "properties": {HOSTILE_NAME: "real value"},
+            }
+        ],
+    }
+    data, popup = rename_untemplatable_fields(
+        data,
+        PopupSpec(enabled=True, fields=(PopupFieldSpec(HOSTILE_NAME),)),
+        {HOSTILE_NAME},
+        FidelityReportBuilder(),
+        "s",
+        "l",
+    )
+    layer = ExportLayer(
+        layer_id="hostile",
+        name="Hostile",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=1,
+        geojson=data,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=31, g=119, b=180), radius=6.0),
+        ),
+        labeling=LabelingSpec(enabled=True, field_name=HOSTILE_NAME, font_size=13.0),
+        popup=popup,
+    )
+    project = ExportProject(
+        title="Hostile field name",
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=50.9, east=1.1, north=51.9),
+    )
+    destination = tmp_path_factory.mktemp("hostile")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path

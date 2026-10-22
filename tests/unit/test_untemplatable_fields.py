@@ -86,15 +86,36 @@ class TestRenameUntemplatableFields:
         assert out == data
         assert popup_out == popup
 
-    def test_protected_drawing_fields_are_never_renamed(self) -> None:
-        """Accessors reference drawing fields by their real name."""
+    def test_protected_drawing_fields_keep_their_name_and_are_copied(self) -> None:
+        """Accessors reference drawing fields by their real name; the popup
+        reads a copy under a safe one."""
         popup = PopupSpec(fields=(PopupFieldSpec(name="max vei"),))
         report = FidelityReportBuilder()
         out, popup_out = rename_untemplatable_fields(
             collection({"max vei": 4}), popup, {"max vei"}, report, "s", "l"
         )
-        assert popup_out.fields[0].name == "max vei"
-        assert out["features"][0]["properties"] == {"max vei": 4}
+        assert popup_out.fields[0].name == "max_vei"
+        assert popup_out.fields[0].display_name == "max vei"
+        assert out["features"][0]["properties"] == {"max vei": 4, "max_vei": 4}
+
+    def test_only_untemplatable_protected_fields_pay_for_a_copy(self) -> None:
+        popup = PopupSpec(
+            fields=(PopupFieldSpec(name="kind"), PopupFieldSpec(name="max vei"))
+        )
+        out, _ = rename_untemplatable_fields(
+            collection({"kind": "a", "max vei": 4, "other": 1}),
+            popup,
+            {"kind", "max vei"},
+            FidelityReportBuilder(),
+            "s",
+            "l",
+        )
+        assert set(out["features"][0]["properties"]) == {
+            "kind",
+            "max vei",
+            "max_vei",
+            "other",
+        }
 
     def test_collisions_get_a_distinct_name(self) -> None:
         popup = PopupSpec(
@@ -143,19 +164,20 @@ class TestRenameUntemplatableFields:
         assert popup.fields[0].name == "max_vei_"
         assert data["features"][0]["properties"] == {"max_vei": 1, "max_vei_": 2}
 
-    def test_a_protected_untemplatable_field_is_reported_as_leaking(self) -> None:
-        """It cannot be renamed - accessors use the real name - so the popup
-        shows the raw placeholder, and the report must say so."""
-        report = FidelityReportBuilder()
-        rename_untemplatable_fields(
-            collection({"max vei": 4}),
-            PopupSpec(fields=(PopupFieldSpec(name="max vei"),)),
-            {"max vei"},
-            report,
+    def test_a_malicious_drawing_field_name_reaches_no_popup_markup(self) -> None:
+        name = 'x</span><img src=x onerror="window.reviewSentinel=1">'
+        out, popup = rename_untemplatable_fields(
+            collection({name: "value"}),
+            PopupSpec(fields=(PopupFieldSpec(name=name),)),
+            {name},
+            FidelityReportBuilder(),
             "s",
             "l",
         )
-        assert any("raw placeholder" in item.detail for item in report.items)
+        assert (
+            popup.fields[0].name == "x_span_img_src_x_onerror_window_reviewSentinel_1"
+        )
+        assert out["features"][0]["properties"][popup.fields[0].name] == "value"
 
     def test_the_rename_is_reported(self) -> None:
         report = FidelityReportBuilder()

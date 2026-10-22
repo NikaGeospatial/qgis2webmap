@@ -176,7 +176,9 @@ def rename_untemplatable_fields(
     `{{Last Known Eruption}}` in every popup. The field is renamed in the
     exported data and the popup references the new name; the label the reader
     sees keeps the original spelling. `protected` names - anything the map
-    draws with - are never touched.
+    draws with - are never renamed, because accessors reference them by their
+    real name: their value is copied under the safe name instead, and only the
+    popup reads the copy.
     """
     # The runtime's interpolator is JavaScript, whose `\w` is ASCII-only -
     # Python's is Unicode-aware, so without re.ASCII a field named 'Höhe'
@@ -186,64 +188,61 @@ def rename_untemplatable_fields(
     # candidate colliding with one would silently clobber it.
     existing = {f.name for f in popup.fields} | protected
     renames: dict[str, str] = {}
-    leaking: list[str] = []
+    copies: dict[str, str] = {}
     for field in popup.fields:
         if re.fullmatch(r"\w+", field.name, flags=re.ASCII):
-            continue
-        if field.name in protected:
-            leaking.append(field.name)
             continue
         candidate = (
             re.sub(r"\W+", "_", field.name, flags=re.ASCII).strip("_") or "field"
         )
-        while candidate in existing or candidate in renames.values():
+        while (
+            candidate in existing
+            or candidate in renames.values()
+            or candidate in copies.values()
+        ):
             candidate += "_"
-        renames[field.name] = candidate
+        if field.name in protected:
+            copies[field.name] = candidate
+        else:
+            renames[field.name] = candidate
 
-    if leaking:
-        # A drawing field cannot be renamed - accessors reference it by its
-        # real name - so its popup entry shows the raw placeholder. Saying so
-        # beats the recipient discovering it.
-        count = len(leaking)
-        report.unsupported(
-            subject,
-            f"{count} field{'s' if count != 1 else ''} the map draws with "
-            f"({', '.join(repr(n) for n in leaking)}) "
-            "cannot be renamed for the popup template, so popups show the "
-            "raw placeholder for "
-            f"{'them' if count != 1 else 'it'}. Rename the column in QGIS "
-            "to letters, digits and underscores to fix it.",
-            layer_id,
-        )
-
-    if not renames:
+    if not renames and not copies:
         return collection, popup
 
+    safe_names = {**renames, **copies}
     fields = tuple(
-        replace(f, name=renames[f.name], alias=f.alias or f.name)
-        if f.name in renames
+        replace(f, name=safe_names[f.name], alias=f.alias or f.name)
+        if f.name in safe_names
         else f
         for f in popup.fields
     )
-    features = [
-        {
-            **feature,
-            "properties": {
-                renames.get(name, name): value
-                for name, value in (feature.get("properties") or {}).items()
-            },
-        }
-        for feature in collection.get("features") or ()
-    ]
-    count = len(renames)
+    features = []
+    for feature in collection.get("features") or ():
+        properties = feature.get("properties") or {}
+        renamed = {renames.get(name, name): value for name, value in properties.items()}
+        renamed.update(
+            {
+                copy: properties[name]
+                for name, copy in copies.items()
+                if name in properties
+            }
+        )
+        features.append({**feature, "properties": renamed})
+    count = len(safe_names)
+    first = next(iter(safe_names))
     report.approximated(
         subject,
         f"{count} field name{'s' if count != 1 else ''} contain characters the "
         "web popup template cannot reference (only letters, digits and "
         "underscores work). The attribute is renamed in the exported data - "
-        f"for example '{next(iter(renames))}' becomes "
-        f"'{renames[next(iter(renames))]}' - and popups keep the original "
-        "spelling as the label.",
+        f"for example '{first}' becomes '{safe_names[first]}' - and popups keep "
+        "the original spelling as the label."
+        + (
+            f" {len(copies)} of them also draw the map, so that value is "
+            "carried a second time under the new name."
+            if copies
+            else ""
+        ),
         layer_id,
     )
     return {**collection, "features": features}, replace(popup, fields=fields)

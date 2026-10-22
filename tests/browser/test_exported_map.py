@@ -1169,3 +1169,48 @@ class TestGhostPopups:
             }""",
             timeout=10_000,
         )
+
+
+class TestHostileFieldName:
+    """A field name is the user's text; it must never become the page's markup."""
+
+    def test_the_popup_shows_the_value_and_runs_nothing(
+        self, page, hostile_field_map
+    ) -> None:
+        open_map(page, hostile_field_map)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        page.wait_for_function(
+            """() => {
+                const map = document.querySelector('om-map');
+                const layer = map.getLayers().find(
+                    (candidate) => candidate?.data?.[0]?.properties
+                );
+                if (!layer) return false;
+                map.injectPickInternal({
+                    layerId: layer.id,
+                    object: layer.data[0],
+                    index: 0,
+                    coordinate: [0.87, 51.15],
+                    pixel: [100, 100],
+                    type: 'click',
+                });
+                return true;
+            }""",
+            timeout=30_000,
+        )
+        page.wait_for_function(
+            """() => Array.from(
+                document.querySelector('om-overlay')?.shadowRoot
+                    ?.querySelectorAll('.om-popup-value') ?? []
+            ).some((value) => value.textContent.trim() === 'real value')""",
+            timeout=10_000,
+        )
+        assert page.evaluate("() => window.reviewSentinel") is None
+        assert (
+            page.evaluate(
+                "() => document.querySelector('om-overlay').shadowRoot"
+                ".querySelectorAll('img').length"
+            )
+            == 0
+        )
