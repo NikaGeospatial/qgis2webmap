@@ -28,6 +28,7 @@ from nika_onlymap_exporter.core.export_ir import (
     SymbolSpec,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.portable_names import avoid_windows_reserved
 from nika_onlymap_exporter.exporters.folder import FolderExporter
 from nika_onlymap_exporter.exporters.share_zip import ShareZipExporter, archive_root
 from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
@@ -471,6 +472,21 @@ class TestExportIntegrity:
         assert (folder / "index.html").read_bytes() == b"v1"
         FolderExporter().export(second, folder)
         assert not (folder / "dem.tif").exists()
+
+
+class TestWindowsReservedNames:
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("CON", "CON-map"),
+            ("lpt9.html", "lpt9.html-map"),
+            ("Aux", "Aux-map"),
+            ("CONSOLE", "CONSOLE"),
+            ("my CON", "my CON"),
+        ],
+    )
+    def test_reserved_names_get_a_suffix(self, name: str, expected: str) -> None:
+        assert avoid_windows_reserved(name) == expected
 
 
 class TestZipArchiveRoot:

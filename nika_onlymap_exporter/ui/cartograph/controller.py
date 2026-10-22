@@ -59,6 +59,7 @@ from ...core.fidelity_summary import (
     strip_message,
     summarise,
 )
+from ...core.portable_names import avoid_windows_reserved
 from ...core.print_settings import PrintSettings, apply_to_spec
 from ...core.save_folders import cartographs_folder, unused_path
 from ...core.settings import (
@@ -162,8 +163,9 @@ def _file_name_part(name: str) -> str:
     Separators, reserved and control characters become a dash, and dots and
     dashes are trimmed from both ends: "carto: Parcels" -> "carto-Parcels",
     "Survey /2026" -> "Survey-2026", and "..." -> "" (the caller's fallback).
+    A Windows device name gets "-map" added: "CON" -> "CON-map".
     """
-    return re.sub(r"[^\w.-]+", "-", name).strip("-.")
+    return avoid_windows_reserved(re.sub(r"[^\w.-]+", "-", name).strip("-."))
 
 
 def _panel_scroll(content: QWidget) -> QScrollArea:

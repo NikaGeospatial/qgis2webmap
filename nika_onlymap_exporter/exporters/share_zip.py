@@ -20,11 +20,11 @@ from pathlib import Path
 
 from ..core.atomic_write import staged_beside
 from ..core.export_ir import OutputMode
+from ..core.portable_names import avoid_windows_reserved
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
 
 _UNPORTABLE = re.compile(r'[\x00-\x1f<>:"/\\|?*]+')
-_WINDOWS_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$", re.I)
 
 
 def archive_root(stem: str) -> str:
@@ -33,9 +33,7 @@ def archive_root(stem: str) -> str:
     name = _UNPORTABLE.sub("-", stem).strip(" .")
     if not name:
         return "map"
-    if _WINDOWS_RESERVED.match(name):
-        name = f"{name}-map"
-    return name[:100]
+    return avoid_windows_reserved(name)[:100]
 
 
 def _member_name(root: str, file_name: str) -> str:

@@ -3555,3 +3555,23 @@ class TestRenamingALayout:
         finally:
             gate.set()
             dialog.close()
+||||||| parent of d856a52 (Suffix Windows device names in cartograph file names)
+
+
+@pytest.mark.parametrize(
+    ("project", "layout", "expected"),
+    [
+        ("", "CON", "CON-map.html"),
+        ("parcels.qgz", "con.txt", "parcels-con.txt-map.html"),
+        ("parcels.qgz", "Survey", "parcels-Survey.html"),
+    ],
+)
+def test_default_name_avoids_windows_device_names(
+    tmp_path: Path, project: str, layout: str, expected: str
+) -> None:
+    from nika_onlymap_exporter.ui.cartograph.controller import (
+        default_cartograph_path,
+    )
+
+    path = default_cartograph_path(project, layout, tmp_path)
+    assert path == tmp_path / expected
