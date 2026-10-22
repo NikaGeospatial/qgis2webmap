@@ -152,7 +152,8 @@ class TestMerging:
         assert len(summary.layer_groups) == 2
 
     def test_no_item_is_lost_in_the_merge(self) -> None:
-        """Every report item lands in exactly one row."""
+        """Every report item lands in exactly one row, so each is reachable
+        through the row that lists it."""
         items = volcanoes_like()
         summary = summarise(items, NAMES, ORDER)
         subjects = [
@@ -314,17 +315,6 @@ class TestNothingIsLost:
         twice = [item("Symbology of 'Roads'", CHANGED, "Dashes.", "r")] * 2
         (row,) = summarise(twice, NAMES, ORDER).groups[0].rows
         assert row.item_labels == ("Symbology", "Symbology")
-
-    def test_every_item_is_reachable_through_its_row(self) -> None:
-        items = volcanoes_like()
-        summary = summarise(items, NAMES, ORDER)
-        reachable = [
-            subject
-            for group in summary.groups
-            for row in group.rows
-            for subject in row.subjects
-        ]
-        assert sorted(reachable) == sorted(i.subject for i in items)
 
 
 # Every subject the package records, as written in the source: the literal
