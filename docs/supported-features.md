@@ -93,7 +93,8 @@ the current QGIS view and is the quickest way to bring a very large layer under
 the feature cap; split the project across several maps; or filter the layer in
 QGIS.
 
-Clipping reports what it removed, per layer, in the **Fidelity** tab - features
+A feature is kept if any part of it touches the view, and is exported whole -
+nothing is cut at the edge. Clipping reports what it removed, per layer, in the **Fidelity** tab - features
 that are not there leave no gap on the map, so this is the one thing an export
 cannot show you for itself.
 
