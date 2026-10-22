@@ -402,3 +402,149 @@ class TestCornerMenus:
             menu.hide()
         finally:
             dialog.close()
+
+
+def _painted_contrast(widget) -> float:
+    """The contrast of what a widget really paints: its most common pixel is the
+    ground, the pixel furthest from it in luminance is the text."""
+    import collections
+
+    from qgis.PyQt.QtGui import QColor
+
+    top = widget.window()
+    region = widget.visibleRegion().boundingRect()
+    image = top.grab(
+        region.translated(widget.mapTo(top, region.topLeft()) - region.topLeft())
+    ).toImage()
+    counts = collections.Counter(
+        image.pixel(x, y) for y in range(image.height()) for x in range(image.width())
+    )
+    ground = QColor.fromRgba(counts.most_common(1)[0][0]).name()
+    return max(_contrast(QColor.fromRgba(px).name(), ground) for px in counts)
+
+
+@pytest.fixture
+def qgis_host(qgis_app):
+    """Simulates QGIS's own theme: a window palette and the application
+    stylesheet that paints every bare widget, as Night Mapping does."""
+    from qgis.PyQt.QtGui import QColor, QPalette
+
+    original = QPalette(qgis_app.palette())
+
+    def set_host(kind: str) -> None:
+        ground, text = (
+            ("#ffffff", "#111111") if kind == "light" else ("#202020", "#eeeeee")
+        )
+        palette = QPalette()
+        for role, colour in (
+            (QPalette.ColorRole.Window, ground),
+            (QPalette.ColorRole.Base, ground),
+            (QPalette.ColorRole.Button, ground),
+            (QPalette.ColorRole.WindowText, text),
+            (QPalette.ColorRole.Text, text),
+            (QPalette.ColorRole.ButtonText, text),
+        ):
+            palette.setColor(role, QColor(colour))
+        qgis_app.setPalette(palette)
+        qgis_app.setStyleSheet(
+            f"QWidget {{ background-color:{ground}; color:{text}; }}"
+        )
+
+    yield set_host
+    qgis_app.setStyleSheet("")
+    qgis_app.setPalette(original)
+
+
+class TestHostSurfaces:
+    """Text the plugin colours sits on a surface the plugin colours too: a
+    host theme's background must never show under it (light ink on white,
+    dark ink on near-black), whichever theme each side is wearing."""
+
+    @staticmethod
+    def _controls(tmp_path):
+        from qgis.PyQt.QtCore import QSettings
+        from qgis.PyQt.QtWidgets import QDialog, QLabel, QVBoxLayout, QWidget
+
+        from nika_onlymap_exporter.core.nika_desktop import NOT_FOUND
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.ui.cartograph.print_settings_dialog import (
+            PrintSettingsDialog,
+        )
+        from nika_onlymap_exporter.ui.handoff_dialog import (
+            HandoffContext,
+            HandoffDialog,
+        )
+
+        root = QDialog()
+        root.setObjectName("hostSurfaceRoot")
+        output = tmp_path / "map.html"
+        output.write_text("<html></html>", encoding="utf-8")
+        qsettings = QSettings(str(tmp_path / "p.ini"), QSettings.Format.IniFormat)
+        printing = PrintSettingsDialog(
+            PrintSettings(page="custom"),
+            layout_page_mm=(210, 297),
+            has_live_frame=False,
+            parent=root,
+            qsettings=qsettings,
+        )
+        handoff = HandoffDialog(
+            HandoffContext(
+                output="cartograph",
+                file_path=output,
+                source_name="Parcel survey",
+                plugin_version="0.3.0",
+                task="critique",
+            ),
+            parent=root,
+            detector=lambda: NOT_FOUND,
+        )
+        handoff.instructions_edit.setPlainText("Keep the legend short.")
+        handoff.files_list.setCurrentRow(0)
+        # A plain container holding text, as a template card's text column is.
+        container = QWidget(printing)
+        QVBoxLayout(container).addWidget(QLabel("Plain container text", container))
+        container.setProperty("probe", True)
+        printing.layout().addWidget(container)
+        controls = {
+            "custom width": printing.custom_width,
+            "custom height": printing.custom_height,
+            "instructions": handoff.instructions_edit,
+            "prompt": handoff.prompt_view,
+            "file list": handoff.files_list,
+            "plain container": container,
+        }
+        return root, (printing, handoff), controls
+
+    @pytest.mark.parametrize("host", ["light", "dark"])
+    @pytest.mark.parametrize("plugin", ["light", "dark"])
+    def test_text_reads_on_the_surface_it_is_painted_on(
+        self, qgis_app, qgis_host, tmp_path, host, plugin
+    ):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui import theme
+
+        qgis_host(host)
+        QSettings().setValue(theme.THEME_KEY, plugin)
+        root, windows, controls = self._controls(tmp_path)
+        try:
+            theme.apply(root)
+            other = "dark" if plugin == "light" else "light"
+            # The second pass is the theme switched while the windows stay open.
+            for choice in (plugin, other):
+                QSettings().setValue(theme.THEME_KEY, choice)
+                theme.apply(root)
+                for window in windows:
+                    window.show()
+                qgis_app.processEvents()
+                weak = {
+                    name: round(_painted_contrast(widget), 2)
+                    for name, widget in controls.items()
+                    if _painted_contrast(widget) < 4.5
+                }
+                assert not weak, (host, choice, weak)
+        finally:
+            QSettings().remove(theme.THEME_KEY)
+            for window in windows:
+                window.close()
+            root.close()

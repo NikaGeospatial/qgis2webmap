@@ -584,7 +584,12 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.canvas};
     color: {p.ink};
 }}
+/* Every plain container is see-through, so the card or window behind it shows
+   instead of whatever the host QGIS stylesheet paints on a bare QWidget (white
+   under a dark theme's light ink, near-black under a light one's dark ink).
+   Controls that need a surface of their own are given one below. */
 {d} QWidget {{
+    background: transparent;
     color: {p.ink};
     {font_family}
 }}
@@ -659,7 +664,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }}
-{d} QLineEdit, {d} QComboBox {{
+{d} QLineEdit, {d} QComboBox, {d} QAbstractSpinBox,
+{d} QPlainTextEdit, {d} QTextEdit {{
     background: {p.field};
     border: 1px solid {p.rule};
     border-radius: 5px;
@@ -668,7 +674,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     selection-background-color: {p.accent_soft};
     selection-color: {p.ink};
 }}
-{d} QLineEdit:hover, {d} QComboBox:hover {{
+{d} QLineEdit:hover, {d} QComboBox:hover, {d} QAbstractSpinBox:hover {{
     border-color: {p.muted};
 }}
 /* Open, a box keeps the thin brass outline its list continues, focused or
@@ -677,7 +683,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border: 1px solid {p.accent};
     padding: 5px 8px;
 }}
-{d} QLineEdit:disabled, {d} QComboBox:disabled {{
+{d} QLineEdit:disabled, {d} QComboBox:disabled, {d} QAbstractSpinBox:disabled,
+{d} QPlainTextEdit:disabled, {d} QTextEdit:disabled {{
     color: {p.quiet};
 }}
 {d} QComboBox::drop-down {{
@@ -685,6 +692,30 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     width: 26px;
 }}
 {d} QComboBox::down-arrow {{
+    image: url({p.icon("chevron")});
+    width: 10px;
+    height: 10px;
+}}
+/* A spin box's two steppers, restyled with the box: once a box is drawn by the
+   stylesheet its native arrows are gone. */
+{d} QAbstractSpinBox::up-button, {d} QAbstractSpinBox::down-button {{
+    subcontrol-origin: border;
+    width: 20px;
+    border: none;
+    background: transparent;
+}}
+{d} QAbstractSpinBox::up-button {{
+    subcontrol-position: top right;
+}}
+{d} QAbstractSpinBox::down-button {{
+    subcontrol-position: bottom right;
+}}
+{d} QAbstractSpinBox::up-arrow {{
+    image: url({p.icon("chevron-up")});
+    width: 10px;
+    height: 10px;
+}}
+{d} QAbstractSpinBox::down-arrow {{
     image: url({p.icon("chevron")});
     width: 10px;
     height: 10px;
@@ -1477,6 +1508,20 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     selection-background-color: {p.accent_soft};
     selection-color: {p.ink};
 }}
+/* Ordinary lists (the hand-off's file list): a card of their own. The template
+   picker's lists, set apart by role, and a combo box's drop-down override. */
+{d} QListWidget, {d} QListView {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 0;
+    outline: none;
+    selection-background-color: {p.accent_soft};
+    selection-color: {p.ink};
+}}
+{d} QListWidget::item:selected, {d} QListView::item:selected {{
+    background: {p.accent_soft};
+    color: {p.ink};
+}}
 {d} QTreeView::item {{
     /* Room for the focus ring on the keyboard's row, out of the padding. */
     border: 2px solid transparent;
@@ -1629,6 +1674,9 @@ _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     # selector, padding, border width, sits on an accent fill
     ("QLineEdit", (5, 8, 5, 8), 1, False),
     ("QComboBox", (5, 8, 5, 8), 1, False),
+    ("QAbstractSpinBox", (5, 8, 5, 8), 1, False),
+    ("QPlainTextEdit", (5, 8, 5, 8), 1, False),
+    ("QTextEdit", (5, 8, 5, 8), 1, False),
     ("QPushButton", (6, 14, 6, 14), 1, False),
     ('QPushButton[role="chip"]', (4, 12, 4, 12), 1, False),
     ('QPushButton[role="link"]', (0, 2, 0, 2), 2, False),
