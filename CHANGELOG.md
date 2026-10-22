@@ -86,6 +86,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   mirrored along with its right-to-left layout.
 
 ### Fixed
+- **Symbol sizes and opacity.** Marker size, outline width and offset now follow
+  their unit (pixels, points, millimetres, inches) instead of all being read as
+  millimetres, and symbol opacity is applied to the exported colours once.
+  Sizes in map units or metres on the ground are fixed at one reference scale
+  and reported; sizes set from data per feature are reported too.
+- **Labels.** Glyphs are collected from every label, not the first 5,000.
+  Rule-based labelling with one unfiltered rule is translated and any other is
+  reported; obstacle-only labelling no longer draws labels.
 - **Symbol outlines match QGIS** in web maps and cartographs: a fill or
   marker with no outline ("No Pen") no longer gets a dark one, a 0 mm
   outline draws as a one-pixel hairline as in QGIS instead of disappearing,

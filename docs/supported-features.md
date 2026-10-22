@@ -163,6 +163,10 @@ profile - a server, a container, or CI.
 | Stacked symbol layers on a **point** | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
 | Rule-based, embedded-symbol renderers | Not yet, reported by name |
+| Sizes in pixels, points, millimetres or inches | Yes - converted to screen pixels, so an 8 px marker stays 8 px |
+| Sizes in map units or metres on the ground | Approximated - fixed at the size they have where the layer fills the opening view, and reported |
+| Symbol opacity | Yes - multiplied with the colour's own transparency, and with the layer opacity once |
+| Sizes or opacity set from data per feature | Not yet - drawn at the symbol's static value, reported |
 | Dashed and dotted lines | Yes - the line style dropdown and custom dash patterns alike |
 | Markers along a line, or filling a polygon | Not yet, reported |
 | 2.5D renderer | Yes - becomes a real extrusion, keeping the roof and wall colours |
@@ -295,6 +299,11 @@ for a popup. It replaces the layer's QGIS labels, and like them the names
 appear from the zoom where most have room.
 
 Labels using an expression rather than a single field are not translated yet.
+Rule-based labelling with a single unfiltered rule is translated like simple
+labelling; anything with several rules, filters or scale ranges is reported and
+shows no labels. A layer set to act only as an obstacle for other labels shows
+none of its own. Accented and other non-ASCII letters are collected from every
+label on the layer, however long it is.
 
 Labels can be turned off per layer on the **Layers** tab.
 
