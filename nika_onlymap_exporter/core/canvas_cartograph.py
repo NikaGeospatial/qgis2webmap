@@ -27,11 +27,12 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import math
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -215,6 +216,21 @@ def cartograph_from_view(
     )
 
 
+@contextlib.contextmanager
+def _project_dirty_state_kept(project: QgsProject) -> Iterator[None]:
+    """A layout made on `project` marks it changed as soon as it is given
+    its defaults, whether or not it is ever added: a preview thrown away
+    must not ask the user to save. Nothing else touches the project while a
+    preview is built (one thread, no event loop), so its flag is put back
+    to what it was."""
+    was_dirty = project.isDirty()
+    try:
+        yield
+    finally:
+        if not was_dirty and project.isDirty():
+            project.setDirty(False)
+
+
 def template_preview(
     extent: QgsRectangle,
     crs: QgsCoordinateReferenceSystem,
@@ -237,23 +253,24 @@ def template_preview(
     saved; `None` takes the project's (`project_figures`). The image's
     `text(PREVIEW_LEGEND_LEFT_OUT_KEY)` is how many legend entries the page
     leaves out for want of room ("0" when none)."""
-    plan, _spec, built, left_out = _build_from_view(
-        extent,
-        crs,
-        layers,
-        project,
-        rotation=rotation,
-        page_size=page_size,
-        orientation=orientation,
-        template_id=template_id,
-        placeholders=placeholders,
-        add_to_project=False,
-        figures=figures,
-    )
-    height_px = max(1, round(width_px * plan.page_height / plan.page_width))
-    image = QgsLayoutExporter(built.layout).renderPageToImage(
-        0, QSize(width_px, height_px)
-    )
+    with _project_dirty_state_kept(project):
+        plan, _spec, built, left_out = _build_from_view(
+            extent,
+            crs,
+            layers,
+            project,
+            rotation=rotation,
+            page_size=page_size,
+            orientation=orientation,
+            template_id=template_id,
+            placeholders=placeholders,
+            add_to_project=False,
+            figures=figures,
+        )
+        height_px = max(1, round(width_px * plan.page_height / plan.page_width))
+        image = QgsLayoutExporter(built.layout).renderPageToImage(
+            0, QSize(width_px, height_px)
+        )
     image.setText(PREVIEW_LEGEND_LEFT_OUT_KEY, str(left_out))
     return image
 

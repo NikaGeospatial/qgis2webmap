@@ -311,6 +311,28 @@ class TestPreview:
         }
         assert len(colours) > 3
 
+    @pytest.mark.parametrize("template_id", template_ids())
+    def test_it_does_not_mark_a_clean_project_changed(
+        self, parcels, project, template_id
+    ) -> None:
+        project.setDirty(False)
+        template_preview(
+            _view(parcels),
+            UTM,
+            [parcels],
+            project,
+            template_id=template_id,
+            width_px=120,
+        )
+        assert not project.isDirty()
+
+    def test_it_leaves_a_changed_project_changed(self, parcels, project) -> None:
+        project.setDirty(True)
+        template_preview(
+            _view(parcels), UTM, [parcels], project, template_id="poster", width_px=120
+        )
+        assert project.isDirty()
+
 
 def _categorized(name: str, categories: int):
     """The parcels as `categories` land-use classes -- one legend heading

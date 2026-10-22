@@ -1656,3 +1656,46 @@ class TestEachOpening:
             assert host.findChildren(TemplatePicker) == []
         finally:
             host.deleteLater()
+
+
+class TestOpeningLeavesTheProject:
+    def test_cancelling_after_every_thumbnail_leaves_it_clean(
+        self, qgis_app, tmp_path, project
+    ):
+        """Real QGIS pages for every design: the project is not marked
+        changed (no save prompt after Cancel) and gains no layout."""
+        from cartograph_fixtures import UTM, build_parcels_layer
+
+        from nika_onlymap_exporter.core import canvas_cartograph
+
+        layer = build_parcels_layer()
+        project.addMapLayer(layer)
+        project.setDirty(False)
+        layouts = list(project.layoutManager().layouts())
+
+        def render(template_id, page_size, orientation, width_px, figures=()):
+            return canvas_cartograph.template_preview(
+                layer.extent(),
+                UTM,
+                [layer],
+                project,
+                template_id=template_id,
+                width_px=width_px,
+                page_size=page_size,
+                orientation=orientation,
+                figures=figures,
+            )
+
+        picker = TemplatePicker(render, qsettings=_settings(tmp_path), project=project)
+        try:
+            _shown(qgis_app, picker)
+            _drain(qgis_app, picker)
+            for template_id in picker._templates:
+                key = picker._key(template_id)
+                if key not in picker._pages:
+                    picker._pages.put(key, render(template_id, key[1], key[2], 120))
+            assert picker.rows[picker.template_id].drawn
+        finally:
+            picker.reject()
+        assert not project.isDirty()
+        assert list(project.layoutManager().layouts()) == layouts
