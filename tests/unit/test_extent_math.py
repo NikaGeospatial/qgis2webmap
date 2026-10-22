@@ -13,6 +13,7 @@ from __future__ import annotations
 from nika_onlymap_exporter.core.extent_math import (
     extent_from_geojson,
     extent_from_longitudes_latitudes,
+    iter_coordinate_runs,
     iter_coordinates,
     largest_longitude_gap,
     normalize_longitude,
@@ -118,6 +119,23 @@ class TestExtentFromLongitudesLatitudes:
         assert abs(lon) > 179.0
 
 
+class TestIterCoordinateRuns:
+    def test_keeps_rings_and_lines_apart(self) -> None:
+        geometry = {
+            "type": "MultiLineString",
+            "coordinates": [[[0, 0], [1, 1]], [[5, 5], [6, 6], [7, 7]]],
+        }
+        assert list(iter_coordinate_runs(geometry)) == [
+            [(0.0, 0.0), (1.0, 1.0)],
+            [(5.0, 5.0), (6.0, 6.0), (7.0, 7.0)],
+        ]
+
+    def test_a_point_is_a_run_of_one(self) -> None:
+        assert list(
+            iter_coordinate_runs({"type": "Point", "coordinates": [1, 2, 3]})
+        ) == [[(1.0, 2.0)]]
+
+
 class TestIterCoordinates:
     def test_point(self) -> None:
         coords = list(iter_coordinates({"type": "Point", "coordinates": [1.0, 2.0]}))
@@ -152,6 +170,55 @@ class TestIterCoordinates:
 
 
 class TestExtentFromGeojson:
+    @staticmethod
+    def _collection(*geometries: dict) -> dict:
+        return {
+            "type": "FeatureCollection",
+            "features": [{"geometry": g} for g in geometries],
+        }
+
+    def test_wide_polygon_through_zero_is_not_a_dateline_crossing(self) -> None:
+        """Four corners at -100/+100: the edges cover 0, the gap is not real."""
+        ring = [[-100, -10], [100, -10], [100, 10], [-100, 10], [-100, -10]]
+        extent = extent_from_geojson(
+            self._collection({"type": "Polygon", "coordinates": [ring]})
+        )
+        assert extent is not None
+        assert extent.crosses_antimeridian is False
+        assert (extent.west, extent.east) == (-100.0, 100.0)
+
+    def test_wide_line_through_zero_is_not_a_dateline_crossing(self) -> None:
+        extent = extent_from_geojson(
+            self._collection(
+                {"type": "LineString", "coordinates": [[-100, 0], [100, 5]]}
+            )
+        )
+        assert extent is not None
+        assert extent.crosses_antimeridian is False
+        assert extent.width_degrees == 200.0
+
+    def test_edge_across_the_antimeridian_still_wraps(self) -> None:
+        """Fiji-style: one ring whose neighbouring vertices are 179 and -179."""
+        ring = [[178, -17], [179, -17], [-179, -17], [-178, -18], [178, -17]]
+        extent = extent_from_geojson(
+            self._collection({"type": "Polygon", "coordinates": [ring]})
+        )
+        assert extent is not None
+        assert extent.crosses_antimeridian is True
+        assert extent.width_degrees < 10.0
+
+    def test_parts_either_side_of_the_antimeridian_still_wrap(self) -> None:
+        """Chukotka-style: separate parts at 179 and -179."""
+        extent = extent_from_geojson(
+            self._collection(
+                {"type": "Point", "coordinates": [179.0, 66.0]},
+                {"type": "LineString", "coordinates": [[-179.5, 66], [-178.5, 67]]},
+            )
+        )
+        assert extent is not None
+        assert extent.crosses_antimeridian is True
+        assert extent.width_degrees < 10.0
+
     def test_feature_collection(self) -> None:
         fc = {
             "type": "FeatureCollection",

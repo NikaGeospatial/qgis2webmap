@@ -31,6 +31,12 @@ from .export_ir import Extent
 # gaps that make this technique work.
 MIN_MEANINGFUL_GAP_DEGREES = 2.0
 
+# An edge whose endpoints are further apart than this is taken to cross the
+# antimeridian the short way round (179 to -179 is 2 degrees of ground, not
+# 358). Anything narrower is a plain straight edge that covers the longitudes
+# between its ends, so a polygon from -100 to +100 occupies 0, not 180.
+WRAPPING_EDGE_MIN_SPAN_DEGREES = 270.0
+
 
 def normalize_longitude(lon: float) -> float:
     """Wrap into [-180, 180).
@@ -146,8 +152,63 @@ def iter_coordinates(geometry: object) -> Iterable[tuple[float, float]]:
             yield from iter_coordinates(item)
 
 
+def iter_coordinate_runs(geometry: object) -> Iterable[list[tuple[float, float]]]:
+    """Yield each line or ring of a GeoJSON geometry as a list of `(lon, lat)`.
+
+    `iter_coordinates` flattens everything, which loses which vertices are joined
+    by an edge. A lone point comes out as a run of one.
+    """
+    if isinstance(geometry, dict):
+        for sub in geometry.get("geometries") or ():
+            yield from iter_coordinate_runs(sub)
+        coords = geometry.get("coordinates")
+        if coords is not None:
+            yield from iter_coordinate_runs(coords)
+        return
+
+    if isinstance(geometry, (list, tuple)):
+        if (
+            len(geometry) >= 2
+            and isinstance(geometry[0], (int, float))
+            and isinstance(geometry[1], (int, float))
+        ):
+            yield [(float(geometry[0]), float(geometry[1]))]
+            return
+        if geometry and all(
+            isinstance(item, (list, tuple))
+            and len(item) >= 2
+            and isinstance(item[0], (int, float))
+            for item in geometry
+        ):
+            yield [(float(item[0]), float(item[1])) for item in geometry]
+            return
+        for item in geometry:
+            yield from iter_coordinate_runs(item)
+
+
+def _edge_longitudes(start: float, end: float) -> list[float]:
+    """Longitudes an edge passes over between its ends, sampled below the gap size.
+
+    Only the interior is returned; the ends are the vertices themselves.
+    """
+    if abs(end - start) > WRAPPING_EDGE_MIN_SPAN_DEGREES:
+        # Cross the antimeridian: walk east from the western end.
+        start, end = max(start, end), min(start, end) + 360.0
+    step = MIN_MEANINGFUL_GAP_DEGREES / 2.0
+    low, high = min(start, end), max(start, end)
+    count = int((high - low) / step)
+    return [
+        low + step * index for index in range(1, count + 1) if low + step * index < high
+    ]
+
+
 def extent_from_geojson(feature_collection: dict) -> Extent | None:
-    """Minimal enclosing extent of a GeoJSON FeatureCollection."""
+    """Minimal enclosing extent of a GeoJSON FeatureCollection.
+
+    Edges count as well as vertices: a polygon with corners at -100 and +100 and
+    nothing between them still occupies the longitudes between, so the empty
+    arc the gap search finds is never one a shape actually crosses.
+    """
     longitudes: list[float] = []
     latitudes: list[float] = []
 
@@ -155,9 +216,12 @@ def extent_from_geojson(feature_collection: dict) -> Extent | None:
         geometry = feature.get("geometry")
         if not geometry:
             continue
-        for lon, lat in iter_coordinates(geometry):
-            longitudes.append(lon)
-            latitudes.append(lat)
+        for run in iter_coordinate_runs(geometry):
+            for lon, lat in run:
+                longitudes.append(lon)
+                latitudes.append(lat)
+            for (lon_a, _), (lon_b, _) in zip(run, run[1:]):
+                longitudes.extend(_edge_longitudes(lon_a, lon_b))
 
     return extent_from_longitudes_latitudes(longitudes, latitudes)
 
