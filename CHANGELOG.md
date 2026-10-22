@@ -108,6 +108,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   GeoPackage's key column is left out of the file (Popups unticked, or the
   field set to *Do not show this field*), features are numbered 1, 2, 3 in
   the export instead; atlas pages follow the new numbers.
+- **Categorized and graduated layers draw the features QGIS draws.**
+  Features that match no category or fall outside every range, NULL values,
+  and values in a switched-off class are left out, as in QGIS, instead of
+  appearing in grey or the nearest class. An "all other values" category
+  (empty or NULL value) catches everything unmatched, a category holding
+  several values keeps all of them, and a value equal to a range's upper
+  bound stays in that range. Gaps and overlaps between ranges follow QGIS,
+  and thresholds such as 1e-7 are no longer rounded to 0.
 
 ## [0.2.1] - 2026-10-13
 
