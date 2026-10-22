@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from ..core.atomic_write import staged_beside
 from ..core.export_ir import OutputMode
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
@@ -25,8 +26,10 @@ class StandaloneHtmlExporter:
         """`destination` is the target `.html` path, not a directory."""
         if destination.suffix.lower() != ".html":
             destination = destination.with_suffix(".html")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(result.entry_path, destination)
+        # Copied beside the destination and renamed over it, so a failure part-way
+        # leaves the previous valid file in place instead of a torn copy.
+        with staged_beside(destination) as staged:
+            shutil.copy2(result.entry_path, staged)
 
         return ExportOutcome(
             path=destination,

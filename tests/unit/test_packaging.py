@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import gzip
 import zipfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -26,6 +28,8 @@ from nika_onlymap_exporter.core.export_ir import (
     SymbolSpec,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.exporters.folder import FolderExporter
+from nika_onlymap_exporter.exporters.share_zip import ShareZipExporter, archive_root
 from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
 from nika_onlymap_exporter.packaging.asset_embedder import (
     DATA_COMPRESSION_THRESHOLD_BYTES,
@@ -42,6 +46,7 @@ from nika_onlymap_exporter.packaging.dependency_scanner import (
 )
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle, sha256_of
 from nika_onlymap_exporter.writers.onlymap_writer import (
+    ArtifactResult,
     ExportBlockedError,
     OnlyMapWriter,
 )
@@ -320,3 +325,128 @@ class TestExporters:
         with pytest.raises(ExportBlockedError):
             build_artifact(make_project(layers=[]), destination, writer=self._writer())
         assert not destination.exists()
+
+
+def _staged_result(directory: Path, files: dict[str, bytes]) -> ArtifactResult:
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, content in files.items():
+        (directory / name).write_bytes(content)
+    return ArtifactResult(
+        entry_path=directory / "index.html", mode=OutputMode.STANDALONE_HTML
+    )
+
+
+class TestExportIntegrity:
+    """A failed export must not cost the user the file they already had."""
+
+    def test_failed_html_copy_keeps_the_previous_file(self, tmp_path) -> None:
+        destination = tmp_path / "map.html"
+        destination.write_bytes(b"ORIGINAL VALID MAP")
+
+        def torn_copy(src, dst, *args, **kwargs):
+            Path(dst).write_bytes(b"PARTIAL")
+            raise OSError("disk full")
+
+        with (
+            patch("shutil.copyfile", side_effect=torn_copy),
+            pytest.raises(OSError),
+        ):
+            build_artifact(
+                make_project(),
+                destination,
+                writer=OnlyMapWriter(runtime_provider=FakeRuntime()),
+            )
+        assert destination.read_bytes() == b"ORIGINAL VALID MAP"
+        assert [p.name for p in tmp_path.iterdir()] == ["map.html"]
+
+    def test_failed_zip_keeps_the_previous_archive(self, tmp_path) -> None:
+        destination = tmp_path / "map.zip"
+        with zipfile.ZipFile(destination, "w") as archive:
+            archive.writestr("map/index.html", "ORIGINAL VALID MAP")
+        before = destination.read_bytes()
+
+        with (
+            patch("zipfile.ZipFile.write", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
+            build_artifact(
+                make_project(),
+                destination,
+                mode=OutputMode.SHARE_ZIP,
+                writer=OnlyMapWriter(runtime_provider=FakeRuntime()),
+            )
+        assert destination.read_bytes() == before
+        assert [p.name for p in tmp_path.iterdir()] == ["map.zip"]
+
+    def test_folder_reexport_drops_removed_assets_and_keeps_user_files(
+        self, tmp_path
+    ) -> None:
+        folder = tmp_path / "out"
+        first = _staged_result(
+            tmp_path / "s1", {"index.html": b"v1", "dem.tif": b"raster"}
+        )
+        FolderExporter().export(first, folder)
+        (folder / "notes-from-me.txt").write_text("mine")
+
+        second = _staged_result(tmp_path / "s2", {"index.html": b"v2"})
+        FolderExporter().export(second, folder)
+
+        assert not (folder / "dem.tif").exists()
+        assert (folder / "index.html").read_bytes() == b"v2"
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+
+    def test_folder_never_deletes_a_file_it_did_not_write(self, tmp_path) -> None:
+        folder = tmp_path / "out"
+        folder.mkdir()
+        (folder / "dem.tif").write_bytes(b"theirs, no manifest yet")
+        FolderExporter().export(
+            _staged_result(tmp_path / "s", {"index.html": b"v1"}), folder
+        )
+        assert (folder / "dem.tif").read_bytes() == b"theirs, no manifest yet"
+
+    def test_folder_failure_midway_keeps_old_assets_owned(self, tmp_path) -> None:
+        folder = tmp_path / "out"
+        FolderExporter().export(
+            _staged_result(tmp_path / "s1", {"index.html": b"v1", "dem.tif": b"r"}),
+            folder,
+        )
+        second = _staged_result(tmp_path / "s2", {"index.html": b"v2"})
+        with (
+            patch("shutil.copy2", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
+            FolderExporter().export(second, folder)
+        # Nothing was removed before the new files were all in place.
+        assert (folder / "dem.tif").read_bytes() == b"r"
+        assert (folder / "index.html").read_bytes() == b"v1"
+        FolderExporter().export(second, folder)
+        assert not (folder / "dem.tif").exists()
+
+
+class TestZipArchiveRoot:
+    @pytest.mark.parametrize(
+        ("stem", "expected"),
+        [
+            ("..", "map"),
+            ("", "map"),
+            ("a/b", "a-b"),
+            ("a\\..\\b", "a-..-b"),
+            ("trailing. ", "trailing"),
+            ("CON", "CON-map"),
+            ("my map", "my map"),
+        ],
+    )
+    def test_root_is_portable(self, stem: str, expected: str) -> None:
+        assert archive_root(stem) == expected
+
+    def test_dots_zip_does_not_write_outside_the_root(self, tmp_path) -> None:
+        result = _staged_result(tmp_path / "s", {"index.html": b"x"})
+        outcome = ShareZipExporter().export(result, tmp_path / "...zip")
+        with zipfile.ZipFile(outcome.path) as archive:
+            names = archive.namelist()
+        # The stem of "...zip" is ".." on some Pythons and "...zip" on others.
+        (name,) = names
+        root, _, leaf = name.partition("/")
+        assert leaf == "index.html"
+        assert root not in ("", ".", "..")
+        assert f"{root} folder" in outcome.open_instruction

@@ -14,12 +14,35 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 
+from ..core.atomic_write import staged_beside
 from ..core.export_ir import OutputMode
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
+
+_UNPORTABLE = re.compile(r'[\x00-\x1f<>:"/\\|?*]+')
+_WINDOWS_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$", re.I)
+
+
+def archive_root(stem: str) -> str:
+    """The folder name every member sits in, safe on every OS and never a path
+    traversal: `...zip` has the stem `..`, which would write `../index.html`."""
+    name = _UNPORTABLE.sub("-", stem).strip(" .")
+    if not name:
+        return "map"
+    if _WINDOWS_RESERVED.match(name):
+        name = f"{name}-map"
+    return name[:100]
+
+
+def _member_name(root: str, file_name: str) -> str:
+    """`root/file_name`, refusing anything that could leave the root."""
+    if file_name in ("", ".", "..") or any(c in file_name for c in "/\\:\x00"):
+        raise ValueError(f"unsafe archive member name: {file_name!r}")
+    return f"{root}/{file_name}"
 
 
 class ShareZipExporter:
@@ -31,17 +54,21 @@ class ShareZipExporter:
         """`destination` is the target `.zip` path."""
         if destination.suffix.lower() != ".zip":
             destination = destination.with_suffix(".zip")
-        destination.parent.mkdir(parents=True, exist_ok=True)
 
         source_dir = result.entry_path.parent
-        stem = destination.stem
+        stem = archive_root(destination.stem)
 
         # Everything sits inside one named folder, so extracting never scatters
         # files across the recipient's Downloads directory.
-        with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+        # Built beside the destination and renamed over it, so a failure part-way
+        # leaves the previous valid zip in place instead of an incomplete one.
+        with (
+            staged_beside(destination) as staged,
+            zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED) as archive,
+        ):
             for item in sorted(source_dir.iterdir()):
                 if item.is_file():
-                    archive.write(item, f"{stem}/{item.name}")
+                    archive.write(item, _member_name(stem, item.name))
 
         return ExportOutcome(
             path=destination,

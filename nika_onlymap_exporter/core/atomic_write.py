@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -31,4 +32,32 @@ def write_text_atomic(path: Path, content: str) -> None:
     except BaseException:
         with contextlib.suppress(OSError):
             os.remove(tmp_name)
+        raise
+
+
+@contextlib.contextmanager
+def staged_beside(path: Path) -> Iterator[Path]:
+    """Yield a temp path beside `path`; on a clean exit `os.replace` it onto
+    `path`, on any failure delete it. Whatever was at `path` before survives a
+    failed or cancelled write untouched. The caller writes the whole file to
+    the yielded path (it exists, empty, so a writer may open it in any mode)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+    )
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        yield tmp
+        # mkstemp makes the file owner-only; give it the mode a plain copy
+        # would have had, or the one the file being replaced already has.
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            mode = 0o644
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
         raise

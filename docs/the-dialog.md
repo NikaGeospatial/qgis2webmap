@@ -93,6 +93,10 @@ top right of the dialog.
   filter blocks `.html` attachments.
 - **Folder** — `index.html`, `onlymap.js` and a README side by side, to copy to a
   web server. A folder has to be served; it does not open by double-clicking.
+  Exporting again into the same folder replaces the files the plugin wrote
+  (it keeps a small `.qgis2webmap-export.json` list of them) and removes the
+  ones the map no longer has, such as a raster you took out; files you added
+  yourself are left alone.
 
 **Save to** is where the export is written. A new map starts with a place
 already filled in: **Documents/QGIS2WebMap/Web maps**, named after the map -
@@ -101,7 +105,8 @@ Export, and if a file of that name is already there, the new one gets a
 number: `Peaks (2).html`. Type another path or press **Choose...** to change
 it; to use another folder for every new map, see [Settings](#settings).
 Switching the type keeps the name: `peaks.html` becomes `peaks.zip` or a
-`peaks` folder. Pressing Export writes there without asking again.
+`peaks` folder. Pressing Export writes there without asking again. A failed
+or cancelled export leaves the file that was already there as it was.
 
 For a Standalone HTML export, a line underneath gives measured size advice: how
 large your map's data actually is, and when the file would become slow to open
