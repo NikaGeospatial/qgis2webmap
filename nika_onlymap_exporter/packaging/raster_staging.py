@@ -54,6 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from ..core.cancellation import raise_if_cancelled
 from ..core.export_ir import ExportLayer, ExportProject, NoDataRule, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
 from .dependency_scanner import (
@@ -296,6 +297,9 @@ def stage_rasters(
             layers.append(layer)
             continue
 
+        # Between rasters as well as inside GDAL: a bake is not interruptible,
+        # so this is the soonest a cancel can land once one has started.
+        raise_if_cancelled(should_cancel)
         step = _scaled_progress(on_progress, position, total_units)
         position += 1
 

@@ -356,3 +356,132 @@ def test_labelled_3d_layers_export_end_to_end(project, tmp_path, mode) -> None:
         # Each layer's labels made it, and the dense Z points clustered.
         assert html.count('type="TextLayer"') == 3
         assert 'cluster="true"' in html
+
+
+class TestProgressAndCancel:
+    """Processing's feedback drives the export: progress up, Cancel honoured
+    until the artifact is being put in place, and not after."""
+
+    @staticmethod
+    def _setup(project, make_memory_layer, tmp_path):
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        for name in ("one", "two", "three"):
+            project.addMapLayer(
+                make_memory_layer(name, features=[("a", [0.87, 51.15])])
+            )
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(project)
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+        return algorithm, context, tmp_path / "map.html"
+
+    @staticmethod
+    def _feedback(cancel_at=None):
+        """A real feedback that records progress and cancels itself at a value."""
+        feedback = qgis_core.QgsProcessingFeedback()
+        reported: list[float] = []
+
+        def on_progress(value: float) -> None:
+            reported.append(value)
+            if cancel_at is not None and value >= cancel_at:
+                feedback.cancel()
+
+        feedback.progressChanged.connect(on_progress)
+        return feedback, reported
+
+    def test_progress_only_moves_forward_and_ends_complete(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        algorithm, context, destination = self._setup(
+            project, make_memory_layer, tmp_path
+        )
+        feedback, reported = self._feedback()
+
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(destination), "MODE": 0, "TITLE": "t"}, context, feedback
+        )
+
+        assert Path(results["OUTPUT"]).is_file()
+        assert reported == sorted(reported), reported
+        assert len({round(v) for v in reported}) >= 4, reported
+        assert reported[-1] == 100
+
+    def test_a_cancel_while_reading_writes_nothing(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        algorithm, context, destination = self._setup(
+            project, make_memory_layer, tmp_path
+        )
+        destination.write_bytes(b"ORIGINAL VALID MAP")
+        # Three layers report 0, 23 and 46: stop as the second one is reached.
+        feedback, reported = self._feedback(cancel_at=20)
+
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(destination), "MODE": 0, "TITLE": "t"}, context, feedback
+        )
+
+        assert results == {}
+        assert max(reported) < 50, "kept going after the cancel"
+        assert destination.read_bytes() == b"ORIGINAL VALID MAP"
+        assert [p.name for p in tmp_path.iterdir()] == ["map.html"]
+
+    def test_a_cancel_at_the_commit_still_reports_success(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.processing.export_project import COMMIT_AT
+
+        algorithm, context, destination = self._setup(
+            project, make_memory_layer, tmp_path
+        )
+        destination.write_bytes(b"ORIGINAL VALID MAP")
+        # Cancel lands the instant the commit is announced - after the last check.
+        feedback, _reported = self._feedback(cancel_at=COMMIT_AT)
+
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(destination), "MODE": 0, "TITLE": "t"}, context, feedback
+        )
+
+        assert feedback.isCanceled()
+        assert results == {"OUTPUT": str(destination)}
+        assert destination.read_bytes() != b"ORIGINAL VALID MAP"
+        assert b"om-map" in destination.read_bytes()
+
+    def test_the_algorithm_runs_from_its_snapshot_with_the_project_cleared(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        """`prepareAlgorithm` reads the project on the main thread; the worker's
+        `processAlgorithm` then needs nothing the project owns."""
+        import threading
+
+        algorithm, context, destination = self._setup(
+            project, make_memory_layer, tmp_path
+        )
+        parameters = {"OUTPUT": str(destination), "MODE": 0, "TITLE": "From snapshot"}
+        # No Python slot on it: a signal emitted from the worker would queue to
+        # the main thread and outlive the test.
+        feedback = qgis_core.QgsProcessingFeedback()
+
+        assert algorithm.prepareAlgorithm(parameters, context, feedback)
+        project.removeAllMapLayers()
+
+        results: list = []
+        errors: list[BaseException] = []
+
+        def worker() -> None:
+            try:
+                results.append(
+                    algorithm.processAlgorithm(parameters, context, feedback)
+                )
+            except BaseException as exc:  # reported on the test thread
+                errors.append(exc)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join(120)
+
+        assert not errors, errors
+        html = Path(results[0]["OUTPUT"]).read_text(encoding="utf-8")
+        assert "From snapshot" in html
+        for name in ("one", "two", "three"):
+            assert name in html

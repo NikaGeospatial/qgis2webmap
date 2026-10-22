@@ -95,9 +95,9 @@ def _export_through_dialog(dialog, qgis_app):
     reads = []
     original = dialog._read_current_project
 
-    def counting(progress=None):
+    def counting(*args):
         reads.append(1)
-        return original(progress)
+        return original(*args)
 
     dialog._read_current_project = counting
     assert dialog._ensure_export(lambda export, _report: seen.append(export), "x")
@@ -280,3 +280,132 @@ def test_a_pan_rebuilds_only_when_the_export_uses_the_view(
     assert rebuilt
     assert [n for n, _ in names] == ["a", "b", "c"]
     dialog.close()
+
+
+# ---- the worker holds a snapshot, not the project -------------------------
+
+
+def _wait_for(qgis_app, condition, seconds=60):
+    import time
+
+    deadline = time.monotonic() + seconds
+    while not condition() and time.monotonic() < deadline:
+        qgis_app.processEvents()
+        time.sleep(0.02)
+    assert condition()
+
+
+def test_the_worker_read_runs_with_the_project_cleared(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """What the worker is handed holds no layer: clearing the project between
+    the GUI-thread snapshot and the worker's read must not matter."""
+    import threading
+
+    dialog, layer, _canvas = _live_dialog(project, make_memory_layer, qgis_app)
+    expected = _qgis_truth(layer)
+    prepared = dialog._prepare_current_project()
+    project.removeAllMapLayers()
+    del layer
+
+    done: list = []
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            done.append(dialog._read_current_project(None, prepared))
+        except BaseException as exc:  # reported on the test thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join(60)
+
+    assert not errors, errors
+    export, _report = done[0]
+    got = sorted(
+        (f["properties"]["name"], tuple(f["geometry"]["coordinates"]))
+        for layer_ in export.layers
+        for f in layer_.geojson["features"]
+    )
+    assert got == sorted(expected)
+    dialog.close()
+
+
+def test_the_bar_names_each_layer_and_only_moves_forward(
+    qgis_app, project, make_memory_layer
+) -> None:
+    dialog, _layer, _canvas = _live_dialog(project, make_memory_layer, qgis_app)
+    project.addMapLayer(make_memory_layer("more", features=[("z", [9.0, 9.0])]))
+    shown: list[tuple[int, str]] = []
+    original = dialog._on_job_progress
+    dialog._on_job_progress = lambda percent, message: (
+        shown.append((percent, message)),
+        original(percent, message),
+    )
+    seen: list = []
+    assert dialog._ensure_export(lambda export, _r: seen.append(export), "x")
+    _wait_for(qgis_app, lambda: seen and dialog._job is None)
+
+    percents = [percent for percent, _ in shown]
+    assert percents == sorted(percents), shown
+    messages = [message for _, message in shown]
+    assert any("(1 of 2)" in m for m in messages), messages
+    assert any("(2 of 2)" in m for m in messages), messages
+    dialog.close()
+
+
+class TestJobCommit:
+    """Cancel is honoured until the artifact is being put in place, not after."""
+
+    @staticmethod
+    def _run(qgis_app, work):
+        from nika_onlymap_exporter.ui.background_job import BackgroundJob
+
+        outcome: list[str] = []
+        job = BackgroundJob(work)
+        job.succeeded.connect(lambda _r: outcome.append("succeeded"))
+        job.cancelled.connect(lambda: outcome.append("cancelled"))
+        job.failed.connect(lambda message, _d: outcome.append(f"failed: {message}"))
+        job.start()
+        _wait_for(qgis_app, lambda: outcome)
+        job.wait()
+        return outcome
+
+    def test_a_cancel_before_the_commit_reports_cancelled(self, qgis_app) -> None:
+        def work(progress):
+            progress.step(10, "reading")
+            progress._job.cancel()
+            progress.step(20, "still reading")  # the next checkpoint stops it
+            return "unreachable"
+
+        assert self._run(qgis_app, work) == ["cancelled"]
+
+    def test_a_cancel_after_the_commit_reports_success(self, qgis_app) -> None:
+        def work(progress):
+            progress.step(10, "reading")
+            progress.commit()
+            progress._job.cancel()
+            progress.step(99, "writing")  # no longer a checkpoint
+            return "written"
+
+        assert self._run(qgis_app, work) == ["succeeded"]
+
+    def test_a_cancel_in_the_last_gap_is_ignored_once_committed(self, qgis_app) -> None:
+        """No checkpoint after the cancel: the end of `run` decides."""
+
+        def work(progress):
+            progress.commit()
+            progress._job.cancel()
+            return "written"
+
+        assert self._run(qgis_app, work) == ["succeeded"]
+
+    def test_a_cancel_in_the_last_gap_of_uncommitted_work_still_cancels(
+        self, qgis_app
+    ) -> None:
+        def work(progress):
+            progress._job.cancel()
+            return "complete but unwanted"
+
+        assert self._run(qgis_app, work) == ["cancelled"]

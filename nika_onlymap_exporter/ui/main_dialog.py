@@ -30,6 +30,7 @@ import re
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import replace
 from html import escape as escape_html
 from pathlib import Path
@@ -123,8 +124,10 @@ from ..core.manifest_builder import (
 )
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import (
+    PendingProject,
     extent_from_canvas,
-    read_project,
+    finish_project,
+    prepare_project,
     resolve_title,
     with_output_notes,
 )
@@ -296,6 +299,9 @@ OPENING_SHARE_H = 0.85
 # every layer dominates the wall clock; writing and packaging share the rest, so
 # the bar keeps moving rather than sitting at 100% through the slow part.
 READ_SHARE = 70
+# Where the bar stands when the finished artifact starts being put in place - the
+# last point at which Cancel still stops an export.
+COMMIT_AT = 95
 
 # How long closing the dialog waits for a running job to notice it was
 # cancelled. Long enough for a layer of ordinary size to finish, short enough
@@ -3422,22 +3428,22 @@ class MainDialog(QDialog):
         """Run `work` on a worker thread, `on_success` back on this one.
 
         Returns False if something is already running. One job at a time is a
-        hard rule: the work reads the live QGIS project, and two threads walking
-        the same layers is the kind of fault that takes QGIS down rather than
-        just failing.
+        hard rule: each job works from a snapshot of the project taken when it
+        was requested, and two jobs would race to write the same preview and
+        cache.
 
         `quiet` reports a failure on the status line instead of in a modal. The
         live preview rebuilds on every edit, so a modal there would mean a
         dialog per keystroke for a user who is mid-edit and whose next change
         may well fix it.
         """
-        if self._job is not None or self._cartograph.busy:
-            self.status_label.setText(tr("Still working on the last request."))
+        if self._refuse_while_busy():
             return False
 
         job = BackgroundJob(work, self)
         self._job = job
         job.progressed.connect(self._on_job_progress)
+        job.committing.connect(self._on_job_committing)
         job.failed.connect(
             self._on_job_failed_quietly if quiet else self._on_job_failed
         )
@@ -3450,6 +3456,13 @@ class MainDialog(QDialog):
         self._set_busy(True, label)
         job.start()
         return True
+
+    def _refuse_while_busy(self) -> bool:
+        """Say so and return True if a job or the cartograph is already working."""
+        if self._job is not None or self._cartograph.busy:
+            self.status_label.setText(tr("Still working on the last request."))
+            return True
+        return False
 
     def _set_busy(self, busy: bool, label: str = "") -> None:
         """Show the work, and stop the user starting more of it.
@@ -3483,8 +3496,12 @@ class MainDialog(QDialog):
         self.progress_bar.setFormat(message)
         self.status_label.setText(message)
 
+    def _on_job_committing(self) -> None:
+        """The artifact is being put in place: Cancel can no longer stop it."""
+        self.cancel_button.setEnabled(False)
+
     def _on_cancel_job(self) -> None:
-        if self._job is None:
+        if self._job is None or self._job.is_committed:
             return
         self._job.cancel()
         self.cancel_button.setEnabled(False)
@@ -3692,11 +3709,17 @@ class MainDialog(QDialog):
         def then(export, _report) -> None:
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
+            identity = self._project_identity()
 
             def work(progress: Progress):
                 progress.step(READ_SHARE, tr("Updating the preview..."))
                 write_preview(
-                    export, self._project_identity(), writer=writer, live=True
+                    export,
+                    identity,
+                    writer=writer,
+                    live=True,
+                    on_progress=self._writing_progress(progress),
+                    should_cancel=progress.should_cancel,
                 )
 
             def on_written(_result) -> None:
@@ -3830,14 +3853,65 @@ class MainDialog(QDialog):
         except Exception:  # never let a canvas quirk block an export
             return None
 
-    def _read_current_project(self, progress: Progress | None = None):
-        """Read the project into the export model. **Runs on a worker thread.**
+    @staticmethod
+    def _writing_progress(progress: Progress) -> Callable[[int, int | None], None]:
+        """The writer's raster progress `(done, total)` on the bar's writing share.
 
-        Everything it touches is either a plain value captured before the job
-        started, or the PyQGIS pipeline that the Processing algorithm already
-        runs off the main thread. Nothing here may touch a widget.
+        Converting a large raster is the slow part of writing, and GDAL reports
+        it; spreading it over the share between reading and "Finishing" keeps
+        the bar moving rather than parked while it runs.
+        """
+
+        def on_progress(done: int, total: int | None) -> None:
+            if not total:
+                return
+            span = COMMIT_AT - READ_SHARE
+            progress.step(
+                READ_SHARE + int(span * done / total),
+                tr("Converting rasters ({percent}%)...").format(
+                    percent=int(100 * done / total)
+                ),
+            )
+
+        return on_progress
+
+    def _prepare_current_project(self) -> tuple[PendingProject, FidelityReportBuilder]:
+        """Read everything the project must be asked for. **GUI thread only.**
+
+        The live `QgsProject` and its layers are touched here and nowhere on the
+        worker: this returns a `PendingProject` of plain values and feature
+        sources, which `_read_current_project` finishes off the GUI thread. See
+        `background_job` for the boundary.
         """
         report = FidelityReportBuilder()
+        pending = prepare_project(
+            self.project,
+            report,
+            settings=self.state.to_export_settings(),
+            title_override=self.state.map_name or None,
+            selected_layer_ids=self.state.selected_layer_ids(
+                self._available_layer_ids()
+            ),
+            layer_settings=self.state.layers,
+            canvas_extent=self._pending_canvas_extent,
+        )
+        return pending, report
+
+    def _read_current_project(
+        self,
+        progress: Progress | None = None,
+        prepared: tuple[PendingProject, FidelityReportBuilder] | None = None,
+    ):
+        """Finish reading the project into the export model. **Runs on a worker
+        thread** when given `prepared`, which the GUI thread made with
+        `_prepare_current_project`; without it the preparation happens here, on
+        the caller's thread, for callers that are not a job.
+
+        Everything it touches is either a plain value captured before the job
+        started or part of `prepared`, which holds no project or layer. Nothing
+        here may touch a widget.
+        """
+        pending, report = prepared or self._prepare_current_project()
 
         def on_layer(done: int, total: int, name: str) -> None:
             if progress is None:
@@ -3852,18 +3926,7 @@ class MainDialog(QDialog):
                 ),
             )
 
-        export = read_project(
-            self.project,
-            report,
-            settings=self.state.to_export_settings(),
-            title_override=self.state.map_name or None,
-            selected_layer_ids=self.state.selected_layer_ids(
-                self._available_layer_ids()
-            ),
-            layer_settings=self.state.layers,
-            canvas_extent=self._pending_canvas_extent,
-            progress=on_layer,
-        )
+        export = finish_project(pending, report, on_layer)
         # Licence caps are evaluated here, not left to the writer, because the
         # writer's verdict arrives after the file is on disk. A layer past the
         # free-tier cap renders nothing for the recipient, so the Fidelity tab
@@ -3906,12 +3969,26 @@ class MainDialog(QDialog):
             then(current, self._cached_report)
             return True
 
+        if self._refuse_while_busy():
+            return False
+
         self._pending_canvas_extent = canvas_extent
         self._pending_license_key = self._license_key()
 
+        # On this thread: it reads the live project. The job gets the snapshot.
+        try:
+            prepared = self._prepare_current_project()
+        except Exception as exc:
+            details = traceback.format_exc()
+            if quiet:
+                self._on_job_failed_quietly(str(exc), details)
+            else:
+                self._on_job_failed(str(exc), details)
+            return False
+
         def work(progress: Progress):
             progress.step(0, tr("Reading the project..."))
-            return self._read_current_project(progress)
+            return self._read_current_project(progress, prepared)
 
         generation = self._project_generation
 
@@ -4006,7 +4083,13 @@ class MainDialog(QDialog):
             # Served one-offs carry a listener too, deaf to reloads: it is how
             # the server learns the tab has closed.
             return write_preview(
-                export, identity, writer=writer, live=live, served=served
+                export,
+                identity,
+                writer=writer,
+                live=live,
+                served=served,
+                on_progress=self._writing_progress(progress),
+                should_cancel=progress.should_cancel,
             )
 
         def on_written(result) -> None:
@@ -4260,16 +4343,29 @@ class MainDialog(QDialog):
 
         def work(progress: Progress):
             progress.step(READ_SHARE, tr("Writing the map..."))
+
+            def on_commit() -> None:
+                # The last point Cancel can stop: from here the map is being
+                # put in place, and a stop now would report "cancelled" over a
+                # file that was written.
+                progress.step(COMMIT_AT, tr("Saving the map..."))
+                progress.commit()
+
             try:
                 result, outcome = build_artifact(
-                    export, destination, mode=mode, writer=writer
+                    export,
+                    destination,
+                    mode=mode,
+                    writer=writer,
+                    on_progress=self._writing_progress(progress),
+                    should_cancel=progress.should_cancel,
+                    on_commit=on_commit,
                 )
             except ExportBlockedError as exc:
                 # Returned rather than raised: a blocked export is the user's to
                 # fix, and raising would route it to the crash reporter with a
                 # "please report this" that has nothing to report.
                 return exc
-            progress.step(100, tr("Finishing..."))
             return result, outcome
 
         def on_written(built) -> None:

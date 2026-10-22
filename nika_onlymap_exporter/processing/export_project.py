@@ -26,10 +26,11 @@ from qgis.core import (
     QgsProcessingParameterString,
 )
 
+from ..core.cancellation import ExportCancelledError
 from ..core.export_ir import ExportSettings, OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy, report_verdict
-from ..core.project_reader import read_project
+from ..core.project_reader import PendingProject, finish_project, prepare_project
 from ..core.settings import resolve_license_key
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.runtime_manager import (
@@ -39,6 +40,11 @@ from ..packaging.runtime_manager import (
 )
 from ..ui.i18n import N_, plural, tr
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
+
+# Where the progress bar stands when reading ends and when the finished artifact
+# starts being put in place (the last point Processing's Cancel still stops it).
+READ_SHARE = 70
+COMMIT_AT = 95
 
 # Order is the user-facing enum order, so it is part of the algorithm's saved
 # parameters. Append, never reorder: a stored model would silently change mode.
@@ -191,10 +197,12 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         except RuntimeUnavailableError as exc:
             raise QgsProcessingException(str(exc)) from exc
 
-    def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
-        self._check_runtime_first()
+    _prepared: tuple[PendingProject, FidelityReportBuilder] | None = None
+
+    def _settings_and_title(
+        self, parameters, context
+    ) -> tuple[OutputMode, ExportSettings, str | None]:
         mode = OUTPUT_MODES[self.parameterAsEnum(parameters, self.MODE, context)][0]
-        destination = Path(self.parameterAsFileOutput(parameters, self.OUTPUT, context))
         title = (
             self.parameterAsString(parameters, self.TITLE, context) or ""
         ).strip() or None
@@ -210,16 +218,61 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             ),
             show_scale_bar=self.parameterAsBool(parameters, self.SCALE_BAR, context),
         )
+        return mode, settings, title
+
+    def _prepare(
+        self, parameters, context
+    ) -> tuple[PendingProject, FidelityReportBuilder]:
+        """Read the live project. Must run on the thread that owns it."""
+        _mode, settings, title = self._settings_and_title(parameters, context)
+        report = FidelityReportBuilder()
+        pending = prepare_project(
+            context.project(), report, settings=settings, title_override=title
+        )
+        return pending, report
+
+    def prepareAlgorithm(self, parameters, context, feedback):  # noqa: N802
+        """Runs on the main thread, before `processAlgorithm` goes to a worker.
+
+        Everything that needs the live project and its layers happens here: a
+        Processing algorithm without `NoThreading` runs `processAlgorithm` on a
+        background thread, where QGIS says not to touch the GUI-owned project.
+        What is stored holds no project or layer, only what the worker reads.
+        """
+        self._check_runtime_first()
+        self._prepared = self._prepare(parameters, context)
+        return True
+
+    def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
+        try:
+            return self._process(parameters, context, feedback)
+        except ExportCancelledError:
+            # Stopped before anything was committed: the destination is as it
+            # was. Processing reads the cancel off the feedback.
+            return {}
+
+    def _process(self, parameters, context, feedback):
+        if self._prepared is None:
+            # Called without `prepareAlgorithm` (a script, a test): same thread
+            # as the caller, which is the one that owns the project.
+            self._check_runtime_first()
+            self._prepared = self._prepare(parameters, context)
+        pending, report = self._prepared
+        self._prepared = None
+        mode, _settings, _title = self._settings_and_title(parameters, context)
+        destination = Path(self.parameterAsFileOutput(parameters, self.OUTPUT, context))
 
         license_key = resolve_license_key(
             self.parameterAsString(parameters, self.LICENSE_KEY, context)
         )
         writer = OnlyMapWriter(license_policy=default_policy(license_key))
 
-        report = FidelityReportBuilder()
-        export = read_project(
-            context.project(), report, settings=settings, title_override=title
-        )
+        def on_layer(done: int, total: int, _name: str) -> None:
+            if feedback.isCanceled():
+                raise ExportCancelledError
+            feedback.setProgress(READ_SHARE * done / total if total else 0)
+
+        export = finish_project(pending, report, on_layer)
         # The caps are the recipient's experience, so a batch run has to record
         # them where an audit can find them. Processing has no Fidelity tab.
         report_verdict(writer.license_policy.evaluate(export), report)
@@ -289,9 +342,21 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         # build folder beside the user's output) and what writes the recipient's
         # README. Reimplementing those here is exactly the dialog/algorithm drift
         # this module exists to avoid.
+        def on_raster_progress(done: int, total: int | None) -> None:
+            if total:
+                feedback.setProgress(
+                    READ_SHARE + (COMMIT_AT - READ_SHARE) * done / total
+                )
+
         try:
             result, outcome = build_artifact(
-                export, destination, mode=mode, writer=writer
+                export,
+                destination,
+                mode=mode,
+                writer=writer,
+                on_progress=on_raster_progress,
+                should_cancel=feedback.isCanceled,
+                on_commit=lambda: feedback.setProgress(COMMIT_AT),
             )
         except ExportBlockedError as exc:
             raise QgsProcessingException(
@@ -312,6 +377,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             feedback.pushWarning(warning)
 
         feedback.pushInfo(outcome.summary())
+        feedback.setProgress(100)
         return {self.OUTPUT: str(outcome.path)}
 
     @staticmethod

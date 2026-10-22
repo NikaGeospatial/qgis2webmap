@@ -463,6 +463,11 @@ A bar appears only while something is running, naming the layer it is on, with
 than that the plugin has hung. One job runs at a time: pressing Export twice does
 not export twice.
 
+The bar also follows raster conversion, the slow part of a map with imagery.
+**Cancel** stops the job and leaves the file you already had untouched, right up
+to the moment the bar reads *Saving the map...*. From there the file is being put
+in place, Cancel is greyed out, and the export finishes.
+
 ---
 
 ## Next

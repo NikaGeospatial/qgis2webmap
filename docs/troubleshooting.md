@@ -194,7 +194,8 @@ does not affect extrusion, because extrusion never reads the geometry's height.
 
 It reads every feature of every layer, so a large project takes a while. The
 progress bar names the layer it is on. It runs on a background thread — the
-window stays usable, and **Cancel** stops it.
+window stays usable, and **Cancel** stops it. Layer settings and styling are
+read first, on the main thread, which is a brief pause rather than a freeze.
 
 ### Nothing happens when I press Export twice
 

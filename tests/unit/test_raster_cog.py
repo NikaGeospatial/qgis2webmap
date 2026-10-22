@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from nika_onlymap_exporter.core.cancellation import ExportCancelledError
 from nika_onlymap_exporter.packaging import raster_cog as rc
 
 
@@ -357,9 +358,8 @@ def test_converting_onto_the_source_is_refused(plain_geotiff):
 
 @needs_gdal
 def test_cancellation_is_reported_as_cancellation(tmp_path, plain_geotiff):
-    with pytest.raises(rc.ConversionError) as error:
+    with pytest.raises(ExportCancelledError):
         rc.to_cog(plain_geotiff, tmp_path / "out.tif", should_cancel=lambda: True)
-    assert "cancelled" in str(error.value)
 
 
 @needs_gdal

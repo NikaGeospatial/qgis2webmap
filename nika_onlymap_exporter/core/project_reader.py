@@ -25,11 +25,12 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
     QgsDistanceArea,
     QgsLayerTreeLayer,
     QgsPointXY,
@@ -49,7 +50,7 @@ from .export_ir import (
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
-from .layer_reader import WGS84, read_layer
+from .layer_reader import WGS84, PendingLayer, prepare_layer
 from .manifest_builder import (
     DEFAULT_LABEL_SIZE,
     OSM_FILE_NOTE,
@@ -197,7 +198,7 @@ def _project_terrain_kind(project: QgsProject) -> str | None:
 
 
 def _report_terrain(
-    project: QgsProject,
+    project_terrain_kind: str | None,
     settings: ExportSettings,
     report: FidelityReportBuilder,
 ) -> None:
@@ -211,7 +212,7 @@ def _report_terrain(
     note = terrain_note(settings.terrain, basemap=settings.basemap)
     if note is not None:
         report.approximated("Terrain", note)
-        kind = _project_terrain_kind(project)
+        kind = project_terrain_kind
         if kind is not None:
             report.approximated(
                 "Terrain",
@@ -221,7 +222,7 @@ def _report_terrain(
             )
         return
 
-    kind = _project_terrain_kind(project)
+    kind = project_terrain_kind
     if kind is not None:
         report.unsupported(
             "Terrain",
@@ -303,7 +304,39 @@ def read_project(
     progress: Callable[[int, int, str], None] | None = None,
     layer_order: Sequence[str] | None = None,
 ) -> ExportProject:
-    """Read a whole project into the normalized model.
+    """Read a whole project into the normalized model, on the calling thread.
+
+    `prepare_project` and `finish_project` back to back, for callers that
+    are not a background job (the Processing algorithm, the cartograph, tests).
+    See `prepare_project` for the arguments and `finish_project` for
+    `progress`.
+    """
+    pending = prepare_project(
+        project,
+        report,
+        settings=settings,
+        title_override=title_override,
+        background_color=background_color,
+        selected_layer_ids=selected_layer_ids,
+        layer_settings=layer_settings,
+        canvas_extent=canvas_extent,
+        layer_order=layer_order,
+    )
+    return finish_project(pending, report, progress)
+
+
+def prepare_project(
+    project: QgsProject,
+    report: FidelityReportBuilder,
+    settings: ExportSettings | None = None,
+    title_override: str | None = None,
+    background_color: Color | None = None,
+    selected_layer_ids: frozenset[str] | None = None,
+    layer_settings: Mapping[str, LayerSettings] | None = None,
+    canvas_extent: Extent | None = None,
+    layer_order: Sequence[str] | None = None,
+) -> PendingProject:
+    """Read a whole project up to its features. **GUI thread only.**
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
@@ -322,12 +355,6 @@ def read_project(
     `layer_settings` carries the dialog's per-layer popup and label checkboxes,
     keyed by layer id. A layer absent from the mapping keeps the defaults, so a
     caller with no dialog (the Processing algorithm, a test) can omit it.
-
-    `progress` is called as `(done, total, layer_name)` before each layer is
-    read. Reading is the slow half of an export - every feature of every layer -
-    and it is the half a user has no other way to watch, so the dialog drives its
-    progress bar from here. A caller that wants none passes `None` and pays
-    nothing.
     """
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
@@ -378,25 +405,10 @@ def read_project(
             tree_layers.sort(key=lambda node: -rank.get(node.layerId(), len(rank)))
         effective_selected_ids = selected_layer_ids
 
-    layers = []
+    entries: list[tuple[str, ExportLayer | PendingLayer | None]] = []
     # Named, not counted: "1 layer(s) could not be loaded" left the user to
     # find which one, and the Fidelity tab groups a named row under its layer.
     skipped_invalid: list[tuple[str, str]] = []
-
-    # Counted up front so the progress bar can show "3 of 12" rather than a bar
-    # that only ever fills at the end.
-    total = sum(
-        1
-        for tree_layer in tree_layers
-        if isinstance(tree_layer, QgsLayerTreeLayer)
-        and tree_layer.layer() is not None
-        and tree_layer.layer().isValid()
-        and (
-            effective_selected_ids is None
-            or tree_layer.layer().id() in effective_selected_ids
-        )
-    )
-    done = 0
 
     for tree_layer in tree_layers:
         if not isinstance(tree_layer, QgsLayerTreeLayer):
@@ -415,12 +427,8 @@ def read_project(
             skipped_invalid.append((tree_layer.layerId(), tree_layer.name()))
             continue
 
-        if progress is not None:
-            progress(done, total, map_layer.name())
-        done += 1
-
         per_layer = (layer_settings or {}).get(map_layer.id()) or LayerSettings()
-        export_layer = read_layer(
+        prepared = prepare_layer(
             map_layer,
             report,
             group_path=group_path_for(tree_layer),
@@ -438,10 +446,81 @@ def read_project(
             name_field=per_layer.name_field,
             cluster=per_layer.cluster,
         )
-        if export_layer is not None:
-            layers.append(export_layer)
+        entries.append((map_layer.name(), prepared))
 
-    for layer_id, name in skipped_invalid:
+    return PendingProject(
+        entries=tuple(entries),
+        skipped_invalid=tuple(skipped_invalid),
+        settings=settings,
+        canvas_extent=canvas_extent,
+        background_color=background_color,
+        has_tile_layer=_has_tile_layer(project),
+        scale_basis=ScaleBasis.of(project),
+        terrain_kind=_project_terrain_kind(project),
+        title=resolve_title(project, title_override),
+        title_override=title_override,
+        project_title=(project.title() or "").strip(),
+        abstract=project.metadata().abstract() or "",
+        source_crs=project.crs().authid() if project.crs().isValid() else None,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class PendingProject:
+    """A project read as far as the GUI thread can take it.
+
+    **The boundary a background export runs on.** `prepare_project` walks the
+    live `QgsProject` on the GUI thread and translates everything that needs a
+    live layer: symbology, labels, popups, sources, the project's title, CRS and
+    terrain. What it hands back holds no `QgsProject` and no `QgsMapLayer` -
+    only plain values, value-type QGIS copies and per-layer feature sources
+    (see `layer_reader.LayerFeatures`). `finish_project` then does the work that scales
+    with the data - reading and serialising every feature - plus the
+    project-wide steps that depend on it, and runs on a worker. QGIS's task
+    guidance says a background job must not touch GUI-owned layers or the
+    project, and nothing `finish_project` reaches does.
+    """
+
+    entries: tuple[tuple[str, ExportLayer | PendingLayer | None], ...]
+    skipped_invalid: tuple[tuple[str, str], ...]
+    settings: ExportSettings
+    canvas_extent: Extent | None
+    background_color: Color | None
+    has_tile_layer: bool
+    scale_basis: ScaleBasis
+    terrain_kind: str | None
+    title: str
+    title_override: str | None
+    project_title: str
+    abstract: str
+    source_crs: str | None
+
+
+def finish_project(
+    pending: PendingProject,
+    report: FidelityReportBuilder,
+    progress: Callable[[int, int, str], None] | None = None,
+) -> ExportProject:
+    """Read the features and complete the model. **Safe off the GUI thread.**
+
+    `progress` is called as `(done, total, layer_name)` before each layer is
+    read. Reading is the slow half of an export - every feature of every
+    layer - and it is the half a user has no other way to watch, so the
+    dialog drives its progress bar from here, and its Cancel from the same
+    call raising. A caller that wants none passes `None` and pays nothing.
+    """
+    settings = pending.settings
+    canvas_extent = pending.canvas_extent
+    layers: list[ExportLayer] = []
+    total = len(pending.entries)
+    for done, (name, prepared) in enumerate(pending.entries):
+        if progress is not None:
+            progress(done, total, name)
+        if isinstance(prepared, PendingLayer):
+            prepared = prepared.finish(report)
+        if prepared is not None:
+            layers.append(prepared)
+    for layer_id, name in pending.skipped_invalid:
         report.blocked(
             f"Layer '{name}'",
             "QGIS could not load this layer - its data source is missing or "
@@ -476,7 +555,7 @@ def read_project(
         report.approximated("Basemap", OSM_FILE_NOTE)
     elif note is not None:
         report.approximated("Basemap", note)
-    elif _has_tile_layer(project) and not any(layer.tiles for layer in layers):
+    elif pending.has_tile_layer and not any(layer.tiles for layer in layers):
         # The project has a backdrop and the export will not. Silence here is
         # how someone ships a map of bare shapes floating on white and only
         # finds out when the recipient asks what they are looking at.
@@ -491,10 +570,10 @@ def read_project(
     # Before the terrain notes: they name labelled layers, and a layer whose
     # labels never have room is unlabelled from `_declutter` on.
     extent = _resolve_extent(layers, report, settings, canvas_extent)
-    layers = _translate_scale_visibility(project, layers, extent, report)
+    layers = _translate_scale_visibility(pending.scale_basis, layers, extent, report)
     layers = _declutter(layers, report)
 
-    _report_terrain(project, settings, report)
+    _report_terrain(pending.terrain_kind, settings, report)
 
     # Extrusion and relief cannot coexist: columns would rise from sea level
     # and vanish inside the mountains. Under relief the runtime drapes every
@@ -556,24 +635,28 @@ def read_project(
                 + ". Turn relief off if the outlines matter more.",
             )
 
-    title = resolve_title(project, title_override)
-
-    _report_project_metadata(project, title, title_override, report)
+    _report_project_metadata(
+        pending.project_title,
+        pending.abstract,
+        pending.title,
+        pending.title_override,
+        report,
+    )
 
     return ExportProject(
-        title=title,
+        title=pending.title,
         layers=tuple(layers),
-        abstract=(project.metadata().abstract() or None),
+        abstract=(pending.abstract or None),
         extent=extent,
-        background_color=background_color,
-        source_crs=project.crs().authid() if project.crs().isValid() else None,
+        background_color=pending.background_color,
+        source_crs=pending.source_crs,
         settings=settings,
         fidelity=report.items,
     )
 
 
 def _translate_scale_visibility(
-    project: QgsProject,
+    basis: ScaleBasis,
     layers: list[ExportLayer],
     extent: Extent | None,
     report: FidelityReportBuilder,
@@ -589,10 +672,10 @@ def _translate_scale_visibility(
         return layers
 
     longitude, latitude = extent.center if extent is not None else (0.0, 0.0)
-    factor = _qgis_scale_factor(project, longitude, latitude)
+    factor = _qgis_scale_factor(basis, longitude, latitude)
     edges = (
         [
-            (edge, _qgis_scale_factor(project, longitude, edge))
+            (edge, _qgis_scale_factor(basis, longitude, edge))
             for edge in (extent.south, extent.north)
         ]
         if extent is not None
@@ -672,7 +755,30 @@ def _declutter(
     return decluttered
 
 
-def _qgis_scale_factor(project: QgsProject, longitude: float, latitude: float) -> float:
+@dataclasses.dataclass(frozen=True)
+class ScaleBasis:
+    """What `_qgis_scale_factor` needs from the project, copied out.
+
+    The CRS and transform context are value types and the scale method is an
+    enum, so unlike the project they can cross to a worker thread.
+    """
+
+    crs: QgsCoordinateReferenceSystem
+    transform_context: QgsCoordinateTransformContext
+    method: Any | None
+
+    @classmethod
+    def of(cls, project: QgsProject) -> ScaleBasis:
+        """**GUI thread only.**"""
+        method = getattr(project, "scaleMethod", None)
+        return cls(
+            crs=project.crs(),
+            transform_context=project.transformContext(),
+            method=method() if method is not None else None,
+        )
+
+
+def _qgis_scale_factor(basis: ScaleBasis, longitude: float, latitude: float) -> float:
     """QGIS's scale readout divided by the true ground scale, at one point.
 
     Measured with QGIS's own `QgsScaleCalculator` - in the project's CRS and
@@ -682,14 +788,14 @@ def _qgis_scale_factor(project: QgsProject, longitude: float, latitude: float) -
     latitude method gives in a geographic CRS. Anything that cannot be measured
     falls back to 1.0, the metre-based case, rather than failing the export.
     """
-    crs = project.crs()
+    crs = basis.crs
     if not crs.isValid():
         return 1.0
     half = 0.005
     pixels = 1000
     try:
         transform = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(WGS84), crs, project.transformContext()
+            QgsCoordinateReferenceSystem(WGS84), crs, basis.transform_context
         )
         box = transform.transformBoundingBox(
             QgsRectangle(
@@ -697,9 +803,8 @@ def _qgis_scale_factor(project: QgsProject, longitude: float, latitude: float) -
             )
         )
         calculator = QgsScaleCalculator(96, crs.mapUnits())
-        method = getattr(project, "scaleMethod", None)
-        if method is not None:
-            calculator.setMethod(method())
+        if basis.method is not None:
+            calculator.setMethod(basis.method)
         reported = calculator.calculate(box, pixels)
         distance = QgsDistanceArea()
         distance.setEllipsoid("WGS84")
@@ -801,7 +906,8 @@ def _data_extent(layers: list, report: FidelityReportBuilder) -> Extent | None:
 
 
 def _report_project_metadata(
-    project: QgsProject,
+    project_title: str,
+    abstract: str,
     resolved_title: str,
     title_override: str | None,
     report: FidelityReportBuilder,
@@ -812,8 +918,6 @@ def _report_project_metadata(
     field overrides a different project title, the user should be told which one
     reached the map rather than left to discover it in the output.
     """
-    project_title = (project.title() or "").strip()
-
     if title_override and project_title and title_override.strip() != project_title:
         report.approximated(
             "Map title",
@@ -829,7 +933,7 @@ def _report_project_metadata(
     else:
         report.preserved("Map title", f"The map is titled '{resolved_title}'.")
 
-    if not (project.metadata().abstract() or "").strip():
+    if not abstract.strip():
         # Not a problem - just absent. Recorded so the Fidelity tab can show what
         # a richer export would have included.
         report.preserved(

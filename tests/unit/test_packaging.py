@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
+from nika_onlymap_exporter.core.cancellation import ExportCancelledError
 from nika_onlymap_exporter.core.export_ir import (
     AssetDependency,
     AssetDisposition,
@@ -454,6 +455,76 @@ class TestExportIntegrity:
             )
         assert destination.read_bytes() == b"ORIGINAL VALID MAP"
         assert [p.name for p in tmp_path.iterdir()] == ["map.html"]
+
+    @pytest.mark.parametrize(
+        ("mode", "name"),
+        [
+            (OutputMode.STANDALONE_HTML, "map.html"),
+            (OutputMode.SHARE_ZIP, "map.zip"),
+            (OutputMode.FOLDER, "map"),
+        ],
+    )
+    def test_a_cancel_before_the_commit_leaves_the_destination_untouched(
+        self, tmp_path, mode, name
+    ) -> None:
+        destination = tmp_path / name
+        if mode is OutputMode.FOLDER:
+            destination.mkdir()
+            (destination / "index.html").write_bytes(b"ORIGINAL VALID MAP")
+        else:
+            destination.write_bytes(b"ORIGINAL VALID MAP")
+        committed: list[bool] = []
+
+        with pytest.raises(ExportCancelledError):
+            build_artifact(
+                make_project(),
+                destination,
+                mode=mode,
+                writer=OnlyMapWriter(runtime_provider=FakeRuntime()),
+                should_cancel=lambda: True,
+                on_commit=lambda: committed.append(True),
+            )
+
+        assert committed == [], "the commit hook ran for a cancelled export"
+        if mode is OutputMode.FOLDER:
+            assert [p.name for p in destination.iterdir()] == ["index.html"]
+            assert (destination / "index.html").read_bytes() == b"ORIGINAL VALID MAP"
+        else:
+            assert destination.read_bytes() == b"ORIGINAL VALID MAP"
+            assert [p.name for p in tmp_path.iterdir()] == [name]
+
+    @pytest.mark.parametrize(
+        ("mode", "name"),
+        [
+            (OutputMode.STANDALONE_HTML, "map.html"),
+            (OutputMode.SHARE_ZIP, "map.zip"),
+            (OutputMode.FOLDER, "map"),
+        ],
+    )
+    def test_a_cancel_after_the_commit_still_reports_success(
+        self, tmp_path, mode, name
+    ) -> None:
+        stop = {"asked": False}
+        calls: list[bool] = []
+
+        def should_cancel() -> bool:
+            calls.append(stop["asked"])
+            return stop["asked"]
+
+        _, outcome = build_artifact(
+            make_project(),
+            tmp_path / name,
+            mode=mode,
+            writer=OnlyMapWriter(runtime_provider=FakeRuntime()),
+            should_cancel=should_cancel,
+            # The user presses Cancel the instant the commit begins.
+            on_commit=lambda: stop.update(asked=True),
+        )
+
+        assert outcome.path.exists()
+        assert outcome.size_bytes > 0
+        # Nothing asked "should I stop?" once the artifact was being placed.
+        assert calls and not calls[-1]
 
     def test_failed_zip_keeps_the_previous_archive(self, tmp_path) -> None:
         destination = tmp_path / "map.zip"

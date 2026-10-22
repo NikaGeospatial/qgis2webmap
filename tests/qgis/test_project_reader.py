@@ -820,10 +820,13 @@ class TestQgisScaleFactor:
     """What a QGIS scale readout means, measured by QGIS for the project CRS."""
 
     def factor(self, project, crs: str, longitude: float, latitude: float) -> float:
-        from nika_onlymap_exporter.core.project_reader import _qgis_scale_factor
+        from nika_onlymap_exporter.core.project_reader import (
+            ScaleBasis,
+            _qgis_scale_factor,
+        )
 
         project.setCrs(qgis_core.QgsCoordinateReferenceSystem(crs))
-        return _qgis_scale_factor(project, longitude, latitude)
+        return _qgis_scale_factor(ScaleBasis.of(project), longitude, latitude)
 
     def test_web_mercator_reads_one_over_cos_latitude(self, project) -> None:
         assert self.factor(project, "EPSG:3857", 15.0, 60.0) == pytest.approx(
@@ -837,10 +840,13 @@ class TestQgisScaleFactor:
         )
 
     def test_an_invalid_crs_falls_back_to_true_scale(self, project) -> None:
-        from nika_onlymap_exporter.core.project_reader import _qgis_scale_factor
+        from nika_onlymap_exporter.core.project_reader import (
+            ScaleBasis,
+            _qgis_scale_factor,
+        )
 
         project.setCrs(qgis_core.QgsCoordinateReferenceSystem())
-        assert _qgis_scale_factor(project, 0.0, 0.0) == 1.0
+        assert _qgis_scale_factor(ScaleBasis.of(project), 0.0, 0.0) == 1.0
 
 
 def test_an_exported_tile_layer_is_not_reported_as_a_missing_basemap(
@@ -857,3 +863,76 @@ def test_an_exported_tile_layer_is_not_reported_as_a_missing_basemap(
     export = read_project(project, report)
     assert any(layer.tiles for layer in export.layers)
     assert not any(item.subject == "Basemap" for item in report.items)
+
+
+class TestPrepareThenFinish:
+    """The split an export runs on: the project is read on the GUI thread, the
+    features on a worker that holds neither the project nor its layers."""
+
+    def test_a_worker_finishes_a_prepared_project_after_the_project_is_cleared(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        import threading
+
+        from nika_onlymap_exporter.core.project_reader import (
+            finish_project,
+            prepare_project,
+        )
+
+        project.setTitle("Split read")
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+        project.addMapLayer(
+            make_memory_layer("roads", features=[("a", [1.0, 2.0]), ("b", [3.0, 4.0])])
+        )
+        project.addMapLayer(make_memory_layer("towns", features=[("c", [5.0, 6.0])]))
+        expected = read_project(project, FidelityReportBuilder())
+
+        report = FidelityReportBuilder()
+        pending = prepare_project(project, report)
+        project.removeAllMapLayers()
+        project.clear()
+
+        done: list = []
+        errors: list[BaseException] = []
+
+        def worker() -> None:
+            try:
+                done.append(finish_project(pending, report))
+            except BaseException as exc:  # reported on the test thread
+                errors.append(exc)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join(60)
+
+        assert not errors, errors
+        (export,) = done
+        assert (
+            export.snapshot(include_geometry=True)["layers"]
+            == (expected.snapshot(include_geometry=True)["layers"])
+        )
+        assert export.title == "Split read"
+        assert export.source_crs == "EPSG:3857"
+        # Same findings; only the order within the report moved, because a
+        # layer's data notes now follow every layer's translation notes.
+        assert sorted(map(str, export.fidelity)) == sorted(map(str, expected.fidelity))
+
+    def test_progress_names_each_layer_as_the_worker_reaches_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from nika_onlymap_exporter.core.project_reader import (
+            finish_project,
+            prepare_project,
+        )
+
+        for name in ("one", "two", "three"):
+            project.addMapLayer(make_memory_layer(name, features=[("a", [0.0, 0.0])]))
+        report = FidelityReportBuilder()
+        seen: list[tuple[int, int, str]] = []
+        finish_project(
+            prepare_project(project, report),
+            report,
+            lambda done, total, name: seen.append((done, total, name)),
+        )
+        assert [(done, total) for done, total, _ in seen] == [(0, 3), (1, 3), (2, 3)]
+        assert sorted(name for _, _, name in seen) == ["one", "three", "two"]

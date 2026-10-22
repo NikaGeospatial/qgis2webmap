@@ -48,6 +48,7 @@ from pathlib import Path
 from ..core.export_ir import ExportProject, OutputMode
 from ..packaging.artifact_builder import terrain_zoom_clamp
 from ..packaging.dependency_scanner import standalone_raster_reason
+from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
 from .links import FEATURE_REQUEST_URL
 from .live_server import RELOAD_PATH
@@ -401,6 +402,8 @@ def write_preview(
     final: bool = False,
     live: bool = False,
     served: bool = False,
+    on_progress: ProgressCallback | None = None,
+    should_cancel: CancelCheck | None = None,
 ) -> ArtifactResult:
     """Build a preview artifact through the production writer.
 
@@ -413,6 +416,10 @@ def write_preview(
     is off by default so that a preview written for any other reason carries
     nothing that expects a server to exist. `served` without `live` is a
     one-off preview on that server: it says it is there, and never reloads.
+
+    `on_progress` and `should_cancel` reach the writer's raster pass, the one
+    slow part. A preview is written in place with no commit step, so a cancelled
+    one may leave the preview folder half-written; the next preview rewrites it.
     """
     writer = writer or OnlyMapWriter()
     destination = preview_directory(project_identity)
@@ -429,4 +436,6 @@ def write_preview(
         preview_hook=compose_preview_hook(
             project, live=live, final=final, served=served
         ),
+        on_progress=on_progress,
+        should_cancel=should_cancel,
     )

@@ -137,6 +137,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   converted raster during the export.
 - **Basemap and terrain count as network use**: a map exported with either
   is no longer described as working offline in the export's dependency list.
+- **Exports no longer read QGIS's project from a background thread.** The
+  dialog and the Processing algorithm now read layer settings and styling on
+  the main thread and hand the background job a snapshot, as QGIS advises, so
+  a layer removed or edited mid-export can no longer reach a half-finished
+  read. Reading the features, converting rasters and writing the file still run
+  in the background.
+- **Cancel and the progress bar cover the whole export.** The bar shows raster
+  conversion as well as reading, and the Processing algorithm reports progress
+  and honours its Cancel button. A Cancel before the file is put in place
+  leaves the file that was already there untouched; once it is being saved the
+  export finishes and reports success rather than "cancelled" over a written
+  file. A cancelled raster conversion is a cancellation, not a blocked layer.
 
 ## [0.2.1] - 2026-10-13
 

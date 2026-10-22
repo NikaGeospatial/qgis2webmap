@@ -45,6 +45,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
+from ..core.cancellation import CancelCheck, ExportCancelledError
+
 # The renderer draws in Web Mercator. A COG in any other CRS would have to be
 # warped in the browser, which the runtime does not do, so anything else is
 # reprojected on the way out rather than shipped and hoped for.
@@ -97,8 +99,8 @@ PROGRESS_TOTAL = 100
 # conversion. Separate from `ProgressCallback` so the callback keeps the
 # void-returning shape the rest of the plugin already uses -- folding
 # cancellation into its return value would have made every existing progress
-# function the wrong type.
-CancelCheck = Callable[[], bool]
+# function the wrong type. Defined in `core.cancellation`, which also owns the
+# exception a cancelled conversion raises.
 
 GDAL_MISSING_MESSAGE = (
     "GDAL's Python bindings are not available, so rasters cannot be converted "
@@ -137,7 +139,7 @@ class MissingCrsError(CogError):
 
 
 class ConversionError(CogError):
-    """`gdal.Translate` failed or was cancelled."""
+    """`gdal.Translate` failed."""
 
 
 # --------------------------------------------------------------------------
@@ -747,9 +749,9 @@ def to_cog(
             raise RuntimeError(gdal.GetLastErrorMsg() or "unknown error")
     except Exception as exc:
         if bridge.cancelled:
-            raise ConversionError(
-                f"Conversion of {Path(source_text).name} was cancelled."
-            ) from None
+            # Not a `ConversionError`: a cancellation is the user's decision,
+            # and staging would have reported it as a blocked layer.
+            raise ExportCancelledError from None
         raise ConversionError(
             f"GDAL could not convert {Path(source_text).name} to a "
             f"Cloud-Optimized GeoTIFF.\n\n{exc}"

@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
+from ..core.cancellation import raise_if_cancelled
 from ..core.export_ir import ExportProject, OutputMode
 from ..exporters.base import Exporter, ExportOutcome
 from ..exporters.folder import FolderExporter
@@ -141,6 +143,7 @@ def build_artifact(
     compress: bool = True,
     on_progress: ProgressCallback | None = None,
     should_cancel: CancelCheck | None = None,
+    on_commit: Callable[[], None] | None = None,
 ) -> tuple[ArtifactResult, ExportOutcome]:
     """Write an artifact and place it at `destination`.
 
@@ -153,6 +156,15 @@ def build_artifact(
     because this function is the plugin's single export entry point: a dialog
     that wants a progress bar for a half-gigabyte orthophoto, and a Processing
     algorithm that wants its `feedback.isCanceled()` honoured, both arrive here.
+
+    **The commit boundary.** `should_cancel` is consulted through the raster
+    pass and once more just before the exporter moves the finished artifact to
+    `destination` (the atomic `os.replace` in `staged_beside`); a stop at any of
+    those raises `ExportCancelledError` with `destination` untouched. After that
+    check it is never consulted again, so an export that gets as far as writing
+    the file always returns normally - reporting "cancelled" over a file that is
+    on disk would be false. `on_commit` is called at the boundary, after the
+    last check, so a caller can stop offering Cancel from there.
     """
     writer = writer or OnlyMapWriter()
     exporter = EXPORTERS[mode]()
@@ -191,6 +203,9 @@ def build_artifact(
                 build_readme(project, result, instruction), encoding="utf-8"
             )
 
+        raise_if_cancelled(should_cancel)
+        if on_commit is not None:
+            on_commit()
         outcome = exporter.export(result, destination)
 
     return result, outcome

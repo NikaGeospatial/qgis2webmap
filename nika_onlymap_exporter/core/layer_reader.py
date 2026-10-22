@@ -18,9 +18,11 @@ from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
+    QgsCoordinateTransformContext,
     QgsJsonExporter,
     QgsMapLayerType,
     QgsReadWriteContext,
+    QgsVectorLayerFeatureSource,
     QgsWkbTypes,
 )
 from qgis.PyQt.QtXml import QDomDocument
@@ -61,6 +63,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
 
     from qgis.core import (
+        QgsFeature,
+        QgsFieldFormatter,
         QgsMapLayer,
         QgsProject,
         QgsRasterLayer,
@@ -198,7 +202,11 @@ def _report_clip(
     )
 
 
-def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
+def clip_request(
+    layer: QgsVectorLayer,
+    extent: Any,
+    transform_context: QgsCoordinateTransformContext | None = None,
+) -> Any:
     """A feature request limited to `extent`, in the layer's own CRS.
 
     The extent arrives in WGS84 because that is what the rest of the model
@@ -212,7 +220,19 @@ def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
     the rectangle. Without it a diagonal line or a polygon around a hole
     survives on its bounding box alone. Features are kept or dropped whole;
     nothing is cut.
+
+    Only the layer's CRS is read from `layer`, so the request can be built from
+    a `LayerFeatures` snapshot on a worker thread; `transform_context` defaults
+    to the running project's, as it always did.
     """
+    return _clip_request(layer.crs(), extent, transform_context)
+
+
+def _clip_request(
+    target: QgsCoordinateReferenceSystem,
+    extent: Any,
+    transform_context: QgsCoordinateTransformContext | None,
+) -> Any:
     from qgis.core import (
         QgsCoordinateTransform,
         QgsFeatureRequest,
@@ -221,15 +241,120 @@ def clip_request(layer: QgsVectorLayer, extent: Any) -> Any:
     )
 
     rect = QgsRectangle(extent.west, extent.south, extent.east, extent.north)
-    target = layer.crs()
     if target.isValid() and target.authid() != WGS84:
         transform = QgsCoordinateTransform(
-            QgsCoordinateReferenceSystem(WGS84), target, QgsProject.instance()
+            QgsCoordinateReferenceSystem(WGS84),
+            target,
+            transform_context or QgsProject.instance().transformContext(),
         )
         rect = transform.transformBoundingBox(rect)
 
     request = QgsFeatureRequest().setFilterRect(rect)
     return request.setFlags(QgsFeatureRequest.Flag.ExactIntersect)
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldFormat:
+    """One field's editor-widget formatter, with the inputs it needs copied out.
+
+    `QgsJsonExporter` given a layer writes a field the way its widget shows it -
+    a Value Map's description rather than its stored key - and that needs the
+    layer, which a worker must not touch. So the formatter, its configuration
+    and its lookup cache (a Value Relation's table of the other layer, read
+    here on the GUI thread) are taken up front, and `LayerFeatures.represent`
+    applies them to the features a worker reads.
+    """
+
+    index: int
+    formatter: QgsFieldFormatter
+    config: dict[str, Any]
+    cache: Any
+
+
+@dataclasses.dataclass(frozen=True)
+class LayerFeatures:
+    """Everything the feature read needs from a vector layer, copied out.
+
+    Taken on the GUI thread, consumed on a worker. `QgsVectorLayer` is a
+    GUI-owned object that QGIS's own task documentation says a background job
+    must not touch, so the worker is given only what is safe to carry across:
+    a `QgsVectorLayerFeatureSource` (QGIS's thread-safe handle on the layer's
+    data, made for exactly this), value-type copies of the CRS and transform
+    context, and plain values. Nothing here refers back to the layer, which is
+    what lets the worker keep running if the user removes it meanwhile.
+
+    `total` is the layer's feature count, read only when a clip needs it for
+    the "kept N of M" note - it can be a full scan on a remote provider, which
+    is not worth paying when nothing will report it.
+    """
+
+    source: QgsVectorLayerFeatureSource
+    layer_id: str
+    layer_name: str
+    crs: QgsCoordinateReferenceSystem
+    transform_context: QgsCoordinateTransformContext
+    total: int = -1
+    # Only fields whose editor widget changes how a value reads. Empty - almost
+    # always - means the values go out as stored, and `formats_layer` is `None`.
+    formats: tuple[FieldFormat, ...] = ()
+    # A private clone for the formatters to be called with, never the project's
+    # layer. Made only when `formats` is not empty.
+    formats_layer: QgsVectorLayer | None = None
+
+    def represent(self, features: list[QgsFeature]) -> list[QgsFeature]:
+        """The features with each formatted field in the form its widget shows."""
+        if not self.formats:
+            return features
+        for feature in features:
+            attributes = feature.attributes()
+            for fmt in self.formats:
+                attributes[fmt.index] = fmt.formatter.representValue(
+                    self.formats_layer,
+                    fmt.index,
+                    fmt.config,
+                    fmt.cache,
+                    attributes[fmt.index],
+                )
+            feature.setAttributes(attributes)
+        return features
+
+
+def _field_formats(layer: QgsVectorLayer) -> tuple[FieldFormat, ...]:
+    """The fields `QgsJsonExporter(layer)` would reformat. **GUI thread only.**"""
+    from qgis.core import QgsApplication
+
+    registry = QgsApplication.fieldFormatterRegistry()
+    fallback_id = registry.fallbackFieldFormatter().id()
+    formats = []
+    for index, field in enumerate(layer.fields()):
+        setup = field.editorWidgetSetup()
+        formatter = registry.fieldFormatter(setup.type())
+        if formatter.id() == fallback_id:
+            continue
+        config = setup.config()
+        formats.append(
+            FieldFormat(
+                index, formatter, config, formatter.createCache(layer, index, config)
+            )
+        )
+    return tuple(formats)
+
+
+def snapshot_features(layer: QgsVectorLayer, clip_extent: Any | None) -> LayerFeatures:
+    """Copy out what `export_geojson_from` needs. **GUI thread only.**"""
+    from qgis.core import QgsProject
+
+    formats = _field_formats(layer)
+    return LayerFeatures(
+        source=QgsVectorLayerFeatureSource(layer),
+        layer_id=layer.id(),
+        layer_name=layer.name(),
+        crs=layer.crs(),
+        transform_context=QgsProject.instance().transformContext(),
+        total=layer.featureCount() if clip_extent is not None else -1,
+        formats=formats,
+        formats_layer=layer.clone() if formats else None,
+    )
 
 
 def export_geojson(
@@ -240,6 +365,27 @@ def export_geojson(
 ) -> dict[str, Any] | None:
     """Read every feature as WGS84 GeoJSON, or only those within `clip_extent`.
 
+    Snapshot and read in one call, for callers already on the thread that owns
+    `layer`. A background job takes the snapshot on the GUI thread and calls
+    `export_geojson_from` on its worker instead.
+    """
+    return export_geojson_from(
+        snapshot_features(layer, clip_extent),
+        report,
+        precision=precision,
+        clip_extent=clip_extent,
+    )
+
+
+def export_geojson_from(
+    features: LayerFeatures,
+    report: FidelityReportBuilder,
+    precision: int = GEOJSON_PRECISION,
+    clip_extent: Any | None = None,
+) -> dict[str, Any] | None:
+    """Read a snapshot's features as WGS84 GeoJSON, or only those within
+    `clip_extent`. Safe on a worker thread: it touches no layer.
+
     `QgsJsonExporter` handles reprojection through `setDestinationCrs`, so this
     is the single place a CRS transform happens in the whole plugin.
 
@@ -247,10 +393,11 @@ def export_geojson(
     the features outside it are never read, so the cost is paid by the provider's
     spatial index rather than by us filtering afterwards.
     """
-    layer_id = layer.id()
-    subject = f"Data of '{layer.name()}'"
+    layer_id = features.layer_id
+    subject = f"Data of '{features.layer_name}'"
 
-    exporter = QgsJsonExporter(layer)
+    exporter = QgsJsonExporter()
+    exporter.setSourceCrs(features.crs)
     exporter.setDestinationCrs(QgsCoordinateReferenceSystem(WGS84))
     exporter.setTransformGeometries(True)
     exporter.setIncludeGeometry(True)
@@ -259,12 +406,14 @@ def export_geojson(
 
     try:
         if clip_extent is None:
-            features = list(layer.getFeatures())
+            collected = list(features.source.getFeatures())
         else:
-            total = layer.featureCount()
-            features = list(layer.getFeatures(clip_request(layer, clip_extent)))
-            _report_clip(report, subject, layer_id, len(features), total)
-        text = exporter.exportFeatures(features)
+            request = _clip_request(
+                features.crs, clip_extent, features.transform_context
+            )
+            collected = list(features.source.getFeatures(request))
+            _report_clip(report, subject, layer_id, len(collected), features.total)
+        text = exporter.exportFeatures(features.represent(collected))
         collection = json.loads(text)
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
@@ -275,7 +424,7 @@ def export_geojson(
         )
         return None
 
-    source_crs = layer.crs()
+    source_crs = features.crs
     if source_crs.isValid() and source_crs.authid() != WGS84:
         report.preserved(
             subject,
@@ -1000,6 +1149,82 @@ def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class PendingLayer:
+    """A vector layer read as far as the GUI thread can take it.
+
+    `prepare_layer` fills in everything that needs the live `QgsVectorLayer` -
+    symbology, labels, popup, source, the feature snapshot - and leaves the one
+    expensive step, reading and serialising every feature, to `finish`. The
+    split is the boundary a background export runs on: `prepare_layer` on the
+    GUI thread, `finish` on a worker. `finish` reaches no layer, so it is safe
+    to run after the layer has been removed from the project.
+    """
+
+    base: ExportLayer
+    features: LayerFeatures
+    precision: int
+    clip_extent: Any | None
+    drawing: frozenset[str]
+    renumber_ids: bool = False
+
+    def finish(self, report: FidelityReportBuilder) -> ExportLayer | None:
+        """Read the features and complete the layer. **Safe off the GUI thread.**"""
+        base = self.base
+        geojson = export_geojson_from(
+            self.features,
+            report,
+            precision=self.precision,
+            clip_extent=self.clip_extent,
+        )
+        if geojson is None:
+            return None
+
+        # Before counting: a switched-off category means the author does not want
+        # those features on the map at all, so they must leave the data, not just
+        # the style. The count has to reflect what actually ships.
+        geojson = drop_hidden_features(geojson, base.renderer)
+
+        # Only the attributes something still reads survive: what the popup shows,
+        # plus what the map draws with. A value the user hid must leave the file,
+        # not merely the popup - see `keep_only_fields`.
+        keep = set(self.drawing)
+        if base.popup.enabled:
+            keep |= {field.name for field in base.popup.visible_fields}
+        geojson = keep_only_fields(geojson, keep)
+        feature_ids: tuple[tuple[int, int], ...] = ()
+        if self.renumber_ids:
+            geojson, feature_ids = renumber_feature_ids(geojson)
+
+        # After the strip so only surviving fields are considered; drawing fields
+        # are protected because accessors reference them by their real name.
+        geojson, popup = rename_untemplatable_fields(
+            geojson,
+            base.popup,
+            set(self.drawing),
+            report,
+            f"Popup fields of '{base.name}'",
+            base.layer_id,
+        )
+
+        feature_count = len(geojson.get("features") or ())
+        if feature_count == 0:
+            report.unsupported(
+                f"Layer '{base.name}'",
+                "The layer contains no features. It is exported but will show "
+                "nothing - check for an active filter or an empty data source.",
+                base.layer_id,
+            )
+
+        return dataclasses.replace(
+            base,
+            popup=popup,
+            feature_count=feature_count,
+            geojson=geojson,
+            feature_ids=feature_ids,
+        )
+
+
 def read_layer(
     layer: QgsMapLayer,
     report: FidelityReportBuilder,
@@ -1016,12 +1241,56 @@ def read_layer(
     name_field: str | None = None,
     cluster: bool = True,
 ) -> ExportLayer | None:
-    """Read one layer into the normalized model.
+    """Read one layer into the normalized model, on the calling thread.
 
-    Raster layers are handed straight to `read_raster`; everything below is the
-    vector path. Returns `None` for layers with no web equivalent at all - a
-    mesh or point cloud, a vector layer with no geometry, a raster that is a
-    live service rather than a file - after recording why.
+    `prepare_layer` and `PendingLayer.finish` back to back, for callers that are
+    not a background job. See `prepare_layer` for the arguments.
+    """
+    prepared = prepare_layer(
+        layer,
+        report,
+        group_path=group_path,
+        visible=visible,
+        with_popup=with_popup,
+        with_labels=with_labels,
+        field_modes=field_modes,
+        precision=precision,
+        popup_on_hover=popup_on_hover,
+        highlight_color=highlight_color,
+        project=project,
+        clip_extent=clip_extent,
+        name_field=name_field,
+        cluster=cluster,
+    )
+    if isinstance(prepared, PendingLayer):
+        return prepared.finish(report)
+    return prepared
+
+
+def prepare_layer(
+    layer: QgsMapLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+    with_popup: bool = True,
+    with_labels: bool = True,
+    field_modes: Mapping[str, str] | None = None,
+    precision: int | None = None,
+    popup_on_hover: bool = False,
+    highlight_color: Color | None = None,
+    project: QgsProject | None = None,
+    clip_extent: Any | None = None,
+    name_field: str | None = None,
+    cluster: bool = True,
+) -> ExportLayer | PendingLayer | None:
+    """Read one layer into the normalized model, up to its features. **GUI
+    thread only** - it reads the live layer.
+
+    Raster layers are handed straight to `read_raster` and come back complete;
+    everything below is the vector path, which comes back as a `PendingLayer`
+    whose `finish` reads the features. Returns `None` for layers with no web
+    equivalent at all - a mesh or point cloud, a vector layer with no geometry,
+    a raster that is a live service rather than a file - after recording why.
 
     `project` is needed only to read a 2.5D renderer's height, which QGIS keeps
     as a project variable rather than on the layer. Passed in rather than taken
@@ -1063,20 +1332,9 @@ def read_layer(
         )
         return None
 
-    geojson = export_geojson(
-        layer,
-        report,
-        precision=GEOJSON_PRECISION if precision is None else precision,
-        clip_extent=clip_extent,
-    )
-    if geojson is None:
-        return None
+    features = snapshot_features(layer, clip_extent)
 
-    # Before counting: a switched-off category means the author does not want
-    # those features on the map at all, so they must leave the data, not just
-    # the style. The count has to reflect what actually ships.
     renderer = translate_renderer(layer, report)
-    geojson = drop_hidden_features(geojson, renderer)
 
     # After the renderer, because the atlas rasterises the very symbols the
     # renderer just described, and re-emits it with each class naming its icon.
@@ -1116,38 +1374,14 @@ def read_layer(
         else PopupSpec(enabled=False)
     )
 
-    # Only the attributes something still reads survive: what the popup shows,
-    # plus what the map draws with. A value the user hid must leave the file,
-    # not merely the popup - see `keep_only_fields`.
-    keep = drawing_fields(renderer, labeling, elevation)
+    # The primary-key check reads the live layer, so it is made here; the strip
+    # it guards happens in `PendingLayer.finish`.
+    keep = set(drawing_fields(renderer, labeling, elevation))
     if popup.enabled:
         keep |= {field.name for field in popup.visible_fields}
-    geojson = keep_only_fields(geojson, keep)
-    feature_ids: tuple[tuple[int, int], ...] = ()
-    if primary_key_is_excluded(layer, keep):
-        geojson, feature_ids = renumber_feature_ids(geojson)
+    renumber_ids = primary_key_is_excluded(layer, keep)
 
-    # After the strip so only surviving fields are considered; drawing fields
-    # are protected because accessors reference them by their real name.
-    geojson, popup = rename_untemplatable_fields(
-        geojson,
-        popup,
-        drawing_fields(renderer, labeling, elevation),
-        report,
-        f"Popup fields of '{name}'",
-        layer_id,
-    )
-
-    feature_count = len(geojson.get("features") or ())
-    if feature_count == 0:
-        report.unsupported(
-            f"Layer '{name}'",
-            "The layer contains no features. It is exported but will show "
-            "nothing - check for an active filter or an empty data source.",
-            layer_id,
-        )
-
-    return ExportLayer(
+    base = ExportLayer(
         layer_id=layer_id,
         name=name,
         geometry_kind=kind,
@@ -1162,10 +1396,15 @@ def read_layer(
         popup=popup,
         highlight_color=highlight_color,
         attribution=read_attribution(layer),
-        feature_count=feature_count,
-        geojson=geojson,
-        feature_ids=feature_ids,
         group_path=group_path,
         dependencies=(describe_source(layer),),
         cluster_allowed=cluster,
+    )
+    return PendingLayer(
+        base=base,
+        features=features,
+        precision=GEOJSON_PRECISION if precision is None else precision,
+        clip_extent=clip_extent,
+        drawing=frozenset(drawing_fields(renderer, labeling, elevation)),
+        renumber_ids=renumber_ids,
     )

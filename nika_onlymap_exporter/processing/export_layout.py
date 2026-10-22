@@ -173,6 +173,10 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException(str(exc)) from exc
 
         report = FidelityReportBuilder()
+        # The layout export is one call with no seams to report from, so the bar
+        # only marks that reading finished; its Cancel is honoured before the
+        # file is written, and not after (see `core.cancellation`).
+        feedback.setProgress(10)
         try:
             html = export_layout_to_cartograph(
                 layout,
@@ -207,7 +211,11 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
                 )
             )
 
+        if feedback.isCanceled():
+            return {}
+        feedback.setProgress(90)
         _write_atomic(destination, html)
+        feedback.setProgress(100)
         feedback.pushInfo(
             tr("Wrote {path} ({size} KB).").format(
                 path=destination, size=max(1, destination.stat().st_size // 1024)

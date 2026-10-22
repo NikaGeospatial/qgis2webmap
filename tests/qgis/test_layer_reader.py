@@ -915,3 +915,106 @@ class TestRasterAppearanceMatchesQgis:
         reference.ImportFromWkt(gdal.Open(baked).GetProjection())
         assert reference.GetAuthorityCode(None) == "32631"
         assert gdal.Open(baked).GetGeoTransform()[0] == 500000.0
+
+
+class TestWorkerSnapshot:
+    """The feature read runs on a worker from a snapshot, not from the layer.
+
+    QGIS's task guidance says a background job must not touch the GUI-owned
+    layer. The proof is that the read still gives the same answer once the layer
+    is gone - and that "the same answer" is what `QgsJsonExporter(layer)` gave
+    when the layer was read directly, widget formatting included.
+    """
+
+    @staticmethod
+    def _layer(project):
+        layer = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:3857&field=name:string&field=kind:integer",
+            "sites",
+            "memory",
+        )
+        layer.setEditorWidgetSetup(
+            1,
+            qgis_core.QgsEditorWidgetSetup(
+                "ValueMap", {"map": [{"Camp": 1}, {"Ford": 2}]}
+            ),
+        )
+        rows = [("a", 1, 1.0e6), ("b", 2, 2.0e6), ("c", None, 3.0e6), ("d", 9, 4.0e6)]
+        features = []
+        for name, kind, x in rows:
+            feature = qgis_core.QgsFeature(layer.fields())
+            feature.setAttributes([name, kind])
+            feature.setGeometry(
+                qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(x, 5.0e6))
+            )
+            features.append(feature)
+        layer.dataProvider().addFeatures(features)
+        project.addMapLayer(layer)
+        return layer
+
+    @staticmethod
+    def _legacy_read(layer, precision=9):
+        """What the reader did before the split: the exporter, given the layer."""
+        import json
+
+        exporter = qgis_core.QgsJsonExporter(layer)
+        exporter.setDestinationCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:4326"))
+        exporter.setTransformGeometries(True)
+        exporter.setIncludeGeometry(True)
+        exporter.setIncludeAttributes(True)
+        exporter.setPrecision(precision)
+        return json.loads(exporter.exportFeatures(list(layer.getFeatures())))
+
+    def test_the_read_survives_its_layer_and_matches_the_live_exporter(
+        self, qgis_app, project
+    ) -> None:
+        import threading
+
+        from nika_onlymap_exporter.core.layer_reader import (
+            export_geojson_from,
+            snapshot_features,
+        )
+
+        layer = self._layer(project)
+        expected = self._legacy_read(layer)
+        # A Value Map shows its description, not the stored key - and a key it
+        # does not list, or a NULL, keeps whatever the formatter makes of it.
+        shown = [f["properties"]["kind"] for f in expected["features"]]
+        assert shown[:2] == ["Camp", "Ford"]
+
+        snapshot = snapshot_features(layer, None)
+        project.removeAllMapLayers()
+        del layer
+
+        found: list = []
+        errors: list[BaseException] = []
+
+        def worker() -> None:
+            try:
+                found.append(export_geojson_from(snapshot, FidelityReportBuilder()))
+            except BaseException as exc:  # reported on the test thread
+                errors.append(exc)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join(60)
+
+        assert not errors, errors
+        assert found == [expected]
+
+    def test_the_snapshot_keeps_the_filter_the_layer_had(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.layer_reader import (
+            export_geojson_from,
+            snapshot_features,
+        )
+
+        layer = self._layer(project)
+        layer.setSubsetString("\"name\" <> 'a'")
+        snapshot = snapshot_features(layer, None)
+        project.removeAllMapLayers()
+
+        collection = export_geojson_from(snapshot, FidelityReportBuilder())
+        names = [f["properties"]["name"] for f in collection["features"]]
+        assert names == ["b", "c", "d"]
