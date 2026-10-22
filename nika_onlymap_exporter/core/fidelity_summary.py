@@ -134,6 +134,7 @@ TOPIC_BY_HEAD = {
     "Coordinate precision": Topic.MAP,
     "Layer count": Topic.MAP,
     "Project layers": Topic.MAP,
+    "Widget colours": Topic.MAP,
     # A cartograph's print layout (`core/layout_reader.py`).
     "Page count": Topic.LAYOUT,
     "Page background": Topic.LAYOUT,
