@@ -20,6 +20,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     TextSpec,
 )
 from nika_onlymap_exporter.core.export_ir import FidelityStatus
+from nika_onlymap_exporter.core.expression_tokens import _split_expression_blocks
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.fidelity_summary import Topic, subject_head, topic_of
 from nika_onlymap_exporter.core.layout_reader import read_layout
@@ -785,3 +786,87 @@ class TestFurnitureStyling:
         reading = read_layout(survey.layout, FidelityReportBuilder())
         north = next(item for item in reading.furniture if isinstance(item, NorthSpec))
         assert north.color == "#e8e6e3"
+
+
+class TestItemState:
+    """What QGIS does with an item's own switches: hidden stays hidden, an
+    item excluded from exports is not exported, opacity is reported."""
+
+    def test_a_hidden_label_and_a_locked_one_keep_their_state(self, survey) -> None:
+        survey.title_label.setVisible(False)
+        survey.title_label.setLocked(True)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        (text,) = [item for item in reading.furniture if isinstance(item, TextSpec)]
+        assert (text.hidden, text.locked) == (True, True)
+
+    def test_a_hidden_map_hides_its_grid(self, survey) -> None:
+        survey.main_map.setVisible(False)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        grids = [item for item in reading.furniture if isinstance(item, GraticuleSpec)]
+        assert grids and all(grid.hidden for grid in grids)
+        assert [frame.hidden for frame in reading.frames].count(True) == 1
+
+    def test_an_item_excluded_from_exports_is_left_out(self, survey) -> None:
+        survey.title_label.setExcludeFromExports(True)
+        report = FidelityReportBuilder()
+        reading = read_layout(survey.layout, report)
+        assert not [i for i in reading.furniture if isinstance(i, TextSpec)]
+        assert any(
+            "excluded from exports" in item.detail and "Layout item" in item.subject
+            for item in report.items
+        )
+
+    def test_a_data_defined_exclusion_is_evaluated(self, survey) -> None:
+        survey.title_label.dataDefinedProperties().setProperty(
+            qgis_core.QgsLayoutObject.DataDefinedProperty.ExcludeFromExports,
+            qgis_core.QgsProperty.fromExpression("1 = 1"),
+        )
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        assert not [i for i in reading.furniture if isinstance(i, TextSpec)]
+
+    def test_an_excluded_map_is_gone_and_its_legend_is_left_out(self, survey) -> None:
+        survey.legend.setLinkedMap(survey.inset_map)
+        survey.inset_map.setExcludeFromExports(True)
+        report = FidelityReportBuilder()
+        reading = read_layout(survey.layout, report)
+        assert len(reading.frames) == 1
+        assert not [i for i in reading.furniture if isinstance(i, LegendSpec)]
+
+    def test_opacity_is_reported_on_furniture_too(self, survey) -> None:
+        survey.title_label.setItemOpacity(0.4)
+        report = FidelityReportBuilder()
+        read_layout(survey.layout, report)
+        assert any(
+            item.subject.startswith("Opacity of")
+            and item.status is FidelityStatus.APPROXIMATED
+            and "40%" in item.detail
+            for item in report.items
+        )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[% 'x[y' %]",
+        "[% 'a]b' %]",
+        "[% 'it''s [' %]",
+        "[% 'a\\'[' %]",
+        "[% '[' %] and [% ']' %]",
+        "[% '[' || array(1,2)[0] %] z",
+        "[% 1 %",
+        "plain [text]",
+    ],
+)
+def test_block_scanner_agrees_with_qgis_replace_expression_text(
+    qgis_app, text: str
+) -> None:
+    """QGIS's own `replaceExpressionText` is the oracle for where a `[% %]`
+    block ends."""
+    context = qgis_core.QgsExpressionContext()
+    rebuilt = "".join(
+        value
+        if kind == "text"
+        else str(qgis_core.QgsExpression(value).evaluate(context))
+        for kind, value in _split_expression_blocks(text)
+    )
+    assert rebuilt == qgis_core.QgsExpression.replaceExpressionText(text, context)

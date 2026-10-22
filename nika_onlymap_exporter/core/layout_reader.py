@@ -86,6 +86,7 @@ from qgis.core import (
     QgsLayoutItemScaleBar,
     QgsLayoutItemShape,
     QgsLayoutMeasurementConverter,
+    QgsLayoutObject,
     QgsLegendStyle,
     QgsMapLayer,
     QgsMapLayerLegendUtils,
@@ -374,6 +375,19 @@ def _read_layout(
                 "left out.",
             )
     items = sized
+    # QGIS leaves an item excluded from exports out of every export, so it is
+    # dropped before anything references or rasterises it.
+    included = []
+    for item in items:
+        if _is_excluded_from_exports(item):
+            report.preserved(
+                f"Layout item {_name(item)}",
+                "This item is set to be excluded from exports in QGIS, so it "
+                "was left out, as QGIS does in its own exports.",
+            )
+        else:
+            included.append(item)
+    items = included
     # Document order = zValue order (issue #1 section 2's last row): sorting
     # here means every downstream list -- frames, furniture, the writer's
     # eventual DOM order -- agrees with it for free.
@@ -394,7 +408,6 @@ def _read_layout(
     single_map = map_items[0] if len(map_items) == 1 else None
 
     for item in map_items:
-        _record_unrepresentable_item_properties(item, report)
         mode = _frame_mode(item, frame_modes)
         box = _box(item, converter)
         frame_id = _eid("frame", item.uuid())
@@ -455,6 +468,7 @@ def _read_layout(
 
     for item in items:
         if isinstance(item, QgsLayoutItemMap):
+            _record_unrepresentable_item_properties(item, report)
             grids = item.grids().asList() if item.grids() is not None else []
             frame_id = map_frame_id_by_uuid[item.uuid()]
             for index, grid in enumerate(grids):
@@ -462,7 +476,13 @@ def _read_layout(
                     item, grid, frame_id, converter, report, index=index
                 )
                 if graticule is not None:
-                    furniture.append(graticule)
+                    furniture.append(
+                        replace(
+                            graticule,
+                            locked=item.isLocked(),
+                            hidden=not item.isVisible(),
+                        )
+                    )
             continue
         spec: CartographItem | None
         if isinstance(item, QgsLayoutItemLegend):
@@ -505,7 +525,10 @@ def _read_layout(
             )
             continue
         if spec is not None:
-            furniture.append(spec)
+            _record_unrepresentable_item_properties(item, report)
+            furniture.append(
+                replace(spec, locked=item.isLocked(), hidden=not item.isVisible())
+            )
 
     _record_low_contrast_text(text_subjects, frames, furniture, page_bg, report)
 
@@ -567,6 +590,21 @@ def _box(item: QgsLayoutItem, converter: QgsLayoutMeasurementConverter) -> Box:
             h=size.height(),
         )
     return Box(x=pos.x(), y=pos.y(), w=size.width(), h=size.height())
+
+
+def _is_excluded_from_exports(item: QgsLayoutItem) -> bool:
+    """Whether QGIS leaves `item` out of exports: its own setting (a
+    data-defined one is evaluated for this layout), or that of a group it is in."""
+    prop = QgsLayoutObject.DataDefinedProperty.ExcludeFromExports
+    defined = item.dataDefinedProperties()
+    if defined.isActive(prop):
+        excluded = defined.valueAsBool(
+            prop, item.createExpressionContext(), item.excludeFromExports()
+        )
+    else:
+        excluded = item.excludeFromExports()
+    group = item.parentGroup()
+    return excluded or (group is not None and _is_excluded_from_exports(group))
 
 
 def _record_unrepresentable_item_properties(
