@@ -22,7 +22,7 @@ from ..core.export_ir import (
     OutputMode,
 )
 from ..core.fidelity_report import FidelityReportBuilder
-from ..core.manifest_builder import FILE_OPENED_MODES
+from ..core.manifest_builder import FILE_OPENED_MODES, settings_network_hosts
 
 # Past this, a single HTML file stops being a practical thing to email: Gmail
 # rejects attachments over 25 MB, and many corporate filters are stricter.
@@ -287,6 +287,12 @@ def scan(
                 blocking.append(reason)
                 report.blocked(f"Data source of '{layer.name}'", reason, layer.layer_id)
 
+    # The basemap and terrain are not layers, so no layer dependency names them,
+    # yet the map fetches their tiles every time it is opened. The Fidelity
+    # report already explains each (`project_reader`); listing the hosts here is
+    # what stops the result calling a map that needs them "offline".
+    remote.extend(settings_network_hosts(project.settings))
+
     if not project.exportable_layers:
         blocking.append(
             "There are no layers to export. Add a vector or raster layer with data."
@@ -341,7 +347,7 @@ def scan(
 
     return ScanResult(
         data_bytes=data_bytes,
-        remote_dependencies=tuple(remote),
+        remote_dependencies=tuple(dict.fromkeys(remote)),
         blocking_reasons=tuple(blocking),
         credentials_detected=tuple(dict.fromkeys(credentials)),
     )

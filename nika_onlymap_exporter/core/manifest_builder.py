@@ -36,6 +36,7 @@ from .export_ir import (
     ElevationSpec,
     ExportLayer,
     ExportProject,
+    ExportSettings,
     GeometryKind,
     OutputMode,
     PopupFieldMode,
@@ -344,6 +345,33 @@ def terrain_note(terrain: str, basemap: str = "none") -> str | None:
             "Dark Matter or Voyager to see the map on the mountains."
         )
     return note
+
+
+def settings_network_hosts(settings: ExportSettings) -> tuple[str, ...]:
+    """Who the finished map contacts for the basemap or terrain chosen, if any.
+
+    Follows what `build_map_element` actually emits, not what was selected: a
+    projected map draws no basemap or terrain, a preset the runtime does not
+    know is replaced by none, and while terrain is on the runtime swaps the
+    basemap for its raster twin, so a vector basemap is not fetched at all.
+    This is the same set of hosts `basemap_note` and `terrain_note` name to the
+    author, so the dependency scan and the Fidelity report cannot disagree.
+
+    Telemetry is left out on purpose: the runtime's anonymous usage report is
+    not something the map needs to draw, so it is no dependency, and the map
+    works offline with it blocked. `docs/privacy.md` covers it.
+    """
+    if settings.map_crs is not None:
+        return ()
+    if settings.terrain != "none" and settings.terrain in TERRAIN_PRESETS:
+        hosts = [TERRAIN_HOSTS[settings.terrain]]
+        if settings.basemap in RASTER_TEXTURE_TEMPLATES:
+            hosts.append(TEXTURE_HOSTS[settings.basemap])
+        hosts.append("unpkg.com")
+        return tuple(dict.fromkeys(hosts))
+    if settings.basemap in BASEMAP_PRESETS and settings.basemap != BASEMAP:
+        return (BASEMAP_HOSTS[settings.basemap],)
+    return ()
 
 
 # The output types a recipient opens straight from disk. OpenStreetMap's tile

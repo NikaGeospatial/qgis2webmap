@@ -230,6 +230,51 @@ class TestDependencyScanner:
         assert result.is_offline is False
         assert any("internet connection" in i.detail for i in report.items)
 
+    @pytest.mark.parametrize(
+        ("settings", "hosts"),
+        [
+            pytest.param({}, (), id="the-default-is-offline"),
+            pytest.param({"basemap": "osm"}, ("openstreetmap.org",), id="basemap"),
+            pytest.param({"basemap": "liberty"}, ("openfreemap.org",), id="vector"),
+            pytest.param(
+                {"terrain": "terrarium", "basemap": "voyager"},
+                ("s3.amazonaws.com", "earthdata.nasa.gov", "unpkg.com"),
+                id="terrain-with-imagery",
+            ),
+            # The runtime swaps a vector basemap for the relief surface, so only
+            # the elevation tiles and the decoder scripts are fetched.
+            pytest.param(
+                {"terrain": "terrarium", "basemap": "liberty"},
+                ("s3.amazonaws.com", "unpkg.com"),
+                id="terrain-with-a-vector-basemap",
+            ),
+            pytest.param(
+                {"terrain": "terrarium"},
+                ("s3.amazonaws.com", "unpkg.com"),
+                id="terrain-alone",
+            ),
+            pytest.param({"basemap": "nonsense"}, (), id="unknown-preset-is-none"),
+            pytest.param(
+                {"basemap": "osm", "map_crs": "EPSG:3414", "map_crs_def": "+proj=x"},
+                (),
+                id="a-projected-map-draws-neither",
+            ),
+        ],
+    )
+    def test_a_configured_basemap_or_terrain_is_a_network_dependency(
+        self, settings, hosts
+    ) -> None:
+        """The manifest decides what is fetched; the scan has to say the same,
+        or a map that needs the internet is described as offline."""
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        result = scan(
+            make_project(settings=ExportSettings(**settings)), FidelityReportBuilder()
+        )
+        assert result.remote_dependencies == hosts
+        assert result.is_offline is (hosts == ())
+        assert result.snapshot()["remoteDependencies"] == list(hosts)
+
     def test_blocking_dependency_stops_the_export(self) -> None:
         layer = make_layer(
             dependencies=(

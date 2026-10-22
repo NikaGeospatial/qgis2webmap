@@ -116,6 +116,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   several values keeps all of them, and a value equal to a range's upper
   bound stays in that range. Gaps and overlaps between ranges follow QGIS,
   and thresholds such as 1e-7 are no longer rounded to 0.
+- **Rasters keep their QGIS appearance and position in web maps.**
+  Brightness, contrast, hue and saturation, transparent colours, an alpha
+  band and no-data settings you set in QGIS are now drawn into the exported
+  image (a plain colour composite is still carried as it is), and a CRS you
+  assigned to a raster that has none, or the wrong one, is used to place it.
+- **A large raster no longer blocks a single-file export up front.** The
+  file's size on disk only warns; the 100 MB limit is checked on the
+  converted raster during the export.
+- **Basemap and terrain count as network use**: a map exported with either
+  is no longer described as working offline in the export's dependency list.
 
 ## [0.2.1] - 2026-10-13
 
