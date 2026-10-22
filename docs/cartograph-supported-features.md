@@ -41,6 +41,7 @@ QGIS drew, so its layers come across as they look.
 | Item position, size, rotation | **Kept**, in millimetres from the page's top-left corner |
 | Stacking order | **Kept** |
 | Locked and hidden items | **Kept** - a hidden item stays hidden, in print too |
+| An item set to be excluded from exports | **Not exported** - left out, as QGIS leaves it out of its own exports |
 | Item groups | **Changed** - each item keeps its place; the grouping itself is not kept |
 | Item opacity below 100% | **Changed** - drawn fully opaque |
 | An item with no size | **Not exported** |

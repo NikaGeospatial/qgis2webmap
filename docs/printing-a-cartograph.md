@@ -118,6 +118,11 @@ QGIS prints a copy of your print layout - page 1, grown by the bleed, with the
 crop marks drawn in - using the chosen colour model, and puts your project's
 colour settings back afterwards. Your layout itself is never changed.
 
+The **Title** from the Cartograph tab is applied to that copy, so a label that
+reads the project title and the PDF's own title match the browser's. The page
+**attribution** and **theme** are browser features; when you have set them, the
+export says they are not in the QGIS PDF.
+
 With **CMYK**, the PDF is PDF/X-4 when the project has a CMYK profile set in
 **Project Properties → Styles**; without one you get CMYK colours but no output
 profile, and the plugin says so. With an **ICC profile** (ask the shop - FOGRA39
