@@ -567,7 +567,7 @@ class TestTileServices:
     def _xyz(url: str, name: str = "Tiles", zmin: int = 0, zmax: int = 19):
         from urllib.parse import quote
 
-        source = f"type=xyz&url={quote(url, safe=':/?=&')}&zmax={zmax}&zmin={zmin}"
+        source = f"type=xyz&url={quote(url, safe=':/?=')}&zmax={zmax}&zmin={zmin}"
         layer = qgis_core.QgsRasterLayer(source, name, "wms")
         assert layer.isValid()
         return layer
@@ -590,6 +590,38 @@ class TestTileServices:
         assert dependency.disposition is AssetDisposition.BLOCKING
         assert "key" in (dependency.note or "")
         assert "SECRET" not in repr(exported.snapshot())
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://user:SENTINEL-pw@tiles.example.com/{z}/{x}/{y}.png?style=dark",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&subscription-key=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&Ocp-Apim-Subscription-Key=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&X-Amz-Signature=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&X-Amz-Credential=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&X-Amz-Security-Token=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&sig=SENTINEL-pw",
+            "https://tiles.example.com/{z}/{x}/{y}.png?style=dark&API-KEY=SENTINEL-pw",
+        ],
+    )
+    def test_no_credential_form_reaches_the_model_or_the_report(
+        self, qgis_app, url: str
+    ) -> None:
+        report = FidelityReportBuilder()
+        exported = read_layer(self._xyz(url), report)
+        assert exported is not None
+        assert exported.tiles is not None
+        (dependency,) = exported.dependencies
+        assert dependency.disposition is AssetDisposition.BLOCKING
+        assert "tiles.example.com" in (dependency.note or "")
+        # The legitimate parameter survives; only the credential goes.
+        assert "style=dark" in exported.tiles.url
+        assert exported.tiles.url.startswith("https://tiles.example.com/")
+        rendered = repr(exported.snapshot()) + repr(
+            [(i.subject, i.detail) for i in report.items]
+        )
+        assert "SENTINEL" not in rendered
+        assert "SENTINEL" not in repr(dependency)
 
     def test_a_template_the_web_map_cannot_fill_is_reported(self, qgis_app) -> None:
         layer = self._xyz("https://tiles.example.com/{q}.png")

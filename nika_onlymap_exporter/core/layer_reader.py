@@ -491,10 +491,40 @@ def raster_nodata(layer: QgsRasterLayer) -> float | None:
 
 
 # Query parameters that carry an access key. A tile URL travels in the map as
-# written, so a key in it is a key handed to everyone the file reaches.
+# written, so a key in it is a key handed to everyone the file reaches. Compared
+# lower-case with `-` and `_` removed, so `api_key`, `API-Key` and `apikey` are
+# one entry, and so are Azure's `subscription-key` and AWS's `X-Amz-Signature`.
 _KEY_PARAMETERS = frozenset(
-    {"key", "apikey", "api_key", "access_token", "token", "accesstoken", "secret"}
+    {
+        "key",
+        "apikey",
+        "accesskey",
+        "token",
+        "accesstoken",
+        "authtoken",
+        "sastoken",
+        "secret",
+        "clientsecret",
+        "password",
+        "passwd",
+        "pwd",
+        "auth",
+        "authkey",
+        "sig",
+        "signature",
+        "subscriptionkey",
+        "ocpapimsubscriptionkey",
+        "xamzsignature",
+        "xamzcredential",
+        "xamzsecuritytoken",
+        "xgoogsignature",
+        "xgoogcredential",
+    }
 )
+
+
+def _is_key_parameter(name: str) -> bool:
+    return name.lower().replace("-", "").replace("_", "") in _KEY_PARAMETERS
 
 
 def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
@@ -542,15 +572,16 @@ def read_tile_service(
 
     parts = urlsplit(url)
     pairs = parse_qsl(parts.query, keep_blank_values=True)
-    keyless = [
-        (key, value) for key, value in pairs if key.lower() not in _KEY_PARAMETERS
-    ]
-    keyed = len(keyless) != len(pairs)
+    keyless = [(key, value) for key, value in pairs if not _is_key_parameter(key)]
+    # `user:password@host` is a credential just as `?key=` is.
+    host = parts.netloc.rpartition("@")[2]
+    keyed = len(keyless) != len(pairs) or host != parts.netloc
     if keyed:
         # Never kept, not even in the model: the export is blocked below, but a
         # snapshot or a report must not be able to carry the key either.
-        url = urlunsplit(parts._replace(query=urlencode(keyless, safe="{}")))
-    host = parts.netloc
+        url = urlunsplit(
+            parts._replace(netloc=host, query=urlencode(keyless, safe="{}"))
+        )
     dependency = AssetDependency(
         # The host only when keyed: the full URL would carry the key into the
         # snapshot and the report.
