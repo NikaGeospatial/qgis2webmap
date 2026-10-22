@@ -43,13 +43,11 @@ Corrections against issue #1 §2.1, from `specs/cartograph/spike-findings.md`:
 - `'text'` is a QGIS string literal, never a field: only `"double quoted"` (or
   bare) names are field references.
 
-The atlas's own expressions -- its filter, sort, filename and page name --
-are translated here too (`translate_filter_expression`,
-`translate_sort_expression`, `translate_atlas_pattern`), by one small
-tokenizer and a deliberately narrow recursive-descent parser. Narrow on
-purpose: an expression it does not fully understand comes back as `None`, and
-the caller records it as approximated, rather than being half-translated into
-a predicate that pages a different set of features than QGIS does.
+The atlas's own filename and page name expressions are translated here too
+(`translate_atlas_pattern`), by one small tokenizer and a deliberately narrow
+parser. Narrow on purpose: an expression it does not fully understand comes
+back as `None`, and the caller records it as approximated. Its filter is not
+translated at all: `atlas_id_filter` writes the features QGIS itself pages.
 
 Pure Python: no PyQGIS, no Qt, unit-tested in CI.
 
@@ -59,7 +57,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -315,14 +312,12 @@ def _translate_expression(expr: str, builder: _Builder) -> None:
 
 
 # --------------------------------------------------------------------------
-# Atlas expressions: filename / page name patterns, filter, sort
+# Atlas expressions: filename / page name patterns, filter
 # --------------------------------------------------------------------------
 
 #: The field names a runtime `{{atlas.<field>}}` token can address: ASCII word
 #: characters only (JavaScript's `\w`), see the module docstring.
 _TOKEN_FIELD_RE = re.compile(r"^[A-Za-z0-9_]+$")
-#: `$field` in the runtime's core expression language (`/^\$[A-Za-z_][\w]*$/`).
-_DOLLAR_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 #: Names the runtime resolves to the page number and page count itself.
 _RESERVED_ATLAS_NAMES = frozenset({"index", "count"})
 
@@ -401,10 +396,6 @@ def _tokenize(expression: str) -> list[_Token] | None:
 
 def _is_op(token: _Token | None, *values: str) -> bool:
     return token is not None and token.kind == "op" and token.value in values
-
-
-def _is_keyword(token: _Token | None, *values: str) -> bool:
-    return token is not None and token.kind == "keyword" and token.value in values
 
 
 def _field_name(tokens: list[_Token]) -> str | None:
@@ -525,179 +516,55 @@ def translate_atlas_pattern(expression: str) -> str | None:
     return _pattern_piece(tokens)
 
 
-def translate_sort_expression(expression: str, *, ascending: bool) -> str | None:
-    """A QGIS atlas sort expression -> the runtime's `sort=` value, or `None`.
+def atlas_id_filter(kept: Sequence[int], every: Sequence[int]) -> str | None:
+    """The `<om-atlas filter>` that keeps exactly the features `kept` out of
+    `every` feature of the coverage layer, tested on the feature's id.
 
-    The runtime sorts by a field (`"lot"`, `"-lot"` for descending), so only
-    an expression that *is* a field translates. A name containing a comma or
-    starting with `-` would be read as a list or a direction by the runtime's
-    parser, so it is refused too.
+    QGIS has already answered which features its atlas pages; this writes
+    that answer instead of translating the expression it came from, because
+    the runtime's expression language is JavaScript's, which parts company
+    with QGIS's on NULL (`NULL <> 1`, `NOT (NULL = 1)`, `NULL IN (...)` are
+    NULL in QGIS, which an atlas treats as "not a page"), on text and on every
+    function. Runs of ids that are neighbours among `every` are written as
+    ranges, and whichever of "these" and "all but these" is shorter is used.
+    Never a whole expression in one pair of parentheses: the runtime's parser
+    stops at the first closing one and rejects the rest.
+    `None` when every feature is kept: no filter at all.
     """
-    tokens = _tokenize(expression.strip())
-    if not tokens:
+    kept_ids = set(kept)
+    ordered = sorted(set(every))
+    if all(feature_id in kept_ids for feature_id in ordered):
         return None
-    field_name = _field_name(_strip_parentheses(tokens))
-    if (
-        field_name is None
-        or not field_name.strip()
-        or field_name != field_name.strip()
-        or "," in field_name
-        or field_name.startswith("-")
-    ):
-        return None
-    return field_name if ascending else f"-{field_name}"
+    if not kept_ids.intersection(ordered):
+        return "false"
+    include = _id_ranges([feature_id in kept_ids for feature_id in ordered], ordered)
+    exclude = _id_ranges(
+        [feature_id not in kept_ids for feature_id in ordered], ordered
+    )
+    positive = " || ".join(include)
+    negative = " || ".join(exclude)
+    if len(negative) + 3 < len(positive):
+        return f"!({negative})"
+    return positive
 
 
-class _UntranslatableError(Exception):
-    """Raised inside the filter parser for anything it does not translate."""
-
-
-class _FilterParser:
-    """QGIS filter expression -> the runtime's core expression language.
-
-    The core language is a whitelisted JavaScript expression subset with
-    `$field` sugar (`docs/cartograph.md` "Atlas": `filter="$area > 500"`).
-    Every sub-expression is parenthesised on the way out, so the output keeps
-    QGIS's precedence whatever JavaScript's would have been.
-    """
-
-    def __init__(self, tokens: list[_Token]) -> None:
-        self.tokens = tokens
-        self.position = 0
-
-    def peek(self) -> _Token | None:
-        return self.tokens[self.position] if self.position < len(self.tokens) else None
-
-    def take(self) -> _Token:
-        token = self.peek()
-        if token is None:
-            raise _UntranslatableError("unexpected end")
-        self.position += 1
-        return token
-
-    def parse(self) -> str:
-        result = self.or_expr()
-        if self.peek() is not None:
-            raise _UntranslatableError("trailing tokens")
-        return result
-
-    def or_expr(self) -> str:
-        left = self.and_expr()
-        while _is_keyword(self.peek(), "OR"):
-            self.take()
-            left = f"({left} || {self.and_expr()})"
-        return left
-
-    def and_expr(self) -> str:
-        left = self.not_expr()
-        while _is_keyword(self.peek(), "AND"):
-            self.take()
-            left = f"({left} && {self.not_expr()})"
-        return left
-
-    def not_expr(self) -> str:
-        if _is_keyword(self.peek(), "NOT"):
-            self.take()
-            return f"(!{self.not_expr()})"
-        return self.comparison()
-
-    def comparison(self) -> str:
-        left = self.additive()
-        token = self.peek()
-        if _is_op(token, "=", "<>", "!=", "<", ">", "<=", ">="):
-            operator = self.take().value
-            js_operator = {"=": "==", "<>": "!="}.get(operator, operator)
-            return f"({left} {js_operator} {self.additive()})"
-        if _is_keyword(token, "IS"):
-            self.take()
-            negated = _is_keyword(self.peek(), "NOT")
-            if negated:
-                self.take()
-            if not _is_keyword(self.take(), "NULL"):
-                raise _UntranslatableError("IS with a non-NULL operand")
-            return f"({left} {'!=' if negated else '=='} null)"
-        negated = False
-        if _is_keyword(token, "NOT") and _is_keyword(
-            self.tokens[self.position + 1]
-            if self.position + 1 < len(self.tokens)
-            else None,
-            "IN",
-        ):
-            self.take()
-            negated = True
-            token = self.peek()
-        if _is_keyword(token, "IN"):
-            self.take()
-            if not _is_op(self.take(), "("):
-                raise _UntranslatableError("IN without a list")
-            values = [self.additive()]
-            while _is_op(self.peek(), ","):
-                self.take()
-                values.append(self.additive())
-            if not _is_op(self.take(), ")"):
-                raise _UntranslatableError("unclosed IN list")
-            if negated:
-                return "(" + " && ".join(f"{left} != {v}" for v in values) + ")"
-            return "(" + " || ".join(f"{left} == {v}" for v in values) + ")"
-        return left
-
-    def additive(self) -> str:
-        left = self.multiplicative()
-        while _is_op(self.peek(), "+", "-"):
-            operator = self.take().value
-            left = f"({left} {operator} {self.multiplicative()})"
-        return left
-
-    def multiplicative(self) -> str:
-        left = self.unary()
-        while _is_op(self.peek(), "*", "/", "%"):
-            operator = self.take().value
-            left = f"({left} {operator} {self.unary()})"
-        return left
-
-    def unary(self) -> str:
-        if _is_op(self.peek(), "-"):
-            self.take()
-            return f"(-{self.unary()})"
-        return self.atom()
-
-    def atom(self) -> str:
-        token = self.take()
-        if token.kind == "number":
-            return token.value
-        if token.kind == "string":
-            return json.dumps(token.value, ensure_ascii=False)
-        if token.kind == "keyword" and token.value in ("TRUE", "FALSE", "NULL"):
-            return token.value.lower()
-        if token.kind in ("column", "name"):
-            if token.kind == "name" and _is_op(self.peek(), "("):
-                raise _UntranslatableError("function call")
-            if not _DOLLAR_FIELD_RE.match(token.value):
-                raise _UntranslatableError(
-                    "field name the core language cannot address"
-                )
-            return f"${token.value}"
-        if _is_op(token, "("):
-            inner = self.or_expr()
-            if not _is_op(self.take(), ")"):
-                raise _UntranslatableError("unclosed parenthesis")
-            return inner
-        raise _UntranslatableError(f"unsupported token {token.value!r}")
-
-
-def translate_filter_expression(expression: str) -> str | None:
-    """A QGIS atlas filter -> a `<om-atlas filter>` predicate, or `None`.
-
-    Translates comparisons (`=`, `<>`/`!=`, `<`, `>`, `<=`, `>=`), `AND`/`OR`/
-    `NOT`, `IS [NOT] NULL`, `[NOT] IN (...)`, arithmetic, string/number/
-    boolean literals and fields whose names the core language can address as
-    `$field`. Everything else -- function calls, `LIKE`, `BETWEEN`, `CASE`,
-    `||`, `$area` and the other `$` specials, `@variables` -- returns `None`.
-    """
-    tokens = _tokenize(expression.strip())
-    if not tokens:
-        return None
-    try:
-        return _FilterParser(tokens).parse()
-    except _UntranslatableError:
-        return None
+def _id_ranges(flags: Sequence[bool], ordered: Sequence[int]) -> list[str]:
+    """`d.id` tests covering the ids whose flag is set, one per run."""
+    ranges: list[str] = []
+    start = 0
+    while start < len(ordered):
+        if not flags[start]:
+            start += 1
+            continue
+        end = start
+        while end + 1 < len(ordered) and flags[end + 1]:
+            end += 1
+        first, last = ordered[start], ordered[end]
+        if start == end:
+            ranges.append(f"d.id == {first}")
+        elif end == start + 1:
+            ranges.append(f"d.id == {first} || d.id == {last}")
+        else:
+            ranges.append(f"d.id >= {first} && d.id <= {last}")
+        start = end + 1
+    return ranges

@@ -586,10 +586,34 @@ CartographItem = Union[
 ]
 
 
+#: The runtime reads `atlas-margin="0"` as "unset" and pads by its 0.15
+#: default, so a QGIS margin of zero is written as this instead -- 0.01% of
+#: the feature's extent, which is no visible padding at all.
+SMALLEST_ATLAS_MARGIN = 0.0001
+
+#: The member of each coverage-layer feature that carries its place in the
+#: atlas order QGIS worked out. The runtime sorts by a field, but it orders
+#: missing values and text its own way; a page number it only has to read
+#: back cannot disagree with QGIS. A top-level member of the GeoJSON feature,
+#: not a property, so no popup or table ever shows it.
+ATLAS_ORDER_KEY = "qgis2webmap_atlas_order"
+
+#: On `<om-atlas>`: the QGIS filter and sort its attributes were worked out
+#: from, for a round trip.
+ATLAS_SOURCE_ATTRIBUTE = "data-qgis2webmap-atlas-source"
+
+
 @dataclass(frozen=True)
 class AtlasSpec:
     """One page per feature: `<om-atlas>`. Not a placed element -- the frames
-    it drives carry `atlas_fit`/`atlas_margin` themselves."""
+    it drives carry `atlas_fit`/`atlas_margin` themselves.
+
+    `filter` and `sort` are what the runtime evaluates. The export writes QGIS's
+    own answer there (a test on the feature ids QGIS pages, `sort` =
+    `ATLAS_ORDER_KEY`), because the runtime's expression language does not
+    treat NULL, text order or functions the way QGIS does. `filter_source`,
+    `sort_source` and `sort_ascending` are QGIS's own settings those were
+    worked out from, carried so a round trip gets the settings back."""
 
     for_: str = ""
     layer: str = ""
@@ -599,6 +623,9 @@ class AtlasSpec:
     filename: str | None = None
     page_name: str | None = None
     pager: str | None = None
+    filter_source: str | None = None
+    sort_source: str | None = None
+    sort_ascending: bool = True
 
     def __post_init__(self) -> None:
         if not self.for_:

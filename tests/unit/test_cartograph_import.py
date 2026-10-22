@@ -7,6 +7,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -488,6 +489,46 @@ class TestTolerance:
         )
         assert result.spec.atlas is None
         assert result.issues
+
+    _SOURCE: ClassVar[str] = (
+        '{"filter":{"qgis":"\\"score\\" <> 1","written":"d.id == 3"},'
+        '"sort":{"qgis":"\\"rank\\"","ascending":false,"written":"qgis2webmap_atlas_order"}}'
+    )
+
+    def _atlas(self, filter_text: str, sort_text: str):
+        source = self._SOURCE
+        return parse_cartograph_html(
+            _page(
+                _FRAME + f'<om-atlas for="f" layer="parcels" filter="{filter_text}" '
+                f"sort=\"{sort_text}\" data-qgis2webmap-atlas-source='{source}'>"
+                "</om-atlas>"
+            )
+        )
+
+    def test_qgis_s_own_filter_and_sort_come_back_while_unedited(self) -> None:
+        atlas = self._atlas("d.id == 3", "qgis2webmap_atlas_order").spec.atlas
+        assert atlas is not None
+        assert atlas.filter_source == '"score" <> 1'
+        assert atlas.sort_source == '"rank"'
+        assert atlas.sort_ascending is False
+
+    def test_an_edited_filter_or_sort_is_not_overruled_by_the_old_source(self) -> None:
+        atlas = self._atlas("d.id == 4", "lot").spec.atlas
+        assert atlas is not None
+        assert atlas.filter == "d.id == 4" and atlas.filter_source is None
+        assert atlas.sort == "lot" and atlas.sort_source is None
+        assert atlas.sort_ascending is True
+
+    def test_unreadable_source_is_ignored(self) -> None:
+        result = parse_cartograph_html(
+            _page(
+                _FRAME + '<om-atlas for="f" layer="p" filter="d.id == 3" '
+                'data-qgis2webmap-atlas-source="{nope"></om-atlas>'
+            )
+        )
+        assert result.spec.atlas is not None
+        assert result.spec.atlas.filter_source is None
+        assert not any("data-qgis2webmap" in issue.detail for issue in result.issues)
 
     def test_second_cartograph_is_reported(self) -> None:
         result = parse_cartograph_html(_page("") + _page(""))

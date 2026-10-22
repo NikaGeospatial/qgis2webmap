@@ -75,8 +75,8 @@ the scale bar is worked out again, and labels using the feature's fields,
 | A **point** coverage layer | Kept: QGIS centres each point at the map's scale, in any scaling mode |
 | **Hide coverage layer** | Kept on live frames |
 | **Only show the current atlas feature** | Not kept - every feature of the layer is drawn. Marked **Changed** |
-| **Filter with** | Kept when the expression has a cartograph equivalent; otherwise left out, so every feature gets a page. Named on the Checks tab |
-| **Sort by** | Kept when it sorts by a field. An expression cannot be kept, and pages follow the layer's own order |
+| **Filter with** | Kept for any QGIS expression: QGIS itself works out which features get a page (so `NULL` is handled as QGIS handles it) and the cartograph pages exactly those. The filter in the file lists feature ids, not your expression; the expression itself is kept for "Import cartograph as QGIS layout" |
+| **Sort by** | Kept for any QGIS expression, with QGIS's own order (empty values first when ascending, text order as QGIS sorts it). Each feature carries its place in that order |
 | **Output filename expression** | Kept when it can be translated; otherwise pages are named `page-1`, `page-2`, ... |
 | **Page name** | Kept when it can be translated; otherwise the pager shows page numbers |
 | A label expression that depends on the atlas feature in another way | Reads the same on every page. Named on the Checks tab |
@@ -96,8 +96,11 @@ stay greyed out until it has atlas pages.
   names** expression. One ZIP rather than one download per page, because
   browsers block a run of separate downloads.
 - **Print all pages...** opens the cartograph with every page rendered and
-  laid out for one print job. Choose **Save as PDF** for one multi-page PDF; in
-  a Chromium-based browser every page is at its true size. Each page is an
+  laid out for one print job. While the pages are made the page shows
+  *Preparing page n of N* with a **Cancel** button; if a page cannot be made,
+  nothing is printed and the page says which one failed. Choose **Save as
+  PDF** for one multi-page PDF; in a Chromium-based browser every page is at
+  its true size. Each page is an
   image rendered at 200 dpi, so text in that PDF is not selectable.
 
 **Export PNG...** and **Export PDF...** in the Share menu work on the page the

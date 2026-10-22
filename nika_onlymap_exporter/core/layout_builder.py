@@ -77,6 +77,8 @@ from .canvas_layout import nice_interval, page_dimensions
 from .cartograph_export import plane_view_width
 from .cartograph_import import RoundTripIssue, read_cartograph_file
 from .cartograph_ir import (
+    ATLAS_ORDER_KEY,
+    SMALLEST_ATLAS_MARGIN,
     AtlasSpec,
     Box,
     CartographItem,
@@ -623,7 +625,15 @@ class _Builder:
                 else QgsLayoutItemMap.Auto
             )
             if frame.atlas_margin is not None:
-                map_item.setAtlasMargin(frame.atlas_margin)
+                # The runtime pads each side by the margin; QGIS scales the
+                # fitted extent by 1 + margin, so its margin is twice that
+                # (`layout_reader._atlas_fit` halves it). The smallest margin
+                # is how a margin of zero is written.
+                map_item.setAtlasMargin(
+                    0.0
+                    if frame.atlas_margin <= SMALLEST_ATLAS_MARGIN
+                    else frame.atlas_margin * 2
+                )
         if frame.attribution:
             self.issue(
                 subject,
@@ -1297,18 +1307,35 @@ class _Builder:
 
     # -- atlas ----------------------------------------------------------------
 
+    def _coverage_layer(self, atlas_spec: AtlasSpec) -> QgsVectorLayer | None:
+        """The project's vector layer an `<om-atlas layer>` names: the
+        export writes the layer's QGIS id (prefixed with its frame's id when
+        two frames show it), a hand-written file may name it by its name."""
+        candidates = [atlas_spec.layer]
+        prefix = f"{atlas_spec.for_}__"
+        if atlas_spec.layer.startswith(prefix):
+            candidates.append(atlas_spec.layer[len(prefix) :])
+        for candidate in candidates:
+            layer = self.project.mapLayer(candidate)
+            if isinstance(layer, QgsVectorLayer):
+                return layer
+        return next(
+            (
+                layer
+                for layer in self.project.mapLayersByName(atlas_spec.layer)
+                if isinstance(layer, QgsVectorLayer)
+            ),
+            None,
+        )
+
     def _build_atlas(self, atlas_spec: AtlasSpec) -> None:
         subject = _ATLAS_SUBJECT
-        layers = [
-            layer
-            for layer in self.project.mapLayersByName(atlas_spec.layer)
-            if isinstance(layer, QgsVectorLayer)
-        ]
+        coverage = self._coverage_layer(atlas_spec)
         map_item = self.maps[atlas_spec.for_]
         if not map_item.atlasDriven():
             map_item.setAtlasDriven(True)
             map_item.setAtlasScalingMode(QgsLayoutItemMap.Auto)
-        if not layers:
+        if coverage is None:
             self.issue(
                 subject,
                 f"The atlas layer {atlas_spec.layer!r} is not a vector layer in this "
@@ -1316,20 +1343,39 @@ class _Builder:
             )
             return
         atlas = self.layout.atlas()
-        atlas.setCoverageLayer(layers[0])
+        atlas.setCoverageLayer(coverage)
         atlas.setEnabled(True)
-        if atlas_spec.filter:
-            expression = QgsExpression(atlas_spec.filter)
-            if expression.hasParserError():
+        if atlas_spec.filter_source:
+            # QGIS's own text, kept beside what the export wrote from it.
+            if QgsExpression(atlas_spec.filter_source).hasParserError():
                 self.issue(
                     subject,
-                    f"The atlas filter {atlas_spec.filter!r} is not a valid QGIS "
-                    "expression, so it was not applied.",
+                    f"The atlas filter {atlas_spec.filter_source!r} is not a valid "
+                    "QGIS expression, so it was not applied.",
                 )
             else:
                 atlas.setFilterFeatures(True)
-                atlas.setFilterExpression(atlas_spec.filter)
-        if atlas_spec.sort:
+                atlas.setFilterExpression(atlas_spec.filter_source)
+        elif atlas_spec.filter:
+            # The runtime's expression language is not QGIS's (`$area` is a
+            # geometry function there, `==` is not an operator), so it is
+            # never handed to QGIS as if it were.
+            self.issue(
+                subject,
+                f"The atlas filter {atlas_spec.filter!r} is written for the "
+                "cartograph, not for QGIS, so it was not applied.",
+            )
+        if atlas_spec.sort_source:
+            atlas.setSortFeatures(True)
+            atlas.setSortExpression(atlas_spec.sort_source)
+            atlas.setSortAscending(atlas_spec.sort_ascending)
+        elif atlas_spec.sort == ATLAS_ORDER_KEY:
+            self.issue(
+                subject,
+                "The atlas order was edited after the export, and QGIS cannot "
+                "read it back, so the pages are not sorted.",
+            )
+        elif atlas_spec.sort:
             keys = [key.strip() for key in atlas_spec.sort.split(",") if key.strip()]
             if keys:
                 first = keys[0]
@@ -1346,7 +1392,9 @@ class _Builder:
         if atlas_spec.filename:
             atlas.setFilenameExpression(_pattern_expression(atlas_spec.filename))
         if atlas_spec.page_name:
-            atlas.setPageNameExpression(_pattern_expression(atlas_spec.page_name))
+            atlas.setPageNameExpression(
+                _pattern_expression(atlas_spec.page_name, feature_fields=True)
+            )
         if atlas_spec.pager == "none":
             self.issue(subject, "The on-sheet pager setting has no QGIS equivalent.")
 
@@ -1413,9 +1461,14 @@ def _north_svg(kind: str) -> str:
     )
 
 
-def _pattern_expression(pattern: str) -> str:
+def _pattern_expression(pattern: str, *, feature_fields: bool = False) -> str:
     """A runtime token pattern (`lot-{{atlas.lot}}`) -> a QGIS expression
-    (`'lot-' || attribute(@atlas_feature, 'lot')`)."""
+    (`'lot-' || attribute(@atlas_feature, 'lot')`).
+
+    QGIS works the page names out while it lists the features, before
+    `@atlas_feature` exists, so a page name asks for the fields themselves
+    (`feature_fields`: `'lot-' || "lot"`), as the Atlas panel's own choice does.
+    """
     parts: list[str] = []
     position = 0
     for match in _TOKEN_RE.finditer(pattern):
@@ -1427,7 +1480,12 @@ def _pattern_expression(pattern: str) -> str:
         elif token == "atlas.count":
             parts.append("@atlas_totalfeatures")
         elif token.startswith("atlas."):
-            parts.append(f"attribute(@atlas_feature, {_quote(token[len('atlas.') :])})")
+            name = token[len("atlas.") :]
+            parts.append(
+                QgsExpression.quotedColumnRef(name)
+                if feature_fields
+                else f"attribute(@atlas_feature, {_quote(name)})"
+            )
         else:
             parts.append(_quote(match.group(0)))
         position = match.end()

@@ -447,6 +447,71 @@ class TestAtlasCartograph:
             page.evaluate("() => window.__printedSheets") == expected["atlas"]["pages"]
         )
 
+    def test_a_page_that_fails_to_print_releases_the_earlier_ones(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        """Page 3's image fails: every address made for pages 1 to 3 is
+        revoked, nothing reaches the print dialog, and the reader is told
+        which page failed and what to do."""
+        _needs_webgl(page)
+        page.add_init_script(
+            """
+            window.__printCalls = 0;
+            window.print = () => { window.__printCalls += 1; };
+            window.__printImages = [];
+            window.__revoked = [];
+            const revoke = URL.revokeObjectURL.bind(URL);
+            URL.revokeObjectURL = (url) => { window.__revoked.push(url); revoke(url); };
+            const decode = HTMLImageElement.prototype.decode;
+            HTMLImageElement.prototype.decode = function () {
+              if (!this.style.cssText.includes('break-after')) return decode.call(this);
+              window.__printImages.push(this.src);
+              if (window.__printImages.length === 3) {
+                return Promise.reject(new Error('injected decode failure'));
+              }
+              return decode.call(this);
+            };
+            """
+        )
+        page.goto((fixtures / "atlas-live.html").as_uri() + "?atlas=print&dpi=72")
+        alert = page.locator("[data-qgis2webmap-atlas-notice][role=alert]")
+        alert.wait_for(timeout=120_000)
+        message = alert.inner_text()
+        assert "Page 3 of 3" in message
+        assert "injected decode failure" in message
+        images = page.evaluate("() => window.__printImages")
+        assert len(images) == 3
+        assert set(images) <= set(page.evaluate("() => window.__revoked"))
+        assert page.evaluate("() => window.__printCalls") == 0
+        assert page.locator("[data-qgis2webmap-atlas-print]").count() == 0
+
+    def test_preparing_pages_shows_progress(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(
+            """
+            window.__printed = false;
+            window.print = () => { window.__printed = true; };
+            window.__noticeLog = [];
+            new MutationObserver(() => {
+              const notice = document.querySelector('[data-qgis2webmap-atlas-notice]');
+              const text = notice?.textContent ?? '';
+              const log = window.__noticeLog;
+              if (text && text !== log[log.length - 1]) log.push(text);
+            }).observe(document, {
+              subtree: true, childList: true, characterData: true,
+            });
+            """
+        )
+        page.goto((fixtures / "atlas-live.html").as_uri() + "?atlas=print&dpi=72")
+        page.wait_for_function("() => window.__printed", timeout=120_000)
+        log = page.evaluate("() => window.__noticeLog")
+        assert [entry.split("Cancel")[0] for entry in log] == [
+            f"Preparing page {number} of 3" for number in (1, 2, 3)
+        ]
+        assert page.locator("[data-qgis2webmap-atlas-notice]").count() == 0
+
 
 class TestAtlasFixedScale:
     """QGIS's Fixed atlas scale, which the runtime cannot do: every page
@@ -485,6 +550,34 @@ class TestAtlasFixedScale:
             assert camera["center"] == pytest.approx(
                 want["centres"][camera["id"]], abs=1e-6
             )
+
+
+class TestAtlasFilterAndOrder:
+    """The runtime's own filter and sort differ from QGIS on NULL (and on
+    text order): the export writes QGIS's answer, which the runtime must page
+    exactly -- the filter as a test on feature ids, the order as a number
+    carried by each feature."""
+
+    def test_pages_are_the_features_and_order_qgis_pages(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        _open(page, fixtures / "atlas-ranked.html")
+        page.wait_for_function(
+            "() => document.querySelector('om-atlas')?.count > 0", timeout=60_000
+        )
+        paged = page.evaluate(
+            """() => {
+              const atlas = document.querySelector('om-atlas');
+              const seen = [];
+              for (let index = 0; index < atlas.count; index++) {
+                atlas.seek(index);
+                seen.push(Number(atlas.current.id));
+              }
+              return seen;
+            }"""
+        )
+        assert paged == expected["atlas_ranked"]["pages"]
 
 
 class TestSharedLayerData:

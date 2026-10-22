@@ -62,6 +62,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ..core.cartograph_ir import (
+    ATLAS_SOURCE_ATTRIBUTE,
     AtlasSpec,
     Box,
     CartographItem,
@@ -408,8 +409,52 @@ _ATLAS_ACTIONS = [
     "const sheet = document.querySelector('om-cartograph');",
     "if (atlasAction && sheet && sheet.hasAttribute('allow-url-actions')",
     "    && document.documentElement.dataset.omHost !== 'editor') {",
-    "  runAtlasAction(atlasAction).catch((error) =>",
-    "    console.warn(`[qgis2webmap] atlas ${atlasAction} failed: ${error.message}`));",
+    "  runAtlasAction(atlasAction).catch((error) => {",
+    "    console.warn(`[qgis2webmap] atlas ${atlasAction} failed: ${error.message}`);",
+    "    atlasNotice().problem(`The atlas could not be prepared: ${error.message}. `",
+    "      + 'Reload the page to try again.');",
+    "  });",
+    "}",
+    # What the reader sees while a long atlas job runs, and when it fails:
+    # one line at the foot of the screen, never printed.
+    "function atlasNotice() {",
+    "  let notice = document.querySelector('[data-qgis2webmap-atlas-notice]');",
+    "  if (!notice) {",
+    "    notice = document.createElement('div');",
+    "    notice.setAttribute('data-qgis2webmap-atlas-notice', '');",
+    "    notice.setAttribute('role', 'status');",
+    "    notice.style.cssText = 'position:fixed;left:50%;bottom:16px;'",
+    "      + 'transform:translateX(-50%);max-width:min(90vw,40em);z-index:2147483647;'",
+    "      + 'padding:10px 14px;border-radius:6px;font:14px/1.4 system-ui,sans-serif;'",
+    "      + 'background:#1f2933;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35);';",
+    "    const text = document.createElement('span');",
+    "    const button = document.createElement('button');",
+    "    button.style.cssText = 'margin-left:12px;font:inherit;cursor:pointer;';",
+    "    notice.append(text, button);",
+    "    const hide = document.createElement('style');",
+    "    hide.textContent = '@media print { [data-qgis2webmap-atlas-notice] '",
+    "      + '{ display: none !important } }';",
+    "    document.body.append(hide, notice);",
+    "  }",
+    "  const [text, button] = notice.children;",
+    "  return {",
+    "    progress(message, onCancel) {",
+    "      notice.setAttribute('role', 'status');",
+    "      text.textContent = message;",
+    "      button.textContent = 'Cancel';",
+    "      button.hidden = false;",
+    "      button.onclick = onCancel;",
+    "    },",
+    "    problem(message) {",
+    "      notice.setAttribute('role', 'alert');",
+    "      notice.style.background = '#8a1c1c';",
+    "      text.textContent = message;",
+    "      button.textContent = 'Dismiss';",
+    "      button.hidden = false;",
+    "      button.onclick = () => notice.remove();",
+    "    },",
+    "    done() { notice.remove(); },",
+    "  };",
     "}",
     "async function runAtlasAction(kind) {",
     "  await carto.whenPageReady(sheet);",
@@ -433,35 +478,64 @@ _ATLAS_ACTIONS = [
     "  if (kind !== 'print') throw new Error(`unknown atlas action ${kind}`);",
     # Print-resolution images, one per sheet, at the sheet's own size; the
     # page's `@page` rule (written by the runtime from the sheet) still sets
-    # the paper, so Chromium prints every sheet at true size.
+    # the paper, so Chromium prints every sheet at true size. Sheets are
+    # rendered one after another, and every address made for one is revoked
+    # whatever happens: when a page fails, when the reader cancels, and when
+    # the print dialog closes.
     "  const dpi = Number(query.get('dpi')) || 200;",
     "  const widthMm = sheet.offsetWidth * 25.4 / 96;",
     "  const heightMm = sheet.offsetHeight * 25.4 / 96;",
     "  const sheets = document.createElement('div');",
     "  sheets.setAttribute('data-qgis2webmap-atlas-print', '');",
-    "  for (let index = 0; index < atlas.count; index++) {",
-    "    const page = await carto.renderCartographAtlas(sheet, { dpi, page: index });",
-    "    const image = new Image();",
-    "    image.src = URL.createObjectURL(page.blob);",
-    "    image.style.cssText = `display:block;width:${widthMm}mm;`",
-    "      + `height:${heightMm}mm;break-after:page;`;",
-    "    await image.decode();",
-    "    sheets.appendChild(image);",
-    "  }",
     "  const style = document.createElement('style');",
     "  const printed = '[data-qgis2webmap-atlas-print]';",
     "  style.textContent = `@media screen { ${printed} { display: none } }`",
     "    + ' @media print { om-cartograph { display: none !important }'",
     "    + ` ${printed} { display: block !important } }`;",
-    "  document.body.append(style, sheets);",
-    "  const restore = () => {",
-    "    for (const image of sheets.querySelectorAll('img')) {",
-    "      URL.revokeObjectURL(image.src);",
-    "    }",
+    "  const urls = [];",
+    "  const release = () => {",
+    "    for (const url of urls.splice(0)) URL.revokeObjectURL(url);",
     "    sheets.remove();",
     "    style.remove();",
     "  };",
-    "  window.addEventListener('afterprint', restore, { once: true });",
+    "  const notice = atlasNotice();",
+    "  let cancelled = false;",
+    "  const total = atlas.count;",
+    "  let index = 0;",
+    "  try {",
+    "    for (; index < total; index++) {",
+    "      notice.progress(`Preparing page ${index + 1} of ${total}`, () => {",
+    "        cancelled = true;",
+    "      });",
+    "      if (cancelled) break;",
+    "      const page = await carto.renderCartographAtlas(",
+    "        sheet, { dpi, page: index });",
+    "      const url = URL.createObjectURL(page.blob);",
+    "      urls.push(url);",
+    "      const image = new Image();",
+    "      image.src = url;",
+    "      image.style.cssText = `display:block;width:${widthMm}mm;`",
+    "        + `height:${heightMm}mm;break-after:page;`;",
+    "      await image.decode();",
+    "      sheets.appendChild(image);",
+    "    }",
+    "  } catch (error) {",
+    "    release();",
+    "    notice.problem(`Page ${index + 1} of ${total} could not be prepared for `",
+    "      + `printing (${error.message}). Nothing was sent to the printer. Reload `",
+    "      + 'the page to try again.');",
+    "    console.warn('[qgis2webmap] atlas print failed on page '",
+    "      + `${index + 1}: ${error.message}`);",
+    "    return;",
+    "  }",
+    "  if (cancelled) {",
+    "    release();",
+    "    notice.done();",
+    "    return;",
+    "  }",
+    "  notice.done();",
+    "  document.body.append(style, sheets);",
+    "  window.addEventListener('afterprint', release, { once: true });",
     "  window.print();",
     "}",
 ]
@@ -963,5 +1037,26 @@ def _render_atlas(atlas: AtlasSpec) -> str:
         _attr("filename", atlas.filename),
         _attr("page-name", atlas.page_name),
         _attr("pager", atlas.pager),
+        _attr(ATLAS_SOURCE_ATTRIBUTE, _atlas_source_json(atlas)),
     ]
     return f"<om-atlas{''.join(attrs)}></om-atlas>"
+
+
+def _atlas_source_json(atlas: AtlasSpec) -> str | None:
+    """QGIS's own filter and sort, beside what was written from them (see
+    `AtlasSpec`). The importer takes the QGIS text back only while
+    `written` still matches the attribute, i.e. while nobody has edited it."""
+    source: dict[str, object] = {}
+    if atlas.filter_source is not None:
+        source["filter"] = {"qgis": atlas.filter_source, "written": atlas.filter}
+    if atlas.sort_source is not None:
+        source["sort"] = {
+            "qgis": atlas.sort_source,
+            "ascending": atlas.sort_ascending,
+            "written": atlas.sort,
+        }
+    return (
+        json.dumps(source, ensure_ascii=False, separators=(",", ":"))
+        if source
+        else None
+    )

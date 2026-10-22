@@ -27,6 +27,7 @@ from nika_onlymap_exporter.core.cartograph_import import (
     parse_cartograph_html,
 )
 from nika_onlymap_exporter.core.cartograph_ir import (
+    ATLAS_ORDER_KEY,
     AtlasSpec,
     Box,
     CartographSpec,
@@ -641,8 +642,11 @@ class TestFurniture:
         built = build_layout(
             _furniture_spec(
                 layer="lots",
-                filter="\"lot\" <> 'B'",
-                sort="-lot",
+                filter="d.id == 1 || d.id == 3",
+                filter_source="\"lot\" <> 'B'",
+                sort=ATLAS_ORDER_KEY,
+                sort_source='"lot"',
+                sort_ascending=False,
                 filename="lot-{{atlas.lot}}",
                 page_name="{{atlas.lot}}",
             ),
@@ -658,6 +662,47 @@ class TestFurniture:
         )
         assert built.items_by_id["main"].atlasDriven()
         assert atlas.updateFeatures() == 2
+
+    def test_a_cartograph_filter_is_never_handed_to_qgis(self, project) -> None:
+        """`$area > 500` is the runtime's language: to QGIS `$area` is the
+        feature's geometry area, so it would parse and filter wrongly."""
+        _live_project(project)
+        built = build_layout(
+            _furniture_spec(layer="lots", filter="$area > 500", sort=ATLAS_ORDER_KEY),
+            project,
+        )
+        atlas = built.layout.atlas()
+        assert not atlas.filterFeatures() and not atlas.sortFeatures()
+        details = " ".join(issue.detail for issue in built.issues)
+        assert "$area > 500" in details and "not applied" in details
+        assert "pages are not sorted" in details
+
+    def test_a_field_sort_without_qgis_text_still_applies(self, project) -> None:
+        _live_project(project)
+        built = build_layout(_furniture_spec(layer="lots", sort="-lot"), project)
+        atlas = built.layout.atlas()
+        assert atlas.sortFeatures() and not atlas.sortAscending()
+        assert atlas.sortExpression() == '"lot"'
+
+    def test_the_layer_may_be_named_by_its_id_or_its_frame_prefixed_id(
+        self, project
+    ) -> None:
+        layer = _live_project(project)
+        for name in (layer.id(), f"main__{layer.id()}"):
+            built = build_layout(_furniture_spec(layer=name), project)
+            assert built.layout.atlas().coverageLayer() is layer
+            assert not [i for i in built.issues if "atlas layer" in i.detail]
+
+    def test_the_runtime_margin_is_half_of_qgis_s(self, project) -> None:
+        """The runtime pads each side by the margin, QGIS scales the fit by
+        1 + margin (`layout_reader._atlas_fit` halves it); zero is written
+        as the smallest margin and comes back as zero."""
+        _live_project(project)
+        spec = _furniture_spec(layer="lots")
+        for written, qgis in ((0.05, 0.10), (0.0001, 0.0)):
+            frame = replace(spec.items[0], atlas_fit="feature", atlas_margin=written)
+            built = build_layout(replace(spec, items=(frame, *spec.items[1:])), project)
+            assert built.items_by_id["main"].atlasMargin() == pytest.approx(qgis)
 
     def test_atlas_without_its_layer_is_reported(self, project) -> None:
         built = build_layout(_furniture_spec(layer="nowhere"), project)

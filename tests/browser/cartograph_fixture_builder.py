@@ -25,6 +25,8 @@ download instead. It writes:
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
   QGIS's own atlas centres each parcel.
+- `atlas-ranked.html`: an atlas filtered and sorted over NULLs, and the page
+  order QGIS's own atlas makes.
 - `shared-live.html`: one layer drawn in two live frames, its rows written
   once.
 - `expected.json`: what QGIS itself says the browser must show - the page
@@ -72,6 +74,9 @@ def main(out_dir: Path) -> int:
         expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas_fixed"] = _write_atlas_fixed(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        QgsProject.instance().clear()
+        expected["atlas_ranked"] = _write_atlas_ranked(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["shared"] = _write_shared(QgsProject.instance(), out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
@@ -392,6 +397,33 @@ def _write_atlas_fixed(project, out_dir: Path) -> dict:
         centre = to_wgs84.transform(feature.geometry().boundingBox().center())
         centres[str(feature.id())] = [centre.x(), centre.y()]
     return {"main_frame": _frame_id(built.layout, built.main_map), "centres": centres}
+
+
+def _write_atlas_ranked(project, out_dir: Path) -> dict:
+    from atlas_fixtures import (
+        build_atlas_layout,
+        qgis_atlas_page_ids,
+        use_ranked_parcels,
+    )
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    built = build_atlas_layout(project)
+    use_ranked_parcels(built)
+    # NULL scores drop out of the filter in QGIS; NULL ranks sort first.
+    built.atlas.setFilterFeatures(True)
+    built.atlas.setFilterExpression('"score" <> 1')
+    built.atlas.setSortFeatures(True)
+    built.atlas.setSortExpression('"rank"')
+    built.atlas.setSortAscending(True)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-ranked.html").write_text(html, encoding="utf-8")
+    return {"pages": qgis_atlas_page_ids(built.layout)}
 
 
 def _write_shared(project, out_dir: Path) -> dict:

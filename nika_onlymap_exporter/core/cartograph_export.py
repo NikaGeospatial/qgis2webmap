@@ -79,6 +79,7 @@ from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
 from .cartograph_ir import (
+    ATLAS_ORDER_KEY,
     AtlasCamera,
     CartographItem,
     CartographSpec,
@@ -102,6 +103,7 @@ from .layout_reader import (
     FrameMode,
     MapFrameReading,
     draws_in_own_plane,
+    layout_state_restored,
     read_layout,
 )
 from .project_reader import read_project
@@ -551,8 +553,10 @@ def finish_cartograph_full(
         export_project, frame_rasters = _embed_rasters(export_project, report)
         for name, data in frame_rasters:
             embedded_rasters.setdefault(name, data)
-        projects.append(export_project)
         requirement = prepared.atlas_requirement
+        if requirement is not None and requirement.frame_id == source.frame_id:
+            export_project = _with_atlas_order(export_project, requirement)
+        projects.append(export_project)
         if (
             requirement is not None
             and requirement.frame_id == source.frame_id
@@ -849,6 +853,30 @@ def _atlas_layer_survived(
     return True
 
 
+def _with_atlas_order(
+    export_project: ExportProject, requirement: AtlasRequirement
+) -> ExportProject:
+    """The coverage layer's features, each carrying its place in the order
+    QGIS pages them (`ATLAS_ORDER_KEY`), which is what the atlas sorts by."""
+    if not requirement.page_order:
+        return export_project
+    places = {
+        feature_id: place for place, feature_id in enumerate(requirement.page_order)
+    }
+    layers = []
+    for layer in export_project.layers:
+        if layer.layer_id == requirement.layer_id and layer.geojson is not None:
+            features = [
+                {**feature, ATLAS_ORDER_KEY: places[feature["id"]]}
+                if feature.get("id") in places
+                else feature
+                for feature in layer.geojson.get("features") or ()
+            ]
+            layer = replace(layer, geojson={**layer.geojson, "features": features})
+        layers.append(layer)
+    return replace(export_project, layers=tuple(layers))
+
+
 def _without_atlas(spec: CartographSpec) -> CartographSpec:
     items = tuple(
         replace(item, atlas_fit=None, atlas_margin=None, atlas_cameras=())
@@ -994,28 +1022,23 @@ def _atlas_page_extents(
     if not frames:
         return {}
     atlas = layout.atlas()
-    previewed = atlas.currentFeatureNumber()
-    saved = {frame.frame_id: QgsRectangle(frame.map_item.extent()) for frame in frames}
     pages: dict[str, list[tuple[int, QgsRectangle]]] = {
         frame.frame_id: [] for frame in frames
     }
-    if not atlas.beginRender():
-        return {}
-    try:
-        for index in range(atlas.count()):
-            if not atlas.seekTo(index):
-                continue
-            feature_id = int(layout.reportContext().feature().id())
-            for frame in frames:
-                pages[frame.frame_id].append(
-                    (feature_id, QgsRectangle(frame.map_item.extent()))
-                )
-    finally:
-        atlas.endRender()
-        for frame in frames:
-            frame.map_item.setExtent(saved[frame.frame_id])
-        if previewed >= 0:
-            atlas.seekTo(previewed)
+    with layout_state_restored(layout):
+        if not atlas.beginRender():
+            return {}
+        try:
+            for index in range(atlas.count()):
+                if not atlas.seekTo(index):
+                    continue
+                feature_id = int(layout.reportContext().feature().id())
+                for frame in frames:
+                    pages[frame.frame_id].append(
+                        (feature_id, QgsRectangle(frame.map_item.extent()))
+                    )
+        finally:
+            atlas.endRender()
     return {frame_id: tuple(found) for frame_id, found in pages.items()}
 
 

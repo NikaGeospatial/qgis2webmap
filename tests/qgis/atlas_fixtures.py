@@ -150,3 +150,66 @@ def build_atlas_layout(project: QgsProject) -> AtlasLayout:
         main_map=main_map,
         label=label,
     )
+
+
+#: (lot, rank, score): text and integer fields with NULLs, two per column and
+#: not on the same features, so a filter or sort over either has to decide
+#: what NULL means. `rank` mixes case and numbers in text ("b10" < "b9" as
+#: text, "B2" between "a1" and "b10" for a case-insensitive numeric sort).
+RANKED = (
+    ("p1", "b10", 1),
+    ("p2", None, None),
+    ("p3", "B2", 3),
+    ("p4", "a1", 2),
+    ("p5", None, 5),
+    ("p6", "b9", None),
+)
+
+
+def build_ranked_parcels(name: str = "ranked") -> QgsVectorLayer:
+    layer = QgsVectorLayer(
+        "Polygon?crs=EPSG:3857&field=lot:string&field=rank:string&field=score:integer",
+        name,
+        "memory",
+    )
+    features = []
+    for index, (lot, rank, score) in enumerate(RANKED):
+        feature = QgsFeature(layer.fields())
+        feature.setAttribute("lot", lot)
+        feature.setAttribute("rank", rank)
+        feature.setAttribute("score", score)
+        x = index * 1000
+        feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(x, 0, x + 400, 400)))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+    layer.renderer().setSymbol(QgsFillSymbol.createSimple({"color": "#eba941"}))
+    return layer
+
+
+def use_ranked_parcels(built: AtlasLayout) -> QgsVectorLayer:
+    """Make the atlas page the ranked parcels instead of the plain ones."""
+    ranked = build_ranked_parcels()
+    built.project.addMapLayer(ranked)
+    built.main_map.setLayers([ranked, built.roads])
+    built.atlas.setCoverageLayer(ranked)
+    built.atlas.setFilenameExpression("'lot_' || \"lot\"")
+    built.atlas.setPageNameExpression("lot")
+    return ranked
+
+
+def qgis_atlas_page_ids(layout: QgsPrintLayout) -> list[int]:
+    """The feature ids of the pages QGIS's own atlas makes, in order: the
+    oracle for what the cartograph must page."""
+    atlas = layout.atlas()
+    if not atlas.beginRender():  # nothing begins an atlas with no pages
+        assert atlas.count() == 0
+        return []
+    try:
+        ids = []
+        for index in range(atlas.count()):
+            assert atlas.seekTo(index)
+            ids.append(int(layout.reportContext().feature().id()))
+    finally:
+        atlas.endRender()
+    return ids

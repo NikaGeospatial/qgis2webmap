@@ -60,8 +60,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -73,6 +74,7 @@ from qgis.core import (
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
+    QgsFeature,
     QgsGraduatedSymbolRenderer,
     QgsLayerTreeLayer,
     QgsLayoutItem,
@@ -87,6 +89,7 @@ from qgis.core import (
     QgsLayoutItemShape,
     QgsLayoutMeasurementConverter,
     QgsLayoutObject,
+    QgsLayoutSize,
     QgsLegendStyle,
     QgsMapLayer,
     QgsMapLayerLegendUtils,
@@ -94,6 +97,7 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
     QgsRasterLayer,
+    QgsRectangle,
     QgsSimpleFillSymbolLayer,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -102,6 +106,8 @@ from qgis.PyQt.QtCore import QFile, QIODevice, QSizeF, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QTextDocument
 
 from .cartograph_ir import (
+    ATLAS_ORDER_KEY,
+    SMALLEST_ATLAS_MARGIN,
     TEXT_KINDS,
     AtlasSpec,
     Box,
@@ -119,10 +125,9 @@ from .cartograph_ir import (
     live_layer_dom_ids,
 )
 from .expression_tokens import (
+    atlas_id_filter,
     translate_atlas_pattern,
-    translate_filter_expression,
     translate_label,
-    translate_sort_expression,
 )
 from .fidelity_report import FidelityReportBuilder
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
@@ -268,6 +273,9 @@ class AtlasRequirement:
     layer_id: str
     layer_name: str
     fields: tuple[str, ...] = ()
+    # The coverage layer's feature ids in the order QGIS pages them, when the
+    # atlas sorts: `finish_cartograph` writes each feature's place into it.
+    page_order: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1229,13 +1237,17 @@ def _read_atlas(
             "page; the cartograph draws all of them.",
         )
 
+    pages = _AtlasPages.of(layout, atlas, coverage, report)
     spec = AtlasSpec(
         for_=driver.frame_id,
         layer=coverage_id,  # swapped for its <om-layer id> by read_layout
-        filter=_atlas_filter(atlas, coverage, report),
-        sort=_atlas_sort(atlas, report),
+        filter=pages.filter,
+        sort=ATLAS_ORDER_KEY if pages.order else None,
         filename=_atlas_filename(atlas, report),
         page_name=_atlas_page_name(atlas, coverage, report),
+        filter_source=pages.filter_source,
+        sort_source=pages.sort_source,
+        sort_ascending=atlas.sortAscending(),
     )
     report.preserved(
         ATLAS_SUBJECT,
@@ -1249,6 +1261,7 @@ def _read_atlas(
             frame_id=driver.frame_id,
             layer_id=coverage_id,
             layer_name=coverage_name,
+            page_order=pages.order,
         ),
     )
 
@@ -1257,11 +1270,6 @@ def _read_atlas(
 _ATLAS_FIXED = 0
 _ATLAS_PREDEFINED = 1
 _ATLAS_AUTO = 2
-
-#: The runtime reads `atlas-margin="0"` as "unset" and pads by its 0.15
-#: default, so a QGIS margin of zero is written as this instead -- 0.01% of
-#: the feature's extent, which is no visible padding at all.
-_SMALLEST_ATLAS_MARGIN = 0.0001
 
 
 def _atlas_fit(
@@ -1289,7 +1297,7 @@ def _atlas_fit(
     over_points = coverage.geometryType() == Qgis.GeometryType.Point
     if mode == _ATLAS_AUTO and not over_points:
         report.preserved(label, "Refits to each atlas feature, with QGIS's margin.")
-        margin = max(map_item.atlasMargin() / 2.0, _SMALLEST_ATLAS_MARGIN)
+        margin = max(map_item.atlasMargin() / 2.0, SMALLEST_ATLAS_MARGIN)
         return "feature", round(margin, 6)
     if mode == _ATLAS_PREDEFINED:
         detail = (
@@ -1339,38 +1347,186 @@ def atlas_page_count(layout: QgsPrintLayout) -> int | None:
     return _count_features(coverage, expression or None)
 
 
-def _atlas_filter(
-    atlas, coverage: QgsVectorLayer, report: FidelityReportBuilder
-) -> str | None:
-    if not atlas.filterFeatures() or not atlas.filterExpression().strip():
-        return None
-    expression = atlas.filterExpression()
-    translated = translate_filter_expression(expression)
-    if translated is not None:
-        report.preserved(ATLAS_SUBJECT, f"Atlas filter `{expression}` kept.")
-        return translated
-    report.approximated(
-        ATLAS_SUBJECT,
-        f"The atlas filter `{expression}` has no equivalent in the cartograph's "
-        "expression language, so it was left out: the cartograph has a page "
-        f"for each of the layer's {_count_features(coverage, None)} features, "
-        f"where QGIS has {_count_features(coverage, expression)}.",
-    )
-    return None
+@contextlib.contextmanager
+def layout_state_restored(layout: QgsPrintLayout) -> Iterator[None]:
+    """Leave the layout as it was found, whatever the body does or raises.
+
+    Paging the atlas moves *every* atlas-driven map -- including the ones
+    that are not being read, such as a static frame's -- and can resize them
+    to the new extent's aspect; it also leaves the atlas on its last page
+    with the report context pointing at that feature. The authored maps,
+    the atlas's preview page and the report context all go back.
+    """
+    atlas = layout.atlas()
+    context = layout.reportContext()
+    enabled = atlas.enabled()
+    previewed = atlas.currentFeatureNumber()
+    feature = QgsFeature(context.feature())
+    context_layer = context.layer()
+    coverage = atlas.coverageLayer()
+    subset = coverage.subsetString() if coverage is not None else ""
+    maps = [
+        (map_item, _MapState.of(map_item))
+        for map_item in layout.items()
+        if isinstance(map_item, QgsLayoutItemMap)
+    ]
+    try:
+        yield
+    finally:
+        if atlas.enabled() != enabled:
+            atlas.setEnabled(enabled)
+        # `seekTo` is what moves the atlas's page; -1 (no page yet) is
+        # reached by asking for it, which QGIS answers with False.
+        atlas.seekTo(previewed)
+        context.setFeature(feature)
+        context.setLayer(context_layer)
+        if coverage is not None and coverage.subsetString() != subset:
+            coverage.setSubsetString(subset)
+        # Last: seeking a page moves the atlas's maps again.
+        for map_item, state in maps:
+            state.restore(map_item)
 
 
-def _atlas_sort(atlas, report: FidelityReportBuilder) -> str | None:
-    if not atlas.sortFeatures() or not atlas.sortExpression().strip():
-        return None
-    expression = atlas.sortExpression()
-    translated = translate_sort_expression(expression, ascending=atlas.sortAscending())
-    if translated is None:
-        report.approximated(
-            ATLAS_SUBJECT,
-            f"Pages are sorted by `{expression}` in QGIS; the cartograph can "
-            "only sort by a field, so its pages follow the layer's own order.",
+@dataclass(frozen=True)
+class _MapState:
+    """What paging an atlas can change about a map item."""
+
+    extent: QgsRectangle
+    size: QgsLayoutSize
+    rotation: float
+    atlas_driven: bool
+    scaling_mode: QgsLayoutItemMap.AtlasScalingMode
+    margin: float
+
+    @classmethod
+    def of(cls, map_item: QgsLayoutItemMap) -> _MapState:
+        return cls(
+            extent=QgsRectangle(map_item.extent()),
+            size=QgsLayoutSize(map_item.sizeWithUnits()),
+            rotation=map_item.mapRotation(),
+            atlas_driven=map_item.atlasDriven(),
+            scaling_mode=map_item.atlasScalingMode(),
+            margin=map_item.atlasMargin(),
         )
-    return translated
+
+    def restore(self, map_item: QgsLayoutItemMap) -> None:
+        map_item.setAtlasDriven(self.atlas_driven)
+        map_item.setAtlasScalingMode(self.scaling_mode)
+        map_item.setAtlasMargin(self.margin)
+        map_item.setMapRotation(self.rotation)
+        # `setExtent` resizes the item to the extent's aspect, so the size
+        # goes back afterwards, and the extent is fitted to it once more.
+        map_item.setExtent(self.extent)
+        if map_item.sizeWithUnits() != self.size:
+            map_item.attemptResize(self.size)
+            map_item.zoomToExtent(self.extent)
+
+
+@dataclass(frozen=True)
+class _AtlasPages:
+    """Which features QGIS's atlas pages, and in what order -- asked of QGIS
+    itself, so the cartograph pages exactly those.
+
+    The runtime's own filter and sort cannot be trusted to agree with QGIS's:
+    a comparison with NULL is NULL in QGIS (so a filter drops the feature)
+    but `true` or `false` in JavaScript, QGIS puts NULL first in an
+    ascending sort where the runtime puts it last, and text sorts by
+    different rules. So the filter is written as a test on the ids QGIS keeps
+    and the order as each feature's place in QGIS's own (`ATLAS_ORDER_KEY`).
+    """
+
+    filter: str | None = None
+    filter_source: str | None = None
+    order: tuple[int, ...] = ()
+    sort_source: str | None = None
+
+    @classmethod
+    def of(
+        cls,
+        layout: QgsPrintLayout,
+        atlas,
+        coverage: QgsVectorLayer,
+        report: FidelityReportBuilder,
+    ) -> _AtlasPages:
+        filter_expression = (
+            atlas.filterExpression().strip() if atlas.filterFeatures() else ""
+        )
+        sort_expression = atlas.sortExpression().strip() if atlas.sortFeatures() else ""
+        if not filter_expression and not sort_expression:
+            return cls()
+        for expression, what in (
+            (filter_expression, "filter"),
+            (sort_expression, "sort"),
+        ):
+            if expression and QgsExpression(expression).hasParserError():
+                report.approximated(
+                    ATLAS_SUBJECT,
+                    f"The atlas {what} `{expression}` is not a valid QGIS "
+                    "expression, so it was left out: the cartograph has a page "
+                    "for each of the layer's features, in the layer's own order.",
+                )
+                return cls()
+        every = _feature_ids(coverage)
+        pages = _qgis_page_ids(layout)
+        if pages is None or len(set(every)) != len(every):
+            report.approximated(
+                ATLAS_SUBJECT,
+                f"The atlas filter or sort of '{coverage.name()}' could not be "
+                "carried over: QGIS could not page the layer, or its features "
+                "have no ids of their own to name them by, so the cartograph "
+                "has a page for each feature, in the layer's own order.",
+            )
+            return cls()
+        filter_js: str | None = None
+        if filter_expression:
+            filter_js = atlas_id_filter(pages, every)
+            report.preserved(
+                ATLAS_SUBJECT,
+                f"Atlas filter `{filter_expression}` kept: {len(pages)} of "
+                f"{len(every)} features get a page, as QGIS evaluates it.",
+            )
+        if sort_expression:
+            report.preserved(
+                ATLAS_SUBJECT,
+                f"Pages are sorted by `{sort_expression}`, in the order QGIS "
+                "puts them.",
+            )
+        return cls(
+            filter=filter_js,
+            filter_source=filter_expression or None,
+            order=tuple(pages) if sort_expression else (),
+            sort_source=sort_expression or None,
+        )
+
+
+def _feature_ids(layer: QgsVectorLayer) -> list[int]:
+    """The ids of every feature of `layer`, through the layer's own subset
+    filter."""
+    from qgis.core import QgsFeatureRequest
+
+    request = QgsFeatureRequest()
+    request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
+    request.setNoAttributes()
+    return [feature.id() for feature in layer.getFeatures(request)]
+
+
+def _qgis_page_ids(layout: QgsPrintLayout) -> list[int] | None:
+    """The ids of the features QGIS's own atlas makes pages of, in page
+    order: the atlas is asked, not re-implemented, because its filter, its
+    NULL handling and its text order are QGIS's. `None` if it cannot start."""
+    atlas = layout.atlas()
+    ids: list[int] = []
+    with layout_state_restored(layout):
+        if not atlas.beginRender():
+            # An atlas with no pages at all does not begin either.
+            return [] if atlas.count() == 0 else None
+        try:
+            for index in range(atlas.count()):
+                if atlas.seekTo(index):
+                    ids.append(int(layout.reportContext().feature().id()))
+        finally:
+            atlas.endRender()
+    return ids
 
 
 def _atlas_filename(atlas, report: FidelityReportBuilder) -> str | None:
@@ -1408,25 +1564,19 @@ def _atlas_page_name(
 
 
 _ATLAS_TOKEN_RE = re.compile(r"\{\{\s*atlas\.([A-Za-z0-9_]+)\s*\}\}")
-_CORE_FIELD_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
-_CORE_STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
 def _atlas_fields_used(
     atlas: AtlasSpec, furniture: Sequence[CartographItem]
 ) -> tuple[str, ...]:
     """Every coverage-layer field the written atlas reads, in first-use
-    order: `{{atlas.<field>}}` in the filename, page name and text, `$field`
-    in the filter, and the sort keys."""
+    order: `{{atlas.<field>}}` in the filename, page name and text. (The
+    filter and sort read feature ids and `ATLAS_ORDER_KEY`, not fields.)"""
     names: list[str] = []
     texts = [atlas.filename or "", atlas.page_name or ""]
     texts += [item.body for item in furniture if isinstance(item, TextSpec)]
     for text in texts:
         names += _ATLAS_TOKEN_RE.findall(text)
-    if atlas.filter:
-        names += _CORE_FIELD_RE.findall(_CORE_STRING_RE.sub("", atlas.filter))
-    if atlas.sort:
-        names += [key.strip().lstrip("-") for key in atlas.sort.split(",")]
     reserved = {"index", "count"}
     return tuple(name for name in dict.fromkeys(names) if name and name not in reserved)
 

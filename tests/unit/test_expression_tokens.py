@@ -6,14 +6,18 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
+import random
+import shutil
+import subprocess
+
 import pytest
 
 from nika_onlymap_exporter.core.expression_tokens import (
     TranslatedLabel,
+    atlas_id_filter,
     translate_atlas_pattern,
-    translate_filter_expression,
     translate_label,
-    translate_sort_expression,
 )
 
 
@@ -339,86 +343,72 @@ class TestAtlasPattern:
 # --------------------------------------------------------------------------
 
 
-class TestAtlasSort:
-    def test_quoted_field_ascending(self) -> None:
-        assert translate_sort_expression('"lot"', ascending=True) == "lot"
-
-    def test_bare_field_descending(self) -> None:
-        assert translate_sort_expression("lot", ascending=False) == "-lot"
-
-    def test_a_field_with_a_space_is_fine(self) -> None:
-        """The runtime's sort reads the row by name, not through a token."""
-        assert translate_sort_expression('"plot no"', ascending=True) == "plot no"
-
-    @pytest.mark.parametrize(
-        "expression", ['"a,b"', '"-lot"', 'length("lot")', "\"lot\" || 'x'", ""]
-    )
-    def test_anything_but_a_plain_field_is_untranslatable(
-        self, expression: str
-    ) -> None:
-        assert translate_sort_expression(expression, ascending=True) is None
-
-
-# --------------------------------------------------------------------------
-# Atlas filter -> core expression language
-# --------------------------------------------------------------------------
+def _evaluate_filter(expression: str, ids: list[int]) -> list[bool]:
+    """The filter over features `{"id": n}`, the way the runtime's core
+    expression language (JavaScript) evaluates it: in Node when there is
+    one, else through Python, whose `and`/`or`/`not` mean the same on the
+    comparisons and ids this filter is made of."""
+    node = shutil.which("node")
+    if node is not None:
+        script = (
+            f"const f = (d) => ({expression});"
+            f"console.log(JSON.stringify({ids!r}.map((id) => !!f({{ id }}))));"
+        )
+        done = subprocess.run(
+            [node, "-e", script], capture_output=True, text=True, check=True
+        )
+        return json.loads(done.stdout)
+    python = expression.replace("&&", " and ").replace("||", " or ")
+    python = python.replace("false", "False")
+    python = python.replace("!(", "not (").replace("d.id", "feature_id")
+    return [bool(eval(python, {"feature_id": feature_id})) for feature_id in ids]
 
 
-class TestAtlasFilter:
-    @pytest.mark.parametrize(
-        ("qgis", "core"),
-        [
-            ("\"lot\" = 'A'", '($lot == "A")'),
-            ("\"lot\" <> 'B'", '($lot != "B")'),
-            ('"area" > 500', "($area > 500)"),
-            ("area >= 1.5e3", "($area >= 1.5e3)"),
-            (
-                "\"lot\" = 'A' OR \"lot\" = 'C'",
-                '(($lot == "A") || ($lot == "C"))',
-            ),
-            (
-                'NOT ("a" = 1 AND "b" < 2)',
-                "(!(($a == 1) && ($b < 2)))",
-            ),
-            ('"lot" IS NULL', "($lot == null)"),
-            ('"lot" IS NOT NULL', "($lot != null)"),
-            ("\"lot\" IN ('A', 'C')", '($lot == "A" || $lot == "C")'),
-            ('"lot" NOT IN (1, 2)', "($lot != 1 && $lot != 2)"),
-            ('"a" * 2 + 1 > -3', "((($a * 2) + 1) > (-3))"),
-            ("flag = TRUE", "($flag == true)"),
-            ("\"name\" = 'O''Brien'", '($name == "O\'Brien")'),
-        ],
-    )
-    def test_translates(self, qgis: str, core: str) -> None:
-        assert translate_filter_expression(qgis) == core
+class TestAtlasIdFilter:
+    def test_every_feature_kept_needs_no_filter(self) -> None:
+        assert atlas_id_filter([3, 1, 2], [1, 2, 3]) is None
 
-    def test_and_binds_tighter_than_or(self) -> None:
+    def test_no_feature_kept_pages_nothing(self) -> None:
+        assert atlas_id_filter([], [1, 2, 3]) == "false"
+
+    def test_a_run_of_neighbours_is_one_range(self) -> None:
         assert (
-            translate_filter_expression("a = 1 OR b = 2 AND c = 3")
-            == "(($a == 1) || (($b == 2) && ($c == 3)))"
+            atlas_id_filter([3, 4, 5], [1, 2, 3, 4, 5, 6]) == "d.id >= 3 && d.id <= 5"
         )
 
-    @pytest.mark.parametrize(
-        "expression",
-        [
-            "$area > 500",
-            "\"lot\" LIKE 'A%'",
-            "upper(\"lot\") = 'A'",
-            "@atlas_featurenumber = 1",
-            '"plot no" = 1',
-            '"a" BETWEEN 1 AND 2',
-            '"a" = 1 AND',
-            "\"a\" || 'x' = 'y'",
-            "CASE WHEN a THEN 1 END",
-            '"a" IS 3',
-            "",
-        ],
-    )
-    def test_anything_else_is_untranslatable(self, expression: str) -> None:
-        assert translate_filter_expression(expression) is None
+    def test_neighbours_among_the_layers_ids_count_even_across_gaps(self) -> None:
+        # 10 and 20 are neighbours when nothing in between is a feature.
+        assert atlas_id_filter([10, 20], [1, 10, 20, 30]) == "d.id == 10 || d.id == 20"
+
+    def test_the_shorter_of_keeping_and_dropping_is_written(self) -> None:
+        every = list(range(1, 11))
+        kept = [feature_id for feature_id in every if feature_id != 5]
+        assert atlas_id_filter(kept, every) == "!(d.id == 5)"
+
+    def test_never_one_pair_of_parentheses_around_the_whole_expression(self) -> None:
+        """The runtime's parser stops at the first closing parenthesis of a
+        fully parenthesised expression and rejects the rest (verified in the
+        browser tier against the real runtime)."""
+        every = list(range(1, 20))
+        for kept in ([2, 3, 4], [1, 5, 6, 7, 12], every[:-1], [4]):
+            expression = atlas_id_filter(kept, every)
+            assert expression is not None
+            assert not (expression.startswith("(") and expression.endswith(")"))
+
+    @pytest.mark.parametrize("seed", range(25))
+    def test_keeps_exactly_the_features_asked_for(self, seed: int) -> None:
+        rng = random.Random(seed)
+        every = rng.sample(range(-5, 60), rng.randint(1, 30))
+        kept = [feature_id for feature_id in every if rng.random() < 0.5]
+        expression = atlas_id_filter(kept, every)
+        if expression is None:
+            assert sorted(kept) == sorted(every)
+            return
+        assert _evaluate_filter(expression, every) == [
+            feature_id in kept for feature_id in every
+        ]
 
 
-# The named map item, as the layout builder writes a scale or CRS label
 class TestItemVariables:
     def test_the_labels_own_frame_reads_as_its_token(self) -> None:
         text = (

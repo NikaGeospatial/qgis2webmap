@@ -9,15 +9,21 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from typing import ClassVar
 
 import pytest
-from atlas_fixtures import add_map, build_atlas_layout
+from atlas_fixtures import (
+    add_map,
+    build_atlas_layout,
+    qgis_atlas_page_ids,
+    use_ranked_parcels,
+)
 
 from nika_onlymap_exporter.core.cartograph_export import (
     finish_cartograph,
     prepare_cartograph,
 )
-from nika_onlymap_exporter.core.cartograph_ir import TextSpec
+from nika_onlymap_exporter.core.cartograph_ir import ATLAS_ORDER_KEY, TextSpec
 from nika_onlymap_exporter.core.export_ir import FidelityStatus
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layout_reader import atlas_page_count, read_layout
@@ -97,34 +103,55 @@ class TestAtlasSpec:
         atlas_layout.atlas.setSortExpression('"lot"')
         atlas_layout.atlas.setSortAscending(False)
         reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
-        assert reading.atlas.sort == "-lot"
+        assert reading.atlas.sort == ATLAS_ORDER_KEY
+        assert reading.atlas.sort_source == '"lot"'
+        assert reading.atlas.sort_ascending is False
+        # C-3, B-2, A-1: the feature ids QGIS's atlas pages in that order.
+        assert reading.atlas_requirement.page_order == (1, 3, 2)
 
-    def test_an_untranslatable_sort_is_reported(self, atlas_layout) -> None:
+    def test_a_sort_that_is_not_a_field_is_carried_too(self, atlas_layout) -> None:
         atlas_layout.atlas.setSortFeatures(True)
-        atlas_layout.atlas.setSortExpression('length("lot")')
+        atlas_layout.atlas.setSortExpression('"area" * -1')
         report = FidelityReportBuilder()
         reading = read_layout(atlas_layout.layout, report)
-        assert reading.atlas.sort is None
-        assert any(
-            "sorted by" in row for row in _rows(report, FidelityStatus.APPROXIMATED)
+        assert reading.atlas.sort == ATLAS_ORDER_KEY
+        assert list(reading.atlas_requirement.page_order) == qgis_atlas_page_ids(
+            atlas_layout.layout
         )
+        assert not _rows(report, FidelityStatus.APPROXIMATED)
 
-    def test_filter_is_translated_to_the_core_language(self, atlas_layout) -> None:
+    def test_filter_is_written_as_the_ids_qgis_pages(self, atlas_layout) -> None:
         atlas_layout.atlas.setFilterFeatures(True)
         atlas_layout.atlas.setFilterExpression("\"size\" = 'small'")
-        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
-        assert reading.atlas.filter == '($size == "small")'
+        report = FidelityReportBuilder()
+        reading = read_layout(atlas_layout.layout, report)
+        # Features 1 and 3 are the small ones; the shorter way to say so.
+        assert reading.atlas.filter == "!(d.id == 2)"
+        assert reading.atlas.filter_source == "\"size\" = 'small'"
+        assert any(
+            "2 of 3 features" in row for row in _rows(report, FidelityStatus.PRESERVED)
+        )
 
-    def test_an_untranslatable_filter_reports_both_page_counts(
-        self, atlas_layout
-    ) -> None:
+    def test_a_filter_with_no_equivalent_is_still_exact(self, atlas_layout) -> None:
+        """`LIKE` has no counterpart in the runtime's expression language;
+        the ids QGIS pages need none."""
         atlas_layout.atlas.setFilterFeatures(True)
         atlas_layout.atlas.setFilterExpression("\"lot\" LIKE 'A%'")
         report = FidelityReportBuilder()
         reading = read_layout(atlas_layout.layout, report)
+        assert reading.atlas.filter == "d.id == 2"
+        assert not _rows(report, FidelityStatus.APPROXIMATED)
+
+    def test_an_invalid_filter_is_reported_not_guessed(self, atlas_layout) -> None:
+        atlas_layout.atlas.setFilterFeatures(True)
+        atlas_layout.atlas.setFilterExpression('"lot" = = 1')
+        report = FidelityReportBuilder()
+        reading = read_layout(atlas_layout.layout, report)
         assert reading.atlas.filter is None
-        rows = _rows(report, FidelityStatus.APPROXIMATED)
-        assert any("3 features, where QGIS has 1" in row for row in rows)
+        assert any(
+            "not a valid QGIS expression" in row
+            for row in _rows(report, FidelityStatus.APPROXIMATED)
+        )
 
     def test_page_count_follows_qgis(self, atlas_layout) -> None:
         assert atlas_page_count(atlas_layout.layout) == 3
@@ -448,7 +475,12 @@ class TestAtlasLabels:
         atlas_layout.atlas.setFilterExpression("\"size\" = '$x'")
         reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
         assert reading.atlas_requirement is not None
-        assert set(reading.atlas_requirement.fields) == {"lot", "size", "area"}
+        # The filter and the sort read feature ids and the carried order, not
+        # fields: only the page names and labels need any.
+        assert set(reading.atlas_requirement.fields) == {"lot"}
+        assert list(reading.atlas_requirement.page_order) == qgis_atlas_page_ids(
+            atlas_layout.layout
+        )
 
 
 class TestAtlasWritten:
@@ -530,3 +562,338 @@ class TestAtlasWritten:
         assert list(fits.values()) == ["feature", "feature"]
         # The page turner is the one that carries the coverage layer.
         assert reading.atlas.for_ == reading.frames[0].frame_id
+
+
+def _layout_state(layout) -> dict:
+    """Everything paging an atlas can touch: every map item (extent, scale,
+    rotation, size, position, atlas settings) and the atlas itself."""
+    from qgis.core import QgsLayoutItemMap
+
+    state: dict = {}
+    for item in layout.items():
+        if isinstance(item, QgsLayoutItemMap):
+            size = item.sizeWithUnits()
+            position = item.positionWithUnits()
+            state[item.uuid()] = {
+                "extent": item.extent().toString(6),
+                "scale": round(item.scale(), 6),
+                "rotation": item.mapRotation(),
+                "size": (round(size.width(), 6), round(size.height(), 6)),
+                "position": (round(position.x(), 6), round(position.y(), 6)),
+                "atlas_driven": item.atlasDriven(),
+                "atlas_mode": int(item.atlasScalingMode()),
+                "atlas_margin": item.atlasMargin(),
+            }
+    atlas = layout.atlas()
+    context = layout.reportContext()
+    coverage = atlas.coverageLayer()
+    state["atlas"] = {
+        "enabled": atlas.enabled(),
+        "page": atlas.currentFeatureNumber(),
+        "preview": layout.renderContext().isPreviewRender(),
+        "feature": (context.feature().isValid(), context.feature().id()),
+        "context_layer": context.layer().id() if context.layer() else None,
+        "subset": coverage.subsetString(),
+        "filter": (atlas.filterFeatures(), atlas.filterExpression()),
+        "sort": (atlas.sortFeatures(), atlas.sortExpression(), atlas.sortAscending()),
+    }
+    return state
+
+
+class TestAtlasExtractionLeavesTheLayoutAlone:
+    """Reading each atlas page's camera pages the real atlas, which moves
+    every atlas-driven map: an Auto map beside a Fixed inset, say, or a
+    static frame nobody asked for a camera. None of it may stay."""
+
+    @staticmethod
+    def _with_fixed_inset(atlas_layout):
+        from qgis.core import QgsLayoutItemMap
+
+        inset = add_map(
+            atlas_layout.layout,
+            [atlas_layout.parcels],
+            x=100,
+            y=150,
+            w=40,
+            h=40,
+        )
+        inset.setAtlasDriven(True)
+        inset.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Fixed)
+        return inset
+
+    def test_an_auto_map_and_a_fixed_inset_are_both_put_back(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        inset = self._with_fixed_inset(atlas_layout)
+        before = _layout_state(atlas_layout.layout)
+        _export(atlas_layout, fake_runtime)
+        assert _layout_state(atlas_layout.layout) == before
+        assert inset.atlasDriven()
+
+    def test_the_designers_atlas_preview_page_survives(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        self._with_fixed_inset(atlas_layout)
+        atlas = atlas_layout.atlas
+        atlas.updateFeatures()
+        assert atlas.seekTo(1)
+        assert atlas.currentFeatureNumber() == 1
+        before = _layout_state(atlas_layout.layout)
+        _export(atlas_layout, fake_runtime)
+        assert _layout_state(atlas_layout.layout) == before
+
+    def test_a_map_nobody_asked_a_camera_for_is_put_back_too(
+        self, atlas_layout
+    ) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import _atlas_page_extents
+
+        self._with_fixed_inset(atlas_layout)
+        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
+        auto_frame, fixed_frame = reading.frames
+        assert auto_frame.atlas_fit == "feature" and fixed_frame.atlas_cameras_from_qgis
+        before = _layout_state(atlas_layout.layout)
+        pages = _atlas_page_extents(atlas_layout.layout, [fixed_frame])
+        assert list(pages) == [fixed_frame.frame_id]
+        assert _layout_state(atlas_layout.layout) == before
+
+    def test_a_failure_part_way_leaves_it_alone_as_well(
+        self, atlas_layout, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core import cartograph_export
+
+        self._with_fixed_inset(atlas_layout)
+        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
+        frames = [f for f in reading.frames if f.atlas_cameras_from_qgis]
+        before = _layout_state(atlas_layout.layout)
+        real = cartograph_export.QgsRectangle
+        calls: list[int] = []
+
+        def failing(*args):
+            calls.append(1)
+            if len(calls) == 2:
+                raise RuntimeError("injected mid-extraction failure")
+            return real(*args)
+
+        monkeypatch.setattr(cartograph_export, "QgsRectangle", failing)
+        with pytest.raises(RuntimeError, match="injected"):
+            cartograph_export._atlas_page_extents(atlas_layout.layout, frames)
+        monkeypatch.undo()
+        assert len(calls) == 2
+        assert _layout_state(atlas_layout.layout) == before
+
+
+def _ranked_export(atlas_layout, runtime, *, filter_expression=None, sort=None):
+    """Export the ranked parcels with the given atlas filter and sort
+    (`(expression, ascending)`), returning the document, the `<om-atlas>`
+    element and the finished export (for the layer rows)."""
+    from nika_onlymap_exporter.core.cartograph_export import finish_cartograph_full
+
+    use_ranked_parcels(atlas_layout)
+    atlas = atlas_layout.atlas
+    if filter_expression is not None:
+        atlas.setFilterFeatures(True)
+        atlas.setFilterExpression(filter_expression)
+    if sort is not None:
+        atlas.setSortFeatures(True)
+        atlas.setSortExpression(sort[0])
+        atlas.setSortAscending(sort[1])
+    report = FidelityReportBuilder()
+    prepared = prepare_cartograph(
+        atlas_layout.layout, atlas_layout.project, runtime, report, raster_cache=None
+    )
+    finished = finish_cartograph_full(prepared, atlas_layout.project, report)
+    (element,) = _sheet(finished.html).iter("om-atlas")
+    return finished, element, report
+
+
+def _exported_pages(finished, element, all_ids: list[int]) -> list[int]:
+    """The feature ids the exported atlas pages, in order: the runtime's
+    rule (keep what the filter keeps, order by the carried place, features
+    without one last), applied to the exported rows."""
+    from atlas_filter_eval import evaluate_filter
+
+    expression = element.get("filter")
+    kept = (
+        all_ids
+        if expression is None
+        else [i for i, ok in zip(all_ids, evaluate_filter(expression, all_ids)) if ok]
+    )
+    (export_project,) = finished.projects
+    coverage = next(
+        layer
+        for layer in export_project.exportable_layers
+        if layer.geojson and layer.name == "ranked"
+    )
+    places = {
+        feature["id"]: feature.get(ATLAS_ORDER_KEY)
+        for feature in coverage.geojson["features"]
+    }
+    if element.get("sort") != ATLAS_ORDER_KEY:
+        return kept
+    return sorted(kept, key=lambda i: (places[i] is None, places[i] or 0))
+
+
+class TestAtlasMatchesQgis:
+    """The exported atlas pages exactly what QGIS's own atlas pages, in the
+    same order, wherever JavaScript and QGIS part ways: NULL in comparisons,
+    arithmetic, `IN` and the logic operators, NULL placement in a sort, text
+    order, and functions the runtime does not have. QGIS's `QgsLayoutAtlas`
+    is the oracle."""
+
+    ALL_IDS: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6]
+
+    @pytest.mark.parametrize(
+        "expression",
+        [
+            '"score" <> 1',
+            'NOT ("score" = 1)',
+            '"score" + 2 > 3',
+            '"score" IN (1, 3)',
+            '"score" NOT IN (1, 3)',
+            '"rank" IS NULL',
+            '"rank" IS NOT NULL',
+            '"score" > 1 AND "rank" IS NOT NULL',
+            '"score" > 1 OR "rank" = \'a1\'',
+            'NOT ("score" > 1 AND "rank" = \'B2\')',
+            '"score" > 1 OR NOT ("rank" = \'a1\')',
+            '"rank" = \'b9\' OR "score" IS NULL',
+            "\"rank\" LIKE 'b%'",
+            'length("rank") > 2',
+            'coalesce("score", 0) > 1',
+            '"score" > 100',
+            '"score" IS NULL OR "score" IS NOT NULL',
+        ],
+    )
+    def test_filter_pages_what_qgis_pages(
+        self, atlas_layout, fake_runtime, expression
+    ) -> None:
+        finished, element, report = _ranked_export(
+            atlas_layout, fake_runtime, filter_expression=expression
+        )
+        want = sorted(qgis_atlas_page_ids(atlas_layout.layout))
+        assert sorted(_exported_pages(finished, element, self.ALL_IDS)) == want
+        assert not _rows(report, FidelityStatus.APPROXIMATED)
+
+    @pytest.mark.parametrize(
+        ("expression", "ascending"),
+        [
+            ('"rank"', True),
+            ('"rank"', False),
+            ('"score"', True),
+            ('"score"', False),
+            ('length("rank")', True),
+            ('"lot"', False),
+            ('lower("rank")', True),
+        ],
+    )
+    def test_sort_orders_like_qgis(
+        self, atlas_layout, fake_runtime, expression, ascending
+    ) -> None:
+        finished, element, _report = _ranked_export(
+            atlas_layout, fake_runtime, sort=(expression, ascending)
+        )
+        want = qgis_atlas_page_ids(atlas_layout.layout)
+        assert len(want) == 6
+        assert _exported_pages(finished, element, self.ALL_IDS) == want
+
+    def test_filter_and_sort_together(self, atlas_layout, fake_runtime) -> None:
+        finished, element, _report = _ranked_export(
+            atlas_layout,
+            fake_runtime,
+            filter_expression='"score" <> 1',
+            sort=('"rank"', True),
+        )
+        want = qgis_atlas_page_ids(atlas_layout.layout)
+        # NULL first in QGIS' ascending order -- the runtime would put it last.
+        # (How "a1" and "B2" compare differs between QGIS versions.)
+        assert want[0] == 5 and sorted(want) == [3, 4, 5]
+        assert _exported_pages(finished, element, self.ALL_IDS) == want
+
+
+class TestAtlasRoundTrip:
+    """Export an atlas to HTML, import that file as a layout, and compare the
+    rebuilt layout's atlas with the original: same coverage layer, filter,
+    sort, margin and page names -- and the same pages, in the same order."""
+
+    @staticmethod
+    def _round_trip(atlas_layout, runtime, tmp_path):
+        from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
+
+        html = _export(atlas_layout, runtime)
+        path = tmp_path / "atlas.html"
+        path.write_text(html, encoding="utf-8")
+        return import_cartograph_file(path, atlas_layout.project)
+
+    def test_the_rebuilt_atlas_matches_the_original(
+        self, atlas_layout, fake_runtime, tmp_path
+    ) -> None:
+        ranked = use_ranked_parcels(atlas_layout)
+        atlas = atlas_layout.atlas
+        atlas.setFilterFeatures(True)
+        atlas.setFilterExpression('"score" <> 1')
+        atlas.setSortFeatures(True)
+        atlas.setSortExpression('"rank"')
+        atlas.setSortAscending(False)
+        atlas_layout.main_map.setAtlasMargin(0.10)
+
+        built = self._round_trip(atlas_layout, fake_runtime, tmp_path)
+
+        rebuilt = built.layout.atlas()
+        assert rebuilt.enabled()
+        assert rebuilt.coverageLayer() is ranked
+        assert (rebuilt.filterFeatures(), rebuilt.filterExpression()) == (
+            True,
+            '"score" <> 1',
+        )
+        assert (
+            rebuilt.sortFeatures(),
+            rebuilt.sortExpression(),
+            rebuilt.sortAscending(),
+        ) == (True, '"rank"', False)
+        (driven,) = [
+            item
+            for item in built.items_by_id.values()
+            if getattr(item, "atlasDriven", lambda: False)()
+        ]
+        assert driven.atlasMargin() == pytest.approx(0.10)
+        assert driven.atlasScalingMode() == atlas_layout.main_map.atlasScalingMode()
+        # The same pages, in the same order, with the same names.
+        assert qgis_atlas_page_ids(built.layout) == qgis_atlas_page_ids(
+            atlas_layout.layout
+        )
+        assert [rebuilt.nameForPage(i) for i in range(rebuilt.count())] == [
+            atlas.nameForPage(i) for i in range(atlas.count())
+        ]
+        assert not [issue for issue in built.issues if "tlas" in issue.subject]
+
+    def test_a_filter_written_for_the_cartograph_is_reported_not_run_by_qgis(
+        self, atlas_layout, fake_runtime, tmp_path
+    ) -> None:
+        """Editing the exported filter means QGIS's text no longer describes
+        it; the runtime's language is never handed to QGIS."""
+        from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
+
+        use_ranked_parcels(atlas_layout)
+        atlas_layout.atlas.setFilterFeatures(True)
+        atlas_layout.atlas.setFilterExpression('"score" <> 1')
+        html = _export(atlas_layout, fake_runtime).replace(
+            'filter="d.id &gt;= 3 &amp;&amp; d.id &lt;= 5"', 'filter="$score &gt; 1"'
+        )
+        assert 'filter="$score &gt; 1"' in html
+        path = tmp_path / "edited.html"
+        path.write_text(html, encoding="utf-8")
+        built = import_cartograph_file(path, atlas_layout.project)
+        assert not built.layout.atlas().filterFeatures()
+        assert any("$score > 1" in issue.detail for issue in built.issues)
+
+    def test_the_margin_comes_back_as_it_went(
+        self, atlas_layout, fake_runtime, tmp_path
+    ) -> None:
+        atlas_layout.main_map.setAtlasMargin(0.30)
+        built = self._round_trip(atlas_layout, fake_runtime, tmp_path)
+        (driven,) = [
+            item
+            for item in built.items_by_id.values()
+            if getattr(item, "atlasDriven", lambda: False)()
+        ]
+        assert driven.atlasMargin() == pytest.approx(0.30)

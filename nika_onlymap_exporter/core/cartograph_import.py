@@ -45,6 +45,7 @@ from typing import TypedDict
 from urllib.parse import unquote_to_bytes
 
 from .cartograph_ir import (
+    ATLAS_SOURCE_ATTRIBUTE,
     AtlasSpec,
     Box,
     CartographItem,
@@ -959,20 +960,63 @@ class _Converter:
                 "left out.",
             )
             return None
+        filter_text = attrs.text("filter")
+        sort_text = attrs.text("sort")
+        source = _atlas_source(node.attrs.get(ATLAS_SOURCE_ATTRIBUTE))
+        filter_entry = _source_entry(source, "filter", filter_text)
+        sort_entry = _source_entry(source, "sort", sort_text)
         try:
             return AtlasSpec(
                 for_=for_id,
                 layer=attrs.text("layer") or "",
                 id=attrs.text("id"),
-                filter=attrs.text("filter"),
-                sort=attrs.text("sort"),
+                filter=filter_text,
+                sort=sort_text,
                 filename=attrs.text("filename"),
                 page_name=attrs.text("page-name"),
                 pager=attrs.text("pager"),
+                filter_source=_qgis_text(filter_entry),
+                sort_source=_qgis_text(sort_entry),
+                sort_ascending=sort_entry is None
+                or sort_entry.get("ascending") is not False,
             )
         except ValueError as error:
             self.issues.add(subject, f"Left out: {error}.")
             return None
+
+
+def _atlas_source(raw: str | None) -> dict[str, dict[str, object]]:
+    """The `data-qgis2webmap-atlas-source` JSON, or nothing when it is
+    absent or unreadable (it is only ever a help for the round trip)."""
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw)
+    except ValueError:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    return {
+        key: value
+        for key, value in loaded.items()
+        if isinstance(key, str) and isinstance(value, dict)
+    }
+
+
+def _source_entry(
+    source: Mapping[str, dict[str, object]], key: str, current: str | None
+) -> dict[str, object] | None:
+    """QGIS's text for the atlas `filter` or `sort`, if the attribute still
+    reads what the export wrote from it -- an edited one is the editor's."""
+    entry = source.get(key)
+    if entry is None or entry.get("written") != current:
+        return None
+    return entry if isinstance(entry.get("qgis"), str) else None
+
+
+def _qgis_text(entry: dict[str, object] | None) -> str | None:
+    text = None if entry is None else entry.get("qgis")
+    return text if isinstance(text, str) else None
 
 
 def _construct_root(
