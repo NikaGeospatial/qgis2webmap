@@ -323,7 +323,9 @@ class TestCreditComponent:
         """
         markup = self.html()
         assert "58px !important" not in markup
-        assert 'om-widget[type="scale-bar"] {' not in markup
+        # The scale bar may carry its own surface, but never a position.
+        scale_rule = markup.split('om-widget[type="scale-bar"] {')[1].split("}")[0]
+        assert "bottom" not in scale_rule
 
     def test_it_is_reachable_by_keyboard(self) -> None:
         """`:focus-within` is what expands it for a tabbing user, no script."""

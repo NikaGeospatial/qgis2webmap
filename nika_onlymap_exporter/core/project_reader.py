@@ -60,6 +60,7 @@ from .manifest_builder import (
     terrain_note,
 )
 from .settings import LayerSettings
+from .widget_colors import resolve_widget_colors
 from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -227,6 +228,37 @@ def _report_terrain(
             f"This project uses a {kind} terrain, which is not exported - a DEM "
             "on your disk cannot travel with the map. Switch Terrain on under "
             "the Map tab for global relief instead, or the map exports flat.",
+        )
+
+
+def _report_widget_colors(
+    settings: ExportSettings, report: FidelityReportBuilder
+) -> None:
+    """Say so when the widget colours were completed or cannot be read."""
+    colors = resolve_widget_colors(
+        settings.widget_background, settings.widget_foreground
+    )
+    if colors.derived == "text":
+        report.approximated(
+            "Widget colours",
+            "The widget text colour is on Default, which cannot be read on your "
+            "background colour, so the text is shown in a contrasting colour "
+            "instead. Pick a text colour to choose it yourself.",
+        )
+    elif colors.derived == "background":
+        report.approximated(
+            "Widget colours",
+            "The widget background is on Default, which cannot show your text "
+            "colour, so the background is shown in a contrasting colour "
+            "instead. Pick a background colour to choose it yourself.",
+        )
+    elif colors.explicit_contrast is not None:
+        report.approximated(
+            "Widget colours",
+            "Your widget text and background colours have a contrast of "
+            f"{colors.explicit_contrast:.1f}:1, below the 4.5:1 needed to read "
+            "them comfortably. They are exported as chosen - change one of "
+            "them if the legend or scale bar is hard to read.",
         )
 
 
@@ -433,6 +465,8 @@ def read_project(
             "discards data - the exported geometry is no longer identical to "
             "the source.",
         )
+
+    _report_widget_colors(settings, report)
 
     # A basemap is the only setting whose cost falls on the *recipient*, and it
     # cannot be undone once the file is sent - so it belongs in the report the

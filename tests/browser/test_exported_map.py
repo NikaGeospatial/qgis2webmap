@@ -21,6 +21,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import pytest
 
 from nika_onlymap_exporter.core.manifest_builder import RASTER_TEXTURE_TEMPLATES
@@ -1214,3 +1217,165 @@ class TestHostileFieldName:
             )
             == 0
         )
+
+
+def _controls_toggle(page):
+    """The top fold button; its name flips to "Close ..." once it is open."""
+    return page.locator('[data-om-fold-toggle="top"]')
+
+
+def _wait_for_fold_toggle(page) -> None:
+    page.wait_for_selector('[data-om-fold-toggle="top"]', timeout=30_000)
+
+
+def _rects_overlap(a: dict, b: dict) -> bool:
+    return not (
+        a["x"] + a["width"] <= b["x"]
+        or b["x"] + b["width"] <= a["x"]
+        or a["y"] + a["height"] <= b["y"]
+        or b["y"] + b["height"] <= a["y"]
+    )
+
+
+class TestTitleAndPhoneControls:
+    """A long centred title at 320px used to sit on the folded controls button,
+    and a real click on it was intercepted by the title."""
+
+    def _open_phone(self, page, long_title_map):
+        page.set_viewport_size({"width": 320, "height": 640})
+        open_map(page, long_title_map)
+        _wait_for_fold_toggle(page)
+        return page
+
+    def test_the_controls_button_is_clickable(self, page, long_title_map) -> None:
+        self._open_phone(page, long_title_map)
+        # A real click by its accessible name: Playwright fails it if another
+        # element intercepts.
+        page.get_by_role("button", name="Open top map controls", exact=True).click(
+            timeout=3_000
+        )
+        button = _controls_toggle(page)
+        assert button.get_attribute("aria-expanded") == "true"
+        box = button.bounding_box()
+        assert box is not None
+        hit = page.evaluate(
+            """([x, y]) => document.elementFromPoint(x, y)
+                 ?.closest('[data-om-fold-toggle]')?.getAttribute('aria-label')""",
+            [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
+        )
+        assert hit == "Close top map controls"
+
+    def test_the_controls_button_is_a_touch_target(self, page, long_title_map) -> None:
+        self._open_phone(page, long_title_map)
+        for edge in ("top", "bottom"):
+            box = page.locator(f'[data-om-fold-toggle="{edge}"]').bounding_box()
+            assert box is not None
+            assert box["width"] >= 44 and box["height"] >= 44, (edge, box)
+
+    def test_the_long_title_stays_clear_of_the_controls(
+        self, page, long_title_map
+    ) -> None:
+        self._open_phone(page, long_title_map)
+        caption = page.locator(".om-caption").bounding_box()
+        assert caption is not None
+        assert caption["x"] >= 0 and caption["x"] + caption["width"] <= 320
+        for edge in ("top", "bottom"):
+            button = page.locator(f'[data-om-fold-toggle="{edge}"]').bounding_box()
+            assert button is not None
+            assert not _rects_overlap(caption, button), (edge, caption, button)
+        assert page.evaluate("() => document.documentElement.scrollWidth <= innerWidth")
+
+    def test_the_controls_button_opens_from_the_keyboard(
+        self, page, long_title_map
+    ) -> None:
+        self._open_phone(page, long_title_map)
+        button = _controls_toggle(page)
+        button.focus()
+        page.keyboard.press("Enter")
+        assert button.get_attribute("aria-expanded") == "true"
+        focused = page.evaluate(
+            "() => document.activeElement?.closest('[data-om-fold-panel]') !== null"
+        )
+        assert focused
+        page.screenshot(path=str(Path(tempfile.gettempdir()) / "q2w-w14-phone.png"))
+
+
+WIDGET_TEXT_AND_SURFACE = """
+() => {
+  const out = [];
+  const parse = (value) => value.match(/[\\d.]+/g).map(Number);
+  const opaque = (value) => {
+    const [r, g, b, a = 1] = parse(value);
+    return { r, g, b, a };
+  };
+  for (const widget of document.querySelectorAll('om-widget')) {
+    const root = widget.shadowRoot;
+    if (!root) continue;
+    for (const element of root.querySelectorAll('.omni-panel, .label, button')) {
+      const style = getComputedStyle(element);
+      // Text is drawn on the element's own fill, else on the host's.
+      let fill = opaque(style.backgroundColor);
+      if (fill.a === 0) fill = opaque(getComputedStyle(widget).backgroundColor);
+      out.push({
+        widget: widget.getAttribute('type'),
+        cls: element.className,
+        text: opaque(style.color),
+        fill,
+      });
+    }
+  }
+  return out;
+}
+"""
+
+
+def _luminance(c: dict) -> float:
+    def channel(v: float) -> float:
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    return (
+        0.2126 * channel(c["r"]) + 0.7152 * channel(c["g"]) + 0.0722 * channel(c["b"])
+    )
+
+
+def _contrast(a: dict, b: dict) -> float:
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestWidgetColoursAreReadable:
+    def _readings(self, page, path):
+        open_map(page, path)
+        page.wait_for_function(
+            "() => document.querySelector('om-widget[type=\"scale-bar\"]')"
+            "?.shadowRoot?.textContent?.includes('km')",
+            timeout=30_000,
+        )
+        readings = page.evaluate(WIDGET_TEXT_AND_SURFACE)
+        assert readings, "no widget text found"
+        return readings
+
+    @pytest.mark.parametrize("fixture", ["black_background_map", "white_text_map"])
+    def test_a_default_partner_colour_is_readable(self, page, request, fixture) -> None:
+        path = request.getfixturevalue(fixture)
+        page.set_viewport_size({"width": 1000, "height": 700})
+        for reading in self._readings(page, path):
+            ratio = _contrast(reading["text"], reading["fill"])
+            assert ratio >= 4.5, (fixture, reading, ratio)
+        page.screenshot(
+            path=str(Path(tempfile.gettempdir()) / f"q2w-w14-{fixture}.png")
+        )
+
+    def test_the_scale_label_has_a_surface(self, page, exported_map) -> None:
+        page.set_viewport_size({"width": 1000, "height": 700})
+        open_map(page, exported_map)
+        page.wait_for_selector('om-widget[type="scale-bar"]', timeout=30_000)
+        alpha = page.evaluate(
+            """() => {
+              const host = document.querySelector('om-widget[type="scale-bar"]');
+              return parseFloat(getComputedStyle(host).backgroundColor
+                .match(/[\\d.]+/g).slice(3)[0] ?? '1');
+            }"""
+        )
+        assert alpha > 0.5

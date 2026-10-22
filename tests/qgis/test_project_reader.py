@@ -176,6 +176,36 @@ class TestTerrainNotes:
         assert "Labels shrink to a few pixels over relief" in details
         assert "'peaks'" in details
 
+    def test_widget_colour_notes(self, project, make_memory_layer) -> None:
+        from nika_onlymap_exporter.core.export_ir import Color, ExportSettings
+
+        project.addMapLayer(
+            make_memory_layer("peaks", features=[("Everest", [86.9, 27.9])])
+        )
+
+        def notes(**colors: Color) -> list[str]:
+            report = FidelityReportBuilder()
+            read_project(project, report, settings=ExportSettings(**colors))
+            return [i.detail for i in report.items if i.subject == "Widget colours"]
+
+        assert notes() == []
+        assert "text colour is on Default" in notes(widget_background=Color(0, 0, 0))[0]
+        assert (
+            "background is on Default"
+            in notes(widget_foreground=Color(255, 255, 255))[0]
+        )
+        pair = notes(
+            widget_background=Color(255, 255, 255),
+            widget_foreground=Color(200, 200, 200),
+        )
+        assert len(pair) == 1 and "below the 4.5:1" in pair[0]
+        assert (
+            notes(
+                widget_background=Color(0, 0, 0), widget_foreground=Color(255, 255, 255)
+            )
+            == []
+        )
+
     def test_no_label_note_without_terrain(self, project, make_memory_layer) -> None:
         from qgis.core import (
             QgsPalLayerSettings,

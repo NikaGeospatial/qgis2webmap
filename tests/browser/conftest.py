@@ -837,3 +837,66 @@ def hostile_field_map(runtime, tmp_path_factory):
     destination = tmp_path_factory.mktemp("hostile")
     result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
     return result.entry_path
+
+
+LONG_TITLE = (
+    "Local survey map - a deliberately very long title that has to wrap on a "
+    "phone without ever reaching the map controls"
+)
+
+
+def _titled_map(runtime, tmp_path_factory, name, settings):
+    """A one-layer export with a long title and the given settings."""
+    layer = ExportLayer(
+        layer_id="stations",
+        name="Stations",
+        geometry_kind=GeometryKind.POINT,
+        source_kind=SourceKind.FILE,
+        feature_count=2,
+        geojson=GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(fill_color=Color(r=31, g=119, b=180), radius=6.0),
+        ),
+    )
+    project = ExportProject(
+        title=LONG_TITLE,
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=50.9, east=1.1, north=51.9),
+        settings=settings,
+    )
+    destination = tmp_path_factory.mktemp(name)
+    return (
+        OnlyMapWriter(runtime_provider=runtime).write(project, destination).entry_path
+    )
+
+
+@pytest.fixture(scope="session")
+def long_title_map(runtime, tmp_path_factory):
+    return _titled_map(runtime, tmp_path_factory, "long-title", ExportSettings())
+
+
+BLACK = Color(r=0, g=0, b=0)
+WHITE = Color(r=255, g=255, b=255)
+
+
+@pytest.fixture(scope="session")
+def black_background_map(runtime, tmp_path_factory):
+    """A custom black background with the text left on Default."""
+    return _titled_map(
+        runtime,
+        tmp_path_factory,
+        "black-background",
+        ExportSettings(widget_background=BLACK),
+    )
+
+
+@pytest.fixture(scope="session")
+def white_text_map(runtime, tmp_path_factory):
+    """Custom white text with the background left on Default."""
+    return _titled_map(
+        runtime,
+        tmp_path_factory,
+        "white-text",
+        ExportSettings(widget_foreground=WHITE),
+    )

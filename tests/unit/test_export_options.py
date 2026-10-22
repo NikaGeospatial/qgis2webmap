@@ -41,6 +41,11 @@ from nika_onlymap_exporter.core.settings import (
     LayerSettings,
     parse_hex_color,
 )
+from nika_onlymap_exporter.core.widget_colors import (
+    RUNTIME_TEXT,
+    contrast_between,
+    resolve_widget_colors,
+)
 from nika_onlymap_exporter.writers.onlymap_writer import (
     _caption_block,
     _widget_color_block,
@@ -128,6 +133,69 @@ class TestWidgetColors:
     def test_either_colour_alone_is_enough(self) -> None:
         assert _widget_color_block(make_project(widget_background=TEAL)) != ""
         assert _widget_color_block(make_project(widget_foreground=TEAL)) != ""
+
+
+class TestUnspecifiedPartnerColour:
+    """A colour left on Default must not make the other one unreadable."""
+
+    def test_a_dark_background_gets_light_text(self) -> None:
+        markup = _widget_color_block(make_project(widget_background=Color(0, 0, 0)))
+        assert "--om-widget-fg: #ffffff;" in markup
+        assert "--om-widget-muted: #ffffff;" in markup
+
+    def test_white_text_gets_a_dark_background(self) -> None:
+        markup = _widget_color_block(
+            make_project(widget_foreground=Color(255, 255, 255))
+        )
+        assert "--om-widget-bg: #000000;" in markup
+        assert "--om-widget-hover-bg: #000000;" in markup
+
+    def test_a_readable_default_partner_is_left_alone(self) -> None:
+        assert "--om-widget-fg" not in _widget_color_block(
+            make_project(widget_background=Color(255, 255, 255))
+        )
+        assert "--om-widget-bg" not in _widget_color_block(
+            make_project(widget_foreground=Color(0, 0, 0))
+        )
+
+    def test_a_deliberate_pair_is_never_changed(self) -> None:
+        """Even an unreadable one - that is reported, not overridden."""
+        markup = _widget_color_block(
+            make_project(
+                widget_background=Color(255, 255, 255),
+                widget_foreground=Color(250, 250, 250),
+            )
+        )
+        assert "--om-widget-bg: #ffffff;" in markup
+        assert "--om-widget-fg: #fafafa;" in markup
+
+
+class TestWidgetColourResolution:
+    def test_an_explicit_low_contrast_pair_reports_its_ratio(self) -> None:
+        result = resolve_widget_colors(Color(255, 255, 255), Color(200, 200, 200))
+        assert result.explicit_contrast is not None
+        assert result.explicit_contrast < 4.5
+        assert result.derived is None
+
+    def test_a_readable_explicit_pair_reports_nothing(self) -> None:
+        result = resolve_widget_colors(Color(0, 0, 0), Color(255, 255, 255))
+        assert result.explicit_contrast is None
+
+    def test_the_resulting_text_always_reads(self) -> None:
+        for shade in range(0, 256, 15):
+            background = Color(shade, shade, shade)
+            result = resolve_widget_colors(background, None)
+            text = result.foreground or RUNTIME_TEXT
+            assert contrast_between(background, text) >= 4.5, shade
+
+    def test_mid_grey_text_gets_a_surface_that_reads(self) -> None:
+        result = resolve_widget_colors(None, Color(119, 119, 119))
+        assert result.background is not None
+        assert result.derived == "background"
+
+    def test_nothing_set_resolves_to_nothing(self) -> None:
+        result = resolve_widget_colors(None, None)
+        assert (result.background, result.foreground) == (None, None)
 
 
 class TestHighlightColour:

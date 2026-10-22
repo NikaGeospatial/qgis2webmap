@@ -241,6 +241,80 @@
         bottom: 12px;
         right: 12px;
       }
+      /* A long title wraps rather than overflowing its box. */
+      .om-caption-title,
+      .om-caption-abstract {
+        overflow-wrap: anywhere;
+      }
+
+      /* Small screens. The runtime folds crowded widget slots into a "..."
+         button, and at the top centre that button is exactly where a centred
+         title sits - the title intercepted real clicks on it at 320px. The
+         runtime marks every fold button it has made with `data-om-fold-toggle`,
+         so the caption keys off the buttons that exist rather than a guessed
+         breakpoint: it moves clear of them, and a title too long for the room
+         is cut with an ellipsis instead of growing over the map. The touch
+         target is the runtime's own `--om-widget-size` (36px by default),
+         raised to the 44px minimum. */
+      @media (max-width: 640px), (pointer: coarse) {
+        :root {
+          --om-widget-size: 44px;
+        }
+      }
+      @media (max-width: 640px) {
+        .om-caption-top-center,
+        .om-caption-bottom-center {
+          box-sizing: border-box;
+          width: max-content;
+          max-width: calc(100% - 24px);
+        }
+        .om-caption-title {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 3;
+          line-clamp: 3;
+          overflow: hidden;
+        }
+        .om-caption-abstract {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 4;
+          line-clamp: 4;
+          overflow: hidden;
+        }
+      }
+      body:has([data-om-fold-toggle="top"]) .om-caption-top-left,
+      body:has([data-om-fold-toggle="top"]) .om-caption-top-center,
+      body:has([data-om-fold-toggle="top"]) .om-caption-top-right {
+        top: calc(12px + var(--om-widget-size, 36px) + 8px);
+      }
+      /* The bottom button is lifted off the edge by the runtime to clear the
+         licence notice, so the caption sits above that lift. */
+      body:has([data-om-fold-toggle="bottom"]) .om-caption-bottom-left,
+      body:has([data-om-fold-toggle="bottom"]) .om-caption-bottom-center,
+      body:has([data-om-fold-toggle="bottom"]) .om-caption-bottom-right {
+        bottom: calc(12px + var(--om-widget-size, 36px) * 2 + 48px);
+      }
+      /* An open fold panel opens over the map, where the caption would cover
+         it - so the caption drops behind the runtime's widgets while one is
+         open. */
+      body:has([data-om-fold-toggle][aria-expanded="true"]) .om-caption {
+        z-index: 10;
+      }
+      [data-om-fold-toggle]:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+      }
+
+      /* The scale bar's label has no surface of its own, so it vanished on a
+         pale map under white text, and on a dark one under the default dark
+         text. The host is ours to style: give it the widget background, or a
+         light veil when none is set. */
+      om-widget[type="scale-bar"] {
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--om-widget-bg, rgba(255, 255, 255, 0.75));
+      }
 
       /* Lift the runtime's provider attribution above our credit chip.
 

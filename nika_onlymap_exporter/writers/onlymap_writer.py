@@ -34,6 +34,7 @@ from ..core.manifest_builder import (
     collect_attributions,
     texture_credit,
 )
+from ..core.widget_colors import resolve_widget_colors
 from ..packaging.asset_embedder import (
     build_bootstrap,
     build_data_inflater,
@@ -487,13 +488,18 @@ def _widget_color_block(project: ExportProject) -> str:
     """
     settings = project.settings
     declarations: list[str] = []
+    # A colour left on Default is resolved against its partner, so a black
+    # background never ends up under the runtime's own dark text.
+    colors = resolve_widget_colors(
+        settings.widget_background, settings.widget_foreground
+    )
 
-    if settings.widget_background is not None:
-        background = _hex(settings.widget_background)
+    if colors.background is not None:
+        background = _hex(colors.background)
         declarations.append(f"        --om-widget-bg: {background};")
         declarations.append(f"        --om-widget-hover-bg: {background};")
-    if settings.widget_foreground is not None:
-        foreground = _hex(settings.widget_foreground)
+    if colors.foreground is not None:
+        foreground = _hex(colors.foreground)
         declarations.append(f"        --om-widget-fg: {foreground};")
         declarations.append(f"        --om-widget-muted: {foreground};")
 
