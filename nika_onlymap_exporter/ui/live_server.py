@@ -20,8 +20,11 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import queue
 import re
+import selectors
+import socket
 import sys
 import threading
 import time
@@ -47,6 +50,48 @@ BIND_HOST = "127.0.0.1"
 # `bytes=N-M`, `bytes=N-` or `bytes=-K`: one range, which is all a COG reader
 # sends. A comma means several, and those fall back to the whole file.
 _SINGLE_RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+class _PreviewHTTPServer(ThreadingHTTPServer):
+    """A server whose loop sleeps until there is something to do.
+
+    `serve_forever` wakes every half second to check whether it should stop,
+    so an idle preview woke QGIS twice a second, and every `stop()` waited up
+    to that half second. This loop blocks until a request arrives or `wake`
+    is called, which also makes stopping immediate.
+    """
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self._wake_reader, self._wake_writer = socket.socketpair()
+        self._stop_requested = threading.Event()
+        self._stopped = threading.Event()
+
+    def serve_until_stopped(self) -> None:
+        try:
+            with selectors.DefaultSelector() as selector:
+                selector.register(self, selectors.EVENT_READ)
+                selector.register(self._wake_reader, selectors.EVENT_READ)
+                while not self._stop_requested.is_set():
+                    for key, _events in selector.select():
+                        if key.fileobj is self and not self._stop_requested.is_set():
+                            self._handle_request_noblock()
+                    self.service_actions()
+        finally:
+            self._stopped.set()
+
+    def stop_serving(self, timeout: float = 5.0) -> None:
+        """End `serve_until_stopped` and wait for it, as `shutdown` does."""
+        self._stop_requested.set()
+        # Already closed: the loop has nothing left to wake from.
+        with contextlib.suppress(OSError):
+            self._wake_writer.send(b"x")
+        self._stopped.wait(timeout)
+
+    def server_close(self) -> None:
+        super().server_close()
+        self._wake_reader.close()
+        self._wake_writer.close()
 
 
 class _BoundedReader:
@@ -203,7 +248,7 @@ class PreviewServer:
 
     def __init__(self, root: Path) -> None:
         self._root = Path(root).resolve()
-        self._httpd: ThreadingHTTPServer | None = None
+        self._httpd: _PreviewHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._clients: list[queue.Queue[str]] = []
         # Whether a page has ever reached this server, and since when none
@@ -254,7 +299,7 @@ class PreviewServer:
             def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, directory=str(root), **kwargs)  # type: ignore[arg-type]
 
-        httpd = ThreadingHTTPServer((BIND_HOST, 0), _Bound)
+        httpd = _PreviewHTTPServer((BIND_HOST, 0), _Bound)
         # Threads must not keep the QGIS process alive if `stop` is somehow
         # missed - a plugin that prevents QGIS from exiting is unforgivable.
         httpd.daemon_threads = True
@@ -262,7 +307,7 @@ class PreviewServer:
 
         self._httpd = httpd
         self._thread = threading.Thread(
-            target=httpd.serve_forever,
+            target=httpd.serve_until_stopped,
             name="qgis2webmap-preview",
             daemon=True,
         )
@@ -334,7 +379,7 @@ class PreviewServer:
 
         httpd, self._httpd = self._httpd, None
         if httpd is not None:
-            httpd.shutdown()
+            httpd.stop_serving()
             httpd.server_close()
 
         thread, self._thread = self._thread, None

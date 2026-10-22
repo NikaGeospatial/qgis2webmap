@@ -82,6 +82,25 @@ class TestServing:
         with pytest.raises(OSError):
             socket.create_connection((lan, server.port), timeout=2).close()
 
+    def test_stopping_is_prompt_and_closes_every_socket(self, tmp_path) -> None:
+        """No half-second poll to wait out: the loop sleeps until a request or
+        the stop, so stopping is immediate and an idle server never wakes."""
+        (tmp_path / "index.html").write_text("<p>map</p>", encoding="utf-8")
+        times = []
+        for _ in range(5):
+            server = PreviewServer(tmp_path)
+            server.start()
+            httpd = server._httpd
+            # Served once, so the loop is back asleep waiting for the next.
+            assert _get(server, "/index.html")[0] == 200
+            started = time.monotonic()
+            server.stop()
+            times.append(time.monotonic() - started)
+            assert httpd.socket.fileno() == -1
+            assert httpd._wake_reader.fileno() == -1
+            assert httpd._wake_writer.fileno() == -1
+        assert sorted(times)[2] < 0.1, times
+
     def test_each_server_gets_its_own_port(self, tmp_path) -> None:
         """Two projects previewed at once must not fight over a port."""
         first, second = PreviewServer(tmp_path), PreviewServer(tmp_path)
