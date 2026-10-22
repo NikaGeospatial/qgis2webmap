@@ -1439,9 +1439,9 @@ class CartographController:
         )
         self.accessibility_button.clicked.connect(self.on_accessibility)
 
-        # "HTML", because the page beside the panel is QGIS's drawing: this
-        # is the button that shows the cartograph itself.
-        self.cartograph_preview_button = button(tr("Preview HTML"), "preview")
+        # The page beside the panel is QGIS's drawing; this opens the
+        # cartograph itself, in the browser, as the web map's Preview does.
+        self.cartograph_preview_button = button(tr("Preview"), "preview")
         self.cartograph_preview_button.setToolTip(
             tr("Open the cartograph in your browser.")
         )

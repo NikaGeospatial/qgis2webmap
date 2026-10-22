@@ -2869,9 +2869,8 @@ class MainDialog(QDialog):
         self.live_switch.setProperty("role", "cornerPart")
         self.live_switch.setProperty("position", "right")
         self.live_switch.setCheckable(True)
-        # Labelled, not a bare dot: the dot alone said nothing until hovered,
-        # and it switches a mode that outlives the session.
-        self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Just the dot; "Live: on/off" stays as its text for screen readers.
+        self.live_switch.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.live_switch.setChecked(
             QSettings().value(LIVE_PREVIEW_KEY, False, type=bool)
         )

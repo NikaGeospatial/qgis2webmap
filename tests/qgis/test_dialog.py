@@ -455,6 +455,7 @@ class TestTabCorner:
     def test_the_corner_holds_preview_export_and_share(
         self, qgis_app, project, make_memory_layer
     ) -> None:
+        from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtWidgets import QToolButton
 
         dialog = self._dialog(project, make_memory_layer)
@@ -462,9 +463,12 @@ class TestTabCorner:
             corner = dialog.active_actions()
             assert corner is not None
             labels = [b.text() for b in corner.findChildren(QToolButton)]
-            # The live switch sits inside Preview, labelled with its state:
-            # a bare dot said nothing until hovered.
+            # The live switch sits inside Preview as just its dot; its state
+            # stays in its text for screen readers.
             assert labels == ["Preview", "Live: off", "Share", "Export"]
+            assert dialog.live_switch.toolButtonStyle() == (
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+            )
             dialog.live_switch.setChecked(True)
             assert dialog.live_switch.text() == "Live: on"
             dialog.live_switch.setChecked(False)

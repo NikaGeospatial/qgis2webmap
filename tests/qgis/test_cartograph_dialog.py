@@ -2916,7 +2916,7 @@ class TestPanel:
             assert dialog.create_label.text() == "Create:"
             assert dialog.create_label.buddy() is dialog.output_switcher
             preview = dialog._cartograph.cartograph_preview_button
-            assert preview.text() == "Preview HTML"
+            assert preview.text() == "Preview"
         finally:
             dialog.close()
 

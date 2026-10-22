@@ -15,7 +15,7 @@ lead_image:
 Choose **Cartograph** from the title menu at the top of the plugin's dialog
 (**Create: Web map ▾**) and the dialog becomes one screen: the print layout's
 page on the left and a panel of settings on the right. The header holds
-**colour vision**, **Preview HTML** and **Share**, and there is no Export
+**colour vision**, **Preview** and **Share**, and there is no Export
 button. The web map's tabs are described in
 [the dialog, tab by tab](the-dialog.md). The **Settings** and **Help** icons
 at the right of the header are shared and work the same way.
@@ -35,7 +35,7 @@ A cartograph is **a file that is always saved**, not something an Export
 button produces. Selecting a layout saves it at once, and every change after
 that - in the panel, in the print layout itself, or to the style or data of a
 layer it draws - rewrites the file about 600 ms later, through a temporary
-file that is swapped in, so it is never half written. Preview HTML, Share and
+file that is swapped in, so it is never half written. Preview, Share and
 the NIKA hand-off all work on that file. The dialog's title names it. Closing
 the dialog leaves it where it is, and reopening the plugin on the same project
 picks it up again.
@@ -55,7 +55,7 @@ restyled layer or a new title shows at once.
 It is not the HTML. The cartograph can differ in places - a north arrow the
 browser draws its own way, the page's theme - and the **Checks** tab lists
 every difference. Beside the caption, a link such as **2 changes in the HTML**
-opens Checks. To see the real cartograph, press **Preview HTML**.
+opens Checks. To see the real cartograph, press **Preview**.
 
 Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
 100% is the page at its real size on your screen. The mouse wheel zooms too,
@@ -242,12 +242,12 @@ At the top right, reachable whatever the panel shows:
   on the canvas and in the browser, and check which legend classes become
   indistinguishable. Stays pressed while a simulation is on, and its tooltip
   names it.
-- **Preview HTML** - opens the saved cartograph in your default browser.
+- **Preview** - opens the saved cartograph in your default browser.
 - **Share** - opens the [Share menu](#the-share-menu).
 
 Then the **Settings** and **Help** icons, as on the web map.
 
-![The header on Cartograph: the colour vision icon, Preview HTML and Share, then the Settings and Help icons.](images/cartograph-corner.png)
+![The header on Cartograph: the colour vision icon, Preview and Share, then the Settings and Help icons.](images/cartograph-corner.png)
 
 The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
@@ -261,7 +261,7 @@ live map from a file path. Nothing leaves your computer.
 |---|---|---|
 | **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
 | **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
-| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview HTML does | Once the file exists |
+| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |
 | **Prepare enhancement prompt...** (NIKA hand-off) | Opens the [hand-off dialog](enhance-with-ai.md#hand-off-to-nika) with a prompt asking an AI agent to improve the cartograph; nothing is sent from the plugin | Once the file exists |
 | **Prepare critique prompt...** (NIKA hand-off) | The same dialog, with a prompt asking for a cartographer's critique | Once the file exists |
 | **Join NIKA hosting waitlist ↗** (NIKA hosting) | Hosting is not live yet; opens a short waitlist form in your browser - it does not publish the cartograph | Always |

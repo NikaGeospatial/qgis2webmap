@@ -89,7 +89,7 @@ sends even less:
   of the free licence's attribution condition, so it prints and appears in an
   exported PNG too. It is text on the page, not a request.
 
-Opening a cartograph from the plugin's **Preview HTML** or **Open in browser** serves
+Opening a cartograph from the plugin's **Preview** or **Open in browser** serves
 it from a small server on your own machine (`127.0.0.1`), which nothing outside
 your computer can reach.
 

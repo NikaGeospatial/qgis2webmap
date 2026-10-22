@@ -287,12 +287,12 @@ works with no connection at all, set **Basemap** to **None** — the default.
 
 ## Cartographs
 
-### "Not saved yet", and Preview HTML does nothing
+### "Not saved yet", and Preview does nothing
 
 A cartograph is written as soon as a layout is selected - by default into
 **Documents/QGIS2WebMap/Cartographs**, whether or not the project has been
 saved. Until that first save finishes, the line at the foot of the panel reads
-*Not saved yet*, and Preview HTML and the Share menu's file rows wait for the
+*Not saved yet*, and Preview and the Share menu's file rows wait for the
 file. It normally takes a moment.
 
 If it does not save, that line says why:

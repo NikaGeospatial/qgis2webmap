@@ -44,7 +44,7 @@ Create: [Web map ▾]                Preview [Live]  Share ▾  Export   ⚙  ?
   dialog straight on either one.
 - **The output's actions sit beside it**, at the right, so they are in reach
   from every tab: Preview (with a labelled Live switch), Share and Export for
-  the web map; colour vision, Preview HTML and Share for the cartograph.
+  the web map; colour vision, Preview and Share for the cartograph.
 - **Settings and Help are icons, not tabs.** They are about the plugin, not
   the map, and as tabs they sat beside Map and Layers as if they were part of
   the work. Each opens a page in place of the main screen, with a back arrow.

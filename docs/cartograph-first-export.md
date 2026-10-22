@@ -50,7 +50,7 @@ howto:
     - name: Preview it
       anchor: 6-preview-it
       text: >-
-        Press Preview HTML to open the saved cartograph in your browser.
+        Press Preview to open the saved cartograph in your browser.
     - name: Read the checks
       anchor: 7-read-the-checks
       text: >-
@@ -184,13 +184,13 @@ graphics card.
 
 ## 6. Preview it
 
-**Preview HTML**, at the top right of the dialog, opens the saved cartograph
+**Preview**, at the top right of the dialog, opens the saved cartograph
 in your default browser. The page on the left is QGIS's drawing of the layout;
 this is the real HTML. **Share** beside it opens the
 [Share menu](cartograph-dialog.md#the-share-menu), with PDF and PNG export,
 the layout template and the NIKA hand-off.
 
-Nothing opens until there is a saved file. If you press Preview HTML before
+Nothing opens until there is a saved file. If you press Preview before
 the first save, the bar at the foot of the dialog says so.
 
 ## 7. Read the checks
