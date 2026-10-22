@@ -1378,6 +1378,57 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     font-size: 15px;
     font-weight: 650;
 }}
+{d} QLabel[role="templateIncludes"] {{
+    color: {p.ink};
+    font-size: 12px;
+}}
+/* What the design would show with more content: quieter than what the
+   page shows now. */
+{d} QLabel[role="templateSupports"] {{
+    color: {p.muted};
+    font-size: 12px;
+}}
+/* A legend that left entries out to stay readable: a warning, not an
+   error. */
+{d} QLabel[role="templateCrowded"] {{
+    color: {p.warn};
+    font-size: 12px;
+}}
+/* A card under the pointer, unless it is the chosen one; inset so the
+   card's own outline and the focus ring stay visible. */
+{d} QFrame[role="templateRow"][chosen="false"]:hover {{
+    background: {p.hover};
+    border-radius: 7px;
+    margin: 2px;
+}}
+/* The page box: a quiet field while the page is drawn, then the page. */
+{d} QFrame[role="templatePreview"] {{
+    background: transparent;
+}}
+{d} QLabel[role="templatePage"] {{
+    background: {p.field};
+    color: {p.muted};
+    border-radius: 4px;
+    padding: 6px;
+}}
+{d} QLabel[role="templatePage"][drawn="true"] {{
+    background: transparent;
+    padding: 0px;
+}}
+{d} QFrame[role="templateFailure"] {{
+    background: {p.field};
+    border: 1px dashed {p.warn};
+    border-radius: 4px;
+}}
+{d} QLabel[role="templateFailureText"] {{
+    color: {p.ink};
+}}
+/* The chosen design's key figures, under the list: a card like the rows. */
+{d} QFrame[role="keyFigures"] {{
+    background: {p.paper};
+    border: 1px solid {p.rule};
+    border-radius: 8px;
+}}
 
 /* A one-line notice across the top: the language offer. */
 {d} QFrame[role="notice"] {{

@@ -33,10 +33,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     the project is saved. Title, attribution and theme in the Layout tab's
     Page section.
   - **Add... → From canvas...** builds a `carto:` print layout from the map view in
-    one of ten **layout templates** - Classic, Legend below, Map only, Report
-    figure, Field / survey map, Poster, Map with locator, Story map,
-    Infographic and Dark full-bleed - each shown as a large preview of the
-    current map in a scrolling list, on A4, A3, Letter, Tabloid and more.
+    one of fifteen **layout templates** - six quiet essentials (Daylight,
+    Clearline, Bare Map, Caption, After Hours, Night Desk) and nine with more
+    character (Fieldbook, Broadside, Near & Far, On the Map, Signal,
+    Marginalia, Atlas Ledger, Town Hall, Wayfinder) - each shown as a large
+    preview of the current map with a one-line description of what it is for,
+    on A4, A3, Letter, Tabloid and more. Templates never put stand-in text on
+    the page: a panel with nothing real to show is left out and the map takes
+    its room. Each card says what that page includes for this project, and
+    what else the design can show with more content (notes, key figures, a
+    sheet number). Signal's key figures are typed in the picker and saved
+    with the project. Legend text never drops below a readable size (6.5 pt,
+    9 pt on Town Hall's large print): a legend that still cannot fit leaves
+    its last entries out, and the card and the **Checks** tab say how many.
     **Import cartograph** turns a
     cartograph back into a QGIS layout.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
@@ -75,6 +84,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Keyboard focus is visible on every control**, and in Arabic the
   dialog's directional styling - arrows, rounded ends, section chevrons - is
   mirrored along with its right-to-left layout.
+
+### Fixed
+- **Symbol outlines match QGIS** in web maps and cartographs: a fill or
+  marker with no outline ("No Pen") no longer gets a dark one, a 0 mm
+  outline draws as a one-pixel hairline as in QGIS instead of disappearing,
+  and an outline-only fill ("No Brush") is no longer filled.
+- **Live legends match QGIS more closely**: lines show as lines, a classed
+  layer's heading has no swatch of its own, and graduated classes keep their
+  QGIS labels ("0–1 m", not "< 1"). **Checks** lists what the browser still
+  draws differently in a legend or scale bar instead of calling it
+  preserved.
 
 ## [0.2.1] - 2026-10-13
 

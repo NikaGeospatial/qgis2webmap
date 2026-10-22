@@ -29,6 +29,9 @@ from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
 
+#: The ten designs this file covers (the newer five: test_template_designs_build).
+TEN = template_ids()[:10]
+
 
 @pytest.fixture
 def runtime() -> RuntimeBundle:
@@ -165,21 +168,22 @@ class TestEveryTemplateBuildsAndExports:
         assert reading.bg == "#14161a"
         assert [frame.frame_bg for frame in reading.frames] == ["#14161a"]
 
-    @pytest.mark.parametrize(
-        "template_id", [tid for tid in template_ids() if tid != "dark"]
-    )
-    def test_a_white_page_adds_no_colours_to_the_markup(
+    @pytest.mark.parametrize("template_id", TEN)
+    def test_a_design_keeps_its_page_and_map_colours_in_the_html(
         self, template_id, parcels, project, runtime
     ) -> None:
-        """QGIS's default white page and white map background are not
-        written, so every existing cartograph's markup stays as it was."""
+        """Every design chooses its paper and its map's background -- white
+        included -- so the HTML shows them rather than the runtime theme's
+        lilac or off-white; and none of its text is too faint to read."""
         result = cartograph_from_view(
             _view(parcels), UTM, [parcels], project, template_id=template_id
         )
         report = FidelityReportBuilder()
         html = _export(result, project, runtime, report)
-        assert not re.search(r"<om-cartograph [^>]*\bbg=", html)
-        assert "frame-bg=" not in html
+        page = re.search(r'<om-cartograph [^>]*\bbg="([^"]+)"', html)
+        assert page and page.group(1).lower() == result.plan.bg.lower()
+        main = re.search(r"<om-frame [^>]*>", html).group(0)
+        assert f'frame-bg="{result.plan.frames[0].frame_bg}"' in main
         assert not [row for row in report.items if "contrast" in row.detail]
 
     def test_tabloid_is_a_real_page_size(self, parcels, project) -> None:
@@ -204,6 +208,82 @@ class TestEveryTemplateBuildsAndExports:
         )
         notes = result.layout.itemById("notes")
         assert "Parcels surveyed in 2026." in notes.currentText()
+
+
+class TestTheRefinedDesigns:
+    def test_fieldbook_prints_its_scale_and_crs_in_qgis(
+        self, parcels, project, runtime
+    ) -> None:
+        """The title block's scale and CRS are numbers in the QGIS layout,
+        its PDF and PNG -- not the blank a bare `@map_scale` gives a label --
+        and live tokens in the HTML."""
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="field-map"
+        )
+        layout = result.layout
+        assert re.fullmatch(r"Scale 1:\d+", layout.itemById("block-0").currentText())
+        assert layout.itemById("block-1").currentText() == "EPSG:32648"
+        html = _export(result, project, runtime, FidelityReportBuilder())
+        assert re.search(r">Scale 1:\{\{frame\.[\w-]+\.scale\}\}<", html)
+        assert re.search(r">\{\{frame\.[\w-]+\.crs\}\}<", html)
+
+    @pytest.mark.parametrize("template_id", ["story-map", "dark"])
+    def test_the_view_sits_in_the_clear_part_of_the_frame(
+        self, template_id, parcels, project
+    ) -> None:
+        project.setTitle("Kranji parcels: land use survey, 2026")
+        view = _view(parcels)
+        result = cartograph_from_view(
+            view, UTM, [parcels], project, template_id=template_id
+        )
+        slot = result.plan.frames[0]
+        assert slot.focus is not None
+        shown = result.layout.itemById("main").extent()
+        per_mm = shown.width() / slot.box.w
+        assert per_mm == pytest.approx(shown.height() / slot.box.h, rel=1e-3)
+        # The canvas view, in page mm inside the frame, is inside the focus.
+        left = slot.box.x + (view.xMinimum() - shown.xMinimum()) / per_mm
+        top = slot.box.y + (shown.yMaximum() - view.yMaximum()) / per_mm
+        right = left + view.width() / per_mm
+        bottom = top + view.height() / per_mm
+        focus = slot.focus
+        assert left >= focus.x - 0.1 and right <= focus.x + focus.w + 0.1
+        assert top >= focus.y - 0.1 and bottom <= focus.y + focus.h + 0.1
+
+    def test_signal_shows_the_figures_the_project_gives(self, parcels, project) -> None:
+        project.setCustomVariables(
+            {"nika_figure_1": "214 | parcels surveyed", "nika_figure_2": " | blank"}
+        )
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="dashboard"
+        )
+        layout = result.layout
+        assert layout.itemById("figure-0").text() == "214"
+        assert layout.itemById("figure-0-label").text() == "parcels surveyed"
+        assert layout.itemById("figure-1") is None
+        project.setCustomVariables({})
+        bare = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="dashboard"
+        )
+        assert bare.layout.itemById("figure-0") is None
+
+    @pytest.mark.parametrize("template_id", ["classic", "dark", "story-map"])
+    def test_a_turned_map_gets_a_north_arrow(
+        self, template_id, parcels, project
+    ) -> None:
+        turned = cartograph_from_view(
+            _view(parcels),
+            UTM,
+            [parcels],
+            project,
+            template_id=template_id,
+            rotation=25.0,
+        )
+        assert turned.layout.itemById("north") is not None
+        upright = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id=template_id
+        )
+        assert upright.layout.itemById("north") is None
 
 
 class TestPreview:
@@ -314,7 +394,7 @@ class TestPicker:
 
         settings = QSettings(str(tmp_path / "picker.ini"), QSettings.Format.IniFormat)
 
-        def render(template_id, page_size, orientation, width_px):
+        def render(template_id, page_size, orientation, width_px, figures=()):
             calls.append((template_id, page_size, orientation))
             if template_id in fail:
                 raise RuntimeError("no")
@@ -330,7 +410,13 @@ class TestPicker:
             qgis_app.processEvents()
         qgis_app.processEvents()
 
-    def test_every_preview_draws_the_selected_one_first(
+    @staticmethod
+    def _in_reach(picker) -> set[str]:
+        """The designs drawn unasked: the chosen one, and the cards in view
+        or a short scroll from it (the rest wait until they come near)."""
+        return {picker.template_id, *picker.near_ids()}
+
+    def test_the_selected_preview_draws_first_then_those_in_reach(
         self, qgis_app, tmp_path
     ) -> None:
         calls: list[tuple[str, str, str]] = []
@@ -338,8 +424,9 @@ class TestPicker:
         try:
             self._drain(qgis_app, picker)
             assert calls[0][0] == "classic"
-            assert sorted(c[0] for c in calls) == sorted(template_ids())
-            assert all(row.drawn for row in picker.rows.values())
+            assert {c[0] for c in calls} == self._in_reach(picker)
+            assert len(calls) == len({c[0] for c in calls})
+            assert all(picker.rows[t].drawn for t in self._in_reach(picker))
             assert len(picker.rows) == picker.template_list.count()
         finally:
             picker.reject()
@@ -353,7 +440,7 @@ class TestPicker:
             picker.page_combo.setCurrentIndex(picker.page_combo.findData("Tabloid"))
             self._drain(qgis_app, picker)
             assert {c[1] for c in calls} == {"Tabloid"}
-            assert len(calls) == len(template_ids())
+            assert sorted(c[0] for c in calls) == sorted(self._in_reach(picker))
         finally:
             picker.reject()
 
@@ -363,6 +450,10 @@ class TestPicker:
         calls: list[tuple[str, str, str]] = []
         picker, _settings = self._picker(qgis_app, tmp_path, calls, fail=("dark",))
         try:
+            # Chosen, so it is drawn whatever is in view.
+            for row in range(picker.template_list.count()):
+                if picker.template_list.item(row).data(256) == "dark":
+                    picker.template_list.setCurrentRow(row)
             self._drain(qgis_app, picker)
             items = {
                 picker.template_list.item(r).data(256): picker.template_list.item(r)
@@ -370,7 +461,9 @@ class TestPicker:
             }
             assert not picker.rows["dark"].drawn
             assert "could not be drawn" in items["dark"].toolTip()
-            assert picker.rows["poster"].drawn
+            assert all(
+                picker.rows[t].drawn for t in self._in_reach(picker) if t != "dark"
+            )
         finally:
             picker.reject()
 
@@ -441,29 +534,37 @@ class TestPicker:
         finally:
             picker.reject()
 
-    def test_a_chip_click_selects_and_scrolls_to_it(self, qgis_app, tmp_path) -> None:
-        from nika_onlymap_exporter.core.layout_templates import get_template
+    def test_the_filter_shows_one_category_and_keeps_a_shown_choice(
+        self, qgis_app, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.layout_templates import (
+            CATEGORIES,
+            get_template,
+        )
 
         calls: list[tuple[str, str, str]] = []
         picker, _settings = self._picker(qgis_app, tmp_path, calls)
         try:
-            chip = None
-            for r in range(picker.chip_list.count()):
-                item = picker.chip_list.item(r)
-                if item.data(256) == "story-map":
-                    chip = item
-                    break
-            assert chip is not None
-            picker.chip_list.setCurrentItem(chip)
-            assert picker.template_id == "story-map"
-            current = picker.template_list.currentItem()
-            assert current is not None
-            assert current.data(256) == "story-map"
-            assert get_template("story-map").name in picker.selected_label.text()
+            for r in range(picker.template_list.count()):
+                if picker.template_list.item(r).data(256) == "poster":
+                    picker.template_list.setCurrentRow(r)
+            own = get_template("poster").category
+            assert own in CATEGORIES
+            picker.filter_buttons[own].click()
+            assert picker.template_id == "poster"
+            for r in range(picker.template_list.count()):
+                item = picker.template_list.item(r)
+                shown = get_template(item.data(256)).category == own
+                assert item.isHidden() == (not shown)
+            picker.filter_buttons["all"].click()
+            assert not any(
+                picker.template_list.item(r).isHidden()
+                for r in range(picker.template_list.count())
+            )
         finally:
             picker.reject()
 
-    def test_selecting_a_row_updates_the_chip_and_the_selected_line(
+    def test_selecting_a_row_updates_the_selected_line(
         self, qgis_app, tmp_path
     ) -> None:
         from nika_onlymap_exporter.core.layout_templates import get_template
@@ -474,9 +575,6 @@ class TestPicker:
             for r in range(picker.template_list.count()):
                 if picker.template_list.item(r).data(256) == "poster":
                     picker.template_list.setCurrentRow(r)
-            chip_current = picker.chip_list.currentItem()
-            assert chip_current is not None
-            assert chip_current.data(256) == "poster"
             assert get_template("poster").name in picker.selected_label.text()
         finally:
             picker.reject()

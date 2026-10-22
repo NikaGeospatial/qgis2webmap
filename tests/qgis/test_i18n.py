@@ -202,6 +202,96 @@ class TestTranslating:
         assert tr("Map") == "Map"
 
 
+def _report_figure():
+    from nika_onlymap_exporter.core.layout_templates import TEMPLATES
+    from nika_onlymap_exporter.core.translatable import MarkedText
+
+    report = next(t for t in TEMPLATES if t.id == "report-figure")
+    assert isinstance(report.name, MarkedText)
+    return report
+
+
+class TestOneTextTwoMeanings:
+    """ "Caption" is the web map's box for a title over the map, and the
+    template whose figure has a caption under it: two entries, told apart by
+    Qt's disambiguation, looked up through a real compiled pack."""
+
+    @pytest.mark.parametrize(
+        ("code", "dialog_box", "template_name", "cue"),
+        [
+            ("fr", "En-tête", "Figure commentée", "commentaire"),
+            ("es", "Encabezado", "Pie de figura", "pie de figura"),
+            ("pt_BR", "Cabeçalho", "Figura comentada", "texto explicativo"),
+            ("ar", "الترويسة", "شكل مع تعليق", "تعليق توضيحي"),
+            ("hi", "शीर्ष भाग", "कैप्शन सहित आकृति", "कैप्शन"),
+            ("zh_CN", "页眉", "图注", "图注"),
+        ],
+    )
+    def test_each_meaning_finds_its_own_translation(
+        self, qgis_app, code, dialog_box, template_name, cue
+    ):
+        from nika_onlymap_exporter.ui.i18n import N_, tr, use_language
+
+        report = _report_figure()
+        meaning = report.name.disambiguation
+        try:
+            assert use_language(code) == code
+            assert tr("Caption") == dialog_box
+            # Marked in core, translated later by the picker: the value
+            # carries its disambiguation.
+            assert tr(report.name) == template_name
+            assert tr(N_("Caption", meaning)) == template_name
+            assert tr("Caption", meaning) == template_name
+            assert tr(report.includes[0]) == cue
+        finally:
+            use_language("en")
+
+    def test_english_shows_the_source_for_both(self, qgis_app):
+        from nika_onlymap_exporter.ui.i18n import tr, use_language
+
+        use_language("en")
+        assert tr("Caption") == "Caption"
+        assert tr(_report_figure().name) == "Caption"
+
+    def test_the_picker_names_the_card_in_the_template_s_sense(
+        self, qgis_app, tmp_path
+    ):
+        """The card's name, its spoken name and the "Selected" line."""
+        from qgis.PyQt.QtCore import QSettings, Qt
+        from qgis.PyQt.QtGui import QColor, QImage
+
+        from nika_onlymap_exporter.ui.cartograph.template_picker import (
+            TemplatePicker,
+        )
+        from nika_onlymap_exporter.ui.i18n import tr, use_language
+
+        def flat_page(template_id, page_size, orientation, width_px, figures=()):
+            image = QImage(
+                width_px, round(width_px / 1.414), QImage.Format.Format_RGB32
+            )
+            image.fill(QColor("#336699"))
+            return image
+
+        settings = QSettings(str(tmp_path / "picker.ini"), QSettings.Format.IniFormat)
+        assert use_language("fr") == "fr"
+        picker = TemplatePicker(flat_page, qsettings=settings)
+        try:
+            row = picker.rows["report-figure"]
+            assert row.name.text() == "Figure commentée"
+            assert "commentaire" in row.includes.text() + row.supports.text()
+            item = picker._items["report-figure"]
+            spoken = item.data(Qt.ItemDataRole.AccessibleTextRole)
+            assert spoken.startswith("Figure commentée")
+            assert "En-tête" not in spoken
+            picker.template_list.setCurrentItem(item)
+            assert picker.selected_label.text() == tr("Selected: {name}").format(
+                name="Figure commentée"
+            )
+        finally:
+            picker.reject()
+            use_language("en")
+
+
 def _dialog(project, make_memory_layer):
     from nika_onlymap_exporter.ui.main_dialog import MainDialog
 

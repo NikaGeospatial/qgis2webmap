@@ -13,6 +13,10 @@ sentence means the same thing wherever it appears, so it is translated once.
 built at import time (combo labels, status names) that are translated where
 they are shown - a module can be imported before the translator is installed.
 
+When one English text has two meanings, both take a disambiguation:
+`tr(text, disambiguation)`, or `N_(text, disambiguation)`, whose value
+carries it to the `tr()` that later shows it (see `core/translatable.py`).
+
 `scripts/update_translations.py` collects every `tr()` and `N_()` literal into
 `i18n/*.ts` and compiles them.
 
@@ -24,17 +28,21 @@ from __future__ import annotations
 
 from qgis.PyQt.QtCore import QCoreApplication, QTranslator
 
+from ..core.translatable import N_ as N_
+
 CONTEXT = "qgis2webmap"
 
 
-def tr(text: str) -> str:
-    """`text` in the current language, or unchanged if there is no translation."""
+def tr(text: str, disambiguation: str = "") -> str:
+    """`text` in the current language, or unchanged if there is no translation.
+
+    `disambiguation` picks one meaning of a text that has several; without
+    one, a value marked by `N_(text, disambiguation)` brings its own.
+    """
+    disambiguation = disambiguation or getattr(text, "disambiguation", "")
+    if disambiguation:
+        return QCoreApplication.translate(CONTEXT, text, disambiguation)
     return QCoreApplication.translate(CONTEXT, text)
-
-
-def N_(text: str) -> str:  # noqa: N802 - the conventional gettext marker name
-    """Mark `text` for the catalogue without translating it yet."""
-    return text
 
 
 def plural(count: int, singular: str, many: str, **fields: object) -> str:

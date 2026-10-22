@@ -105,6 +105,7 @@ from .layout_reader import (
     read_layout,
 )
 from .project_reader import read_project
+from .runtime_legend import fit_frame_legends
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
@@ -571,9 +572,12 @@ def finish_cartograph_full(
                 ),
             )
         verdict = writer.license_policy.evaluate(export_project)
-        live_markup[source.frame_id] = writer.render_map_element(
-            _as_rendered_in_frame(export_project, source), verdict
-        )
+        rendered = _as_rendered_in_frame(export_project, source)
+        # The frame's legends derive from exactly these layers, so their
+        # overrides are put in the runtime's terms here, where the layers'
+        # final symbology is known.
+        spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
+        live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
     return FinishedCartograph(
         html=write_cartograph_html(
             spec,
@@ -846,6 +850,7 @@ def _build_static_frame(
         dpi=float(static_dpi),
         overview_of=frame.overview_of,
         frame_bg=frame.frame_bg,
+        frame_stroke=frame.frame_stroke,
     )
 
 
@@ -914,6 +919,7 @@ def _build_live_frame(
         bearing=map_item.mapRotation(),
         overview_of=frame.overview_of,
         frame_bg=frame.frame_bg,
+        frame_stroke=frame.frame_stroke,
         atlas_fit=frame.atlas_fit,
         atlas_margin=frame.atlas_margin,
         atlas_cameras=atlas_cameras,

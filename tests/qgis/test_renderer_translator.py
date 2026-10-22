@@ -11,10 +11,16 @@ import pytest
 from nika_onlymap_exporter.core.export_ir import (
     ClassificationMethod,
     FidelityStatus,
+    GeometryKind,
     RendererKind,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.manifest_builder import (
+    fill_expression,
+    line_color_expression,
+)
 from nika_onlymap_exporter.core.renderer_translator import (
+    HAIRLINE_PIXELS,
     MM_TO_PIXELS,
     translate_renderer,
     translate_symbol,
@@ -548,3 +554,110 @@ class TestDashPatterns:
 
         if len(spec.stroke_dash) > 2:
             assert any("dash-dot" in item.detail for item in report.items)
+
+
+class TestOutlines:
+    """A symbol's outline as QGIS draws it: switched off, hairline or sized.
+
+    The cartograph comparison showed it first: flood polygons drawn with "No
+    Pen" in QGIS came out ringed in dark grey in the browser, because the
+    outline's colour and its 0.26 mm default width were read and its style
+    was not.
+    """
+
+    def test_a_fill_with_no_pen_has_a_transparent_outline(self, qgis_app) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple(
+            {"color": "#6baed6", "outline_style": "no", "outline_color": "#232323"}
+        )
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None
+        assert spec.stroke_color.a == 0.0
+        assert spec.stroke_width == 0.0
+        assert spec.fill_color is not None and spec.fill_color.a == 1.0
+
+    def test_a_marker_with_no_pen_has_a_transparent_outline(self, qgis_app) -> None:
+        symbol = marker_symbol()
+        symbol.symbolLayer(0).setStrokeStyle(QtCore.Qt.PenStyle.NoPen)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None and spec.stroke_color.a == 0.0
+        assert spec.stroke_width == 0.0
+
+    def test_a_fill_with_no_brush_is_outline_only(self, qgis_app) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple(
+            {"color": "#6baed6", "style": "no", "outline_color": "#232323"}
+        )
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.fill_color is not None and spec.fill_color.a == 0.0
+        assert spec.stroke_color is not None and spec.stroke_color.a == 1.0
+
+    def test_a_solid_fill_is_still_drawn(self, qgis_app) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple({"color": "#6baed6"})
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.fill_color is not None and spec.fill_color.a == 1.0
+
+    def test_an_outline_only_layer_writes_a_transparent_fill(
+        self, project, make_memory_layer
+    ) -> None:
+        """End to end through the writer's expression."""
+        layer = make_memory_layer("zones", geometry="Polygon", fields="name:string")
+        layer.renderer().setSymbol(
+            qgis_core.QgsFillSymbol.createSimple(
+                {"color": "#6baed6", "style": "no", "outline_color": "#232323"}
+            )
+        )
+        spec = translate_renderer(layer, FidelityReportBuilder())
+
+        assert fill_expression(spec, GeometryKind.POLYGON) == "'#6baed600'"
+        assert line_color_expression(spec, GeometryKind.POLYGON) == "'#232323'"
+
+    def test_a_drawn_outline_keeps_its_colour_and_width(self, qgis_app) -> None:
+        symbol = qgis_core.QgsFillSymbol.createSimple(
+            {"color": "#6baed6", "outline_color": "#232323", "outline_width": "0.5"}
+        )
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_color is not None and spec.stroke_color.a == 1.0
+        assert spec.stroke_width == pytest.approx(0.5 * MM_TO_PIXELS)
+
+    def test_a_zero_width_marker_outline_is_a_hairline(self, qgis_app) -> None:
+        """QGIS's default simple marker: width 0, drawn one pixel wide."""
+        symbol = marker_symbol()
+        assert symbol.symbolLayer(0).strokeWidth() == 0
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_width == HAIRLINE_PIXELS
+
+    def test_a_zero_width_line_is_a_hairline(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple(
+            {"line_color": "#555555", "line_width": "0"}
+        )
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "test")
+
+        assert spec.stroke_width == HAIRLINE_PIXELS
+
+    def test_the_written_outline_is_transparent_for_every_class(
+        self, project, make_memory_layer
+    ) -> None:
+        """End to end through the writer's expression, not just the spec."""
+        layer = make_memory_layer("flood", geometry="Polygon", fields="depth:double")
+        ranges = [
+            qgis_core.QgsRendererRange(
+                low,
+                low + 1,
+                qgis_core.QgsFillSymbol.createSimple(
+                    {"color": colour, "outline_style": "no"}
+                ),
+                f"{low}-{low + 1} m",
+            )
+            for low, colour in ((0, "#eff3ff"), (1, "#08519c"))
+        ]
+        layer.setRenderer(qgis_core.QgsGraduatedSymbolRenderer("depth", ranges))
+        spec = translate_renderer(layer, FidelityReportBuilder())
+
+        expression = line_color_expression(spec, GeometryKind.POLYGON)
+        assert expression.endswith("00'"), expression
+        assert "#232323'" not in expression

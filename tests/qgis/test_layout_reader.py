@@ -659,3 +659,129 @@ class TestTextContrast:
         report = FidelityReportBuilder()
         read_layout(survey.layout, report)
         assert _contrast_rows(report) == []
+
+
+_DEFAULT_NORTH = ":/images/north_arrows/layout_default_north_arrow.svg"
+
+
+def _legend_spec(reading) -> LegendSpec:
+    return next(item for item in reading.furniture if isinstance(item, LegendSpec))
+
+
+def _set_legend_ink(legend, color: str, styles=None) -> None:
+    from qgis.PyQt.QtGui import QColor
+
+    for style in styles or (
+        qgis_core.QgsLegendStyle.Title,
+        qgis_core.QgsLegendStyle.Group,
+        qgis_core.QgsLegendStyle.Subgroup,
+        qgis_core.QgsLegendStyle.SymbolLabel,
+    ):
+        legend_style = legend.rstyle(style)
+        text_format = legend_style.textFormat()
+        text_format.setColor(QColor(color))
+        legend_style.setTextFormat(text_format)
+
+
+class TestFurnitureStyling:
+    """A legend's panel, ink and border, a map item's frame colour and a
+    coloured default north arrow reach the cartograph -- except QGIS's
+    defaults, so ordinary layouts write the markup they always did."""
+
+    def test_default_legend_maps_and_north_carry_nothing(self, survey) -> None:
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        legend = _legend_spec(reading)
+        assert (legend.bg, legend.color, legend.stroke) == (None, None, None)
+        assert [frame.frame_stroke for frame in reading.frames] == [None, None]
+
+    def test_a_coloured_legend_panel_is_carried_without_the_theme_border(
+        self, survey
+    ) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.legend.setBackgroundColor(QColor(20, 22, 26, 209))
+        legend = _legend_spec(read_layout(survey.layout, FidelityReportBuilder()))
+        assert legend.bg == "#14161ad1"
+        # No QGIS frame: the runtime's pale border would be a box QGIS never
+        # draws round the dark panel.
+        assert legend.stroke == "#00000000"
+
+    def test_a_legend_with_no_background_keeps_the_theme(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.legend.setBackgroundColor(QColor("#14161a"))
+        survey.legend.setBackgroundEnabled(False)
+        legend = _legend_spec(read_layout(survey.layout, FidelityReportBuilder()))
+        assert (legend.bg, legend.stroke) == (None, None)
+
+    def test_a_legend_frame_is_its_border_even_in_black(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.legend.setFrameEnabled(True)
+        legend = _legend_spec(read_layout(survey.layout, FidelityReportBuilder()))
+        assert legend.stroke == "#000000"
+        survey.legend.setFrameStrokeColor(QColor("#336699"))
+        legend = _legend_spec(read_layout(survey.layout, FidelityReportBuilder()))
+        assert legend.stroke == "#336699"
+
+    def test_legend_text_colour_is_carried(self, survey) -> None:
+        _set_legend_ink(survey.legend, "#e8e6e3")
+        report = FidelityReportBuilder()
+        legend = _legend_spec(read_layout(survey.layout, report))
+        assert legend.color == "#e8e6e3"
+        rows = [row for row in report.items if row.subject.startswith("Legend")]
+        assert all("different colours" not in row.detail for row in rows)
+
+    def test_mixed_legend_text_colours_use_the_rows_and_say_so(self, survey) -> None:
+        _set_legend_ink(
+            survey.legend, "#e8e6e3", styles=(qgis_core.QgsLegendStyle.SymbolLabel,)
+        )
+        report = FidelityReportBuilder()
+        legend = _legend_spec(read_layout(survey.layout, report))
+        assert legend.color == "#e8e6e3"
+        (row,) = [row for row in report.items if "different colours" in row.detail]
+        assert row.status is FidelityStatus.APPROXIMATED
+        assert "#e8e6e3" in row.detail
+
+    def test_a_black_map_frame_is_the_runtime_edge_already(self, survey) -> None:
+        survey.main_map.setFrameEnabled(True)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        assert [frame.frame_stroke for frame in reading.frames] == [None, None]
+
+    def test_a_coloured_or_transparent_map_frame_is_carried(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.main_map.setFrameEnabled(True)
+        survey.main_map.setFrameStrokeColor(QColor("#14161a"))
+        survey.inset_map.setFrameEnabled(True)
+        survey.inset_map.setFrameStrokeColor(QColor(0, 0, 0, 0))
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        strokes = {
+            frame.map_item.uuid(): frame.frame_stroke for frame in reading.frames
+        }
+        assert strokes[survey.main_map.uuid()] == "#14161a"
+        assert strokes[survey.inset_map.uuid()] == "#00000000"
+
+    def test_a_switched_off_map_frame_carries_no_colour(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.main_map.setFrameEnabled(False)
+        survey.main_map.setFrameStrokeColor(QColor("#14161a"))
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        assert reading.frames[0].frame_stroke is None
+
+    def test_qgis_default_north_arrow_keeps_the_theme_ink(self, survey) -> None:
+        survey.north.setPicturePath(_DEFAULT_NORTH)
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        north = next(item for item in reading.furniture if isinstance(item, NorthSpec))
+        assert north.color is None
+
+    def test_a_coloured_default_north_arrow_is_carried(self, survey) -> None:
+        from qgis.PyQt.QtGui import QColor
+
+        survey.north.setPicturePath(_DEFAULT_NORTH)
+        survey.north.setSvgFillColor(QColor("#e8e6e3"))
+        survey.north.setSvgStrokeColor(QColor("#e8e6e3"))
+        reading = read_layout(survey.layout, FidelityReportBuilder())
+        north = next(item for item in reading.furniture if isinstance(item, NorthSpec))
+        assert north.color == "#e8e6e3"

@@ -85,10 +85,14 @@ def picked_template(monkeypatch):
             self.choice: tuple[str, str, str] | None = ("classic", "A4", "auto")
             self.shown = 0
             self.previews: list[object] = []
+            self.canvas_keys: list[str] = []
+            self.planners: list[object] = []
 
-        def ask(self, render, parent=None):
+        def ask(self, render, parent=None, project=None, canvas_key="", planner=None):
             self.shown += 1
             self.previews.append(render("story-map", "A4", "auto", 120))
+            self.canvas_keys.append(canvas_key)
+            self.planners.append(planner)
             return self.choice
 
     picker = Picker()
@@ -1256,6 +1260,149 @@ class TestCanvasAndImport:
             _pick_in_layout_list(dialog, "canvas")
             assert picked_template.shown == 1
             assert len(project.layoutManager().layouts()) == before
+        finally:
+            dialog.close()
+
+    def test_the_picker_s_key_holds_until_the_canvas_or_project_changes(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        """The key the controller hands the picker: the same for the same
+        canvas, so pages drawn before are shown again; new after anything a
+        preview shows changes."""
+        from qgis.PyQt.QtGui import QColor
+
+        picked_template.choice = None
+        dialog, canvas = self._canvas_dialog(project)
+        layer = canvas.layers()[0]
+
+        def key() -> str:
+            dialog._cartograph.create_from_canvas()
+            return picked_template.canvas_keys[-1]
+
+        def restyle() -> None:
+            layer.renderer().symbol().setColor(QColor("#ff00ff"))
+            layer.triggerRepaint()
+
+        def edit() -> None:
+            layer.startEditing()
+            layer.changeGeometry(
+                next(layer.getFeatures()).id(),
+                qgis_core.QgsGeometry.fromRect(
+                    qgis_core.QgsRectangle(103.7, 1.25, 103.8, 1.3)
+                ),
+            )
+
+        def abstract() -> None:
+            metadata = project.metadata()
+            metadata.setAbstract("Parks of the west.")
+            project.setMetadata(metadata)
+
+        changes = {
+            "style": restyle,
+            "feature edited": edit,
+            "extent": lambda: canvas.zoomByFactor(0.5),
+            "title": lambda: project.setTitle("Lakes"),
+            "abstract": abstract,
+            "figures": lambda: project.setCustomVariables({"nika_figure_1": "214"}),
+            "layer toggled off": lambda: canvas.setLayers([]),
+        }
+        try:
+            _choose_cartograph(dialog)
+            first = key()
+            assert first
+            assert key() == first
+            for name, change in changes.items():
+                before = key()
+                change()
+                assert key() != before, name
+        finally:
+            layer.rollBack()
+            project.setCustomVariables({})
+            dialog.close()
+
+    def test_reopening_the_picker_draws_nothing_already_drawn(
+        self, qgis_app, project, monkeypatch
+    ) -> None:
+        """Through the real controller and picker: the second opening shows
+        the pages the first drew, and draws none again; a restyled layer
+        draws them afresh."""
+        from qgis.PyQt.QtCore import QSettings
+        from qgis.PyQt.QtGui import QColor
+
+        from nika_onlymap_exporter.ui.cartograph import template_picker
+
+        calls: list[str] = []
+        drawn: list[set[str]] = []
+
+        def ask(render, parent=None, project=None, canvas_key="", planner=None):
+            def counted(template_id, *args, **kwargs):
+                calls.append(template_id)
+                return render(template_id, *args, **kwargs)
+
+            picker = template_picker.TemplatePicker(
+                counted,
+                qsettings=QSettings(),
+                canvas_key=canvas_key,
+                project=project,
+                planner=planner,
+            )
+            picker.resize(900, 600)
+            picker.show()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline and (
+                picker._queue
+                or picker._timer.isActive()
+                or picker._scroll_rest.isActive()
+            ):
+                qgis_app.processEvents()
+            drawn.append({t for t, row in picker.rows.items() if row.drawn})
+            picker.reject()
+            picker.deleteLater()
+            return None
+
+        monkeypatch.setattr(template_picker, "ask_template", ask)
+        template_picker._SHARED_PAGES.clear()
+        dialog, canvas = self._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            dialog._cartograph.create_from_canvas()
+            first = list(calls)
+            assert first and drawn[0] == set(first)
+            calls.clear()
+            dialog._cartograph.create_from_canvas()
+            assert calls == []
+            assert drawn[1] == drawn[0]
+            canvas.layers()[0].renderer().symbol().setColor(QColor("#ff00ff"))
+            dialog._cartograph.create_from_canvas()
+            assert sorted(calls) == sorted(first)
+        finally:
+            template_picker._SHARED_PAGES.clear()
+            dialog.close()
+
+    def test_the_picker_plans_this_project_s_pages(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        """The planner the controller passes lays out the page from the
+        canvas and project, as the preview does: Marginalia includes its
+        notes once the project has an abstract."""
+        from nika_onlymap_exporter.core.layout_templates import get_template
+        from nika_onlymap_exporter.core.template_cues import plan_cues
+
+        picked_template.choice = None
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            dialog._cartograph.create_from_canvas()
+            plan = picked_template.planners[-1]("marginalia", "A4", "auto", figures=())
+            cues = plan_cues(get_template("marginalia"), plan)
+            assert plan.title_text == "Parks"
+            assert "notes" in cues.can_show
+            metadata = project.metadata()
+            metadata.setAbstract("Parks of the west.")
+            project.setMetadata(metadata)
+            dialog._cartograph.create_from_canvas()
+            plan = picked_template.planners[-1]("marginalia", "A4", "auto", figures=())
+            assert "notes" in plan_cues(get_template("marginalia"), plan).includes
         finally:
             dialog.close()
 

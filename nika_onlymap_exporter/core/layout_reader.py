@@ -69,9 +69,12 @@ from typing import Literal
 
 from qgis.core import (
     Qgis,
+    QgsCategorizedSymbolRenderer,
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
+    QgsGraduatedSymbolRenderer,
+    QgsLayerTreeLayer,
     QgsLayoutItem,
     QgsLayoutItemGroup,
     QgsLayoutItemLabel,
@@ -83,8 +86,10 @@ from qgis.core import (
     QgsLayoutItemScaleBar,
     QgsLayoutItemShape,
     QgsLayoutMeasurementConverter,
+    QgsLegendStyle,
     QgsMapLayer,
     QgsMapLayerLegendUtils,
+    QgsNumericFormatContext,
     QgsPrintLayout,
     QgsProject,
     QgsRasterLayer,
@@ -92,7 +97,7 @@ from qgis.core import (
     QgsUnitTypes,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QSizeF, Qt
+from qgis.PyQt.QtCore import QFile, QIODevice, QSizeF, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QTextDocument
 
 from .cartograph_ir import (
@@ -119,6 +124,7 @@ from .expression_tokens import (
     translate_sort_expression,
 )
 from .fidelity_report import FidelityReportBuilder
+from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
 
 #: The Fidelity subject of every row about the layout's atlas, so the Atlas
@@ -129,6 +135,34 @@ ATLAS_SUBJECT = "Layout item 'Atlas'"
 #: `core/layout_builder.py` so a layout built from a cartograph reads back
 #: with the same kinds (QGIS has no field for it).
 TEXT_KIND_PROPERTY = "qgis2webmap/cartograph_text_kind"
+#: Set on a legend's layer node whose heading a template broke onto lines
+#: itself, for a QGIS (3.44) that does not wrap a heading at the legend's
+#: wrap width (`core/canvas_cartograph.py`): the same name, so no rename.
+WRAPPED_TITLE_PROPERTY = "qgis2webmap/cartograph_wrapped_title"
+#: Set on a template's legend that left entries out because its box could
+#: not hold them at a readable size (`core/canvas_cartograph.py`), so the
+#: checks say so for as long as the legend still leaves some out.
+LEGEND_LEFT_OUT_PROPERTY = "qgis2webmap/cartograph_legend_left_out"
+
+
+def chosen_style_property(role: str) -> str:
+    """The custom property `core/layout_builder.py` records a style a design
+    chose under -- `role` is the attribute it becomes: "bg" (page or
+    legend), "frame-bg", "frame-stroke" or "color" (legend text), as
+    `#aarrggbb`, or "font-size" (legend rows). QGIS gives every new page,
+    map and legend the same white, black and 12 pt, and those are not
+    carried so ordinary layouts keep the theme's look; a design that chose
+    them on purpose is."""
+    return f"qgis2webmap/cartograph_chosen_{role}"
+
+
+def _was_chosen(item: QgsLayoutItem, role: str, color: QColor) -> bool:
+    stored = item.customProperty(chosen_style_property(role))
+    if not isinstance(stored, str):
+        return False
+    chosen = QColor(stored)
+    return chosen.isValid() and chosen.rgba() == color.rgba()
+
 
 #: The QGIS item names (`item_id_tokens`) of the layout being read, so every
 #: helper names its element consistently without threading a map through.
@@ -216,6 +250,9 @@ class MapFrameReading:
     # `<om-frame frame-bg>`: the map item's background colour, when it is one
     # QGIS does not give every map by default (see `_map_background`).
     frame_bg: str | None = None
+    # `<om-frame frame-stroke>`: the map item's frame colour, when it draws
+    # one QGIS's default does not (see `_map_frame_stroke`).
+    frame_stroke: str | None = None
 
 
 @dataclass(frozen=True)
@@ -375,6 +412,7 @@ def _read_layout(
                 hidden=not item.isVisible(),
                 overview_of=None,  # resolved in the second pass below
                 frame_bg=_map_background(item),
+                frame_stroke=_map_frame_stroke(item),
             )
         )
         if mode == "static":
@@ -721,6 +759,10 @@ def _is_default_white(color: QColor) -> bool:
     return color.alpha() == 255 and color.rgb() & 0xFFFFFF == 0xFFFFFF
 
 
+def _is_default_black(color: QColor) -> bool:
+    return color.alpha() == 255 and color.rgb() & 0xFFFFFF == 0
+
+
 def _page_background(
     page: QgsLayoutItemPage, report: FidelityReportBuilder
 ) -> str | None:
@@ -730,7 +772,9 @@ def _page_background(
     Only a colour QGIS does not give every page is carried: a new layout's
     page is plain opaque white, and writing `bg="#ffffff"` for it would change
     the markup of every cartograph already exported for a near-identical
-    colour. A transparent page keeps the theme's colour too. The colour is the
+    colour -- unless the layout builder recorded it as a design's choice
+    (`chosen_style_property`). A transparent page keeps the theme's colour
+    too. The colour is the
     fill's own times the symbol's opacity, as `_shape_fill_opacity` reads a
     shape's; a fill QGIS draws as more than one plain colour is exported as
     its first colour, and says so.
@@ -745,7 +789,9 @@ def _page_background(
     if plain and layer.brushStyle() == Qt.BrushStyle.NoBrush:
         alpha = 0.0
     color.setAlpha(round(min(max(alpha, 0.0), 1.0) * 255))
-    if color.alpha() == 0 or _is_default_white(color):
+    if color.alpha() == 0:
+        return None
+    if _is_default_white(color) and not _was_chosen(page, "bg", color):
         return None
     css = _css_color(color)
     if symbol.symbolLayerCount() > 1 or not (
@@ -774,7 +820,30 @@ def _map_background(item: QgsLayoutItemMap) -> str | None:
     if not item.hasBackground():
         return None
     color = item.backgroundColor()
-    if color.alpha() == 0 or _is_default_white(color):
+    if color.alpha() == 0:
+        return None
+    if _is_default_white(color) and not _was_chosen(item, "frame-bg", color):
+        return None
+    return _css_color(color)
+
+
+def _map_frame_stroke(item: QgsLayoutItemMap) -> str | None:
+    """A map item's frame colour as `<om-frame frame-stroke>`, or `None` to
+    keep the theme's.
+
+    The runtime always draws a thin edge round a frame, in
+    `--om-carto-frame-stroke` (near black) unless told otherwise. A QGIS
+    frame in its default black is that edge already, so it is not written --
+    ordinary layouts keep their markup; nor is a map with no frame, which
+    the runtime cannot leave edgeless without changing every such page. Any
+    other colour is carried, a transparent one included: that is how a dark
+    page keeps its frame from showing a pale line, and how a design asks for
+    no visible edge at all.
+    """
+    if not item.frameEnabled():
+        return None
+    color = item.frameStrokeColor()
+    if _is_default_black(color) and not _was_chosen(item, "frame-stroke", color):
         return None
     return _css_color(color)
 
@@ -1499,7 +1568,29 @@ def _read_legend(
         rows = _live_legend_rows(
             item, linked, dom_ids_by_frame.get(frame_id, {}), label, report
         )
-        report.preserved(label, "Legend rows derive from the live frame.")
+        changes = describe_runtime_legend_changes(
+            _classed_legend_layers(item, linked), item.columnCount() or 1
+        )
+        if changes:
+            report.approximated(
+                label,
+                "Legend rows derive from the live frame, with QGIS's labels "
+                "and line and point swatches, but the browser's legend "
+                + _join_phrases(changes)
+                + ".",
+            )
+        else:
+            report.preserved(label, "Legend rows derive from the live frame.")
+    left_out = _legend_left_out(item, linked)
+    if left_out:
+        report.approximated(
+            label,
+            f"The legend leaves out {left_out} "
+            + ("entry" if left_out == 1 else "entries")
+            + " that did not fit its box at a readable size. Use a larger "
+            "page, shorten the layer names, or make the legend bigger in the "
+            "layout designer and add them back in its item properties.",
+        )
 
     if not derived and not rows:
         # A static legend with nothing to show (e.g. every layer unreadable)
@@ -1509,6 +1600,13 @@ def _read_legend(
         report.unsupported(label, "No legend rows could be derived; left out.")
         return None
 
+    bg, color, stroke = _legend_style(item, label, report)
+    font_size = None
+    if item.customProperty(chosen_style_property("font-size")) is not None:
+        row_text = item.style(QgsLegendStyle.SymbolLabel).textFormat()
+        points_per_unit = _POINTS_PER_UNIT.get(int(row_text.sizeUnit()))
+        if points_per_unit is not None and row_text.size() > 0:
+            font_size = round(row_text.size() * points_per_unit, 2)
     return LegendSpec(
         id=_eid("legend", item.uuid()),
         box=_box(item, converter),
@@ -1516,10 +1614,129 @@ def _read_legend(
         title=item.title() or None,
         columns=item.columnCount() or None,
         derived=derived,
+        bg=bg,
+        color=color,
+        stroke=stroke,
+        font_size=font_size,
         rows=rows,
         rotation=item.itemRotation(),
         z=round(item.zValue()),
     )
+
+
+#: The legend text levels `<om-legend color>` stands for, as the layout
+#: builder writes them.
+_LEGEND_TEXT_STYLES = (
+    QgsLegendStyle.Title,
+    QgsLegendStyle.Group,
+    QgsLegendStyle.Subgroup,
+    QgsLegendStyle.SymbolLabel,
+)
+
+
+def _legend_style(
+    item: QgsLayoutItemLegend, label: str, report: FidelityReportBuilder
+) -> tuple[str | None, str | None, str | None]:
+    """The legend's `bg`, `color` (its text ink) and `stroke` (its border),
+    each `None` where QGIS's default stands.
+
+    A new QGIS legend is opaque white with black text and no frame; those
+    keep the theme's look, so ordinary legends write the markup they always
+    did. A legend with its background switched off keeps the theme's panel
+    too, and a frameless one the theme's border unless its panel is carried.
+    The runtime has one ink for every level of legend text: the row
+    labels' colour is used, and a legend whose levels differ says so.
+    """
+    bg = None
+    if item.hasBackground():
+        background = item.backgroundColor()
+        if background.alpha() > 0 and (
+            not _is_default_white(background) or _was_chosen(item, "bg", background)
+        ):
+            bg = _css_color(background)
+    if item.frameEnabled():
+        stroke = _css_color(item.frameStrokeColor())
+    else:
+        # The runtime always borders a legend in its theme's pale line; on a
+        # panel of the layout's own colour that line is a box QGIS does not
+        # draw, so it is made transparent there -- and only there, so a
+        # plain legend's markup stays as it was.
+        stroke = "#00000000" if bg is not None else None
+
+    colors = []
+    for style in _LEGEND_TEXT_STYLES:
+        if style == QgsLegendStyle.Title and not item.title():
+            continue
+        colors.append(QColor(item.style(style).textFormat().color()))
+    ink = colors[-1]
+    color = None
+    if not _is_default_black(ink) or _was_chosen(item, "color", ink):
+        color = _css_color(ink)
+    if any(other.rgba() != ink.rgba() for other in colors[:-1]):
+        report.approximated(
+            label,
+            "The legend's headings and rows are in different colours; the "
+            f"cartograph legend writes all its text in the rows' colour, "
+            f"{_css_color(ink)}.",
+        )
+    return bg, color, stroke
+
+
+def _join_phrases(phrases: list[str]) -> str:
+    """The phrases as one: "a, b and c"."""
+    if len(phrases) < 2:
+        return "".join(phrases)
+    return ", ".join(phrases[:-1]) + " and " + phrases[-1]
+
+
+def _classed_legend_layers(
+    item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap
+) -> list[ClassedLayer]:
+    """The layers this legend lists that are drawn with classes."""
+    listed = {node.layerId() for node in item.model().rootGroup().findLayers()}
+    classed = []
+    for layer in map_item.layersToRender():
+        if layer.id() not in listed or not isinstance(layer, QgsVectorLayer):
+            continue
+        renderer = layer.renderer()
+        if isinstance(renderer, QgsCategorizedSymbolRenderer):
+            count = len(renderer.categories())
+        elif isinstance(renderer, QgsGraduatedSymbolRenderer):
+            count = len(renderer.ranges())
+        else:
+            continue
+        classed.append(
+            ClassedLayer(
+                geometry=_legend_shape_for_geometry(layer) or "polygon",
+                categorized=isinstance(renderer, QgsCategorizedSymbolRenderer),
+                class_count=count,
+            )
+        )
+    return classed
+
+
+def _legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> int:
+    """How many entries of `map_item`'s layers -- class rows, or a layer's
+    one row -- a template's legend still leaves out for want of room: 0
+    for a legend no template marked (`LEGEND_LEFT_OUT_PROPERTY`), whose
+    left-out rows are the user's own choice. Counted afresh, so entries the
+    user has put back since are not reported."""
+    if not item.customProperty(LEGEND_LEFT_OUT_PROPERTY):
+        return 0
+    model = item.model()
+    shown = {
+        node.layerId(): max(len(model.layerLegendNodes(node)), 1)
+        for node in model.rootGroup().findLayers()
+    }
+    left_out = 0
+    for layer in map_item.layersToRender():
+        layer_legend = layer.legend()
+        own = 0
+        if layer_legend is not None:
+            node = QgsLayerTreeLayer(layer)
+            own = len(layer_legend.createLayerTreeModelLegendNodes(node))
+        left_out += max(max(own, 1) - shown.get(layer.id(), 0), 0)
+    return left_out
 
 
 def _legend_is_manual(item: QgsLayoutItemLegend) -> bool:
@@ -1550,8 +1767,9 @@ def _live_legend_rows(
     (QGIS lists the top layer first), and, when the legend is edited by hand
     in QGIS: a renamed layer gets `label`, a layer removed from the legend
     gets `hide`, a renamed category gets `match` + `label` (matched on its
-    original label, which is what the runtime keys on) and a removed one
-    `match` + `hide`. What the runtime cannot express -- groups, reordered
+    original QGIS label, which `runtime_legend.fit_legend_rows` rekeys on
+    the runtime's own label at export) and a removed one `match` + `hide`.
+    What the runtime cannot express -- groups, reordered
     categories, symbol-level edits, layers from outside the map -- is
     reported as approximated.
     """
@@ -1590,6 +1808,11 @@ def _live_legend_rows(
         listed.add(layer_id)
         dom_id = dom_ids[layer_id]
         title = node.customProperty("legend/title-label") or node.name()
+        if node.customProperty(WRAPPED_TITLE_PROPERTY) and (
+            " ".join(str(title).split()) == layer.name()
+        ):
+            # Only broken onto lines for QGIS: the runtime wraps it itself.
+            title = layer.name()
         rows.append(
             LegendRowSpec(
                 layer=dom_id,
@@ -1693,9 +1916,11 @@ def _literal_legend_rows(map_item: QgsLayoutItemMap) -> tuple[LegendRowSpec, ...
 
 
 def _legend_shape_for_geometry(layer: QgsVectorLayer) -> str | None:
+    """The `<om-legend-row shape>` for `layer`: the runtime's own words,
+    `point`, `line` or `polygon` -- anything else it draws as a square."""
     geometry_type = layer.geometryType()
     # 0 = Point, 1 = Line, 2 = Polygon (QgsWkbTypes.GeometryType).
-    return {0: "circle", 1: "line", 2: "square"}.get(int(geometry_type))
+    return {0: "point", 1: "line", 2: "polygon"}.get(int(geometry_type))
 
 
 # --------------------------------------------------------------------------
@@ -1713,6 +1938,66 @@ def _segment_length_metres(item: QgsLayoutItemScaleBar) -> float | None:
         item.units(), QgsUnitTypes.DistanceMeters
     )
     return per_segment * factor
+
+
+#: The runtime's unit tiers per system, finest first (`scalebar.ts`): the
+#: largest whose segment is at least one unit labels the bar.
+_RUNTIME_SCALEBAR_UNITS = {
+    "metric": ((1.0, "m"), (1000.0, "km")),
+    "imperial": ((0.3048, "ft"), (1609.344, "mi")),
+    "nautical": ((1852.0, "nmi"),),
+}
+
+
+def runtime_scalebar_labels(
+    segment_metres: float, segments: int, units: str
+) -> list[str]:
+    """The labels the runtime writes under a bar of `segments` segments of
+    `segment_metres` each: its own unit, fixed decimals, no separators."""
+    tiers = _RUNTIME_SCALEBAR_UNITS.get(units, _RUNTIME_SCALEBAR_UNITS["metric"])
+    per_unit, unit = tiers[0]
+    for tier_per_unit, tier_unit in tiers:
+        if segment_metres / tier_per_unit >= 1:
+            per_unit, unit = tier_per_unit, tier_unit
+    step = segment_metres / per_unit
+    decimals = 2 if step < 1 else 1 if step < 10 and step != int(step) else 0
+    labels = [f"{index * step:.{decimals}f}" for index in range(segments + 1)]
+    labels[-1] += f" {unit}"
+    return labels
+
+
+def _scalebar_label_changes(item: QgsLayoutItemScaleBar, units: str) -> list[str]:
+    """What the browser's labels on this bar change, as sentences for Checks.
+
+    The runtime has no attribute for where the labels sit, their unit or
+    their number format: it always writes them below the bar, in the unit
+    it picks for the segment length, as plain fixed-point numbers.
+    """
+    notes = []
+    placement = item.labelVerticalPlacement()
+    if int(getattr(placement, "value", placement)) == 0:  # above the segment
+        notes.append("The browser draws the bar's labels below it, not above.")
+    segment_metres = _segment_length_metres(item)
+    segments = item.numberOfSegments()
+    if segment_metres and segments > 0:
+        context = QgsNumericFormatContext()
+        number_format = item.numericFormat()
+        qgis_labels = [
+            number_format.formatDouble(index * item.unitsPerSegment(), context)
+            for index in range(segments + 1)
+        ]
+        if item.unitLabel():
+            qgis_labels[-1] += f" {item.unitLabel()}"
+        browser_labels = runtime_scalebar_labels(segment_metres, segments, units)
+        if browser_labels != qgis_labels:
+            notes.append(
+                f"Its labels read '{' · '.join(browser_labels)}' rather than "
+                f"'{' · '.join(qgis_labels)}': the browser picks the unit and "
+                "writes plain numbers."
+            )
+    if item.numberOfSegmentsLeft() > 0:
+        notes.append("The segments left of zero are not drawn.")
+    return notes
 
 
 def _read_scalebar(
@@ -1743,17 +2028,6 @@ def _read_scalebar(
         )
 
     kind = _SCALEBAR_KIND_BY_STYLE.get(style_name, "single")
-    if style_name not in _SCALEBAR_KIND_BY_STYLE or style_name in _NEAREST_ONLY_STYLES:
-        # Mapped to the nearest kind the runtime draws is still a change the
-        # reader sees: "Kept" would be a silent one.
-        report.approximated(
-            label,
-            f"QGIS scale bar style {style_name!r} has no exact cartograph "
-            f"equivalent; exported as a {kind} scale bar.",
-        )
-    else:
-        report.preserved(label, "Scale bar preserved.")
-
     units_map = {
         QgsUnitTypes.DistanceMeters: "metric",
         QgsUnitTypes.DistanceKilometers: "metric",
@@ -1762,6 +2036,20 @@ def _read_scalebar(
         QgsUnitTypes.DistanceNauticalMiles: "nautical",
     }
     units = units_map.get(item.units(), "metric")
+
+    notes = []
+    if style_name not in _SCALEBAR_KIND_BY_STYLE or style_name in _NEAREST_ONLY_STYLES:
+        # Mapped to the nearest kind the runtime draws is still a change the
+        # reader sees: "Kept" would be a silent one.
+        notes.append(
+            f"QGIS scale bar style {style_name!r} has no exact cartograph "
+            f"equivalent; exported as a {kind} scale bar."
+        )
+    notes += _scalebar_label_changes(item, units)
+    if notes:
+        report.approximated(label, " ".join(notes))
+    else:
+        report.preserved(label, "Scale bar preserved.")
 
     line_symbol = item.lineSymbol()
     return ScalebarSpec(
@@ -1803,10 +2091,23 @@ def _north_color(item: QgsLayoutItemPicture) -> str | None:
     path = item.evaluatedPath() or item.picturePath() or ""
     if not path.lower().endswith(".svg"):
         return None
-    try:
-        svg = Path(path).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
+    if path.startswith(":/"):
+        # A Qt resource -- QGIS's own default arrow, which the layout builder
+        # uses. New pictures draw it white with a black outline, which the
+        # theme's glyph already stands for; any other colour was chosen.
+        resource = QFile(path)
+        if not resource.open(QIODevice.OpenModeFlag.ReadOnly):
+            return None
+        svg = bytes(resource.readAll()).decode("utf-8", errors="replace")
+        resource.close()
+        fill, outline = item.svgFillColor(), item.svgStrokeColor()
+        if _is_default_white(fill) and _is_default_black(outline):
+            return None
+    else:
+        try:
+            svg = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
     if "param(fill)" in svg:
         return _css_color(item.svgFillColor())
     if "param(outline)" in svg or "param(stroke)" in svg:
@@ -1987,6 +2288,7 @@ def _read_label(
         frame_id=frame_id or "frame_unknown",
         frame_is_live=is_live,
         in_atlas=in_atlas,
+        frame_item_id=map_item.id() if map_item is not None else None,
     )
     if translated.frozen_expressions:
         context = _label_expression_context(layout, map_item)
@@ -1994,7 +2296,16 @@ def _read_label(
         for expression_text in translated.frozen_expressions:
             expression = QgsExpression(expression_text)
             value = expression.evaluate(context)
-            if expression.hasEvalError() or value is None:
+            if value is None and not in_atlas and _reads_only_atlas(expression):
+                # Atlas variables are NULL outside an atlas, by design: a
+                # page number such as Atlas Ledger's is blank on one page.
+                values.append("")
+                report.preserved(
+                    label,
+                    f"`{expression_text}` shows the atlas page; with no atlas "
+                    "on, it is blank, as in QGIS.",
+                )
+            elif expression.hasEvalError() or value is None:
                 values.append("")
                 report.approximated(
                     label,
@@ -2033,6 +2344,17 @@ def _read_label(
         bg=style.bg,
         rotation=item.itemRotation(),
         z=round(item.zValue()),
+    )
+
+
+def _reads_only_atlas(expression: QgsExpression) -> bool:
+    """Whether `expression` reads atlas variables and nothing else: no
+    fields, no other variables."""
+    variables = {name.lower() for name in expression.referencedVariables()}
+    return (
+        bool(variables)
+        and all(name.startswith("atlas_") for name in variables)
+        and not expression.referencedColumns()
     )
 
 
@@ -2337,7 +2659,9 @@ def _shape_stroke(
         )
         return None, None
     if layer.strokeStyle() == Qt.PenStyle.NoPen:
-        return None, None
+        # No outline in QGIS: a zero width says so, where leaving the
+        # attribute out gives the runtime's own 0.3 mm theme outline.
+        return None, 0.0
     width = layer.strokeWidth()
     if layer.strokeWidthUnit() != QgsUnitTypes.RenderMillimeters:
         report.approximated(

@@ -184,7 +184,23 @@ def translate_symbol(
     stroke_width = line_width
     if stroke_width is None:
         stroke_width = _safe(symbol_layer, "strokeWidth")
+    width_was_read = stroke_width is not None
     stroke_width = float(stroke_width or 0.0) * MM_TO_PIXELS
+
+    # An outline is switched off with its pen style, not its width: "No Pen"
+    # keeps the colour and the 0.26 mm default width, so reading only those
+    # drew a dark ring QGIS never draws. A transparent stroke is that same
+    # nothing in every class expression the writer builds. A width of 0 with
+    # a pen is the other way round -- QGIS's hairline, one device pixel, which
+    # a zero width left at deck.gl's default of one metre, too thin to see.
+    pen = _pen_style_value(
+        symbol_layer, "penStyle" if line_width is not None else "strokeStyle"
+    )
+    if pen == _NO_PEN:
+        stroke_color = _transparent(stroke_color or own_color)
+        stroke_width = 0.0
+    elif pen is not None and width_was_read and stroke_width == 0.0:
+        stroke_width = HAIRLINE_PIXELS
 
     if line_width is not None:
         # A line symbol's own colour is its stroke, not a fill.
@@ -192,6 +208,10 @@ def translate_symbol(
         fill_color = None
     else:
         fill_color = fill_color or own_color
+        # "No Brush" is QGIS's outline-only fill: like "No Pen", the colour
+        # is kept and only the style says it is not drawn.
+        if _brush_style_value(symbol_layer) == _NO_BRUSH:
+            fill_color = _transparent(fill_color)
 
     radius = _safe(symbol_layer, "size")
     if radius is not None:
@@ -310,6 +330,48 @@ QT_PEN_STYLE_VALUES = {
     4: "DashDotLine",
     5: "DashDotDotLine",
 }
+
+#: `Qt::NoPen`: the stroke style QGIS offers as "No Pen" / "No line".
+_NO_PEN = 0
+
+#: The width QGIS draws a zero-width ("hairline") stroke at: one device pixel,
+#: which in a browser is one CSS pixel.
+HAIRLINE_PIXELS = 1.0
+
+
+def _pen_style_value(symbol_layer: Any, method: str) -> int | None:
+    """A `Qt::PenStyle` read with `method`, as a plain int; `None` when the
+    symbol layer has no such style (gradient fills, SVG markers ...).
+
+    PyQt5 returns a bare int and PyQt6 an enum, as `_pen_style_name` explains.
+    """
+    style = _safe(symbol_layer, method)
+    if style is None:
+        return None
+    for read in (int, lambda s: s.value):
+        try:
+            return int(read(style))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+#: `Qt::NoBrush`: the fill style QGIS offers as "No Brush".
+_NO_BRUSH = 0
+
+
+def _brush_style_value(symbol_layer: Any) -> int | None:
+    """A fill's `Qt::BrushStyle` as a plain int; `None` for symbol layers
+    without one (markers, gradient and pattern fills ...). Read the way
+    `_pen_style_value` reads a pen style -- both are plain Qt enums."""
+    return _pen_style_value(symbol_layer, "brushStyle")
+
+
+def _transparent(color: Color | None) -> Color:
+    """`color` with its alpha at zero (black when there is none)."""
+    if color is None:
+        return Color(r=0, g=0, b=0, a=0.0)
+    return Color(r=color.r, g=color.g, b=color.b, a=0.0)
 
 
 def _pen_style_name(symbol_layer: Any) -> str | None:

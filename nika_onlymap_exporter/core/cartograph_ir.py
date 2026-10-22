@@ -398,6 +398,13 @@ class LegendSpec:
     `derived` is `True` by default -- rows are computed from the frame's own
     layers at render time. Set it `False` (a static frame has no layers to
     derive from) and supply literal `rows`.
+
+    `wrap_width` is QGIS-only: the longest, in mm, a row's text runs before
+    QGIS wraps it onto another line (its "wrap lines after"), so a long
+    layer name takes two lines rather than shrinking the whole legend. The
+    runtime has no such attribute -- its legend wraps each row at the
+    column's width by itself -- so the writer leaves it out; `None` keeps
+    QGIS's default of no wrapping.
     """
 
     id: str
@@ -412,6 +419,7 @@ class LegendSpec:
     font_size: float | None = None
     padding: float | None = None
     rows: tuple[LegendRowSpec, ...] = ()
+    wrap_width: float | None = None
     rotation: float = 0.0
     z: int | None = None
     locked: bool = False
@@ -426,13 +434,20 @@ class LegendSpec:
             raise ValueError(f"font_size must be positive, got {self.font_size!r}")
         if self.padding is not None and self.padding < 0:
             raise ValueError(f"padding must be >= 0, got {self.padding!r}")
+        if self.wrap_width is not None and self.wrap_width <= 0:
+            raise ValueError(f"wrap_width must be positive, got {self.wrap_width!r}")
         if not self.derived and not self.rows:
             raise ValueError("a non-derived legend needs at least one literal row")
 
 
 @dataclass(frozen=True)
 class ScalebarSpec:
-    """A scale bar: `<om-scalebar>`."""
+    """A scale bar: `<om-scalebar>`.
+
+    `font_size` is QGIS-only: its labels' size in points. The runtime sizes
+    a bar's labels from the bar's box height and has no attribute for it,
+    so the writer leaves it out; `None` keeps QGIS's default (12 pt).
+    """
 
     id: str
     box: Box
@@ -442,6 +457,7 @@ class ScalebarSpec:
     segment_length: float | None = None
     kind: str = "single"
     color: str | None = None
+    font_size: float | None = None
     rotation: float = 0.0
     z: int | None = None
     locked: bool = False
@@ -458,6 +474,8 @@ class ScalebarSpec:
             raise ValueError(
                 f"segment_length must be positive, got {self.segment_length!r}"
             )
+        if self.font_size is not None and self.font_size <= 0:
+            raise ValueError(f"font_size must be positive, got {self.font_size!r}")
 
 
 @dataclass(frozen=True)

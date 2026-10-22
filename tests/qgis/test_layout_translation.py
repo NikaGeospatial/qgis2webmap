@@ -311,6 +311,56 @@ class TestLiveLegend:
         assert any("groups are not kept" in r for r in rows)
 
 
+class TestLiveLegendChecks:
+    """Checks may only call a live legend kept when the browser draws it as
+    QGIS does: the runtime's own legend still differs for classed layers."""
+
+    def _legend_rows(self, report):
+        return [
+            item
+            for item in report.items
+            if item.subject.startswith("Legend")
+            and "derive from the live frame" in item.detail
+        ]
+
+    def test_single_symbol_layers_in_one_column_are_kept(self, project) -> None:
+        layout, map_item, *_ = _layout(project)
+        _legend(layout, map_item)
+        report = FidelityReportBuilder()
+        read_layout(layout, report)
+        (row,) = self._legend_rows(report)
+        assert row.status is FidelityStatus.PRESERVED
+
+    def test_a_categorized_layer_says_what_the_browser_changes(self, project) -> None:
+        layout, map_item, parcels, _roads = _layout(project)
+        _categorise(parcels)
+        _legend(layout, map_item).setColumnCount(2)
+        report = FidelityReportBuilder()
+        read_layout(layout, report)
+        (row,) = self._legend_rows(report)
+        assert row.status is FidelityStatus.APPROXIMATED
+        assert "'other' row" in row.detail
+        assert "classified field" in row.detail
+        assert "columns" in row.detail
+        # Polygon classes are squares in QGIS too.
+        assert "square" not in row.detail
+
+
+class TestStaticLegendShapes:
+    def test_literal_rows_use_the_runtimes_shape_words(self, project) -> None:
+        from cartograph_fixtures import all_static
+
+        layout, map_item, _parcels, _roads = _layout(project)
+        _legend(layout, map_item)
+        legend = _only(
+            read_layout(
+                layout, FidelityReportBuilder(), frame_modes=all_static(layout)
+            ),
+            LegendSpec,
+        )
+        assert {row.shape for row in legend.rows} == {"line", "polygon"}
+
+
 # --------------------------------------------------------------------------
 # Live and static frame fidelity
 # --------------------------------------------------------------------------
@@ -582,6 +632,44 @@ class TestScalebarDetails:
         bar, report = self._bar(project, lambda sb: sb.setStyle(renderer_id))
         assert bar.kind == "single"
         assert any("style" in r for r in _rows(report, FidelityStatus.APPROXIMATED))
+
+    def test_labels_drawn_differently_are_not_called_kept(self, project) -> None:
+        def configure(scalebar):
+            scalebar.setUnits(QgsUnitTypes.DistanceMeters)
+            scalebar.setUnitLabel("m")
+            scalebar.setNumberOfSegments(2)
+            scalebar.setNumberOfSegmentsLeft(0)
+            scalebar.setUnitsPerSegment(700)
+
+        _bar, report = self._bar(project, configure)
+        rows = [r for r in _rows(report, FidelityStatus.APPROXIMATED) if "Scale" in r]
+        assert rows, _rows(report, FidelityStatus.PRESERVED)
+        assert "below it" in rows[0]
+        assert "'0 · 700 · 1400 m' rather than '0 · 700 · 1,400 m'" in rows[0]
+
+    def test_a_bar_the_browser_labels_alike_is_kept(self, project) -> None:
+        from qgis.core import Qgis
+
+        below = getattr(Qgis, "ScaleBarDistanceLabelVerticalPlacement", None)
+        if below is not None:
+            below = below.BelowSegment
+        else:  # pragma: no cover - before the enum moved to Qgis
+            from qgis.core import QgsScaleBarSettings
+
+            below = QgsScaleBarSettings.LabelBelowSegment
+
+        def configure(scalebar):
+            scalebar.setUnits(QgsUnitTypes.DistanceMeters)
+            scalebar.setUnitLabel("m")
+            scalebar.setNumberOfSegments(2)
+            scalebar.setNumberOfSegmentsLeft(0)
+            scalebar.setUnitsPerSegment(200)
+            scalebar.setLabelVerticalPlacement(below)
+
+        _bar, report = self._bar(project, configure)
+        assert any(
+            r.startswith("Scale bar") for r in _rows(report, FidelityStatus.PRESERVED)
+        ), _rows(report, FidelityStatus.APPROXIMATED)
 
     def test_every_registered_style_is_mapped(self, project) -> None:
         from qgis.core import QgsApplication

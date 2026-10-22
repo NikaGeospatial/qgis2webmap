@@ -83,6 +83,15 @@ _PLACEHOLDER_RE = re.compile(f"{_PLACEHOLDER_OPEN}(\\d+){_PLACEHOLDER_CLOSE}")
 
 _MAP_SCALE_RE = re.compile(r"^(?:round\s*\(\s*)?@map_scale(?:\s*\))?$", re.IGNORECASE)
 _MAP_CRS_RE = re.compile(r"^@map_crs(?:_description)?$", re.IGNORECASE)
+# The same two read off a named map item, as the layout builder writes them
+# (a label's own context has no `@map_scale`): only the label's own frame,
+# by its QGIS item id, is recognised; another frame's value is frozen like
+# any expression.
+_ITEM_MAP_VARIABLE_RE = re.compile(
+    r"^(round\s*\(\s*)?map_get\s*\(\s*item_variables\s*\(\s*'([^']*)'\s*\)"
+    r"\s*,\s*'(map_scale|map_crs)'\s*\)(?(1)\s*\))$",
+    re.IGNORECASE,
+)
 _PROJECT_TITLE_RE = re.compile(r"^@project_title$", re.IGNORECASE)
 _NOW_RE = re.compile(r"^now\s*\(\s*\)$", re.IGNORECASE)
 _FORMAT_DATE_NOW_RE = re.compile(
@@ -133,6 +142,7 @@ class _Builder:
     frame_id: str
     frame_is_live: bool
     in_atlas: bool
+    frame_item_id: str | None = None
     pieces: list[str] = field(default_factory=list)
     frozen: list[str] = field(default_factory=list)
 
@@ -203,15 +213,21 @@ def translate_label(
     frame_id: str,
     frame_is_live: bool,
     in_atlas: bool = False,
+    frame_item_id: str | None = None,
 ) -> TranslatedLabel:
     """Translate one QGIS label's text into a cartograph template.
 
     `frame_id` is the label's linked map, or the layout's reference map when
     the label has none -- the caller resolves that; this function only needs
     the id to frame-qualify `{{frame.<id>.scale}}` / `{{frame.<id>.crs}}`.
+    `frame_item_id` is that map's QGIS item id, the name an
+    `item_variables('<id>')` expression reaches it by.
     """
     builder = _Builder(
-        frame_id=frame_id, frame_is_live=frame_is_live, in_atlas=in_atlas
+        frame_id=frame_id,
+        frame_is_live=frame_is_live,
+        in_atlas=in_atlas,
+        frame_item_id=frame_item_id,
     )
     for kind, value in _split_expression_blocks(text):
         if kind == "text":
@@ -222,6 +238,18 @@ def translate_label(
 
 
 def _translate_expression(expr: str, builder: _Builder) -> None:
+    item_variable = _ITEM_MAP_VARIABLE_RE.match(expr)
+    if item_variable and item_variable.group(2) in (
+        builder.frame_item_id,
+        builder.frame_id,
+    ):
+        is_scale = item_variable.group(3).lower() == "map_scale"
+        if is_scale and not item_variable.group(1):
+            # Unrounded, as `@map_scale` is when written bare.
+            expr = "@map_scale"
+        else:
+            expr = "round(@map_scale)" if is_scale else "@map_crs"
+
     if _MAP_SCALE_RE.match(expr):
         if builder.frame_is_live:
             builder.token(f"{{{{frame.{builder.frame_id}.scale}}}}")

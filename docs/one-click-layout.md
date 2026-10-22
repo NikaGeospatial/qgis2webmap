@@ -3,7 +3,7 @@ title: One-click layouts and the round trip
 seo_title: Make a QGIS print layout from the map canvas in one click
 description: >-
   Build a print layout from the QGIS map canvas in one click - title, map,
-  legend, scale bar, north arrow - keep editing it in QGIS, and import a
+  legend, scale bar - keep editing it in QGIS, and import a
   cartograph back as a layout.
 lead_image:
   src: /images/cartograph-one-click.png
@@ -35,68 +35,103 @@ is taken), adds it to the project, and selects it in the Print layout list.
 
 ## Choose a template
 
-Ten designs, modelled on the print layouts GIS users make most - Esri's print
-service set and the recurring designs of its map gallery. Each preview is the
-real page drawn with the map the canvas shows now, so what you pick is what
-you get.
+Fifteen designs: six quiet essentials that suit most jobs, and nine with more
+character, each made for one kind of page. Each preview is the real page drawn
+with the map the canvas shows now, so what you pick is what you get.
 
-The picker shows **Page size** and **Orientation** at the top, then a strip
-of the ten template names, then the designs themselves as a scrolling list of
-large previews, one per row. Click a name in the strip to jump to its
-preview. **Create layout** builds the one selected.
+The picker shows **All**, **Essentials** and **Characterful** at the top to
+narrow the list, with **Page size** and **Orientation** beside them. Below is
+a scrolling list of the designs: a large preview of each, its name, one line
+on what it is for, and what that page includes for this project. A second,
+quieter line, **Can also show**, lists what the design would add with more
+content - notes from the project's abstract, Signal's key figures, Atlas
+Ledger's sheet number; point at it to see where each comes from. **Create
+layout** builds the one selected.
 
-![The template picker: page size and orientation at the top, the strip of ten template names, and the first large previews of the current map - Classic and Legend below.](images/cartograph-templates.png)
+![The template picker: the All, Essentials and Characterful buttons, page size and orientation at the top, and the designs as large previews of the current map, each with its name, a one-line description and what it includes.](images/cartograph-templates.png)
 
-- **Classic** - title, map, legend beside it (or below, whichever leaves the
-  map larger), scale bar and north arrow. The layout described
-  [below](#what-the-classic-layout-contains).
-- **Legend below** - Classic with the legend always in a band under the map.
-- **Map only** - just the map and its data credits, for placing in another
-  document. The credits stay because most basemap and open-data licences
-  require them.
-- **Report figure** - the map with a caption, scale bar and north arrow under
-  it, and no legend.
-- **Field / survey map** - a bordered sheet with a labelled grid in the map's
-  own units and a title block with the scale, CRS, author and date.
-- **Poster** - a large title band, the map, and a side panel (below the map on
-  a portrait page) for the story, the legend, scale bar and north arrow. Text
-  and bands grow with the page size.
-- **Map with locator** - the map with a locator inset that outlines where it
-  is, and the legend under the inset.
-- **Story map** - the map fills the page, with the title, a text panel and a
-  locator inset laid over it.
-- **Infographic** - a bold title band, the map and legend, and three tiles for
-  key figures.
-- **Dark full-bleed** - a dark page with the map to within a few millimetres of
-  its edges, and light text over it.
+**Essentials**
+
+- **Daylight** - a balanced everyday sheet: title, large map, legend beside
+  or below it (whichever leaves the map larger), scale bar and source line.
+  The safest first choice; the layout described
+  [below](#what-the-daylight-layout-contains).
+- **Clearline** - a wide map with the legend in columns in a band under it,
+  for wide extents and long legends.
+- **Bare Map** - just the map and its data credits, with no frame line, for
+  placing in another document. The credits stay because most basemap and
+  open-data licences require them.
+- **Caption** - a report figure: the map with a caption under it (the title
+  as a bold lead, then the project's abstract), the scale bar and the source.
+- **After Hours** - a dark page with the map to the edges; the title, legend
+  and scale bar sit on solid dark panels, so they stay readable whatever the
+  map's colours.
+- **Night Desk** - a calm dark report sheet: the map inset with wide margins,
+  a quiet legend, the source and the date.
+
+**Characterful**
+
+- **Fieldbook** - a survey sheet with a labelled grid in the map's own units
+  and a title block with the scale, CRS, author and date.
+- **Broadside** - a poster: a big headline that steps down in size for long
+  titles, a dominant map, and the story, legend and scale bar in a rail beside
+  it (a band below it on a portrait page).
+- **Near & Far** - the map with a locator inset that outlines where it is.
+- **On the Map** - the map fills the page, with the title and story on a solid
+  panel over the edge of the map, and a locator inset.
+- **Signal** - a data-led page: the map with up to three key figures you
+  supply. Type them under the list when Signal is selected - a value such as
+  *214* and what it counts, such as *parcels surveyed*. They are saved with
+  the project. With no figures the page becomes the map and its notes.
+- **Marginalia** - an editorial sheet: a large map with the project's abstract
+  in a narrow margin. With no abstract there is no margin.
+- **Atlas Ledger** - one sheet of a map series: title, sheet number, a
+  locator, legend and source. The sheet number (*2 / 12*) shows once you turn
+  the layout's atlas on, and stays blank on a single page.
+- **Town Hall** - large print for public meetings: a big title, an
+  easy-to-read legend in large type, and nothing laid over the map. It
+  enlarges the page's own text; it does not make your map's symbols any
+  easier to tell apart.
+- **Wayfinder** - a long map for routes, rivers and coasts, with a distance
+  scale. It adds no routes or waypoints of its own.
+
+Legends stay readable: their text never goes below 6.5 pt (9 pt on Town
+Hall). A crowded legend first gets more room, up to half the space the map
+and legend share; if it still cannot fit, it leaves its last entries out.
+The card then says *Legend: 3 entries do not fit at a readable size*, and
+the **Checks** tab of the new layout says the same until you put them back
+(a larger page, shorter layer names, or a bigger legend and the entries
+re-added in its item properties).
 
 The **page size** can be A4, A3, Letter, Tabloid, A5, A2, A1, A0 or Legal;
 **Automatic** orientation takes whichever shows the map larger. The picker
 remembers your last choice.
 
 The panels' text comes from the project: the title from **Project Properties
-→ General → Project title**, the story text from **Metadata → Abstract**.
-Until there is an abstract, the text panels and the infographic tiles hold a
-short placeholder to replace in the layout designer.
+→ General → Project title**, the story text from **Metadata → Abstract**, the
+author from **Metadata**. Templates never put stand-in text on the page: until
+there is an abstract, a design leaves its text panel out and gives the map the
+room.
 
-Every template except Classic and Legend below gives the map frame the shape
-its design needs; the frame then shows a little more around the canvas view
-rather than cutting any of it off. A locator inset is a static frame - a
-picture of its map, as QGIS draws it.
+Daylight and Caption keep the canvas's own shape, so the page shows exactly
+the view. The other templates give the map frame the shape their design needs;
+the frame then shows a little more around the canvas view rather than cutting
+any of it off. A locator inset is a static frame - a picture of its map, as
+QGIS draws it.
 
-## What the Classic layout contains
+## What the Daylight layout contains
 
 An **A4** page, in whichever orientation gives the map more room, with:
 
 - **the map**, at the canvas's extent, CRS and rotation, showing the layers the
   canvas showed at that moment, in the same order;
+- **a title** from the project title, under a short accent mark;
 - **a legend** beside or below the map, whichever leaves the map larger, with
   one row per layer;
 - **a scale bar** under the map, bottom left;
-- **a north arrow** above the map, top right;
-- **a title** beside the north arrow, from the project title;
-- **an attribution line** under the scale bar, from the layers' own credits,
-  when they have any;
+- **an attribution line** beside the scale bar (under it on a narrow map),
+  from the layers' own credits, when they have any;
+- **a north arrow**, only when the canvas is rotated;
 - **a grid** in degrees, when the canvas CRS is geographic.
 
 Nothing overlaps the map, so when you open the layout in the designer you are

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import math
+import re
 from dataclasses import fields, replace
 
 import pytest
@@ -564,7 +565,8 @@ class TestFurniture:
         built = build_layout(_furniture_spec(), project)
         label = built.items_by_id["title"]
         assert label.text() == (
-            "[% @project_title %] 1:[% round(@map_scale) %] "
+            "[% @project_title %] 1:[% round(map_get(item_variables('main'), "
+            "'map_scale')) %] "
             "([% map_get(item_variables('inset'), 'map_crs') %]) "
             "[% format_date(now(),'yyyy-MM-dd') %] {{bogus}}"
         )
@@ -580,7 +582,9 @@ class TestFurniture:
         built = build_layout(_furniture_spec(), project)
         label = built.items_by_id["title"]
         text = label.currentText()
-        assert text.startswith("Lots 1:")
+        # The scale is a number in QGIS itself, not blank: a bare
+        # `@map_scale` is not in a label's context, the named map's is.
+        assert re.match(r"Lots 1:\d+ ", text), text
         assert "EPSG:3857" in text
 
     def test_title_differing_from_the_project_is_written_as_text(self, project) -> None:
@@ -807,6 +811,68 @@ class TestInkAndGridLabels:
             assert legend.rstyle(style).textFormat().color().name() == "#eeeeee"
         assert built.items_by_id["bar"].textFormat().color().name() == "#ffffff"
         assert not any("color" in issue.detail for issue in built.issues)
+
+    def test_a_legend_font_size_sizes_its_rows_and_scales_its_headings(
+        self, project
+    ) -> None:
+        from qgis.core import QgsLegendStyle
+
+        spec = CartographSpec(
+            cartograph_id="legend-size",
+            size="A4",
+            orientation="landscape",
+            items=(
+                FrameSpec(
+                    id="main", box=Box(10, 10, 200, 150), center=(103.8, 1.3), zoom=12
+                ),
+                LegendSpec(
+                    id="legend", box=Box(220, 10, 60, 40), for_="main", font_size=9
+                ),
+            ),
+        )
+        built = build_layout(spec, project)
+        legend = built.items_by_id["legend"]
+        sizes = {
+            style: legend.rstyle(style).textFormat().size()
+            for style in (QgsLegendStyle.Title, QgsLegendStyle.SymbolLabel)
+        }
+        assert sizes[QgsLegendStyle.SymbolLabel] == pytest.approx(9.0)
+        # QGIS's 16 pt title over 12 pt rows keeps that proportion.
+        assert sizes[QgsLegendStyle.Title] == pytest.approx(12.0)
+        assert not any("font-size" in issue.detail for issue in built.issues)
+
+    def test_a_legend_wrap_width_and_a_scale_bar_text_size_reach_qgis(
+        self, project
+    ) -> None:
+        """Both QGIS-only: long legend rows wrap at the width a template
+        planned, and a scale bar's labels take its size (both QGIS 3.44 and
+        4.x); a spec without them keeps QGIS's defaults."""
+        spec = CartographSpec(
+            cartograph_id="wrap",
+            size="A4",
+            orientation="landscape",
+            items=(
+                FrameSpec(
+                    id="main", box=Box(10, 10, 200, 150), center=(103.8, 1.3), zoom=12
+                ),
+                LegendSpec(
+                    id="legend", box=Box(220, 10, 60, 40), for_="main", wrap_width=31.5
+                ),
+                LegendSpec(id="plain", box=Box(220, 60, 60, 40), for_="main"),
+                ScalebarSpec(
+                    id="bar", box=Box(220, 110, 60, 12), for_="main", font_size=7.5
+                ),
+                ScalebarSpec(id="plain-bar", box=Box(220, 130, 60, 14), for_="main"),
+            ),
+        )
+        built = build_layout(spec, project)
+        settings = built.items_by_id["legend"].legendSettings()
+        assert settings.autoWrapLinesAfter() == pytest.approx(31.5)
+        assert built.items_by_id["plain"].legendSettings().autoWrapLinesAfter() == 0
+        bar = built.items_by_id["bar"].textFormat()
+        assert bar.size() == pytest.approx(7.5)
+        assert bar.sizeUnit() == qgis_core.QgsUnitTypes.RenderPoints
+        assert built.items_by_id["plain-bar"].textFormat().size() == pytest.approx(12)
 
     def test_grid_labels_have_the_decimals_their_interval_needs(self, project) -> None:
         built = self._built(project)

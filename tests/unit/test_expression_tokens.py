@@ -396,3 +396,34 @@ class TestAtlasFilter:
     )
     def test_anything_else_is_untranslatable(self, expression: str) -> None:
         assert translate_filter_expression(expression) is None
+
+
+# The named map item, as the layout builder writes a scale or CRS label
+class TestItemVariables:
+    def test_the_labels_own_frame_reads_as_its_token(self) -> None:
+        text = (
+            "1:[% round(map_get(item_variables('main'), 'map_scale')) %] "
+            "[% map_get(item_variables('main'), 'map_crs') %]"
+        )
+        result = translate_label(text, frame_id="main", frame_is_live=True)
+        assert result.template == "1:{{frame.main.scale}} {{frame.main.crs}}"
+        assert result.frozen_expressions == ()
+
+    def test_a_static_frame_freezes_its_scale_as_before(self) -> None:
+        text = "1:[% round(map_get(item_variables('main'), 'map_scale')) %]"
+        result = translate_label(text, frame_id="main", frame_is_live=False)
+        assert result.frozen_expressions == ("round(@map_scale)",)
+
+    def test_the_frame_is_known_by_its_qgis_item_id(self) -> None:
+        text = "[% map_get(item_variables('main'), 'map_crs') %]"
+        result = translate_label(
+            text, frame_id="frame_main", frame_is_live=True, frame_item_id="main"
+        )
+        assert result.template == "{{frame.frame_main.crs}}"
+
+    def test_another_frame_is_frozen(self) -> None:
+        text = "[% map_get(item_variables('inset'), 'map_crs') %]"
+        result = translate_label(text, frame_id="main", frame_is_live=True)
+        assert result.frozen_expressions == (
+            "map_get(item_variables('inset'), 'map_crs')",
+        )

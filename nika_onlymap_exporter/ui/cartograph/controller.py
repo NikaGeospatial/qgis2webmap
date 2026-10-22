@@ -26,6 +26,7 @@ import re
 import sys
 import time
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -85,6 +86,7 @@ from .status import page_label, status_text
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
 
+    from ...core.canvas_cartograph import LayerRevisions
     from ...core.cvd import Condition, LegendEntry
     from ...core.export_ir import ExportProject
     from ...core.fidelity_report import FidelityReportBuilder
@@ -196,6 +198,9 @@ class CartographController:
         self._pending_spec: CartographSpec | None = None
         # Map item uuid -> how many of its fidelity rows are not "Kept".
         self._frame_issue_counts: dict[str, int] = {}
+        # Each vector layer's edits, counted from the first "From canvas...":
+        # part of the template picker's preview key.
+        self._layer_revisions: LayerRevisions | None = None
         self._built_layers_signature = self._layers_signature()
         self._selected_name: str | None = None
         self._shut_down = False
@@ -513,7 +518,14 @@ class CartographController:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
         layout in the project, selected as this cartograph's source -- in the
         layout template the user picks (`template_picker.py`)."""
-        from ...core.canvas_cartograph import cartograph_from_canvas, template_preview
+        from ...core.canvas_cartograph import (
+            LayerRevisions,
+            cartograph_from_canvas,
+            preview_state_key,
+            template_preview,
+            view_input,
+        )
+        from ...core.layout_templates import plan_template
         from .template_picker import ask_template
 
         canvas = self._map_canvas()
@@ -523,13 +535,67 @@ class CartographController:
             )
             return
         settings = canvas.mapSettings()
+        layers = canvas.layers()
         placeholders = _template_placeholders()
+        if self._layer_revisions is None:
+            self._layer_revisions = LayerRevisions()
+        # Everything the previews draw: the same key next time means the
+        # pages drawn now are still true, and the picker shows them at once.
+        try:
+            canvas_key = preview_state_key(
+                settings.extent(),
+                settings.destinationCrs(),
+                layers,
+                self.project,
+                rotation=settings.rotation(),
+                revisions=self._layer_revisions.track(layers),
+            )
+        except Exception:  # an unreadable layer: no sharing, not no picker
+            canvas_key = ""
+        # Read once per opening: the planner checks each card's cues against
+        # this project's page for every page setting the user tries.
+        try:
+            base_input = view_input(
+                settings.extent(),
+                settings.destinationCrs(),
+                layers,
+                self.project,
+                rotation=settings.rotation(),
+                placeholders=placeholders,
+            )
+        except Exception:  # the cards then say only what every page has
+            base_input = None
 
-        def render(template_id: str, page_size: str, orientation: str, width_px: int):
+        def plan(
+            template_id: str,
+            page_size: str,
+            orientation: str,
+            *,
+            figures: Sequence[tuple[str, str]],
+        ):
+            if base_input is None:
+                raise ValueError("the canvas could not be read")
+            return plan_template(
+                template_id,
+                dataclasses.replace(
+                    base_input,
+                    page_size=page_size,
+                    orientation=orientation,
+                    figures=tuple(figures),
+                ),
+            )
+
+        def render(
+            template_id: str,
+            page_size: str,
+            orientation: str,
+            width_px: int,
+            figures: Sequence[tuple[str, str]] | None = None,
+        ):
             return template_preview(
                 settings.extent(),
                 settings.destinationCrs(),
-                canvas.layers(),
+                layers,
                 self.project,
                 template_id=template_id,
                 width_px=width_px,
@@ -537,9 +603,18 @@ class CartographController:
                 page_size=page_size,
                 orientation=orientation,
                 placeholders=placeholders,
+                figures=figures,
             )
 
-        choice = ask_template(render, parent=self.dialog)
+        # The picker saves the key figures typed into it to the project as it
+        # accepts, so the layout built next reads them from there.
+        choice = ask_template(
+            render,
+            parent=self.dialog,
+            canvas_key=canvas_key,
+            project=self.project,
+            planner=plan,
+        )
         if choice is None:
             return
         template_id, page_size, orientation = choice

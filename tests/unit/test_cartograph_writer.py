@@ -421,6 +421,27 @@ class TestLegend:
         assert row.get("label") == "Parcels"
         assert row.get("color") == "#eba941"
 
+    def test_qgis_only_wrap_and_bar_text_size_stay_out_of_the_html(self) -> None:
+        """The runtime has no attribute for either (its legend wraps rows at
+        the column's width itself; its bar sizes labels from the box), so
+        the page is the same with or without them."""
+        frame = _static_spec().items[0]
+
+        def page(wrap: float | None, bar_pt: float | None) -> str:
+            items = (
+                frame,
+                LegendSpec(
+                    id="lg", box=Box(165, 24, 35, 60), for_="main", wrap_width=wrap
+                ),
+                ScalebarSpec(
+                    id="bar", box=Box(10, 180, 70, 9), for_="main", font_size=bar_pt
+                ),
+            )
+            spec = CartographSpec(cartograph_id="cg", size="A4", items=items)
+            return write_cartograph_html(spec, _runtime())
+
+        assert page(31.5, 7.5) == page(None, None)
+
 
 class TestAtlas:
     def test_atlas_element_written(self) -> None:

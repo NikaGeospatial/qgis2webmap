@@ -90,7 +90,7 @@ from .cartograph_ir import (
     ShapeSpec,
     TextSpec,
 )
-from .layout_reader import TEXT_KIND_PROPERTY, FrameMode
+from .layout_reader import TEXT_KIND_PROPERTY, FrameMode, chosen_style_property
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -125,6 +125,14 @@ _SCALEBAR_STYLE_BY_KIND = {
 _NORTH_ARROW_RESOURCE = ":/images/north_arrows/layout_default_north_arrow.svg"
 _NORTH_FALLBACK_SVG = "arrows/NorthArrow_02.svg"
 _NORTH_ROSE_SVG = "arrows/NorthArrow_05.svg"
+
+#: The legend text levels `<om-legend color>` and `font-size` style.
+_LEGEND_TEXT_STYLES = (
+    QgsLegendStyle.Title,
+    QgsLegendStyle.Group,
+    QgsLegendStyle.Subgroup,
+    QgsLegendStyle.SymbolLabel,
+)
 
 #: How every atlas issue names its element.
 _ATLAS_SUBJECT = "<om-atlas>"
@@ -267,9 +275,10 @@ def label_text_from_tokens(
     it produces (that module stays the one-way reader; this is its mirror):
 
     - `{{frame.<id>.scale}}` / `{{frame.<id>.crs}}` (and the single-frame
-      `{{scale}}` / `{{crs}}`) -> `@map_scale` / `@map_crs`, which a label
-      resolves against the layout's reference map; a frame that is *not*
-      the reference map is reached through `item_variables('<id>')`.
+      `{{scale}}` / `{{crs}}`, meaning the reference map) -> the map item's
+      `map_scale` / `map_crs` through `item_variables('<id>')`. A bare
+      `@map_scale` is not in a label's own expression context -- QGIS
+      prints it empty -- so even the reference map is named.
     - `{{title}}` -> `@project_title` when the page title is the project's
       title, else the page title as literal text -- a label must not start
       showing a different title than the cartograph did.
@@ -288,10 +297,7 @@ def label_text_from_tokens(
     def frame_expression(frame_id: str, variable: str, rounded: bool) -> str | None:
         if frame_id not in frame_ids:
             return None
-        if frame_id == reference_frame_id:
-            inner = f"@{variable}"
-        else:
-            inner = f"map_get(item_variables({_quote(frame_id)}), '{variable}')"
+        inner = f"map_get(item_variables({_quote(frame_id)}), '{variable}')"
         return f"[% round({inner}) %]" if rounded else f"[% {inner} %]"
 
     def replace(match: re.Match[str]) -> str:
@@ -376,6 +382,14 @@ def _color(value: str) -> QColor | None:
     return color if color.isValid() else None
 
 
+def _mark_chosen(item: QgsLayoutItem, role: str, color: QColor) -> None:
+    """Record `color` as the design's own choice for `role`, so the reader
+    carries it even where it is also QGIS's default (white, black)."""
+    item.setCustomProperty(
+        chosen_style_property(role), color.name(QColor.NameFormat.HexArgb)
+    )
+
+
 def _subject(kind: str, item_id: str) -> str:
     return f'<om-{kind} id="{item_id}">'
 
@@ -453,6 +467,7 @@ class _Builder:
                 )
                 symbol.symbolLayer(0).setStrokeStyle(Qt.PenStyle.NoPen)
                 page.setPageStyleSymbol(symbol)
+                _mark_chosen(page, "bg", color)
 
     def _report_page_settings(self) -> None:
         spec = self.spec
@@ -593,11 +608,13 @@ class _Builder:
             if color is not None:
                 map_item.setFrameEnabled(True)
                 map_item.setFrameStrokeColor(color)
+                _mark_chosen(map_item, "frame-stroke", color)
         if frame.frame_bg is not None:
             color = _color(frame.frame_bg)
             if color is not None:
                 map_item.setBackgroundEnabled(True)
                 map_item.setBackgroundColor(color)
+                _mark_chosen(map_item, "frame-bg", color)
         if frame.atlas_fit is not None or frame.atlas_margin is not None:
             map_item.setAtlasDriven(True)
             map_item.setAtlasScalingMode(
@@ -934,6 +951,7 @@ class _Builder:
         if item.bg is not None and (color := _color(item.bg)) is not None:
             legend.setBackgroundEnabled(True)
             legend.setBackgroundColor(color)
+            _mark_chosen(legend, "bg", color)
         if item.stroke is not None and (color := _color(item.stroke)) is not None:
             legend.setFrameEnabled(True)
             legend.setFrameStrokeColor(color)
@@ -953,16 +971,27 @@ class _Builder:
             )
         if item.color is not None and (color := _color(item.color)) is not None:
             # The runtime's `color` is the legend's text ink, every level of it.
-            for style in (
-                QgsLegendStyle.Title,
-                QgsLegendStyle.Group,
-                QgsLegendStyle.Subgroup,
-                QgsLegendStyle.SymbolLabel,
-            ):
+            for style in _LEGEND_TEXT_STYLES:
                 legend_style = legend.rstyle(style)
                 text_format = legend_style.textFormat()
                 text_format.setColor(color)
                 legend_style.setTextFormat(text_format)
+            _mark_chosen(legend, "color", color)
+        if item.font_size is not None and item.font_size > 0:
+            # `font-size` is the rows' size; the headings keep QGIS's own
+            # proportions to them (16/14/12 pt titles over 12 pt rows).
+            labels = legend.rstyle(QgsLegendStyle.SymbolLabel).textFormat()
+            factor = item.font_size / labels.size() if labels.size() > 0 else 1.0
+            for style in _LEGEND_TEXT_STYLES:
+                legend_style = legend.rstyle(style)
+                text_format = legend_style.textFormat()
+                text_format.setSize(text_format.size() * factor)
+                legend_style.setTextFormat(text_format)
+            legend.setCustomProperty(chosen_style_property("font-size"), item.font_size)
+        if item.wrap_width is not None:
+            # QGIS-only: a long row wraps onto more lines at this width
+            # rather than running past the box (see `LegendSpec`).
+            legend.setAutoWrapLinesAfter(item.wrap_width)
         not_kept = [
             name
             for name, value in (
@@ -970,7 +999,6 @@ class _Builder:
                     "color",
                     item.color if item.color and not _color(item.color) else None,
                 ),
-                ("font-size", item.font_size),
                 ("padding", item.padding),
             )
             if value is not None
@@ -1030,6 +1058,12 @@ class _Builder:
             bar.setTextFormat(text_format)
         elif item.color is not None:
             self.issue(subject, f"Unreadable scale bar colour {item.color!r}; left.")
+        if item.font_size is not None:
+            # QGIS-only: the labels' size in points (see `ScalebarSpec`).
+            text_format = bar.textFormat()
+            text_format.setSize(item.font_size)
+            text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+            bar.setTextFormat(text_format)
         self._place(bar, item.box)
         if item.segment_length is None:
             self._fit_scalebar_width(bar, item.box)

@@ -13,6 +13,9 @@ from nika_onlymap_exporter.core.canvas_cartograph import (
     FRAME_ID,
     cartograph_from_canvas,
     cartograph_from_view,
+    project_figure_rows,
+    project_figures,
+    set_project_figures,
 )
 from nika_onlymap_exporter.core.cartograph_export import prepare_cartograph
 from nika_onlymap_exporter.core.cartograph_ir import (
@@ -121,8 +124,10 @@ class TestCanvasLayout:
         kinds = {type(item) for item in result.spec.items}
         assert {FrameSpec, LegendSpec, ScalebarSpec, TextSpec} <= kinds
         assert GraticuleSpec not in kinds
-        for item_id in ("legend", "scalebar", "north", "title"):
+        for item_id in ("legend", "scalebar", "title"):
             assert result.layout.itemById(item_id) is not None, item_id
+        # A north-up map needs no arrow (a turned one gets one).
+        assert result.layout.itemById("north") is None
         assert result.issues == ()
 
     def test_canvas_rotation_is_kept(self, project, parcels) -> None:
@@ -189,3 +194,54 @@ class TestCanvasLayout:
     def test_empty_extent_is_rejected(self, project, parcels) -> None:
         with pytest.raises(ValueError):
             cartograph_from_view(qgis_core.QgsRectangle(), UTM, [parcels], project)
+
+
+class TestKeyFigureVariables:
+    """The key figures kept as project variables: what the picker's rows
+    show, and how they are written back."""
+
+    def test_rows_keep_every_slot_and_the_figures_only_real_ones(self, project) -> None:
+        project.setCustomVariables(
+            {
+                "nika_figure_1": " 214 | parcels surveyed ",
+                "nika_figure_2": "| a label alone",
+                "nika_figure_3": "12 km",
+            }
+        )
+        assert project_figure_rows(project) == (
+            ("214", "parcels surveyed"),
+            ("", "a label alone"),
+            ("12 km", ""),
+        )
+        assert project_figures(project) == (
+            ("214", "parcels surveyed"),
+            ("12 km", ""),
+        )
+
+    def test_written_rows_read_back_the_same(self, project) -> None:
+        project.setCustomVariables({"other": "kept"})
+        rows = (("214", "parcels surveyed"), ("", "a label alone"), ("12 km", ""))
+        set_project_figures(project, rows)
+        variables = project.customVariables()
+        assert variables["nika_figure_1"] == "214 | parcels surveyed"
+        assert variables["nika_figure_2"] == "| a label alone"
+        # A value alone is written without the bar.
+        assert variables["nika_figure_3"] == "12 km"
+        assert variables["other"] == "kept"
+        assert project_figure_rows(project) == rows
+
+    def test_a_blank_row_removes_its_variable(self, project) -> None:
+        project.setCustomVariables(
+            {"nika_figure_1": "1 | one", "nika_figure_2": "2 | two"}
+        )
+        set_project_figures(project, (("", " "), ("2", "two")))
+        variables = project.customVariables()
+        assert "nika_figure_1" not in variables
+        assert variables["nika_figure_2"] == "2 | two"
+        assert "nika_figure_3" not in variables
+
+    def test_a_bar_in_a_value_is_refused(self, project) -> None:
+        project.setCustomVariables({})
+        with pytest.raises(ValueError):
+            set_project_figures(project, (("1|2", "split"),))
+        assert project.customVariables() == {}

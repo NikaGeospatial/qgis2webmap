@@ -17,6 +17,13 @@ A string that disappears from the code is dropped; one that changes wording
 is a new, untranslated entry, which is correct - the old translation said the
 old thing.
 
+**Disambiguation.** `tr(text, disambiguation)` and `N_(text, disambiguation)`
+(positional or by keyword, a string literal) make the same English text a
+separate entry, written with its `<comment>` - Qt's disambiguation, which
+`lrelease` keys the compiled entry by. An entry is the pair, so adding a
+disambiguation to one use of a text leaves the others' translation alone
+and starts the new use untranslated.
+
 Compiling needs Qt's `lrelease` (set `LRELEASE` or put it on PATH). Without
 it the `.ts` files are still refreshed and the command says what it skipped.
 
@@ -40,57 +47,93 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_DIR = REPO_ROOT / "nika_onlymap_exporter"
 I18N_DIR = PACKAGE_DIR / "i18n"
 CONTEXT = "qgis2webmap"
-MARKERS = {"tr": (0,), "N_": (0,), "plural": (1, 2)}
+# Marker -> (positions of its text arguments, position of its disambiguation
+# or None). A disambiguation may also be passed as `disambiguation=`.
+MARKERS: dict[str, tuple[tuple[int, ...], int | None]] = {
+    "tr": ((0,), 1),
+    "N_": ((0,), 1),
+    "plural": ((1, 2), None),
+}
+
+# A catalogue entry: its source text and its disambiguation ("" for none).
+Entry = tuple[str, str]
 
 
-def collect() -> dict[str, list[str]]:
+def _disambiguation(call: ast.Call, position: int | None, where: str) -> str:
+    """The literal disambiguation of a marker call, or "" if it has none."""
+    if position is None:
+        return ""
+    if position < len(call.args):
+        arg: ast.expr | None = call.args[position]
+    else:
+        arg = next((k.value for k in call.keywords if k.arg == "disambiguation"), None)
+    if arg is None:
+        return ""
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+        return arg.value
+    # A computed one would be looked up at runtime under a key the
+    # catalogue never had, and silently fall back to the plain entry.
+    raise SystemExit(f"{where}: the disambiguation must be a string literal")
+
+
+def collect() -> dict[Entry, list[str]]:
     """Every marked literal, in first-seen order, with where it appears."""
-    found: dict[str, list[str]] = {}
+    found: dict[Entry, list[str]] = {}
     for path in sorted(PACKAGE_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
                 continue
-            for index in MARKERS.get(node.func.id, ()):
+            if node.func.id not in MARKERS:
+                continue
+            indexes, disambiguation_at = MARKERS[node.func.id]
+            where = f"{path.relative_to(PACKAGE_DIR).as_posix()}:{node.lineno}"
+            for index in indexes:
                 if index < len(node.args):
                     arg = node.args[index]
                     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                        where = (
-                            f"{path.relative_to(PACKAGE_DIR).as_posix()}:{node.lineno}"
-                        )
-                        found.setdefault(arg.value, []).append(where)
+                        disambiguation = _disambiguation(node, disambiguation_at, where)
+                        found.setdefault((arg.value, disambiguation), []).append(where)
     return found
 
 
-def read_existing(path: Path) -> dict[str, str]:
+def _entry(message: ET.Element) -> Entry:
+    return (message.findtext("source") or "", message.findtext("comment") or "")
+
+
+def read_existing(path: Path) -> dict[Entry, str]:
     if not path.is_file():
         return {}
-    translations: dict[str, str] = {}
+    translations: dict[Entry, str] = {}
     for message in ET.parse(path).getroot().iter("message"):
-        source = message.findtext("source") or ""
         translation = message.find("translation")
         if (
             translation is not None
             and translation.text
             and (translation.get("type") not in ("unfinished", "obsolete", "vanished"))
         ):
-            translations[source] = translation.text
+            translations[_entry(message)] = translation.text
     return translations
 
 
-def render(language: str, sources: dict[str, list[str]], known: dict[str, str]) -> str:
+def render(
+    language: str, sources: dict[Entry, list[str]], known: dict[Entry, str]
+) -> str:
     root = ET.Element("TS", version="2.1", language=language)
     context = ET.SubElement(root, "context")
     ET.SubElement(context, "name").text = CONTEXT
-    for source, places in sources.items():
+    for entry, places in sources.items():
+        source, disambiguation = entry
         message = ET.SubElement(context, "message")
         for place in places:
             filename, line = place.rsplit(":", 1)
             ET.SubElement(message, "location", filename=f"../{filename}", line=line)
         ET.SubElement(message, "source").text = source
+        if disambiguation:
+            ET.SubElement(message, "comment").text = disambiguation
         translation = ET.SubElement(message, "translation")
-        if source in known:
-            translation.text = known[source]
+        if entry in known:
+            translation.text = known[entry]
         else:
             translation.set("type", "unfinished")
     ET.indent(root)
@@ -171,7 +214,7 @@ def main(argv: list[str]) -> int:
             # check that failed on a shifted line number would train people to
             # regenerate without looking.
             listed = (
-                {m.findtext("source") for m in ET.parse(ts).getroot().iter("message")}
+                {_entry(m) for m in ET.parse(ts).getroot().iter("message")}
                 if ts.is_file()
                 else set()
             )

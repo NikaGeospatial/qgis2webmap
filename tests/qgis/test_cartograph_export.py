@@ -323,6 +323,80 @@ class TestIds:
         assert f'<om-legend-row layer="{inset_id}__{parcels.id()}"' in sheet
 
 
+class TestLegendInTheRuntimesTerms:
+    """The derived legend's overrides, written against the very layers the
+    frame draws: QGIS's class labels keyed on the runtime's own labels, and
+    swatches shaped like the symbol (the Night Desk / Daylight comparisons)."""
+
+    def _sheet(self, project, fake_runtime, renderer):
+        layout, main, _inset, parcels, roads = _two_live_frames_layout(project)
+        parcels.setRenderer(renderer)
+        html = export_layout_to_cartograph(
+            layout, project, fake_runtime, FidelityReportBuilder()
+        )
+        sheet = html[html.index('<template id="sheet">') : html.index("</template>")]
+        return sheet, element_id("frame", main.uuid()), parcels, roads
+
+    def test_graduated_classes_keep_their_qgis_labels(
+        self, project, fake_runtime
+    ) -> None:
+        from qgis.core import (
+            QgsFillSymbol,
+            QgsGraduatedSymbolRenderer,
+            QgsRendererRange,
+        )
+
+        ranges = [
+            QgsRendererRange(
+                low,
+                high,
+                QgsFillSymbol.createSimple({"color": colour, "outline_style": "no"}),
+                f"{low:g}\u2013{high:g} m²",
+            )
+            for low, high, colour in ((0, 1000, "#eff3ff"), (1000, 1e7, "#08519c"))
+        ]
+        sheet, main, parcels, roads = self._sheet(
+            project, fake_runtime, QgsGraduatedSymbolRenderer("area", ranges)
+        )
+        layer = f"{main}__{parcels.id()}"
+        assert f'layer="{layer}" match="&lt; 1,000" label="0\u20131000 m²"' in sheet
+        assert f'layer="{layer}" match="≥ 1,000" label="1000\u20131e+07 m²"' in sheet
+        # A classed layer is headed by its name, with no swatch to see.
+        assert re.search(
+            rf'<om-legend-row layer="{layer}" order="\d+" color="#00000000" '
+            r'shape="line">',
+            sheet,
+        )
+        # The roads are a line, not a square.
+        assert re.search(
+            rf'<om-legend-row layer="{main}__{roads.id()}" order="\d+" shape="line">',
+            sheet,
+        )
+        # "No Pen" outlines stay undrawn.
+        assert "get-line-color=\"'#23232300'\"" in sheet
+
+    def test_categories_labelled_as_their_values_need_no_relabel(
+        self, project, fake_runtime
+    ) -> None:
+        from qgis.core import (
+            QgsCategorizedSymbolRenderer,
+            QgsFillSymbol,
+            QgsRendererCategory,
+        )
+
+        renderer = QgsCategorizedSymbolRenderer(
+            "size",
+            [
+                QgsRendererCategory(
+                    value, QgsFillSymbol.createSimple({"color": colour}), value
+                )
+                for value, colour in (("small", "red"), ("large", "blue"))
+            ],
+        )
+        sheet, _main, _parcels, _roads = self._sheet(project, fake_runtime, renderer)
+        assert " match=" not in sheet
+
+
 # --------------------------------------------------------------------------
 # The writer (licence policy) and the per-frame projects
 # --------------------------------------------------------------------------
