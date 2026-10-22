@@ -21,9 +21,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from nika_onlymap_exporter.core.manifest_builder import RASTER_TEXTURE_TEMPLATES
@@ -1297,7 +1294,6 @@ class TestTitleAndPhoneControls:
             "() => document.activeElement?.closest('[data-om-fold-panel]') !== null"
         )
         assert focused
-        page.screenshot(path=str(Path(tempfile.gettempdir()) / "q2w-w14-phone.png"))
 
 
 WIDGET_TEXT_AND_SURFACE = """
@@ -1363,9 +1359,6 @@ class TestWidgetColoursAreReadable:
         for reading in self._readings(page, path):
             ratio = _contrast(reading["text"], reading["fill"])
             assert ratio >= 4.5, (fixture, reading, ratio)
-        page.screenshot(
-            path=str(Path(tempfile.gettempdir()) / f"q2w-w14-{fixture}.png")
-        )
 
     def test_the_scale_label_has_a_surface(self, page, exported_map) -> None:
         page.set_viewport_size({"width": 1000, "height": 700})
