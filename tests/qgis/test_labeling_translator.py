@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from nika_onlymap_exporter.core.export_ir import MM_TO_PIXELS
+from nika_onlymap_exporter.core.export_ir import MM_TO_PIXELS, FidelityStatus
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.labeling_translator import (
     read_quadrant,
@@ -261,3 +261,89 @@ class TestCapitalizationAndWrapping:
 
         assert spec.character_set is not None
         assert "Ü" in spec.character_set, "the drawn glyph is missing from the atlas"
+
+
+def accented_layer(count: int, odd_index: int, odd_text: str):
+    """`count` ASCII-labelled points, one of which (`odd_index`) has `odd_text`."""
+    layer = labelled_layer()
+    provider = layer.dataProvider()
+    features = []
+    for index in range(count):
+        feature = qgis_core.QgsFeature(layer.fields())
+        feature.setAttributes([odd_text if index == odd_index else f"town {index}"])
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(index % 90, 0))
+        )
+        features.append(feature)
+    provider.addFeatures(features)
+    return layer
+
+
+class TestLabelFidelity:
+    def test_a_glyph_first_used_past_5000_features_is_in_the_atlas(
+        self, qgis_app
+    ) -> None:
+        layer = accented_layer(6000, 5500, "Ž")
+        spec = translate_labeling(layer, FidelityReportBuilder())
+        assert spec.character_set is not None
+        assert "Ž" in spec.character_set
+        assert "t" in spec.character_set  # the ASCII letters are kept too
+
+    def test_all_ascii_still_needs_no_character_set(self, qgis_app) -> None:
+        layer = accented_layer(50, 0, "plain")
+        assert translate_labeling(layer, FidelityReportBuilder()).character_set is None
+
+    @staticmethod
+    def rule_layer(*rules):
+        """A labelled layer whose labelling is rule-based: (filter, settings) each."""
+        layer = labelled_layer()
+        root = qgis_core.QgsRuleBasedLabeling.Rule(qgis_core.QgsPalLayerSettings())
+        for filter_expression, settings in rules:
+            root.appendChild(
+                qgis_core.QgsRuleBasedLabeling.Rule(
+                    settings, filterExp=filter_expression
+                )
+            )
+        layer.setLabeling(qgis_core.QgsRuleBasedLabeling(root))
+        layer.setLabelsEnabled(True)
+        return layer
+
+    @staticmethod
+    def name_settings():
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        return settings
+
+    def test_one_unfiltered_rule_is_translated_like_simple_labelling(
+        self, qgis_app
+    ) -> None:
+        layer = self.rule_layer(("TRUE", self.name_settings()))
+        report = FidelityReportBuilder()
+        spec = translate_labeling(layer, report)
+        assert spec.enabled is True
+        assert spec.field_name == "name"
+        assert any("Rule-based" in item.detail for item in report.items)
+
+    def test_a_filtered_rule_is_reported_not_silently_dropped(self, qgis_app) -> None:
+        layer = self.rule_layer(("\"name\" = 'x'", self.name_settings()))
+        report = FidelityReportBuilder()
+        assert translate_labeling(layer, report).enabled is False
+        assert any(
+            item.status is FidelityStatus.UNSUPPORTED
+            and "rule-based" in item.detail.lower()
+            for item in report.items
+        )
+
+    def test_several_rules_are_reported(self, qgis_app) -> None:
+        layer = self.rule_layer(
+            ("TRUE", self.name_settings()), ("TRUE", self.name_settings())
+        )
+        report = FidelityReportBuilder()
+        assert translate_labeling(layer, report).enabled is False
+        assert any(item.status is FidelityStatus.UNSUPPORTED for item in report.items)
+
+    def test_obstacle_only_labelling_draws_no_labels(self, qgis_app) -> None:
+        report = FidelityReportBuilder()
+        spec = translate_labeling(labelled_layer(drawLabels=False), report)
+        assert spec.enabled is False
+        assert any("obstacle" in item.detail for item in report.items)

@@ -24,9 +24,11 @@ from nika_onlymap_exporter.core.manifest_builder import (
     line_color_expression,
     numeric_expression,
 )
+from nika_onlymap_exporter.core.render_units import MapUnitScale
 from nika_onlymap_exporter.core.renderer_translator import (
     HAIRLINE_PIXELS,
     MM_TO_PIXELS,
+    reference_scale,
     translate_renderer,
     translate_symbol,
 )
@@ -1143,3 +1145,155 @@ class TestGraduatedMatchesQgis:
             "range is switched off" in i.detail
             for i in report.by_status(FidelityStatus.APPROXIMATED)
         )
+
+
+RENDER_UNITS = [
+    "Millimeters",
+    "Points",
+    "Pixels",
+    "Inches",
+    "MapUnits",
+    "MetersInMapUnits",
+]
+
+
+def _unit_oracle_context(mupp: float):
+    """QGIS's own unit conversion at 96 dpi in a metre CRS (painter unit = CSS px)."""
+    context = qgis_core.QgsRenderContext()
+    context.setScaleFactor(MM_TO_PIXELS)
+    context.setMapToPixel(qgis_core.QgsMapToPixel(mupp))
+    context.setExtent(qgis_core.QgsRectangle(0, 0, 7000, 4900))
+    area = qgis_core.QgsDistanceArea()
+    area.setSourceCrs(
+        qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"),
+        qgis_core.QgsProject.instance().transformContext(),
+    )
+    context.setDistanceArea(area)
+    return context
+
+
+class TestSymbolUnits:
+    """Sizes follow the symbol layer's unit, checked against QGIS's own conversion.
+
+    The web runtime's px are CSS px at 96 dpi, so the oracle context uses 96 / 25.4
+    painter units per millimetre. Map units are fixed at the layer's reference
+    scale: here a 7000 m wide extent in a 1000 px view, 7 m per pixel.
+    """
+
+    @staticmethod
+    def _layer(make_memory_layer):
+        layer = make_memory_layer(
+            "pts",
+            crs="EPSG:3857",
+            features=[("a", [0.0, 0.0]), ("b", [7000.0, 4900.0])],
+        )
+        layer.updateExtents()
+        return layer
+
+    @pytest.mark.parametrize("unit_name", RENDER_UNITS)
+    def test_size_stroke_and_offset_match_qgis(
+        self, qgis_app, make_memory_layer, unit_name
+    ) -> None:
+        unit = getattr(qgis_core.Qgis.RenderUnit, unit_name)
+        layer = self._layer(make_memory_layer)
+        symbol = qgis_core.QgsMarkerSymbol.createSimple(
+            {"name": "circle", "size": "8", "outline_width": "1"}
+        )
+        symbol_layer = symbol.symbolLayer(0)
+        symbol_layer.setSizeUnit(unit)
+        symbol_layer.setStrokeWidthUnit(unit)
+        symbol_layer.setOffset(QtCore.QPointF(2, 3))
+        symbol_layer.setOffsetUnit(unit)
+        layer.setRenderer(qgis_core.QgsSingleSymbolRenderer(symbol))
+
+        report = FidelityReportBuilder()
+        spec = translate_renderer(layer, report).symbol
+
+        oracle = _unit_oracle_context(7.0)
+        convert = oracle.convertToPainterUnits
+        assert spec.radius * 2 == pytest.approx(convert(8, unit), rel=1e-4)
+        assert spec.stroke_width == pytest.approx(convert(1, unit), rel=1e-4)
+        assert spec.offset_x == pytest.approx(convert(2, unit), rel=1e-4)
+        assert spec.offset_y == pytest.approx(convert(3, unit), rel=1e-4)
+
+        approximated = [
+            item
+            for item in report.items
+            if item.status is FidelityStatus.APPROXIMATED and "map units" in item.detail
+        ]
+        assert bool(approximated) is (unit_name in ("MapUnits", "MetersInMapUnits"))
+
+    def test_an_8px_marker_is_8px_not_30(self, qgis_app) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"name": "circle", "size": "8"})
+        symbol.symbolLayer(0).setSizeUnit(qgis_core.Qgis.RenderUnit.Pixels)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "s")
+        assert spec.radius == pytest.approx(4.0)
+
+    def test_line_width_unit_is_honoured(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple({"line_width": "2"})
+        symbol.symbolLayer(0).setWidthUnit(qgis_core.Qgis.RenderUnit.Points)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "s")
+        assert spec.stroke_width == pytest.approx(2 * 96 / 72)
+
+    def test_map_units_without_a_scale_are_reported_not_hidden(self, qgis_app) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"size": "8"})
+        symbol.symbolLayer(0).setSizeUnit(qgis_core.Qgis.RenderUnit.MapUnits)
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "s")
+        assert any(i.status is FidelityStatus.APPROXIMATED for i in report.items)
+
+    def test_the_reference_scale_fits_the_extent_into_the_view(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        scale = reference_scale(self._layer(make_memory_layer))
+        assert scale == MapUnitScale(metres_per_pixel=7.0, metres_per_map_unit=1.0)
+
+    def test_a_single_point_layer_has_no_reference_scale(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer("one", features=[("a", [1.0, 1.0])])
+        assert reference_scale(layer) is None
+
+    def test_data_defined_size_is_reported(self, qgis_app) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple({"size": "4"})
+        symbol.symbolLayer(0).setDataDefinedProperty(
+            qgis_core.QgsSymbolLayer.Property.Size,
+            qgis_core.QgsProperty.fromExpression('"v" * 2'),
+        )
+        report = FidelityReportBuilder()
+        translate_symbol(symbol, report, "s")
+        assert any("from data per feature" in i.detail for i in report.items)
+
+
+class TestSymbolOpacity:
+    """Symbol opacity multiplies colour alpha exactly once, as QGIS paints it."""
+
+    @staticmethod
+    def _centre_alpha(symbol) -> float:
+        image = symbol.asImage(QtCore.QSize(41, 41))
+        return image.pixelColor(20, 20).alphaF()
+
+    @pytest.mark.parametrize("opacity", [1.0, 0.5, 0.25])
+    def test_exported_alpha_is_what_qgis_paints(self, qgis_app, opacity) -> None:
+        symbol = qgis_core.QgsMarkerSymbol.createSimple(
+            {"name": "circle", "size": "10", "color": "255,0,0,204"}
+        )
+        symbol.setOpacity(opacity)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "s")
+        assert spec.fill_color.a == pytest.approx(self._centre_alpha(symbol), abs=0.01)
+        assert spec.fill_color.a == pytest.approx(0.8 * opacity, abs=0.01)
+
+    def test_stroke_alpha_carries_the_opacity_too(self, qgis_app) -> None:
+        symbol = qgis_core.QgsLineSymbol.createSimple({"color": "0,0,255"})
+        symbol.setOpacity(0.4)
+        spec = translate_symbol(symbol, FidelityReportBuilder(), "s")
+        assert spec.stroke_color.a == pytest.approx(0.4)
+
+    def test_layer_opacity_is_not_folded_into_the_symbol(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        layer = make_memory_layer("pts", features=[("a", [0.0, 0.0])])
+        layer.setOpacity(0.5)
+        exported = read_layer(layer, FidelityReportBuilder())
+        assert exported.opacity == pytest.approx(0.5)
+        assert exported.renderer.symbol.fill_color.a == pytest.approx(1.0)

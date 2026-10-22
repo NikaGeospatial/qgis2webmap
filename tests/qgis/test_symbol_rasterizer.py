@@ -22,6 +22,7 @@ from nika_onlymap_exporter.core.export_ir import (
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.renderer_translator import (
     class_symbols,
+    reference_render_context,
     translate_renderer,
 )
 from nika_onlymap_exporter.core.symbol_atlas import layer_symbols
@@ -330,3 +331,31 @@ class TestBuildIconAtlas:
         assert renderer.kind is RendererKind.CATEGORIZED
         assert [c.value for c in renderer.categories] == ["a", "b", "c"]
         assert [c.symbol.icon_name for c in renderer.categories] == ["i0", "i1", "i2"]
+
+
+class TestMapUnitMarkers:
+    """A marker sized in map units is drawn at its size at the reference scale."""
+
+    def test_a_map_unit_marker_is_drawn_as_big_as_the_same_pixel_marker(
+        self, qgis_app, make_memory_layer
+    ) -> None:
+        # 7000 m wide extent in a 1000 px view: 7 m per pixel, so 56 m is 8 px.
+        layer = make_memory_layer(
+            "pts",
+            crs="EPSG:3857",
+            features=[("a", [0.0, 0.0]), ("b", [7000.0, 4900.0])],
+        )
+        layer.updateExtents()
+        in_pixels = marker("star", size=8.0)
+        in_pixels.symbolLayer(0).setSizeUnit(qgis_core.Qgis.RenderUnit.Pixels)
+        in_map_units = marker("star", size=56.0)
+        in_map_units.symbolLayer(0).setSizeUnit(qgis_core.Qgis.RenderUnit.MapUnits)
+
+        expected = render_symbol(in_pixels)
+        drawn = render_symbol(in_map_units, context=reference_render_context(layer))
+        assert expected is not None and drawn is not None
+        assert drawn.width() == pytest.approx(expected.width(), abs=3)
+        # Without the context QGIS draws a map unit as a pixel: 56 px, 7x too big.
+        assert render_symbol(in_map_units) is None or (
+            render_symbol(in_map_units).width() > 3 * expected.width()
+        )

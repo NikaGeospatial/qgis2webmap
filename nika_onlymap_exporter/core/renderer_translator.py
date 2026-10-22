@@ -21,8 +21,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
@@ -44,6 +45,12 @@ from .export_ir import (
     ValueRange,
 )
 from .fidelity_report import FidelityReportBuilder
+from .render_units import (
+    CSS_PIXEL_METRES,
+    MapUnitScale,
+    is_map_dependent,
+    to_pixels,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsFeatureRenderer, QgsVectorLayer
@@ -137,6 +144,7 @@ def translate_symbol(
     subject: str,
     layer_id: str | None = None,
     depth: int = 0,
+    scale: MapUnitScale | None = None,
 ) -> SymbolSpec:
     """Flatten one QGIS symbol into the web-expressible subset.
 
@@ -144,6 +152,11 @@ def translate_symbol(
     the one worth keeping when only one can survive.
 
     `depth` guards the one recursive case, a geometry generator's sub-symbol.
+
+    Sizes come out in CSS pixels whatever unit the symbol layer uses; `scale` is
+    what map units are worth on screen (see `render_units`). Symbol opacity is
+    folded into the colours' alpha here, once - nothing downstream reads
+    `SymbolSpec.opacity` to apply it again.
     """
     if symbol is None:
         report.unsupported(subject, "The layer has no symbol to translate.", layer_id)
@@ -156,7 +169,7 @@ def translate_symbol(
         return SymbolSpec()
 
     generated = _translate_geometry_generator(
-        symbol_layer, report, subject, layer_id, depth
+        symbol_layer, report, subject, layer_id, depth, scale
     )
     if generated is not None:
         return generated
@@ -187,7 +200,13 @@ def translate_symbol(
     if stroke_width is None:
         stroke_width = _safe(symbol_layer, "strokeWidth")
     width_was_read = stroke_width is not None
-    stroke_width = float(stroke_width or 0.0) * MM_TO_PIXELS
+    sizes = _SizeReader(scale)
+    stroke_width = sizes.pixels(
+        float(stroke_width or 0.0),
+        _safe(
+            symbol_layer, "widthUnit" if line_width is not None else "strokeWidthUnit"
+        ),
+    )
 
     # An outline is switched off with its pen style, not its width: "No Pen"
     # keeps the colour and the 0.26 mm default width, so reading only those
@@ -218,7 +237,7 @@ def translate_symbol(
     radius = _safe(symbol_layer, "size")
     if radius is not None:
         # QGIS marker size is a diameter; deck.gl wants a radius.
-        radius = float(radius) * MM_TO_PIXELS / 2.0
+        radius = sizes.pixels(float(radius), _safe(symbol_layer, "sizeUnit")) / 2.0
 
     dash = read_dash_pattern(symbol_layer, stroke_width)
     if len(dash) > 2:
@@ -235,6 +254,18 @@ def translate_symbol(
     icon_path = _safe(symbol_layer, "path")
     marker_shape = read_marker_shape(symbol_layer)
 
+    offset_unit = _safe(symbol_layer, "offsetUnit")
+    offset_x = _offset(symbol_layer, "x", sizes, offset_unit)
+    offset_y = _offset(symbol_layer, "y", sizes, offset_unit)
+    sizes.report(report, subject, layer_id)
+    _report_data_defined(symbol_layer, symbol, report, subject, layer_id)
+
+    # Symbol opacity multiplies the colours' own alpha, and layer opacity is
+    # carried separately as `<om-layer opacity>`: three factors, each once.
+    opacity = float(symbol.opacity())
+    fill_color = _with_opacity(fill_color, opacity)
+    stroke_color = _with_opacity(stroke_color, opacity)
+
     # No note about the SVG or the shape here. On a point layer the symbol atlas
     # takes over and reports the outcome once for the whole layer - QGIS draws
     # the marker itself, parameter overrides and all - and a per-class note
@@ -249,15 +280,15 @@ def translate_symbol(
         stroke_width=stroke_width,
         stroke_dash=dash,
         radius=radius,
-        opacity=float(symbol.opacity()),
+        opacity=opacity,
         icon_path=str(icon_path) if icon_path else None,
         marker_shape=marker_shape,
         symbol_layer_count=layer_count,
         cap_rounded=read_cap_rounded(symbol_layer),
         join_rounded=read_join_rounded(symbol_layer),
         rotation=float(_safe(symbol_layer, "angle") or 0.0),
-        offset_x=_offset(symbol_layer, "x"),
-        offset_y=_offset(symbol_layer, "y"),
+        offset_x=offset_x,
+        offset_y=offset_y,
     )
 
 
@@ -273,6 +304,7 @@ def _translate_geometry_generator(
     subject: str,
     layer_id: str | None,
     depth: int,
+    scale: MapUnitScale | None = None,
 ) -> SymbolSpec | None:
     """A geometry generator, which draws a shape the layer's data does not hold.
 
@@ -309,7 +341,7 @@ def _translate_geometry_generator(
     sub_symbol = _safe(symbol_layer, "subSymbol")
     if sub_symbol is None or depth >= MAX_SUB_SYMBOL_DEPTH:
         return SymbolSpec()
-    return translate_symbol(sub_symbol, report, subject, layer_id, depth + 1)
+    return translate_symbol(sub_symbol, report, subject, layer_id, depth + 1, scale)
 
 
 # Qt's own dash patterns for its named pen styles, in units of the pen width -
@@ -462,11 +494,13 @@ def read_join_rounded(symbol_layer: Any) -> bool:
         return False
 
 
-def _offset(symbol_layer: Any, axis: str) -> float:
+def _offset(
+    symbol_layer: Any, axis: str, sizes: _SizeReader, unit: Any = None
+) -> float:
     """One axis of a marker's offset, in pixels.
 
-    QGIS gives a `QPointF` in millimetres. Screen y grows downward in both QGIS
-    and deck.gl's pixel offsets, so no sign flip is needed.
+    QGIS gives a `QPointF` in `offsetUnit()`. Screen y grows downward in both
+    QGIS and deck.gl's pixel offsets, so no sign flip is needed.
     """
     point = _safe(symbol_layer, "offset")
     if point is None:
@@ -475,7 +509,99 @@ def _offset(symbol_layer: Any, axis: str) -> float:
         value = point.x() if axis == "x" else point.y()
     except AttributeError:  # pragma: no cover
         return 0.0
-    return float(value) * MM_TO_PIXELS
+    return sizes.pixels(float(value), unit)
+
+
+class _SizeReader:
+    """Converts one symbol layer's sizes to pixels and remembers what it assumed."""
+
+    def __init__(self, scale: MapUnitScale | None) -> None:
+        self._scale = scale
+        self.map_dependent = False
+        self.unconvertible = False
+
+    def pixels(self, value: float, unit: Any) -> float:
+        # An unreadable unit is QGIS's default, millimetres, as before.
+        if unit is None:
+            return value * MM_TO_PIXELS
+        if is_map_dependent(unit):
+            self.map_dependent = True
+        pixels = to_pixels(value, unit, self._scale)
+        if pixels is None:
+            self.unconvertible = True
+            return value * MM_TO_PIXELS
+        return pixels
+
+    def report(
+        self, report: FidelityReportBuilder, subject: str, layer_id: str | None
+    ) -> None:
+        if self.map_dependent:
+            if self._scale is None:
+                report.approximated(
+                    subject,
+                    "A size is given in map units or metres on the ground, which "
+                    "change with the zoom in QGIS, and the layer has no extent to "
+                    "fix a scale from. It is drawn as if in millimetres.",
+                    layer_id,
+                )
+                self.unconvertible = False
+            else:
+                report.approximated(
+                    subject,
+                    "A size is given in map units or metres on the ground, so it "
+                    "grows and shrinks with the zoom in QGIS. The web map draws "
+                    "fixed pixel sizes: it is fixed at its size at about 1:"
+                    f"{round(self._scale.scale_denominator, -1):,.0f}, where this "
+                    "layer fills a 1000 pixel wide view.",
+                    layer_id,
+                )
+        if self.unconvertible:
+            report.approximated(
+                subject,
+                "A size is given as a percentage or in a unit the exporter does "
+                "not know, so it is drawn as if in millimetres.",
+                layer_id,
+            )
+
+
+def _with_opacity(color: Color | None, opacity: float) -> Color | None:
+    """`color` with its alpha multiplied by a symbol's opacity."""
+    if color is None or opacity >= 1.0:
+        return color
+    return replace(color, a=color.a * max(opacity, 0.0))
+
+
+def _report_data_defined(
+    symbol_layer: Any,
+    symbol: QgsSymbol,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str | None,
+) -> None:
+    """Say so when sizes, colours or opacity are driven by data per feature.
+
+    The exporter reads each property's static value, so a data-defined size or
+    opacity is drawn at the value QGIS shows when no feature overrides it. That
+    is a visible difference on exactly the maps that use them, so it is named.
+    """
+    properties = _safe(symbol_layer, "dataDefinedProperties")
+    names: list[str] = []
+    if properties is not None:
+        definitions = _safe(symbol_layer, "propertyDefinitions") or {}
+        for key in properties.propertyKeys():
+            if not properties.isActive(key):
+                continue
+            definition = definitions.get(key)
+            names.append(definition.name() if definition is not None else str(key))
+    if names:
+        report.approximated(
+            subject,
+            "The symbol sets "
+            + ", ".join(sorted(names))
+            + " from data per feature. The web map draws one value for all "
+            "features - the symbol's static one - so the variation is lost.",
+            layer_id,
+        )
 
 
 def read_marker_shape(symbol_layer: Any) -> str | None:
@@ -559,6 +685,7 @@ def translate_renderer(
     renderer: QgsFeatureRenderer | None = layer.renderer()
     layer_id = layer.id()
     subject = f"Symbology of '{layer.name()}'"
+    scale = reference_scale(layer)
 
     if renderer is None:
         report.unsupported(subject, "The layer has no renderer.", layer_id)
@@ -570,15 +697,17 @@ def translate_renderer(
         return _translate_25d(renderer, report, subject, layer_id)
 
     if isinstance(renderer, QgsSingleSymbolRenderer):
-        symbol = translate_symbol(renderer.symbol(), report, subject, layer_id)
+        symbol = translate_symbol(
+            renderer.symbol(), report, subject, layer_id, scale=scale
+        )
         report.preserved(subject, "Single symbol translated.", layer_id)
         return RendererSpec(kind=RendererKind.SINGLE, symbol=symbol)
 
     if isinstance(renderer, QgsCategorizedSymbolRenderer):
-        return _translate_categorized(renderer, report, subject, layer_id)
+        return _translate_categorized(renderer, report, subject, layer_id, scale)
 
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
-        return _translate_graduated(renderer, report, subject, layer_id)
+        return _translate_graduated(renderer, report, subject, layer_id, scale)
 
     kind_name = type(renderer).__name__
     report.unsupported(
@@ -589,6 +718,77 @@ def translate_renderer(
         layer_id,
     )
     return RendererSpec(kind=RendererKind.UNSUPPORTED, unsupported_reason=kind_name)
+
+
+# The view a layer's map-unit sizes are fixed at: the layer's extent fitted into
+# this many CSS pixels, which is roughly how the web map opens on it.
+REFERENCE_VIEW_PIXELS = (1000.0, 700.0)
+
+# Ground metres in one degree of latitude, and of longitude at the equator.
+_METRES_PER_DEGREE_LAT = 110_540.0
+_METRES_PER_DEGREE_LON = 111_320.0
+
+
+def reference_scale(layer: QgsVectorLayer) -> MapUnitScale | None:
+    """What a map unit is worth in pixels where the layer fills the opening view.
+
+    `None` when the layer has no usable extent (empty, or a single point), in
+    which case there is no scale to fix a map-unit size at.
+    """
+    from qgis.core import Qgis, QgsUnitTypes
+
+    try:
+        extent = layer.extent()
+        if extent.isNull() or extent.isEmpty():
+            return None
+        crs = layer.crs()
+        map_units = crs.mapUnits()
+        if map_units == Qgis.DistanceUnit.Degrees:
+            middle = math.radians(extent.center().y())
+            lon_metres = _METRES_PER_DEGREE_LON * math.cos(middle)
+            metres_per_unit = lon_metres
+            width = extent.width() * lon_metres
+            height = extent.height() * _METRES_PER_DEGREE_LAT
+        else:
+            metres_per_unit = QgsUnitTypes.fromUnitToUnitFactor(
+                map_units, Qgis.DistanceUnit.Meters
+            )
+            width = extent.width() * metres_per_unit
+            height = extent.height() * metres_per_unit
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return None
+    view_width, view_height = REFERENCE_VIEW_PIXELS
+    metres_per_pixel = max(width / view_width, height / view_height)
+    if not (metres_per_pixel > CSS_PIXEL_METRES / 1000 and metres_per_unit > 0):
+        return None
+    return MapUnitScale(
+        metres_per_pixel=metres_per_pixel, metres_per_map_unit=metres_per_unit
+    )
+
+
+def reference_render_context(layer: QgsVectorLayer) -> Any | None:
+    """A QGIS render context at `reference_scale`, for drawing the layer's markers.
+
+    The symbol atlas has QGIS draw the markers, so map-unit sizes need the same
+    scale there as in `translate_symbol`: one pixel is `metres_per_pixel` of
+    ground, and metres-in-map-units resolve against the layer's CRS and extent.
+    `None` when there is no reference scale, which leaves QGIS's own defaults.
+    """
+    from qgis.core import QgsDistanceArea, QgsMapToPixel, QgsProject, QgsRenderContext
+
+    scale = reference_scale(layer)
+    if scale is None:
+        return None
+    context = QgsRenderContext()
+    context.setScaleFactor(MM_TO_PIXELS)
+    context.setMapToPixel(
+        QgsMapToPixel(scale.metres_per_pixel / scale.metres_per_map_unit)
+    )
+    context.setExtent(layer.extent())
+    area = QgsDistanceArea()
+    area.setSourceCrs(layer.crs(), QgsProject.instance().transformContext())
+    context.setDistanceArea(area)
+    return context
 
 
 # A `$field` reference in an OnlyMap accessor is a bare identifier; the
@@ -703,6 +903,7 @@ def _translate_categorized(
     report: FidelityReportBuilder,
     subject: str,
     layer_id: str,
+    scale: MapUnitScale | None = None,
 ) -> RendererSpec:
     categories: list[CategorySpec] = []
     hidden: list[str | int | float | None] = []
@@ -727,7 +928,11 @@ def _translate_categorized(
             switched_off += 1
             continue
         symbol = translate_symbol(
-            category.symbol(), report, f"{subject}, class {index + 1}", layer_id
+            category.symbol(),
+            report,
+            f"{subject}, class {index + 1}",
+            layer_id,
+            scale=scale,
         )
         has_catch_all = has_catch_all or resolved.catch_all
         categories.append(
@@ -775,6 +980,7 @@ def _translate_graduated(
     report: FidelityReportBuilder,
     subject: str,
     layer_id: str,
+    scale: MapUnitScale | None = None,
 ) -> RendererSpec:
     classes: list[GraduatedClassSpec] = []
     value_ranges: list[ValueRange] = []
@@ -792,7 +998,11 @@ def _translate_graduated(
             # values, so the features in it are dropped rather than recoloured.
             continue
         symbol = translate_symbol(
-            value_range.symbol(), report, f"{subject}, range {index + 1}", layer_id
+            value_range.symbol(),
+            report,
+            f"{subject}, range {index + 1}",
+            layer_id,
+            scale=scale,
         )
         classes.append(
             GraduatedClassSpec(

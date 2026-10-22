@@ -48,7 +48,11 @@ from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
-from .renderer_translator import category_key, translate_renderer
+from .renderer_translator import (
+    category_key,
+    reference_render_context,
+    translate_renderer,
+)
 from .symbol_rasterizer import build_icon_atlas
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -1077,7 +1081,13 @@ def read_layer(
     # Layers that draw with plain circles - almost all of them - get `None` back
     # and the renderer they came in with, untouched.
     icon_atlas, renderer = build_icon_atlas(
-        layer.renderer(), renderer, kind, report, name, layer_id
+        layer.renderer(),
+        renderer,
+        kind,
+        report,
+        name,
+        layer_id,
+        reference_render_context(layer),
     )
 
     labeling = translate_labeling(layer, report) if with_labels else LabelingSpec()

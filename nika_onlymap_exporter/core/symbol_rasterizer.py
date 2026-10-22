@@ -28,7 +28,7 @@ import base64
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QRect, QSize, Qt
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRect, QSize, Qt
 from qgis.PyQt.QtGui import QImage, QPainter
 
 from .export_ir import (
@@ -111,13 +111,44 @@ def _touches_edge(bounds: tuple[int, int, int, int], box: int) -> bool:
     return min_x == 0 or min_y == 0 or max_x == box - 1 or max_y == box - 1
 
 
-def render_symbol(symbol: QgsSymbol, supersample: int = SUPERSAMPLE) -> QImage | None:
+def _draw(symbol: QgsSymbol, box: int, context: Any | None) -> QImage:
+    """`symbol` drawn centred in a `box` pixel square.
+
+    `asImage` draws with its own context and ignores a custom one's painter, so
+    with a `context` the marker is painted by hand: the context's map-to-pixel
+    and scale, which resolve map-unit sizes, on a painter of our own.
+    """
+    if context is None:
+        return symbol.asImage(QSize(box, box))
+    from qgis.core import QgsRenderContext
+
+    image = QImage(box, box, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(0)
+    painter = QPainter(image)
+    try:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        draw_context = QgsRenderContext(context)
+        draw_context.setPainter(painter)
+        symbol.startRender(draw_context)
+        symbol.renderPoint(QPointF(box / 2.0, box / 2.0), None, draw_context)
+        symbol.stopRender(draw_context)
+    finally:
+        painter.end()
+    return image
+
+
+def render_symbol(
+    symbol: QgsSymbol, supersample: int = SUPERSAMPLE, context: Any | None = None
+) -> QImage | None:
     """One symbol, drawn at `supersample` times its size and cropped square.
 
     The crop is square and centred on the box's centre rather than tight around
     the ink, because QGIS centres a marker on its feature: a tight crop of an
     asymmetric marker - a pin, an arrow, anything with an offset symbol layer -
     would move its anchor and slide every feature on the map.
+
+    `context` is the render context sizes in map units resolve against; without
+    one QGIS treats a map unit as a pixel.
 
     Returns `None` when the symbol draws nothing at all, or when it is still
     clipped at `MAX_BOX_PIXELS`.
@@ -133,7 +164,7 @@ def render_symbol(symbol: QgsSymbol, supersample: int = SUPERSAMPLE) -> QImage |
 
     box = INITIAL_BOX_PIXELS
     while box <= MAX_BOX_PIXELS:
-        image = scaled.asImage(QSize(box, box))
+        image = _draw(scaled, box, context)
         bounds = _alpha_bounds(image)
         if bounds is None:
             return None
@@ -268,6 +299,7 @@ def build_icon_atlas(
     report: FidelityReportBuilder,
     layer_name: str,
     layer_id: str,
+    context: Any | None = None,
 ) -> tuple[IconAtlasSpec | None, RendererSpec]:
     """Rasterise a layer's markers, or explain why it kept its circles.
 
@@ -309,7 +341,7 @@ def build_icon_atlas(
 
     images: list[QImage] = []
     for symbol in order:
-        image = render_symbol(symbol)
+        image = render_symbol(symbol, context=context)
         if image is None:
             report.approximated(
                 subject,

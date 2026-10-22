@@ -18,40 +18,18 @@ from __future__ import annotations
 import string
 from typing import TYPE_CHECKING, Any
 
+from qgis.core import QgsFeatureRequest, QgsRuleBasedLabeling
+
 from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
 from .fidelity_report import FidelityReportBuilder
 from .label_points import apply_capitalization
-
-# Screen pixels per unit, at the 96 dpi CSS assumes. `Qgis.RenderUnit` by
-# value, as `_CAPITALIZATION_BY_VALUE` below does, so PyQt5 and PyQt6 agree:
-# 0 millimetres, 2 pixels, 4 points, 5 inches. Map units (1) and percentages
-# (3) have no fixed size on screen and are left out on purpose.
-_PIXELS_PER_UNIT = {0: MM_TO_PIXELS, 2: 1.0, 4: 96.0 / 72.0, 5: 96.0}
-
-
-def to_pixels(value: float, unit: Any) -> float | None:
-    """`value` in QGIS `unit`, as screen pixels; `None` when it has no fixed size.
-
-    QGIS sizes label text in points by default and the web map in pixels, so
-    copying the number across drew a 9 pt label at 9 px.
-    """
-    key = getattr(unit, "value", unit)
-    try:
-        factor = _PIXELS_PER_UNIT.get(int(key))
-    except (TypeError, ValueError):
-        return None
-    return None if factor is None else float(value) * factor
-
+from .render_units import to_pixels
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
 
 # What the runtime's default atlas already covers.
 ASCII_PRINTABLE = frozenset(string.printable)
-
-# Walking every feature to collect glyphs is wasteful on large layers, and the
-# tail of a long dataset rarely introduces a character the head did not.
-CHARACTER_SCAN_LIMIT = 5000
 
 
 def _color_from_qcolor(qcolor: object) -> Color | None:
@@ -76,14 +54,19 @@ def collect_character_set(
     if not field_name or field_name not in layer.fields().names():
         return None
 
+    # Every feature, not a prefix: the atlas *replaces* the runtime's, so a
+    # glyph first used by feature 5,500 and left out of the scan renders blank
+    # on that label alone, which nothing else in the export would reveal. Only
+    # the label field is fetched, and each distinct value is walked once.
+    request = QgsFeatureRequest()
+    request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
+    request.setSubsetOfAttributes([field_name], layer.fields())
+    values = {feature[field_name] for feature in layer.getFeatures(request)}
+    values.discard(None)
+
     characters: set[str] = set()
     has_extra = False
-    for index, feature in enumerate(layer.getFeatures()):
-        if index >= CHARACTER_SCAN_LIMIT:
-            break
-        value = feature[field_name]
-        if value is None:
-            continue
+    for value in values:
         for char in apply_capitalization(str(value), capitalization):
             characters.add(char)
             if char not in ASCII_PRINTABLE:
@@ -93,6 +76,58 @@ def collect_character_set(
         return None
     # Sorted so the attribute is byte-stable across runs.
     return "".join(sorted(characters))
+
+
+def _single_rule_settings(
+    labeling: QgsRuleBasedLabeling,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> Any | None:
+    """The settings of a rule-based labelling that is really just one rule.
+
+    A single active rule with no filter and no scale limits labels every feature
+    exactly as simple labelling would, so it is translated as that. Anything
+    else - several rules, a filter, a scale range - decides per feature or per
+    zoom what is labelled and how, which one label spec cannot say, so it is
+    reported rather than flattened into labels that are wrong for some features.
+    """
+    rules = [
+        rule
+        for rule in labeling.rootRule().descendants()
+        if rule.active() and rule.settings() is not None
+    ]
+    if not rules:
+        report.unsupported(
+            subject,
+            "This layer uses rule-based labelling with no active rule that draws "
+            "labels, so no labels appear.",
+            layer_id,
+        )
+        return None
+    only = rules[0]
+    if (
+        len(rules) == 1
+        and not only.children()
+        and (only.filterExpression() or "").strip().upper() in ("", "TRUE")
+        and not only.dependsOnScale()
+    ):
+        report.preserved(
+            subject,
+            "Rule-based labelling with one unfiltered rule is translated as "
+            "simple labelling.",
+            layer_id,
+        )
+        return only.settings()
+    report.unsupported(
+        subject,
+        f"This layer uses rule-based labelling ({len(rules)} active rules, with "
+        "filters or scale ranges). The exporter translates one label style per "
+        "layer, so its rules cannot be reproduced and no labels appear. Merge "
+        "them into one simple labelling in QGIS to keep the labels.",
+        layer_id,
+    )
+    return None
 
 
 def translate_labeling(
@@ -110,13 +145,31 @@ def translate_labeling(
     if labeling is None:
         return LabelingSpec(enabled=False)
 
-    try:
-        settings = labeling.settings()
-    except (AttributeError, TypeError):
-        report.unsupported(
+    if isinstance(labeling, QgsRuleBasedLabeling):
+        settings = _single_rule_settings(labeling, report, subject, layer_id)
+        if settings is None:
+            return LabelingSpec(enabled=False)
+    else:
+        try:
+            settings = labeling.settings()
+        except (AttributeError, TypeError):
+            report.unsupported(
+                subject,
+                "This layer uses a labelling mode the exporter cannot translate "
+                "yet. Labels will not appear.",
+                layer_id,
+            )
+            return LabelingSpec(enabled=False)
+
+    # "Only obstacle" labelling: the layer keeps its place in QGIS's collision
+    # handling but draws no text. The web map has no collision handling to feed,
+    # so nothing is drawn, which is what QGIS shows.
+    if not settings.drawLabels:
+        report.approximated(
             subject,
-            "This layer uses a labelling mode the exporter cannot translate yet "
-            "(rule-based labelling). Labels will not appear.",
+            "This layer's labelling is set to act only as an obstacle for other "
+            "layers' labels and draws no text of its own, so it shows no labels. "
+            "The web map has no label collision handling for it to take part in.",
             layer_id,
         )
         return LabelingSpec(enabled=False)
