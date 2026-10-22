@@ -129,7 +129,7 @@ class TestTabOrder:
             assert not isinstance(stop, QScrollArea), stop
 
     def test_a_tree_tabbed_into_shows_a_current_row(self, qgis_app, dialog) -> None:
-        dialog.tabs.setCurrentWidget(dialog._layers_page)
+        dialog.tabs.setCurrentWidget(dialog._layers_scroll)
         qgis_app.processEvents()
         tree = dialog.layer_tree
         assert not tree.currentIndex().isValid()
@@ -202,7 +202,7 @@ class TestOverflow:
     ) -> None:
         _show_output(dialog, qgis_app, output)
         if output is DialogOutput.WEB_MAP:
-            dialog.tabs.setCurrentWidget(dialog._layers_page)
+            dialog.tabs.setCurrentWidget(dialog._layers_scroll)
         qgis_app.processEvents()
         tree = dialog.layer_tree
         tree.expandAll()

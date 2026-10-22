@@ -226,6 +226,7 @@ POPUP_MODE_LABELS = {
 
 # Keeps the mode combos aligned down the list however long the field names are.
 FIELD_NAME_COLUMN_WIDTH = 160
+LAYER_TREE_MIN_HEIGHT = 200
 
 # How often the live preview checks whether any setting changed. Comparing one
 # short JSON string, so the cost is noise; the interval only bounds how long a
@@ -884,7 +885,15 @@ class MainDialog(QDialog):
         self.tabs = QTabWidget(self)
         self._map_tab_widget = _scrollable(self._build_map_tab())
         self.tabs.addTab(self._map_tab_widget, tr("Map"))
-        self.tabs.addTab(self._build_layers_tab(), tr("Layers"))
+        # The page is shared with the Cartograph panel, which scrolls on its
+        # own; on the web map it sits in a scroll area of its own so a short
+        # window scrolls the tab instead of squeezing the list to nothing.
+        self._layers_page = self._build_layers_tab()
+        self._layers_scroll = _scrollable(self._layers_page)
+        self._layers_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.tabs.addTab(self._layers_scroll, tr("Layers"))
         self._appearance_tab_widget = _scrollable(self._build_appearance_tab())
         self.tabs.addTab(self._appearance_tab_widget, tr("Appearance"))
         # Held, not found by title: the title is translated.
@@ -896,12 +905,11 @@ class MainDialog(QDialog):
         # Tabs by their English names, for jumps that must survive translation.
         self._pages = {
             "Map": self._map_tab_widget,
-            "Layers": self.tabs.widget(1),
+            "Layers": self._layers_scroll,
             "Appearance": self._appearance_tab_widget,
             "Fidelity": self._fidelity_page,
             "Help": self._help_page,
         }
-        self._layers_page = self.tabs.widget(1)
         # The web map's actions. They sit in the header beside the output's
         # name, with the Cartograph output's own; `_apply_output` shows the
         # one that matches.
@@ -1833,6 +1841,9 @@ class MainDialog(QDialog):
         # Always reserved: a scrollbar appearing as a layer opens took its
         # width from the tree and slid the checkbox columns sideways.
         self.layer_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        # About a layer row and one stacked settings row; below this the tab
+        # scrolls rather than the list shrinking until nothing shows.
+        self.layer_tree.setMinimumHeight(LAYER_TREE_MIN_HEIGHT)
         layout.addWidget(self.layer_tree)
 
         # What the three columns do, in terms of what the *recipient* loses.
@@ -2827,8 +2838,9 @@ class MainDialog(QDialog):
         # Layers and the checks are one set of widgets for both outputs: tabs
         # on the web map, sections of the panel on the cartograph.
         if web:
-            if self.tabs.indexOf(self._layers_page) < 0:
-                self.tabs.insertTab(1, self._layers_page, tr("Layers"))
+            if self.tabs.indexOf(self._layers_scroll) < 0:
+                self._layers_scroll.setWidget(self._layers_page)
+                self.tabs.insertTab(1, self._layers_scroll, tr("Layers"))
             if self.tabs.indexOf(self._fidelity_page) < 0:
                 self.tabs.insertTab(3, self._fidelity_page, tr("Fidelity"))
             # Back on whichever tab was open: taking Layers or Fidelity out
@@ -2837,9 +2849,12 @@ class MainDialog(QDialog):
             if open_tab is not None and self.tabs.indexOf(open_tab) >= 0:
                 self.tabs.setCurrentWidget(open_tab)
         else:
-            if self.tabs.indexOf(self._layers_page) >= 0:
+            if self.tabs.indexOf(self._layers_scroll) >= 0:
                 self._web_tab_before_cartograph = self.tabs.currentWidget()
-            for page in (self._layers_page, self._fidelity_page):
+            # Out of the scroll area first: the panel seats the page itself.
+            if self._layers_scroll.widget() is self._layers_page:
+                self._layers_scroll.takeWidget()
+            for page in (self._layers_scroll, self._fidelity_page):
                 index = self.tabs.indexOf(page)
                 if index >= 0:
                     self.tabs.removeTab(index)

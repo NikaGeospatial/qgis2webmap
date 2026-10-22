@@ -2714,7 +2714,7 @@ class TestLayersTabControls:
 
     def test_no_control_in_a_row_is_cut_off(self, project, make_memory_layer) -> None:
         """The tree sized rows for text and squeezed the combos into them."""
-        from qgis.PyQt.QtWidgets import QComboBox
+        from qgis.PyQt.QtWidgets import QComboBox, QWidget
 
         dialog = self._expanded(project, make_memory_layer)
         try:
@@ -2728,7 +2728,18 @@ class TestLayersTabControls:
                         continue
                     for combo in row.findChildren(QComboBox):
                         checked += 1
-                        assert row.height() >= combo.sizeHint().height()
+                        # The row is its controls (stacked when narrow), never
+                        # the ~190 px a combo's hidden popup list reports.
+                        controls = [
+                            c.sizeHint().height()
+                            for c in row.findChildren(QWidget)
+                            if c.parentWidget() is row
+                        ]
+                        assert (
+                            combo.sizeHint().height()
+                            <= row.height()
+                            <= sum(controls) + 24
+                        )
             assert checked
         finally:
             dialog.close()

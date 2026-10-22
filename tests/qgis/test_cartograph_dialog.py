@@ -372,12 +372,13 @@ class TestOutputSwitch:
         widget, and comes back to index 1."""
         dialog = _dialog(project)
         try:
-            layers_widget = dialog.tabs.widget(1)
+            layers_widget = dialog._layers_page
             _choose_cartograph(dialog)
             section = dialog._cartograph.layers_section
             assert layers_widget.parentWidget() is section.body
             _choose_web(dialog)
-            assert dialog.tabs.widget(1) is layers_widget
+            assert dialog.tabs.widget(1) is dialog._layers_scroll
+            assert dialog._layers_scroll.widget() is layers_widget
             assert dialog.tabs.tabText(1) == "Layers"
         finally:
             dialog.close()
@@ -2497,7 +2498,7 @@ class TestWorkspace:
             layers, checks = dialog._layers_page, dialog._fidelity_page
             cartograph = dialog._cartograph
             for _round in range(2):
-                assert dialog.tabs.widget(1) is layers
+                assert dialog.tabs.widget(1) is dialog._layers_scroll
                 assert dialog.tabs.widget(3) is checks
                 _choose_cartograph(dialog)
                 assert dialog.tabs.indexOf(layers) < 0
@@ -2507,7 +2508,7 @@ class TestWorkspace:
                 _choose_web(dialog)
                 titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
                 assert titles == ["Map", "Layers", "Appearance", "Fidelity"]
-                assert dialog.tabs.widget(1) is layers
+                assert dialog.tabs.widget(1) is dialog._layers_scroll
                 assert dialog.tabs.widget(3) is checks
         finally:
             dialog.close()
@@ -2746,7 +2747,7 @@ class TestWorkspace:
             _choose_web(dialog)
             dialog._show_tab("Layers")
             assert dialog.views.currentWidget() is dialog.tabs
-            assert dialog.tabs.currentWidget() is dialog._layers_page
+            assert dialog.tabs.currentWidget() is dialog._layers_scroll
             dialog._show_tab("Fidelity")
             assert dialog.tabs.currentWidget() is dialog._fidelity_page
         finally:
@@ -3642,7 +3643,7 @@ class TestLayerDisclosure:
             _choose_cartograph(dialog)
             dialog._cartograph.open_section("layers")
         else:
-            dialog.tabs.setCurrentWidget(dialog._layers_page)
+            dialog.tabs.setCurrentWidget(dialog._layers_scroll)
         for _ in range(5):
             qgis_app.processEvents()
         return dialog
@@ -3663,11 +3664,12 @@ class TestLayerDisclosure:
             layer = tree.topLevelItem(tree.topLevelItemCount() - 1)
             assert layer.text(0) == "Viewpoints"
             assert not layer.isExpanded()
+            if mode == "web":
+                # A short window scrolls the tab; the user scrolls it to the list.
+                dialog._layers_scroll.ensureWidgetVisible(tree)
             tree.scrollToItem(layer)  # as a user scrolls to the layer first
             for _ in range(3):
                 qgis_app.processEvents()
-            if how == "mouse" and not tree.viewport().height():
-                pytest.skip("Qt 5 gives the list no height in a 320 px dialog")
             if how == "mouse":
                 # The branch arrow sits in the indentation left of the item's rect.
                 rect = tree.visualItemRect(layer)
@@ -3688,9 +3690,8 @@ class TestLayerDisclosure:
             assert layer.isExpanded()
             viewport = tree.viewport().rect()
             first_row = tree.visualItemRect(layer.child(0))
-            # Qt 5 gives the list no height at all in a 320 px dialog.
-            if viewport.height() > 0:
-                assert viewport.contains(first_row.topLeft()), "first row in view"
+            assert viewport.height() >= 150, "the list keeps a usable height"
+            assert viewport.contains(first_row.topLeft()), "first row in view"
             for index in range(layer.childCount()):
                 child = layer.child(index)
                 row = tree.itemWidget(child, 0)
