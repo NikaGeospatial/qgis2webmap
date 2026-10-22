@@ -441,6 +441,37 @@ class TestPopupFieldModes:
                 continue
             assert "{{name}}" in self._row(mode)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "a<b",
+            "R&D",
+            'x</span><img src=x onerror="window.reviewSentinel=1">',
+        ],
+    )
+    def test_a_field_name_is_text_in_the_popup_never_markup(self, name: str) -> None:
+        """A drawing field keeps its raw name, and that name is the user's text."""
+        from html.parser import HTMLParser
+
+        class Tags(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.tags: list[str] = []
+                self.attributes: list[str] = []
+
+            def handle_starttag(self, tag: str, attrs: list) -> None:
+                self.tags.append(tag)
+                self.attributes += [key for key, _ in attrs]
+
+        layer = make_layer(
+            popup=PopupSpec(enabled=True, fields=(PopupFieldSpec(name, alias=None),))
+        )
+        parser = Tags()
+        parser.feed(build_popup_elements(layer))
+        assert "img" not in parser.tags
+        assert "onerror" not in parser.attributes
+        assert set(parser.tags) <= {"om-overlay", "style", "div", "span", "om-behavior"}
+
 
 class TestLayerElement:
     def test_data_is_inline_as_a_direct_child(self) -> None:

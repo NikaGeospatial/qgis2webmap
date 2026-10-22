@@ -1460,7 +1460,9 @@ def _popup_row(field: PopupFieldSpec, indent: str) -> str:
     return (
         f'{indent}    <div class="{" ".join(classes)}">'
         f"{label}"
-        f'<span class="om-popup-value">{{{{{field.name}}}}}</span></div>'
+        # Escaped: a field the map draws with keeps its original name (see
+        # `rename_untemplatable_fields`), and that name is the user's text.
+        f'<span class="om-popup-value">{{{{{escape_attr(field.name)}}}}}</span></div>'
     )
 
 
