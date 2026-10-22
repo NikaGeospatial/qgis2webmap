@@ -659,6 +659,7 @@ class TestBuildThreadsAndJobs:
             assert "opens when saved" in dialog.status_label.text()
             assert _wait_for(qgis_app, lambda: opened)
             assert opened == [("export=png&dpi=300", "<html>edited</html>")]
+            assert "opens when saved" not in dialog.status_label.text()
         finally:
             dialog.close()
 
@@ -779,6 +780,7 @@ class TestBuildThreadsAndJobs:
             assert _wait_for(qgis_app, lambda: "No space left" in status.text())
             assert _wait_for(qgis_app, settled)
             assert cartograph._open_after_save == []
+            assert "opens when saved" not in dialog.status_label.text()
 
             cartograph.on_export_png()  # idle, but the file is the old one
             assert opened == []
@@ -1176,6 +1178,52 @@ class TestCartographShareMenu:
             cartograph.on_reveal()
             assert opened == [str(tmp_path)]
             assert dialog.status_label.text() == f"Opened {tmp_path}"
+        finally:
+            dialog.close()
+
+    def test_the_pdf_tooltip_names_the_route_print_settings_chose(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+
+        dialog, _target = self._ready_dialog(project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            row = cartograph.cartograph_share_actions["export_pdf"]
+            assert row.toolTip() == (
+                "Opens the cartograph and prints it at true page size"
+            )
+            layout = cartograph.state.cartograph_layout
+            cmyk = PrintSettings(profile="cmyk")
+            cartograph.state.cartograph_print[layout] = cmyk.to_json()
+            cartograph._update_share_enabled()
+            assert "CMYK or ICC PDF with QGIS" in row.toolTip()
+            cartograph.state.cartograph_print[layout] = PrintSettings().to_json()
+            cartograph._update_share_enabled()
+            assert row.toolTip() == (
+                "Opens the cartograph and prints it at true page size"
+            )
+        finally:
+            dialog.close()
+
+    def test_an_opened_message_goes_once_the_file_or_layout_changes(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, _target = self._ready_dialog(project, tmp_path)
+        _add_layout(project, "Other", [("Map", "EPSG:4326")])
+        try:
+            cartograph = dialog._cartograph
+            monkeypatch.setattr(
+                "nika_onlymap_exporter.ui.cartograph.controller.QDesktopServices.openUrl",
+                lambda url: None,
+            )
+            cartograph.on_reveal()
+            assert dialog.status_label.text().startswith("Opened")
+            cartograph._on_file_edited(str(tmp_path / "elsewhere.html"))
+            assert dialog.status_label.text() == ""
+            cartograph.on_reveal()
+            cartograph.layout_combo.setCurrentText("Other")
+            assert dialog.status_label.text() == ""
         finally:
             dialog.close()
 
@@ -2682,6 +2730,41 @@ class TestWorkspace:
                 assert dialog.views.currentWidget() is home
             QTest.keyClick(dialog, Qt.Key.Key_Escape)
             assert not dialog.isVisible()
+        finally:
+            dialog.close()
+
+    def test_at_the_minimum_size_the_panel_scrolls_instead_of_overlapping(
+        self, qgis_app, project
+    ) -> None:
+        """720 x 320 is the dialog's floor (Windows must be able to shrink
+        it); the panel column scrolls there, and only there."""
+        from nika_onlymap_exporter.ui.main_dialog import (
+            MINIMUM_DIALOG_HEIGHT,
+            MINIMUM_DIALOG_WIDTH,
+        )
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph.layout_combo.setCurrentText("Survey")
+            dialog.show()
+            bar = cartograph.panel_scroll.verticalScrollBar()
+
+            def overlapping() -> bool:
+                tabs, footer = cartograph.panel_tabs, cartograph.file_edit
+                return tabs.geometry().intersects(footer.geometry())
+
+            dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+            qgis_app.processEvents()
+            assert dialog.height() == MINIMUM_DIALOG_HEIGHT
+            assert not overlapping()
+            assert bar.maximum() > 0
+            dialog.resize(1152, 768)
+            qgis_app.processEvents()
+            assert not overlapping()
+            assert bar.maximum() == 0
         finally:
             dialog.close()
 

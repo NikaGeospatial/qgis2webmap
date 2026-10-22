@@ -305,7 +305,17 @@ class CartographController:
         )
         splitter.addWidget(self.page_pane)
 
-        panel = QWidget(splitter)
+        # The whole column scrolls, not only its tabs: the layout list above
+        # them and the save location below do not shrink, and on a window at
+        # its minimum height (320 px, see main_dialog) they would otherwise
+        # be painted over the tabs. Taller than that it never scrolls.
+        panel_scroll = QScrollArea(splitter)
+        panel_scroll.setWidgetResizable(True)
+        panel_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        panel_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        panel_scroll.setMinimumWidth(PANEL_MIN_WIDTH)
+        panel = QWidget()
         panel.setMinimumWidth(PANEL_MIN_WIDTH)
         column = QVBoxLayout(panel)
         column.setContentsMargins(12, 0, 0, 0)
@@ -441,7 +451,9 @@ class CartographController:
         )
         self._update_status_label()
 
-        splitter.addWidget(panel)
+        panel_scroll.setWidget(panel)
+        self.panel_scroll = panel_scroll
+        splitter.addWidget(panel_scroll)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         splitter.setSizes([10_000, PANEL_WIDTH])
@@ -717,6 +729,9 @@ class CartographController:
             self._select_layout(name)
 
     def _on_file_edited(self, text: str) -> None:
+        # Whatever the footer said about the old file ("Opened ...") is not
+        # about this one.
+        self.dialog.status_label.setText("")
         if self.state.cartograph_layout:
             self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
         self._on_cartograph_setting_changed()
@@ -1015,8 +1030,10 @@ class CartographController:
         self._last_error = ""
         self._last_summary = None
         self._frame_issue_counts = {}
-        # A page asked for the layout left behind; this one did not ask.
+        # A page asked for the layout left behind; this one did not ask, and
+        # the footer's last message was about that layout's file.
         self._open_after_save = []
+        self.dialog.status_label.setText("")
 
     def on_project_content_changed(self) -> None:
         """A layer was restyled or its edits saved in QGIS: the cartograph
@@ -1077,11 +1094,11 @@ class CartographController:
 
     def _start_build(self) -> None:
         if self._current_layout is None:
-            self._open_after_save = []
+            self._cancel_waiting_pages()
             return
         path_text = self.file_edit.text().strip()
         if not path_text:
-            self._open_after_save = []
+            self._cancel_waiting_pages()
             return
         if self._job is not None or self.dialog._job is not None:
             # A build, or a web-map job, is already reading the project - and
@@ -1092,7 +1109,7 @@ class CartographController:
 
         runtime = self._load_runtime()
         if runtime is None:
-            self._open_after_save = []
+            self._cancel_waiting_pages()
             self._update_status_label()
             return
 
@@ -1214,7 +1231,7 @@ class CartographController:
                 return
             # The pages waiting on this save would open the file it failed
             # to replace.
-            self._open_after_save = []
+            self._cancel_waiting_pages()
             self._last_error = tr("Could not save the cartograph: {error}").format(
                 error=str(exc)
             )
@@ -1244,6 +1261,8 @@ class CartographController:
         self._open_after_save = [
             entry for entry in self._open_after_save if build_number < entry[1]
         ]
+        if ready:
+            self.dialog.status_label.setText("")  # no longer "saving first"
         for query in ready:
             self._open_url(self._page_url(path, query))
         self._update_status_label()
@@ -1265,7 +1284,7 @@ class CartographController:
         if built_for is not None and built_for != self.state.cartograph_layout:
             return
         # The page waiting on this save would open without the latest edits.
-        self._open_after_save = []
+        self._cancel_waiting_pages()
         self._last_error = tr("Could not build the cartograph: {message}").format(
             message=message
         )
@@ -1525,6 +1544,13 @@ class CartographController:
             return
         self._open_saved(path)
 
+    def _cancel_waiting_pages(self) -> None:
+        """Drop the pages waiting on a save that will not come, and the
+        footer's promise that they open when it does."""
+        if self._open_after_save:
+            self._open_after_save = []
+            self.dialog.status_label.setText("")
+
     def _open_saved(self, path: Path, query: str = "") -> None:
         """Open the cartograph in the browser as it is with every edit made
         so far: now if it is saved, otherwise once the save carrying the
@@ -1536,6 +1562,7 @@ class CartographController:
             # The running build carries every edit so far.
             needed = self._builds_started
         elif self._edits_saved >= self._edits_made:
+            self.dialog.status_label.setText("")
             self._open_url(self._page_url(path, query))
             return
         else:
@@ -1713,6 +1740,16 @@ class CartographController:
     def _update_share_enabled(self) -> None:
         if not hasattr(self, "cartograph_share_actions"):
             return
+        # Export PDF goes where the Print settings send it, and says so.
+        settings = self._print_settings()
+        self._cartograph_share_tips["export_pdf"] = (
+            tr(
+                "Makes a CMYK or ICC PDF with QGIS's own exporter from the "
+                "print layout, and asks where to save it"
+            )
+            if settings is not None and settings.uses_qgis_exporter
+            else tr("Opens the cartograph and prints it at true page size")
+        )
         exists = self._file_exists()
         for key in (
             "copy_path",
@@ -1855,6 +1892,7 @@ class CartographController:
         action, settings = answer
         self.state.cartograph_print[self.state.cartograph_layout] = settings.to_json()
         save_state(self.project, self.state)
+        self._update_share_enabled()
         if action == ACTION_EXPORT:
             if settings.uses_qgis_exporter:
                 path = self._current_path()

@@ -94,6 +94,17 @@ def qgis_app(tmp_path_factory):
     return start_qgis(tmp_path_factory.mktemp("qgis"))
 
 
+@pytest.fixture
+def project(qgis_app):
+    """An empty project, cleared before and after each probe test."""
+    from qgis.core import QgsProject
+
+    instance = QgsProject.instance()
+    instance.clear()
+    yield instance
+    instance.clear()
+
+
 @pytest.fixture(autouse=True)
 def hermetic_settings(tmp_path_factory):
     """Fresh settings for every probe test, saves included."""
