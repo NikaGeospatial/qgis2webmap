@@ -45,13 +45,25 @@ from qgis.core import (
 )
 from qgis.gui import QgsColorButton
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QObject, QSettings, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QObject,
+    QSettings,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QGuiApplication,
+    QKeyEvent,
     QPalette,
     QShowEvent,
     QTextDocument,
+    QTextFrame,
+    QTextLength,
+    QTextTable,
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -536,6 +548,9 @@ def _scrollable(page: QWidget) -> QScrollArea:
     # No frame: a sunken border around a whole tab reads as a nested panel, and
     # the scroll area is meant to be invisible until it is needed.
     area.setFrameShape(QScrollArea.Shape.NoFrame)
+    # Not a Tab stop of its own: the controls inside are, and a focused scroll
+    # area shows no sign of having the focus.
+    area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     return area
 
 
@@ -675,7 +690,53 @@ def render_help_document(parent: QObject | None = None) -> QTextDocument:
     """
     document = QTextDocument(parent)
     document.setMarkdown(load_help_markdown(), markdown_features())
+    _fit_tables_to_width(document.rootFrame())
     return document
+
+
+def _fit_tables_to_width(frame: QTextFrame) -> None:
+    """Make every table exactly as wide as the page, wrapping its cells.
+
+    Qt sizes a markdown table to its content, so a table with long cells (the
+    "What you get" table) could be wider than the viewport and give the Help
+    page a sideways scrollbar. A table fixed to 100% wraps its cells instead.
+    """
+    for child in frame.childFrames():
+        if isinstance(child, QTextTable):
+            table_format = child.format()
+            table_format.setWidth(QTextLength(QTextLength.Type.PercentageLength, 100))
+            child.setFormat(table_format)
+        _fit_tables_to_width(child)
+
+
+class _HelpBrowser(QTextBrowser):
+    """The Help text: one Tab stop, links reached with Ctrl+Tab.
+
+    A QTextBrowser makes every link a Tab stop, which put about 126 presses
+    between the Help page and the buttons below it. Tab now leaves the text in
+    one step; the browser stays focusable, so the arrow and page keys scroll it.
+    Links stay reachable from the keyboard: Ctrl+Tab and Ctrl+Shift+Tab step
+    through them and Enter opens the one that is focused.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setTabChangesFocus(True)
+
+    def focusNextPrevChild(self, next: bool) -> bool:  # noqa: N802 - Qt override
+        return QWidget.focusNextPrevChild(self, next)
+
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:  # noqa: N802 - Qt override
+        if (
+            event is not None
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            forward = event.key() == Qt.Key.Key_Tab
+            if forward or event.key() == Qt.Key.Key_Backtab:
+                QTextBrowser.focusNextPrevChild(self, forward)
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
 
 class MainDialog(QDialog):
@@ -788,7 +849,8 @@ class MainDialog(QDialog):
         self.views.addWidget(self._cartograph_workspace)
         self.views.addWidget(self._build_aside())
 
-        layout.addWidget(self._build_header())
+        self._header = self._build_header()
+        layout.addWidget(self._header)
         layout.addWidget(self.views)
         # Puts Map/Appearance or Cartograph/Frames on screen to match what was
         # last saved, without marking a project that only opened the dialog as
@@ -808,6 +870,7 @@ class MainDialog(QDialog):
         self.account_button.refresh()
         self._update_basemap_warning()
         self._update_terrain_warning()
+        self._arrange_keyboard()
 
         # The list tracks QGIS live; there is no refresh button because there is
         # nothing to refresh.
@@ -882,6 +945,50 @@ class MainDialog(QDialog):
             # Qt's own choice put the focus ring round "Map" or "Fit page" on
             # opening, which read as something selected. Tab reaches them.
             QTimer.singleShot(0, self._park_focus)
+
+    def _arrange_keyboard(self) -> None:
+        """Tab follows the screen: header left to right, then the main
+        content, then the foot, with Close last.
+
+        Qt chains focus in creation order, which is not the layout's: the
+        header's actions are built with the tabs, the Settings and Help pages
+        before the Back arrow above them, and the foot after both. Run again
+        whenever a page is moved (`_apply_output` re-seats Layers and Checks).
+        Also keeps scroll areas out of the chain: they take focus and show
+        nothing. (A tree tabbed into needs no help: Qt makes its first row
+        current, so the focus shows.)
+        """
+        for area in self.findChildren(QScrollArea):
+            area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+        foot = (self.fidelity_strip, self.progress_row, self.close_button)
+        header_actions = (self.settings_button, self.help_button)
+
+        def region(widget: QWidget) -> tuple[int, int]:
+            if widget is self.output_switcher:
+                return (1, 0)
+            if self._header.isAncestorOf(widget):
+                return (1, 2 if widget in header_actions else 1)
+            if self.aside_back is widget:
+                return (2, 0)
+            if self.views.isAncestorOf(widget):
+                return (2, 1)
+            for rank, group in enumerate(foot):
+                if group is widget or group.isAncestorOf(widget):
+                    return (3, rank)
+            return (0, 0)
+
+        # Only widgets that take focus: `setTabOrder` ignores any pair with a
+        # `NoFocus` member, which would leave a gap in the chain.
+        chain: list[QWidget] = []
+        widget = self.nextInFocusChain()
+        while widget is not None and widget is not self:
+            if widget.focusPolicy() != Qt.FocusPolicy.NoFocus:
+                chain.append(widget)
+            widget = widget.nextInFocusChain()
+        chain.sort(key=region)
+        for previous, widget in zip(chain, chain[1:]):
+            QWidget.setTabOrder(previous, widget)
 
     def _park_focus(self) -> None:
         if hasattr(self, "views") and not sip.isdeleted(self.views):
@@ -1639,6 +1746,10 @@ class MainDialog(QDialog):
             [tr("Layer"), tr("Include"), tr("Popups"), tr("Labels")]
         )
         self.layer_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        # The layer column takes the spare width. Left on, the header's own
+        # last-section stretch fought it and the columns came out 13 px wider
+        # than the narrow Cartograph panel, with a sideways scrollbar.
+        self.layer_tree.header().setStretchLastSection(False)
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         layout.addWidget(self.layer_tree)
 
@@ -1708,6 +1819,14 @@ class MainDialog(QDialog):
         # explicit minimum, because a styled combo box reports its longest
         # item as its minimum whatever its size policy says.
         self.bulk_mode_combo.setMinimumWidth(COMPACT_COMBO_WIDTH if compact else 0)
+        # Stacked under the button, the bare "i" explained nothing and looked
+        # like a stray icon; with room for it, it says what it is for.
+        self.layers_info_button.setText(tr("What these columns do") if compact else "")
+        self.layers_info_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if compact
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
         header = self.layer_tree.header()
         for column in (1, 2, 3):
             header.setSectionResizeMode(
@@ -2661,6 +2780,9 @@ class MainDialog(QDialog):
             # screen; check it now if its tab is the one open.
             self._on_tab_changed(self.tabs.currentIndex())
 
+        if hasattr(self, "close_button"):
+            self._arrange_keyboard()
+
         if persist:
             save_state(self.project, self.state)
 
@@ -3104,7 +3226,7 @@ class MainDialog(QDialog):
     def _build_help_tab(self) -> QWidget:
         page = QWidget(self)
         layout = QVBoxLayout(page)
-        browser = QTextBrowser(page)
+        browser = _HelpBrowser(page)
         self.help_browser = browser
         # Markdown keeps one source of truth: the same files the website serves.
         browser.setDocument(render_help_document(browser))
@@ -3151,7 +3273,7 @@ class MainDialog(QDialog):
         self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, 1)
 
-        close = QPushButton(tr("Close"), self)
+        close = self.close_button = QPushButton(tr("Close"), self)
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row

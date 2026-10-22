@@ -1119,6 +1119,12 @@ class TemplatePicker(QDialog):
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
         self._relayout()
+        if self.template_list.currentItem() is None:
+            # Nothing chosen (and nothing remembered): arrows need a start.
+            for item in self._items.values():
+                if not item.isHidden():
+                    self.template_list.setCurrentItem(item)
+                    break
         # The keyboard starts on the designs: arrows choose, Enter creates.
         self.template_list.setFocus(Qt.FocusReason.OtherFocusReason)
         # The remembered design may be far down the list.
