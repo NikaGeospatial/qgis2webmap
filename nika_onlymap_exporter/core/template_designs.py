@@ -328,11 +328,23 @@ def _night_desk(page: _Page) -> _Layout:
     sb_w = min(55.0 * min(s, 2.0), body.w * 0.4)
     column_w = min(max(body.w * 0.22, 48.0), 75.0 * s)
     room = body.h - sb_h - g
-    if (
-        page.landscape
-        and page.data.layer_names
-        and _legend_need(page, legend_pt, column_w) <= room
-    ):
+    row_h, under = _strip(
+        page, body.w, legend_pt, (sb_w, sb_h), g, legend_room_cap(body.h, g)
+    )
+    use_column = bool(page.data.layer_names) and (
+        _legend_need(page, legend_pt, column_w) <= room
+    )
+    if use_column:
+        # Whichever shows the canvas view larger, the column or the row; a
+        # tie keeps the column on a landscape sheet, the row on a portrait.
+        column_area = _fit_area(
+            page.aspect, Box(0, 0, body.w - column_w - 2 * g, body.h)
+        )
+        row_area = _fit_area(page.aspect, Box(0, 0, body.w, body.h - row_h - g))
+        use_column = column_area > row_area or (
+            page.landscape and column_area == row_area
+        )
+    if use_column:
         # The legend and scale bar in a column right of the map, long rows
         # wrapped to its width.
         frame = Box(body.x, body.y, body.w - column_w - 2 * g, body.h)
@@ -348,9 +360,6 @@ def _night_desk(page: _Page) -> _Layout:
     else:
         # A row under the map: the legend, the scale bar at its right -- or
         # under it, for a legend that needs the row's whole width.
-        row_h, under = _strip(
-            page, body.w, legend_pt, (sb_w, sb_h), g, legend_room_cap(body.h, g)
-        )
         frame = Box(body.x, body.y, body.w, body.h - row_h - g)
         row = Box(body.x, frame.y + frame.h + g, body.w, row_h)
         items += _strip_items(
@@ -588,14 +597,19 @@ def _atlas_ledger(page: _Page) -> _Layout:
     column_w = min(max(body.w * 0.24, 50.0), 85.0 * s)
     locator_h = min(column_w * 0.8, body.h * 0.4)
     column_room = body.h - locator_h - sb_h - 2 * g
-    if page.landscape and _legend_need(page, legend_pt, column_w) <= column_room:
+
+    def column() -> tuple[Box, Box, Box, Box]:
+        """The index column: locator, legend, scale bar, right of the map."""
         # The index column: locator, legend, scale bar, right of the map.
         frame = Box(body.x, body.y, body.w - column_w - g, body.h)
         cx = frame.x + frame.w + g
         locator = Box(cx, body.y, column_w, locator_h)
         legend_box = Box(cx, locator.y + locator.h + g, column_w, column_room)
         scalebar_box = Box(cx, body.y + body.h - sb_h, min(column_w, 55.0 * s), sb_h)
-    else:
+        return frame, locator, legend_box, scalebar_box
+
+    def band() -> tuple[Box, Box, Box, Box]:
+        """The index band under the map: locator, legend, scale bar."""
         # The index band under the map: locator, legend, scale bar. Long
         # layer names or many rows: the scale bar moves under the locator
         # and the legend takes its place -- or the legend runs across the
@@ -648,6 +662,18 @@ def _atlas_ledger(page: _Page) -> _Layout:
         else:
             legend_box = Box(locator.x + locator_w + g, band_y, beside_w, band_h)
             scalebar_box = right_bar
+        return frame, locator, legend_box, scalebar_box
+
+    # The column on a landscape sheet and the band on a portrait one, unless
+    # the other shows the canvas view larger; the column only when the
+    # legend fits it. max() keeps the first of equals.
+    arrangements = [band]
+    if _legend_need(page, legend_pt, column_w) <= column_room:
+        arrangements = [column, band] if page.landscape else [band, column]
+    frame, locator, legend_box, scalebar_box = max(
+        (arrange() for arrange in arrangements),
+        key=lambda option: _fit_area(page.aspect, option[0]),
+    )
     legend = _legend_in(page, legend_box, legend_pt, pal)
     if legend is not None:
         items.append(legend)
