@@ -31,6 +31,9 @@ from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
 
+#: The hidden key column's first value in the hidden-key atlas test.
+HIDDEN_KEY_BASE = 4105829371
+
 
 @pytest.fixture
 def atlas_layout(project):
@@ -337,7 +340,9 @@ class TestAtlasCameras:
         centres = []
         for offset, feature in enumerate(atlas_layout.parcels.getFeatures()):
             row = ogr.Feature(table.GetLayerDefn())
-            row.SetFID(987000 + offset)
+            # Ten digits: too long to turn up by chance in a 6-digit colour
+            # such as the random symbol colour "#987db7", which once did.
+            row.SetFID(HIDDEN_KEY_BASE + offset)
             row.SetField("lot", feature.attribute("lot"))
             row.SetGeometry(
                 ogr.CreateGeometryFromWkb(bytes(feature.geometry().asWkb()))
@@ -360,7 +365,8 @@ class TestAtlasCameras:
             layer_settings={keyed.id(): LayerSettings(popup=False)},
         )
 
-        assert "987" not in html
+        for offset in range(len(centres)):
+            assert str(HIDDEN_KEY_BASE + offset) not in html
         assert "parcel_pk" not in html
         cameras = self._cameras(html)
         assert sorted(cameras) == ["1", "2", "3"]
