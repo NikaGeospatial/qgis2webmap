@@ -76,6 +76,7 @@ from ..exporters.frame_raster import (
     frame_corners_wgs84,
     render_static_frame,
 )
+from ..packaging.dependency_scanner import report_remote_dependency
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
@@ -89,6 +90,7 @@ from .cartograph_ir import (
     FrameSpec,
 )
 from .export_ir import (
+    AssetDisposition,
     ExportLayer,
     ExportProject,
     ExportSettings,
@@ -581,6 +583,7 @@ def finish_cartograph_full(
     # By file name, which carries the layer id: a raster drawn in two frames
     # is converted to the same bytes and carried once.
     embedded_rasters: dict[str, bytes] = {}
+    reported_remote: set[str] = set()
     for index, source in enumerate(prepared.live_frames):
         if prepared.live_reads:
             export_project = finish_project(prepared.live_reads[index], report)
@@ -595,6 +598,15 @@ def finish_cartograph_full(
                 layer_settings=layer_settings,
                 settings=_LIVE_FRAME_SETTINGS,
             )
+        # A live frame never goes through the dependency scan, yet its tile
+        # layers are fetched from their host each time the page is opened.
+        for layer in export_project.exportable_layers:
+            if layer.layer_id in reported_remote:
+                continue
+            for dependency in layer.dependencies:
+                if dependency.disposition is AssetDisposition.REMOTE:
+                    reported_remote.add(layer.layer_id)
+                    report_remote_dependency(layer, dependency, report)
         export_project, frame_rasters = _embed_rasters(export_project, report)
         for name, data in frame_rasters:
             embedded_rasters.setdefault(name, data)

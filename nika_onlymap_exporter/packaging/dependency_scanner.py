@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..core.export_ir import (
+    AssetDependency,
     AssetDisposition,
     ExportLayer,
     ExportProject,
@@ -233,6 +234,37 @@ def standalone_ineligible_reason(project: ExportProject) -> str | None:
     return None
 
 
+def report_remote_dependency(
+    layer: ExportLayer,
+    dependency: AssetDependency,
+    report: FidelityReportBuilder,
+    mode: OutputMode = OutputMode.STANDALONE_HTML,
+) -> None:
+    """The Fidelity rows for a layer that stays a live reference.
+
+    Shared with the cartograph, whose live frames never pass through `scan`
+    but fetch their tile layers just the same.
+    """
+    report.approximated(
+        f"Data source of '{layer.name}'",
+        f"'{dependency.identifier}' stays a live reference, so the "
+        "map needs an internet connection to draw this layer.",
+        layer.layer_id,
+    )
+    # The same refusal as the basemap's - see
+    # `manifest_builder.OSM_FILE_NOTE` for why.
+    if "tile.openstreetmap.org" in dependency.identifier and mode in FILE_OPENED_MODES:
+        report.approximated(
+            f"Data source of '{layer.name}'",
+            "OpenStreetMap's tile servers refuse maps opened "
+            "straight from a file, so recipients who double-click "
+            "this map may see 'Access blocked' tiles in this layer. "
+            "Export as a Folder for a website, or use another tile "
+            "source, to avoid it.",
+            layer.layer_id,
+        )
+
+
 def scan(
     project: ExportProject,
     report: FidelityReportBuilder,
@@ -260,27 +292,7 @@ def scan(
 
             if dependency.disposition is AssetDisposition.REMOTE:
                 remote.append(dependency.identifier)
-                report.approximated(
-                    f"Data source of '{layer.name}'",
-                    f"'{dependency.identifier}' stays a live reference, so the "
-                    "map needs an internet connection to draw this layer.",
-                    layer.layer_id,
-                )
-                # The same refusal as the basemap's - see
-                # `manifest_builder.OSM_FILE_NOTE` for why.
-                if (
-                    "tile.openstreetmap.org" in dependency.identifier
-                    and mode in FILE_OPENED_MODES
-                ):
-                    report.approximated(
-                        f"Data source of '{layer.name}'",
-                        "OpenStreetMap's tile servers refuse maps opened "
-                        "straight from a file, so recipients who double-click "
-                        "this map may see 'Access blocked' tiles in this layer. "
-                        "Export as a Folder for a website, or use another tile "
-                        "source, to avoid it.",
-                        layer.layer_id,
-                    )
+                report_remote_dependency(layer, dependency, report, mode)
 
             if dependency.disposition is AssetDisposition.BLOCKING:
                 reason = dependency.note or f"'{dependency.identifier}' is missing."

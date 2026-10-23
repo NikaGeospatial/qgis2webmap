@@ -171,6 +171,35 @@ class TestStaysInWebMercator:
         assert 'crs="EPSG:32648"' in _om_map_tag(html)
 
 
+class TestTileHostsAreDisclosed:
+    """A live frame's tile layer is fetched from its host each time the page
+    opens, so the report names it - in a projected frame and in Web Mercator."""
+
+    @pytest.mark.parametrize("authid", ["EPSG:32648", "EPSG:3857"])
+    def test_the_tile_host_and_osm_refusal_are_in_the_report(
+        self, survey, fake_runtime, authid: str
+    ) -> None:
+        survey.main_map.setCrs(qgis_core.QgsCoordinateReferenceSystem(authid))
+        source = "type=xyz&url=" + quote(
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png", safe=":/"
+        )
+        tiles = qgis_core.QgsRasterLayer(source, "OSM", "wms")
+        survey.project.addMapLayer(tiles)
+        survey.main_map.setLayers([survey.parcels, tiles])
+        report = FidelityReportBuilder()
+        html = _export(survey, fake_runtime, report)
+        assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in html
+        rows = [
+            item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+            if item.subject == "Data source of 'OSM'"
+        ]
+        assert len(rows) == 2
+        assert "tile.openstreetmap.org" in rows[0]
+        assert "internet connection" in rows[0]
+        assert "Access blocked" in rows[1]
+
+
 def _export_geo(layout, map_item, project, runtime, report) -> str:
     prepared = prepare_cartograph(
         layout,
