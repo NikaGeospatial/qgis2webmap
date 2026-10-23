@@ -3490,6 +3490,20 @@ class TestDesignerEditsAutosave:
         finally:
             dialog.close()
 
+    def test_deleting_the_shown_layout_leaves_the_dialog_running(
+        self, qgis_app, project
+    ) -> None:
+        """Deleting a layout clears its undo stack as it is destroyed, which
+        moves the index the tab watches: under PyQt6 a slot that touches the
+        half-destroyed layout aborts QGIS."""
+        dialog, cartograph, layout, _label, _map = self._ready(project, qgis_app)
+        try:
+            project.layoutManager().removeLayout(layout)
+            qgis_app.processEvents()
+            assert cartograph._current_layout is None
+        finally:
+            dialog.close()
+
     def test_a_burst_of_edits_is_one_build(
         self, qgis_app, project, fake_cartograph_export, tmp_path
     ) -> None:

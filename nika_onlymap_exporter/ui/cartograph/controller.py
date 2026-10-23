@@ -30,6 +30,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
 from qgis.PyQt.QtWidgets import (
@@ -1161,6 +1162,10 @@ class CartographController:
 
     def _on_layout_content_changed(self, *_args: object) -> None:
         if self._exporting:
+            return
+        if self._current_layout is not None and sip.isdeleted(self._current_layout):
+            # Being deleted: its destructor clears the undo stack, which moves
+            # the index. `layoutRemoved` picks another layout once it is gone.
             return
         if self._current_layout is not None:
             current_ids = {
