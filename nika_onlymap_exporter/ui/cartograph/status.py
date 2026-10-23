@@ -44,13 +44,25 @@ def status_text(
     now: float,
     translate,
     has_path: bool = True,
+    phase: str = "",
 ) -> str:
     """The Cartograph tab's status line.
 
     `translate` is `ui.i18n.tr`, passed in rather than imported so this stays
     testable without a translator installed - the same reason `status.py`
     exists apart from Qt at all.
+
+    `phase` is "pending" (an edit waits out the autosave debounce) or
+    "saving" (the cartograph file is being rebuilt); either outranks a
+    "Saved" or error line left over from an earlier build, since it no longer
+    describes the file the edit will produce. Before the first save "pending"
+    stays "Not saved yet", which already says so. The words name the cartograph,
+    never the QGIS project, which this plugin does not save.
     """
+    if phase == "saving":
+        return translate("Saving the cartograph...")
+    if phase == "pending" and saved_at is not None:
+        return translate("Changes pending")
     if error:
         return error
     if saved_at is None:

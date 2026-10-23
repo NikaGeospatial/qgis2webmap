@@ -240,6 +240,10 @@ and two links - **Change...** to save it somewhere else, and **Show in
 folder**. Under them, the save status:
 
 - *Saved just now · 3.3 MB* - the file on disk matches what you see;
+- *Changes pending* - you edited something and the file has not been
+  rewritten yet;
+- *Saving the cartograph...* - the file is being rewritten. These two are about
+  the cartograph's HTML file only; the dialog never saves your QGIS project;
 - *Not saved yet* - the first save is still running;
 - a sentence starting *Could not...* - the save failed, and why. The previous
   file is left untouched.
