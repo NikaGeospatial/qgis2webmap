@@ -313,6 +313,9 @@ class LayoutTemplate:
     #: Short English cues for the picker's "Includes ..." line, e.g.
     #: ("legend", "scale bar"); translated by the UI.
     includes: tuple[str, ...] = ()
+    #: A short English "Best for: ..." line naming the jobs the design suits,
+    #: shown in the card's tooltip; translated by the UI.
+    best_for: str = ""
     #: Whether the design draws `TemplateInput.figures`: the picker offers
     #: its "Key figures" fields only for a design that does.
     takes_figures: bool = False
@@ -1405,6 +1408,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A balanced everyday sheet: title, large map, legend, scale and source."),
         _classic,
         category=ESSENTIAL,
+        best_for=N_("Best for: everyday maps, reports and emails."),
         includes=(N_("legend"), N_("scale bar"), N_("source line")),
     ),
     LayoutTemplate(
@@ -1413,6 +1417,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A wide map with the legend in columns below: for long legends."),
         _legend_below,
         category=ESSENTIAL,
+        best_for=N_("Best for: wide maps with long legends."),
         includes=(N_("legend band"), N_("scale bar"), N_("source line")),
     ),
     LayoutTemplate(
@@ -1421,6 +1426,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("Just the map and its data credits, for placing in another document."),
         _map_only,
         category=ESSENTIAL,
+        best_for=N_("Best for: pasting into a report, slide or web page."),
         includes=(N_("source line"),),
     ),
     LayoutTemplate(
@@ -1429,6 +1435,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A report figure: the map with a caption, scale bar and source under it."),
         _report_figure,
         category=ESSENTIAL,
+        best_for=N_("Best for: reports and papers that caption their figures."),
         includes=(N_("caption"), N_("scale bar"), N_("source line")),
     ),
     LayoutTemplate(
@@ -1437,6 +1444,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A survey sheet with a labelled grid and a title block: scale, CRS, date."),
         _field_map,
         category=CHARACTERFUL,
+        best_for=N_("Best for: field surveys and site records."),
         includes=(
             N_("grid"),
             N_("title block"),
@@ -1451,6 +1459,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A bold poster: big headline, dominant map, story and legend in a rail."),
         _poster,
         category=CHARACTERFUL,
+        best_for=N_("Best for: posters and wall displays."),
         includes=(N_("headline"), N_("notes panel"), N_("legend"), N_("scale bar")),
     ),
     LayoutTemplate(
@@ -1459,6 +1468,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("The map with a locator inset that shows where it is."),
         _main_and_locator,
         category=CHARACTERFUL,
+        best_for=N_("Best for: maps of a small area that need locating."),
         includes=(N_("locator"), N_("legend"), N_("scale bar"), N_("source line")),
     ),
     LayoutTemplate(
@@ -1467,6 +1477,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("The map fills the page; the title and story sit on a panel over it."),
         _story_map,
         category=CHARACTERFUL,
+        best_for=N_("Best for: presentations and maps with a story."),
         includes=(N_("notes panel"), N_("locator"), N_("scale bar")),
     ),
     LayoutTemplate(
@@ -1475,6 +1486,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A data-led page: the map with up to three key figures you supply."),
         _dashboard,
         category=CHARACTERFUL,
+        best_for=N_("Best for: data summaries and briefings with key figures."),
         includes=(N_("key figures"), N_("notes"), N_("legend"), N_("scale bar")),
         takes_figures=True,
     ),
@@ -1484,6 +1496,7 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A dark page with the map to the edges and text on dark panels."),
         _dark,
         category=ESSENTIAL,
+        best_for=N_("Best for: dark-room screens and projected displays."),
         includes=(N_("legend"), N_("scale bar"), N_("source line")),
     ),
 )

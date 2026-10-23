@@ -1117,6 +1117,7 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         ),
         _night_desk,
         category=ESSENTIAL,
+        best_for=N_("Best for: reports read on screen in low light."),
         includes=(N_("legend"), N_("scale bar"), N_("source line"), N_("date")),
     ),
     LayoutTemplate(
@@ -1125,6 +1126,7 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("An editorial sheet: a large map with your notes in a narrow margin."),
         _marginalia,
         category=CHARACTERFUL,
+        best_for=N_("Best for: editorial and explanatory maps with notes."),
         includes=(N_("notes"), N_("legend"), N_("scale bar"), N_("source line")),
     ),
     LayoutTemplate(
@@ -1133,6 +1135,7 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("One sheet of a map series: locator, sheet number, legend and source."),
         _atlas_ledger,
         category=CHARACTERFUL,
+        best_for=N_("Best for: atlases and map series."),
         includes=(
             N_("locator"),
             N_("sheet number"),
@@ -1147,6 +1150,7 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("Large print for public meetings: a big title and an easy-to-read legend."),
         _town_hall,
         category=CHARACTERFUL,
+        best_for=N_("Best for: public meetings and large-print handouts."),
         includes=(N_("large legend"), N_("scale bar"), N_("source line")),
         legend_floor=_town_hall_legend_floor,
     ),
@@ -1156,6 +1160,7 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         N_("A long map for routes, rivers and coasts, with a distance scale."),
         _wayfinder,
         category=CHARACTERFUL,
+        best_for=N_("Best for: routes, rivers and coasts."),
         includes=(N_("legend strip"), N_("distance scale"), N_("source line")),
     ),
 )

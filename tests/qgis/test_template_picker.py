@@ -320,6 +320,18 @@ class TestTheCards:
         finally:
             picker.reject()
 
+    def test_the_card_says_what_the_design_is_best_for(
+        self, qgis_app, tmp_path, fifteen
+    ):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
+        try:
+            _shown(qgis_app, picker, QSize(700, 480))
+            _drain(qgis_app, picker)
+            line = layout_templates.get_template("classic").best_for
+            assert line and line in picker._items["classic"].toolTip()
+        finally:
+            picker.reject()
+
     @pytest.mark.parametrize(
         ("orientation", "tall_pages"), [("portrait", False), ("auto", True)]
     )

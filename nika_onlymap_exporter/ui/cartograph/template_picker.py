@@ -583,6 +583,14 @@ def cue_hints(cues: CardCues) -> str:
     )
 
 
+def card_tooltip(template: LayoutTemplate) -> str:
+    """A card's tooltip: its description, then the jobs it suits. The card
+    has no spare height for a "Best for" line of its own."""
+    return "\n".join(
+        tr(line) for line in (template.description, template.best_for) if line
+    )
+
+
 def cue_description(cues: CardCues) -> str:
     """Both lines and the hints, for a screen reader."""
     return "\n".join(part for part in (*cue_lines(cues), cue_hints(cues)) if part)
@@ -1030,7 +1038,7 @@ class TemplatePicker(QDialog):
                 name=tr(template.name), description=tr(template.description)
             )
             item.setData(Qt.ItemDataRole.AccessibleTextRole, spoken)
-            item.setToolTip(tr(template.description))
+            item.setToolTip(card_tooltip(template))
             row = _TemplateRow(template, self, self.template_list.viewport())
             item.setData(
                 Qt.ItemDataRole.AccessibleDescriptionRole, cue_description(row.cues)
@@ -1188,7 +1196,7 @@ class TemplatePicker(QDialog):
         else:
             row.show_page(None)
             self._items[template_id].setToolTip(
-                tr(self._templates[template_id].description)
+                card_tooltip(self._templates[template_id])
             )
 
     def _update_cues(self, template_ids: Iterable[str]) -> None:
@@ -1341,7 +1349,7 @@ class TemplatePicker(QDialog):
 
     def _mark_failed_item(self, template_id: str) -> None:
         self._items[template_id].setToolTip(
-            f"{tr(self._templates[template_id].description)}\n"
+            f"{card_tooltip(self._templates[template_id])}\n"
             + tr("Preview could not be drawn")
         )
 

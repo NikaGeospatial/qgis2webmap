@@ -205,6 +205,15 @@ class TestRegistry:
             assert len(template.description) <= 80
             assert template.includes and all(cue for cue in template.includes)
 
+    def test_every_design_says_what_it_is_best_for(self) -> None:
+        """The picker's "Best for" line is there on all fifteen, one line."""
+        assert len(TEMPLATES) == 15
+        for template in TEMPLATES:
+            assert template.best_for.startswith("Best for: "), template.id
+            assert len(template.best_for) > 20, template.id
+            assert template.best_for.endswith("."), template.id
+            assert len(template.best_for) <= 70, template.id
+
     @pytest.mark.parametrize(
         "first",
         [

@@ -45,8 +45,8 @@ a scrolling list of the designs: a large preview of each, its name, one line
 on what it is for, and what that page includes for this project. A second,
 quieter line, **Can also show**, lists what the design would add with more
 content - notes from the project's abstract, Signal's key figures, Atlas
-Ledger's sheet number; point at it to see where each comes from. **Create
-layout** builds the one selected.
+Ledger's sheet number; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
+for (also listed below). **Create layout** builds the one selected.
 
 The **Text sizes** button beside the buttons opens three sliders, **Title**,
 **Legend** and **Notes**, each with five positions: Smaller (0.8x), Small
@@ -63,49 +63,49 @@ the choice is saved with the project.
 - **Daylight** - a balanced everyday sheet: title, large map, legend beside
   or below it (whichever leaves the map larger), scale bar and source line.
   The safest first choice; the layout described
-  [below](#what-the-daylight-layout-contains).
+  [below](#what-the-daylight-layout-contains). *Best for: everyday maps, reports and emails.*
 - **Clearline** - a wide map with the legend in columns in a band under it,
-  for wide extents and long legends.
+  for wide extents and long legends. *Best for: wide maps with long legends.*
 - **Bare Map** - just the map and its data credits, with no frame line, for
   placing in another document. The credits stay because most basemap and
-  open-data licences require them.
+  open-data licences require them. *Best for: pasting into a report, slide or web page.*
 - **Caption** - a report figure: the map with a caption under it (the title
-  as a bold lead, then the project's abstract), the scale bar and the source.
+  as a bold lead, then the project's abstract), the scale bar and the source. *Best for: reports and papers that caption their figures.*
 - **After Hours** - a dark page with the map to the edges; the title, legend
   and scale bar sit on solid dark panels, so they stay readable whatever the
-  map's colours.
+  map's colours. *Best for: dark-room screens and projected displays.*
 - **Night Desk** - a calm dark report sheet: the map inset with wide margins,
-  a quiet legend, the source and the date.
+  a quiet legend, the source and the date. *Best for: reports read on screen in low light.*
 
 **Characterful**
 
 - **Fieldbook** - a survey sheet with a labelled grid in the map's own units
   and a title block with the scale, CRS, author and date, in a column beside
   the map or a band under it - whichever shows your view larger, so a wide
-  view gets a wide frame.
+  view gets a wide frame. *Best for: field surveys and site records.*
 - **Broadside** - a poster: a big headline that steps down in size for long
   titles, a dominant map, and the story, legend and scale bar in a rail beside
   it, or in a band below it when that shows your view larger - on a portrait
-  page, or for a wide view.
+  page, or for a wide view. *Best for: posters and wall displays.*
 - **Near & Far** - the map with a locator inset that outlines where it is,
-  beside the map or below it, whichever shows your view larger.
+  beside the map or below it, whichever shows your view larger. *Best for: maps of a small area that need locating.*
 - **On the Map** - the map fills the page, with the title and story on a solid
-  panel over the edge of the map, and a locator inset.
+  panel over the edge of the map, and a locator inset. *Best for: presentations and maps with a story.*
 - **Signal** - a data-led page: the map with up to three key figures you
   supply. Type them under the list when Signal is selected - a value such as
   *214* and what it counts, such as *parcels surveyed*. They are saved with
-  the project. With no figures the page becomes the map and its notes.
+  the project. With no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
 - **Marginalia** - an editorial sheet: a large map with the project's abstract
-  in a narrow margin. With no abstract there is no margin.
+  in a narrow margin. With no abstract there is no margin. *Best for: editorial and explanatory maps with notes.*
 - **Atlas Ledger** - one sheet of a map series: title, sheet number, a
   locator, legend and source. The sheet number (*2 / 12*) shows once you turn
-  the layout's atlas on, and stays blank on a single page.
+  the layout's atlas on, and stays blank on a single page. *Best for: atlases and map series.*
 - **Town Hall** - large print for public meetings: a big title, an
   easy-to-read legend in large type beside the map or under it, whichever
   shows your view larger, and nothing laid over the map. It enlarges the page's own text; it does not make your map's symbols any
-  easier to tell apart.
+  easier to tell apart. *Best for: public meetings and large-print handouts.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
-  scale. It adds no routes or waypoints of its own.
+  scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
 Legends stay readable: their text never goes below 6.5 pt (9 pt on Town
 Hall). A crowded legend first gets more room, up to half the space the map
