@@ -1150,6 +1150,9 @@ class CartographController:
         """A layer was restyled or its edits saved in QGIS: the cartograph
         draws those layers, so it is saved again."""
         if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
+            if sip.isdeleted(self._current_layout):
+                # Being deleted; `layoutRemoved` picks another layout.
+                return
             # The preview draws from caches the layout keeps per item; a
             # restyled layer is only redrawn once they are refreshed.
             self._refresh_timer.start()
@@ -1158,6 +1161,10 @@ class CartographController:
     def _refresh_current_layout(self) -> None:
         """One refresh for a burst of restyles (`_refresh_timer`)."""
         if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
+            if sip.isdeleted(self._current_layout):
+                # Destroyed since the timer started; `layoutRemoved` picks
+                # another layout once it is gone.
+                return
             self._current_layout.refresh()
 
     def _on_layout_content_changed(self, *_args: object) -> None:
@@ -1215,7 +1222,9 @@ class CartographController:
             self._on_build_failed(str(exc), traceback.format_exc())
 
     def _start_build(self) -> None:
-        if self._current_layout is None:
+        if self._current_layout is None or sip.isdeleted(self._current_layout):
+            # Destroyed since the debounce started; `layoutRemoved` picks
+            # another layout once it is gone.
             self._cancel_waiting_pages()
             return
         path_text = self.file_edit.text().strip()
