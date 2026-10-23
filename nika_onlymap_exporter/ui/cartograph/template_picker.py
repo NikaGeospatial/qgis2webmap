@@ -670,7 +670,7 @@ class _KeyFigures(QFrame):
             label.setCursorPosition(0)
 
 
-class _TextSizeControls(QFrame):
+class TextSizeControls(QFrame):
     """The Title, Legend and Notes size steps (`TEXT_SIZE_STEPS`), three
     labelled sliders with five snapping positions in a row under the list:
     the design's text made smaller gives the map room, larger takes it. They
@@ -682,7 +682,9 @@ class _TextSizeControls(QFrame):
 
     changed = pyqtSignal()
 
-    def __init__(self, sizes: TextSizes, parent: QWidget) -> None:
+    def __init__(
+        self, sizes: TextSizes, parent: QWidget, *, stacked: bool = False
+    ) -> None:
         super().__init__(parent)
         self.setProperty("role", "keyFigures")
         self.setAccessibleName(tr("Text sizes"))
@@ -693,7 +695,9 @@ class _TextSizeControls(QFrame):
         self.toggle.setCheckable(True)
         self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.toggle.toggled.connect(self._on_toggled)
-        row = QHBoxLayout(self)
+        # Stacked: one slider to a row, for a column as narrow as the
+        # Layout tab's; the picker's foot has the width for one row.
+        row = QVBoxLayout(self) if stacked else QHBoxLayout(self)
         row.setContentsMargins(12, 2, 12, 2)
         row.setSpacing(6)
         self.sliders: dict[str, QSlider] = {}
@@ -713,7 +717,7 @@ class _TextSizeControls(QFrame):
         self._timer.setInterval(_SIZES_DELAY_MS)
         self._timer.timeout.connect(self._commit_and_emit)
         for index, element in enumerate(self._names):
-            if index:
+            if index and not stacked:
                 row.addSpacing(10)
             column = QHBoxLayout()
             column.setSpacing(6)
@@ -785,6 +789,16 @@ class _TextSizeControls(QFrame):
 
     def sizes(self) -> TextSizes:
         return self._committed
+
+    def set_sizes(self, sizes: TextSizes) -> None:
+        """Show `sizes` as the committed steps, without a `changed`."""
+        self._timer.stop()
+        for element, slider in self.sliders.items():
+            slider.blockSignals(True)
+            slider.setValue(self._index(getattr(sizes, element)))
+            slider.blockSignals(False)
+            self._describe(element)
+        self._committed = self.live_sizes()
 
     def commit(self) -> bool:
         """Take the handles as they stand; whether that changed anything."""
@@ -1029,7 +1043,7 @@ class TemplatePicker(QDialog):
         self.figures_group = _KeyFigures(self._saved_figures, self)
         self.figures_group.setVisible(False)
         self.figures_group.edited.connect(self._figures_timer.start)
-        self.size_controls = _TextSizeControls(self._saved_sizes, self)
+        self.size_controls = TextSizeControls(self._saved_sizes, self)
         self.size_controls.changed.connect(self._restart_previews)
         self.template_list.currentItemChanged.connect(self._on_template)
         self.template_list.itemDoubleClicked.connect(lambda _item: self.accept())

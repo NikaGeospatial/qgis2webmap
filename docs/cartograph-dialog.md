@@ -123,6 +123,16 @@ what is in it, such as *Default theme* or *1 live, 1 static*.
 - **Theme** - the page's look: **Default**, **Dark**, **Sepia**,
   **Blueprint** or **Minimal**. It colours the page and the furniture - legend,
   scale bar, north arrow, grid - not your map data.
+- **Title / Legend / Notes sliders** - the same text sizes as the template
+  picker's *Text sizes*, shown only for a layout made from a template. Each
+  layout keeps its own (they start at the picker's). When you stop moving a
+  slider the page is built again from its template with the new sizes, in
+  place: same layout, same name and file, and the title, attribution, theme and
+  map frame choices stay. If you moved, resized or edited anything on the page
+  since it was built, you are asked first - *Rebuild the page from the
+  template? Your moves and edits on this page will be replaced.* - and **No**
+  leaves the page and the sliders as they were. Rebuilding is not an undo step;
+  undo history of the page is cleared with the old items.
 
 ### Map frames
 

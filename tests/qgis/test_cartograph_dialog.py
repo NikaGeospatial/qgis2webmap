@@ -1886,6 +1886,194 @@ class TestCanvasAndImport:
             dialog.close()
 
 
+class TestLayoutTextSizes:
+    """The Layout tab's Title / Legend / Notes sliders: only for a layout made
+    from a template, kept on the layout, and a change rebuilds the page."""
+
+    def _template_dialog(self, project, picked_template, template="classic"):
+        picked_template.choice = (template, "A4", "landscape")
+        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+        _choose_cartograph(dialog)
+        _pick_in_layout_list(dialog, "canvas")
+        cartograph = dialog._cartograph
+        layout = project.layoutManager().layoutByName(
+            cartograph.layout_combo.currentText()
+        )
+        return dialog, cartograph, layout
+
+    @staticmethod
+    def _main_mm(layout) -> tuple[float, float]:
+        rect = layout.itemById("main").rect()
+        return rect.width(), rect.height()
+
+    @staticmethod
+    def _move(layout, item_id: str) -> None:
+        from qgis.core import QgsLayoutPoint
+
+        item = layout.itemById(item_id)
+        layout.undoStack().beginCommand(item, "move")
+        item.attemptMove(QgsLayoutPoint(item.x() + 7, item.y() + 5))
+        layout.undoStack().endCommand()
+
+    def test_only_a_template_layout_shows_the_sliders(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        try:
+            assert cartograph.size_controls.isVisibleTo(cartograph.page_section.body)
+            plain = _add_layout(project, "plain", [("m", "EPSG:4326")])
+            cartograph._select_layout(plain.name())
+            assert not cartograph.size_controls.isVisibleTo(
+                cartograph.page_section.body
+            )
+            cartograph._select_layout(layout.name())
+            assert cartograph.size_controls.isVisibleTo(cartograph.page_section.body)
+        finally:
+            dialog.close()
+
+    def test_smaller_title_rebuilds_in_place_and_the_map_grows(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        from nika_onlymap_exporter.core.canvas_cartograph import layout_text_sizes
+        from nika_onlymap_exporter.core.settings import FrameChoice
+
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        try:
+            name = layout.name()
+            page = dialog.state.page_choice(name)
+            page.title, page.attribution, page.theme = "Mine", "Credit", "default"
+            old_uuid = layout.itemById("main").uuid()
+            dialog.state.frame_choices(name)[old_uuid] = FrameChoice(
+                mode="static", dpi=222
+            )
+            before = self._main_mm(layout)
+            controls = cartograph.size_controls
+            controls.sliders["title"].setValue(0)
+            assert _wait_for(
+                qgis_app, lambda: layout_text_sizes(layout, project).title == "smaller"
+            )
+            after = self._main_mm(layout)
+            assert after[0] * after[1] > before[0] * before[1]
+            assert project.layoutManager().layoutByName(name) is layout
+            assert dialog.state.page_choice(name).title == "Mine"
+            assert dialog.state.page_choice(name).attribution == "Credit"
+            new_uuid = layout.itemById("main").uuid()
+            assert new_uuid != old_uuid
+            choice = dialog.state.frame_choices(name)[new_uuid]
+            assert (choice.mode, choice.dpi) == ("static", 222)
+            assert old_uuid not in dialog.state.frame_choices(name)
+            assert set(cartograph._frame_rows) == {new_uuid}
+        finally:
+            dialog.close()
+
+    def test_a_drag_rebuilds_once(
+        self, qgis_app, project, picked_template, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph import controller
+
+        dialog, cartograph, _layout = self._template_dialog(project, picked_template)
+        calls: list[object] = []
+        real = controller.rebuild_from_template
+        monkeypatch.setattr(
+            controller,
+            "rebuild_from_template",
+            lambda *a, **k: calls.append(a) or real(*a, **k),
+        )
+        try:
+            slider = cartograph.size_controls.sliders["legend"]
+            for value in (1, 0, 3):
+                slider.setValue(value)
+            assert _wait_for(qgis_app, lambda: calls)
+            time.sleep(0.5)
+            qgis_app.processEvents()
+            assert len(calls) == 1
+        finally:
+            dialog.close()
+
+    def test_sizes_are_kept_on_the_layout_and_restored(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        try:
+            cartograph.size_controls.sliders["notes"].setValue(4)
+            cartograph.size_controls.commit()
+            cartograph.size_controls.changed.emit()
+            name = layout.name()
+        finally:
+            dialog.close()
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            dialog._cartograph._select_layout(name)
+            controls = dialog._cartograph.size_controls
+            assert controls.isVisibleTo(dialog._cartograph.page_section.body)
+            assert controls.sizes().notes == "larger"
+            assert controls.sizes().title == "standard"
+            assert controls.sliders["notes"].value() == 4
+        finally:
+            dialog.close()
+
+    def test_an_edited_page_asks_first_and_cancel_keeps_it(
+        self, qgis_app, project, picked_template, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from nika_onlymap_exporter.core.canvas_cartograph import layout_text_sizes
+
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        asked: list[str] = []
+        answer = [QMessageBox.StandardButton.No]
+
+        def question(parent, title, text, *args):
+            asked.append(text)
+            return answer[0]
+
+        monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+        try:
+            self._move(layout, "title")
+            moved = (layout.itemById("title").x(), layout.itemById("title").y())
+            controls = cartograph.size_controls
+            controls.sliders["title"].setValue(0)
+            controls._timer.stop()
+            controls._commit_and_emit()
+            assert len(asked) == 1
+            assert "Rebuild the page from the template?" in asked[0]
+            item = layout.itemById("title")
+            assert (item.x(), item.y()) == moved
+            assert layout_text_sizes(layout, project).title == "standard"
+            assert controls.sliders["title"].value() == 2
+            answer[0] = QMessageBox.StandardButton.Yes
+            controls.sliders["title"].setValue(0)
+            controls._timer.stop()
+            controls._commit_and_emit()
+            assert len(asked) == 2
+            assert layout_text_sizes(layout, project).title == "smaller"
+            item = layout.itemById("title")
+            assert (item.x(), item.y()) != moved
+        finally:
+            dialog.close()
+
+    def test_an_unedited_page_is_rebuilt_without_asking(
+        self, qgis_app, project, picked_template, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        dialog, cartograph, _layout = self._template_dialog(project, picked_template)
+        asked: list[object] = []
+        monkeypatch.setattr(
+            QMessageBox, "question", staticmethod(lambda *a: asked.append(a))
+        )
+        try:
+            controls = cartograph.size_controls
+            for value in (0, 4):
+                controls.sliders["title"].setValue(value)
+                controls._timer.stop()
+                controls._commit_and_emit()
+            assert asked == []
+        finally:
+            dialog.close()
+
+
 class TestLayoutTemplateExport:
     """Export the selected layout as a .qpt, with an honest success message."""
 
