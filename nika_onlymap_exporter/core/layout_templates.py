@@ -400,11 +400,12 @@ def _classic(page: _Page) -> _Layout:
     # The title runs as wide as the map group, which depends on the room
     # the title leaves: measured at the full width, then at the group's.
     # So does the foot: a row, or stacked under a narrow map.
-    head_h = _Heading(page, content_w, pal).height
+    head_cap = content_h * _HEADING_MAX_SHARE
+    head_h = _Heading(page, content_w, pal, max_height=head_cap).height
     foot_h = _bar_h(page)
     for _ in range(6):
         group = _daylight_group(page, head_h, content_w, content_h, foot_h)
-        head = _Heading(page, group[0], pal)
+        head = _Heading(page, group[0], pal, max_height=head_cap)
         foot = max(foot_h, _foot_height(page, group[0]))
         if head.height <= head_h + 1e-6 and foot <= foot_h:
             break
@@ -1624,6 +1625,10 @@ def _text_width(text: str, font_pt: float, *, bold: bool = False) -> float:
     return sum((_SPACE_EM if ch == " " else _char_em(ch)) * em for ch in text)
 
 
+#: The most of a page's content height a heading may take.
+_HEADING_MAX_SHARE = 0.3
+
+
 class _Heading:
     """A page's title -- under a short accent mark, when the design has
     one -- sized for a `width` mm column: as large as the page's title size
@@ -1631,7 +1636,13 @@ class _Heading:
     with no title."""
 
     def __init__(
-        self, page: _Page, width: float, palette: PagePalette, *, accent: bool = True
+        self,
+        page: _Page,
+        width: float,
+        palette: PagePalette,
+        *,
+        accent: bool = True,
+        max_height: float | None = None,
     ) -> None:
         self.page = page
         self.palette = palette
@@ -1645,6 +1656,11 @@ class _Heading:
             self.height = self.title_h + self.gap
             if self.accent_h:
                 self.height += self.accent_h + self.gap * 0.6
+            if max_height is not None and self.height > max_height:
+                # A title too long even at its smallest size keeps only the
+                # room it is allowed; the page's other pieces keep theirs.
+                self.title_h -= self.height - max_height
+                self.height = max_height
 
     def items(self, x: float, y: float, width: float) -> list[CartographItem]:
         if not self.title_h:

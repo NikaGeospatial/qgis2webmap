@@ -813,3 +813,32 @@ def test_a_sparse_project_still_gets_a_page(template_id: str, content: str) -> N
             ),
         )
         assert not any(isinstance(item, LegendSpec) for item in plan.items)
+
+
+@pytest.mark.parametrize(
+    ("extent", "size", "orientation"),
+    [((1.0, 50.0), "A0", "auto"), ((1.0, 1.0), "A5", "landscape")],
+)
+def test_daylight_with_an_endless_title_stays_on_the_page(
+    extent: tuple[float, float], size: str, orientation: str
+) -> None:
+    """Daylight's heading once grew with every pass of its sizing loop: a
+    200-character title raised `Box.w must be positive` on a very tall view
+    and ran to y=518 mm on an A5 sheet."""
+    plan = plan_template(
+        "classic",
+        TemplateInput(
+            extent_width=extent[0],
+            extent_height=extent[1],
+            crs_is_geographic=False,
+            page_size=size,
+            orientation=orientation,
+            title="T" * 200,
+        ),
+    )
+    page = Box(0.0, 0.0, plan.page_width, plan.page_height)
+    for name, box in _boxes(plan):
+        assert box.w > 0 and box.h > 0, name
+        assert _contains(page, box), name
+    frame = plan.frames[0].box
+    assert frame.h >= 0.4 * plan.page_height
