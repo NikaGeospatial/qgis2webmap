@@ -241,7 +241,7 @@ class TestFieldbookFraming:
 
     @pytest.mark.parametrize("size", ["A4", "A3"])
     @pytest.mark.parametrize("shape", ["wide", "tall"])
-    @pytest.mark.parametrize("template_id", ["poster", "locator"])
+    @pytest.mark.parametrize("template_id", ["poster", "locator", "dashboard"])
     def test_broadside_and_near_and_far_choose_too(
         self, template_id, shape, size
     ) -> None:

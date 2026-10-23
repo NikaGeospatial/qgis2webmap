@@ -1066,9 +1066,10 @@ def _story_map(page: _Page) -> _Layout:
 def _dashboard(page: _Page) -> _Layout:
     """Signal: a data-led one-pager. Up to three key figures the user gave
     -- each a large value over what it counts -- beside the map (above it
-    on a portrait sheet), with the project's notes, the legend and the
-    scale bar. Without figures it becomes a map-and-note page: no empty or
-    stand-in tile is ever drawn, and no number is ever made up."""
+    on a portrait sheet, or over a wide view), with the project's notes,
+    the legend and the scale bar. Without figures it becomes a map-and-note
+    page: no empty or stand-in tile is ever drawn, and no number is ever
+    made up."""
     pal = DAYLIGHT
     sp = page.spacing
     s = page.scale
@@ -1088,100 +1089,123 @@ def _dashboard(page: _Page) -> _Layout:
         items += _foot(
             page, Box(body.x, frame.y + frame.h + g, body.w, foot_h), pal, z=10
         )
-    elif page.landscape:
-        column_w = min(max(body.w * 0.28, 62.0 * s), 105.0 * s)
-        # A legend with too little room under the figures and notes widens
-        # the column, up to as wide as the map (`MAP_MIN_SHARE`).
-        widest = max(legend_room_cap(body.w, 1.5 * g), column_w)
-        while True:
-            column = Box(body.x + body.w - column_w, body.y, column_w, body.h)
-            y = column.y
-            figure_items: list[CartographItem] = []
-            if figures:
-                figure_items, y = _figure_stack(page, figures, column, pal)
-            foot_h = _stacked_foot_height(page, column.w)
-            room = column.y + column.h - foot_h - g - y
-            notes_pt, notes_h = _fit_body(
-                page.notes,
-                column.w,
-                note_pt,
-                MINIMUM_TYPE.body,
-                room * (0.5 if page.data.layer_names else 1.0),
-            )
-            legend_room = room - (notes_h + g if notes_h else 0.0)
-            if (
-                _legend_need(page, legend_pt, column.w) <= legend_room
-                or column_w >= widest
-            ):
-                break
-            column_w = min(column_w + 5.0, widest)
-        frame = Box(body.x, body.y, body.w - column_w - 1.5 * g, body.h)
-        items += figure_items
-        if notes_h:
-            items.append(
-                _notes(Box(column.x, y, column.w, notes_h), notes_pt, pal, z=8)
-            )
-            y += notes_h + g
-        items += _legend(
-            page,
-            Box(column.x, y, column.w, column.y + column.h - foot_h - g - y),
-            pal,
-            legend_pt,
-            z=9,
-        )
-        items += _stacked_foot(
-            page,
-            Box(column.x, column.y + column.h - foot_h, column.w, foot_h),
-            pal,
-            z=10,
-        )
     else:
-        y = body.y
-        if figures:
-            figure_items, y = _figure_row(
-                page, figures, Box(body.x, y, body.w, 1.0), pal
-            )
+
+        def column() -> tuple[Box, list[CartographItem]]:
+            """The figures, notes, legend and scale bar in a column right of the map."""
+            items: list[CartographItem] = []
+            column_w = min(max(body.w * 0.28, 62.0 * s), 105.0 * s)
+            # A legend with too little room under the figures and notes widens
+            # the column, up to as wide as the map (`MAP_MIN_SHARE`).
+            widest = max(legend_room_cap(body.w, 1.5 * g), column_w)
+            while True:
+                column = Box(body.x + body.w - column_w, body.y, column_w, body.h)
+                y = column.y
+                figure_items: list[CartographItem] = []
+                if figures:
+                    figure_items, y = _figure_stack(page, figures, column, pal)
+                foot_h = _stacked_foot_height(page, column.w)
+                room = column.y + column.h - foot_h - g - y
+                notes_pt, notes_h = _fit_body(
+                    page.notes,
+                    column.w,
+                    note_pt,
+                    MINIMUM_TYPE.body,
+                    room * (0.5 if page.data.layer_names else 1.0),
+                )
+                legend_room = room - (notes_h + g if notes_h else 0.0)
+                if (
+                    _legend_need(page, legend_pt, column.w) <= legend_room
+                    or column_w >= widest
+                ):
+                    break
+                column_w = min(column_w + 5.0, widest)
+            frame = Box(body.x, body.y, body.w - column_w - 1.5 * g, body.h)
             items += figure_items
-            y += g
-        foot_h = _foot_height(page, body.w)
-        band_w = body.w
-        rows = _legend_rows(page)
-        legend_h = 0.0
-        # The notes give the legend more of the band's width when it needs
-        # it to fit.
-        for share in (0.56, 0.45, 0.35) if rows else (1.0,):
-            notes_w = band_w * share
-            notes_pt, notes_h = _fit_body(
-                page.notes, notes_w, note_pt, MINIMUM_TYPE.body, body.h * 0.22
-            )
-            if rows:
-                legend_w = band_w - (notes_w + g if notes_h else 0.0)
-                legend_h = _legend_need(page, legend_pt, legend_w)
-            if not notes_h or legend_h <= body.h * 0.25:
-                break
-        # The map keeps half the height it shares with the band
-        # (`MAP_MIN_SHARE`).
-        legend_h = min(legend_h, legend_room_cap(body.y + body.h - y - foot_h - g, g))
-        band_h = max(notes_h, legend_h)
-        frame_h = body.y + body.h - y - foot_h - g - (band_h + g if band_h else 0.0)
-        frame = Box(body.x, y, body.w, frame_h)
-        band_y = frame.y + frame.h + g
-        if notes_h:
-            items.append(
-                _notes(Box(body.x, band_y, notes_w, notes_h), notes_pt, pal, z=8)
-            )
-        if legend_h:
-            legend_x = body.x + (notes_w + g if notes_h else 0.0)
+            if notes_h:
+                items.append(
+                    _notes(Box(column.x, y, column.w, notes_h), notes_pt, pal, z=8)
+                )
+                y += notes_h + g
             items += _legend(
                 page,
-                Box(legend_x, band_y, body.x + body.w - legend_x, band_h),
+                Box(column.x, y, column.w, column.y + column.h - foot_h - g - y),
                 pal,
                 legend_pt,
                 z=9,
             )
-        items += _foot(
-            page, Box(body.x, body.y + body.h - foot_h, body.w, foot_h), pal, z=10
+            items += _stacked_foot(
+                page,
+                Box(column.x, column.y + column.h - foot_h, column.w, foot_h),
+                pal,
+                z=10,
+            )
+            return frame, items
+
+        def band() -> tuple[Box, list[CartographItem]]:
+            """The figures over the map, the notes and legend in a band under it."""
+            items: list[CartographItem] = []
+            y = body.y
+            if figures:
+                figure_items, y = _figure_row(
+                    page, figures, Box(body.x, y, body.w, 1.0), pal
+                )
+                items += figure_items
+                y += g
+            foot_h = _foot_height(page, body.w)
+            band_w = body.w
+            rows = _legend_rows(page)
+            legend_h = 0.0
+            # The notes give the legend more of the band's width when it needs
+            # it to fit.
+            for share in (0.56, 0.45, 0.35) if rows else (1.0,):
+                notes_w = band_w * share
+                notes_pt, notes_h = _fit_body(
+                    page.notes, notes_w, note_pt, MINIMUM_TYPE.body, body.h * 0.22
+                )
+                if rows:
+                    legend_w = band_w - (notes_w + g if notes_h else 0.0)
+                    legend_h = _legend_need(page, legend_pt, legend_w)
+                if not notes_h or legend_h <= body.h * 0.25:
+                    break
+            # The map keeps half the height it shares with the band
+            # (`MAP_MIN_SHARE`).
+            legend_h = min(
+                legend_h, legend_room_cap(body.y + body.h - y - foot_h - g, g)
+            )
+            band_h = max(notes_h, legend_h)
+            frame_h = body.y + body.h - y - foot_h - g - (band_h + g if band_h else 0.0)
+            frame = Box(body.x, y, body.w, frame_h)
+            band_y = frame.y + frame.h + g
+            if notes_h:
+                items.append(
+                    _notes(Box(body.x, band_y, notes_w, notes_h), notes_pt, pal, z=8)
+                )
+            if legend_h:
+                legend_x = body.x + (notes_w + g if notes_h else 0.0)
+                items += _legend(
+                    page,
+                    Box(legend_x, band_y, body.x + body.w - legend_x, band_h),
+                    pal,
+                    legend_pt,
+                    z=9,
+                )
+            items += _foot(
+                page, Box(body.x, body.y + body.h - foot_h, body.w, foot_h), pal, z=10
+            )
+            return frame, items
+
+        # The column on a landscape sheet and the figures over the map on a
+        # portrait one, unless the other shows the canvas view larger: a
+        # wide view on a landscape sheet takes the band. max() keeps the
+        # first of equals.
+        arrangements = [column, band] if page.landscape else [band, column]
+        aspect = page.data.extent_width / page.data.extent_height
+        frame, arranged = max(
+            (arrange() for arrange in arrangements),
+            key=lambda option: _fit_area(aspect, option[0]),
         )
+        items += arranged
     return (_main(frame, pal),), items, _page_style(pal)
 
 
