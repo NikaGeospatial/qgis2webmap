@@ -1256,16 +1256,26 @@ class CartographController:
         self._last_page_label = page_label(prepared.spec)
         self._pending_spec = prepared.spec
 
-        # The dialog's own writer, so a licence key the user set reaches the
-        # cartograph's live frames exactly as it reaches a web map.
-        writer = self.dialog._writer()
         # The Layers tab's popup and label choices, copied: the worker must
         # not read state the GUI thread may be editing.
         layers = copy.deepcopy(dict(self.state.layers))
+        # The live project's part of reading each frame's layers, still on
+        # this thread; the worker finishes it from the snapshot.
+        try:
+            prepared = cartograph_export.prepare_live_reads(
+                prepared, project, report, layer_settings=layers
+            )
+        except Exception as exc:
+            self._on_build_failed(str(exc), traceback.format_exc())
+            return
+
+        # The dialog's own writer, so a licence key the user set reaches the
+        # cartograph's live frames exactly as it reaches a web map.
+        writer = self.dialog._writer()
 
         def work(_progress: object) -> cartograph_export.FinishedCartograph:
             return cartograph_export.finish_cartograph_full(
-                prepared, project, report, writer=writer, layer_settings=layers
+                prepared, None, report, writer=writer, layer_settings=layers
             )
 
         job = BackgroundJob(work, self.dialog)

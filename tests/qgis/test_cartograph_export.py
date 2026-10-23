@@ -209,6 +209,38 @@ class TestPrepareThenFinish:
         assert "error" not in result, result.get("error")
         assert "<om-map" in str(result["html"])
 
+    def test_a_worker_finishes_from_the_live_reads_without_the_project(
+        self, qgis_app, project, fake_runtime
+    ) -> None:
+        """The controller's build job: the project's part is read on the GUI
+        thread (`prepare_live_reads`), the project is then emptied, and the
+        worker - given no project at all - still writes the same page."""
+        from qgis.PyQt.QtCore import QThread
+
+        from nika_onlymap_exporter.core.cartograph_export import prepare_live_reads
+
+        layout = _live_layout(project)
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(layout, project, fake_runtime, report)
+        expected = finish_cartograph(prepared, project, FidelityReportBuilder())
+        prepared = prepare_live_reads(prepared, project, report)
+        assert prepared.live_reads
+        project.removeAllMapLayers()
+        result: dict[str, object] = {}
+
+        class Worker(QThread):
+            def run(self) -> None:
+                try:
+                    result["html"] = finish_cartograph(prepared, None, report)
+                except Exception as exc:  # surfaced by the assert below
+                    result["error"] = exc
+
+        worker = Worker()
+        worker.start()
+        assert worker.wait(60_000)
+        assert "error" not in result, result.get("error")
+        assert result["html"] == expected
+
     def test_each_static_frame_renders_at_its_own_dpi(
         self, survey, fake_runtime
     ) -> None:

@@ -26,11 +26,13 @@ This module is where those three results get assembled into one
 or changes the layout -- reading its items, hiding them for a static render,
 rendering it -- and must run on the GUI thread: the layout is a graphics
 scene that may be on screen in the layout designer, and QGIS's own layout
-export algorithms are no-threading for the same reason. `finish_cartograph`
-only reads layers (the same `read_project` the web-map export runs on a
-worker thread) and assembles the HTML, so the dialog runs it off the GUI
-thread. `export_layout_to_cartograph` runs both, for callers already on one
-thread.
+export algorithms are no-threading for the same reason. The layers a live
+frame draws are read the way the web-map export reads them: `prepare_live_reads`
+(`project_reader.prepare_project`) takes the live project's part on the GUI
+thread, and `finish_cartograph` completes it from that snapshot - reading the
+features and assembling the HTML - so the dialog runs it off the GUI thread
+without handing the worker the project. `export_layout_to_cartograph` runs all
+three, for callers already on one thread.
 
 **Static rasters are cached.** Autosave rebuilds the whole cartograph after
 every edit, and a static frame's region render is by far its slowest part.
@@ -106,7 +108,12 @@ from .layout_reader import (
     layout_state_restored,
     read_layout,
 )
-from .project_reader import read_project
+from .project_reader import (
+    PendingProject,
+    finish_project,
+    prepare_project,
+    read_project,
+)
 from .runtime_legend import fit_frame_legends
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
@@ -187,6 +194,9 @@ class PreparedCartograph:
     bundle: CartographRuntimeBundle
     # Checked once the coverage layer is read (`finish_cartograph`).
     atlas_requirement: AtlasRequirement | None = None
+    # One per live frame, in order, from `prepare_live_reads`; empty means
+    # `finish_cartograph` reads the project itself, on its own thread.
+    live_reads: tuple[PendingProject, ...] = ()
 
     @property
     def items(self) -> tuple[CartographItem, ...]:
@@ -394,9 +404,38 @@ def export_layout_to_cartograph(
         static_dpi=static_dpi,
         title_override=title_override,
     )
+    prepared = prepare_live_reads(
+        prepared, project, report, layer_settings=layer_settings
+    )
     return finish_cartograph(
         prepared, project, report, writer=writer, layer_settings=layer_settings
     )
+
+
+def prepare_live_reads(
+    prepared: PreparedCartograph,
+    project: QgsProject,
+    report: FidelityReportBuilder,
+    *,
+    layer_settings: Mapping[str, LayerSettings] | None = None,
+) -> PreparedCartograph:
+    """Read each live frame's layers off the live project. **GUI thread only.**
+
+    The result carries a `PendingProject` per frame, so `finish_cartograph` can
+    run on a worker holding no project or layer.
+    """
+    reads = tuple(
+        prepare_project(
+            project,
+            report,
+            layer_order=source.layer_order,
+            canvas_extent=source.extent,
+            layer_settings=layer_settings,
+            settings=_LIVE_FRAME_SETTINGS,
+        )
+        for source in prepared.live_frames
+    )
+    return replace(prepared, live_reads=reads)
 
 
 def prepare_cartograph(
@@ -501,14 +540,15 @@ def prepare_cartograph(
 
 def finish_cartograph(
     prepared: PreparedCartograph,
-    project: QgsProject,
+    project: QgsProject | None,
     report: FidelityReportBuilder,
     *,
     writer: OnlyMapWriter | None = None,
     layer_settings: Mapping[str, LayerSettings] | None = None,
 ) -> str:
-    """Render each live frame's `<om-map>` and write the document. Reads
-    layers only, never the layout, so it is safe on a worker thread."""
+    """Render each live frame's `<om-map>` and write the document. Never reads
+    the layout, and with `prepare_live_reads` done never reads the project
+    either (`project` may then be `None`), so it is safe on a worker thread."""
     return finish_cartograph_full(
         prepared, project, report, writer=writer, layer_settings=layer_settings
     ).html
@@ -516,7 +556,7 @@ def finish_cartograph(
 
 def finish_cartograph_full(
     prepared: PreparedCartograph,
-    project: QgsProject,
+    project: QgsProject | None,
     report: FidelityReportBuilder,
     *,
     writer: OnlyMapWriter | None = None,
@@ -541,15 +581,20 @@ def finish_cartograph_full(
     # By file name, which carries the layer id: a raster drawn in two frames
     # is converted to the same bytes and carried once.
     embedded_rasters: dict[str, bytes] = {}
-    for source in prepared.live_frames:
-        export_project = read_project(
-            project,
-            report,
-            layer_order=source.layer_order,
-            canvas_extent=source.extent,
-            layer_settings=layer_settings,
-            settings=_LIVE_FRAME_SETTINGS,
-        )
+    for index, source in enumerate(prepared.live_frames):
+        if prepared.live_reads:
+            export_project = finish_project(prepared.live_reads[index], report)
+        else:
+            if project is None:
+                raise ValueError("a project is needed when no live reads were prepared")
+            export_project = read_project(
+                project,
+                report,
+                layer_order=source.layer_order,
+                canvas_extent=source.extent,
+                layer_settings=layer_settings,
+                settings=_LIVE_FRAME_SETTINGS,
+            )
         export_project, frame_rasters = _embed_rasters(export_project, report)
         for name, data in frame_rasters:
             embedded_rasters.setdefault(name, data)
