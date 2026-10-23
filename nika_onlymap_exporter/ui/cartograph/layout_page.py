@@ -27,6 +27,7 @@ from types import SimpleNamespace
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import (
+    QKeyEvent,
     QKeySequence,
     QPalette,
     QResizeEvent,
@@ -41,7 +42,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QShortcut,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -241,14 +241,10 @@ class LayoutPreview(QStackedWidget):
         # resized, which once stopped the page fitting at all.
         self._user_zoomed = False
         self.view.viewport().installEventFilter(self)
-        # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, the
-        # layout's own stack, as in the designer.
-        undo = QShortcut(QKeySequence.StandardKey.Undo, self.view)
-        undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        undo.activated.connect(lambda: self._step_undo(redo=False))
-        redo = QShortcut(QKeySequence.StandardKey.Redo, self.view)
-        redo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        redo.activated.connect(lambda: self._step_undo(redo=True))
+        # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, on the
+        # layout's own stack as in the designer. A key filter rather than a
+        # QShortcut: that one waits for the window to be the active one.
+        self.view.installEventFilter(self)
         # Not the first Tab stop: opening the dialog put the focus ring round
         # the page. A click still focuses it; the zoom bar is the keyboard's.
         self.view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
@@ -311,6 +307,18 @@ class LayoutPreview(QStackedWidget):
         self.view.zoomFull()
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if (
+            event is not None
+            and watched is self.view
+            and event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+        ):
+            if event.matches(QKeySequence.StandardKey.Undo):
+                self._step_undo(redo=False)
+                return True
+            if event.matches(QKeySequence.StandardKey.Redo):
+                self._step_undo(redo=True)
+                return True
         if event is not None and (
             event.type() == QEvent.Type.Wheel
             # Having selected or moved something, the page stays as the user

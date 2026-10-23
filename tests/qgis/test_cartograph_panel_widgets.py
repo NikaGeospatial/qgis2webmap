@@ -171,6 +171,25 @@ def _viewport_point(pane, x_mm: float, y_mm: float):
     return view.mapFromScene(QPointF(x_mm, y_mm))
 
 
+def _move_held(viewport, point) -> None:
+    from qgis.PyQt.QtCore import QEvent, QPointF, Qt
+    from qgis.PyQt.QtGui import QMouseEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    position = QPointF(point)
+    QApplication.sendEvent(
+        viewport,
+        QMouseEvent(
+            QEvent.Type.MouseMove,
+            position,
+            QPointF(viewport.mapToGlobal(point)),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+
+
 def _drag(qgis_app, pane, start, end, buttons=None) -> None:
     """A human drag on the page: press, a path of moves, release."""
     from qgis.PyQt.QtCore import QPoint, Qt
@@ -187,7 +206,8 @@ def _drag(qgis_app, pane, start, end, buttons=None) -> None:
             start.x() + (end.x() - start.x()) * step // steps,
             start.y() + (end.y() - start.y()) * step // steps,
         )
-        QTest.mouseMove(viewport, point)
+        # Sent with the button held: Qt 5's QTest.mouseMove has none.
+        _move_held(viewport, point)
         qgis_app.processEvents()
     QTest.mouseRelease(viewport, button, Qt.KeyboardModifier.NoModifier, end)
     _settle(qgis_app, 0.05)

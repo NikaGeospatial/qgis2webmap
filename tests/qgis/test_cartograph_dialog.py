@@ -3526,8 +3526,10 @@ class TestDesignerEditsAutosave:
     ) -> None:
         """The page preview edits through QGIS's select tool: the move is an
         undo command, so the autosave follows it and so does an undo."""
-        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, Qt
+        from qgis.PyQt.QtGui import QMouseEvent
         from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QApplication
 
         dialog, cartograph, layout, _label, map_item = self._ready(project, qgis_app)
         try:
@@ -3552,7 +3554,19 @@ class TestDesignerEditsAutosave:
                 centre,
             )
             for step in range(1, 9):
-                QTest.mouseMove(viewport, centre + QPoint(step * 8, step * 5))
+                # Sent with the button held: Qt 5's QTest.mouseMove has none.
+                point = centre + QPoint(step * 8, step * 5)
+                QApplication.sendEvent(
+                    viewport,
+                    QMouseEvent(
+                        QEvent.Type.MouseMove,
+                        QPointF(point),
+                        QPointF(viewport.mapToGlobal(point)),
+                        Qt.MouseButton.NoButton,
+                        Qt.MouseButton.LeftButton,
+                        Qt.KeyboardModifier.NoModifier,
+                    ),
+                )
                 qgis_app.processEvents()
             QTest.mouseRelease(
                 viewport,
