@@ -634,60 +634,33 @@ def _field_map(page: _Page) -> _Layout:
     """Fieldbook: a survey sheet. The map under a grid labelled in its own
     units, a neat line round it, and a ruled title block -- title, then
     scale, CRS and date, then north arrow and scale bar -- read before the
-    legend: in a column at the right on a landscape sheet, a band under
-    the map on a portrait one."""
+    legend: in a column at the right of the map or a band under it,
+    whichever shows the canvas view larger. A landscape sheet tries the
+    column first and a portrait one the band, so a tie keeps that order; a
+    wide view on a landscape sheet takes the band, rather than a near-square
+    frame that pads the view out with half again its height."""
     pal = PAPER
-    sp = page.spacing
-    m, g = sp.margin, sp.gutter
     data = page.data
-    content = Box(m, m, page.width - 2 * m, page.height - 2 * m)
     grid_crs = None if data.crs_is_geographic else (data.crs_authid or None)
     interval = nice_interval(min(data.extent_width, data.extent_height) / 4)
     side_room, end_room = _grid_label_room(page, interval)
     block = _TitleBlock(page, pal)
     legend_pt = _legend_pt(page)
-    if page.landscape:
-        column_w = min(max(content.w * 0.27, 70.0), 95.0 * page.scale)
-        map_area = Box(content.x, content.y, content.w - column_w - g, content.h)
-        column = Box(map_area.x + map_area.w + g, content.y, column_w, content.h)
-        block_box = Box(column.x, column.y, column.w, block.height(column.w))
-        legend_box = Box(
-            column.x,
-            block_box.y + block_box.h + g,
-            column.w,
-            column.h - block_box.h - g,
-        )
-        if _legend_need(page, legend_pt, column.w) > legend_box.h:
-            # A legend longer than the column under the block: a strip
-            # across the whole sheet, under the map and the block, the map
-            # keeping half the sheet's height (`MAP_MIN_SHARE`).
-            strip_h = min(
-                _legend_need(page, legend_pt, content.w),
-                legend_room_cap(content.h - 2 * end_room, g),
-                content.h - block_box.h - g,
-            )
-            map_area = Box(map_area.x, map_area.y, map_area.w, content.h - strip_h - g)
-            legend_box = Box(content.x, map_area.y + map_area.h + g, content.w, strip_h)
-    else:
-        block_w = min(max(content.w * 0.5, 80.0), content.w)
-        block_h = block.height(block_w)
-        # The legend beside the block, as tall as it needs; or, when that
-        # makes the band taller, across the sheet under the block.
-        beside_w = content.w - block_w - g
-        under, band_h = _band_layout(
-            page, legend_pt, block_h, beside_w, content.w, content.h - 2 * end_room
-        )
-        if not data.layer_names:
-            band_h = block_h
-        map_area = Box(content.x, content.y, content.w, content.h - band_h - g)
-        band_y = map_area.y + map_area.h + g
-        block_box = Box(content.x, band_y, block_w, block_h)
-        if under:
-            legend_box = Box(
-                content.x, band_y + block_h + g, content.w, band_h - block_h - g
-            )
-        else:
-            legend_box = Box(content.x + block_w + g, band_y, beside_w, band_h)
+    arrangements = [_field_column, _field_band]
+    if not page.landscape:
+        arrangements.reverse()
+    aspect = data.extent_width / data.extent_height
+
+    def shown(arrangement: tuple[Box, Box, Box]) -> float:
+        map_area = arrangement[0]
+        w, h = _fit(aspect, map_area.w - 2 * side_room, map_area.h - 2 * end_room)
+        return w * h
+
+    # max() keeps the first of equals: the orientation's own arrangement.
+    map_area, block_box, legend_box = max(
+        (arrange(page, block, legend_pt, end_room) for arrange in arrangements),
+        key=shown,
+    )
     frame = Box(
         map_area.x + side_room,
         map_area.y + end_room,
@@ -715,6 +688,66 @@ def _field_map(page: _Page) -> _Layout:
         items,
         _page_style(pal),
     )
+
+
+def _field_column(
+    page: _Page, block: _TitleBlock, legend_pt: float, end_room: float
+) -> tuple[Box, Box, Box]:
+    """Fieldbook's map area, title block and legend with the block and
+    legend in a column at the right."""
+    m, g = page.spacing.margin, page.spacing.gutter
+    content = Box(m, m, page.width - 2 * m, page.height - 2 * m)
+    column_w = min(max(content.w * 0.27, 70.0), 95.0 * page.scale)
+    map_area = Box(content.x, content.y, content.w - column_w - g, content.h)
+    column = Box(map_area.x + map_area.w + g, content.y, column_w, content.h)
+    block_box = Box(column.x, column.y, column.w, block.height(column.w))
+    legend_box = Box(
+        column.x,
+        block_box.y + block_box.h + g,
+        column.w,
+        column.h - block_box.h - g,
+    )
+    if _legend_need(page, legend_pt, column.w) > legend_box.h:
+        # A legend longer than the column under the block: a strip
+        # across the whole sheet, under the map and the block, the map
+        # keeping half the sheet's height (`MAP_MIN_SHARE`).
+        strip_h = min(
+            _legend_need(page, legend_pt, content.w),
+            legend_room_cap(content.h - 2 * end_room, g),
+            content.h - block_box.h - g,
+        )
+        map_area = Box(map_area.x, map_area.y, map_area.w, content.h - strip_h - g)
+        legend_box = Box(content.x, map_area.y + map_area.h + g, content.w, strip_h)
+    return map_area, block_box, legend_box
+
+
+def _field_band(
+    page: _Page, block: _TitleBlock, legend_pt: float, end_room: float
+) -> tuple[Box, Box, Box]:
+    """Fieldbook's map area, title block and legend with the block and
+    legend in a band under the map."""
+    m, g = page.spacing.margin, page.spacing.gutter
+    content = Box(m, m, page.width - 2 * m, page.height - 2 * m)
+    block_w = min(max(content.w * 0.5, 80.0), content.w)
+    block_h = block.height(block_w)
+    # The legend beside the block, as tall as it needs; or, when that
+    # makes the band taller, across the sheet under the block.
+    beside_w = content.w - block_w - g
+    under, band_h = _band_layout(
+        page, legend_pt, block_h, beside_w, content.w, content.h - 2 * end_room
+    )
+    if not page.data.layer_names:
+        band_h = block_h
+    map_area = Box(content.x, content.y, content.w, content.h - band_h - g)
+    band_y = map_area.y + map_area.h + g
+    block_box = Box(content.x, band_y, block_w, block_h)
+    if under:
+        legend_box = Box(
+            content.x, band_y + block_h + g, content.w, band_h - block_h - g
+        )
+    else:
+        legend_box = Box(content.x + block_w + g, band_y, beside_w, band_h)
+    return map_area, block_box, legend_box
 
 
 def _poster(page: _Page) -> _Layout:

@@ -72,7 +72,9 @@ layout** builds the one selected.
 **Characterful**
 
 - **Fieldbook** - a survey sheet with a labelled grid in the map's own units
-  and a title block with the scale, CRS, author and date.
+  and a title block with the scale, CRS, author and date, in a column beside
+  the map or a band under it - whichever shows your view larger, so a wide
+  view gets a wide frame.
 - **Broadside** - a poster: a big headline that steps down in size for long
   titles, a dominant map, and the story, legend and scale bar in a rail beside
   it (a band below it on a portrait page).

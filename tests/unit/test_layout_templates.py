@@ -216,6 +216,37 @@ class TestPage:
             plan_template("classic", _input(extent_width=0.0))
 
 
+def _view_share(plan: TemplatePlan, data: TemplateInput) -> float:
+    """How much of the main frame the canvas view fills; the rest is padding
+    the template added. Whitespace inside the view itself is the user's and
+    counts as view."""
+    box = plan.frames[0].focus or plan.frames[0].box
+    aspect = data.extent_width / data.extent_height
+    w = min(box.w, box.h * aspect)
+    return (w * (w / aspect)) / (box.w * box.h)
+
+
+class TestFieldbookFraming:
+    """Fieldbook kept its block and legend in a column beside the map on a
+    landscape sheet, so a wide view got a near-square frame and filled about
+    half of it. It now takes the column or a band under the map, whichever
+    shows the view larger."""
+
+    @pytest.mark.parametrize("size", ["A4", "A3"])
+    @pytest.mark.parametrize("shape", ["wide", "tall"])
+    def test_a_long_view_fills_most_of_its_frame(self, shape, size) -> None:
+        data = _input(shape, page_size=size)
+        plan = plan_template("field-map", data)
+        assert _view_share(plan, data) >= 0.7
+
+    def test_a_square_view_keeps_the_column_on_a_landscape_sheet(self) -> None:
+        data = _input("square", orientation="landscape")
+        plan = plan_template("field-map", data)
+        frame = plan.frames[0].box
+        assert frame.w < plan.page_width * 0.7
+        assert frame.h > plan.page_height * 0.7
+
+
 class TestDesigns:
     def test_ten_designs_with_stable_ids(self) -> None:
         assert template_ids()[:10] == (
