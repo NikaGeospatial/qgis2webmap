@@ -1595,7 +1595,9 @@ class CartographController:
                 lambda: self._legend_entries,
                 canvas=self._map_canvas(),
                 open_preview=self._open_cvd_preview,
-                ask_nika=lambda findings: self.on_handoff("critique", findings),
+                # The hand-off is not ready for cartographs: greyed out here
+                # too, as on the Share menu.
+                ask_nika=None,
                 parent=self.dialog,
             )
 

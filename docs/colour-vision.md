@@ -81,10 +81,11 @@ save while the dialog is open; before the first save it is empty.
 
 ## Ask NIKA to fix
 
-**Ask NIKA to fix ↗** opens the [hand-off dialog](enhance-with-ai.md#hand-off-to-nika)
-with the findings already written into the prompt - each pair, the
-conditions it collapses under and how close it comes - so an AI agent can
-propose a safer palette. It is greyed out when nothing collapses.
+**Ask NIKA to fix ↗** is shown greyed out for now: the
+[hand-off to NIKA](enhance-with-ai.md#hand-off-to-nika) is not available for
+cartographs yet. The findings above name each pair, the conditions it
+collapses under and how close it comes, which is what the advice below works
+from.
 
 ## Fixing a palette yourself
 

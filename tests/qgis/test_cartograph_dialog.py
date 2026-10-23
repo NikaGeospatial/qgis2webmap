@@ -1963,6 +1963,9 @@ class TestAccessibility:
             assert cartograph._colour_vision is first
             # The survey's static legend is literal rows: the check sees them.
             assert [e.color for e in cartograph._legend_entries] == ["#eba941"]
+            # The hand-off is not ready for cartographs, here as on Share.
+            assert not first.ask_button.isEnabled()
+            assert first.ask_button.toolTip() == "Not available for cartographs yet"
         finally:
             dialog.close()
 

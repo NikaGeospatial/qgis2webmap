@@ -1031,8 +1031,9 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="445" />
-      <source>NIKA is not available here.</source>
-      <translation>此处无法使用 NIKA。</translation>
+      <location filename="../ui/cartograph/controller.py" line="1918" />
+      <source>Not available for cartographs yet</source>
+      <translation>图版暂不可用</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="140" />
@@ -1257,22 +1258,22 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2138" />
+      <location filename="../ui/cartograph/controller.py" line="2140" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>在此描述地图：它展示了什么，数据来自哪里。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2139" />
+      <location filename="../ui/cartograph/controller.py" line="2141" />
       <source>Key figure</source>
       <translation>关键数据</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2140" />
+      <location filename="../ui/cartograph/controller.py" line="2142" />
       <source>What the number means</source>
       <translation>该数字的含义</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2141" />
+      <location filename="../ui/cartograph/controller.py" line="2143" />
       <source>Author</source>
       <translation>作者</translation>
     </message>
@@ -1417,7 +1418,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1563" />
-      <location filename="../ui/cartograph/controller.py" line="1607" />
+      <location filename="../ui/cartograph/controller.py" line="1609" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>色觉：模拟并检查图例的颜色</translation>
     </message>
@@ -1440,138 +1441,138 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>分享</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1724" />
+      <location filename="../ui/cartograph/controller.py" line="1726" />
       <source>Saving the latest changes first - it opens when saved.</source>
       <translation>正在先保存最新的更改 - 保存后即会打开。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1813" />
+      <location filename="../ui/cartograph/controller.py" line="1815" />
       <location filename="../ui/main_dialog.py" line="3097" />
       <source>Copy file path</source>
       <translation>复制文件路径</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1814" />
+      <location filename="../ui/cartograph/controller.py" line="1816" />
       <source>Copies the cartograph's path</source>
       <translation>复制图版的路径</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1820" />
+      <location filename="../ui/cartograph/controller.py" line="1822" />
       <source>Shows the cartograph in your file manager</source>
       <translation>在文件管理器中显示图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1825" />
+      <location filename="../ui/cartograph/controller.py" line="1827" />
       <source>Open in browser</source>
       <translation>在浏览器中打开</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1826" />
+      <location filename="../ui/cartograph/controller.py" line="1828" />
       <source>Opens the cartograph in your browser</source>
       <translation>在浏览器中打开图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1831" />
+      <location filename="../ui/cartograph/controller.py" line="1833" />
       <location filename="../ui/main_dialog.py" line="1170" />
       <location filename="../ui/main_dialog.py" line="3007" />
       <source>Export</source>
       <translation>导出</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1834" />
+      <location filename="../ui/cartograph/controller.py" line="1836" />
       <source>Export PDF...</source>
       <translation>导出 PDF...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1835" />
-      <location filename="../ui/cartograph/controller.py" line="1896" />
+      <location filename="../ui/cartograph/controller.py" line="1837" />
+      <location filename="../ui/cartograph/controller.py" line="1898" />
       <source>Opens the cartograph and prints it at true page size</source>
       <translation>打开图版并按真实页面大小打印</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1841" />
+      <location filename="../ui/cartograph/controller.py" line="1843" />
       <source>Export PNG...</source>
       <translation>导出 PNG...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1842" />
+      <location filename="../ui/cartograph/controller.py" line="1844" />
       <source>300 dpi image of the first page</source>
       <translation>首页的 300 dpi 图像</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1847" />
+      <location filename="../ui/cartograph/controller.py" line="1849" />
       <source>Export QGIS layout template (.qpt)...</source>
       <translation>导出 QGIS 布局模板 (.qpt)...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1848" />
+      <location filename="../ui/cartograph/controller.py" line="1850" />
       <source>Round trip back into QGIS</source>
       <translation>回传到 QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1853" />
+      <location filename="../ui/cartograph/controller.py" line="1855" />
       <source>Print settings...</source>
       <translation>打印设置...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1854" />
+      <location filename="../ui/cartograph/controller.py" line="1856" />
       <source>Page size, bleed, crop marks and colour profile for Export PDF</source>
       <translation>“导出 PDF”所用的页面大小、出血、裁切标记和颜色配置文件</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1863" />
+      <location filename="../ui/cartograph/controller.py" line="1865" />
       <location filename="../ui/main_dialog.py" line="3122" />
       <source>NIKA hand-off</source>
       <translation>交给 NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1866" />
+      <location filename="../ui/cartograph/controller.py" line="1868" />
       <location filename="../ui/main_dialog.py" line="3125" />
       <source>Prepare enhancement prompt...</source>
       <translation>准备改进提示...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1867" />
+      <location filename="../ui/cartograph/controller.py" line="1869" />
       <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>打开一个用于改进此图版的提示，可复制到 NIKA 或其他 AI 助手。此处不会发送任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1875" />
+      <location filename="../ui/cartograph/controller.py" line="1877" />
       <location filename="../ui/main_dialog.py" line="3134" />
       <source>Prepare critique prompt...</source>
       <translation>准备评审提示...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1876" />
+      <location filename="../ui/cartograph/controller.py" line="1878" />
       <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>打开一个请求评审此图版的提示，可复制到 NIKA 或其他 AI 助手。此处不会发送任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1891" />
+      <location filename="../ui/cartograph/controller.py" line="1893" />
       <source>Makes a CMYK or ICC PDF with QGIS's own exporter from the print layout, and asks where to save it</source>
       <translation>使用 QGIS 自带的导出器从打印布局生成 CMYK 或 ICC PDF，并询问保存位置</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2078" />
-      <location filename="../ui/cartograph/controller.py" line="2067" />
-      <location filename="../ui/cartograph/controller.py" line="2092" />
+      <location filename="../ui/cartograph/controller.py" line="2080" />
+      <location filename="../ui/cartograph/controller.py" line="2069" />
+      <location filename="../ui/cartograph/controller.py" line="2094" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="322" />
       <source>Export PDF</source>
       <translation>导出 PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2080" />
+      <location filename="../ui/cartograph/controller.py" line="2082" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2115" />
-      <location filename="../ui/cartograph/controller.py" line="2127" />
+      <location filename="../ui/cartograph/controller.py" line="2117" />
+      <location filename="../ui/cartograph/controller.py" line="2129" />
       <source>Save layout template as</source>
       <translation>布局模板另存为</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2117" />
+      <location filename="../ui/cartograph/controller.py" line="2119" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>QGIS 布局模板 (*.qpt)</translation>
     </message>
@@ -1621,33 +1622,28 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>无法生成图版：{message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1680" />
+      <location filename="../ui/cartograph/controller.py" line="1682" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
       <translation>还没有可预览的内容 - 图版尚未保存。请在面板中选择一个打印布局。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1909" />
+      <location filename="../ui/cartograph/controller.py" line="1911" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>图版保存后可用 - 请选择一个打印布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1913" />
+      <location filename="../ui/cartograph/controller.py" line="1915" />
       <source>Choose a print layout first</source>
       <translation>请先选择一个打印布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1916" />
-      <source>Not available for cartographs yet</source>
-      <translation>图版暂不可用</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="2068" />
+      <location filename="../ui/cartograph/controller.py" line="2070" />
       <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
       <translation>CMYK 或 ICC PDF 由 QGIS 根据打印布局生成，只有在所有画框都为静态时才可用。请在“地图画框”中把实时画框设为静态，或在打印设置中选择 RGB。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2094" />
-      <location filename="../ui/cartograph/controller.py" line="2131" />
+      <location filename="../ui/cartograph/controller.py" line="2096" />
+      <location filename="../ui/cartograph/controller.py" line="2133" />
       <source>Saved {path}</source>
       <translation>已保存：{path}</translation>
     </message>
@@ -1662,13 +1658,13 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>已根据画布创建打印布局“{name}”。可随时在布局设计器中编辑它；图版会随之更新。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1931" />
+      <location filename="../ui/cartograph/controller.py" line="1933" />
       <location filename="../ui/main_dialog.py" line="4220" />
       <source>Copied {path}</source>
       <translation>已复制：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1943" />
+      <location filename="../ui/cartograph/controller.py" line="1945" />
       <location filename="../ui/main_dialog.py" line="4240" />
       <source>Opened {path}</source>
       <translation>已打开：{path}</translation>
@@ -1696,12 +1692,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>无法保存图版：{error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1737" />
+      <location filename="../ui/cartograph/controller.py" line="1739" />
       <source>Could not start the local preview server ({error}), so the cartograph opened from its file. If it does not print or download, check that local connections to {host} are allowed, then try again.</source>
       <translation>无法启动本地预览服务器（{error}），因此图版已从其文件打开。如果它没有打印或下载，请检查是否允许到 {host} 的本地连接，然后重试。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2128" />
+      <location filename="../ui/cartograph/controller.py" line="2130" />
       <source>Could not save the layout template to {path}.</source>
       <translation>无法将布局模板保存到 {path}。</translation>
     </message>

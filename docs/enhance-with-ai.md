@@ -81,7 +81,7 @@ never points at a stale file.
 
 The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
 
-![The Hand off to NIKA dialog for a cartograph: NIKA desktop not found, with a Download button; NIKA desktop chosen as the target and Critique this cartograph as the task; the prompt below, with Copy prompt highlighted.](images/handoff-dialog.png)
+![The Hand off to NIKA dialog for a web map: NIKA desktop not found, with a Download button; NIKA desktop chosen as the target and Critique this web map as the task; the prompt below, with Copy prompt highlighted.](images/handoff-dialog.png)
 
 1. **NIKA desktop** - whether the app is installed on this computer, and its
    version when it is. Found, **Open NIKA desktop** is enabled. Not found,
@@ -92,16 +92,13 @@ The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
    - **Paste into** - **NIKA desktop**, for a prompt its map skills recognise,
      or **Other agent**, for a prompt any coding assistant can follow, which
      starts by sending it to OnlyMap's own documentation - the
-     [OnlyMap skill](https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/skills/onlymapjs/SKILL.md)
-     for a web map, the *PRINT LAYOUTS* entry of OnlyMap's
-     [llms.txt](https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/llms.txt)
-     for a cartograph.
+     [OnlyMap skill](https://raw.githubusercontent.com/NikaGeospatial/onlymap-js/main/skills/onlymapjs/SKILL.md).
    - **Task** - **Critique** asks for a cartographer's review, ranked by
      impact, and asks the agent to change nothing until you confirm.
      **Enhance** asks it to improve the map or page without changing its data,
      fixing what the Fidelity or Checks tab marked *Changed*. The menu row you chose
      preselects it.
-   - **Files** - the map or cartograph file, ticked. **Change files...** picks
+   - **Files** - the map file, ticked. **Change files...** picks
      others from the same folder; anything from elsewhere is left out, because
      the agent works in that folder.
    - An optional box for your own instructions.
@@ -115,8 +112,8 @@ The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
 service: the prompt goes onto your clipboard or into a file, and you paste it
 where you choose.
 
-From the [Colour vision](colour-vision.md) dialog, **Ask NIKA to fix ↗** opens
-the same dialog with the colour findings already in the prompt.
+The [Colour vision](colour-vision.md) dialog's **Ask NIKA to fix ↗** is a
+cartograph tool, so it is greyed out for now too.
 
 ## Or any assistant that can read files
 
@@ -164,7 +161,7 @@ A [cartograph](qgis-print-layout-to-html.md) is the same kind of file: a page
 described in readable markup - `<om-cartograph>`, `<om-frame>`, `<om-legend>` -
 with sizes in millimetres. The same two rules apply, plus one: **keep every
 element's `id`**, because the legend, scale bar and north arrow find their map
-by it. The hand-off prompt says so for you. The ids are readable: each is
+by it. The ids are readable: each is
 named after the item's ID in the QGIS layout designer - `frame_main_map`,
 `legend_legend` - so give layout items sensible IDs and the HTML, and any
 agent working on it, reads the same names you do.

@@ -442,7 +442,7 @@ class AccessibilityDialog(QDialog):
     def _update_ask_button(self) -> None:
         if self._ask_nika is None:
             self.ask_button.setEnabled(False)
-            self.ask_button.setToolTip(tr("NIKA is not available here."))
+            self.ask_button.setToolTip(tr("Not available for cartographs yet"))
         elif not self._lint.collapses:
             self.ask_button.setEnabled(False)
             self.ask_button.setToolTip(tr("Nothing to fix: no classes collapse."))
