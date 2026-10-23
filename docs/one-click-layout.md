@@ -93,8 +93,8 @@ layout** builds the one selected.
   locator, legend and source. The sheet number (*2 / 12*) shows once you turn
   the layout's atlas on, and stays blank on a single page.
 - **Town Hall** - large print for public meetings: a big title, an
-  easy-to-read legend in large type, and nothing laid over the map. It
-  enlarges the page's own text; it does not make your map's symbols any
+  easy-to-read legend in large type beside the map or under it, whichever
+  shows your view larger, and nothing laid over the map. It enlarges the page's own text; it does not make your map's symbols any
   easier to tell apart.
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own.

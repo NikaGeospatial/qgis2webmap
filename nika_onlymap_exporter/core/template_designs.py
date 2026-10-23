@@ -42,6 +42,7 @@ from .layout_templates import (
     FrameSlot,
     LayoutTemplate,
     _char_em,
+    _fit_area,
     _Layout,
     _legend_need,
     _legend_plan,
@@ -741,11 +742,27 @@ def _town_hall(page: _Page) -> _Layout:
     sb_w = min(60.0 * min(s, 2.0), body.w * 0.32)
     column_room = body.h - sb_h - 2 * g
     row_w = body.w - sb_w - 2 * g
-    if (
-        page.landscape
-        and page.aspect <= 1.8
-        and (_legend_need(page, least_pt, column_w) <= column_room)
-    ):
+    row_fits = _legend_need(page, least_pt, row_w) <= body.h * 0.4
+    column_fits = _legend_need(page, least_pt, column_w) <= column_room
+    if row_fits:
+        row_room = body.h * 0.4
+        row_size = _large_legend(page, row_w, row_room, large_pt, least_pt)
+        row_h = max(min(_legend_need(page, row_size, row_w), row_room), sb_h)
+        if column_fits:
+            # Whichever shows the canvas view larger: the column for a view
+            # about as tall as the room beside it, the row for a wider one;
+            # a tie keeps the column on a landscape sheet, the row on a
+            # portrait one.
+            column_frame = Box(body.x, body.y, body.w - column_w - 2 * g, body.h)
+            row_frame = Box(body.x, body.y, body.w, body.h - row_h - 2 * g)
+            column_area = _fit_area(page.aspect, column_frame)
+            row_area = _fit_area(page.aspect, row_frame)
+            column_fits = column_area > row_area or (
+                page.landscape and column_area == row_area
+            )
+    else:
+        column_fits = column_fits and page.landscape
+    if column_fits:
         # A column right of the map, as tall as the map.
         frame = Box(body.x, body.y, body.w - column_w - 2 * g, body.h)
         cx = frame.x + frame.w + 2 * g
@@ -753,12 +770,10 @@ def _town_hall(page: _Page) -> _Layout:
         legend_h = min(_legend_need(page, size, column_w), column_room)
         legend_box = Box(cx, body.y, column_w, legend_h)
         scalebar_box = Box(cx, body.y + body.h - sb_h, min(column_w, 60.0 * s), sb_h)
-    elif _legend_need(page, least_pt, row_w) <= body.h * 0.4:
+    elif row_fits:
         # A row under the map; a wide map on a landscape sheet keeps the
         # page's whole width this way.
-        room = body.h * 0.4
-        size = _large_legend(page, row_w, room, large_pt, least_pt)
-        legend_h = max(min(_legend_need(page, size, row_w), room), sb_h)
+        size, legend_h = row_size, row_h
         frame = Box(body.x, body.y, body.w, body.h - legend_h - 2 * g)
         row_y = frame.y + frame.h + 2 * g
         legend_box = Box(body.x, row_y, row_w, legend_h)
