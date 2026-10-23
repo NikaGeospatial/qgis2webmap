@@ -103,6 +103,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # if this tab had one - collapses into one rebuild, the same ~600 ms the plan
 # settles on for the document model.
 AUTOSAVE_DEBOUNCE_MS = 600
+#: How long a restyle burst must rest before the preview is redrawn.
+REFRESH_DEBOUNCE_MS = 120
 STATUS_TICK_MS = 1000
 # How long closing waits for a running build, as `main_dialog`'s own job.
 SHUTDOWN_WAIT_MS = 5000
@@ -264,6 +266,13 @@ class CartographController:
         self._autosave_timer.setSingleShot(True)
         self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
         self._autosave_timer.timeout.connect(self._run_autosave)
+        # A restyle in QGIS arrives as a stream of events; each refresh drops
+        # the preview's caches and starts the maps drawing again, so only the
+        # last of a burst is worth it.
+        self._refresh_timer = QTimer(dialog)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(REFRESH_DEBOUNCE_MS)
+        self._refresh_timer.timeout.connect(self._refresh_current_layout)
 
         self._status_timer = QTimer(dialog)
         self._status_timer.setInterval(STATUS_TICK_MS)
@@ -303,6 +312,7 @@ class CartographController:
         """Release everything that outlives a single widget - called once,
         from `MainDialog._shutdown`, alongside the web map's own teardown."""
         self._autosave_timer.stop()
+        self._refresh_timer.stop()
         self._status_timer.stop()
         # Same rule as the web map's job (`MainDialog._shutdown`): a build
         # thread still running when its dialog is destroyed takes QGIS down.
@@ -606,7 +616,7 @@ class CartographController:
             LayerRevisions,
             cartograph_from_canvas,
             preview_state_key,
-            template_preview,
+            template_preview_async,
             view_input,
         )
         from ...core.layout_templates import plan_template
@@ -676,7 +686,7 @@ class CartographController:
             width_px: int,
             figures: Sequence[tuple[str, str]] | None = None,
         ):
-            return template_preview(
+            return template_preview_async(
                 settings.extent(),
                 settings.destinationCrs(),
                 layers,
@@ -1141,8 +1151,13 @@ class CartographController:
         if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
             # The preview draws from caches the layout keeps per item; a
             # restyled layer is only redrawn once they are refreshed.
-            self._current_layout.refresh()
+            self._refresh_timer.start()
             self.schedule_autosave()
+
+    def _refresh_current_layout(self) -> None:
+        """One refresh for a burst of restyles (`_refresh_timer`)."""
+        if self.state.output is DialogOutput.CARTOGRAPH and self._current_layout:
+            self._current_layout.refresh()
 
     def _on_layout_content_changed(self, *_args: object) -> None:
         if self._exporting:

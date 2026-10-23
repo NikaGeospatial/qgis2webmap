@@ -196,6 +196,19 @@ def _saved_once(qgis_app, project, fake, tmp_path):
     return dialog
 
 
+def _drawn(qgis_app, preview):
+    """The image of a preview, once a background one (`PendingPreview`) is
+    done; `None` if it was not drawn."""
+    from qgis.PyQt.QtGui import QImage
+
+    if preview is None or isinstance(preview, QImage):
+        return preview
+    images: list[object] = []
+    preview.finished.connect(images.append)
+    assert _wait_for(qgis_app, lambda: images, timeout=60.0)
+    return images[0]
+
+
 def _wait_for(qgis_app, predicate, timeout=10.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -526,6 +539,27 @@ class TestAutosave:
             )
             assert target.read_text() == first_content
             assert list(tmp_path.glob("*.tmp")) == []
+        finally:
+            dialog.close()
+
+    def test_a_burst_of_restyles_refreshes_the_preview_once(
+        self, qgis_app, project, fake_cartograph_export
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            layout = cartograph._current_layout
+            assert layout is not None
+            refreshes: list[None] = []
+            layout.refreshed.connect(lambda: refreshes.append(None))
+            for _ in range(5):
+                cartograph.on_project_content_changed()
+            assert refreshes == []
+            assert _wait_for(qgis_app, lambda: refreshes)
+            qgis_app.processEvents()
+            assert len(refreshes) == 1
         finally:
             dialog.close()
 
@@ -1643,6 +1677,7 @@ class TestCanvasAndImport:
             assert picked_template.shown == 1
             # The picker's previews draw the real page for this canvas.
             (preview,) = picked_template.previews
+            preview = _drawn(qgis_app, preview)
             assert preview is not None and not preview.isNull()
             layout = project.layoutManager().layoutByName(
                 dialog._cartograph.layout_combo.currentText()
@@ -1755,6 +1790,7 @@ class TestCanvasAndImport:
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline and (
                 picker._queue
+                or picker._inflight is not None
                 or picker._timer.isActive()
                 or picker._scroll_rest.isActive()
             ):
@@ -2392,7 +2428,7 @@ class TestCartographTab:
             refreshed: list[bool] = []
             layout.refreshed.connect(lambda: refreshed.append(True))
             dialog._cartograph.on_project_content_changed()
-            assert refreshed
+            assert _wait_for(qgis_app, lambda: refreshed)
         finally:
             dialog.close()
 

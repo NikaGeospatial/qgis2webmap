@@ -44,6 +44,7 @@ from qgis.core import (
     QgsLayerTreeLayer,
     QgsLayoutExporter,
     QgsLayoutItemLegend,
+    QgsLayoutItemMap,
     QgsLayoutUtils,
     QgsLegendRenderer,
     QgsLegendStyle,
@@ -60,8 +61,8 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.gui import QgsMapCanvas
-from qgis.PyQt.QtCore import QSize, Qt
-from qgis.PyQt.QtGui import QImage
+from qgis.PyQt.QtCore import QObject, QRectF, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from . import layout_templates
 from .cartograph_import import RoundTripIssue
@@ -273,6 +274,159 @@ def template_preview(
         )
     image.setText(PREVIEW_LEGEND_LEFT_OUT_KEY, str(left_out))
     return image
+
+
+class PendingPreview(QObject):
+    """A template preview whose maps QGIS draws in the background.
+
+    The page is built at once (the cheap part, on the GUI thread) and painted
+    the way the layout designer paints it: each map item starts its own
+    background render job and shows a placeholder until it is done. The event
+    loop stays free meanwhile. When every map has reported, the page is
+    painted again from their caches and `finished` carries the image, or
+    `None` when it could not be drawn. `cancel()` drops the page and with it
+    any job still running; nothing is emitted afterwards.
+
+    The image is what `template_preview` draws, but not pixel for pixel: a
+    map's cache is resampled onto the thumbnail instead of drawn straight at
+    its size, so edges differ in anti-aliasing.
+    """
+
+    finished = pyqtSignal(object)
+
+    def __init__(
+        self,
+        project: QgsProject,
+        built: BuiltLayout,
+        size: QSize,
+        left_out: int,
+        was_dirty: bool,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._project = project
+        #: Whether the project was already changed: if not, nothing this
+        #: preview does (building, drawing, dropping the page) may leave it so.
+        self._was_dirty = was_dirty
+        self._layout: QgsPrintLayout | None = built.layout
+        self._size = size
+        self._left_out = left_out
+        self._waiting = {
+            id(item)
+            for item in built.layout.items()
+            if isinstance(item, QgsLayoutItemMap)
+        }
+        self._done = False
+        # The page is shown by the first paint, which starts the map jobs.
+        for item in built.layout.items():
+            if isinstance(item, QgsLayoutItemMap):
+                # By id, not the item: a closure holding the item would keep
+                # its Python wrapper alive after the page is dropped.
+                item.previewRefreshed.connect(
+                    functools.partial(self._on_map_refreshed, id(item))
+                )
+        self._paint()
+        if not self._waiting:
+            QTimer.singleShot(0, self._finish)
+
+    @property
+    def active(self) -> bool:
+        return self._layout is not None
+
+    def _paint(self) -> QImage:
+        layout = self._layout
+        if layout is None:
+            return QImage()
+        image = QImage(self._size, QImage.Format.Format_ARGB32)
+        image.fill(QColor("white"))
+        page = layout.pageCollection().page(0)
+        # Pixels per metre of the page, so the map caches follow the size.
+        per_metre = round(self._size.width() / (page.rect().width() / 1000.0))
+        image.setDotsPerMeterX(per_metre)
+        image.setDotsPerMeterY(per_metre)
+        with self._project_kept():
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            layout.render(
+                painter,
+                QRectF(0, 0, self._size.width(), self._size.height()),
+                QRectF(page.pos(), page.rect().size()),
+            )
+            painter.end()
+        return image
+
+    @contextlib.contextmanager
+    def _project_kept(self) -> Iterator[None]:
+        try:
+            yield
+        finally:
+            if not self._was_dirty and self._project.isDirty():
+                self._project.setDirty(False)
+
+    def _on_map_refreshed(self, key: int) -> None:
+        with self._project_kept():
+            self._waiting.discard(key)
+        if not self._waiting:
+            self._finish()
+
+    def _finish(self) -> None:
+        if self._done or self._layout is None:
+            return
+        self._done = True
+        image = self._paint()
+        image.setText(PREVIEW_LEGEND_LEFT_OUT_KEY, str(self._left_out))
+        self._release()
+        self.finished.emit(image)
+
+    def cancel(self) -> None:
+        """Stop drawing: the page is dropped, which ends its map jobs."""
+        self._done = True
+        self._release()
+
+    def _release(self) -> None:
+        layout, self._layout = self._layout, None
+        if layout is not None:
+            with self._project_kept():
+                pass
+
+
+def template_preview_async(
+    extent: QgsRectangle,
+    crs: QgsCoordinateReferenceSystem,
+    layers: Sequence[QgsMapLayer],
+    project: QgsProject,
+    *,
+    template_id: str,
+    width_px: int,
+    rotation: float = 0.0,
+    page_size: str = "A4",
+    orientation: str = "auto",
+    placeholders: Mapping[str, str] | None = None,
+    figures: Sequence[tuple[str, str]] | None = None,
+) -> PendingPreview:
+    """`template_preview`, drawn in the background: see `PendingPreview`.
+    The arguments are the same; building the page can raise, as there."""
+    was_dirty = project.isDirty()
+    with _project_dirty_state_kept(project):
+        plan, _spec, built, left_out = _build_from_view(
+            extent,
+            crs,
+            layers,
+            project,
+            rotation=rotation,
+            page_size=page_size,
+            orientation=orientation,
+            template_id=template_id,
+            placeholders=placeholders,
+            add_to_project=False,
+            figures=figures,
+        )
+    height_px = max(1, round(width_px * plan.page_height / plan.page_width))
+    return PendingPreview(
+        project, built, QSize(width_px, height_px), left_out, was_dirty
+    )
 
 
 def view_input(

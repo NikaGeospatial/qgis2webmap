@@ -333,6 +333,80 @@ class TestPreview:
         )
         assert project.isDirty()
 
+    @staticmethod
+    def _wait(qgis_app, pending) -> list:
+        """Spin the event loop until the pending preview reports."""
+        import time
+
+        got: list = []
+        pending.finished.connect(got.append)
+        deadline = time.monotonic() + 30
+        while not got and time.monotonic() < deadline:
+            qgis_app.processEvents()
+        return got
+
+    def test_the_background_page_matches_the_direct_one(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            PREVIEW_LEGEND_LEFT_OUT_KEY,
+            template_preview_async,
+        )
+
+        kwargs = {"template_id": "locator", "width_px": 360}
+        direct = template_preview(_view(parcels), UTM, [parcels], project, **kwargs)
+        pending = template_preview_async(
+            _view(parcels), UTM, [parcels], project, **kwargs
+        )
+        (image,) = self._wait(qgis_app, pending)
+        assert image.size() == direct.size()
+        assert image.text(PREVIEW_LEGEND_LEFT_OUT_KEY) == direct.text(
+            PREVIEW_LEGEND_LEFT_OUT_KEY
+        )
+        # Not pixel for pixel (the maps are resampled from their caches),
+        # but the same page: the mean channel error stays tiny.
+        total = 0
+        for y in range(direct.height()):
+            for x in range(direct.width()):
+                a, b = image.pixelColor(x, y), direct.pixelColor(x, y)
+                total += abs(a.red() - b.red()) + abs(a.green() - b.green())
+                total += abs(a.blue() - b.blue())
+        assert total / (direct.width() * direct.height() * 3) < 2.0
+
+    def test_the_background_page_leaves_the_project_clean(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            template_preview_async,
+        )
+
+        project.setDirty(False)
+        layouts = list(project.layoutManager().layouts())
+        pending = template_preview_async(
+            _view(parcels), UTM, [parcels], project, template_id="poster", width_px=120
+        )
+        self._wait(qgis_app, pending)
+        assert not project.isDirty()
+        assert list(project.layoutManager().layouts()) == layouts
+
+    def test_a_cancelled_background_page_never_reports(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            template_preview_async,
+        )
+
+        pending = template_preview_async(
+            _view(parcels), UTM, [parcels], project, template_id="poster", width_px=120
+        )
+        got: list = []
+        pending.finished.connect(got.append)
+        pending.cancel()
+        assert not pending.active
+        for _ in range(50):
+            qgis_app.processEvents()
+        assert got == []
+
 
 def _categorized(name: str, categories: int):
     """The parcels as `categories` land-use classes -- one legend heading

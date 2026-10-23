@@ -86,6 +86,7 @@ from ...core import layout_templates
 from ...core.canvas_cartograph import (
     FIGURE_VARIABLES,
     PREVIEW_LEGEND_LEFT_OUT_KEY,
+    PendingPreview,
     project_figure_rows,
     set_project_figures,
 )
@@ -180,8 +181,11 @@ _FIGURE_VALUE_WIDTH = 160
 
 class PreviewRenderer(Protocol):
     """`render(template_id, page_size, orientation, width_px, figures=...)`
-    -> the preview, or `None` when it cannot be drawn. `figures` are the key
-    figure rows as typed for a design that takes them, `()` for the rest."""
+    -> the preview, or `None` when it cannot be drawn; or a pending preview
+    (`canvas_cartograph.PendingPreview`: a `finished` signal carrying the
+    image or `None`, and `cancel()`), drawn in the background while the
+    picker stays usable. `figures` are the key figure rows as typed for a
+    design that takes them, `()` for the rest."""
 
     def __call__(
         self,
@@ -191,7 +195,7 @@ class PreviewRenderer(Protocol):
         width_px: int,
         *,
         figures: Figures,
-    ) -> QImage | None: ...
+    ) -> QImage | PendingPreview | None: ...
 
 
 class PreviewPlanner(Protocol):
@@ -723,6 +727,9 @@ class TemplatePicker(QDialog):
         #: The designs still to draw for the current settings, most useful
         #: first. Recomputed whenever what is useful changes.
         self._queue: list[str] = []
+        #: The design being drawn in the background, its page key and the
+        #: pending preview; one at a time, so the order above holds.
+        self._inflight: tuple[str, _PageKey, PendingPreview] | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(0)
@@ -952,6 +959,7 @@ class TemplatePicker(QDialog):
 
     def accept(self) -> None:
         self._timer.stop()
+        self._cancel_inflight()
         self._figures_timer.stop()
         self._save_choice()
         self._save_figures()
@@ -959,6 +967,7 @@ class TemplatePicker(QDialog):
 
     def reject(self) -> None:
         self._timer.stop()
+        self._cancel_inflight()
         self._figures_timer.stop()
         super().reject()
 
@@ -1038,9 +1047,16 @@ class TemplatePicker(QDialog):
             else None
         )
         order = ([chosen] if chosen else []) + self.visible_ids() + self.near_ids()
+        if self._inflight is not None:
+            drawing, drawing_key, _pending = self._inflight
+            if drawing not in order or self._key(drawing) != drawing_key:
+                # Not wanted any more: a newer request has taken its place.
+                self._cancel_inflight()
         queue: list[str] = []
         for template_id in order:
             if template_id in queue:
+                continue
+            if self._inflight is not None and template_id == self._inflight[0]:
                 continue
             key = self._key(template_id)
             if key in self._pages or key in self._failed:
@@ -1076,7 +1092,7 @@ class TemplatePicker(QDialog):
         self._scroll_rest.start()
 
     def _render_next(self) -> None:
-        if self._scroll_rest.isActive():
+        if self._scroll_rest.isActive() or self._inflight is not None:
             return
         self._reprioritise()
         if not self._queue:
@@ -1084,9 +1100,25 @@ class TemplatePicker(QDialog):
         template_id = self._queue.pop(0)
         key = self._key(template_id)
         try:
-            image = self._render(template_id, key[1], key[2], key[3], figures=key[5])
+            result = self._render(template_id, key[1], key[2], key[3], figures=key[5])
         except Exception:  # a preview must never break the picker
-            image = None
+            result = None
+        if result is not None and not isinstance(result, QImage):
+            # Drawn in the background: the next one waits for this one.
+            self._inflight = (template_id, key, result)
+            result.finished.connect(
+                lambda image, pending=result: self._on_pending_done(pending, image)
+            )
+            self._show_state(template_id)
+            return
+        self._store_page(template_id, key, result)
+        if self._queue:
+            self._timer.start()
+
+    def _store_page(
+        self, template_id: str, key: _PageKey, image: QImage | None
+    ) -> None:
+        """Keep a drawn page for its card, or mark the card failed."""
         if image is not None and not image.isNull():
             self._pages.put(key, image)
             if self._templates[template_id].takes_figures:
@@ -1098,8 +1130,22 @@ class TemplatePicker(QDialog):
         else:
             self._failed.add(key)
         self._show_state(template_id)
-        if self._queue:
-            self._timer.start()
+
+    def _on_pending_done(self, pending: PendingPreview, image: QImage | None) -> None:
+        if self._inflight is None or self._inflight[2] is not pending:
+            return  # cancelled while it finished
+        template_id, key, _pending = self._inflight
+        self._inflight = None
+        self._store_page(template_id, key, image)
+        self._reprioritise()
+
+    def _cancel_inflight(self) -> None:
+        """Stop the page being drawn in the background, if any."""
+        if self._inflight is None:
+            return
+        _template_id, _key, pending = self._inflight
+        self._inflight = None
+        pending.cancel()
 
     def retry(self, template_id: str) -> None:
         """Draw `template_id`'s page again, next."""

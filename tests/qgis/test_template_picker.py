@@ -19,7 +19,15 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
-from qgis.PyQt.QtCore import QEventLoop, QSettings, QSize, Qt
+from qgis.PyQt.QtCore import (
+    QEventLoop,
+    QObject,
+    QSettings,
+    QSize,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QAbstractItemView, QWidget
@@ -1699,3 +1707,117 @@ class TestOpeningLeavesTheProject:
             picker.reject()
         assert not project.isDirty()
         assert list(project.layoutManager().layouts()) == layouts
+
+
+class _Pending(QObject):
+    """A page drawn in the background: reports after `delay_ms` of the event
+    loop running, the way `PendingPreview` does. Never blocks."""
+
+    finished = pyqtSignal(object)
+
+    def __init__(self, width_px: int, delay_ms: int) -> None:
+        super().__init__()
+        self.cancelled = False
+        self._width = width_px
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._done)
+        self._timer.start(delay_ms)
+
+    def _done(self) -> None:
+        image = QImage(
+            self._width, round(self._width / 1.414), QImage.Format.Format_ARGB32
+        )
+        image.fill(QColor("#336699"))
+        self.finished.emit(image)
+
+    def cancel(self) -> None:
+        self.cancelled = True
+        self._timer.stop()
+
+
+class _SlowRenderer:
+    def __init__(self, delay_ms: int = 150) -> None:
+        self.delay_ms = delay_ms
+        self.started: list[tuple[str, str]] = []
+        self.pending: list[_Pending] = []
+
+    def __call__(self, template_id, page_size, orientation, width_px, figures=()):
+        self.started.append((template_id, page_size))
+        pending = _Pending(width_px, self.delay_ms)
+        self.pending.append(pending)
+        return pending
+
+
+class TestBackgroundPages:
+    def test_the_picker_keeps_running_while_a_page_draws(
+        self, qgis_app, tmp_path, fifteen
+    ):
+        """No step of a full pass holds the event loop: a heartbeat timer
+        never waits long, and the cards still fill in."""
+        renderer = _SlowRenderer(delay_ms=120)
+        picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
+        gaps: list[float] = []
+        last = [time.monotonic()]
+
+        def beat() -> None:
+            now = time.monotonic()
+            gaps.append(now - last[0])
+            last[0] = now
+
+        heartbeat = QTimer()
+        heartbeat.timeout.connect(beat)
+        heartbeat.start(10)
+        try:
+            _shown(qgis_app, picker)
+            _drain(qgis_app, picker)
+            for _ in range(20):
+                qgis_app.processEvents()
+            assert picker.rows[picker.template_id].drawn
+            assert len(renderer.started) > 1
+            # Pages took >100 ms each, in sequence, yet no gap came close.
+            assert max(gaps) < 0.1
+        finally:
+            heartbeat.stop()
+            picker.reject()
+
+    def test_pages_draw_one_at_a_time_selected_first(self, qgis_app, tmp_path, fifteen):
+        renderer = _SlowRenderer(delay_ms=30)
+        picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
+        try:
+            _shown(qgis_app, picker)
+            qgis_app.processEvents()
+            assert [t for t, _s in renderer.started] == ["classic"]
+            _drain(qgis_app, picker)
+            assert renderer.started[0][0] == picker.template_id
+        finally:
+            picker.reject()
+
+    def test_closing_cancels_the_page_in_flight(self, qgis_app, tmp_path, fifteen):
+        renderer = _SlowRenderer(delay_ms=5000)
+        picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
+        _shown(qgis_app, picker)
+        qgis_app.processEvents()
+        (pending,) = renderer.pending
+        picker.reject()
+        assert pending.cancelled
+
+    def test_a_newer_request_cancels_the_obsolete_page(
+        self, qgis_app, tmp_path, fifteen
+    ):
+        """Changing the page size makes the page being drawn the wrong one:
+        it is cancelled and the design is drawn again for the new size."""
+        renderer = _SlowRenderer(delay_ms=5000)
+        picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
+        try:
+            _shown(qgis_app, picker)
+            qgis_app.processEvents()
+            first = renderer.pending[0]
+            other = picker.page_combo.findData("A3")
+            picker.page_combo.setCurrentIndex(other)
+            for _ in range(5):
+                qgis_app.processEvents()
+            assert first.cancelled
+            assert renderer.started[-1] == ("classic", "A3")
+        finally:
+            picker.reject()
