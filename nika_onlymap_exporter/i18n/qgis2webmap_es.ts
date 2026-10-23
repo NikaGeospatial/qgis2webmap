@@ -61,7 +61,7 @@
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="603" />
-      <location filename="../ui/cartograph/controller.py" line="579" />
+      <location filename="../ui/cartograph/controller.py" line="598" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
       <source>Not checked yet.</source>
@@ -157,202 +157,229 @@
       <translation>No se pudo completar la comprobación: {error}</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1284" />
+      <location filename="../core/layout_templates.py" line="136" />
+      <source>Smaller</source>
+      <translation>Más pequeño</translation>
+    </message>
+    <message>
+      <location filename="../core/layout_templates.py" line="137" />
+      <location filename="../ui/main_dialog.py" line="351" />
+      <source>Small</source>
+      <translation>Pequeño</translation>
+    </message>
+    <message>
+      <location filename="../core/layout_templates.py" line="138" />
+      <source>Standard</source>
+      <translation>Estándar</translation>
+    </message>
+    <message>
+      <location filename="../core/layout_templates.py" line="139" />
+      <location filename="../ui/main_dialog.py" line="352" />
+      <source>Large</source>
+      <translation>Grande</translation>
+    </message>
+    <message>
+      <location filename="../core/layout_templates.py" line="140" />
+      <source>Larger</source>
+      <translation>Más grande</translation>
+    </message>
+    <message>
+      <location filename="../core/layout_templates.py" line="1404" />
       <source>Daylight</source>
       <translation>Luz de día</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1285" />
+      <location filename="../core/layout_templates.py" line="1405" />
       <source>A balanced everyday sheet: title, large map, legend, scale and source.</source>
       <translation>Una hoja equilibrada para el día a día: título, mapa grande, leyenda, escala y origen.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1292" />
+      <location filename="../core/layout_templates.py" line="1412" />
       <source>Clearline</source>
       <translation>Línea clara</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1293" />
+      <location filename="../core/layout_templates.py" line="1413" />
       <source>A wide map with the legend in columns below: for long legends.</source>
       <translation>Un mapa ancho con la leyenda en columnas debajo: para leyendas largas.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1300" />
+      <location filename="../core/layout_templates.py" line="1420" />
       <source>Bare Map</source>
       <translation>Mapa simple</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1301" />
+      <location filename="../core/layout_templates.py" line="1421" />
       <source>Just the map and its data credits, for placing in another document.</source>
       <translation>Solo el mapa y los créditos de sus datos, para colocarlo en otro documento.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1308" />
+      <location filename="../core/layout_templates.py" line="1428" />
       <source>Caption</source>
       <comment>layout template name: a report figure, caption under the map</comment>
       <translation>Pie de figura</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1309" />
+      <location filename="../core/layout_templates.py" line="1429" />
       <source>A report figure: the map with a caption, scale bar and source under it.</source>
       <translation>Una figura de informe: el mapa con un pie de figura, barra de escala y origen debajo.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1316" />
+      <location filename="../core/layout_templates.py" line="1436" />
       <source>Fieldbook</source>
       <translation>Cuaderno de campo</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1317" />
+      <location filename="../core/layout_templates.py" line="1437" />
       <source>A survey sheet with a labelled grid and a title block: scale, CRS, date.</source>
       <translation>Una hoja de levantamiento con una cuadrícula etiquetada y una cartela: escala, CRS, fecha.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1330" />
+      <location filename="../core/layout_templates.py" line="1450" />
       <source>Broadside</source>
       <translation>Cartel</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1331" />
+      <location filename="../core/layout_templates.py" line="1451" />
       <source>A bold poster: big headline, dominant map, story and legend in a rail.</source>
       <translation>Un cartel llamativo: titular grande, mapa protagonista, texto y leyenda en una franja lateral.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1338" />
+      <location filename="../core/layout_templates.py" line="1458" />
       <source>Near &amp; Far</source>
       <translation>Cerca y lejos</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1339" />
+      <location filename="../core/layout_templates.py" line="1459" />
       <source>The map with a locator inset that shows where it is.</source>
       <translation>El mapa con un recuadro localizador que muestra dónde está.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1346" />
+      <location filename="../core/layout_templates.py" line="1466" />
       <source>On the Map</source>
       <translation>En el mapa</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1347" />
+      <location filename="../core/layout_templates.py" line="1467" />
       <source>The map fills the page; the title and story sit on a panel over it.</source>
       <translation>El mapa ocupa toda la página; el título y el texto van en un panel sobre él.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1354" />
+      <location filename="../core/layout_templates.py" line="1474" />
       <source>Signal</source>
       <translation>Señal</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1355" />
+      <location filename="../core/layout_templates.py" line="1475" />
       <source>A data-led page: the map with up to three key figures you supply.</source>
       <translation>Una página centrada en datos: el mapa con hasta tres cifras clave que tú defines.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1363" />
+      <location filename="../core/layout_templates.py" line="1483" />
       <source>After Hours</source>
       <translation>Medianoche</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1364" />
+      <location filename="../core/layout_templates.py" line="1484" />
       <source>A dark page with the map to the edges and text on dark panels.</source>
       <translation>Una página oscura con el mapa a sangre y texto sobre paneles oscuros.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1288" />
-      <location filename="../core/layout_templates.py" line="1325" />
-      <location filename="../core/layout_templates.py" line="1334" />
-      <location filename="../core/layout_templates.py" line="1342" />
-      <location filename="../core/layout_templates.py" line="1358" />
-      <location filename="../core/layout_templates.py" line="1367" />
-      <location filename="../core/template_designs.py" line="1080" />
-      <location filename="../core/template_designs.py" line="1088" />
-      <location filename="../core/template_designs.py" line="1099" />
+      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1445" />
+      <location filename="../core/layout_templates.py" line="1454" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1478" />
+      <location filename="../core/layout_templates.py" line="1487" />
+      <location filename="../core/template_designs.py" line="1120" />
+      <location filename="../core/template_designs.py" line="1128" />
+      <location filename="../core/template_designs.py" line="1139" />
       <source>legend</source>
       <translation>leyenda</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1288" />
-      <location filename="../core/layout_templates.py" line="1296" />
-      <location filename="../core/layout_templates.py" line="1312" />
-      <location filename="../core/layout_templates.py" line="1324" />
-      <location filename="../core/layout_templates.py" line="1334" />
-      <location filename="../core/layout_templates.py" line="1342" />
-      <location filename="../core/layout_templates.py" line="1350" />
-      <location filename="../core/layout_templates.py" line="1358" />
-      <location filename="../core/layout_templates.py" line="1367" />
-      <location filename="../core/template_designs.py" line="1080" />
-      <location filename="../core/template_designs.py" line="1088" />
-      <location filename="../core/template_designs.py" line="1100" />
-      <location filename="../core/template_designs.py" line="1110" />
+      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1416" />
+      <location filename="../core/layout_templates.py" line="1432" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1454" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1470" />
+      <location filename="../core/layout_templates.py" line="1478" />
+      <location filename="../core/layout_templates.py" line="1487" />
+      <location filename="../core/template_designs.py" line="1120" />
+      <location filename="../core/template_designs.py" line="1128" />
+      <location filename="../core/template_designs.py" line="1140" />
+      <location filename="../core/template_designs.py" line="1150" />
       <source>scale bar</source>
       <translation>barra de escala</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1288" />
-      <location filename="../core/layout_templates.py" line="1296" />
-      <location filename="../core/layout_templates.py" line="1304" />
-      <location filename="../core/layout_templates.py" line="1312" />
-      <location filename="../core/layout_templates.py" line="1342" />
-      <location filename="../core/layout_templates.py" line="1367" />
-      <location filename="../core/template_designs.py" line="1080" />
-      <location filename="../core/template_designs.py" line="1088" />
-      <location filename="../core/template_designs.py" line="1101" />
-      <location filename="../core/template_designs.py" line="1110" />
-      <location filename="../core/template_designs.py" line="1119" />
+      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1416" />
+      <location filename="../core/layout_templates.py" line="1424" />
+      <location filename="../core/layout_templates.py" line="1432" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1487" />
+      <location filename="../core/template_designs.py" line="1120" />
+      <location filename="../core/template_designs.py" line="1128" />
+      <location filename="../core/template_designs.py" line="1141" />
+      <location filename="../core/template_designs.py" line="1150" />
+      <location filename="../core/template_designs.py" line="1159" />
       <source>source line</source>
       <translation>línea de origen</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1296" />
+      <location filename="../core/layout_templates.py" line="1416" />
       <source>legend band</source>
       <translation>banda de leyenda</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1312" />
+      <location filename="../core/layout_templates.py" line="1432" />
       <source>caption</source>
       <translation>pie de figura</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1321" />
+      <location filename="../core/layout_templates.py" line="1441" />
       <source>grid</source>
       <translation>cuadrícula</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1322" />
+      <location filename="../core/layout_templates.py" line="1442" />
       <source>title block</source>
       <translation>cartela</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1323" />
+      <location filename="../core/layout_templates.py" line="1443" />
       <source>north arrow</source>
       <translation>flecha de norte</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1334" />
+      <location filename="../core/layout_templates.py" line="1454" />
       <source>headline</source>
       <translation>titular</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1334" />
-      <location filename="../core/layout_templates.py" line="1350" />
+      <location filename="../core/layout_templates.py" line="1454" />
+      <location filename="../core/layout_templates.py" line="1470" />
       <source>notes panel</source>
       <translation>panel de notas</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1342" />
-      <location filename="../core/layout_templates.py" line="1350" />
-      <location filename="../core/template_designs.py" line="1097" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1470" />
+      <location filename="../core/template_designs.py" line="1137" />
       <source>locator</source>
       <translation>localizador</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1358" />
+      <location filename="../core/layout_templates.py" line="1478" />
       <source>key figures</source>
       <translation>cifras clave</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1358" />
-      <location filename="../core/template_designs.py" line="1088" />
+      <location filename="../core/layout_templates.py" line="1478" />
+      <location filename="../core/template_designs.py" line="1128" />
       <source>notes</source>
       <translation>notas</translation>
     </message>
@@ -392,77 +419,77 @@
       <translation>Se numera en cada página cuando se activa el atlas del diseño.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1074" />
+      <location filename="../core/template_designs.py" line="1114" />
       <source>Night Desk</source>
       <translation>Escritorio nocturno</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1075" />
+      <location filename="../core/template_designs.py" line="1115" />
       <source>A calm dark report sheet: the map inset with wide margins, a quiet legend.</source>
       <translation>Una hoja de informe oscura y serena: el mapa en un recuadro con márgenes amplios y una leyenda discreta.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1084" />
+      <location filename="../core/template_designs.py" line="1124" />
       <source>Marginalia</source>
       <translation>Notas al margen</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1085" />
+      <location filename="../core/template_designs.py" line="1125" />
       <source>An editorial sheet: a large map with your notes in a narrow margin.</source>
       <translation>Una hoja editorial: un mapa grande con tus notas en un margen estrecho.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1092" />
+      <location filename="../core/template_designs.py" line="1132" />
       <source>Atlas Ledger</source>
       <translation>Hoja de atlas</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1093" />
+      <location filename="../core/template_designs.py" line="1133" />
       <source>One sheet of a map series: locator, sheet number, legend and source.</source>
       <translation>Una hoja de una serie cartográfica: localizador, número de hoja, leyenda y origen.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1106" />
+      <location filename="../core/template_designs.py" line="1146" />
       <source>Town Hall</source>
       <translation>Asamblea pública</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1107" />
+      <location filename="../core/template_designs.py" line="1147" />
       <source>Large print for public meetings: a big title and an easy-to-read legend.</source>
       <translation>Impresión grande para reuniones públicas: un título grande y una leyenda fácil de leer.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1115" />
+      <location filename="../core/template_designs.py" line="1155" />
       <source>Wayfinder</source>
       <translation>Guía de ruta</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1116" />
+      <location filename="../core/template_designs.py" line="1156" />
       <source>A long map for routes, rivers and coasts, with a distance scale.</source>
       <translation>Un mapa alargado para rutas, ríos y costas, con una escala de distancia.</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1080" />
+      <location filename="../core/template_designs.py" line="1120" />
       <source>date</source>
       <translation>fecha</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1098" />
+      <location filename="../core/template_designs.py" line="1138" />
       <source>sheet number</source>
       <translation>número de hoja</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1110" />
+      <location filename="../core/template_designs.py" line="1150" />
       <source>large legend</source>
       <translation>leyenda grande</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1119" />
+      <location filename="../core/template_designs.py" line="1159" />
       <source>legend strip</source>
       <translation>franja de leyenda</translation>
     </message>
     <message>
-      <location filename="../core/template_designs.py" line="1119" />
+      <location filename="../core/template_designs.py" line="1159" />
       <source>distance scale</source>
       <translation>escala de distancia</translation>
     </message>
@@ -608,7 +635,7 @@ Todo lo que no se pueda reproducir con exactitud se indica en el registro. Si un
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="108" />
-      <location filename="../ui/cartograph/controller.py" line="382" />
+      <location filename="../ui/cartograph/controller.py" line="391" />
       <source>Print layout</source>
       <translation>Diseño de impresión</translation>
     </message>
@@ -724,6 +751,7 @@ Todo lo que no se puede trasladar con exactitud se indica en el registro en luga
     </message>
     <message>
       <location filename="../processing/export_project.py" line="143" />
+      <location filename="../ui/cartograph/template_picker.py" line="707" />
       <location filename="../ui/main_dialog.py" line="2309" />
       <source>Legend</source>
       <translation>Leyenda</translation>
@@ -1031,7 +1059,7 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="445" />
-      <location filename="../ui/cartograph/controller.py" line="1918" />
+      <location filename="../ui/cartograph/controller.py" line="2011" />
       <source>Not available for cartographs yet</source>
       <translation>Aún no disponible para láminas cartográficas</translation>
     </message>
@@ -1159,28 +1187,28 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Activar/desactivar el atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="329" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="331" />
       <source>Change Atlas Coverage</source>
       <translation>Cambiar la cobertura del atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="350" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="352" />
       <source>Change Atlas Map</source>
       <translation>Cambiar el mapa del atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="363" />
-      <location filename="../ui/cartograph/atlas_tab.py" line="369" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="365" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="371" />
       <source>Change Atlas Sort</source>
       <translation>Cambiar el orden del atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="381" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="383" />
       <source>Change Atlas Filter</source>
       <translation>Cambiar el filtro del atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="386" />
+      <location filename="../ui/cartograph/atlas_tab.py" line="388" />
       <source>Change Atlas Filename</source>
       <translation>Cambiar el nombre de archivo del atlas</translation>
     </message>
@@ -1200,519 +1228,537 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>La lámina cartográfica guardada aún no tiene páginas de atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="145" />
+      <location filename="../ui/cartograph/controller.py" line="153" />
       <location filename="../ui/main_dialog.py" line="437" />
       <source>Show in file manager</source>
       <translation>Mostrar en el gestor de archivos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="129" />
+      <location filename="../ui/cartograph/controller.py" line="137" />
       <location filename="../ui/main_dialog.py" line="2396" />
       <location filename="../ui/main_dialog.py" line="2405" />
       <source>Default</source>
       <translation>Predeterminado</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="130" />
+      <location filename="../ui/cartograph/controller.py" line="138" />
       <location filename="../ui/main_dialog.py" line="3248" />
       <source>Dark</source>
       <translation>Oscuro</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="131" />
+      <location filename="../ui/cartograph/controller.py" line="139" />
       <source>Sepia</source>
       <translation>Sepia</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="132" />
+      <location filename="../ui/cartograph/controller.py" line="140" />
       <source>Blueprint</source>
       <translation>Plano azul</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="133" />
+      <location filename="../ui/cartograph/controller.py" line="141" />
       <source>Minimal</source>
       <translation>Minimalista</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="142" />
+      <location filename="../ui/cartograph/controller.py" line="150" />
       <location filename="../ui/main_dialog.py" line="434" />
       <source>Reveal in Finder</source>
       <translation>Mostrar en el Finder</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="144" />
+      <location filename="../ui/cartograph/controller.py" line="152" />
       <location filename="../ui/main_dialog.py" line="436" />
       <source>Show in Explorer</source>
       <translation>Mostrar en el Explorador</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="417" />
+      <location filename="../ui/cartograph/controller.py" line="426" />
       <source>Pick a design and build another print layout from what the map canvas shows. The layout shown here is kept as it is.</source>
       <translation>Elige un diseño y crea otro diseño de impresión a partir de lo que muestra el lienzo de mapa. El diseño que se muestra aquí se mantiene tal cual.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="852" />
+      <location filename="../ui/cartograph/controller.py" line="935" />
       <location filename="../ui/main_dialog.py" line="835" />
       <location filename="../ui/main_dialog.py" line="2885" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2140" />
+      <location filename="../ui/cartograph/controller.py" line="2233" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>Describe el mapa aquí: qué muestra, de dónde vienen los datos.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2141" />
+      <location filename="../ui/cartograph/controller.py" line="2234" />
       <source>Key figure</source>
       <translation>Cifra clave</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2142" />
+      <location filename="../ui/cartograph/controller.py" line="2235" />
       <source>What the number means</source>
       <translation>Qué significa el número</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2143" />
+      <location filename="../ui/cartograph/controller.py" line="2236" />
       <source>Author</source>
       <translation>Autor</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="291" />
-      <location filename="../ui/cartograph/controller.py" line="299" />
+      <location filename="../ui/cartograph/controller.py" line="300" />
+      <location filename="../ui/cartograph/controller.py" line="308" />
       <source>There is no map canvas to build from.</source>
       <translation>No hay ningún lienzo de mapa a partir del cual construir.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="396" />
+      <location filename="../ui/cartograph/controller.py" line="405" />
       <source>Add...</source>
       <translation>Añadir...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="403" />
-      <location filename="../ui/cartograph/layout_page.py" line="84" />
-      <location filename="../ui/cartograph/layout_page.py" line="203" />
+      <location filename="../ui/cartograph/controller.py" line="412" />
+      <location filename="../ui/cartograph/layout_page.py" line="92" />
+      <location filename="../ui/cartograph/layout_page.py" line="219" />
       <source>From canvas...</source>
       <translation>Desde el lienzo...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="414" />
+      <location filename="../ui/cartograph/controller.py" line="423" />
       <source>New layout from template...</source>
       <translation>Nuevo diseño desde plantilla...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="429" />
+      <location filename="../ui/cartograph/controller.py" line="438" />
       <source>This project has no print layouts yet. Build one from the canvas, or import a cartograph.</source>
       <translation>Este proyecto aún no tiene diseños de impresión. Crea uno desde el lienzo o importa una lámina cartográfica.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="454" />
+      <location filename="../ui/cartograph/controller.py" line="463" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="215" />
       <source>Page</source>
       <translation>Página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="461" />
+      <location filename="../ui/cartograph/controller.py" line="470" />
       <source>The project title</source>
       <translation>El título del proyecto</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="463" />
+      <location filename="../ui/cartograph/controller.py" line="472" />
       <source>Shown wherever the layout uses the project title. Blank keeps it.</source>
       <translation>Se muestra allí donde el diseño usa el título del proyecto. Vacío lo conserva.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="466" />
+      <location filename="../ui/cartograph/controller.py" line="475" />
+      <location filename="../ui/cartograph/template_picker.py" line="706" />
       <source>Title</source>
       <translation>Título</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="468" />
+      <location filename="../ui/cartograph/controller.py" line="477" />
       <source>Optional, e.g. data sources</source>
       <translation>Opcional, p. ej. las fuentes de datos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="470" />
+      <location filename="../ui/cartograph/controller.py" line="479" />
       <source>Attribution</source>
       <translation>Atribución</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="475" />
+      <location filename="../ui/cartograph/controller.py" line="484" />
       <location filename="../ui/main_dialog.py" line="3255" />
       <source>Theme</source>
       <translation>Tema</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="477" />
+      <location filename="../ui/cartograph/controller.py" line="496" />
       <source>Map frames</source>
       <translation>Marcos de mapa</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="479" />
+      <location filename="../ui/cartograph/controller.py" line="498" />
       <location filename="../ui/main_dialog.py" line="902" />
       <location filename="../ui/main_dialog.py" line="2846" />
       <source>Layers</source>
       <translation>Capas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="489" />
+      <location filename="../ui/cartograph/controller.py" line="508" />
       <source>Layout</source>
       <translation>Diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="493" />
-      <location filename="../ui/cartograph/controller.py" line="606" />
+      <location filename="../ui/cartograph/controller.py" line="512" />
+      <location filename="../ui/cartograph/controller.py" line="625" />
       <source>Atlas</source>
       <translation>Atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="499" />
-      <location filename="../ui/cartograph/controller.py" line="580" />
-      <location filename="../ui/cartograph/controller.py" line="583" />
+      <location filename="../ui/cartograph/controller.py" line="518" />
+      <location filename="../ui/cartograph/controller.py" line="599" />
+      <location filename="../ui/cartograph/controller.py" line="602" />
       <source>Checks</source>
       <translation>Comprobaciones</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="510" />
+      <location filename="../ui/cartograph/controller.py" line="529" />
       <source>Choose where the cartograph is saved</source>
       <translation>Elige dónde se guarda la lámina cartográfica</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="754" />
-      <location filename="../ui/cartograph/controller.py" line="782" />
-      <location filename="../ui/cartograph/controller.py" line="767" />
+      <location filename="../ui/cartograph/controller.py" line="778" />
+      <location filename="../ui/cartograph/controller.py" line="806" />
+      <location filename="../ui/cartograph/controller.py" line="791" />
       <source>Import cartograph</source>
       <translation>Importar lámina cartográfica</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="760" />
+      <location filename="../ui/cartograph/controller.py" line="784" />
       <source>Cartograph (*.html *.htm)</source>
       <translation>Lámina cartográfica (*.html *.htm)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="863" />
+      <location filename="../ui/cartograph/controller.py" line="946" />
       <source>Save cartograph as</source>
       <translation>Guardar lámina cartográfica como</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="863" />
+      <location filename="../ui/cartograph/controller.py" line="946" />
       <location filename="../ui/main_dialog.py" line="1633" />
       <source>Web page (*.html)</source>
       <translation>Página web (*.html)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="985" />
+      <location filename="../ui/cartograph/controller.py" line="1068" />
       <location filename="../ui/cartograph/frames_list.py" line="124" />
       <source>Match QGIS canvas</source>
       <translation>Igual que el lienzo de QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1328" />
+      <location filename="../ui/cartograph/controller.py" line="1421" />
       <source>The OnlyMap runtime is needed to save a cartograph. Nothing was written.</source>
       <translation>Se necesita el runtime de OnlyMap para guardar una lámina cartográfica. No se escribió nada.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1560" />
+      <location filename="../ui/cartograph/controller.py" line="1653" />
       <source>Accessibility</source>
       <translation>Accesibilidad</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1563" />
-      <location filename="../ui/cartograph/controller.py" line="1609" />
+      <location filename="../ui/cartograph/controller.py" line="1656" />
+      <location filename="../ui/cartograph/controller.py" line="1702" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>Visión del color: simularla y comprobar los colores de la leyenda</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1569" />
+      <location filename="../ui/cartograph/controller.py" line="1662" />
       <location filename="../ui/main_dialog.py" line="2968" />
       <location filename="../ui/main_dialog.py" line="3048" />
       <source>Preview</source>
       <translation>Vista previa</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1571" />
+      <location filename="../ui/cartograph/controller.py" line="1664" />
       <source>Open the cartograph in your browser.</source>
       <translation>Abre la lámina cartográfica en tu navegador.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1575" />
+      <location filename="../ui/cartograph/controller.py" line="1668" />
       <location filename="../ui/main_dialog.py" line="2991" />
       <source>Share</source>
       <translation>Compartir</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1726" />
+      <location filename="../ui/cartograph/controller.py" line="1819" />
       <source>Saving the latest changes first - it opens when saved.</source>
       <translation>Guardando primero los últimos cambios: se abrirá al guardarse.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1815" />
+      <location filename="../ui/cartograph/controller.py" line="1908" />
       <location filename="../ui/main_dialog.py" line="3094" />
       <source>Copy file path</source>
       <translation>Copiar la ruta del archivo</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1816" />
+      <location filename="../ui/cartograph/controller.py" line="1909" />
       <source>Copies the cartograph's path</source>
       <translation>Copia la ruta de la lámina cartográfica</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1822" />
+      <location filename="../ui/cartograph/controller.py" line="1915" />
       <source>Shows the cartograph in your file manager</source>
       <translation>Muestra la lámina cartográfica en el gestor de archivos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1827" />
+      <location filename="../ui/cartograph/controller.py" line="1920" />
       <source>Open in browser</source>
       <translation>Abrir en el navegador</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1828" />
+      <location filename="../ui/cartograph/controller.py" line="1921" />
       <source>Opens the cartograph in your browser</source>
       <translation>Abre la lámina cartográfica en tu navegador</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1833" />
+      <location filename="../ui/cartograph/controller.py" line="1926" />
       <location filename="../ui/main_dialog.py" line="1170" />
       <location filename="../ui/main_dialog.py" line="3004" />
       <source>Export</source>
       <translation>Exportar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1836" />
+      <location filename="../ui/cartograph/controller.py" line="1929" />
       <source>Export PDF...</source>
       <translation>Exportar PDF...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1837" />
-      <location filename="../ui/cartograph/controller.py" line="1898" />
+      <location filename="../ui/cartograph/controller.py" line="1930" />
+      <location filename="../ui/cartograph/controller.py" line="1991" />
       <source>Opens the cartograph and prints it at true page size</source>
       <translation>Abre la lámina cartográfica y la imprime a tamaño real de página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1843" />
+      <location filename="../ui/cartograph/controller.py" line="1936" />
       <source>Export PNG...</source>
       <translation>Exportar PNG...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1844" />
+      <location filename="../ui/cartograph/controller.py" line="1937" />
       <source>300 dpi image of the first page</source>
       <translation>Imagen a 300 dpi de la primera página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1849" />
+      <location filename="../ui/cartograph/controller.py" line="1942" />
       <source>Export QGIS layout template (.qpt)...</source>
       <translation>Exportar plantilla de diseño de QGIS (.qpt)...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1850" />
+      <location filename="../ui/cartograph/controller.py" line="1943" />
       <source>Round trip back into QGIS</source>
       <translation>Vuelta completa a QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1855" />
+      <location filename="../ui/cartograph/controller.py" line="1948" />
       <source>Print settings...</source>
       <translation>Configuración de impresión...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1856" />
+      <location filename="../ui/cartograph/controller.py" line="1949" />
       <source>Page size, bleed, crop marks and colour profile for Export PDF</source>
       <translation>Tamaño de página, sangrado, marcas de corte y perfil de color para Exportar PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1865" />
+      <location filename="../ui/cartograph/controller.py" line="1958" />
       <location filename="../ui/main_dialog.py" line="3119" />
       <source>NIKA hand-off</source>
       <translation>Traspaso a NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1868" />
+      <location filename="../ui/cartograph/controller.py" line="1961" />
       <location filename="../ui/main_dialog.py" line="3122" />
       <source>Prepare enhancement prompt...</source>
       <translation>Preparar instrucción de mejora...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1869" />
+      <location filename="../ui/cartograph/controller.py" line="1962" />
       <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>Abre una instrucción para mejorar esta lámina cartográfica, para copiarla en NIKA u otro asistente de IA. No se envía nada desde aquí.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1877" />
+      <location filename="../ui/cartograph/controller.py" line="1970" />
       <location filename="../ui/main_dialog.py" line="3131" />
       <source>Prepare critique prompt...</source>
       <translation>Preparar instrucción de crítica...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1878" />
+      <location filename="../ui/cartograph/controller.py" line="1971" />
       <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>Abre una instrucción que pide una crítica de esta lámina cartográfica, para copiarla en NIKA u otro asistente de IA. No se envía nada desde aquí.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1893" />
+      <location filename="../ui/cartograph/controller.py" line="1986" />
       <source>Makes a CMYK or ICC PDF with QGIS's own exporter from the print layout, and asks where to save it</source>
       <translation>Crea un PDF CMYK o ICC con el exportador propio de QGIS a partir del diseño de impresión y pregunta dónde guardarlo</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2080" />
-      <location filename="../ui/cartograph/controller.py" line="2069" />
-      <location filename="../ui/cartograph/controller.py" line="2094" />
+      <location filename="../ui/cartograph/controller.py" line="2173" />
+      <location filename="../ui/cartograph/controller.py" line="2162" />
+      <location filename="../ui/cartograph/controller.py" line="2187" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="322" />
       <source>Export PDF</source>
       <translation>Exportar PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2082" />
+      <location filename="../ui/cartograph/controller.py" line="2175" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2117" />
-      <location filename="../ui/cartograph/controller.py" line="2129" />
+      <location filename="../ui/cartograph/controller.py" line="2210" />
+      <location filename="../ui/cartograph/controller.py" line="2222" />
       <source>Save layout template as</source>
       <translation>Guardar plantilla de diseño como</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2119" />
+      <location filename="../ui/cartograph/controller.py" line="2212" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>Plantilla de diseño de QGIS (*.qpt)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="582" />
+      <location filename="../ui/cartograph/controller.py" line="601" />
       <source>No differences from the QGIS layout.</source>
       <translation>Sin diferencias con el diseño de QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="585" />
+      <location filename="../ui/cartograph/controller.py" line="604" />
       <source>{n} difference from the QGIS layout to review</source>
       <translation>{n} diferencia con el diseño de QGIS por revisar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="585" />
+      <location filename="../ui/cartograph/controller.py" line="604" />
       <source>{n} differences from the QGIS layout to review</source>
       <translation>{n} diferencias con el diseño de QGIS por revisar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="606" />
+      <location filename="../ui/cartograph/controller.py" line="625" />
       <source>Atlas (on)</source>
       <translation>Atlas (activado)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="609" />
+      <location filename="../ui/cartograph/controller.py" line="628" />
       <source>One page per feature: on</source>
       <translation>Una página por entidad: activado</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="609" />
+      <location filename="../ui/cartograph/controller.py" line="628" />
       <source>One page per feature: off</source>
       <translation>Una página por entidad: desactivado</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="629" />
+      <location filename="../ui/cartograph/controller.py" line="648" />
       <source>There is no map canvas to build a layout from.</source>
       <translation>No hay ningún lienzo de mapa a partir del cual construir un diseño.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="775" />
+      <location filename="../ui/cartograph/controller.py" line="799" />
       <source>Imported as the print layout "{name}".</source>
       <translation>Importado como el diseño de impresión «{name}».</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1426" />
+      <location filename="../ui/cartograph/controller.py" line="1519" />
       <source>Could not build the cartograph: {message}</source>
       <translation>No se pudo generar la lámina cartográfica: {message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1682" />
+      <location filename="../ui/cartograph/controller.py" line="1775" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
       <translation>Nada que previsualizar todavía: la lámina cartográfica no se ha guardado. Elija un diseño de impresión en el panel.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1911" />
+      <location filename="../ui/cartograph/controller.py" line="2004" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>Disponible cuando la lámina cartográfica se haya guardado: elija un diseño de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1915" />
+      <location filename="../ui/cartograph/controller.py" line="2008" />
       <source>Choose a print layout first</source>
       <translation>Elija primero un diseño de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2070" />
+      <location filename="../ui/cartograph/controller.py" line="2163" />
       <source>A CMYK or ICC PDF is made by QGIS from the print layout, which only works when every frame is static. Set the live frames to Static in Map frames, or choose RGB in Print settings.</source>
       <translation>Un PDF CMYK o ICC lo genera QGIS a partir del diseño de impresión, lo que solo funciona si todos los marcos son estáticos. Cambie los marcos en vivo a Estático en Marcos de mapa, o elija RGB en la configuración de impresión.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2096" />
-      <location filename="../ui/cartograph/controller.py" line="2133" />
+      <location filename="../ui/cartograph/controller.py" line="2189" />
+      <location filename="../ui/cartograph/controller.py" line="2226" />
       <source>Saved {path}</source>
       <translation>Guardado: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="600" />
+      <location filename="../ui/cartograph/controller.py" line="619" />
       <source>{theme} theme</source>
       <translation>Tema {theme}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="738" />
+      <location filename="../ui/cartograph/controller.py" line="762" />
       <source>Created the print layout "{name}" from the canvas. Edit it in the layout designer any time; the cartograph follows.</source>
       <translation>Se creó el diseño de impresión «{name}» a partir del lienzo. Edítalo en cualquier momento en el diseñador de diseños; la lámina cartográfica lo sigue.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1933" />
+      <location filename="../ui/cartograph/controller.py" line="884" />
+      <location filename="../ui/cartograph/template_picker.py" line="690" />
+      <location filename="../ui/cartograph/template_picker.py" line="755" />
+      <source>Text sizes</source>
+      <translation>Tamaños de texto</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="885" />
+      <source>Rebuild the page from the template? Your moves and edits on this page will be replaced.</source>
+      <translation>¿Reconstruir la página a partir de la plantilla? Se reemplazarán los movimientos y cambios que hizo en esta página.</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="2026" />
       <location filename="../ui/main_dialog.py" line="4217" />
       <source>Copied {path}</source>
       <translation>Copiado: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1945" />
+      <location filename="../ui/cartograph/controller.py" line="2038" />
       <location filename="../ui/main_dialog.py" line="4237" />
       <source>Opened {path}</source>
       <translation>Abierto: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="405" />
-      <location filename="../ui/cartograph/layout_page.py" line="85" />
-      <location filename="../ui/cartograph/layout_page.py" line="209" />
+      <location filename="../ui/cartograph/controller.py" line="414" />
+      <location filename="../ui/cartograph/layout_page.py" line="93" />
+      <location filename="../ui/cartograph/layout_page.py" line="225" />
       <source>Import cartograph...</source>
       <translation>Importar lámina cartográfica...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="590" />
+      <location filename="../ui/cartograph/controller.py" line="609" />
       <source>Checks ({n})</source>
       <translation>Comprobaciones ({n})</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1341" />
+      <location filename="../ui/cartograph/controller.py" line="1434" />
       <source>The OnlyMap runtime could not be loaded, so nothing was written: {error}</source>
       <translation>No se pudo cargar el runtime de OnlyMap, por lo que no se escribió nada: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1370" />
+      <location filename="../ui/cartograph/controller.py" line="1463" />
       <source>Could not save the cartograph: {error}</source>
       <translation>No se pudo guardar la lámina cartográfica: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1739" />
+      <location filename="../ui/cartograph/controller.py" line="1832" />
       <source>Could not start the local preview server ({error}), so the cartograph opened from its file. If it does not print or download, check that local connections to {host} are allowed, then try again.</source>
       <translation>No se pudo iniciar el servidor local de previsualización ({error}), así que la lámina cartográfica se abrió desde su archivo. Si no se imprime ni se descarga, compruebe que se permiten las conexiones locales a {host} y vuelva a intentarlo.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2130" />
+      <location filename="../ui/cartograph/controller.py" line="2223" />
       <source>Could not save the layout template to {path}.</source>
       <translation>No se pudo guardar la plantilla de diseño en {path}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="727" />
+      <location filename="../ui/cartograph/controller.py" line="751" />
       <source>Could not build a layout from the canvas: {error}</source>
       <translation>No se pudo construir un diseño a partir del lienzo: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="785" />
+      <location filename="../ui/cartograph/controller.py" line="809" />
       <source>Some parts could not be carried into QGIS:</source>
       <translation>Algunas partes no se pudieron trasladar a QGIS:</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="938" />
+      <location filename="../ui/cartograph/controller.py" line="903" />
+      <source>Could not rebuild the page: {error}</source>
+      <translation>No se pudo reconstruir la página: {error}</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/controller.py" line="1021" />
       <source>Unknown CRS</source>
       <translation>CRS desconocido</translation>
     </message>
@@ -1810,83 +1856,103 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>{dpi} dpi</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="66" />
+      <location filename="../ui/cartograph/layout_page.py" line="74" />
       <source>No print layouts yet</source>
       <translation>Aún no hay diseños de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="88" />
+      <location filename="../ui/cartograph/layout_page.py" line="96" />
       <source>Turn a cartograph HTML file back into a QGIS print layout</source>
       <translation>Convierte de nuevo un archivo HTML de lámina cartográfica en un diseño de impresión de QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="188" />
+      <location filename="../ui/cartograph/layout_page.py" line="204" />
       <source>No print layout yet</source>
       <translation>Aún no hay diseño de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="193" />
+      <location filename="../ui/cartograph/layout_page.py" line="209" />
       <source>Build one from what the map canvas shows, or open a cartograph.</source>
       <translation>Crea uno a partir de lo que muestra el lienzo del mapa o abre una lámina cartográfica.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="314" />
+      <location filename="../ui/cartograph/layout_page.py" line="369" />
       <source>QGIS's drawing of the print layout. The cartograph can differ in places - see Checks - and Preview shows it in the browser.</source>
       <translation>El dibujo de QGIS del diseño de impresión. La lámina cartográfica puede diferir en algunos puntos - ver Comprobaciones - y Vista previa la muestra en el navegador.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="328" />
+      <location filename="../ui/cartograph/layout_page.py" line="383" />
       <source>See them in Checks</source>
       <translation>Verlos en Comprobaciones</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="340" />
+      <location filename="../ui/cartograph/layout_page.py" line="396" />
+      <source>Select</source>
+      <translation>Seleccionar</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/layout_page.py" line="396" />
+      <source>Select, move and resize items (hold Space to pan)</source>
+      <translation>Seleccionar, mover y redimensionar elementos (mantenga Espacio para desplazarse)</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/layout_page.py" line="398" />
+      <source>Pan</source>
+      <translation>Desplazar</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/layout_page.py" line="398" />
+      <source>Pan the page</source>
+      <translation>Desplazar la página</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/layout_page.py" line="409" />
       <source>Fit page</source>
       <translation>Ajustar página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="340" />
+      <location filename="../ui/cartograph/layout_page.py" line="409" />
       <source>Fit the whole page</source>
       <translation>Ajustar toda la página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="344" />
+      <location filename="../ui/cartograph/layout_page.py" line="413" />
       <source>Zoom out</source>
       <translation>Alejar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="352" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Zoom in</source>
       <translation>Acercar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="365" />
+      <location filename="../ui/cartograph/layout_page.py" line="434" />
       <source>{n} change in the HTML</source>
       <translation>{n} cambio en el HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="365" />
+      <location filename="../ui/cartograph/layout_page.py" line="434" />
       <source>{n} changes in the HTML</source>
       <translation>{n} cambios en el HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="464" />
+      <location filename="../ui/cartograph/layout_page.py" line="533" />
       <location filename="../ui/main_dialog.py" line="3267" />
       <source>Change...</source>
       <translation>Cambiar...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="469" />
+      <location filename="../ui/cartograph/layout_page.py" line="538" />
       <source>Show in folder</source>
       <translation>Mostrar en la carpeta</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="135" />
+      <location filename="../ui/cartograph/layout_page.py" line="143" />
       <source>Builds a print layout from what the map canvas shows - title, map, legend, scale bar and north arrow - and uses it here. Edit it in the layout designer any time.</source>
       <translation>Crea un diseño de impresión a partir de lo que muestra el lienzo del mapa: título, mapa, leyenda, barra de escala y flecha de norte, y lo usa aquí. Edítalo en cualquier momento en el diseñador de diseños.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="382" />
+      <location filename="../ui/cartograph/layout_page.py" line="451" />
       <source>QGIS layout · {page}</source>
       <translation>Diseño de QGIS · {page}</translation>
     </message>
@@ -2132,184 +2198,214 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Guardado como {profile}, que no está disponible aquí: {reason}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="152" />
+      <location filename="../ui/cartograph/template_picker.py" line="159" />
       <source>Letter (ANSI A)</source>
       <translation>Letter (ANSI A)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="153" />
+      <location filename="../ui/cartograph/template_picker.py" line="160" />
       <source>Tabloid (ANSI B)</source>
       <translation>Tabloid (ANSI B)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="154" />
+      <location filename="../ui/cartograph/template_picker.py" line="161" />
       <source>Legal</source>
       <translation>Legal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="157" />
+      <location filename="../ui/cartograph/template_picker.py" line="164" />
       <source>Automatic (fits the map)</source>
       <translation>Automático (se ajusta al mapa)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="158" />
+      <location filename="../ui/cartograph/template_picker.py" line="165" />
       <source>Portrait</source>
       <translation>Vertical</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="159" />
+      <location filename="../ui/cartograph/template_picker.py" line="166" />
       <source>Landscape</source>
       <translation>Horizontal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="164" />
+      <location filename="../ui/cartograph/template_picker.py" line="171" />
       <source>All</source>
       <translation>Todas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="165" />
+      <location filename="../ui/cartograph/template_picker.py" line="172" />
       <source>Essentials</source>
       <translation>Esenciales</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="166" />
+      <location filename="../ui/cartograph/template_picker.py" line="173" />
       <source>Characterful</source>
       <translation>Con carácter</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="368" />
-      <location filename="../ui/cartograph/template_picker.py" line="491" />
+      <location filename="../ui/cartograph/template_picker.py" line="384" />
+      <location filename="../ui/cartograph/template_picker.py" line="507" />
       <source>Drawing the preview…</source>
       <translation>Dibujando la vista previa…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="379" />
-      <location filename="../ui/cartograph/template_picker.py" line="1162" />
+      <location filename="../ui/cartograph/template_picker.py" line="395" />
+      <location filename="../ui/cartograph/template_picker.py" line="1345" />
       <source>Preview could not be drawn</source>
       <translation>No se pudo dibujar la vista previa</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="384" />
+      <location filename="../ui/cartograph/template_picker.py" line="400" />
       <source>Retry</source>
       <translation>Reintentar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="472" />
+      <location filename="../ui/cartograph/template_picker.py" line="488" />
       <source>Legend: {n} entry does not fit at a readable size. Try a larger page or shorter layer names.</source>
       <translation>Leyenda: {n} entrada no cabe con un tamaño legible. Prueba con una página más grande o nombres de capa más cortos.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="472" />
+      <location filename="../ui/cartograph/template_picker.py" line="488" />
       <source>Legend: {n} entries do not fit at a readable size. Try a larger page or shorter layer names.</source>
       <translation>Leyenda: {n} entradas no caben con un tamaño legible. Prueba con una página más grande o nombres de capa más cortos.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="588" />
-      <location filename="../ui/cartograph/template_picker.py" line="592" />
+      <location filename="../ui/cartograph/template_picker.py" line="604" />
+      <location filename="../ui/cartograph/template_picker.py" line="608" />
       <source>Key figures</source>
       <translation>Cifras clave</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="629" />
+      <location filename="../ui/cartograph/template_picker.py" line="645" />
       <source>Optional. A label without a value is left out. Figures are saved with the project.</source>
       <translation>Opcional. Una etiqueta sin valor se omite. Las cifras se guardan con el proyecto.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="700" />
+      <location filename="../ui/cartograph/template_picker.py" line="708" />
+      <source>Notes</source>
+      <translation>Notas</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="711" />
+      <source>Size of the title</source>
+      <translation>Tamaño del título</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="712" />
+      <source>Size of the legend</source>
+      <translation>Tamaño de la leyenda</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="713" />
+      <source>Size of the notes and key figures</source>
+      <translation>Tamaño de las notas y las cifras clave</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="862" />
       <source>Choose a layout template</source>
       <translation>Elige una plantilla de diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="762" />
+      <location filename="../ui/cartograph/template_picker.py" line="928" />
       <source>Each preview shows the map the canvas shows now.</source>
       <translation>Cada vista previa muestra el mapa tal como lo muestra ahora el lienzo.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="772" />
+      <location filename="../ui/cartograph/template_picker.py" line="938" />
       <source>Show designs</source>
       <translation>Mostrar diseños</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="804" />
-      <location filename="../ui/cartograph/template_picker.py" line="809" />
-      <location filename="../ui/cartograph/template_picker.py" line="810" />
+      <location filename="../ui/cartograph/template_picker.py" line="970" />
+      <location filename="../ui/cartograph/template_picker.py" line="975" />
+      <location filename="../ui/cartograph/template_picker.py" line="976" />
       <source>Page size</source>
       <translation>Tamaño de página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="816" />
-      <location filename="../ui/cartograph/template_picker.py" line="821" />
-      <location filename="../ui/cartograph/template_picker.py" line="822" />
+      <location filename="../ui/cartograph/template_picker.py" line="982" />
+      <location filename="../ui/cartograph/template_picker.py" line="987" />
+      <location filename="../ui/cartograph/template_picker.py" line="988" />
       <source>Orientation</source>
       <translation>Orientación</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="840" />
+      <location filename="../ui/cartograph/template_picker.py" line="1006" />
       <source>Layout templates</source>
       <translation>Plantillas de diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="902" />
+      <location filename="../ui/cartograph/template_picker.py" line="1072" />
       <source>Create layout</source>
       <translation>Crear diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="549" />
+      <location filename="../ui/cartograph/template_picker.py" line="565" />
       <source>Includes: {list}</source>
       <translation>Incluye: {list}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="554" />
+      <location filename="../ui/cartograph/template_picker.py" line="570" />
       <source>Can also show: {list}</source>
       <translation>También puede mostrar: {list}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="606" />
+      <location filename="../ui/cartograph/template_picker.py" line="622" />
       <source>Value</source>
       <translation>Valor</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="607" />
+      <location filename="../ui/cartograph/template_picker.py" line="623" />
       <source>The figure itself, such as 214</source>
       <translation>La cifra en sí, como 214</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="612" />
+      <location filename="../ui/cartograph/template_picker.py" line="628" />
       <source>Label</source>
       <translation>Etiqueta</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="613" />
+      <location filename="../ui/cartograph/template_picker.py" line="629" />
       <source>What it counts, such as parcels surveyed</source>
       <translation>Lo que cuenta, como parcelas levantadas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="387" />
+      <location filename="../ui/cartograph/template_picker.py" line="755" />
+      <source>Text sizes (changed)</source>
+      <translation>Tamaños de texto (cambiados)</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="772" />
+      <source>Smaller text gives the map more room.</source>
+      <translation>Un texto más pequeño deja más espacio al mapa.</translation>
+    </message>
+    <message>
+      <location filename="../ui/cartograph/template_picker.py" line="403" />
       <source>Retry the preview of {name}</source>
       <translation>Reintentar la vista previa de {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="564" />
+      <location filename="../ui/cartograph/template_picker.py" line="580" />
       <source>{cue}: {hint}</source>
       <translation>{cue}: {hint}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="863" />
+      <location filename="../ui/cartograph/template_picker.py" line="1029" />
       <source>{name}: {description}</source>
       <translation>{name}: {description}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1290" />
+      <location filename="../ui/cartograph/template_picker.py" line="1473" />
       <source>Selected: {name}</source>
       <translation>Seleccionado: {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="608" />
+      <location filename="../ui/cartograph/template_picker.py" line="624" />
       <source>Key figure {n}: value</source>
       <translation>Cifra clave {n}: valor</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="614" />
+      <location filename="../ui/cartograph/template_picker.py" line="630" />
       <source>Key figure {n}: label</source>
       <translation>Cifra clave {n}: etiqueta</translation>
     </message>
@@ -3046,16 +3142,6 @@ También están en línea en &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="350" />
       <source>Normal</source>
       <translation>Normal</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="351" />
-      <source>Small</source>
-      <translation>Pequeño</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="352" />
-      <source>Large</source>
-      <translation>Grande</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="353" />
