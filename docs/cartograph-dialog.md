@@ -131,8 +131,8 @@ what is in it, such as *Default theme* or *1 live, 1 static*.
   map frame choices stay. If you moved, resized or edited anything on the page
   since it was built, you are asked first - *Rebuild the page from the
   template? Your moves and edits on this page will be replaced.* - and **No**
-  leaves the page and the sliders as they were. Rebuilding is not an undo step;
-  undo history of the page is cleared with the old items.
+  leaves the page and the sliders as they were. Rebuilding is not itself an
+  undo step.
 
 ### Map frames
 
