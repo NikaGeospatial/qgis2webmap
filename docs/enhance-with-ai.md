@@ -73,12 +73,11 @@ Ask in the same words you would use with a colleague:
 
 The plugin writes the request for you. In the dialog's **Share** menu, choose
 **Prepare enhancement prompt...** or **Prepare critique prompt...**, under
-**NIKA hand-off** - on a web map
-and on a [cartograph](cartograph-dialog.md#the-share-menu) alike. A web map
-needs a **Save to** path on the Map tab - a new map has one from the start -
-and is written first if it is missing or out of date, so the prompt never
-points at a stale file. A cartograph is
-always saved already.
+**NIKA hand-off**. This is for web maps for now; on a
+[cartograph](cartograph-dialog.md#the-share-menu) the two rows are shown greyed
+out. A web map needs a **Save to** path on the Map tab - a new map has one from
+the start - and is written first if it is missing or out of date, so the prompt
+never points at a stale file.
 
 The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
 

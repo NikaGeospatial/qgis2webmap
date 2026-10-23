@@ -267,10 +267,8 @@ live map from a file path. Nothing leaves your computer.
 | **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
 | **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
 | **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |
-| **Prepare enhancement prompt...** (NIKA hand-off) | Opens the [hand-off dialog](enhance-with-ai.md#hand-off-to-nika) with a prompt asking an AI agent to improve the cartograph; nothing is sent from the plugin | Once the file exists |
-| **Prepare critique prompt...** (NIKA hand-off) | The same dialog, with a prompt asking for a cartographer's critique | Once the file exists |
-| **Join NIKA hosting waitlist ↗** (NIKA hosting) | Hosting is not live yet; opens a short waitlist form in your browser - it does not publish the cartograph | Always |
-| **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
+| **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
+| **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size, with its background colours kept even when the browser's **Background graphics** is off - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
 | **Export PNG...** | Opens the cartograph, which renders a 300 dpi image of the page and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
 | **Export QGIS layout template (.qpt)...** | Saves the source layout as a `.qpt` template, to load into another project | Once a layout is selected |
 | **Print settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Export PDF | Once a layout is selected |

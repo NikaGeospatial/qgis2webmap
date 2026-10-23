@@ -1047,27 +1047,22 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
-    def test_the_hand_off_rows_open_the_dialog_on_the_saved_file(
-        self, qgis_app, project, tmp_path, monkeypatch
+    def test_the_hand_off_rows_are_greyed_out_and_hosting_is_not_offered(
+        self, qgis_app, project, tmp_path
     ) -> None:
-        from nika_onlymap_exporter.ui import handoff_dialog
-
-        shown = []
-        monkeypatch.setattr(
-            handoff_dialog.HandoffDialog,
-            "exec",
-            lambda self: shown.append(self.context) or 0,
-        )
-        dialog, target = self._ready_dialog(project, tmp_path)
+        """The hand-off is not ready for cartographs, so its rows stay greyed
+        out even with the file saved; hosting is for web maps only."""
+        dialog, _target = self._ready_dialog(project, tmp_path)
         try:
             actions = dialog._cartograph.cartograph_share_actions
+            assert actions["open_browser"].isEnabled()
             for key in ("enhance", "critique"):
-                assert actions[key].isEnabled(), key
-                actions[key].trigger()
-            assert [(c.output, c.file_path, c.task, c.source_name) for c in shown] == [
-                ("cartograph", target, "enhance", "Survey"),
-                ("cartograph", target, "critique", "Survey"),
-            ]
+                assert not actions[key].isEnabled(), key
+                assert actions[key].toolTip() == "Not available for cartographs yet"
+            assert "publish" not in actions
+            menu = dialog._cartograph.cartograph_share_button.menu()
+            labels = [action.text() for action in menu.actions()]
+            assert not any("hosting" in label.lower() for label in labels), labels
         finally:
             dialog.close()
 
@@ -3079,8 +3074,9 @@ class TestPanel:
         self, qgis_app, project
     ) -> None:
         """Same order and words as the web map's: file and export rows, then
-        the hand-offs, then the waitlist - and a greyed row says what it
-        needs instead of looking broken."""
+        the hand-offs (greyed out for now) - no hosting row, which is for web
+        maps only - and a greyed row says what it needs instead of looking
+        broken."""
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
@@ -3094,13 +3090,11 @@ class TestPanel:
             texts = [text for _section, text in rows]
             assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
             assert ("NIKA hand-off", "Prepare critique prompt...") in rows
-            assert ("NIKA hosting", "Join NIKA hosting waitlist ↗") in rows
             assert texts.index("Export PDF...") < texts.index(
                 "Prepare enhancement prompt..."
             )
-            assert texts[-1] == "Join NIKA hosting waitlist ↗"
+            assert texts[-1] == "Prepare critique prompt..."
             actions = cartograph.cartograph_share_actions
-            assert actions["publish"].isEnabled()
             # No layout yet: greyed, with what it needs.
             assert not actions["export_pdf"].isEnabled()
             assert "print layout" in actions["export_pdf"].toolTip()

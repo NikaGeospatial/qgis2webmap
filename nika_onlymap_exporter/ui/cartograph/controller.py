@@ -1857,8 +1857,9 @@ class CartographController:
 
         # NIKA after everything that works on the file, each named for what
         # it does today, as in the web map's menu: the hand-offs prepare a
-        # prompt for the user to take to NIKA, and the hosting row joins a
-        # waitlist rather than publishing. The hand-off dialog is issue #3 S4.
+        # prompt for the user to take to NIKA, shown greyed out until they are
+        # ready for cartographs. Hosting is for web maps only, so no hosting
+        # row here. The hand-off dialog is issue #3 S4.
         menu.addSection(tr("NIKA hand-off"))
         add(
             "enhance",
@@ -1877,17 +1878,6 @@ class CartographController:
                 "into NIKA or another AI assistant. Nothing is sent from here."
             ),
             lambda: self.on_handoff("critique"),
-        )
-        menu.addSection(tr("NIKA hosting"))
-        add(
-            "publish",
-            tr("Join NIKA hosting waitlist ↗"),
-            tr(
-                "Hosting is not live yet. This opens a short form in your browser "
-                "so we can see how many people want it - it does not publish "
-                "the cartograph."
-            ),
-            self.dialog.on_publish,
         )
 
         return menu
@@ -1912,8 +1902,6 @@ class CartographController:
             "open_browser",
             "export_pdf",
             "export_png",
-            "enhance",
-            "critique",
         ):
             self._set_share_row(
                 key,
@@ -1924,6 +1912,8 @@ class CartographController:
             self._set_share_row(
                 key, self._current_layout is not None, tr("Choose a print layout first")
             )
+        for key in ("enhance", "critique"):
+            self._set_share_row(key, False, tr("Not available for cartographs yet"))
 
     def _set_share_row(self, key: str, available: bool, needs: str) -> None:
         """Grey a row out with what it needs, or give it back its own words."""
