@@ -25,6 +25,8 @@ download instead. It writes:
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
   QGIS's own atlas centres each parcel.
+- `atlas-raster.html`: an atlas whose live frame draws only an embedded
+  raster, one pure colour under each of the three parcels.
 - `atlas-ranked.html`: an atlas filtered and sorted over NULLs, and the page
   order QGIS's own atlas makes.
 - `shared-live.html`: one layer drawn in two live frames, its rows written
@@ -77,6 +79,8 @@ def main(out_dir: Path) -> int:
         QgsProject.instance().clear()
         QgsProject.instance().clear()
         expected["atlas_ranked"] = _write_atlas_ranked(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas_raster"] = _write_atlas_raster(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["shared"] = _write_shared(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -370,6 +374,57 @@ def _write_atlas(project, out_dir: Path) -> dict:
     )
     (out_dir / "atlas-live.html").write_text(html, encoding="utf-8")
     return {"pages": atlas_page_count(built.layout)}
+
+
+def _write_atlas_raster(project, out_dir: Path) -> dict:
+    from atlas_fixtures import PARCELS, build_atlas_layout
+    from osgeo import gdal
+    from qgis.core import QgsFillSymbol, QgsLayoutItemMap, QgsRasterLayer
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    gdal.UseExceptions()
+    built = build_atlas_layout(project)
+    # One 10 m pixel grid over all three parcels, white except a block of a
+    # different pure colour exactly under each parcel: the page shows which
+    # parcel's raster it drew.
+    colours = ((255, 0, 0), (0, 255, 0), (0, 0, 255))
+    pixel, west, north = 10, -500, 1000
+    width, height = 1200, 150
+    source = Path(tempfile.mkdtemp()) / "parcels.tif"
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        str(source), width, height, 3, gdal.GDT_Byte
+    )
+    dataset.SetGeoTransform([west, pixel, 0.0, north, 0.0, -pixel])
+    dataset.SetProjection(built.parcels.crs().toWkt())
+    bands = [bytearray(b"\xff" * width * height) for _ in range(3)]
+    for (_lot, _size, x, w, h), colour in zip(PARCELS, colours):
+        for row in range((north - h) // pixel, north // pixel):
+            for band, value in zip(bands, colour):
+                start = row * width + (x - west) // pixel
+                band[start : start + w // pixel] = bytes([value]) * (w // pixel)
+    for number, rows in enumerate(bands, 1):
+        dataset.GetRasterBand(number).WriteRaster(0, 0, width, height, bytes(rows))
+    dataset = None
+    raster = QgsRasterLayer(str(source), "parcel colours", "gdal")
+    project.addMapLayer(raster)
+    # The atlas follows the parcels, so the page must carry them; they are
+    # painted invisibly so that only the raster puts colour on a sheet.
+    built.parcels.renderer().setSymbol(
+        QgsFillSymbol.createSimple({"color": "0,0,0,0", "outline_style": "no"})
+    )
+    built.main_map.setLayers([built.parcels, raster])
+    built.main_map.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Auto)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-raster.html").write_text(html, encoding="utf-8")
+    project.removeMapLayer(raster.id())
+    source.unlink()
+    return {"pages": len(PARCELS), "colours": [list(c) for c in colours]}
 
 
 def _write_atlas_fixed(project, out_dir: Path) -> dict:

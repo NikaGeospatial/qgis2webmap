@@ -455,6 +455,91 @@ def _needs_webgl(page) -> None:
         pytest.skip("this browser has no WebGL2, so a live frame cannot draw")
 
 
+class TestAtlasWithRasters:
+    """An atlas page change moves the live frame to a new extent, and the
+    raster must be in every page's capture, not just the first, with no
+    network."""
+
+    #: Counts the pixels of an image that are close to each wanted colour.
+    _COUNT_COLOURS = """async ([source, colours]) => {
+      const bitmap = await createImageBitmap(await (await fetch(source)).blob());
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width; canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const counts = colours.map(() => 0);
+      for (let i = 0; i < data.length; i += 4) {
+        colours.forEach((colour, n) => {
+          if (colour.every((v, c) => Math.abs(data[i + c] - v) <= 12)) counts[n]++;
+        });
+      }
+      return { counts, pixels: canvas.width * canvas.height };
+    }"""
+
+    @staticmethod
+    def _offline(page) -> None:
+        page.route(
+            "**/*",
+            lambda route: (
+                route.abort()
+                if route.request.url.startswith("http")
+                else route.continue_()
+            ),
+        )
+
+    def _assert_page_has_its_raster(
+        self, page, source: str, want: dict, number: int
+    ) -> None:
+        result = page.evaluate(self._COUNT_COLOURS, [source, want["colours"]])
+        counts = result["counts"]
+        # Page n shows parcel n's colour (the narrowest parcel is a few
+        # hundred pixels at 72 dpi) and no other parcel's (they are 5 km
+        # apart).
+        assert counts[number] > 200, (number, counts)
+        assert [c for n, c in enumerate(counts) if n != number] == [0, 0], counts
+
+    def test_the_zip_has_the_raster_on_every_page(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        import base64
+        import zipfile
+
+        _needs_webgl(page)
+        want = expected["atlas_raster"]
+        self._offline(page)
+        with page.expect_download(timeout=180_000) as download_info:
+            page.goto((fixtures / "atlas-raster.html").as_uri() + "?atlas=zip&dpi=72")
+        with zipfile.ZipFile(download_info.value.path()) as archive:
+            images = {name: archive.read(name) for name in archive.namelist()}
+        assert len(images) == want["pages"] == 3
+        # Entries are named by the atlas's file name expression, 'lot_<lot>'.
+        for lot, number in (("C-3", 0), ("A-1", 1), ("B-2", 2)):
+            (name,) = [n for n in images if f"lot_{lot}" in n]
+            source = "data:image/png;base64," + base64.b64encode(images[name]).decode()
+            self._assert_page_has_its_raster(page, source, want, number)
+
+    def test_the_print_has_the_raster_on_every_page(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["atlas_raster"]
+        self._offline(page)
+        page.add_init_script(
+            "window.print = () => { window.__printedSources = [...document"
+            ".querySelectorAll('[data-qgis2webmap-atlas-print] img')]"
+            ".map((image) => image.src); };"
+        )
+        page.goto((fixtures / "atlas-raster.html").as_uri() + "?atlas=print&dpi=72")
+        page.wait_for_function(
+            "() => window.__printedSources !== undefined", timeout=180_000
+        )
+        sources = page.evaluate("() => window.__printedSources")
+        assert len(sources) == want["pages"]
+        for number, source in enumerate(sources):
+            self._assert_page_has_its_raster(page, source, want, number)
+
+
 class TestAtlasCartograph:
     """The whole series, not one sheet per URL: the two triggers this plugin
     adds for an atlas."""
