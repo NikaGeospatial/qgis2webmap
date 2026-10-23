@@ -10,6 +10,17 @@ carries each converted raster as base64 and answers those requests itself:
   embedded raster - the same name `RasterSpec.src` carries - from the bytes in
   the page, with a 206 and a `Content-Range` for a range, exactly as a server
   would. Every other request goes to the real `fetch` untouched.
+* **EPSG:3857 without the network.** The runtime's `COGLayer` asks
+  `https://epsg.io/<code>.json` for its file's CRS, so a page with no network
+  drew no raster. Every COG written here is in Web Mercator, and the stand-in
+  answers that one request from the definition the page carries
+  (`web_mercator_projjson`); other codes still go to the network.
+* **What was read, and what failed.** The stand-in notes each raster it
+  serves and the time it last served one, and keeps any raster error the
+  runtime leaves unhandled, in `window.qgis2webmapRasters`. The runtime's own
+  readiness counts a raster layer as drawn before it has even read its file,
+  so the cartograph's print and PNG export wait on this instead
+  (`cartograph_writer._RASTER_GATE`).
 * **Workers from `data:` URLs.** A page opened from disk has an opaque origin,
   and Chrome will not start a module worker from that origin's `blob:` URLs,
   which is how the runtime starts the workers that decode raster tiles. The
@@ -29,6 +40,9 @@ import base64
 from collections.abc import Sequence
 from html import escape
 
+from .raster_cog import WEB_MERCATOR_EPSG
+from .web_mercator_projjson import WEB_MERCATOR_PROJJSON
+
 # The data blocks' type. Unknown to the browser, so it neither runs nor renders
 # them; the stand-in finds them by it and removes them once read.
 RASTER_SCRIPT_TYPE = "application/x-om-raster"
@@ -43,13 +57,30 @@ _STAND_IN = """      <script>
     files.set(el.dataset.src, bytes);
     el.remove();
   }
+  const crsDefinitions = { "%(epsg)s": %(projjson)s };
+  const tracker = {
+    names: [...files.keys()], read: new Set(), lastRead: 0, failed: [],
+  };
+  window.qgis2webmapRasters = tracker;
+  window.addEventListener("unhandledrejection", (event) => {
+    const message = String((event.reason && event.reason.message) || event.reason);
+    if (/tiff|cog|projjson|projection|crs/i.test(message)) tracker.failed.push(message);
+  });
   const realFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     const url =
       typeof input === "string" ? input : (input && input.url) || String(input);
+    const crs = /^https:\\/\\/epsg\\.io\\/(\\d+)\\.json$/.exec(url);
+    if (crs && crsDefinitions[crs[1]]) {
+      return Promise.resolve(new Response(JSON.stringify(crsDefinitions[crs[1]]), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }));
+    }
     const name = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop());
     const bytes = files.get(name);
     if (!bytes) return realFetch(input, init);
+    tracker.read.add(name);
+    tracker.lastRead = performance.now();
     const headers = new Headers(
       (init && init.headers) || (input instanceof Request ? input.headers : undefined)
     );
@@ -109,4 +140,11 @@ def build_raster_embed(embedded: Sequence[tuple[str, bytes]]) -> str:
         f"{base64.b64encode(data).decode('ascii')}</script>"
         for name, data in embedded
     ]
-    return "\n".join([*blocks, _STAND_IN % {"type": RASTER_SCRIPT_TYPE}])
+    stand_in = _STAND_IN % {
+        "type": RASTER_SCRIPT_TYPE,
+        "epsg": WEB_MERCATOR_EPSG,
+        # JSON is a JavaScript expression; `<` escaped so no text in it can
+        # close the script element.
+        "projjson": WEB_MERCATOR_PROJJSON.replace("<", "\\u003c"),
+    }
+    return "\n".join([*blocks, stand_in])

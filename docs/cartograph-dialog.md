@@ -277,7 +277,10 @@ live map from a file path. Nothing leaves your computer.
 the menu.
 
 Export PDF and Export PNG are **derived** from the cartograph rather than being
-the export: the browser makes them from the saved file. Both are covered in
+the export: the browser makes them from the saved file. Both wait until every
+raster in the page has drawn - a note at the foot of the page says so - and if
+one cannot draw, they stop with a message rather than print or save a page
+without it. Rasters draw with no internet connection. Both are covered in
 [printing a cartograph](printing-a-cartograph.md).
 
 There is deliberately no Share ZIP, no Folder, and no report row. A cartograph

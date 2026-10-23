@@ -290,32 +290,7 @@ class TestRasterInALiveFrame:
         _open(page, fixtures / "raster-live.html")
 
         def colour(lonlat: list[float]) -> list[int]:
-            x, y = page.evaluate(
-                """([frameId, at]) => {
-                  const frame = document.getElementById(frameId);
-                  const box = frame.getBoundingClientRect();
-                  const p = frame.georef.project(at);
-                  const perMm = box.width / Number(frame.getAttribute('w'));
-                  return [box.left + p.xMm * perMm, box.top + p.yMm * perMm];
-                }""",
-                [want["main_frame"], lonlat],
-            )
-            shot = base64.b64encode(page.screenshot()).decode()
-            return page.evaluate(
-                """async ([png, x, y]) => {
-                  const image = new Image();
-                  image.src = 'data:image/png;base64,' + png;
-                  await image.decode();
-                  const canvas = document.createElement('canvas');
-                  canvas.width = image.width;
-                  canvas.height = image.height;
-                  const context = canvas.getContext('2d');
-                  context.drawImage(image, 0, 0);
-                  const at = [Math.round(x), Math.round(y)];
-                  return [...context.getImageData(...at, 1, 1).data];
-                }""",
-                [shot, x, y],
-            )
+            return _colour_at(page, want["main_frame"], lonlat)
 
         deadline = time.monotonic() + 30
         red = colour(want["red"])
@@ -324,6 +299,36 @@ class TestRasterInALiveFrame:
             red = colour(want["red"])
         assert red[:3] == pytest.approx([255, 0, 0], abs=8)
         assert colour(want["white"])[:3] == pytest.approx([255, 255, 255], abs=8)
+
+    def test_the_first_automatic_print_has_it_with_no_network(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        """The runtime called a raster frame ready before its file was read,
+        so the first `?print=1` capture had no raster; offline, the COG reader
+        could not even look up EPSG:3857. The capture the print dialog gets
+        must already show it."""
+        _needs_webgl(page)
+        want = expected["raster_live"]
+        page.route(
+            "**/*",
+            lambda route: (
+                route.abort()
+                if route.request.url.startswith("http")
+                else route.continue_()
+            ),
+        )
+        page.add_init_script("window.print = () => { window.__printed = true; };")
+        page.goto((fixtures / "raster-live.html").as_uri() + "?print=1")
+        page.wait_for_function("() => window.__printed === true", timeout=90_000)
+        rasters = page.evaluate(
+            "() => { const r = window.qgis2webmapRasters;"
+            " return { unread: r.names.filter((n) => !r.read.has(n)),"
+            " failed: r.failed }; }"
+        )
+        assert rasters == {"unread": [], "failed": []}
+        # What the print dialog captured: the frame's print-time stand-in.
+        red = _colour_at(page, want["main_frame"], want["red"])
+        assert red[:3] == pytest.approx([255, 0, 0], abs=8)
 
 
 class TestWithoutWebgl:
@@ -410,6 +415,36 @@ class TestLiveCartograph:
         # The core rides gzip+base64 inside the file; nothing is fetched.
         assert "const CORE_GZ" in html
         assert 'src="http' not in html
+
+
+def _colour_at(page, frame_id: str, lonlat: list[float]) -> list[int]:
+    """The screen colour where `lonlat` falls in frame `frame_id`."""
+    x, y = page.evaluate(
+        """([frameId, at]) => {
+          const frame = document.getElementById(frameId);
+          const box = frame.getBoundingClientRect();
+          const p = frame.georef.project(at);
+          const perMm = box.width / Number(frame.getAttribute('w'));
+          return [box.left + p.xMm * perMm, box.top + p.yMm * perMm];
+        }""",
+        [frame_id, lonlat],
+    )
+    shot = base64.b64encode(page.screenshot()).decode()
+    return page.evaluate(
+        """async ([png, x, y]) => {
+          const image = new Image();
+          image.src = 'data:image/png;base64,' + png;
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext('2d');
+          context.drawImage(image, 0, 0);
+          const at = [Math.round(x), Math.round(y)];
+          return [...context.getImageData(...at, 1, 1).data];
+        }""",
+        [shot, x, y],
+    )
 
 
 def _needs_webgl(page) -> None:

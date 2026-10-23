@@ -152,3 +152,18 @@ class TestConvertedOncePerChange:
         os.utime(raster.source(), ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
         _export(layout, project, fake_runtime, FidelityReportBuilder(), maps[:1])
         assert len(calls) == 2
+
+
+def test_the_bundled_web_mercator_definition_is_proj_s_own() -> None:
+    """The page answers the COG reader's EPSG:3857 lookup with this, so it must
+    say what PROJ says. QGIS 3.44 cannot write PROJJSON; 4.x checks it."""
+    import json
+
+    from nika_onlymap_exporter.packaging.web_mercator_projjson import (
+        WEB_MERCATOR_PROJJSON,
+    )
+
+    crs = qgis_core.QgsCoordinateReferenceSystem("EPSG:3857")
+    if not hasattr(crs, "toJsonString"):
+        pytest.skip("this QGIS cannot write PROJJSON")
+    assert json.loads(WEB_MERCATOR_PROJJSON) == json.loads(crs.toJsonString())

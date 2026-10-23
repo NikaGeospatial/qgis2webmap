@@ -302,10 +302,78 @@ def _render_script(
     # imported, which is before the sheet leaves its <template>, so it finds
     # no page to act on. Installing again now that the page is connected is
     # what makes the Share menu's Export PDF/PNG work at all.
+    lines += _RASTER_GATE
     lines.append("carto.installUrlActions();")
     lines += _ATLAS_ACTIONS
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
+
+
+#: Print, PNG export and the atlas jobs capture each live frame once the
+#: runtime calls it ready, and the runtime calls a raster layer ready before it
+#: has read its file - its readiness is deck's, and a COG layer with nothing
+#: read yet has no tiles to wait for. Their first capture had no rasters. So
+#: those actions wait here until every raster the page carries has been read
+#: by the stand-in (`packaging/raster_embed.py`), no read has happened for a
+#: moment, and every map has settled after the last one. A raster that fails
+#: or never loads stops the action with a notice instead of a page missing it;
+#: a colour-vision preview still applies. Without WebGL the live frames turn
+#: static and read no raster, so there is nothing to wait for.
+_RASTER_GATE = [
+    "const RASTER_WAIT_MS = 60000;",
+    "const RASTER_QUIET_MS = 750;",
+    "const asked = new URLSearchParams(location.search);",
+    "const rasters = window.qgis2webmapRasters;",
+    "if (hasWebgl && rasters && rasters.names.length",
+    "    && ['print', 'export', 'atlas'].some((name) => asked.has(name))) {",
+    "  const page = document.querySelector('om-cartograph');",
+    "  const notice = atlasNotice();",
+    "  notice.progress('Waiting for the rasters to draw...',",
+    "    () => location.reload());",
+    "  const problem = await rastersDrawn(page);",
+    "  if (problem) {",
+    "    for (const name of ['print', 'export', 'atlas', 'dpi', 'page']) {",
+    "      asked.delete(name);",
+    "    }",
+    "    const search = asked.toString();",
+    "    const rest = search ? `?${search}` : '';",
+    "    history.replaceState(null, '', location.pathname + rest);",
+    "    console.warn(`[qgis2webmap] ${problem}`);",
+    "    notice.problem(`${problem} Nothing was printed or exported, so the result `",
+    "      + 'is not missing them. Reload the page to try again.');",
+    "  } else {",
+    "    notice.done();",
+    "  }",
+    "}",
+    "async function rastersDrawn(page) {",
+    "  const deadline = performance.now() + RASTER_WAIT_MS;",
+    "  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
+    "  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));",
+    "  await carto.whenPageReady(page, RASTER_WAIT_MS);",
+    "  for (;;) {",
+    "    if (rasters.failed.length) {",
+    "      return `A raster could not be drawn: ${rasters.failed[0]}.`;",
+    "    }",
+    "    const unread = rasters.names.filter((name) => !rasters.read.has(name));",
+    "    if (performance.now() > deadline) {",
+    "      return unread.length",
+    "        ? `These rasters did not load in time: ${unread.join(', ')}.`",
+    "        : 'The rasters did not finish drawing in time.';",
+    "    }",
+    "    const busy = performance.now() - rasters.lastRead < RASTER_QUIET_MS;",
+    "    if (unread.length || busy) {",
+    "      await pause(100);",
+    "      continue;",
+    "    }",
+    "    const before = rasters.lastRead;",
+    "    await Promise.all([...page.querySelectorAll('om-map')].map(",
+    "      (map) => map.whenSettled?.({ timeout: RASTER_WAIT_MS })));",
+    "    await frame();",
+    "    await frame();",
+    "    if (rasters.lastRead === before && !rasters.failed.length) return null;",
+    "  }",
+    "}",
+]
 
 
 #: A browser with no WebGL2 cannot draw a live frame, and the runtime then
