@@ -2178,6 +2178,21 @@ class TestAtlasTab:
             dialog.close()
             project.setFileName("")
 
+    def test_choosing_the_same_coverage_layer_again_is_not_an_edit(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            tab = dialog._cartograph.atlas_tab
+            undo = built.layout.undoStack().stack()
+            steps = undo.count()
+            tab.coverage_combo.layerChanged.emit(built.parcels)
+            tab.coverage_combo.layerChanged.emit(tab.coverage_combo.currentLayer())
+            assert undo.count() == steps
+        finally:
+            dialog.close()
+            project.setFileName("")
+
     @pytest.mark.parametrize("sort", ["lot", 'lower("lot")'])
     def test_sort_direction_and_expression_are_separate_undoable_edits(
         self, qgis_app, project, tmp_path, sort

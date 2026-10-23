@@ -323,7 +323,9 @@ class AtlasTab(QWidget):
             widget.setLayer(layer)
 
         def apply(layout: QgsPrintLayout) -> None:
-            if layout.atlas().coverageLayer() is not layer:
+            # By id: sip may hand back a new wrapper for the same layer.
+            current = layout.atlas().coverageLayer()
+            if (current.id() if current else None) != (layer.id() if layer else None):
                 layout.atlas().setCoverageLayer(layer)
 
         self._edit(tr("Change Atlas Coverage"), apply)
