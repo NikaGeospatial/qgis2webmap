@@ -136,8 +136,11 @@ def ground_size(
     if ground is not None and ground.web_mercator:
         return GroundSize(float(value) * COMMON_UNITS_PER_WEB_MERCATOR_METRE, "common")
     if key == METERS_IN_MAP_UNITS:
-        geographic = ground is not None and ground.metres_per_map_unit is None
-        if geographic and not ground.ellipsoidal:
+        if (
+            ground is not None
+            and ground.metres_per_map_unit is None
+            and not ground.ellipsoidal
+        ):
             return None
         return GroundSize(float(value), "meters")
     if ground is not None and ground.metres_per_map_unit:
