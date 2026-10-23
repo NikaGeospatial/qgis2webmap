@@ -330,6 +330,55 @@ class TestRasterInALiveFrame:
         red = _colour_at(page, want["main_frame"], want["red"])
         assert red[:3] == pytest.approx([255, 0, 0], abs=8)
 
+    _GATE_STUB = (
+        "let real; Object.defineProperty(window, 'qgis2webmapRasters', {"
+        " configurable: true, get: () => real && new Proxy(real, { get: (t, k) =>"
+        " (%s) }), set: (v) => { real = v; } });"
+        "window.print = () => { window.__printed = true; };"
+    )
+
+    def test_cancel_stops_the_wait_instead_of_restarting_it(
+        self, page, fixtures: Path
+    ) -> None:
+        """Cancel used to reload with `?print=1` still in the address, which
+        started the same wait again. A raster that is read all the time keeps
+        the wait open until the reader cancels."""
+        _needs_webgl(page)
+        page.add_init_script(
+            self._GATE_STUB % "k === 'lastRead' ? performance.now() : t[k]"
+        )
+        page.goto((fixtures / "raster-live.html").as_uri() + "?print=1&keep=1#frame")
+        page.evaluate("() => { window.__same = true; }")
+        page.get_by_role("button", name="Cancel").click()
+        page.wait_for_function(
+            "() => !document.querySelector('[data-qgis2webmap-atlas-notice]')"
+        )
+        page.wait_for_timeout(1500)
+        assert page.evaluate("() => location.search + location.hash") == "?keep=1#frame"
+        assert page.evaluate("() => window.__same") is True
+        assert page.evaluate("() => window.__printed === true") is False
+
+    def test_a_wait_that_throws_still_ends_in_a_notice_and_a_live_page(
+        self, page, fixtures: Path
+    ) -> None:
+        """A rejected wait aborted the whole module: the notice stayed and the
+        URL actions after it never ran."""
+        _needs_webgl(page)
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script(
+            self._GATE_STUB
+            % "k === 'read' ? (() => { throw new Error('boom'); })() : t[k]"
+        )
+        page.goto((fixtures / "raster-live.html").as_uri() + "?print=1&keep=1#frame")
+        alert = page.get_by_role("alert")
+        alert.wait_for(timeout=90_000)
+        assert "boom" in alert.inner_text()
+        assert page.evaluate("() => location.search + location.hash") == "?keep=1#frame"
+        page.wait_for_timeout(1000)
+        assert errors == []
+        assert page.evaluate("() => window.__printed === true") is False
+
 
 class TestWithoutWebgl:
     """A browser without WebGL cannot draw a live frame, and the runtime then

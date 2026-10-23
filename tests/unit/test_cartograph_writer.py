@@ -29,6 +29,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     TextSpec,
 )
 from nika_onlymap_exporter.packaging.asset_embedder import GZIP_SCRIPT_TYPE
+from nika_onlymap_exporter.writers import cartograph_writer as writer
 from nika_onlymap_exporter.writers.cartograph_writer import (
     CartographRuntimeBundle,
     write_cartograph_html,
@@ -786,3 +787,24 @@ class TestSharedLayerData:
         )
         assert "data-qgis2webmap-same-as" not in html
         assert "x-qgis2webmap-same-data" not in html
+
+
+class TestRasterGateAndAtlasGuards:
+    def test_the_wait_is_guarded_and_cancel_does_not_reload(self) -> None:
+        html = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+        assert "location.reload" not in html
+        assert "location.pathname + rest + location.hash" in html
+        assert "problem = await rastersDrawn(page, () => cancelled)" in html
+        assert "setTimeout(resolve, 100)" in html
+
+    def test_an_empty_atlas_and_odd_dpi_and_null_cameras_are_guarded(self) -> None:
+        html = write_cartograph_html(
+            _live_spec(), _runtime(with_core=True), {"main": "<om-map></om-map>"}
+        )
+        assert "this atlas has no pages" in html
+        assert "Math.min(600, Math.max(72," in html
+        assert "JSON.parse(frame.getAttribute(ATLAS_CAMERAS)) ?? {}" in "\n".join(
+            writer._ATLAS_CAMERAS
+        )
