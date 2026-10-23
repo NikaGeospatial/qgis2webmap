@@ -1340,6 +1340,11 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:focus {{
     padding: 1px 9px;
 }}
+/* The zoom bar's Select / Pan switch: the mode in use is the filled one. */
+{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:checked {{
+    background: {p.accent_soft};
+    border-color: {p.muted};
+}}
 {d} QLabel[role="saveName"] {{
     color: {p.ink};
     font-weight: 600;

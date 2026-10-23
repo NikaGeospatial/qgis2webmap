@@ -24,16 +24,24 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan
+from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QPalette, QResizeEvent, QShowEvent, QStandardItemModel
+from qgis.PyQt.QtGui import (
+    QKeySequence,
+    QPalette,
+    QResizeEvent,
+    QShowEvent,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QShortcut,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -166,8 +174,11 @@ class LayoutPreview(QStackedWidget):
     """The layout's page, as the layout designer draws it - or, with no
     layout, the two ways to make one.
 
-    Read-only: the pan tool is the only tool, so a drag moves the view and
-    the wheel zooms, but nothing on the page can be moved from here.
+    Two tools, as in the designer: Select (the default), QGIS's own select
+    tool, which moves and resizes items as undo commands on the layout's
+    stack; and Pan, where a drag moves the view and nothing on the page. The
+    wheel zooms in both; Space or the middle button pans while Select is on,
+    which QgsLayoutView does itself.
     """
 
     from_canvas_requested = pyqtSignal()
@@ -178,7 +189,8 @@ class LayoutPreview(QStackedWidget):
         self.view = QgsLayoutView(self)
         self.view.setProperty("role", "layoutPreview")
         self._pan = QgsLayoutViewToolPan(self.view)
-        self.view.setTool(self._pan)
+        self._select = QgsLayoutViewToolSelect(self.view)
+        self.view.setTool(self._select)
         self.addWidget(self.view)
 
         empty = QFrame(self)
@@ -225,6 +237,14 @@ class LayoutPreview(QStackedWidget):
         # resized, which once stopped the page fitting at all.
         self._user_zoomed = False
         self.view.viewport().installEventFilter(self)
+        # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, the
+        # layout's own stack, as in the designer.
+        undo = QShortcut(QKeySequence.StandardKey.Undo, self.view)
+        undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        undo.activated.connect(lambda: self._step_undo(redo=False))
+        redo = QShortcut(QKeySequence.StandardKey.Redo, self.view)
+        redo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        redo.activated.connect(lambda: self._step_undo(redo=True))
         # Not the first Tab stop: opening the dialog put the focus ring round
         # the page. A click still focuses it; the zoom bar is the keyboard's.
         self.view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
@@ -255,6 +275,20 @@ class LayoutPreview(QStackedWidget):
         # was measured with them still taking room.
         self._fit_timer.start()
 
+    def set_select_mode(self, select: bool) -> None:
+        """Select/Move (True) or Pan (False)."""
+        self.view.setTool(self._select if select else self._pan)
+
+    def select_mode(self) -> bool:
+        return self.view.tool() is self._select
+
+    def _step_undo(self, redo: bool) -> None:
+        layout = self.view.currentLayout()
+        if layout is None:
+            return
+        stack = layout.undoStack().stack()
+        stack.redo() if redo else stack.undo()
+
     def zoom_in(self) -> None:
         self._user_zoomed = True
         self.view.zoomIn()
@@ -270,6 +304,14 @@ class LayoutPreview(QStackedWidget):
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
         if event is not None and event.type() == QEvent.Type.Wheel:
+            self._user_zoomed = True
+        # Having selected or moved something, the page stays as the user has
+        # it: an edit's refresh must not fit the page again under their hand.
+        elif (
+            event is not None
+            and event.type() == QEvent.Type.MouseButtonPress
+            and self.select_mode()
+        ):
             self._user_zoomed = True
         return False
 
@@ -337,6 +379,20 @@ class PagePane(QWidget):
         bar = QHBoxLayout(self.zoom_bar)
         bar.setContentsMargins(0, 0, 0, 0)
         bar.setSpacing(4)
+        self.select_button = self._bar_button(
+            tr("Select"), tr("Select, move and resize items (hold Space to pan)")
+        )
+        self.pan_button = self._bar_button(tr("Pan"), tr("Pan the page"))
+        modes = QButtonGroup(self)
+        modes.setExclusive(True)
+        for button in (self.select_button, self.pan_button):
+            button.setCheckable(True)
+            button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            modes.addButton(button)
+            bar.addWidget(button)
+        self.select_button.setChecked(True)
+        self._modes = modes
+        self.select_button.toggled.connect(self.preview.set_select_mode)
         self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
         self.fit_button.clicked.connect(self.preview.fit_page)
         bar.addWidget(self.fit_button)
