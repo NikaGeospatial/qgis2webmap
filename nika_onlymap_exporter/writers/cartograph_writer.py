@@ -160,7 +160,7 @@ def write_cartograph_html(
         )
 
     sheet = _render_sheet(spec, markup_by_frame)
-    css = runtime.cartograph_css
+    css = f"{runtime.cartograph_css}\n{PRINT_COLOURS_CSS}"
     if has_live:
         # mypy cannot see the guard above narrowed core_css to `str`.
         css = f"{css}\n{runtime.core_css or ''}"
@@ -205,6 +205,13 @@ def write_cartograph_html(
         "</body>\n"
         "</html>\n"
     )
+
+
+#: Browsers print without background colours and images unless the user ticks
+#: "Background graphics", which drops a page theme's background, frame fills and
+#: legend boxes, leaving light text on white. The page asks for its colours as
+#: drawn; the property is inherited, so it reaches the runtime's shadow trees.
+PRINT_COLOURS_CSS = "html{print-color-adjust:exact;-webkit-print-color-adjust:exact}"
 
 
 # --------------------------------------------------------------------------

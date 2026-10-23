@@ -124,6 +124,13 @@ class TestDocumentShape:
         assert doc.startswith("<!doctype html>")
         assert "<title>Lot 12</title>" in doc
 
+    def test_asks_the_browser_to_print_its_colours(self) -> None:
+        """Without it a browser's default print drops every background."""
+        doc = write_cartograph_html(_static_spec(), _runtime())
+        style = doc[doc.index("<style>") : doc.index("</style>")]
+        assert "print-color-adjust:exact" in style
+        assert "-webkit-print-color-adjust:exact" in style
+
     def test_falls_back_to_cartograph_id_for_title(self) -> None:
         doc = write_cartograph_html(
             _static_spec(title="", cartograph_id="cg-x"), _runtime()

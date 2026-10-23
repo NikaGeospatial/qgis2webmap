@@ -199,6 +199,14 @@ class TestSurveyCartograph:
         page.add_init_script("window.print = () => { window.__printed = true; };")
         _open(page, fixtures / "survey-static.html", "?print=1")
         page.wait_for_function("() => window.__printed === true", timeout=30_000)
+        # Printed as drawn, even with the browser's Background graphics off.
+        assert (
+            page.evaluate(
+                "() => getComputedStyle(document.querySelector('om-cartograph'))"
+                ".printColorAdjust"
+            )
+            == "exact"
+        )
 
 
 class TestLiveFrameInUtm:
