@@ -40,10 +40,10 @@ change.
 
 ---
 
-## Create: Web map or Cartograph
+## Web map or Cartograph
 
 The dialog's title, at the top left, says what it makes:
-**Create: Web map ▾**. Click it for a menu of the two outputs, each with a
+**Web map ▾**. Click it for a menu of the two outputs, each with a
 one-line description:
 
 - **Web map** - an interactive map to pan, zoom and click. It covers the

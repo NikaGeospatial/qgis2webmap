@@ -1037,16 +1037,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 /* The dialog's title, `Web map ▾`: what it makes, and the menu that changes
    it. Flat until pointed at, like a heading that happens to open. */
 {d} QToolButton[role="outputTitle"] {{
-    /* Filled like a field, so it reads as a choice to open rather than a
-       title; the border stays clear for the focus ring. */
-    background: {p.field};
+    /* Toolbar-sized and unfilled, so it does not outweigh the map; the
+       chevron and the hover fill say it opens. The border stays clear for
+       the focus ring. */
+    background: transparent;
     color: {p.ink};
     border: 2px solid transparent;
     border-radius: 6px;
-    padding: 2px 21px 2px 5px;
+    padding: 2px 21px 2px 4px;
     min-height: 22px;
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 13px;
+    font-weight: 600;
 }}
 {d} QToolButton[role="outputTitle"]:hover,
 {d} QToolButton[role="outputTitle"][menuOpen="true"] {{
@@ -1060,17 +1061,14 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     height: 10px;
     right: 6px;
 }}
-{d} QLabel[role="createLabel"] {{
-    color: {p.muted};
-    font-size: 14px;
-}}
 {d} QLabel[role="betaChip"] {{
-    color: {p.link};
-    background: {p.accent_soft};
+    /* A quiet tag, not a badge: muted words in a hairline outline. */
+    color: {p.muted};
+    background: transparent;
+    border: 1px solid {p.rule};
     border-radius: 4px;
-    padding: 1px 6px;
+    padding: 0px 5px;
     font-size: 11px;
-    font-weight: 600;
 }}
 {d} QFrame[role="outputRow"] {{
     background: transparent;

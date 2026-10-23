@@ -2724,13 +2724,10 @@ class MainDialog(QDialog):
         row_layout.setContentsMargins(0, 0, 0, 6)
         row_layout.setSpacing(8)
 
-        # "Create:" before it, so the title reads as the choice it is.
-        self.create_label = QLabel(tr("Create:"), row)
-        self.create_label.setProperty("role", "createLabel")
-        row_layout.addWidget(self.create_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        # No "Create:" before it: its chevron, hover and tooltip say it is a
+        # choice, and a quiet title leaves the map the loudest thing here.
         self.output_switcher = OutputSwitcher(self.state.output, row)
         self.output_switcher.chosen.connect(self._apply_output)
-        self.create_label.setBuddy(self.output_switcher)
         row_layout.addWidget(self.output_switcher)
         row_layout.addWidget(
             self.output_switcher.beta_chip, 0, Qt.AlignmentFlag.AlignVCenter

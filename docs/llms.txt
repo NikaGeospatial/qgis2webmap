@@ -54,7 +54,7 @@ notes below are the things that are commonly assumed wrong.
 ## Cartographs (Beta)
 
 The plugin has a second output, chosen from the title menu at the top of its
-dialog ("Create: Web map ▾", then Cartograph, marked Beta): a **cartograph**, which is a QGIS **print layout**
+dialog ("Web map ▾", then Cartograph, marked Beta): a **cartograph**, which is a QGIS **print layout**
 (or, in one click, the map canvas) as one printable HTML page drawn by
 OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 

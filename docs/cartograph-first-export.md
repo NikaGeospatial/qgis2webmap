@@ -98,7 +98,7 @@ Any of these opens the plugin on Cartograph (Beta):
 - Press **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) - the dialog opens on
   Cartograph (Beta).
 - Open the plugin as usual (**Ctrl+Alt+W**, **Cmd+Alt+W** on macOS), click
-  the title at the top left - **Create: Web map ▾** - and choose
+  the title at the top left - **Web map ▾** - and choose
   **Cartograph**.
 
 ![The title menu open at the top of the dialog: Web map, an interactive map to pan, zoom and click, and Cartograph (Beta), a print layout with live maps, to read or print.](images/cartograph-make-switch.png)

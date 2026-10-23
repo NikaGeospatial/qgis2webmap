@@ -3006,13 +3006,18 @@ class TestPanel:
         finally:
             dialog.close()
 
-    def test_the_title_reads_create_and_the_preview_says_html(
+    def test_the_title_is_the_switcher_alone_and_the_preview_says_html(
         self, qgis_app, project
     ) -> None:
+        from qgis.PyQt.QtWidgets import QLabel
+
         dialog = _dialog(project)
         try:
-            assert dialog.create_label.text() == "Create:"
-            assert dialog.create_label.buddy() is dialog.output_switcher
+            row = dialog.output_switcher.parentWidget()
+            assert not any(
+                label.text() == "Create:" for label in row.findChildren(QLabel)
+            )
+            assert dialog.output_switcher.toolTip() == "Choose what to make"
             preview = dialog._cartograph.cartograph_preview_button
             assert preview.text() == "Preview"
         finally:

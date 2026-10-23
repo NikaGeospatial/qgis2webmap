@@ -13,7 +13,7 @@ lead_image:
 # The Cartograph dialog, tab by tab
 
 Choose **Cartograph** from the title menu at the top of the plugin's dialog
-(**Create: Web map ▾**) and the dialog becomes one screen: the print layout's
+(**Web map ▾**) and the dialog becomes one screen: the print layout's
 page on the left and a panel of settings on the right. The header holds
 **colour vision**, **Preview** and **Share**, and there is no Export
 button. The web map's tabs are described in

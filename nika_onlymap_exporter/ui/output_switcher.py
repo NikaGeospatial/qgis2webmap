@@ -150,7 +150,7 @@ class OutputSwitcher(QToolButton):
         super().__init__(parent)
         self.setProperty("role", "outputTitle")
         self.setProperty("hasMenu", True)
-        self.setIconSize(QSize(18, 18))
+        self.setIconSize(QSize(16, 16))
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)

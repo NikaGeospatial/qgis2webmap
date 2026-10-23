@@ -30,7 +30,7 @@ This file records what we do differently and why, so the reasoning survives.
 One row at the top, for both outputs:
 
 ```
-Create: [Web map ▾]                Preview [Live]  Share ▾  Export   ⚙  ?
+[Web map ▾]                         Preview [Live]  Share ▾  Export   ⚙  ?
 ```
 
 - **The output is the title.** It used to be a segmented
