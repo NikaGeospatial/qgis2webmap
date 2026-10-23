@@ -257,7 +257,9 @@ class TestTemplatePickerKeyboard:
     ) -> None:
         from nika_onlymap_exporter.ui.cartograph.template_picker import TemplatePicker
 
-        def render(template_id, page_size, orientation, width_px, figures=()):
+        def render(
+            template_id, page_size, orientation, width_px, figures=(), sizes=None
+        ):
             image = QImage(width_px, width_px // 2, QImage.Format.Format_ARGB32)
             image.fill(QColor("#336699"))
             return image

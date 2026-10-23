@@ -37,6 +37,7 @@ from nika_onlymap_exporter.core.canvas_cartograph import PREVIEW_LEGEND_LEFT_OUT
 from nika_onlymap_exporter.core.layout_templates import (
     CHARACTERFUL,
     ESSENTIAL,
+    TextSizes,
 )
 from nika_onlymap_exporter.ui.cartograph import template_picker
 from nika_onlymap_exporter.ui.cartograph.template_picker import (
@@ -93,15 +94,19 @@ class _Renderer:
     def __init__(self, fail=(), tall=False, left_out=None) -> None:
         self.calls: list[tuple[str, str, str, int]] = []
         self.figures: dict[str, tuple] = {}
+        self.sizes: dict[str, object] = {}
         self.fail = set(fail)
         self.tall = tall
         #: Legend entries each design's page leaves out, as the real
         #: `template_preview` records them on the image.
         self.left_out: dict[str, int] = dict(left_out or {})
 
-    def __call__(self, template_id, page_size, orientation, width_px, figures=()):
+    def __call__(
+        self, template_id, page_size, orientation, width_px, figures=(), sizes=None
+    ):
         self.calls.append((template_id, page_size, orientation, width_px))
         self.figures[template_id] = figures
+        self.sizes[template_id] = sizes
         if template_id in self.fail:
             raise RuntimeError("no")
         tall = orientation == "portrait" or (self.tall and orientation == "auto")
@@ -866,6 +871,125 @@ def figures_project(project):
     project.setCustomVariables({})
 
 
+def _slide(qgis_app, picker, element: str, step: str) -> None:
+    """Move a size slider to `step` as the keyboard would, and let the pause
+    after it pass and the pages it asks for draw."""
+    slider = picker.size_controls.sliders[element]
+    slider.setValue([s[0] for s in layout_templates.TEXT_SIZE_STEPS].index(step))
+    QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
+    _drain(qgis_app, picker)
+
+
+class TestTextSizeControls:
+    def test_three_keyboard_reachable_sliders_with_five_steps(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            controls = picker.size_controls
+            assert list(controls.sliders) == ["title", "legend", "notes"]
+            for name, slider in controls.sliders.items():
+                assert slider.accessibleName() == name.capitalize()
+                assert slider.focusPolicy() != Qt.FocusPolicy.NoFocus
+                assert (slider.minimum(), slider.maximum()) == (0, 4)
+                assert slider.value() == template_picker.STANDARD_INDEX
+                assert slider.accessibleDescription() == "Standard"
+                assert (
+                    controls._captions[name].text() == f"{name.capitalize()}: Standard"
+                )
+            assert picker.text_sizes == TextSizes()
+        finally:
+            picker.reject()
+
+    def test_keys_step_the_slider_and_the_label_names_the_step(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            slider = picker.size_controls.sliders["legend"]
+            slider.setFocus()
+            QTest.keyClick(slider, Qt.Key.Key_Left)
+            assert picker.size_controls._captions["legend"].text() == "Legend: Small"
+            QTest.keyClick(slider, Qt.Key.Key_Home)
+            assert picker.size_controls._captions["legend"].text() == "Legend: Smaller"
+            QTest.keyClick(slider, Qt.Key.Key_PageUp)
+            assert slider.value() == 1
+            assert "Small" in slider.toolTip()
+        finally:
+            picker.reject()
+
+    def test_a_change_makes_a_new_page_key_and_redraws_once_after_the_pause(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        renderer = _Renderer()
+        picker = TemplatePicker(
+            renderer, qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            _drain(qgis_app, picker)
+            before = picker._key("classic")
+            drawn = len(renderer.calls)
+            slider = picker.size_controls.sliders["legend"]
+            # Dragging through the steps changes nothing until it rests.
+            for value in (3, 4):
+                slider.setValue(value)
+            assert picker._key("classic") == before
+            assert len(renderer.calls) == drawn
+            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
+            _drain(qgis_app, picker)
+            after = picker._key("classic")
+            assert after != before
+            assert after[6] == TextSizes(legend="larger")
+            assert len(renderer.calls) > drawn
+            assert renderer.sizes["classic"] == TextSizes(legend="larger")
+        finally:
+            picker.reject()
+
+    def test_accept_saves_to_the_project_and_a_new_picker_reads_it_back(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            # Accepted straight after the move, before the pause has passed.
+            picker.size_controls.sliders["title"].setValue(1)
+            picker.size_controls.sliders["notes"].setValue(4)
+            picker.accept()
+        finally:
+            picker.reject()
+        variables = figures_project.customVariables()
+        assert variables["nika_size_title"] == "small"
+        assert variables["nika_size_notes"] == "larger"
+        assert "nika_size_legend" not in variables
+        reopened = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            assert reopened.text_sizes == TextSizes("small", "standard", "larger")
+            assert reopened.size_controls.sliders["notes"].value() == 4
+        finally:
+            reopened.reject()
+
+    def test_cancel_saves_no_size(self, qgis_app, tmp_path, fifteen, figures_project):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            picker.size_controls.sliders["title"].setValue(4)
+            picker.cancel_button.click()
+        finally:
+            picker.reject()
+        assert "nika_size_title" not in figures_project.customVariables()
+
+
 class TestKeyFigures:
     def test_only_a_design_that_takes_figures_shows_them(
         self, qgis_app, tmp_path, fifteen, figures_project
@@ -1000,7 +1124,9 @@ class TestKeyFigures:
         monkeypatch.setattr(canvas_cartograph, "plan_template", recording)
         flat = _Renderer()
 
-        def render(template_id, page_size, orientation, width_px, figures=()):
+        def render(
+            template_id, page_size, orientation, width_px, figures=(), sizes=None
+        ):
             if template_id != "dashboard":
                 return flat(template_id, page_size, orientation, width_px)
             return canvas_cartograph.template_preview(
@@ -1247,7 +1373,7 @@ class TestKeyFigures:
         finally:
             picker.reject()
 
-    def test_tab_runs_list_figures_buttons(
+    def test_tab_runs_list_figures_sizes_buttons(
         self, qgis_app, tmp_path, fifteen, figures_project
     ):
         picker = TemplatePicker(
@@ -1260,13 +1386,14 @@ class TestKeyFigures:
             picker.template_list.setFocus(Qt.FocusReason.TabFocusReason)
             qgis_app.processEvents()
             seen = []
-            for _ in range(7):
+            for _ in range(10):
                 QTest.keyClick(picker.focusWidget(), Qt.Key.Key_Tab)
                 qgis_app.processEvents()
                 seen.append(picker.focusWidget())
             group = picker.figures_group
             fields = [edit for pair in zip(group.values, group.labels) for edit in pair]
-            assert seen == [*fields, picker.create_button]
+            sizes = list(picker.size_controls.sliders.values())
+            assert seen == [*fields, *sizes, picker.create_button]
             for edit in fields:
                 assert edit.accessibleName().startswith("Key figure ")
         finally:
@@ -1345,16 +1472,18 @@ _PROJECT = layout_templates.TemplateInput(
 def _planner(data, calls: list | None = None):
     """The controller's planner for a project described by `data`."""
 
-    def plan(template_id, page_size, orientation, *, figures):
+    def plan(template_id, page_size, orientation, *, figures, sizes=None):
         if calls is not None:
             calls.append((template_id, page_size, orientation, figures))
         return layout_templates.plan_template(
             template_id,
-            dataclasses.replace(
-                data,
-                page_size=page_size,
-                orientation=orientation,
-                figures=tuple(figures),
+            (sizes or TextSizes()).apply(
+                dataclasses.replace(
+                    data,
+                    page_size=page_size,
+                    orientation=orientation,
+                    figures=tuple(figures),
+                )
             ),
         )
 
@@ -1462,7 +1591,7 @@ class TestTheCues:
     def test_a_page_the_planner_cannot_lay_out_keeps_the_safe_cues(
         self, qgis_app, tmp_path
     ):
-        def failing(template_id, page_size, orientation, *, figures):
+        def failing(template_id, page_size, orientation, *, figures, sizes=None):
             raise ValueError("no")
 
         picker = TemplatePicker(
@@ -1681,7 +1810,9 @@ class TestOpeningLeavesTheProject:
         project.setDirty(False)
         layouts = list(project.layoutManager().layouts())
 
-        def render(template_id, page_size, orientation, width_px, figures=()):
+        def render(
+            template_id, page_size, orientation, width_px, figures=(), sizes=None
+        ):
             return canvas_cartograph.template_preview(
                 layer.extent(),
                 UTM,
@@ -1742,7 +1873,9 @@ class _SlowRenderer:
         self.started: list[tuple[str, str]] = []
         self.pending: list[_Pending] = []
 
-    def __call__(self, template_id, page_size, orientation, width_px, figures=()):
+    def __call__(
+        self, template_id, page_size, orientation, width_px, figures=(), sizes=None
+    ):
         self.started.append((template_id, page_size))
         pending = _Pending(width_px, self.delay_ms)
         self.pending.append(pending)

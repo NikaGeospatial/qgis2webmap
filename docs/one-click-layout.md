@@ -48,6 +48,14 @@ content - notes from the project's abstract, Signal's key figures, Atlas
 Ledger's sheet number; point at it to see where each comes from. **Create
 layout** builds the one selected.
 
+Under the list, **Title**, **Legend** and **Notes** each take one of five
+sizes: Smaller (0.8x), Small (0.9x), Standard, Large (1.15x) or Larger
+(1.3x). They apply to every design (the notes size also sets Signal's key
+figures), so a smaller step gives the map more of the page and a larger one
+takes it back. The text never goes under the readable minimum for the page, so
+a smaller step does nothing once that is reached. Standard is the default, and
+the choice is saved with the project.
+
 ![The template picker: the All, Essentials and Characterful buttons, page size and orientation at the top, and the designs as large previews of the current map, each with its name, a one-line description and what it includes.](images/cartograph-templates.png)
 
 **Essentials**

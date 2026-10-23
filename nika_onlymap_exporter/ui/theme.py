@@ -1045,7 +1045,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border: 2px solid transparent;
     border-radius: 6px;
     padding: 2px 21px 2px 4px;
-    min-height: 22px;
+    min-height: 18px;
     font-size: 13px;
     font-weight: 600;
 }}
@@ -1484,6 +1484,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.paper};
     border: 1px solid {p.rule};
     border-radius: 8px;
+}}
+
+/* The text size sliders: a transparent 2 px border that the keyboard's
+   focus ring colours, so nothing moves when focus arrives. */
+{d} QSlider {{
+    border: 2px solid transparent;
+    border-radius: 4px;
+    min-height: 22px;
+}}
+{d} QSlider:focus {{
+    border-color: {p.link};
 }}
 
 /* A one-line notice across the top: the language offer. */

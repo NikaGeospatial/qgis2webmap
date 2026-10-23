@@ -6,7 +6,9 @@ the controller builds the layout (`core/canvas_cartograph.py`). Each preview
 is the real page QGIS would build, drawn by QGIS (`template_preview`), so
 what the thumbnail shows is what the layout will be. The one thing it also
 writes is a design's key figures, typed under the list and saved to the
-project's variables as it accepts, where the layout then reads them.
+project's variables as it accepts, where the layout then reads them. The
+other is the Title, Legend and Notes size steps (`TextSizes`), kept the same
+way.
 
 **Previews draw one at a time** on a zero-length timer: a heavy project can
 take a moment per page, and drawing them all before the dialog appears would
@@ -75,6 +77,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSlider,
     QStackedLayout,
     QStyle,
     QToolButton,
@@ -88,14 +91,18 @@ from ...core.canvas_cartograph import (
     PREVIEW_LEGEND_LEFT_OUT_KEY,
     PendingPreview,
     project_figure_rows,
+    project_text_sizes,
     set_project_figures,
+    set_project_text_sizes,
 )
 from ...core.layout_templates import (
     CHARACTERFUL,
     ESSENTIAL,
     PAGE_SIZE_ORDER,
+    TEXT_SIZE_STEPS,
     LayoutTemplate,
     TemplatePlan,
+    TextSizes,
 )
 from ...core.template_cues import CardCues, declared_cues, plan_cues
 from .. import theme
@@ -175,17 +182,23 @@ _FIGURES_DELAY_MS = 350
 #: Long enough for any real figure; longer would no longer fit its block.
 _FIGURE_VALUE_MAX = 24
 _FIGURE_LABEL_MAX = 80
+#: How long a size slider rests before the pages are drawn again.
+_SIZES_DELAY_MS = 250
+#: The Standard step's position on a size slider.
+STANDARD_INDEX = 2
 #: The widest a value's field grows, in logical pixels.
 _FIGURE_VALUE_WIDTH = 160
 
 
 class PreviewRenderer(Protocol):
-    """`render(template_id, page_size, orientation, width_px, figures=...)`
+    """`render(template_id, page_size, orientation, width_px, figures=...,
+    sizes=...)`
     -> the preview, or `None` when it cannot be drawn; or a pending preview
     (`canvas_cartograph.PendingPreview`: a `finished` signal carrying the
     image or `None`, and `cancel()`), drawn in the background while the
     picker stays usable. `figures` are the key figure rows as typed for a
-    design that takes them, `()` for the rest."""
+    design that takes them, `()` for the rest; `sizes` the title, legend and
+    notes steps chosen."""
 
     def __call__(
         self,
@@ -195,11 +208,12 @@ class PreviewRenderer(Protocol):
         width_px: int,
         *,
         figures: Figures,
+        sizes: TextSizes,
     ) -> QImage | PendingPreview | None: ...
 
 
 class PreviewPlanner(Protocol):
-    """`plan(template_id, page_size, orientation, figures=...)` -> the page
+    """`plan(template_id, page_size, orientation, figures=..., sizes=...)` -> the page
     `template_id` makes of this project, as the planner lays it out (what
     the preview draws), for the card's cues. Cheap next to drawing it."""
 
@@ -210,11 +224,13 @@ class PreviewPlanner(Protocol):
         orientation: str,
         *,
         figures: Figures,
+        sizes: TextSizes,
     ) -> TemplatePlan: ...
 
 
-#: (template, page size, orientation, width, canvas, figures drawn).
-_PageKey = tuple[str, str, str, int, str, Figures]
+#: (template, page size, orientation, width, canvas, figures drawn, text
+#: sizes).
+_PageKey = tuple[str, str, str, int, str, Figures, TextSizes]
 #: Where in a `_PageKey` the canvas state is.
 _CANVAS = 4
 
@@ -654,6 +670,118 @@ class _KeyFigures(QFrame):
             label.setCursorPosition(0)
 
 
+class _TextSizeControls(QFrame):
+    """The Title, Legend and Notes size steps (`TEXT_SIZE_STEPS`), three
+    labelled sliders with five snapping positions in a row under the list:
+    the design's text made smaller gives the map room, larger takes it. They
+    apply to every design. Each label names the current step.
+
+    `changed` fires once a pause follows the last move (or the handle is
+    released), not on every value a drag passes; `sizes()` is the steps as
+    last committed, `live_sizes()` as the handles stand."""
+
+    changed = pyqtSignal()
+
+    def __init__(self, sizes: TextSizes, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "keyFigures")
+        self.setAccessibleName(tr("Text sizes"))
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 4, 12, 4)
+        row.setSpacing(6)
+        self.sliders: dict[str, QSlider] = {}
+        self._captions: dict[str, QLabel] = {}
+        self._names = {
+            "title": tr("Title"),
+            "legend": tr("Legend"),
+            "notes": tr("Notes"),
+        }
+        tips = {
+            "title": tr("Size of the title"),
+            "legend": tr("Size of the legend"),
+            "notes": tr("Size of the notes and key figures"),
+        }
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(_SIZES_DELAY_MS)
+        self._timer.timeout.connect(self._commit_and_emit)
+        for index, element in enumerate(self._names):
+            if index:
+                row.addSpacing(10)
+            column = QVBoxLayout()
+            column.setSpacing(0)
+            caption = QLabel(self)
+            caption.setProperty("role", "hint")
+            slider = QSlider(Qt.Orientation.Horizontal, self)
+            slider.setRange(0, len(TEXT_SIZE_STEPS) - 1)
+            slider.setPageStep(1)
+            slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+            slider.setTickInterval(1)
+            slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            slider.setAccessibleName(self._names[element])
+            slider.setProperty("tip", tips[element])
+            slider.setValue(self._index(getattr(sizes, element)))
+            slider.valueChanged.connect(lambda _v, e=element: self._on_value(e))
+            slider.sliderReleased.connect(self._timer.start)
+            column.addWidget(caption)
+            column.addWidget(slider)
+            row.addLayout(column, 1)
+            self.sliders[element] = slider
+            self._captions[element] = caption
+            self._describe(element)
+        self._committed = self.live_sizes()
+
+    @staticmethod
+    def _index(step_id: str) -> int:
+        for index, (known, _name, _factor) in enumerate(TEXT_SIZE_STEPS):
+            if known == step_id:
+                return index
+        return STANDARD_INDEX
+
+    def _describe(self, element: str) -> None:
+        slider = self.sliders[element]
+        step = tr(TEXT_SIZE_STEPS[slider.value()][1])
+        label = f"{self._names[element]}: {step}"
+        self._captions[element].setText(label)
+        slider.setToolTip(
+            f"{slider.property('tip')}: {step}. "
+            + tr("Smaller text gives the map more room.")
+        )
+        slider.setAccessibleDescription(step)
+
+    def _on_value(self, element: str) -> None:
+        self._describe(element)
+        if not self.sliders[element].isSliderDown():
+            # A key press or wheel step: wait out a run of them.
+            self._timer.start()
+
+    def live_sizes(self) -> TextSizes:
+        return TextSizes(
+            **{
+                element: TEXT_SIZE_STEPS[slider.value()][0]
+                for element, slider in self.sliders.items()
+            }
+        )
+
+    def sizes(self) -> TextSizes:
+        return self._committed
+
+    def commit(self) -> bool:
+        """Take the handles as they stand; whether that changed anything."""
+        self._timer.stop()
+        live = self.live_sizes()
+        changed = live != self._committed
+        self._committed = live
+        return changed
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def _commit_and_emit(self) -> None:
+        if self.commit():
+            self.changed.emit()
+
+
 class _ViewportWatcher(QObject):
     """Tells the picker when the list's visible area changes size."""
 
@@ -746,6 +874,10 @@ class TemplatePicker(QDialog):
         #: The figures as the project had them, to write back only a change.
         self._saved_figures: Figures = (
             project_figure_rows(project) if project is not None else _NO_FIGURES
+        )
+        #: The size steps as the project had them, to write back only a change.
+        self._saved_sizes = (
+            project_text_sizes(project) if project is not None else TextSizes()
         )
         self._figures_timer = QTimer(self)
         self._figures_timer.setSingleShot(True)
@@ -877,6 +1009,8 @@ class TemplatePicker(QDialog):
         self.figures_group = _KeyFigures(self._saved_figures, self)
         self.figures_group.setVisible(False)
         self.figures_group.edited.connect(self._figures_timer.start)
+        self.size_controls = _TextSizeControls(self._saved_sizes, self)
+        self.size_controls.changed.connect(self._restart_previews)
         self.template_list.currentItemChanged.connect(self._on_template)
         self.template_list.itemDoubleClicked.connect(lambda _item: self.accept())
         bar = self.template_list.verticalScrollBar()
@@ -888,6 +1022,7 @@ class TemplatePicker(QDialog):
         self.template_list.viewport().installEventFilter(self._viewport_watcher)
         layout.addWidget(self.template_list, 1)
         layout.addWidget(self.figures_group)
+        layout.addWidget(self.size_controls)
 
         # The choice in words beside the buttons, for anyone not looking at
         # the ringed card; a long translated name wraps rather than clips.
@@ -938,6 +1073,11 @@ class TemplatePicker(QDialog):
         return self.figures_group.rows()
 
     @property
+    def text_sizes(self) -> TextSizes:
+        """The title, legend and notes steps as chosen."""
+        return self.size_controls.sizes()
+
+    @property
     def category_filter(self) -> str:
         for key, button in self.filter_buttons.items():
             if button.isChecked():
@@ -963,12 +1103,15 @@ class TemplatePicker(QDialog):
         self._figures_timer.stop()
         self._save_choice()
         self._save_figures()
+        self.size_controls.commit()
+        self._save_sizes()
         super().accept()
 
     def reject(self) -> None:
         self._timer.stop()
         self._cancel_inflight()
         self._figures_timer.stop()
+        self.size_controls.stop()
         super().reject()
 
     # ---- Previews ------------------------------------------------------------
@@ -982,6 +1125,7 @@ class TemplatePicker(QDialog):
             round(RENDER_WIDTH * ratio),
             self._canvas_key,
             self.figures if self._templates[template_id].takes_figures else (),
+            self.text_sizes,
         )
 
     def _restart_previews(self, *_args: object) -> None:
@@ -1023,7 +1167,9 @@ class TemplatePicker(QDialog):
             if cues is None:
                 template = self._templates[template_id]
                 try:
-                    plan = self._planner(template_id, key[1], key[2], figures=key[5])
+                    plan = self._planner(
+                        template_id, key[1], key[2], figures=key[5], sizes=key[6]
+                    )
                 except Exception:  # a page the planner cannot lay out
                     cues = declared_cues(template)
                 else:
@@ -1100,7 +1246,9 @@ class TemplatePicker(QDialog):
         template_id = self._queue.pop(0)
         key = self._key(template_id)
         try:
-            result = self._render(template_id, key[1], key[2], key[3], figures=key[5])
+            result = self._render(
+                template_id, key[1], key[2], key[3], figures=key[5], sizes=key[6]
+            )
         except Exception:  # a preview must never break the picker
             result = None
         if result is not None and not isinstance(result, QImage):
@@ -1322,6 +1470,14 @@ class TemplatePicker(QDialog):
         set_project_figures(self._project, self.figures)
         self._saved_figures = self.figures
 
+    def _save_sizes(self) -> None:
+        """Write the size steps to the project, when they changed
+        (`set_project_text_sizes`)."""
+        if self._project is None or self.text_sizes == self._saved_sizes:
+            return
+        set_project_text_sizes(self._project, self.text_sizes)
+        self._saved_sizes = self.text_sizes
+
     def _on_filter(self, _button: object, checked: bool) -> None:
         if not checked:
             return
@@ -1384,8 +1540,8 @@ def ask_template(
     planner: PreviewPlanner | None = None,
 ) -> tuple[str, str, str] | None:
     """Show the picker; `(template_id, page_size, orientation)`, or `None`
-    when the user cancels. Accepted, the key figures typed in it are saved
-    to `project`."""
+    when the user cancels. Accepted, the key figures typed in it and
+    the text size steps chosen are saved to `project`."""
     picker = TemplatePicker(
         render,
         canvas_key=canvas_key,

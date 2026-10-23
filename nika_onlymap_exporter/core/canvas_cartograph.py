@@ -77,9 +77,11 @@ from .layout_reader import (
 )
 from .layout_templates import (
     MAIN_FRAME_ID,
+    STANDARD_STEP,
     FrameSlot,
     TemplateInput,
     TemplatePlan,
+    TextSizes,
     plan_template,
     template_spec,
 )
@@ -245,15 +247,17 @@ def template_preview(
     orientation: str = "auto",
     placeholders: Mapping[str, str] | None = None,
     figures: Sequence[tuple[str, str]] | None = None,
+    text_sizes: TextSizes | None = None,
 ) -> QImage:
     """The page `template_id` would make of this view, drawn by QGIS
     `width_px` wide -- the template picker's thumbnail. The layout is built
     outside the project and thrown away; nothing is added to it.
 
     `figures` are the key figures as the picker's fields hold them, not yet
-    saved; `None` takes the project's (`project_figures`). The image's
-    `text(PREVIEW_LEGEND_LEFT_OUT_KEY)` is how many legend entries the page
-    leaves out for want of room ("0" when none)."""
+    saved; `None` takes the project's (`project_figures`). `text_sizes` is
+    the same for the title, legend and notes sizes (`project_text_sizes`).
+    The image's `text(PREVIEW_LEGEND_LEFT_OUT_KEY)` is how many legend
+    entries the page leaves out for want of room ("0" when none)."""
     with _project_dirty_state_kept(project):
         plan, _spec, built, left_out = _build_from_view(
             extent,
@@ -267,6 +271,7 @@ def template_preview(
             placeholders=placeholders,
             add_to_project=False,
             figures=figures,
+            text_sizes=text_sizes,
         )
         height_px = max(1, round(width_px * plan.page_height / plan.page_width))
         image = QgsLayoutExporter(built.layout).renderPageToImage(
@@ -405,6 +410,7 @@ def template_preview_async(
     orientation: str = "auto",
     placeholders: Mapping[str, str] | None = None,
     figures: Sequence[tuple[str, str]] | None = None,
+    text_sizes: TextSizes | None = None,
 ) -> PendingPreview:
     """`template_preview`, drawn in the background: see `PendingPreview`.
     The arguments are the same; building the page can raise, as there."""
@@ -422,6 +428,7 @@ def template_preview_async(
             placeholders=placeholders,
             add_to_project=False,
             figures=figures,
+            text_sizes=text_sizes,
         )
     height_px = max(1, round(width_px * plan.page_height / plan.page_width))
     return PendingPreview(
@@ -440,12 +447,14 @@ def view_input(
     orientation: str = "auto",
     placeholders: Mapping[str, str] | None = None,
     figures: Sequence[tuple[str, str]] | None = None,
+    text_sizes: TextSizes | None = None,
 ) -> TemplateInput:
     """What the template planner takes for this view and project: the one
     place a canvas becomes a `TemplateInput`, for the layout, its preview,
-    and the picker's check of what each page includes. `figures` `None`
-    takes the project's (`project_figures`)."""
-    return TemplateInput(
+    and the picker's check of what each page includes. `figures` and
+    `text_sizes` `None` take the project's (`project_figures`,
+    `project_text_sizes`)."""
+    data = TemplateInput(
         extent_width=extent.width(),
         extent_height=extent.height(),
         crs_is_geographic=crs.isGeographic(),
@@ -464,6 +473,8 @@ def view_input(
         figures=project_figures(project) if figures is None else tuple(figures),
         extent_center=(extent.center().x(), extent.center().y()),
     )
+    sizes = project_text_sizes(project) if text_sizes is None else text_sizes
+    return sizes.apply(data)
 
 
 _Built = tuple[TemplatePlan, CartographSpec, BuiltLayout, int]
@@ -482,6 +493,7 @@ def _build_from_view(
     placeholders: Mapping[str, str] | None,
     add_to_project: bool,
     figures: Sequence[tuple[str, str]] | None = None,
+    text_sizes: TextSizes | None = None,
 ) -> _Built:
     """Plan and build the page; the last value is how many legend entries
     the built legend leaves out (`_fit_legend`).
@@ -503,6 +515,7 @@ def _build_from_view(
             placeholders=placeholders,
             add_to_project=add,
             figures=figures,
+            text_sizes=text_sizes,
         )
 
     first = build(orientation, add_to_project)
@@ -531,6 +544,7 @@ def _build_once(
     placeholders: Mapping[str, str] | None,
     add_to_project: bool,
     figures: Sequence[tuple[str, str]] | None,
+    text_sizes: TextSizes | None,
 ) -> _Built:
     if not crs.isValid():
         raise ValueError("the canvas has no valid CRS")
@@ -550,6 +564,7 @@ def _build_once(
             orientation=orientation,
             placeholders=placeholders,
             figures=figures,
+            text_sizes=text_sizes,
         ),
     )
     frames = {
@@ -906,6 +921,36 @@ def set_project_figures(project: QgsProject, rows: Sequence[tuple[str, str]]) ->
             variables.pop(name, None)
         else:
             variables[name] = f"{value} | {label}".strip() if label else value
+    project.setCustomVariables(variables)
+
+
+#: The project variables the title, legend and notes size steps are kept in
+#: (the step ids of `TEXT_SIZE_STEPS`); unset is Standard.
+TEXT_SIZE_VARIABLES = ("nika_size_title", "nika_size_legend", "nika_size_notes")
+
+
+def project_text_sizes(project: QgsProject) -> TextSizes:
+    """The title, legend and notes size steps saved in the project
+    (`TEXT_SIZE_VARIABLES`); Standard for any that is unset."""
+    variables = project.customVariables()
+    title, legend, notes = (
+        str(variables.get(name) or "").strip() or STANDARD_STEP
+        for name in TEXT_SIZE_VARIABLES
+    )
+    return TextSizes(title, legend, notes)
+
+
+def set_project_text_sizes(project: QgsProject, sizes: TextSizes) -> None:
+    """Save `sizes` to `TEXT_SIZE_VARIABLES`; Standard removes its variable,
+    so a project that never changed a size carries none."""
+    variables = dict(project.customVariables())
+    for name, step in zip(
+        TEXT_SIZE_VARIABLES, (sizes.title, sizes.legend, sizes.notes), strict=True
+    ):
+        if step == STANDARD_STEP:
+            variables.pop(name, None)
+        else:
+            variables[name] = step
     project.setCustomVariables(variables)
 
 

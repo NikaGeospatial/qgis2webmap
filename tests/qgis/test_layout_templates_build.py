@@ -490,7 +490,9 @@ class TestPicker:
 
         settings = QSettings(str(tmp_path / "picker.ini"), QSettings.Format.IniFormat)
 
-        def render(template_id, page_size, orientation, width_px, figures=()):
+        def render(
+            template_id, page_size, orientation, width_px, figures=(), sizes=None
+        ):
             calls.append((template_id, page_size, orientation))
             if template_id in fail:
                 raise RuntimeError("no")

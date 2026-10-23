@@ -15,7 +15,10 @@ from nika_onlymap_exporter.core.canvas_cartograph import (
     cartograph_from_view,
     project_figure_rows,
     project_figures,
+    project_text_sizes,
     set_project_figures,
+    set_project_text_sizes,
+    view_input,
 )
 from nika_onlymap_exporter.core.cartograph_export import prepare_cartograph
 from nika_onlymap_exporter.core.cartograph_ir import (
@@ -26,6 +29,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     TextSpec,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.layout_templates import TextSizes
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -245,3 +249,38 @@ class TestKeyFigureVariables:
         with pytest.raises(ValueError):
             set_project_figures(project, (("1|2", "split"),))
         assert project.customVariables() == {}
+
+
+class TestTextSizeVariables:
+    """The title, legend and notes size steps kept as project variables."""
+
+    def test_written_steps_read_back_and_standard_leaves_no_variable(
+        self, project
+    ) -> None:
+        project.setCustomVariables({"other": "kept"})
+        assert project_text_sizes(project) == TextSizes()
+        set_project_text_sizes(project, TextSizes("smaller", "standard", "larger"))
+        variables = project.customVariables()
+        assert variables["nika_size_title"] == "smaller"
+        assert "nika_size_legend" not in variables
+        assert variables["other"] == "kept"
+        assert project_text_sizes(project) == TextSizes("smaller", "standard", "larger")
+        set_project_text_sizes(project, TextSizes())
+        assert project.customVariables() == {"other": "kept"}
+
+    def test_the_planner_input_takes_the_project_or_the_given_steps(
+        self, project, parcels
+    ) -> None:
+        extent = parcels.extent()
+        set_project_text_sizes(project, TextSizes("small", "large", "standard"))
+        saved = view_input(extent, UTM, [parcels], project)
+        assert (saved.title_scale, saved.legend_scale, saved.notes_scale) == (
+            0.9,
+            1.15,
+            1.0,
+        )
+        given = view_input(
+            extent, UTM, [parcels], project, text_sizes=TextSizes("larger")
+        )
+        assert (given.title_scale, given.legend_scale) == (1.3, 1.0)
+        project.setCustomVariables({})

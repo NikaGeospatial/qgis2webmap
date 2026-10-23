@@ -140,6 +140,30 @@ TEXT_SIZE_STEPS: tuple[tuple[str, str, float], ...] = (
     ("larger", N_("Larger"), 1.3),
 )
 
+_STEP_FACTOR = {step_id: factor for step_id, _name, factor in TEXT_SIZE_STEPS}
+STANDARD_STEP = "standard"
+
+
+@dataclass(frozen=True)
+class TextSizes:
+    """The step ids (`TEXT_SIZE_STEPS`) chosen for the title, the legend and
+    the notes: what the picker holds and the project keeps. An id that is
+    not a step reads as Standard."""
+
+    title: str = STANDARD_STEP
+    legend: str = STANDARD_STEP
+    notes: str = STANDARD_STEP
+
+    def apply(self, data: TemplateInput) -> TemplateInput:
+        """`data` with these steps set as its scales."""
+        return replace(
+            data,
+            title_scale=_STEP_FACTOR.get(self.title, 1.0),
+            legend_scale=_STEP_FACTOR.get(self.legend, 1.0),
+            notes_scale=_STEP_FACTOR.get(self.notes, 1.0),
+        )
+
+
 #: Which of the three user-sized elements a text role belongs to.
 _ELEMENT_OF_ROLE = {
     "display": "title",

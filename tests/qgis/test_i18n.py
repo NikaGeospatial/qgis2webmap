@@ -265,7 +265,9 @@ class TestOneTextTwoMeanings:
         )
         from nika_onlymap_exporter.ui.i18n import tr, use_language
 
-        def flat_page(template_id, page_size, orientation, width_px, figures=()):
+        def flat_page(
+            template_id, page_size, orientation, width_px, figures=(), sizes=None
+        ):
             image = QImage(
                 width_px, round(width_px / 1.414), QImage.Format.Format_RGB32
             )
