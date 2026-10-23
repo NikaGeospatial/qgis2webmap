@@ -754,8 +754,9 @@ def _poster(page: _Page) -> _Layout:
     """Broadside: a public poster. A headline as large as the title allows
     -- a long one steps down in size and runs to more lines rather than
     clip -- a short accent rule, the map dominant, and a disciplined rail
-    (a footer band on a portrait sheet) with the story, the legend and the
-    scale bar. The source line runs along the foot."""
+    (a footer band on a portrait sheet, or under a wide view) with the
+    story, the legend and the scale bar. The source line runs along the
+    foot."""
     pal = PAPER
     sp = page.spacing
     s = page.scale
@@ -797,24 +798,38 @@ def _poster(page: _Page) -> _Layout:
             z=3,
             credits=False,
         )
-    elif page.landscape:
-        rail_w = min(max(body.w * 0.27, 60.0 * s), 110.0 * s)
-        # A legend too long for the rail at the page's legend size widens
-        # it, up to as wide as the map (`MAP_MIN_SHARE`).
-        widest = max(legend_room_cap(body.w, 1.5 * g), rail_w)
-        while rail_w < widest and not _rail_holds_legend(
-            page, rail_w, body.h, story_pt
-        ):
-            rail_w = min(rail_w + 5.0, widest)
-        frame = Box(body.x, body.y, body.w - rail_w - 1.5 * g, body.h)
-        rail = Box(frame.x + frame.w + 1.5 * g, body.y, rail_w, body.h)
-        items += _rail(page, rail, pal, story_pt, z=3)
     else:
-        band = _PosterBand(page, body, story_pt)
-        frame = Box(body.x, body.y, body.w, body.h - band.height - 1.5 * g)
-        items += band.items(
-            Box(body.x, frame.y + frame.h + 1.5 * g, body.w, band.height), pal, z=3
+
+        def beside() -> tuple[Box, list[CartographItem]]:
+            rail_w = min(max(body.w * 0.27, 60.0 * s), 110.0 * s)
+            # A legend too long for the rail at the page's legend size
+            # widens it, up to as wide as the map (`MAP_MIN_SHARE`).
+            widest = max(legend_room_cap(body.w, 1.5 * g), rail_w)
+            while rail_w < widest and not _rail_holds_legend(
+                page, rail_w, body.h, story_pt
+            ):
+                rail_w = min(rail_w + 5.0, widest)
+            frame = Box(body.x, body.y, body.w - rail_w - 1.5 * g, body.h)
+            rail = Box(frame.x + frame.w + 1.5 * g, body.y, rail_w, body.h)
+            return frame, _rail(page, rail, pal, story_pt, z=3)
+
+        def under() -> tuple[Box, list[CartographItem]]:
+            band = _PosterBand(page, body, story_pt)
+            frame = Box(body.x, body.y, body.w, body.h - band.height - 1.5 * g)
+            band_box = Box(body.x, frame.y + frame.h + 1.5 * g, body.w, band.height)
+            return frame, band.items(band_box, pal, z=3)
+
+        # The rail beside the map on a landscape sheet and the band under it
+        # on a portrait one, unless the other shows the canvas view larger:
+        # a wide view on a landscape sheet takes the band. max() keeps the
+        # first of equals, the orientation's own.
+        arrangements = [beside, under] if page.landscape else [under, beside]
+        aspect = page.data.extent_width / page.data.extent_height
+        frame, rail_items = max(
+            (arrange() for arrange in arrangements),
+            key=lambda option: _fit_area(aspect, option[0]),
         )
+        items += rail_items
     credit = source_line(
         page.credits,
         Box(m, page.height - m - credits_h, content_w, credits_h or 1.0),
@@ -827,9 +842,10 @@ def _poster(page: _Page) -> _Layout:
 
 
 def _main_and_locator(page: _Page) -> _Layout:
-    """Near & Far: the map, and beside it (under it on a portrait sheet) a
-    locator showing where it is, its extent outlined, above the legend;
-    title over both, scale bar and source line at the foot."""
+    """Near & Far: the map, and beside it (under it on a portrait sheet, or
+    under a wide view) a locator showing where it is, its extent outlined,
+    above the legend; title over both, scale bar and source line at the
+    foot."""
     pal = DAYLIGHT
     sp = page.spacing
     s = page.scale
@@ -839,7 +855,9 @@ def _main_and_locator(page: _Page) -> _Layout:
     legend_pt = _legend_pt(page)
     body = Box(m, m + head.height, content_w, content_h - head.height)
     items = head.items(m, m, content_w)
-    if page.landscape:
+
+    def column() -> tuple[Box, Box, Box, Box]:
+        """The locator, legend and scale bar in a column right of the map."""
         column_w = min(max(body.w * 0.26, 55.0 * s), 95.0 * s)
         # A legend longer than the room under the locator first shortens
         # the locator (to a wide strip), then widens the column, up to 38 %
@@ -866,8 +884,10 @@ def _main_and_locator(page: _Page) -> _Layout:
             legend_box = Box(frame.x, frame.y + frame.h + g, frame.w, strip_h)
             locator = Box(column.x, column.y, column.w, min(column.w, room))
         foot = Box(column.x, column.y + column.h - foot_h, column.w, foot_h)
-        items += _stacked_foot(page, foot, pal, z=6)
-    else:
+        return frame, locator, legend_box, foot
+
+    def band() -> tuple[Box, Box, Box, Box]:
+        """The locator, legend and scale bar in a band under the map."""
         foot_w = min(60.0 * min(s, 2.0), body.w * 0.34)
         foot_h = _stacked_foot_height(page, foot_w)
         base_h = max(min(body.w * 0.3, body.h * 0.3), foot_h)
@@ -889,7 +909,18 @@ def _main_and_locator(page: _Page) -> _Layout:
             legend_box = Box(locator.x + locator_w + g, band_y, beside_w, band_h)
             foot_y = band_y + band_h - foot_h
         foot = Box(body.x + body.w - foot_w, foot_y, foot_w, foot_h)
-        items += _stacked_foot(page, foot, pal, z=6)
+        return frame, locator, legend_box, foot
+
+    # The column on a landscape sheet and the band on a portrait one, unless
+    # the other shows the canvas view larger: a wide view on a landscape
+    # sheet takes the band. max() keeps the first of equals.
+    arrangements = [column, band] if page.landscape else [band, column]
+    aspect = page.data.extent_width / page.data.extent_height
+    frame, locator, legend_box, foot = max(
+        (arrange() for arrange in arrangements),
+        key=lambda option: _fit_area(aspect, option[0]),
+    )
+    items += _stacked_foot(page, foot, pal, z=6)
     items += _legend(page, legend_box, pal, legend_pt, z=5)
     return (
         (
@@ -2890,6 +2921,12 @@ def frame_for_extent(
     w, h = _fit(shape, area.w, area.h)
     share = {"start": 0.0, "center": 0.5, "end": 1.0}[align]
     return Box(area.x + (area.w - w) * share, area.y + (area.h - h) * share, w, h)
+
+
+def _fit_area(aspect: float, box: Box) -> float:
+    """The area a view of `aspect` (w/h) covers when fitted into `box`."""
+    w, h = _fit(aspect, box.w, box.h)
+    return w * h
 
 
 def _fit(aspect: float, width: float, height: float) -> tuple[float, float]:

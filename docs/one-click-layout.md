@@ -77,8 +77,10 @@ layout** builds the one selected.
   view gets a wide frame.
 - **Broadside** - a poster: a big headline that steps down in size for long
   titles, a dominant map, and the story, legend and scale bar in a rail beside
-  it (a band below it on a portrait page).
-- **Near & Far** - the map with a locator inset that outlines where it is.
+  it, or in a band below it when that shows your view larger - on a portrait
+  page, or for a wide view.
+- **Near & Far** - the map with a locator inset that outlines where it is,
+  beside the map or below it, whichever shows your view larger.
 - **On the Map** - the map fills the page, with the title and story on a solid
   panel over the edge of the map, and a locator inset.
 - **Signal** - a data-led page: the map with up to three key figures you

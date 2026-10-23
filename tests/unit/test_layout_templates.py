@@ -239,6 +239,18 @@ class TestFieldbookFraming:
         plan = plan_template("field-map", data)
         assert _view_share(plan, data) >= 0.7
 
+    @pytest.mark.parametrize("size", ["A4", "A3"])
+    @pytest.mark.parametrize("shape", ["wide", "tall"])
+    @pytest.mark.parametrize("template_id", ["poster", "locator"])
+    def test_broadside_and_near_and_far_choose_too(
+        self, template_id, shape, size
+    ) -> None:
+        """Their rail or column beside the map, or band under it, was fixed
+        by orientation, so a long view filled a third of the frame."""
+        data = _input(shape, page_size=size, notes="Viewpoints along the rim.")
+        plan = plan_template(template_id, data)
+        assert _view_share(plan, data) >= 0.6
+
     def test_a_square_view_keeps_the_column_on_a_landscape_sheet(self) -> None:
         data = _input("square", orientation="landscape")
         plan = plan_template("field-map", data)
