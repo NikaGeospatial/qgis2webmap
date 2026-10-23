@@ -64,7 +64,9 @@ _STAND_IN = """      <script>
   window.qgis2webmapRasters = tracker;
   window.addEventListener("unhandledrejection", (event) => {
     const message = String((event.reason && event.reason.message) || event.reason);
-    if (/tiff|cog|projjson|projection|crs/i.test(message)) tracker.failed.push(message);
+    if (/\\b(tiff|cog|projjson|projection|crs)\\b/i.test(message)) {
+      tracker.failed.push(message);
+    }
   });
   const realFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
@@ -76,7 +78,12 @@ _STAND_IN = """      <script>
         status: 200, headers: { "Content-Type": "application/json" },
       }));
     }
-    const name = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop());
+    let name;
+    try {
+      name = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop());
+    } catch (error) {
+      return realFetch(input, init);
+    }
     const bytes = files.get(name);
     if (!bytes) return realFetch(input, init);
     tracker.read.add(name);

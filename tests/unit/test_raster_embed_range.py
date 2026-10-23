@@ -42,7 +42,7 @@ def _run_stand_in(request: str) -> dict[str, object]:
 const blocks = [{{ textContent: {json.dumps(data.group(1))},
   dataset: {{ src: "r.tif" }}, remove() {{}} }}];
 globalThis.window = globalThis;
-globalThis.addEventListener = () => {{}};
+globalThis.addEventListener = (type, handler) => {{ globalThis.__handler = handler; }};
 globalThis.document = {{ querySelectorAll: () => blocks }};
 globalThis.location = {{ protocol: "http:" }};
 {stand_in.group(1)}
@@ -92,3 +92,34 @@ fetch("r.tif").then(() => console.log(JSON.stringify({
   names: window.qgis2webmapRasters.names })));"""
     )
     assert answer == {"before": 0, "read": ["r.tif"], "names": ["r.tif"]}
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node")
+def test_a_url_with_a_stray_percent_falls_through_to_the_real_fetch() -> None:
+    """`decodeURIComponent` throws on a lone `%`; that must not break fetch."""
+    answer = _run_stand_in(
+        """fetch("http://127.0.0.1:9/100%.json").then(
+  () => console.log(JSON.stringify({ name: "" })),
+  (error) => console.log(JSON.stringify({ name: error.name })));"""
+    )
+    assert answer["name"] != "URIError"
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node")
+@pytest.mark.parametrize(
+    ("message", "counted"),
+    [
+        ("Failed to read GeoTIFF header", False),
+        ("the TIFF header is bad", True),
+        ("unknown CRS 12", True),
+        ("a cogent argument, crsp", False),
+    ],
+)
+def test_only_raster_words_count_as_a_failed_raster(
+    message: str, counted: bool
+) -> None:
+    answer = _run_stand_in(
+        f"""window.__handler({{ reason: new Error({json.dumps(message)}) }});
+console.log(JSON.stringify({{ failed: window.qgis2webmapRasters.failed.length }}));"""
+    )
+    assert answer == {"failed": int(counted)}
