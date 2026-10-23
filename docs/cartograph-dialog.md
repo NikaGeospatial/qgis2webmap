@@ -58,8 +58,19 @@ every difference. Beside the caption, a link such as **2 changes in the HTML**
 opens Checks. To see the real cartograph, press **Preview**.
 
 Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
-100% is the page at its real size on your screen. The mouse wheel zooms too,
-and dragging pans.
+100% is the page at its real size on your screen. The mouse wheel zooms too.
+
+Left of them, **Select** and **Pan** (Select is on when the page opens). With
+**Select** you click an item to select it, drag it to move it, or drag a
+handle to resize it, with the same snapping and **Shift**/**Alt** keys as the
+layout designer; map frames move and resize like any other item, and a locked
+item stays where it is. Hold **Space** or drag with the middle button to pan
+while Select is on, or choose **Pan** to drag the page around without
+touching an item. Every move or resize is an undo step on the layout, so
+**Ctrl+Z** and **Ctrl+Shift+Z** work on the page, the cartograph saves itself
+after each edit, and the page stops fitting to the window once you have
+clicked on it (**Fit page** fits it again). The layout is the same one the
+layout designer shows, so an edit in either appears in both.
 
 With no print layout in the project, the page says so and offers
 **From canvas...** and **Import cartograph...** instead.

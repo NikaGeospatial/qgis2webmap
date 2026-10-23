@@ -145,6 +145,168 @@ class TestPagePane:
         assert _scale(pane) == pytest.approx(kept, rel=0.01)
 
 
+def _framed_pane(qgis_app, project):
+    """A shown pane on an A4 layout holding one 100 x 80 mm map at 30, 40."""
+    from qgis.core import QgsLayoutItemMap
+    from qgis.PyQt.QtCore import QRectF
+
+    from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+    layout = _a4_layout(project)
+    frame = QgsLayoutItemMap(layout)
+    frame.attemptSetSceneRect(QRectF(30, 40, 100, 80))
+    layout.addLayoutItem(frame)
+    widget = PagePane()
+    widget.resize(700, 600)
+    widget.show()
+    widget.show_layout(layout)
+    _settle(qgis_app)
+    return widget, layout, frame
+
+
+def _viewport_point(pane, x_mm: float, y_mm: float):
+    from qgis.PyQt.QtCore import QPointF
+
+    view = pane.preview.view
+    return view.mapFromScene(QPointF(x_mm, y_mm))
+
+
+def _drag(qgis_app, pane, start, end, buttons=None) -> None:
+    """A human drag on the page: press, a path of moves, release."""
+    from qgis.PyQt.QtCore import QPoint, Qt
+    from qgis.PyQt.QtTest import QTest
+
+    button = Qt.MouseButton.LeftButton
+    viewport = pane.preview.view.viewport()
+    QTest.mouseMove(viewport, start)
+    qgis_app.processEvents()
+    QTest.mousePress(viewport, button, Qt.KeyboardModifier.NoModifier, start)
+    steps = 8
+    for step in range(1, steps + 1):
+        point = QPoint(
+            start.x() + (end.x() - start.x()) * step // steps,
+            start.y() + (end.y() - start.y()) * step // steps,
+        )
+        QTest.mouseMove(viewport, point)
+        qgis_app.processEvents()
+    QTest.mouseRelease(viewport, button, Qt.KeyboardModifier.NoModifier, end)
+    _settle(qgis_app, 0.05)
+
+
+class TestEditingThePage:
+    @pytest.fixture
+    def editing(self, qgis_app, project):
+        widget, layout, frame = _framed_pane(qgis_app, project)
+        yield widget, layout, frame
+        widget.close()
+        widget.deleteLater()
+
+    @staticmethod
+    def _centre(pane, frame):
+        rect = frame.sceneBoundingRect()
+        return _viewport_point(pane, rect.center().x(), rect.center().y())
+
+    def test_select_is_the_default_mode(self, editing) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        pane, _layout, _frame = editing
+        assert pane.select_button.isChecked()
+        assert not pane.pan_button.isChecked()
+        assert pane.preview.select_mode()
+        assert pane.select_button.toolTip() != ""
+        # Reachable by Tab, with a name for a screen reader.
+        assert pane.select_button.focusPolicy() == Qt.FocusPolicy.StrongFocus
+        assert pane.select_button.accessibleName()
+
+    def test_a_drag_moves_the_item_as_one_undo_step(self, qgis_app, editing) -> None:
+        pane, layout, frame = editing
+        stack = layout.undoStack().stack()
+        before, count = frame.pos(), stack.count()
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
+        assert frame.isSelected()
+        assert frame.pos().x() > before.x() + 10
+        assert frame.pos().y() > before.y() + 5
+        assert stack.count() == count + 1
+        stack.undo()
+        assert frame.pos().x() == pytest.approx(before.x())
+        assert frame.pos().y() == pytest.approx(before.y())
+        stack.redo()
+        assert frame.pos().x() > before.x() + 10
+
+    def test_ctrl_z_in_the_page_undoes_the_move(self, qgis_app, editing) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        pane, _layout, frame = editing
+        before = frame.pos()
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
+        view = pane.preview.view
+        view.setFocus()
+        QTest.keyClick(view, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        assert frame.pos().x() == pytest.approx(before.x())
+        QTest.keyClick(
+            view,
+            Qt.Key.Key_Z,
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
+        )
+        assert frame.pos().x() > before.x() + 10
+
+    def test_a_corner_handle_resizes_the_item(self, qgis_app, editing) -> None:
+        pane, layout, frame = editing
+        stack = layout.undoStack().stack()
+        # Select it first, so its handles are there to take hold of.
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre)
+        assert frame.isSelected()
+        count, width = stack.count(), frame.rect().width()
+        rect = frame.sceneBoundingRect()
+        corner = _viewport_point(pane, rect.right(), rect.bottom())
+        # The handle sits just inside the corner.
+        corner -= type(corner)(3, 3)
+        _drag(qgis_app, pane, corner, corner + type(corner)(40, 30))
+        assert frame.rect().width() > width + 5
+        assert stack.count() == count + 1
+        stack.undo()
+        assert frame.rect().width() == pytest.approx(width)
+
+    def test_a_locked_item_does_not_move(self, qgis_app, editing) -> None:
+        pane, layout, frame = editing
+        frame.setLocked(True)
+        before, count = frame.pos(), layout.undoStack().stack().count()
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
+        assert frame.pos() == before
+        assert layout.undoStack().stack().count() == count
+
+    def test_pan_mode_moves_the_view_not_the_item(self, qgis_app, editing) -> None:
+        pane, layout, frame = editing
+        pane.pan_button.click()
+        assert not pane.preview.select_mode()
+        pane.zoom_in_button.click()
+        pane.zoom_in_button.click()
+        _settle(qgis_app)
+        before, count = frame.pos(), layout.undoStack().stack().count()
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
+        assert frame.pos() == before
+        assert layout.undoStack().stack().count() == count
+        assert not frame.isSelected()
+        pane.select_button.click()
+        assert pane.preview.select_mode()
+
+    def test_selecting_stops_the_page_refitting(self, qgis_app, editing) -> None:
+        pane, _layout, frame = editing
+        centre = self._centre(pane, frame)
+        _drag(qgis_app, pane, centre, centre)
+        assert pane.preview._user_zoomed
+        kept = _scale(pane)
+        pane.resize(1000, 800)
+        _settle(qgis_app)
+        assert _scale(pane) == pytest.approx(kept, rel=0.01)
+
+
 @pytest.fixture
 def save_location(qgis_app):
     from nika_onlymap_exporter.ui.cartograph.layout_page import SaveLocation

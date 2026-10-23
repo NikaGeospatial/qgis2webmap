@@ -189,8 +189,12 @@ class LayoutPreview(QStackedWidget):
         self.view = QgsLayoutView(self)
         self.view.setProperty("role", "layoutPreview")
         self._pan = QgsLayoutViewToolPan(self.view)
-        self._select = QgsLayoutViewToolSelect(self.view)
-        self.view.setTool(self._select)
+        # The select tool takes the view's mouse handles, which exist only
+        # once the view has a layout: it is made in `show_layout`, and
+        # made before that it crashes on the first wheel turn.
+        self._select: QgsLayoutViewToolSelect | None = None
+        self._select_mode = True
+        self.view.setTool(self._pan)
         self.addWidget(self.view)
 
         empty = QFrame(self)
@@ -259,6 +263,9 @@ class LayoutPreview(QStackedWidget):
             return
         if self.view.currentLayout() is not layout:
             self.view.setCurrentLayout(layout)
+            self._select = QgsLayoutViewToolSelect(self.view)
+            self._select.setLayout(layout)
+            self.set_select_mode(self._select_mode)
             self._user_zoomed = False
         self.setCurrentWidget(self.view)
         self._fit_timer.start()
@@ -277,10 +284,11 @@ class LayoutPreview(QStackedWidget):
 
     def set_select_mode(self, select: bool) -> None:
         """Select/Move (True) or Pan (False)."""
-        self.view.setTool(self._select if select else self._pan)
+        self._select_mode = select
+        self.view.setTool(self._select if select and self._select else self._pan)
 
     def select_mode(self) -> bool:
-        return self.view.tool() is self._select
+        return self._select is not None and self.view.tool() is self._select
 
     def _step_undo(self, redo: bool) -> None:
         layout = self.view.currentLayout()
@@ -303,14 +311,11 @@ class LayoutPreview(QStackedWidget):
         self.view.zoomFull()
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
-        if event is not None and event.type() == QEvent.Type.Wheel:
-            self._user_zoomed = True
-        # Having selected or moved something, the page stays as the user has
-        # it: an edit's refresh must not fit the page again under their hand.
-        elif (
-            event is not None
-            and event.type() == QEvent.Type.MouseButtonPress
-            and self.select_mode()
+        if event is not None and (
+            event.type() == QEvent.Type.Wheel
+            # Having selected or moved something, the page stays as the user
+            # has it: an edit's refresh must not fit the page under their hand.
+            or (event.type() == QEvent.Type.MouseButtonPress and self.select_mode())
         ):
             self._user_zoomed = True
         return False

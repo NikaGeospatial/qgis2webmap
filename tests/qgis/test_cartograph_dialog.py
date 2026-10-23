@@ -3521,6 +3521,57 @@ class TestDesignerEditsAutosave:
         finally:
             dialog.close()
 
+    def test_a_drag_in_the_page_preview_autosaves_and_undoes(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        """The page preview edits through QGIS's select tool: the move is an
+        undo command, so the autosave follows it and so does an undo."""
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        dialog, cartograph, layout, _label, map_item = self._ready(project, qgis_app)
+        try:
+            dialog.resize(1200, 800)
+            dialog.show()
+            assert _wait_for(qgis_app, lambda: cartograph.page_pane.preview.isVisible())
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            cartograph._autosave_timer.stop()
+            fake_cartograph_export.calls.clear()
+            view = cartograph.page_pane.preview.view
+            viewport = view.viewport()
+            centre = view.mapFromScene(map_item.sceneBoundingRect().center())
+            before = map_item.pos()
+            stack = layout.undoStack().stack()
+            count = stack.count()
+            QTest.mouseMove(viewport, centre)
+            QTest.mousePress(
+                viewport,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                centre,
+            )
+            for step in range(1, 9):
+                QTest.mouseMove(viewport, centre + QPoint(step * 8, step * 5))
+                qgis_app.processEvents()
+            QTest.mouseRelease(
+                viewport,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                centre + QPoint(64, 40),
+            )
+            assert map_item.pos() != before
+            assert stack.count() == count + 1
+            assert cartograph._autosave_timer.isActive()
+            assert _wait_for(qgis_app, lambda: target.exists())
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            assert len(fake_cartograph_export.calls) == 1
+            stack.undo()
+            assert map_item.pos() == before
+            assert cartograph._autosave_timer.isActive()
+        finally:
+            dialog.close()
+
     def test_a_burst_of_edits_is_one_build(
         self, qgis_app, project, fake_cartograph_export, tmp_path
     ) -> None:
