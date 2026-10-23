@@ -121,6 +121,33 @@ class TemplateInput:
     #: The canvas extent's centre in map units, when known: how long a grid
     #: label's coordinates run, for a design that labels its grid.
     extent_center: tuple[float, float] | None = None
+    #: How much larger or smaller than standard the user wants the title, the
+    #: legend and the notes (and a key figure, which follows the notes): one
+    #: of `TEXT_SIZE_STEPS`, 1.0 being today's size. A smaller step never
+    #: goes under the readable floors, and the map takes the room it frees.
+    title_scale: float = 1.0
+    legend_scale: float = 1.0
+    notes_scale: float = 1.0
+
+
+#: The five sizes the user picks for the title, the legend and the notes:
+#: (id, name, factor). Bounded steps, never a free zoom.
+TEXT_SIZE_STEPS: tuple[tuple[str, str, float], ...] = (
+    ("smaller", N_("Smaller"), 0.8),
+    ("small", N_("Small"), 0.9),
+    ("standard", N_("Standard"), 1.0),
+    ("large", N_("Large"), 1.15),
+    ("larger", N_("Larger"), 1.3),
+)
+
+#: Which of the three user-sized elements a text role belongs to.
+_ELEMENT_OF_ROLE = {
+    "display": "title",
+    "title": "title",
+    "legend": "legend",
+    "subtitle": "notes",
+    "body": "notes",
+}
 
 
 @dataclass(frozen=True)
@@ -199,9 +226,22 @@ class _Page:
     def spacing(self) -> Spacing:
         return spacing_for(self.width, self.height)
 
-    def pt(self, role: str) -> float:
-        """The size in points for a text `role` on this page."""
-        return type_size(role, self.width, self.height)
+    def pt(self, role: str, element: str | None = None) -> float:
+        """The size in points for a text `role` on this page, with the
+        user's size step for its element (`element`, or the role's own:
+        title, legend or notes) applied and never below the role's readable
+        minimum. Other roles are not the user's to size."""
+        element = element or _ELEMENT_OF_ROLE.get(role)
+        factor = {
+            "title": self.data.title_scale,
+            "legend": self.data.legend_scale,
+            "notes": self.data.notes_scale,
+        }.get(element or "", 1.0)
+        base = type_size(role, self.width, self.height)
+        if factor == 1.0:
+            return base
+        factor = min(max(factor, TEXT_SIZE_STEPS[0][2]), TEXT_SIZE_STEPS[-1][2])
+        return round(max(base * factor, MINIMUM_TYPE.size(role)), 2)
 
     @property
     def rotated(self) -> bool:
@@ -2294,7 +2334,7 @@ class _Caption:
         self.lead_pt, self.lead_h = _fit_title(
             page.title,
             self.text_w,
-            round(page.pt("subtitle") * 1.1, 2),
+            round(page.pt("subtitle", "title") * 1.1, 2),
             MINIMUM_TYPE.subtitle,
             max_lines=3,
         )
@@ -2580,7 +2620,7 @@ def _figure_block(
     value_pt, value_h = _fit_title(
         value,
         width,
-        round(page.pt("display") * 0.8, 2),
+        round(page.pt("display", "notes") * 0.8, 2),
         MINIMUM_TYPE.title,
         max_lines=1,
     )

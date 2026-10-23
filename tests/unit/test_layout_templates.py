@@ -842,3 +842,131 @@ def test_daylight_with_an_endless_title_stays_on_the_page(
         assert _contains(page, box), name
     frame = plan.frames[0].box
     assert frame.h >= 0.4 * plan.page_height
+
+
+class TestTextSizeSteps:
+    """The title, legend and notes sizes the user picks (TEXT_SIZE_STEPS)."""
+
+    _SMALLER, _LARGER = 0.8, 1.3
+    _ELEMENTS = ("title_scale", "legend_scale", "notes_scale")
+
+    @staticmethod
+    def _main_area(plan: TemplatePlan) -> float:
+        return _area(plan.frames[0].box)
+
+    @pytest.mark.parametrize("template_id", template_ids())
+    @pytest.mark.parametrize(
+        ("size", "orientation", "shape"),
+        [
+            ("A4", "portrait", "square"),
+            ("A4", "landscape", "wide"),
+            ("A3", "auto", "tall"),
+            ("A5", "landscape", "square"),
+        ],
+    )
+    @pytest.mark.parametrize("element", (*_ELEMENTS, "all"))
+    def test_smaller_gives_the_map_room_and_larger_takes_it(
+        self, template_id: str, size: str, orientation: str, shape: str, element: str
+    ) -> None:
+        names = self._ELEMENTS if element == "all" else (element,)
+
+        def plan_at_standard() -> TemplatePlan:
+            return plan_template(
+                template_id,
+                _strained(shape, size, orientation, figures=_FIGURES),
+            )
+
+        def plan_at(factor: float) -> TemplatePlan:
+            data = _strained(
+                shape,
+                size,
+                orientation,
+                figures=_FIGURES,
+                **{name: factor for name in names},
+            )
+            plan = plan_template(template_id, data)
+            for item_id, box in _boxes(plan):
+                assert box.w > 0 and box.h > 0, (factor, item_id)
+                assert box.x >= -0.01 and box.y >= -0.01, (factor, item_id)
+                assert box.x + box.w <= plan.page_width + 0.01, (factor, item_id)
+                assert box.y + box.h <= plan.page_height + 0.01, (factor, item_id)
+            for item in plan.items:
+                if isinstance(item, LegendSpec):
+                    assert (item.font_size or 0) >= plan.legend_min_pt, (
+                        factor,
+                        item.id,
+                    )
+                elif isinstance(item, TextSpec) and item.font_size:
+                    # A piece a design sets below the general minimum at
+                    # Standard (a date stamp) is never set lower than there.
+                    floor = min(_minimum_for(item), standard_sizes.get(item.id, 99.0))
+                    assert item.font_size >= floor, (factor, item.id)
+            return plan
+
+        standard_sizes = {
+            item.id: item.font_size
+            for item in plan_at_standard().items
+            if isinstance(item, TextSpec) and item.font_size
+        }
+
+        smaller, standard, larger = (
+            self._main_area(plan_at(f)) for f in (self._SMALLER, 1.0, self._LARGER)
+        )
+        assert smaller >= standard - 0.01
+        if element != "legend_scale":
+            # A larger legend may reflow wider and shorter, which can give
+            # the map height back; its smaller step still never costs room.
+            assert larger <= standard + 0.01
+
+    def test_standard_is_the_default_page(self) -> None:
+        for template_id in template_ids():
+            plain = _strained("square", "A4", "portrait", figures=_FIGURES)
+            explicit = _strained(
+                "square",
+                "A4",
+                "portrait",
+                figures=_FIGURES,
+                title_scale=1.0,
+                legend_scale=1.0,
+                notes_scale=1.0,
+            )
+            assert plan_template(template_id, plain) == plan_template(
+                template_id, explicit
+            )
+
+    @pytest.mark.parametrize("template_id", template_ids())
+    def test_each_element_changes_only_its_own_text(self, template_id: str) -> None:
+        def sizes(**scales: float) -> dict[str, float]:
+            plan = plan_template(
+                template_id,
+                _strained("square", "A3", "portrait", figures=_FIGURES, **scales),
+            )
+            return {
+                item.id: item.font_size
+                for item in plan.items
+                if isinstance(item, (TextSpec, LegendSpec)) and item.font_size
+            }
+
+        base = sizes()
+        changed = {
+            name: {k for k, v in sizes(**{name: 1.3}).items() if base.get(k) != v}
+            for name in self._ELEMENTS
+        }
+        # Only a legend changes with the legend step.
+        assert all(k.startswith("legend") for k in changed["legend_scale"])
+        assert not any(k.startswith("legend") for k in changed["title_scale"])
+        assert not any(k.startswith("legend") for k in changed["notes_scale"])
+        # ...and each step really is used by the designs that show the piece.
+        shown = plan_template(
+            template_id, _strained("square", "A3", "portrait", figures=_FIGURES)
+        ).items
+        if any(isinstance(item, LegendSpec) for item in shown):
+            assert changed["legend_scale"]
+        if any(
+            isinstance(item, TextSpec) and item.body == "{{title}}" for item in shown
+        ):
+            assert changed["title_scale"]
+        if any(
+            isinstance(item, TextSpec) and item.body == "{{notes}}" for item in shown
+        ):
+            assert changed["notes_scale"]

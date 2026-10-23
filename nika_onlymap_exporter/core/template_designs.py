@@ -284,7 +284,7 @@ def _night_desk(page: _Page) -> _Layout:
             ShapeSpec(id="accent", box=Box(m, y, 14.0 * s, rule_h), fill=pal.accent)
         )
         y += rule_h + 2.5 * s
-        title_pt = type_size("title", w, h)
+        title_pt = page.pt("title")
         title_h = title_box_height(page.title, content.w, title_pt, max_lines=3)
         items.append(_title(Box(m, y, content.w, title_h), title_pt, pal))
         y += title_h + 2 * g
@@ -322,7 +322,7 @@ def _night_desk(page: _Page) -> _Layout:
         items.append(credit)
     body = Box(m, body_top, content.w, rule_y - g - body_top)
 
-    legend_pt = type_size("legend", w, h)
+    legend_pt = page.pt("legend")
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     sb_w = min(55.0 * min(s, 2.0), body.w * 0.4)
@@ -397,7 +397,7 @@ def _marginalia(page: _Page) -> _Layout:
 
     y = m
     if page.title:
-        title_pt = round(type_size("title", w, h) * 1.2, 2)
+        title_pt = round(page.pt("title") * 1.2, 2)
         title_h = title_box_height(page.title, content.w, title_pt, max_lines=3)
         items.append(_title(Box(m, y, content.w, title_h), title_pt, pal))
         y += title_h + 1.5 * g
@@ -409,7 +409,7 @@ def _marginalia(page: _Page) -> _Layout:
     if credit is not None:
         items.append(credit)
 
-    legend_pt = type_size("legend", w, h)
+    legend_pt = page.pt("legend")
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     notes = _marginal_note(page, body, sp, pal, sb_h) if page.notes else None
@@ -460,11 +460,10 @@ def _marginal_note(
 ) -> tuple[Box, list[CartographItem], float]:
     """The outside margin for the page's notes: the column's box, the
     accent rule and the note text, and where the note ends."""
-    w, h = page.width, page.height
     s = page.scale
     g = sp.gutter
-    max_pt = type_size("subtitle", w, h)
-    min_pt = max(type_size("body", w, h) * 0.85, MINIMUM_TYPE.body)
+    max_pt = page.pt("subtitle")
+    min_pt = max(page.pt("body") * 0.85, MINIMUM_TYPE.body)
     rule_h = 0.7 * s
     text_top = body.y + rule_h + 2.0 * s
     share = 0.27 if not page.landscape else 0.21
@@ -548,7 +547,7 @@ def _atlas_ledger(page: _Page) -> _Layout:
     items: list[CartographItem] = [
         ShapeSpec(id="rule-head", box=Box(m, m, content.w, rule_h), fill=pal.rule),
     ]
-    title_pt = type_size("title", w, h)
+    title_pt = page.pt("title")
     caption_pt = type_size("caption", w, h)
     sheet_w = _text_width("888 / 888", caption_pt) + 2.0
     y = m + rule_h + 0.75 * g
@@ -591,7 +590,7 @@ def _atlas_ledger(page: _Page) -> _Layout:
     bottom = h - m - (credit_h + 0.75 * g if credit_h else 0.0)
     body = Box(m, body_top, content.w, bottom - body_top)
 
-    legend_pt = type_size("legend", w, h)
+    legend_pt = page.pt("legend")
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     column_w = min(max(body.w * 0.24, 50.0), 85.0 * s)
@@ -718,8 +717,8 @@ def _town_hall(page: _Page) -> _Layout:
 
     y = m
     if page.title:
-        top_pt = round(type_size("display", w, h) * 0.85, 2)
-        least_pt = type_size("title", w, h)
+        top_pt = round(page.pt("display") * 0.85, 2)
+        least_pt = page.pt("title")
         title_pt = _headline_size(
             page.title,
             content.w,
@@ -762,7 +761,7 @@ def _town_hall(page: _Page) -> _Layout:
             )
         )
         return _town_hall_frames(frame, pal), items, _style(pal)
-    large_pt = round(max(type_size("legend", w, h) * 1.6, 11.0), 2)
+    large_pt = round(max(page.pt("legend") * 1.6, 11.0), 2)
     least_pt = _town_hall_legend_floor(page)
     column_w = min(max(body.w * 0.28, 62.0), 120.0 * s)
     sb_w = min(60.0 * min(s, 2.0), body.w * 0.32)
@@ -834,7 +833,7 @@ def _town_hall_legend_floor(page: _Page) -> float:
     page's ordinary legend size, growing with the sheet as the room it is
     read across does, and never below `_TOWN_HALL_LEAST_PT`."""
     return round(
-        max(type_size("legend", page.width, page.height) * 1.15, _TOWN_HALL_LEAST_PT),
+        max(page.pt("legend") * 1.15, _TOWN_HALL_LEAST_PT),
         2,
     )
 
@@ -895,7 +894,7 @@ def _wayfinder_across(page: _Page) -> _Layout:
     s = page.scale
     m, g = sp.margin, sp.gutter
     content = Box(m, m, w - 2 * m, h - 2 * m)
-    title_pt = type_size("title", w, h)
+    title_pt = page.pt("title")
     indent = _wayfinder_indent(page, g)
     title_h = (
         title_box_height(page.title, content.w - indent, title_pt, max_lines=3)
@@ -906,7 +905,7 @@ def _wayfinder_across(page: _Page) -> _Layout:
     credit_pt = type_size("credit", w, h)
     credit_h = _credits_h(page, content.w, credit_pt)
     foot = credit_h + 0.75 * g if credit_h else 0.0
-    legend_pt = type_size("legend", w, h)
+    legend_pt = page.pt("legend")
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     sb_w = min(max(content.w * 0.3, 60.0), 140.0 * s)
@@ -963,7 +962,7 @@ def _wayfinder_down(page: _Page) -> _Layout:
     s = page.scale
     m, g = sp.margin, sp.gutter
     content = Box(m, m, w - 2 * m, h - 2 * m)
-    legend_pt = type_size("legend", w, h)
+    legend_pt = page.pt("legend")
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     column_w = min(max(content.w * 0.3, 46.0), 80.0 * s)
@@ -990,7 +989,7 @@ def _wayfinder_sheet(page: _Page, column_w: float) -> tuple[Box, float, float, f
     sp = spacing_for(w, h)
     m, g = sp.margin, sp.gutter
     content = Box(m, m, w - 2 * m, h - 2 * m)
-    full_pt = type_size("title", w, h)
+    full_pt = page.pt("title")
     indent = _wayfinder_indent(page, g)
     credit_pt = type_size("credit", w, h)
     # The title spans the sheet, which is as wide as the band and its
