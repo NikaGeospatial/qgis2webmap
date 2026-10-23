@@ -890,6 +890,9 @@ class TestTextSizeControls:
         try:
             _shown(qgis_app, picker)
             controls = picker.size_controls
+            assert not controls.isVisibleTo(picker)
+            controls.toggle.click()
+            assert controls.isVisibleTo(picker)
             assert list(controls.sliders) == ["title", "legend", "notes"]
             for name, slider in controls.sliders.items():
                 assert slider.accessibleName() == name.capitalize()
@@ -912,6 +915,7 @@ class TestTextSizeControls:
         )
         try:
             _shown(qgis_app, picker)
+            picker.size_controls.toggle.click()
             slider = picker.size_controls.sliders["legend"]
             slider.setFocus()
             QTest.keyClick(slider, Qt.Key.Key_Left)
@@ -921,6 +925,7 @@ class TestTextSizeControls:
             QTest.keyClick(slider, Qt.Key.Key_PageUp)
             assert slider.value() == 1
             assert "Small" in slider.toolTip()
+            assert picker.size_controls.toggle.text() == "Text sizes (changed)"
         finally:
             picker.reject()
 
@@ -1386,14 +1391,15 @@ class TestKeyFigures:
             picker.template_list.setFocus(Qt.FocusReason.TabFocusReason)
             qgis_app.processEvents()
             seen = []
-            for _ in range(10):
+            for _ in range(8):
                 QTest.keyClick(picker.focusWidget(), Qt.Key.Key_Tab)
                 qgis_app.processEvents()
                 seen.append(picker.focusWidget())
             group = picker.figures_group
             fields = [edit for pair in zip(group.values, group.labels) for edit in pair]
-            sizes = list(picker.size_controls.sliders.values())
-            assert seen == [*fields, *sizes, picker.create_button]
+            # The text sizes are closed: their header, not the sliders.
+            toggle = picker.size_controls.toggle
+            assert seen == [*fields, toggle, picker.create_button]
             for edit in fields:
                 assert edit.accessibleName().startswith("Key figure ")
         finally:

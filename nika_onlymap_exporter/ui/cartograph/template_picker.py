@@ -686,8 +686,15 @@ class _TextSizeControls(QFrame):
         super().__init__(parent)
         self.setProperty("role", "keyFigures")
         self.setAccessibleName(tr("Text sizes"))
+        # Closed, only the header shows, in the picker's foot (`toggle`):
+        # the dialog's smallest size has no room to spare for more rows.
+        self.toggle = QToolButton(parent)
+        self.toggle.setProperty("role", "sectionHeader")
+        self.toggle.setCheckable(True)
+        self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.toggle.toggled.connect(self._on_toggled)
         row = QHBoxLayout(self)
-        row.setContentsMargins(12, 4, 12, 4)
+        row.setContentsMargins(12, 2, 12, 2)
         row.setSpacing(6)
         self.sliders: dict[str, QSlider] = {}
         self._captions: dict[str, QLabel] = {}
@@ -708,15 +715,14 @@ class _TextSizeControls(QFrame):
         for index, element in enumerate(self._names):
             if index:
                 row.addSpacing(10)
-            column = QVBoxLayout()
-            column.setSpacing(0)
+            column = QHBoxLayout()
+            column.setSpacing(6)
             caption = QLabel(self)
             caption.setProperty("role", "hint")
             slider = QSlider(Qt.Orientation.Horizontal, self)
             slider.setRange(0, len(TEXT_SIZE_STEPS) - 1)
             slider.setPageStep(1)
-            slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-            slider.setTickInterval(1)
+            slider.setFixedHeight(24)
             slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             slider.setAccessibleName(self._names[element])
             slider.setProperty("tip", tips[element])
@@ -730,6 +736,19 @@ class _TextSizeControls(QFrame):
             self._captions[element] = caption
             self._describe(element)
         self._committed = self.live_sizes()
+        self.toggle.setChecked(self._committed != TextSizes())
+        self._on_toggled(self.toggle.isChecked())
+
+    def _on_toggled(self, opened: bool) -> None:
+        self.setVisible(opened)
+        self.toggle.setArrowType(
+            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
+        )
+        self._label_toggle()
+
+    def _label_toggle(self) -> None:
+        changed = self.live_sizes() != TextSizes()
+        self.toggle.setText(tr("Text sizes (changed)") if changed else tr("Text sizes"))
 
     @staticmethod
     def _index(step_id: str) -> int:
@@ -743,6 +762,7 @@ class _TextSizeControls(QFrame):
         step = tr(TEXT_SIZE_STEPS[slider.value()][1])
         label = f"{self._names[element]}: {step}"
         self._captions[element].setText(label)
+        self._label_toggle()
         slider.setToolTip(
             f"{slider.property('tip')}: {step}. "
             + tr("Smaller text gives the map more room.")
@@ -1031,6 +1051,7 @@ class TemplatePicker(QDialog):
         self.selected_label = QLabel("", self)
         self.selected_label.setProperty("role", "hint")
         self.selected_label.setWordWrap(True)
+        foot.addWidget(self.size_controls.toggle)
         foot.addWidget(self.selected_label, 1)
         buttons = QDialogButtonBox(self)
         self.create_button = buttons.addButton(
