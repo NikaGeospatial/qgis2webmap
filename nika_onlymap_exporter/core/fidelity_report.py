@@ -42,40 +42,69 @@ class FidelityReportBuilder:
         status: FidelityStatus,
         detail: str,
         layer_id: str | None = None,
+        item_id: str | None = None,
     ) -> None:
         self._items.append(
             FidelityItem(
-                subject=subject, status=status, detail=detail, layer_id=layer_id
+                subject=subject,
+                status=status,
+                detail=detail,
+                layer_id=layer_id,
+                item_id=item_id,
             )
         )
 
-    def preserved(self, subject: str, detail: str, layer_id: str | None = None) -> None:
+    def preserved(
+        self,
+        subject: str,
+        detail: str,
+        layer_id: str | None = None,
+        item_id: str | None = None,
+    ) -> None:
         """Translated exactly. Recorded so a report can show coverage, not only
         problems -- a report that lists nothing but failures reads as a list of
         defects rather than a fidelity statement."""
-        self.record(subject, FidelityStatus.PRESERVED, detail, layer_id)
+        self.record(subject, FidelityStatus.PRESERVED, detail, layer_id, item_id)
 
     def approximated(
-        self, subject: str, detail: str, layer_id: str | None = None
+        self,
+        subject: str,
+        detail: str,
+        layer_id: str | None = None,
+        item_id: str | None = None,
     ) -> None:
         """Translated to something close. `detail` must say what changed."""
-        self.record(subject, FidelityStatus.APPROXIMATED, detail, layer_id)
+        self.record(subject, FidelityStatus.APPROXIMATED, detail, layer_id, item_id)
 
     def raster_fallback(
-        self, subject: str, detail: str, layer_id: str | None = None
+        self,
+        subject: str,
+        detail: str,
+        layer_id: str | None = None,
+        item_id: str | None = None,
     ) -> None:
-        self.record(subject, FidelityStatus.RASTER_FALLBACK, detail, layer_id)
+        self.record(subject, FidelityStatus.RASTER_FALLBACK, detail, layer_id, item_id)
 
     def unsupported(
-        self, subject: str, detail: str, layer_id: str | None = None
+        self,
+        subject: str,
+        detail: str,
+        layer_id: str | None = None,
+        item_id: str | None = None,
     ) -> None:
         """Cannot be represented; the export continues without it."""
-        self.record(subject, FidelityStatus.UNSUPPORTED, detail, layer_id)
+        self.record(subject, FidelityStatus.UNSUPPORTED, detail, layer_id, item_id)
 
-    def blocked(self, subject: str, detail: str, layer_id: str | None = None) -> None:
+    def blocked(
+        self,
+        subject: str,
+        detail: str,
+        layer_id: str | None = None,
+        item_id: str | None = None,
+    ) -> None:
         """The export must not proceed. `detail` has to tell the user what to
         change -- a blocker with no remedy is just a dead end."""
-        self.record(subject, FidelityStatus.BLOCKED, detail, layer_id)
+        self.record(subject, FidelityStatus.BLOCKED, detail, layer_id, item_id)
 
     def suppressed_setting(
         self, subject: str, reason: str, layer_id: str | None = None

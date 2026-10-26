@@ -953,6 +953,10 @@ class FidelityItem:
     status: FidelityStatus
     detail: str
     layer_id: str | None = None
+    # The layout item this is about (a map frame's uuid), where the subject's
+    # name could be shared with a layer or another item: counting what
+    # concerns one frame goes by this, never by finding its name in `subject`.
+    item_id: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {

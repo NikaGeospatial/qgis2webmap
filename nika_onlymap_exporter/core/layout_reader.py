@@ -445,6 +445,7 @@ def _read_layout(
             report.approximated(
                 f"Map frame {_name(item)}",
                 "Rendered as a static, pixel-exact raster rather than a live map.",
+                item_id=item.uuid(),
             )
             _record_rasterised_layers(item, report)
         else:
@@ -462,6 +463,7 @@ def _read_layout(
                     report.preserved(
                         f"Locator inset {_name(mf.map_item)}",
                         f"Locator inset drawing frame {target_id!r}'s footprint.",
+                        item_id=mf.map_item.uuid(),
                     )
                     break
 
@@ -743,7 +745,7 @@ def _record_live_frame_projection(
     authid = crs.authid() if crs.isValid() else ""
     label = f"Map frame {_name(item)}"
     if authid == "EPSG:3857":
-        report.preserved(label, "Exported as a live frame.")
+        report.preserved(label, "Exported as a live frame.", item_id=item.uuid())
         return
     if draws_in_own_plane(item):
         return
@@ -753,6 +755,7 @@ def _record_live_frame_projection(
         f"(EPSG:3857); QGIS draws this map in {authid or 'its own CRS'}, so "
         "shapes, and distances away from the centre, differ slightly. Set the "
         "frame to Static in Map frames to keep QGIS's projection exactly.",
+        item_id=item.uuid(),
     )
 
 
@@ -774,6 +777,7 @@ def _record_rasterised_layers(
             "draws it; in the cartograph it is part of the picture, not a "
             "layer a reader can click.",
             layer.id(),
+            item_id=item.uuid(),
         )
 
 
@@ -1194,6 +1198,7 @@ def _read_atlas(
                 "This map follows the atlas, but it is a static frame: its "
                 "picture is rendered once, so it would show the same place on "
                 "every page. Set the atlas map to Live in Map frames.",
+                item_id=mf.map_item.uuid(),
             )
             continue
         fit, margin = _atlas_fit(mf.map_item, coverage, report)
@@ -1257,6 +1262,7 @@ def _read_atlas(
                     f"QGIS hides the atlas coverage layer '{coverage_name}' on "
                     "atlas pages, but this static frame's picture is rendered "
                     "outside an atlas page, so it shows the layer.",
+                    item_id=mf.map_item.uuid(),
                 )
     limit_render = getattr(atlas, "limitCoverageLayerRenderToCurrentFeature", None)
     if limit_render is not None and limit_render():
@@ -1325,7 +1331,11 @@ def _atlas_fit(
     mode = int(map_item.atlasScalingMode())
     over_points = coverage.geometryType() == Qgis.GeometryType.Point
     if mode == _ATLAS_AUTO and not over_points:
-        report.preserved(label, "Refits to each atlas feature, with QGIS's margin.")
+        report.preserved(
+            label,
+            "Refits to each atlas feature, with QGIS's margin.",
+            item_id=map_item.uuid(),
+        )
         margin = max(map_item.atlasMargin() / 2.0, SMALLEST_ATLAS_MARGIN)
         return "feature", round(margin, 6)
     if mode == _ATLAS_PREDEFINED:
@@ -1335,7 +1345,7 @@ def _atlas_fit(
         )
     else:
         detail = "Keeps the map's scale and centres each atlas feature, as QGIS does."
-    report.preserved(label, detail)
+    report.preserved(label, detail, item_id=map_item.uuid())
     return "fixed", None
 
 

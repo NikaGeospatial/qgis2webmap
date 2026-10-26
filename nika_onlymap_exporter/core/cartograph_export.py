@@ -156,6 +156,7 @@ class ProjectedPlane:
     """
 
     subject: str
+    item_id: str  # the map item's uuid, which its report rows carry
     crs: str
     crs_def: str
     center: tuple[float, float]
@@ -767,7 +768,9 @@ def _draws_in_plane(
     ]
     if not blockers:
         report.preserved(
-            plane.subject, f"Exported as a live frame, drawn in {plane.crs} as in QGIS."
+            plane.subject,
+            f"Exported as a live frame, drawn in {plane.crs} as in QGIS.",
+            item_id=plane.item_id,
         )
         return True
     names = ", ".join(f"'{name}'" for name in blockers)
@@ -779,6 +782,7 @@ def _draws_in_plane(
         "shapes, and distances away from the centre, differ slightly from "
         "QGIS. Set the frame to Static in Map frames to keep QGIS's "
         "projection exactly.",
+        item_id=plane.item_id,
     )
     return False
 
@@ -1035,6 +1039,7 @@ def _build_live_frame(
         )
         plane = ProjectedPlane(
             subject=f"Map frame '{map_item.displayName()}'",
+            item_id=map_item.uuid(),
             crs=crs.authid(),
             crs_def=crs.toProj(),
             center=plane_center,
