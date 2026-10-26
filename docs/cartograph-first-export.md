@@ -113,7 +113,7 @@ the top of the panel, under **Print layout**:
 - **Pick a layout from the list.** Every print layout in the project is
   there, and the list follows the Layout Manager: add, rename or delete a
   layout and it updates. **Rename...** renames the one shown.
-- **Or press New from template...** - pick one of fifteen
+- **Or press New from template...** - pick one of ten
   [templates](one-click-layout.md#choose-a-template), and a new layout called
   `<Design> · <project title>` is built from what the map canvas shows, added to
   the project and selected.

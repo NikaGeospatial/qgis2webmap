@@ -38,18 +38,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     Browser appearance section, which changes the web page only.
   - **New from template...** builds a print layout, named
     `<Design> · <project title>`, from the map view in
-    one of fifteen **layout templates** - six quiet essentials (Daylight,
-    Clearline, Bare Map, Caption, After Hours, Night Desk) and nine with more
-    character (Fieldbook, Broadside, Near & Far, On the Map, Signal,
-    Marginalia, Atlas Ledger, Town Hall, Wayfinder) - each shown as a large
+    one of ten **layout templates** - five quiet essentials (Daylight,
+    Clearline, Bare Map, Caption, After Hours) and five with more
+    character (Fieldbook, Broadside, Near & Far, Signal, Wayfinder) - each shown as a large
     preview of the current map with a one-line description of what it is for,
     on A4, A3, Letter, Tabloid and more. Templates never put stand-in text on
     the page: a panel with nothing real to show is left out and the map takes
     its room. Each card says what that page includes for this project, and
     what else the design can show with more content (notes, key figures, a
     sheet number). Signal's key figures are typed in the picker and saved
-    with the project. Legend text never drops below a readable size (8 pt,
-    9 pt on Town Hall's large print): a legend that still cannot fit leaves
+    with the project. Legend text never drops below a readable size (8 pt): a legend that still cannot fit leaves
     its last entries out, and the card and the **Checks** tab say how many.
     **Framing: fill the frame / whole view** sets how the canvas view fits, a
     card's **Preview** button (or **Space**) opens a large preview, and

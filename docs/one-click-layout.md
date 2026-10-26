@@ -35,7 +35,7 @@ The plugin builds a print layout called **`<Design> · <project title>`**
 
 ## Choose a template
 
-Fifteen starters: six quiet essentials and nine specialised compositions, each
+Ten starters: five quiet essentials and five specialised compositions, each
 made for a different kind of page. Each preview is the real page drawn
 with the map the canvas shows now, so what you pick is what you get.
 
@@ -78,8 +78,6 @@ layout preview, or pick the sizes here before creating it.
 - **After Hours** - a dark page with an uninterrupted map. Its heading,
   legend and scale have their own space, so a dense key never covers the
   terrain. The legend fits beside or below the map at a readable size. *Best for: dark-room screens and projected displays.*
-- **Night Desk** - a calm dark report sheet: the map inset with wide margins and
-  a quiet legend. *Best for: reports read on screen in low light.*
 
 **Characterful**
 
@@ -99,17 +97,10 @@ layout preview, or pick the sizes here before creating it.
   the project. With a substantial legend, Signal can arrange the figures in a
   row or give the key a full-height column to keep its entries readable. With
   no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
-- **Marginalia** - an editorial sheet: a large map with your notes in a narrow
-  margin. *Best for: editorial and explanatory maps with notes.*
-- **Atlas Ledger** - one sheet of a map series: locator, sheet number, legend
-  and source. The sheet number is blank until the layout's atlas is on.
-  *Best for: atlases and map series.*
-- **Town Hall** - large print: a big title and an easy-to-read legend, with
-  larger legend text. *Best for: public meetings and large-print handouts.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
-Legends stay readable: their text never goes below 8 pt (Town Hall: larger). A crowded legend first gets more room, up to half the space the map
+Legends stay readable: their text never goes below 8 pt. A crowded legend first gets more room, up to half the space the map
 and legend share; if it still cannot fit, it leaves its last entries out.
 The card then says *Legend: 3 entries do not fit at a readable size*, and
 the **Checks** tab of the new layout says the same until you put them back
