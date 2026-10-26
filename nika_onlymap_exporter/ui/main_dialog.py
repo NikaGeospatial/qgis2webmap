@@ -2040,6 +2040,9 @@ class MainDialog(QDialog):
             settings = self.state.for_layer(layer.id())
 
             item = QTreeWidgetItem(self.layer_tree)
+            item.setChildIndicatorPolicy(
+                QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless
+            )
             item.setText(0, layer.name())
             item.setData(0, Qt.ItemDataRole.UserRole, layer.id())
             for column, value in (
@@ -2134,11 +2137,12 @@ class MainDialog(QDialog):
         hidden = hidden_field_names(layer)
         layer_id = layer.id()
 
+        # Hover popups, coordinate precision and highlight colour are about
+        # vector features; a raster has no such rows, so no disclosure arrow.
+        if not isinstance(layer, QgsVectorLayer):
+            return
         self._add_layer_options_row(parent, layer_id, settings)
-        if (
-            isinstance(layer, QgsVectorLayer)
-            and layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry
-        ):
+        if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
             self._add_point_options_row(parent, layer, settings)
 
         for field_name in popup_field_names(layer):

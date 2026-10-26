@@ -4484,6 +4484,53 @@ class TestLayerDisclosure:
         finally:
             dialog.close()
 
+    @pytest.mark.parametrize("mode", ["web", "cartograph"])
+    @pytest.mark.parametrize("size", [(720, 320), (1000, 700)])
+    def test_a_raster_row_has_no_arrow_and_its_boxes_line_up(
+        self, qgis_app, project, make_memory_layer, make_raster_layer, mode, size
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        project.addMapLayer(make_raster_layer("Elevation"))
+        dialog = self._open(qgis_app, project, make_memory_layer, mode, size)
+        try:
+            tree = dialog.layer_tree
+            rows = {
+                tree.topLevelItem(i).text(0): tree.topLevelItem(i)
+                for i in range(tree.topLevelItemCount())
+            }
+            raster, vector = rows["Elevation"], rows["Viewpoints"]
+            assert raster.childCount() == 0, "nothing to disclose on a raster"
+            assert vector.childCount() > 0
+            for name in ("Elevation", "Viewpoints"):
+                tree.scrollToItem(rows[name])
+                qgis_app.processEvents()
+            # The same click on the arrow's spot opens a vector layer's rows
+            # and does nothing to a raster.
+            for item in (raster, vector):
+                tree.scrollToItem(item)
+                rect = tree.visualItemRect(item)
+                QTest.mouseClick(
+                    tree.viewport(),
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.NoModifier,
+                    QPoint(rect.left() - tree.indentation() // 2, rect.center().y()),
+                )
+                qgis_app.processEvents()
+            assert not raster.isExpanded()
+            assert vector.isExpanded()
+            vector.setExpanded(False)
+            qgis_app.processEvents()
+            # Include, popup and label boxes sit at the same x on both rows.
+            for column in (1, 2, 3):
+                assert (
+                    tree.visualRect(tree.indexFromItem(raster, column)).left()
+                    == tree.visualRect(tree.indexFromItem(vector, column)).left()
+                )
+        finally:
+            dialog.close()
+
     def test_columns_stay_put_when_the_scrollbar_would_appear(
         self, qgis_app, project, make_memory_layer
     ) -> None:
