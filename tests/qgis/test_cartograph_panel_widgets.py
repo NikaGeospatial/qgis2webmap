@@ -626,8 +626,9 @@ class TestSelectedTextSize:
         assert not pane.controls.text_size_row.isHidden()
         base = title.textFormat().size()
         assert pane.controls.text_size_label.text() == f"{base:g} pt"
+        # A legend's size is the legend editor's own Text size.
         self._select(qgis_app, layout, items["legend"])
-        assert not pane.controls.text_size_row.isHidden()
+        assert pane.controls.text_size_row.isHidden()
         self._select(qgis_app, layout, items["map"])
         assert pane.controls.text_size_row.isHidden()
         layout.deselectAll()

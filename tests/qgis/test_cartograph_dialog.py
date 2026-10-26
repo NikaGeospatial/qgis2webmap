@@ -5013,6 +5013,22 @@ class TestEditTab:
         finally:
             dialog.close()
 
+    def test_a_legend_shows_one_text_size_control(self, qgis_app, project) -> None:
+        """The hosted legend editor has its own Text size, so the A-/A+ row
+        stays for text items only."""
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            controls = cartograph.page_pane.controls
+            items["legend"].setSelected(True)
+            qgis_app.processEvents()
+            assert controls.text_size_row.isHidden()
+            layout.deselectAll()
+            items["text"].setSelected(True)
+            qgis_app.processEvents()
+            assert not controls.text_size_row.isHidden()
+        finally:
+            dialog.close()
+
     def test_a_plus_in_the_tab_is_one_font_step_and_one_undo(
         self, qgis_app, project
     ) -> None:

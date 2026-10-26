@@ -622,6 +622,10 @@ class ContextControls(QFrame):
 
     def _show_text_size(self, item: QgsLayoutItem) -> None:
         size = text_size_points(item)
+        # The legend editor has its own Text size; two controls for one
+        # setting would only disagree in the user's mind.
+        if self._legend_factory is not None and self._kind(item) == "legend":
+            size = None
         self.text_size_row.setVisible(size is not None)
         if size is not None:
             self.text_size_label.setText(tr("{size} pt").format(size=f"{size:g}"))
