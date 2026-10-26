@@ -173,7 +173,9 @@ class AtlasTab(QWidget):
         page.addWidget(self.saved_label)
         self.problem_label = FittedLabel("", self)
         self.problem_label.setWordWrap(True)
-        self.problem_label.setProperty("role", "warning")
+        # The Checks panel's own warning colour; nothing else styles a label.
+        self.problem_label.setProperty("role", "checkVerdict")
+        self.problem_label.setProperty("tone", "warning")
         page.addWidget(self.problem_label)
 
         # One above the other, for the same narrow panel.
@@ -209,7 +211,8 @@ class AtlasTab(QWidget):
     def _error_label(parent: QWidget) -> FittedLabel:
         label = FittedLabel("", parent)
         label.setWordWrap(True)
-        label.setProperty("role", "warning")
+        label.setProperty("role", "checkVerdict")
+        label.setProperty("tone", "warning")
         label.setVisible(False)
         return label
 
