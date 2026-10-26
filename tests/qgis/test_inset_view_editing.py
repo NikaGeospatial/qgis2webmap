@@ -122,6 +122,22 @@ def _wheel(qgis_app, pane, at: QPoint, notches: int) -> None:
     qgis_app.processEvents()
 
 
+def _wheel_raw(qgis_app, pane, at: QPoint, pixel: QPoint, angle: QPoint) -> None:
+    viewport = pane.preview.view.viewport()
+    event = QWheelEvent(
+        QPointF(at),
+        QPointF(viewport.mapToGlobal(at)),
+        pixel,
+        angle,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QApplication.sendEvent(viewport, event)
+    qgis_app.processEvents()
+
+
 def _escape(pane) -> None:
     QTest.keyClick(pane.preview.view, Qt.Key.Key_Escape)
 
@@ -205,6 +221,44 @@ class TestPanAndZoomTheContent:
         assert _map_point_at(pane, inset, at) == pytest.approx(under, abs=width * 0.002)
         _wheel(qgis_app, pane, at, -2)
         assert inset.extent().width() > width
+
+    def test_a_trackpad_with_only_pixels_zooms_in_proportion(
+        self, qgis_app, near_far
+    ) -> None:
+        pane, layout, _main, inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, inset)
+        frame = _geometry(inset)
+        at = _centre(pane, inset) + QPoint(40, -15)
+        under = _map_point_at(pane, inset, at)
+        width = inset.extent().width()
+        _wheel_raw(qgis_app, pane, at, QPoint(0, 6), QPoint(0, 0))
+        small = inset.extent().width()
+        assert small < width
+        # A tiny swipe is a small zoom, far below one full notch (x1/1.2).
+        assert small > width / 1.2
+        assert _geometry(inset) == pytest.approx(frame)
+        assert _map_point_at(pane, inset, at) == pytest.approx(under, abs=width * 0.002)
+        _wheel_raw(qgis_app, pane, at, QPoint(0, -60), QPoint(0, 0))
+        assert inset.extent().width() > small
+
+    def test_the_angle_wins_when_both_are_reported(self, qgis_app, near_far) -> None:
+        pane, layout, _main, inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, inset)
+        width = inset.extent().width()
+        _wheel_raw(qgis_app, pane, _centre(pane, inset), QPoint(0, 6), QPoint(0, 120))
+        assert inset.extent().width() == pytest.approx(width / 1.2, rel=1e-3)
+
+    def test_a_pixel_burst_is_one_undo_step(self, qgis_app, near_far) -> None:
+        pane, layout, _main, inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, inset)
+        before = QgsRectangle(inset.extent())
+        index = _index(layout)
+        at = _centre(pane, inset)
+        for _ in range(8):
+            _wheel_raw(qgis_app, pane, at, QPoint(0, 8), QPoint(0, 0))
+        assert _index(layout) == index + 1
+        layout.undoStack().stack().undo()
+        assert inset.extent() == before
 
     def test_a_burst_of_wheel_steps_is_one_undo_step(self, qgis_app, near_far) -> None:
         pane, layout, _main, inset, _region = near_far

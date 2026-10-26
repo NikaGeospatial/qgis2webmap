@@ -53,6 +53,8 @@ from ..i18n import tr
 WHEEL_BURST_MS = 400
 #: One wheel notch (120 eighths of a degree) zooms the content by this factor.
 WHEEL_NOTCH_FACTOR = 1.2
+#: A precision trackpad reports pixels only; this many pixels count as one notch.
+WHEEL_PIXELS_PER_NOTCH = 60.0
 #: A press this close outside the frame still counts as on it, so the
 #: select tool's resize handles round the frame cannot be reached in this mode.
 _HANDLE_REACH_PX = 10
@@ -90,6 +92,15 @@ class _Banner(QLabel):
             self.contentsRect(), int(Qt.AlignmentFlag.AlignVCenter), self.text()
         )
         painter.end()
+
+
+def _wheel_steps(event: QWheelEvent) -> float:
+    """Notches turned: the angle when the device reports one, else the
+    pixel delta of a precision trackpad, scaled so small swipes zoom a little."""
+    angle = event.angleDelta().y()
+    if angle:
+        return angle / 120.0
+    return event.pixelDelta().y() / WHEEL_PIXELS_PER_NOTCH
 
 
 class ContentEditor(QObject):
@@ -274,7 +285,7 @@ class ContentEditor(QObject):
         at = _local(event)
         if item is None or layout is None or not self._on_frame(at):
             return False
-        steps = event.angleDelta().y() / 120.0
+        steps = _wheel_steps(event)
         if steps == 0 or self._dragging:
             return True  # held still: the wheel never scrolls what is behind
         factor = WHEEL_NOTCH_FACTOR**steps
