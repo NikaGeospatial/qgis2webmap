@@ -5315,6 +5315,49 @@ class TestEditTab:
         finally:
             dialog.close()
 
+    @pytest.mark.parametrize("name", ["text", "map", "legend", "scale_bar"])
+    def test_no_button_is_squeezed_below_its_text_in_a_short_window(
+        self, qgis_app, project, name
+    ) -> None:
+        from qgis.core import QgsLayoutItemScaleBar
+        from qgis.PyQt.QtCore import QRectF
+        from qgis.PyQt.QtGui import QFont
+        from qgis.PyQt.QtWidgets import QAbstractButton, QApplication
+
+        # A larger system font is what squeezes first.
+        font = QApplication.font()
+        larger = QFont(font)
+        larger.setPointSizeF(font.pointSizeF() + 3)
+        QApplication.setFont(larger)
+        dialog, cartograph, layout, items = self._ready(project, qgis_app, (720, 320))
+        try:
+            scale_bar = QgsLayoutItemScaleBar(layout)
+            scale_bar.setLinkedMap(items["map"])
+            scale_bar.attemptSetSceneRect(QRectF(10, 130, 60, 12))
+            layout.addLayoutItem(scale_bar)
+            items["scale_bar"] = scale_bar
+            cartograph.open_section("edit")
+            items[name].setSelected(True)
+            for _ in range(30):
+                qgis_app.processEvents()
+            controls = cartograph.page_pane.controls
+            buttons = [
+                b
+                for b in controls.findChildren(QAbstractButton)
+                if b.isVisibleTo(controls)
+            ]
+            assert buttons
+            for button in buttons:
+                label = button.text().replace("&", "")
+                where = (name, label, button.size(), button.sizeHint())
+                assert button.height() >= button.sizeHint().height(), where
+                assert button.width() >= button.fontMetrics().horizontalAdvance(
+                    label
+                ), where
+        finally:
+            QApplication.setFont(font)
+            dialog.close()
+
     @pytest.mark.parametrize("name", ["text", "map", "legend"])
     def test_a_short_window_scrolls_the_edit_tab_like_the_others(
         self, qgis_app, project, name

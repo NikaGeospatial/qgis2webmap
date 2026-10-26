@@ -46,9 +46,11 @@ from qgis.PyQt.QtGui import (
     QKeyEvent,
     QMouseEvent,
     QPixmap,
+    QShowEvent,
     QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
+    QAbstractButton,
     QButtonGroup,
     QColorDialog,
     QComboBox,
@@ -604,6 +606,18 @@ class ContextControls(QFrame):
         finally:
             self._loading = False
         self._sync_button_styles()
+        self._keep_buttons_readable()
+
+    def _keep_buttons_readable(self) -> None:
+        """No button is squeezed below the height its text needs: a short
+        window then scrolls the Edit tab instead of cutting the lettering."""
+        for button in self.findChildren(QAbstractButton):
+            button.setMinimumHeight(button.sizeHint().height())
+
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802
+        super().showEvent(event)
+        # Hints are only right once the theme has polished the buttons.
+        self._keep_buttons_readable()
 
     def _show_nothing_selected(self) -> None:
         self.heading.setText(
