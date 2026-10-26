@@ -4375,5 +4375,21 @@ Elige un lugar que exista o créalo primero.</translation>
       <source>Source: {package}</source>
       <translation>Origen: {package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>Encuadre del mapa</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>Llenar el marco (recortar bordes)</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>Vista completa</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>El relleno recorta la vista, no los datos. La vista completa conserva toda la extensión del lienzo.</translation>
+    </message>
   </context>
 </TS>

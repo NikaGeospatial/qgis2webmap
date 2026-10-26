@@ -35,8 +35,8 @@ is taken), adds it to the project, and selects it in the Print layout list.
 
 ## Choose a template
 
-Fifteen designs: six quiet essentials that suit most jobs, and nine with more
-character, each made for one kind of page. Each preview is the real page drawn
+Ten starters: five quiet essentials and five specialised compositions, each
+made for a different kind of page. Each preview is the real page drawn
 with the map the canvas shows now, so what you pick is what you get.
 
 The picker shows **All**, **Essentials** and **Characterful** at the top to
@@ -44,8 +44,7 @@ narrow the list, with **Page size** and **Orientation** beside them. Below is
 a scrolling list of the designs: a large preview of each, its name, one line
 on what it is for, and what that page includes for this project. A second,
 quieter line, **Can also show**, lists what the design would add with more
-content - notes from the project's abstract, Signal's key figures, Atlas
-Ledger's sheet number; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
+content - notes from the project's abstract or Signal's key figures; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
 for (also listed below). **Create layout** builds the one selected.
 
 The **Text sizes** button beside the buttons opens three sliders, **Title**,
@@ -79,8 +78,6 @@ layout preview, or pick the sizes here before creating it.
 - **After Hours** - a dark page with the map to the edges; the title, legend
   and scale bar sit on solid dark panels, so they stay readable whatever the
   map's colours. *Best for: dark-room screens and projected displays.*
-- **Night Desk** - a calm dark report sheet: the map inset with wide margins,
-  a quiet legend, the source and the date. *Best for: reports read on screen in low light.*
 
 **Characterful**
 
@@ -94,26 +91,14 @@ layout preview, or pick the sizes here before creating it.
   page, or for a wide view. *Best for: posters and wall displays.*
 - **Near & Far** - the map with a locator inset that outlines where it is,
   beside the map or below it, whichever shows your view larger. *Best for: maps of a small area that need locating.*
-- **On the Map** - the map fills the page, with the title and story on a solid
-  panel over the edge of the map, and a locator inset. *Best for: presentations and maps with a story.*
 - **Signal** - a data-led page: the map with up to three key figures you
   supply. Type them under the list when Signal is selected - a value such as
   *214* and what it counts, such as *parcels surveyed*. They are saved with
   the project. With no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
-- **Marginalia** - an editorial sheet: a large map with the project's abstract
-  in a narrow margin. With no abstract there is no margin. *Best for: editorial and explanatory maps with notes.*
-- **Atlas Ledger** - one sheet of a map series: title, sheet number, a
-  locator, legend and source. The sheet number (*2 / 12*) shows once you turn
-  the layout's atlas on, and stays blank on a single page. *Best for: atlases and map series.*
-- **Town Hall** - large print for public meetings: a big title, an
-  easy-to-read legend in large type beside the map or under it, whichever
-  shows your view larger, and nothing laid over the map. It enlarges the page's own text; it does not make your map's symbols any
-  easier to tell apart. *Best for: public meetings and large-print handouts.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
-Legends stay readable: their text never goes below 6.5 pt (9 pt on Town
-Hall). A crowded legend first gets more room, up to half the space the map
+Legends stay readable: their text never goes below 8 pt. A crowded legend first gets more room, up to half the space the map
 and legend share; if it still cannot fit, it leaves its last entries out.
 The card then says *Legend: 3 entries do not fit at a readable size*, and
 the **Checks** tab of the new layout says the same until you put them back
@@ -130,11 +115,17 @@ author from **Metadata**. Templates never put stand-in text on the page: until
 there is an abstract, a design leaves its text panel out and gives the map the
 room.
 
-Daylight and Caption keep the canvas's own shape, so the page shows exactly
-the view. The other templates give the map frame the shape their design needs;
-the frame then shows a little more around the canvas view rather than cutting
-any of it off. A locator inset is a static frame - a picture of its map, as
-QGIS draws it.
+**Map framing** controls how the canvas view fits the template. **Fill frame
+(crop edges)** fills the main map frame and trims projected raster boundaries
+where possible. It crops the view, preserves its centre and projection, and
+never changes the source data. Choose **Whole view** to keep the entire canvas
+extent, with extra surroundings where the frame has a different shape. This
+choice is remembered when you create a layout; cancelling changes nothing.
+
+A locator inset is a static frame - a picture of its map, as QGIS draws it.
+It needs context layers extending beyond the main view to make a useful
+overview; a project containing only a small local dataset can leave it mostly
+empty.
 
 ## What the Daylight layout contains
 

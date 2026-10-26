@@ -107,6 +107,12 @@ from ...core.layout_templates import (
     TextSizes,
 )
 from ...core.template_cues import CardCues, declared_cues, plan_cues
+from ...core.template_framing import (
+    FRAMING_VARIABLE,
+    preview_framing,
+    project_framing,
+    set_project_framing,
+)
 from .. import theme
 from ..i18n import N_, plural, tr
 
@@ -230,7 +236,7 @@ class PreviewPlanner(Protocol):
 
 #: (template, page size, orientation, width, canvas, figures drawn, text
 #: sizes).
-_PageKey = tuple[str, str, str, int, str, Figures, TextSizes]
+_PageKey = tuple[str, str, str, int, str, Figures, TextSizes, str]
 #: Where in a `_PageKey` the canvas state is.
 _CANVAS = 4
 
@@ -897,7 +903,8 @@ class TemplatePicker(QDialog):
         self._templates: dict[str, LayoutTemplate] = {
             t.id: t
             for t in sorted(
-                layout_templates.TEMPLATES, key=lambda t: t.category != ESSENTIAL
+                layout_templates.starter_templates(),
+                key=lambda t: t.category != ESSENTIAL,
             )
         }
         #: The designs still to draw for the current settings, most useful
@@ -1013,6 +1020,34 @@ class TemplatePicker(QDialog):
         layout.addLayout(self._controls)
         self._place_controls(wrapped=False)
 
+        framing_row = QHBoxLayout()
+        framing_label = QLabel(tr("Map framing"), self)
+        framing_label.setProperty("role", "hint")
+        framing_row.addWidget(framing_label)
+        self.framing_combo = QComboBox(self)
+        self.framing_combo.setAccessibleName(tr("Map framing"))
+        self.framing_combo.addItem(tr("Fill frame (crop edges)"), "fill")
+        self.framing_combo.addItem(tr("Whole view"), "whole")
+        self.framing_combo.setToolTip(
+            tr(
+                "Fill crops the view, not the data. "
+                "Whole view keeps the entire canvas extent."
+            )
+        )
+        if project is not None:
+            from qgis.core import QgsExpressionContextUtils
+
+            if QgsExpressionContextUtils.projectScope(project).hasVariable(
+                FRAMING_VARIABLE
+            ):
+                self.framing_combo.setCurrentIndex(
+                    self.framing_combo.findData(project_framing(project))
+                )
+        framing_label.setBuddy(self.framing_combo)
+        framing_row.addWidget(self.framing_combo)
+        framing_row.addStretch(1)
+        layout.addLayout(framing_row)
+
         # The designs as cards: one column on a narrow dialog, two or three
         # side by side on a wide one (`_relayout`). Only the list scrolls.
         self.template_list = QListWidget(self)
@@ -1094,6 +1129,7 @@ class TemplatePicker(QDialog):
         self._select(saved)
         self.page_combo.currentIndexChanged.connect(self._restart_previews)
         self.orientation_combo.currentIndexChanged.connect(self._restart_previews)
+        self.framing_combo.currentIndexChanged.connect(self._restart_previews)
         theme.attach_menus(self)
         self._fit_to_screen(parent)
         self._restart_previews()
@@ -1154,6 +1190,8 @@ class TemplatePicker(QDialog):
         self._save_figures()
         self.size_controls.commit()
         self._save_sizes()
+        if self._project is not None:
+            set_project_framing(self._project, self.framing_combo.currentData())
         super().accept()
 
     def reject(self) -> None:
@@ -1175,6 +1213,7 @@ class TemplatePicker(QDialog):
             self._canvas_key,
             self.figures if self._templates[template_id].takes_figures else (),
             self.text_sizes,
+            str(self.framing_combo.currentData()),
         )
 
     def _restart_previews(self, *_args: object) -> None:
@@ -1216,9 +1255,10 @@ class TemplatePicker(QDialog):
             if cues is None:
                 template = self._templates[template_id]
                 try:
-                    plan = self._planner(
-                        template_id, key[1], key[2], figures=key[5], sizes=key[6]
-                    )
+                    with preview_framing(key[7]):
+                        plan = self._planner(
+                            template_id, key[1], key[2], figures=key[5], sizes=key[6]
+                        )
                 except Exception:  # a page the planner cannot lay out
                     cues = declared_cues(template)
                 else:
@@ -1295,9 +1335,10 @@ class TemplatePicker(QDialog):
         template_id = self._queue.pop(0)
         key = self._key(template_id)
         try:
-            result = self._render(
-                template_id, key[1], key[2], key[3], figures=key[5], sizes=key[6]
-            )
+            with preview_framing(key[7]):
+                result = self._render(
+                    template_id, key[1], key[2], key[3], figures=key[5], sizes=key[6]
+                )
         except Exception:  # a preview must never break the picker
             result = None
         if result is not None and not isinstance(result, QImage):

@@ -4375,5 +4375,21 @@ Pick somewhere that exists, or create it first.</source>
       <source>Source: {package}</source>
       <translation>स्रोत: {package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>मानचित्र फ़्रेमिंग</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>फ़्रेम भरें (किनारे काटें)</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>पूरा दृश्य</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>भरने पर दृश्य के किनारे कटते हैं, डेटा नहीं। पूरा दृश्य मानचित्र कैनवास का पूरा विस्तार बनाए रखता है।</translation>
+    </message>
   </context>
 </TS>

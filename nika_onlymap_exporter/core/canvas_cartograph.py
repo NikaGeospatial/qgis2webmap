@@ -643,7 +643,8 @@ def _build_once(
         ),
     )
     frames = {
-        slot.id: _frame(slot, extent, rotation, crs, project) for slot in plan.frames
+        slot.id: _frame(slot, extent, rotation, crs, project, layers)
+        for slot in plan.frames
     }
     spec = template_spec(
         plan,
@@ -912,6 +913,7 @@ def _frame(
     rotation: float,
     crs: QgsCoordinateReferenceSystem,
     project: QgsProject,
+    layers: Sequence[QgsMapLayer] = (),
 ) -> FrameSpec:
     """The frame for `slot`: the canvas view (a locator's zoomed out about
     the same centre), as four corners in the canvas CRS."""
@@ -920,6 +922,13 @@ def _frame(
         view.scale(slot.zoom_out)
     elif slot.focus is not None:
         view = _view_around_focus(view, slot.box, slot.focus, rotation)
+    if slot.id == FRAME_ID:
+        from .template_framing import fill_view, project_framing
+
+        if project_framing(project) == "fill":
+            view = fill_view(
+                view, slot.box.w / slot.box.h, crs, layers, project, rotation
+            )
     return FrameSpec(
         id=slot.id,
         box=slot.box,

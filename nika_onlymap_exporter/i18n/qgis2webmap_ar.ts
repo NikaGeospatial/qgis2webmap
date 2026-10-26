@@ -4375,5 +4375,21 @@ Pick somewhere that exists, or create it first.</source>
       <source>Source: {package}</source>
       <translation>المصدر: {package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>تأطير الخريطة</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>ملء الإطار (اقتصاص الحواف)</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>العرض بالكامل</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>يقتص الملء من العرض، وليس من البيانات. يحتفظ العرض بالكامل بكامل نطاق لوحة الخريطة.</translation>
+    </message>
   </context>
 </TS>

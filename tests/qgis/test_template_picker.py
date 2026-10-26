@@ -84,6 +84,9 @@ def fifteen(monkeypatch):
     ]
     assert len(templates) == 15
     monkeypatch.setattr(layout_templates, "TEMPLATES", tuple(templates))
+    monkeypatch.setattr(
+        layout_templates, "starter_templates", lambda: layout_templates.TEMPLATES
+    )
     return {t.id: t for t in templates}
 
 
@@ -240,15 +243,10 @@ class TestTheFilter:
                 "map-only",
                 "report-figure",
                 "dark",
-                "night-desk",
                 "field-map",
                 "poster",
                 "locator",
-                "story-map",
                 "dashboard",
-                "marginalia",
-                "atlas-ledger",
-                "town-hall",
                 "wayfinder",
             ]
         finally:
@@ -824,6 +822,7 @@ class TestTheKeyboard:
             wanted = [
                 picker.page_combo,
                 picker.orientation_combo,
+                picker.framing_combo,
                 picker.template_list,
                 picker.create_button,
                 picker.cancel_button,
@@ -1446,7 +1445,8 @@ class TestKeyFigures:
     ):
         """Nothing typed, nothing written: not even a variable stored in a
         looser form than ours is rewritten."""
-        figures_project.setCustomVariables({"nika_figure_1": "214|parcels"})
+        variables = {"nika_figure_1": "214|parcels", "nika_template_framing": "fill"}
+        figures_project.setCustomVariables(variables)
         figures_project.setDirty(False)
         picker = TemplatePicker(
             _Renderer(), qsettings=_settings(tmp_path), project=figures_project
@@ -1455,7 +1455,7 @@ class TestKeyFigures:
             _select(picker, "dashboard")
             picker.accept()
             assert not figures_project.isDirty()
-            assert figures_project.customVariables() == {"nika_figure_1": "214|parcels"}
+            assert figures_project.customVariables() == variables
         finally:
             picker.reject()
 
@@ -1659,6 +1659,15 @@ def _planner(data, calls: list | None = None):
     return plan
 
 
+@pytest.fixture
+def all_designs(monkeypatch):
+    """Exercise content cues independently of the curated starter subset."""
+    monkeypatch.setattr(
+        layout_templates, "starter_templates", lambda: layout_templates.TEMPLATES
+    )
+
+
+@pytest.mark.usefixtures("all_designs")
 class TestTheCues:
     """Each card checked against the page this project gets (the real
     registry and planner): what the page shows, what it could."""
@@ -2123,3 +2132,54 @@ class TestBackgroundPages:
             assert renderer.started[-1] == ("classic", "A3")
         finally:
             picker.reject()
+
+
+class TestMapFraming:
+    def test_trying_whole_view_uses_a_distinct_preview_and_cancel_leaves_no_setting(
+        self, qgis_app, tmp_path, project
+    ):
+        from nika_onlymap_exporter.core.template_framing import (
+            FRAMING_VARIABLE,
+            project_framing,
+        )
+
+        modes = []
+        renderer = _Renderer()
+
+        def render(*args, **kwargs):
+            modes.append(project_framing(project))
+            return renderer(*args, **kwargs)
+
+        project.setDirty(False)
+        picker = TemplatePicker(render, qsettings=_settings(tmp_path), project=project)
+        try:
+            _shown(qgis_app, picker)
+            _drain(qgis_app, picker)
+            filled_key = picker._key(picker.template_id)
+            assert modes and set(modes) == {"fill"}
+            modes.clear()
+            picker.framing_combo.setCurrentIndex(picker.framing_combo.findData("whole"))
+            _drain(qgis_app, picker)
+            assert picker._key(picker.template_id) != filled_key
+            assert modes and set(modes) == {"whole"}
+        finally:
+            picker.reject()
+        assert FRAMING_VARIABLE not in project.customVariables()
+        assert not project.isDirty()
+
+    @pytest.mark.parametrize("mode", ["fill", "whole"])
+    def test_create_remembers_the_framing_for_the_builder_and_next_picker(
+        self, qgis_app, tmp_path, project, mode
+    ):
+        from nika_onlymap_exporter.core.template_framing import project_framing
+
+        settings = _settings(tmp_path)
+        picker = TemplatePicker(_Renderer(), qsettings=settings, project=project)
+        picker.framing_combo.setCurrentIndex(picker.framing_combo.findData(mode))
+        picker.accept()
+        assert project_framing(project) == mode
+        reopened = TemplatePicker(_Renderer(), qsettings=settings, project=project)
+        try:
+            assert reopened.framing_combo.currentData() == mode
+        finally:
+            reopened.reject()

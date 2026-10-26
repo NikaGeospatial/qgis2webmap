@@ -4375,5 +4375,21 @@ Escolha um lugar que exista ou crie a pasta antes.</translation>
       <source>Source: {package}</source>
       <translation>Origem: {package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>Enquadramento do mapa</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>Preencher o quadro (cortar bordas)</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>Vista completa</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>O preenchimento corta a vista, não os dados. A vista completa mantém toda a extensão da tela do mapa.</translation>
+    </message>
   </context>
 </TS>

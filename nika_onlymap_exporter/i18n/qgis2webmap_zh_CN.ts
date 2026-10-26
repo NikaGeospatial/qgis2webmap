@@ -4375,5 +4375,21 @@ Pick somewhere that exists, or create it first.</source>
       <source>Source: {package}</source>
       <translation>来源：{package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>地图取景</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>填满图框（裁剪边缘）</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>完整视图</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>填满图框只裁剪视图，不裁剪数据。完整视图保留地图画布的全部范围。</translation>
+    </message>
   </context>
 </TS>

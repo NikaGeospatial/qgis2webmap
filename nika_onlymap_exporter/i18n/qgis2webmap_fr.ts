@@ -4375,5 +4375,21 @@ Choisissez un emplacement existant ou créez-le d'abord.</translation>
       <source>Source: {package}</source>
       <translation>Source : {package}</translation>
     </message>
+    <message>
+      <source>Map framing</source>
+      <translation>Cadrage de la carte</translation>
+    </message>
+    <message>
+      <source>Fill frame (crop edges)</source>
+      <translation>Remplir le cadre (rogner les bords)</translation>
+    </message>
+    <message>
+      <source>Whole view</source>
+      <translation>Vue entière</translation>
+    </message>
+    <message>
+      <source>Fill crops the view, not the data. Whole view keeps the entire canvas extent.</source>
+      <translation>Le remplissage rogne la vue, pas les données. La vue entière conserve toute l’étendue du canevas.</translation>
+    </message>
   </context>
 </TS>

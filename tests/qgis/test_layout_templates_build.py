@@ -587,7 +587,7 @@ class TestPicker:
         calls: list[tuple[str, str, str]] = []
         picker, settings = self._picker(qgis_app, tmp_path, calls)
         for row in range(picker.template_list.count()):
-            if picker.template_list.item(row).data(256) == "story-map":
+            if picker.template_list.item(row).data(256) == "poster":
                 picker.template_list.setCurrentRow(row)
         picker.page_combo.setCurrentIndex(picker.page_combo.findData("A3"))
         picker.orientation_combo.setCurrentIndex(
@@ -595,14 +595,14 @@ class TestPicker:
         )
         picker.accept()
         assert (picker.template_id, picker.page_size, picker.orientation) == (
-            "story-map",
+            "poster",
             "A3",
             "portrait",
         )
         again, _ = self._picker(qgis_app, tmp_path, calls)
         try:
             assert (again.template_id, again.page_size, again.orientation) == (
-                "story-map",
+                "poster",
                 "A3",
                 "portrait",
             )
