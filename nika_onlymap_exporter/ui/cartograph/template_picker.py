@@ -1016,15 +1016,20 @@ class TemplatePicker(QDialog):
         self._controls.setHorizontalSpacing(16)
         self._controls.setVerticalSpacing(8)
         self._controls.setColumnStretch(2, 1)
-        self._controls_wrapped: bool | None = None
+        self._controls_arrangement_now: str | None = None
         layout.addLayout(self._controls)
-        self._place_controls(wrapped=False)
 
-        framing_row = QHBoxLayout()
-        framing_label = QLabel(tr("Map framing"), self)
+        # Beside the design filter when they fit together, so the choice
+        # costs the card list no height (`_place_controls`).
+        self.framing_group = QWidget(self)
+        self.framing_group.setMinimumWidth(1)
+        framing_row = QHBoxLayout(self.framing_group)
+        framing_row.setContentsMargins(0, 0, 0, 0)
+        framing_row.setSpacing(4)
+        framing_label = QLabel(tr("Map framing"), self.framing_group)
         framing_label.setProperty("role", "hint")
         framing_row.addWidget(framing_label)
-        self.framing_combo = QComboBox(self)
+        self.framing_combo = QComboBox(self.framing_group)
         self.framing_combo.setAccessibleName(tr("Map framing"))
         self.framing_combo.addItem(tr("Fill frame (crop edges)"), "fill")
         self.framing_combo.addItem(tr("Whole view"), "whole")
@@ -1045,8 +1050,7 @@ class TemplatePicker(QDialog):
                 )
         framing_label.setBuddy(self.framing_combo)
         framing_row.addWidget(self.framing_combo)
-        framing_row.addStretch(1)
-        layout.addLayout(framing_row)
+        self._place_controls("row")
 
         # The designs as cards: one column on a narrow dialog, two or three
         # side by side on a wide one (`_relayout`). Only the list scrolls.
@@ -1421,7 +1425,7 @@ class TemplatePicker(QDialog):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802
         super().resizeEvent(event)
-        self._place_controls(wrapped=self._controls_need_wrap())
+        self._place_controls(self._controls_arrangement())
 
     # ---- Layout --------------------------------------------------------------
 
@@ -1439,28 +1443,39 @@ class TemplatePicker(QDialog):
         self.setMinimumSize(minimum)
         self.resize(size)
 
-    def _controls_need_wrap(self) -> bool:
+    def _controls_arrangement(self) -> str:
+        """`row` when the filter, the page settings and the framing fit on
+        one line; `pair` when only the filter and the framing do (the page
+        settings under them); else `stack`, one line each."""
         margins = self.layout().contentsMargins() if self.layout() else None
         room = self.width() - (margins.left() + margins.right() if margins else 0)
-        need = (
-            self.filter_group.sizeHint().width()
-            + self._controls.horizontalSpacing()
-            + self.page_settings.sizeHint().width()
-        )
-        return need > room
+        gap = self._controls.horizontalSpacing()
+        filter_w = self.filter_group.sizeHint().width()
+        framing_w = self.framing_group.sizeHint().width()
+        if (
+            filter_w + self.page_settings.sizeHint().width() + framing_w + 2 * gap
+            <= room
+        ):
+            return "row"
+        return "pair" if filter_w + framing_w + gap <= room else "stack"
 
-    def _place_controls(self, *, wrapped: bool) -> None:
-        if wrapped == self._controls_wrapped:
+    def _place_controls(self, arrangement: str) -> None:
+        if arrangement == self._controls_arrangement_now:
             return
-        self._controls_wrapped = wrapped
-        self._controls.removeWidget(self.filter_group)
-        self._controls.removeWidget(self.page_settings)
+        self._controls_arrangement_now = arrangement
+        for widget in (self.filter_group, self.page_settings, self.framing_group):
+            self._controls.removeWidget(widget)
         left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         self._controls.addWidget(self.filter_group, 0, 0, left)
-        if wrapped:
+        if arrangement == "row":
+            self._controls.addWidget(self.page_settings, 0, 1, left)
+            self._controls.addWidget(self.framing_group, 0, 2, left)
+        elif arrangement == "pair":
+            self._controls.addWidget(self.framing_group, 0, 1, 1, 2, left)
             self._controls.addWidget(self.page_settings, 1, 0, 1, 3, left)
         else:
-            self._controls.addWidget(self.page_settings, 0, 1, left)
+            self._controls.addWidget(self.page_settings, 1, 0, 1, 3, left)
+            self._controls.addWidget(self.framing_group, 2, 0, 1, 3, left)
 
     def _relayout(self) -> None:
         """Size the cards to the list: as many columns as fit, every card the
