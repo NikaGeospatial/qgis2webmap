@@ -30,7 +30,7 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QAbstractItemView, QWidget
+from qgis.PyQt.QtWidgets import QAbstractItemView, QDialog, QWidget
 
 from nika_onlymap_exporter.core import layout_templates
 from nika_onlymap_exporter.core.canvas_cartograph import PREVIEW_LEGEND_LEFT_OUT_KEY
@@ -163,6 +163,41 @@ def _shown(qgis_app, picker, size: QSize | None = None) -> None:
 
 def _select(picker, template_id) -> None:
     picker.template_list.setCurrentItem(picker._items[template_id])
+
+
+class TestTheMouse:
+    def test_a_single_click_selects_and_keeps_the_picker_open(
+        self, qgis_app, tmp_path, fifteen
+    ) -> None:
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
+        try:
+            picker.show()
+            qgis_app.processEvents()
+            row = picker.rows["map-only"]
+            QTest.mouseClick(
+                row, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+            )
+            qgis_app.processEvents()
+            assert picker.isVisible()
+            assert picker.result() == 0
+            assert picker.template_id == "map-only"
+        finally:
+            picker.reject()
+
+    def test_a_double_click_accepts_the_card(self, qgis_app, tmp_path, fifteen) -> None:
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
+        try:
+            picker.show()
+            qgis_app.processEvents()
+            QTest.mouseDClick(
+                picker.rows["map-only"],
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+            assert picker.result() == QDialog.DialogCode.Accepted
+            assert picker.template_id == "map-only"
+        finally:
+            picker.reject()
 
 
 class TestTheFilter:

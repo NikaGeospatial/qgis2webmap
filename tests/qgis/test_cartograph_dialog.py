@@ -42,11 +42,15 @@ def _choose_cartograph(dialog) -> None:
 def _pick_in_layout_list(dialog, kind: str) -> None:
     """Pick a row of the layout list the way a click does: the list moves to
     it, then reports it activated."""
+    from qgis.PyQt.QtWidgets import QApplication
+
     combo = dialog._cartograph.layout_combo
     index = combo.findData(kind)
     assert index >= 0
     combo.setCurrentIndex(index)
     combo.activated.emit(index)
+    # The picker opens once the list has closed (`create_from_canvas_later`).
+    QApplication.processEvents()
 
 
 def _choose_web(dialog) -> None:
@@ -1915,6 +1919,29 @@ class TestCanvasAndImport:
             assert project.layoutManager().layoutByName(name) is not None
             assert dialog.state.cartograph_layout == name
             assert len(cartograph._frame_rows) == 1
+        finally:
+            dialog.close()
+
+    def test_the_menu_and_list_open_the_picker_after_they_close(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        """The modal picker must not start inside the popup's own event
+        handler: its first click would be taken by the popup's grab."""
+        from qgis.PyQt.QtWidgets import QApplication
+
+        dialog, _canvas = self._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph.add_from_canvas_action.trigger()
+            assert picked_template.shown == 0
+            QApplication.processEvents()
+            assert picked_template.shown == 1
+            index = cartograph.layout_combo.findData("canvas")
+            cartograph.layout_combo.activated.emit(index)
+            assert picked_template.shown == 1
+            QApplication.processEvents()
+            assert picked_template.shown == 2
         finally:
             dialog.close()
 

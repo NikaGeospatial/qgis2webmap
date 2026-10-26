@@ -391,7 +391,7 @@ class CartographController:
         picker_row.setSpacing(6)
         self.layout_combo = LayoutPicker(panel)
         self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
-        self.layout_combo.from_canvas_requested.connect(self.create_from_canvas)
+        self.layout_combo.from_canvas_requested.connect(self.create_from_canvas_later)
         self.layout_combo.import_requested.connect(self.on_import_cartograph)
         picker_row.addWidget(self.layout_combo, 1)
         # The two ways to make a layout, always in sight: at the end of the
@@ -406,7 +406,7 @@ class CartographController:
         )
         add_menu = QMenu(self.add_layout_button)
         self.add_from_canvas_action = add_menu.addAction(tr("From canvas..."))
-        self.add_from_canvas_action.triggered.connect(self.create_from_canvas)
+        self.add_from_canvas_action.triggered.connect(self.create_from_canvas_later)
         add_menu.addAction(tr("Import cartograph...")).triggered.connect(
             self.on_import_cartograph
         )
@@ -630,6 +630,14 @@ class CartographController:
             index,
             tr("One page per feature: on") if on else tr("One page per feature: off"),
         )
+
+    def create_from_canvas_later(self) -> None:
+        """`create_from_canvas`, once the list or menu that asked for it has
+        finished closing. The picker is modal and runs its own event loop; shown
+        from inside the popup's own event handler, the popup's mouse grab is
+        still in force and the picker's first click is taken by it - the
+        window vanishes and only comes back on a click elsewhere."""
+        QTimer.singleShot(0, self.create_from_canvas)
 
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
