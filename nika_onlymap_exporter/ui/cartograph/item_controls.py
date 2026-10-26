@@ -49,6 +49,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QToolButton,
@@ -66,6 +67,19 @@ LegendEditorFactory = Callable[[QWidget], QWidget]
 
 #: The most room the hosted legend editor takes from the page, in pixels.
 _LEGEND_EDITOR_MAX_HEIGHT = 240
+
+
+class _CurrentPageStack(QStackedWidget):
+    """A hidden legend editor must not reserve its height for text controls."""
+
+    def sizeHint(self):  # noqa: N802 - Qt override
+        page = self.currentWidget()
+        return page.sizeHint() if page is not None else super().sizeHint()
+
+    def minimumSizeHint(self):  # noqa: N802 - Qt override
+        page = self.currentWidget()
+        return page.minimumSizeHint() if page is not None else super().minimumSizeHint()
+
 
 _ALIGNMENTS = (
     (Qt.AlignmentFlag.AlignLeft, "align-left", "Align text left"),
@@ -230,7 +244,9 @@ class ContextControls(QFrame):
         head.addWidget(self.delete_button)
         column.addLayout(head)
 
-        self.pages = QStackedWidget(self)
+        self.pages = _CurrentPageStack(self)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.pages.currentChanged.connect(lambda _index: self.pages.updateGeometry())
         column.addWidget(self.pages)
         self._build_text_page()
         self._build_map_page()

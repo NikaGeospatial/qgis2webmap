@@ -301,6 +301,26 @@ class TestTextControls:
         assert controls.text_edit.toPlainText() == label.text() == "Text"
         assert controls.text_edit.hasFocus() or not pane.isActiveWindow()
 
+    def test_a_hidden_tall_legend_editor_does_not_enlarge_text_controls(
+        self, text, qgis_app
+    ):
+        from qgis.PyQt.QtWidgets import QWidget
+
+        pane, _layout, _label = text
+        controls = pane.controls
+        before = controls.sizeHint().height()
+        # A legend editor that has been opened once remains a child of its
+        # stack. Its hidden page must not take room away from the map.
+        editor = QWidget(controls.legend_page)
+        editor.setMinimumHeight(240)
+        controls.legend_slot.addWidget(editor)
+        controls.pages.setCurrentWidget(controls.legend_page)
+        _settle(qgis_app, 0.05)
+        assert controls.sizeHint().height() > before + 100
+        controls.pages.setCurrentWidget(controls.text_page)
+        _settle(qgis_app, 0.05)
+        assert controls.sizeHint().height() == before
+
     def test_enter_applies_the_words_as_one_undo_step(self, qgis_app, text) -> None:
         from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtTest import QTest
