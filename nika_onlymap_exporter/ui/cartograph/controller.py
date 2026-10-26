@@ -84,7 +84,7 @@ from ...packaging.runtime_manager import (
 from ..background_job import BackgroundJob
 from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
-from ..live_server import BIND_HOST, PreviewServer
+from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
@@ -1707,6 +1707,10 @@ class CartographController:
             return
         self._last_error = ""
         self._check_requested = False
+        if self._preview_server is not None:
+            # An open browser preview follows the layout on screen, and every
+            # save of it.
+            self._preview_server.show(path)
         self._edits_saved = max(
             self._edits_saved, self._edits_made if edits is None else edits
         )
@@ -2163,6 +2167,8 @@ class CartographController:
                     "download, check that local connections to {host} are "
                     "allowed, then try again."
                 ).format(error=self._preview_server_error, host=BIND_HOST)
+                + " "
+                + tr("This browser view will not follow later changes.")
             )
         if query:
             url.setQuery(query)
@@ -2177,29 +2183,23 @@ class CartographController:
         some browsers refuse to run WebGL content from at all.
         """
         try:
-            root = path.parent.resolve()
-            if (
-                self._preview_server is None
-                or self._preview_server.root != root
-                or self._preview_server.only != path.name
-            ):
-                if self._preview_server is not None:
-                    self._preview_server.stop()
-                    self._preview_server = None
-                # Only this one file: the cartograph is self-contained, and its
-                # folder may be somewhere like Documents.
-                server = PreviewServer(root, only=path.name)
+            if self._preview_server is None:
+                # One server for the session, serving whichever layout's file
+                # is on screen at one address, so a tab left open follows the
+                # layout and every save. Nothing else in the folder is served.
+                server = PreviewServer(path.parent.resolve(), only=NO_FILES)
                 server.start()
                 # Kept only once running: a server that failed to bind would
                 # otherwise be reused, unstarted, by the next action.
                 self._preview_server = server
+            published = self._preview_server.published()
+            if published is None or published[0] != path.resolve():
+                self._preview_server.show(path)
             url = QUrl()
             url.setScheme("http")
             url.setHost(BIND_HOST)
             url.setPort(self._preview_server.port)
-            # Set as a decoded path, so a `#` or `?` in the name is encoded
-            # rather than read as a fragment or query.
-            url.setPath(f"/{path.name}")
+            url.setPath(PAGE_PATH)
             return url
         except OSError as exc:
             self._preview_server_error = str(exc)

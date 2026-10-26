@@ -1213,3 +1213,91 @@ class TestPageFitsTheWindow:
             assert rect["x"] + rect["w"] <= 1024.5
         assert len(set(ids)) == 3
 
+
+class TestBrowserPreviewFollowsTheLayout:
+    """An open browser preview shows the layout on screen after every save."""
+
+    @pytest.fixture
+    def served(self, fixtures: Path, tmp_path: Path):
+        from nika_onlymap_exporter.ui.live_server import NO_FILES, PreviewServer
+
+        source = (fixtures / "survey-static.html").read_text(encoding="utf-8")
+        first = tmp_path / "first-layout.html"
+        second = tmp_path / "second-layout.html"
+        first.write_text(source, encoding="utf-8")
+        second.write_text(source.replace("Survey UTM", "Second layout"), "utf-8")
+        server = PreviewServer(tmp_path, only=NO_FILES)
+        server.start()
+        try:
+            yield server, first, second
+        finally:
+            server.stop()
+
+    @staticmethod
+    def _title(page) -> str:
+        return page.evaluate("() => document.querySelector('om-text').innerText")
+
+    def _open(self, page, server) -> None:
+        from nika_onlymap_exporter.ui.live_server import PAGE_PATH
+
+        page.goto(f"http://127.0.0.1:{server.port}{PAGE_PATH}")
+        page.wait_for_selector("om-cartograph om-text", timeout=30_000)
+
+    def test_switching_layout_updates_the_open_tab(self, page, served) -> None:
+        server, first, second = served
+        server.show(first)
+        self._open(page, server)
+        assert "Survey UTM" in self._title(page)
+        server.show(second)
+        page.wait_for_function(
+            "() => document.querySelector('om-text')?.innerText"
+            ".includes('Second layout')",
+            timeout=8_000,
+        )
+
+    def test_saving_the_same_layout_again_updates_the_open_tab(
+        self, page, served
+    ) -> None:
+        server, first, _second = served
+        server.show(first)
+        self._open(page, server)
+        first.write_text(
+            first.read_text(encoding="utf-8").replace("Survey UTM", "Edited title"),
+            "utf-8",
+        )
+        server.show(first)
+        page.wait_for_function(
+            "() => document.querySelector('om-text')?.innerText"
+            ".includes('Edited title')",
+            timeout=8_000,
+        )
+
+    def test_the_fit_choice_survives_the_reload(self, page, served) -> None:
+        server, first, second = served
+        page.set_viewport_size({"width": 800, "height": 500})
+        server.show(first)
+        self._open(page, server)
+        page.locator("[data-qgis2webmap-fit-toggle]").click()
+        server.show(second)
+        page.wait_for_function(
+            "() => document.querySelector('om-text')?.innerText"
+            ".includes('Second layout')",
+            timeout=8_000,
+        )
+        page.wait_for_timeout(500)
+        assert page.evaluate(_SHEET_RECT)["kx"] == pytest.approx(1, abs=1e-3)
+
+    def test_an_export_through_the_server_is_not_hooked_and_keeps_its_size(
+        self, page, served, expected
+    ) -> None:
+        from nika_onlymap_exporter.ui.live_server import PAGE_PATH
+
+        server, first, _second = served
+        server.show(first)
+        with page.expect_download(timeout=60_000) as download_info:
+            page.goto(f"http://127.0.0.1:{server.port}{PAGE_PATH}?export=png&dpi=96")
+        width, height = _png_size(Path(download_info.value.path()).read_bytes())
+        page_w, page_h = expected["survey"]["page_mm"]
+        assert width == pytest.approx(page_w / 25.4 * 96, abs=2)
+        assert height == pytest.approx(page_h / 25.4 * 96, abs=2)
+        assert "EventSource" not in first.read_text(encoding="utf-8")

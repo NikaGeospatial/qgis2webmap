@@ -38,6 +38,44 @@ from typing import BinaryIO
 # same namespace.
 RELOAD_PATH = "/__reload"
 
+# The stable address of the page a session previews: whichever file the plugin
+# last published with `PreviewServer.show`, so a tab opened on it follows the
+# plugin from one layout (and one saved file) to the next.
+PAGE_PATH = "/cartograph-preview.html"
+
+# Pass as `only` to serve no file by name: the server then answers `PAGE_PATH`
+# and the event stream, and nothing else on disk.
+NO_FILES = ""
+
+# Query names that make the runtime print, export or page through the atlas.
+# A page opened with one is a one-shot job, not a view to keep fresh: reloading
+# it would print or download again.
+_JOB_QUERY_NAMES = ("print", "export", "atlas")
+
+# Injected into the SERVED response only, never into the saved file. Reloads
+# when the plugin publishes a different revision than the one the page was
+# served with (`__REVISION__`), including one published between the response
+# and the stream connecting, which the stream's first message reports.
+_PAGE_RELOAD_SCRIPT = """<script>(function () {
+  if (location.protocol === "file:") return;
+  var served = __REVISION__;
+  var attempts = 0;
+  function connect() {
+    var source = new EventSource("__RELOAD_PATH__?rev");
+    source.onmessage = function (event) {
+      if (event.data.indexOf("rev:") === 0
+          && Number(event.data.slice(4)) !== served) location.reload();
+    };
+    source.onerror = function () {
+      source.close();
+      attempts += 1;
+      if (attempts <= 5) setTimeout(connect, 1000);
+    };
+  }
+  connect();
+})();</script>
+"""
+
 # How long an idle SSE connection waits before emitting a comment. Without it a
 # proxy or the browser may drop a silent connection, and the preview would go
 # quietly stale rather than visibly break.
@@ -172,10 +210,42 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
         pass
 
     def do_GET(self) -> None:
-        if self.path.split("?", 1)[0] == RELOAD_PATH:
-            self._serve_events()
+        route, _, query = self.path.partition("?")
+        if route == RELOAD_PATH:
+            self._serve_events(report_revision=query == "rev")
+            return
+        if route == PAGE_PATH:
+            self._serve_page(query)
             return
         super().do_GET()
+
+    def _serve_page(self, query: str) -> None:
+        """The published page, with the reload hook added to this response."""
+        server: PreviewServer = self.server.preview  # type: ignore[attr-defined]
+        published = server.published()
+        if published is None:
+            self.send_error(404, "Nothing is published yet")
+            return
+        path, revision = published
+        try:
+            body = path.read_bytes()
+        except OSError:
+            self.send_error(404, "File not found")
+            return
+        names = {pair.split("=", 1)[0] for pair in query.split("&")}
+        if not names.intersection(_JOB_QUERY_NAMES):
+            hook = _PAGE_RELOAD_SCRIPT.replace("__REVISION__", str(revision)).replace(
+                "__RELOAD_PATH__", RELOAD_PATH
+            )
+            at = body.rfind(b"</body>")
+            hook_bytes = hook.encode()
+            body = body[:at] + hook_bytes + body[at:] if at >= 0 else body + hook_bytes
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def send_head(self):  # type: ignore[no-untyped-def]  # stdlib signature
         """Answer a single byte range with 206, the way a raster needs.
@@ -238,7 +308,7 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
         """
         self.send_error(405, "This preview server is read-only")
 
-    def _serve_events(self) -> None:
+    def _serve_events(self, report_revision: bool = False) -> None:
         server: PreviewServer = self.server.preview  # type: ignore[attr-defined]
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -249,6 +319,11 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
         inbox: queue.Queue[str] = queue.Queue()
         server.register(inbox)
         try:
+            # Where the page stands now, so a publish that landed between its
+            # response and this connection is not missed.
+            if report_revision:
+                self.wfile.write(f"data: rev:{server.revision}\n\n".encode())
+                self.wfile.flush()
             while not server.stopping:
                 try:
                     message = inbox.get(timeout=HEARTBEAT_SECONDS)
@@ -287,6 +362,8 @@ class PreviewServer:
         self._empty_since: float | None = None
         self._lock = threading.Lock()
         self._stopping = False
+        self._page: Path | None = None
+        self._revision = 0
 
     @property
     def stopping(self) -> bool:
@@ -394,6 +471,32 @@ class PreviewServer:
             if self._empty_since is None:
                 return None
             return time.monotonic() - self._empty_since
+
+    @property
+    def revision(self) -> int:
+        with self._lock:
+            return self._revision
+
+    def published(self) -> tuple[Path, int] | None:
+        """The file served at `PAGE_PATH` and its revision, if any."""
+        with self._lock:
+            if self._page is None:
+                return None
+            return self._page, self._revision
+
+    def show(self, path: Path) -> None:
+        """Serve `path` at `PAGE_PATH` from now on, and tell open pages.
+
+        Called after every save of the layout on screen, and so also when the
+        layout on screen changes: the address stays, the content follows.
+        """
+        with self._lock:
+            self._page = Path(path).resolve()
+            self._revision += 1
+            revision = self._revision
+            clients = list(self._clients)
+        for inbox in clients:
+            inbox.put(f"rev:{revision}")
 
     def notify_reload(self) -> None:
         """Tell every connected page to reload itself."""

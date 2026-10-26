@@ -17,7 +17,12 @@ import time
 
 import pytest
 
-from nika_onlymap_exporter.ui.live_server import RELOAD_PATH, PreviewServer
+from nika_onlymap_exporter.ui.live_server import (
+    NO_FILES,
+    PAGE_PATH,
+    RELOAD_PATH,
+    PreviewServer,
+)
 
 
 @pytest.fixture
@@ -482,3 +487,74 @@ class TestDisconnects:
         finally:
             server.stop()
         assert "a real fault" in capfd.readouterr().err
+
+
+class TestPublishedPage:
+    """One address that follows the layout on screen, hooked only in transit."""
+
+    @staticmethod
+    def _get(server, target: str) -> tuple[int, str]:
+        conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=5)
+        try:
+            conn.request("GET", target)
+            response = conn.getresponse()
+            return response.status, response.read().decode()
+        finally:
+            conn.close()
+
+    @pytest.fixture
+    def pages(self, tmp_path):
+        first = tmp_path / "one.html"
+        second = tmp_path / "two.html"
+        first.write_text("<html><body><p>one</p></body></html>", encoding="utf-8")
+        second.write_text("<html><body><p>two</p></body></html>", encoding="utf-8")
+        server = PreviewServer(tmp_path, only=NO_FILES)
+        server.start()
+        try:
+            yield server, first, second
+        finally:
+            server.stop()
+
+    def test_nothing_is_served_until_a_page_is_shown(self, pages) -> None:
+        server, _first, _second = pages
+        assert self._get(server, PAGE_PATH)[0] == 404
+        assert self._get(server, "/one.html")[0] == 404
+
+    def test_the_page_carries_the_hook_but_the_file_does_not(self, pages) -> None:
+        server, first, _second = pages
+        server.show(first)
+        status, body = self._get(server, PAGE_PATH)
+        assert status == 200
+        assert "<p>one</p>" in body and "EventSource" in body
+        assert body.index("EventSource") < body.index("</body>")
+        assert "EventSource" not in first.read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("query", ["print=1", "export=png&dpi=96", "atlas=zip"])
+    def test_a_print_or_export_page_gets_no_hook(self, pages, query: str) -> None:
+        server, first, _second = pages
+        server.show(first)
+        assert "EventSource" not in self._get(server, f"{PAGE_PATH}?{query}")[1]
+
+    def test_showing_another_file_swaps_the_content_and_tells_open_pages(
+        self, pages
+    ) -> None:
+        server, first, second = pages
+        server.show(first)
+        inbox: queue.Queue[str] = queue.Queue()
+        server.register(inbox)
+        server.show(second)
+        assert inbox.get(timeout=2) == f"rev:{server.revision}"
+        assert "<p>two</p>" in self._get(server, PAGE_PATH)[1]
+
+    def test_the_event_stream_starts_with_the_current_revision(self, pages) -> None:
+        server, first, _second = pages
+        server.show(first)
+        conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=5)
+        try:
+            conn.request("GET", f"{RELOAD_PATH}?rev")
+            response = conn.getresponse()
+            assert response.fp.readline().decode().strip() == (
+                f"data: rev:{server.revision}"
+            )
+        finally:
+            conn.close()
