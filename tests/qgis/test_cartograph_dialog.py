@@ -5358,6 +5358,42 @@ class TestEditTab:
             QApplication.setFont(font)
             dialog.close()
 
+    def test_the_legend_editor_labels_keep_their_full_text_in_a_larger_font(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.PyQt.QtGui import QFont
+        from qgis.PyQt.QtWidgets import QApplication, QLabel
+
+        font = QApplication.font()
+        larger = QFont(font)
+        larger.setPointSizeF(font.pointSizeF() + 3)
+        QApplication.setFont(larger)
+        dialog, cartograph, _layout, items = self._ready(project, qgis_app, (720, 320))
+        try:
+            cartograph.open_section("edit")
+            items["legend"].setSelected(True)
+            for _ in range(30):
+                qgis_app.processEvents()
+            editor = cartograph.page_pane.controls._legend_editor
+            assert editor is not None and editor.isVisible()
+            names = {"Columns", "Text size", "Row spacing"}
+            # Narrower than the panel ever makes it, so the labels are put to the test.
+            editor.setFixedWidth(220)
+            for _ in range(10):
+                qgis_app.processEvents()
+            labels = [
+                label
+                for label in editor.findChildren(QLabel)
+                if label.text() in names and label.isVisibleTo(editor)
+            ]
+            assert {label.text() for label in labels} == names
+            for label in labels:
+                needed = label.fontMetrics().horizontalAdvance(label.text())
+                assert label.width() >= needed, (label.text(), label.width(), needed)
+        finally:
+            QApplication.setFont(font)
+            dialog.close()
+
     @pytest.mark.parametrize("name", ["text", "map", "legend"])
     def test_a_short_window_scrolls_the_edit_tab_like_the_others(
         self, qgis_app, project, name

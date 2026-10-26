@@ -170,6 +170,9 @@ class LegendEditor(QWidget):
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(4)
+        # A narrow panel or a larger font puts a field under its label rather
+        # than squeezing the label's text ("Row spac...").
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.columns_spin = _Spin(self)
         self.columns_spin.setRange(1, 12)
         self.columns_spin.setAccessibleName(tr("Legend columns"))
