@@ -120,8 +120,12 @@ colour settings back afterwards. Your layout itself is never changed.
 
 The **Title** from the Cartograph tab is applied to that copy, so a label that
 reads the project title and the PDF's own title match the browser's. The page
-**attribution** and **theme** are browser features; when you have set them, the
-export says they are not in the QGIS PDF.
+**attribution** and **theme** are browser features. When you have set either,
+Export PDF first explains that the QGIS PDF will not carry it and offers
+**Continue**, **Use browser RGB export instead** (RGB only), **Add attribution
+to the layout** (a small label along the foot of page 1, one Undo step in the
+layout designer) or **Cancel**. What you accepted is not repeated after the
+export.
 
 With **CMYK**, the PDF is PDF/X-4 when the project has a CMYK profile set in
 **Project Properties → Styles**; without one you get CMYK colours but no output

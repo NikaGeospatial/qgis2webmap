@@ -594,6 +594,51 @@ class TestAutosave:
         finally:
             dialog.close()
 
+    def test_status_line_is_honest_while_a_save_is_pending_or_running(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        import threading
+
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        gate = threading.Event()
+        gate.set()
+        real = export_module.finish_cartograph_full
+
+        def gated(*args, **kwargs):
+            gate.wait(20)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(export_module, "finish_cartograph_full", gated)
+        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            label = cartograph.cartograph_status_label
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            cartograph._autosave_timer.stop()
+            cartograph._update_status_label()
+            assert label.text().startswith("Saved")
+
+            gate.clear()
+            cartograph.schedule_autosave()  # an edit, still in its debounce
+            assert label.text() == "Changes pending"
+            cartograph._autosave_timer.stop()
+            cartograph._run_autosave()
+            assert cartograph._job is not None
+            assert label.text() == "Saving the cartograph..."
+            qgis_app.processEvents()
+            cartograph._on_status_tick()  # the 1 s refresh must not undo it
+            assert label.text() == "Saving the cartograph..."
+
+            gate.set()
+            assert _wait_for(qgis_app, lambda: label.text().startswith("Saved"))
+            for text in ("Changes pending", "Saving the cartograph..."):
+                assert text not in label.text()
+            assert "project" not in label.text().lower()
+        finally:
+            gate.set()
+            dialog.close()
+
 
 class TestBuildThreadsAndJobs:
     def test_the_users_licence_key_reaches_the_build(
@@ -848,6 +893,7 @@ class TestBuildThreadsAndJobs:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(tmp_path / "survey.html"))
+            cartograph._autosave_timer.stop()  # as when the debounce fires
             cartograph._run_autosave()
             assert "nobody anticipated" in cartograph.cartograph_status_label.text()
             assert not cartograph.busy
@@ -1307,7 +1353,11 @@ class TestRealAutosave:
             assert "<om-cartograph" in html
             assert html.count("<om-frame") == 2
             assert cartograph._last_error == ""
-            assert "Saved" in cartograph.cartograph_status_label.text()
+            # A follow-up save may be debouncing: "Changes pending" until it lands.
+            assert _wait_for(
+                qgis_app,
+                lambda: "Saved" in cartograph.cartograph_status_label.text(),
+            )
         finally:
             dialog.close()
 
@@ -1460,6 +1510,184 @@ class TestPrintSettings:
             assert opened == []
         finally:
             dialog.close()
+
+    def _native_pdf_setup(self, qgis_app, project, tmp_path, monkeypatch, **page):
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.exporters import print_pdf
+        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
+
+        dialog, _target = self._real_dialog(qgis_app, project, tmp_path, static=True)
+        cartograph = dialog._cartograph
+        dialog.state.cartograph_print["survey-utm"] = PrintSettings(
+            profile="cmyk"
+        ).to_json()
+        choice = dialog.state.page_choice("survey-utm")
+        for key, value in page.items():
+            setattr(choice, key, value)
+        pdf = tmp_path / "survey.pdf"
+        monkeypatch.setattr(
+            QFileDialog, "getSaveFileName", lambda *a, **k: (str(pdf), "")
+        )
+        exports = []
+
+        def fake_export(layout, settings, path, page=None):
+            exports.append(path)
+            return print_pdf.PrintPdfResult(
+                path=path,
+                warnings=(
+                    print_pdf.attribution_warning(),
+                    print_pdf.theme_warning(),
+                    "Only page 1 is printed.",
+                ),
+            )
+
+        monkeypatch.setattr(print_pdf, "export_print_pdf", fake_export)
+        opened = []
+        monkeypatch.setattr(cartograph, "_open_url", opened.append)
+        asked = []
+
+        def answer_with(answer):
+            def fake(**kwargs):
+                asked.append(kwargs)
+                return answer
+
+            monkeypatch.setattr(
+                print_settings_dialog, "ask_native_pdf_differences", fake
+            )
+
+        return dialog, cartograph, exports, opened, asked, answer_with
+
+    def test_native_pdf_without_attribution_or_theme_asks_nothing(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, title="A title"
+        )
+        try:
+            answer_with("cancel")
+            cartograph.on_export_pdf()
+            assert asked == []  # the title is applied by the exporter
+            assert len(exports) == 1
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize(
+        "page", [{"attribution": "Data: X"}, {"theme": "dark"}], ids=["attr", "theme"]
+    )
+    def test_native_pdf_asks_when_attribution_or_theme_is_set(
+        self, qgis_app, project, tmp_path, monkeypatch, page
+    ) -> None:
+        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, **page
+        )
+        try:
+            answer_with("continue")
+            cartograph.on_export_pdf()
+            assert len(asked) == 1
+            assert bool(asked[0]["attribution"]) == ("attribution" in page)
+            assert asked[0]["themed"] == ("theme" in page)
+            assert len(exports) == 1
+            # Told in the dialog, so the post-export line does not repeat it.
+            text = dialog.status_label.text()
+            assert "Only page 1 is printed." in text
+            assert "attribution" not in text and "theme" not in text
+        finally:
+            dialog.close()
+
+    def test_native_pdf_cancel_writes_nothing(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, exports, opened, _a, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
+        )
+        try:
+            answer_with(None)
+            cartograph.on_export_pdf()
+            assert exports == [] and opened == []
+            assert not (tmp_path / "survey.pdf").exists()
+        finally:
+            dialog.close()
+
+    def test_native_pdf_browser_choice_opens_the_print_url(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, exports, opened, _a, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, theme="dark"
+        )
+        try:
+            answer_with("browser")
+            cartograph.on_export_pdf()
+            assert exports == []
+            assert len(opened) == 1 and "print=1" in opened[0].toString()
+        finally:
+            dialog.close()
+
+    def test_native_pdf_add_attribution_is_one_undo_step_then_exports(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.core import QgsLayoutItemLabel
+
+        dialog, cartograph, exports, _o, _a, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
+        )
+        try:
+            layout = cartograph._current_layout
+
+            def labels():
+                return [
+                    i.text()
+                    for i in layout.items()
+                    if isinstance(i, QgsLayoutItemLabel)
+                ]
+
+            stack = layout.undoStack().stack()
+            before, count = labels(), stack.index()
+            answer_with("add-attribution")
+            cartograph.on_export_pdf()
+            assert labels().count("Data: X") == before.count("Data: X") + 1
+            assert stack.index() == count + 1
+            assert len(exports) == 1
+            assert "attribution" not in dialog.status_label.text()
+            stack.undo()
+            assert labels() == before
+        finally:
+            dialog.close()
+
+    def test_native_pdf_dialog_offers_each_choice_and_never_the_title(
+        self, qgis_app, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog as psd
+
+        shown = {}
+
+        def fake_exec(box):
+            shown["text"] = box.text()
+            shown["buttons"] = {b.text(): b for b in box.buttons()}
+            shown["pick"](box)
+
+        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+        monkeypatch.setattr(
+            QMessageBox, "clickedButton", lambda box: shown["buttons"][shown["want"]]
+        )
+        for want, expected in (
+            ("Continue", psd.NATIVE_CONTINUE),
+            ("Use browser RGB export instead", psd.NATIVE_BROWSER),
+            ("Add attribution to the layout", psd.NATIVE_ADD_ATTRIBUTION),
+            ("Cancel", None),
+        ):
+            shown["want"], shown["pick"] = want, lambda box: None
+            assert psd.ask_native_pdf_differences(attribution="x", themed=True) == (
+                expected
+            )
+        assert "title" not in shown["text"].lower()
+        assert "attribution" in shown["text"] and "theme" in shown["text"]
+        shown["want"] = "Continue"
+        psd.ask_native_pdf_differences(attribution="", themed=True)
+        assert "Add attribution to the layout" not in shown["buttons"]
 
     def test_print_settings_row_needs_a_layout(self, qgis_app, project) -> None:
         dialog = _dialog(project)

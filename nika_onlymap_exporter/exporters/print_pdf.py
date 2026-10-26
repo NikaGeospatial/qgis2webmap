@@ -256,6 +256,16 @@ def build_print_layout(
     return copy
 
 
+def attribution_warning() -> str:
+    return tr(
+        "The page attribution is not in the QGIS PDF; add it to the layout as a label."
+    )
+
+
+def theme_warning() -> str:
+    return tr("The page theme is for the browser; the QGIS PDF is not themed.")
+
+
 def _apply_page_choice(
     copy: QgsLayout, page_choice: PageChoice, warnings: list[str]
 ) -> None:
@@ -267,16 +277,9 @@ def _apply_page_choice(
             copy, "project_title", page_choice.title
         )
     if page_choice.attribution:
-        warnings.append(
-            tr(
-                "The page attribution is not in the QGIS PDF; add it to the "
-                "layout as a label."
-            )
-        )
+        warnings.append(attribution_warning())
     if page_choice.theme not in ("", "default"):
-        warnings.append(
-            tr("The page theme is for the browser; the QGIS PDF is not themed.")
-        )
+        warnings.append(theme_warning())
 
 
 def _movable_items(layout: QgsLayout) -> list[QgsLayoutItem]:

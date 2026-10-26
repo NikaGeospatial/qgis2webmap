@@ -36,6 +36,7 @@ from qgis.PyQt.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -69,6 +70,11 @@ PRESETS_KEY = "qgis2webmap/cartograph_print_presets"
 #: What the dialog was closed with.
 ACTION_EXPORT = "export"
 ACTION_SAVE = "save"
+
+#: What the native-PDF differences dialog was closed with.
+NATIVE_CONTINUE = "continue"
+NATIVE_BROWSER = "browser"
+NATIVE_ADD_ATTRIBUTION = "add-attribution"
 
 BLEED_LABELS = {
     "none": N_("None"),
@@ -519,11 +525,65 @@ def ask_print_settings(
         dialog.deleteLater()
 
 
+def ask_native_pdf_differences(
+    *, attribution: str, themed: bool, parent: QWidget | None = None
+) -> str | None:
+    """Before a CMYK/ICC export through QGIS: what the QGIS PDF will not carry
+    from the cartograph page. `NATIVE_CONTINUE`, `NATIVE_BROWSER` or
+    `NATIVE_ADD_ATTRIBUTION` (offered only when there is an attribution), or
+    None when cancelled. The page title is not listed: the QGIS PDF applies it."""
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Information)
+    box.setWindowTitle(tr("Export PDF"))
+    lines = [tr("The QGIS PDF differs from the cartograph in the browser:")]
+    if attribution:
+        lines.append(
+            "- "
+            + tr(
+                "The page attribution is not in the PDF unless the layout has "
+                "a label with it."
+            )
+        )
+    if themed:
+        lines.append("- " + tr("The page theme is not applied; the PDF is not themed."))
+    box.setText("\n".join(lines))
+    box.setInformativeText(
+        tr(
+            "The browser export keeps them but is RGB only, with no CMYK or "
+            "ICC profile."
+        )
+    )
+    answers: dict[object, str | None] = {}
+    proceed = box.addButton(tr("Continue"), QMessageBox.ButtonRole.AcceptRole)
+    answers[proceed] = NATIVE_CONTINUE
+    if attribution:
+        add = box.addButton(
+            tr("Add attribution to the layout"), QMessageBox.ButtonRole.ActionRole
+        )
+        answers[add] = NATIVE_ADD_ATTRIBUTION
+    browser = box.addButton(
+        tr("Use browser RGB export instead"), QMessageBox.ButtonRole.ActionRole
+    )
+    answers[browser] = NATIVE_BROWSER
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(proceed)
+    box.setEscapeButton(cancel)
+    try:
+        box.exec()
+        return answers.get(box.clickedButton())
+    finally:
+        box.deleteLater()
+
+
 __all__ = [
     "ACTION_EXPORT",
     "ACTION_SAVE",
+    "NATIVE_ADD_ATTRIBUTION",
+    "NATIVE_BROWSER",
+    "NATIVE_CONTINUE",
     "PRESETS_KEY",
     "PrintSettingsDialog",
+    "ask_native_pdf_differences",
     "ask_print_settings",
     "load_presets",
     "save_presets",

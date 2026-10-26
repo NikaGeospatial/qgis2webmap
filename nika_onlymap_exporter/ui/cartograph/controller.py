@@ -1294,6 +1294,7 @@ class CartographController:
         already-running `QTimer` is what gives a burst of edits one write."""
         self._edits_made += 1
         self._autosave_timer.start()
+        self._update_status_label()
 
     def _run_autosave(self) -> None:
         """The debounce timer's slot. Never lets an exception escape: from a
@@ -1407,6 +1408,7 @@ class CartographController:
         )
         job.finished.connect(job.deleteLater)
         job.start()
+        self._update_status_label()
 
     def _load_runtime(self) -> RuntimeBundle | None:
         """The runtime's bytes, read once per runtime version.
@@ -1469,6 +1471,7 @@ class CartographController:
             # Saved for a layout (or file) no longer on screen: its own file is
             # up to date, but the status, Checks and a pending print belong to
             # what is selected now, whose own build follows.
+            self._update_status_label()
             return
         self._last_error = ""
         self._edits_saved = max(
@@ -1513,6 +1516,7 @@ class CartographController:
             built_for is not None
             and self._current_name_of(built_for) != self.state.cartograph_layout
         ):
+            self._update_status_label()
             return
         # The page waiting on this save would open without the latest edits.
         self._cancel_waiting_pages()
@@ -1552,6 +1556,16 @@ class CartographController:
             {k: v.to_dict() for k, v in self.state.layers.items()}, sort_keys=True
         )
 
+    def _save_phase(self) -> str:
+        """Where the cartograph file stands against the edits made: "saving"
+        while a build runs, "pending" while the debounce waits, else "". The
+        layout preview's own rendering status is a separate line."""
+        if self._job is not None:
+            return "saving"
+        if self._autosave_timer.isActive():
+            return "pending"
+        return ""
+
     def _update_status_label(self) -> None:
         if not hasattr(self, "cartograph_status_label"):
             return
@@ -1565,6 +1579,7 @@ class CartographController:
                 has_path=bool(self.file_edit.text().strip())
                 if hasattr(self, "file_edit")
                 else True,
+                phase=self._save_phase(),
             )
         )
 
@@ -2152,7 +2167,12 @@ class CartographController:
     def _export_pdf_through_qgis(self, settings: PrintSettings, path: Path) -> None:
         from qgis.PyQt.QtWidgets import QMessageBox
 
-        from ...exporters.print_pdf import PrintPdfError, export_print_pdf
+        from ...exporters.print_pdf import (
+            PrintPdfError,
+            attribution_warning,
+            export_print_pdf,
+            theme_warning,
+        )
 
         if self._current_layout is None:
             return
@@ -2168,6 +2188,30 @@ class CartographController:
                 ),
             )
             return
+        page = self.state.page_choice(self.state.cartograph_layout)
+        accepted: list[str] = []
+        themed = page.theme not in ("", "default")
+        if page.attribution or themed:
+            from .print_settings_dialog import (
+                NATIVE_ADD_ATTRIBUTION,
+                NATIVE_BROWSER,
+                NATIVE_CONTINUE,
+                ask_native_pdf_differences,
+            )
+
+            answer = ask_native_pdf_differences(
+                attribution=page.attribution, themed=themed, parent=self.dialog
+            )
+            if answer == NATIVE_BROWSER:
+                self._open_saved(path, "print=1")
+                return
+            if answer == NATIVE_ADD_ATTRIBUTION:
+                self._add_attribution_label(page.attribution)
+            elif answer != NATIVE_CONTINUE:
+                return
+            # Told already (or, for the attribution, now in the layout): the
+            # post-export line leaves these two out.
+            accepted = [attribution_warning(), theme_warning()]
         chosen, _ = QFileDialog.getSaveFileName(
             self.dialog,
             tr("Export PDF"),
@@ -2181,15 +2225,41 @@ class CartographController:
                 self._current_layout,
                 settings,
                 Path(chosen),
-                self.state.page_choice(self.state.cartograph_layout),
+                page,
             )
         except PrintPdfError as exc:
             QMessageBox.warning(self.dialog, tr("Export PDF"), str(exc))
             return
         message = tr("Saved {path}").format(path=result.path)
-        if result.warnings:
-            message += " - " + " ".join(result.warnings)
+        warnings = [w for w in result.warnings if w not in accepted]
+        if warnings:
+            message += " - " + " ".join(warnings)
         self.dialog.status_label.setText(message)
+
+    def _add_attribution_label(self, text: str) -> None:
+        """A small label with `text` along the foot of page 1, as one step on
+        the layout's undo stack."""
+        from qgis.core import (
+            QgsLayoutItemLabel,
+            QgsLayoutPoint,
+            QgsLayoutSize,
+            QgsUnitTypes,
+        )
+
+        layout = self._current_layout
+        if layout is None:
+            return
+        width, height = self._layout_page_mm()
+        mm = QgsUnitTypes.LayoutMillimeters
+        label = QgsLayoutItemLabel(layout)
+        label.setText(text)
+        label.attemptResize(QgsLayoutSize(width - 10, 5, mm))
+        label.attemptMove(QgsLayoutPoint(5, height - 8, mm))
+        stack = layout.undoStack()
+        stack.beginMacro(tr("Add attribution"))
+        layout.addLayoutItem(label)
+        stack.endMacro()
+        self.schedule_autosave()
 
     def on_export_png(self) -> None:
         path = self._current_path()
