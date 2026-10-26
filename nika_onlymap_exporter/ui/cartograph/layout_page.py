@@ -25,16 +25,27 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
-from qgis.PyQt.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QEvent,
+    QObject,
+    QPoint,
+    QPointF,
+    QRect,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import (
     QKeyEvent,
     QKeySequence,
+    QMouseEvent,
     QPalette,
     QResizeEvent,
     QShowEvent,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QComboBox,
     QFrame,
@@ -170,6 +181,23 @@ class LayoutPicker(QComboBox):
             self.import_requested.emit()
 
 
+def _local_point(event: QMouseEvent) -> QPoint:
+    # Qt 6 has `position()`; Qt 5 (QGIS 3) only `pos()`.
+    if hasattr(event, "position"):
+        return event.position().toPoint()
+    return event.pos()
+
+
+def _global_point(event: QMouseEvent) -> QPointF:
+    if hasattr(event, "globalPosition"):
+        return QPointF(event.globalPosition())
+    return QPointF(event.globalPos())
+
+
+# How far outside a selected item's box a corner or edge handle still reaches.
+_EDGE_REACH = 4
+
+
 class LayoutPreview(QStackedWidget):
     """The layout's page, as the layout designer draws it - or, with no
     layout, the two ways to make one.
@@ -240,6 +268,7 @@ class LayoutPreview(QStackedWidget):
         # buttons: the view also reports a zoom change when it is merely
         # resized, which once stopped the page fitting at all.
         self._user_zoomed = False
+        self._reaching = False
         self.view.viewport().installEventFilter(self)
         # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, on the
         # layout's own stack as in the designer. A key filter rather than a
@@ -319,6 +348,13 @@ class LayoutPreview(QStackedWidget):
             if event.matches(QKeySequence.StandardKey.Redo):
                 self._step_undo(redo=True)
                 return True
+        if (
+            event is not None
+            and watched is self.view.viewport()
+            and isinstance(event, QMouseEvent)
+            and self._take_edge_reach(event)
+        ):
+            return True
         if event is not None and (
             event.type() == QEvent.Type.Wheel
             # Having selected or moved something, the page stays as the user
@@ -327,6 +363,74 @@ class LayoutPreview(QStackedWidget):
         ):
             self._user_zoomed = True
         return False
+
+    def _selection_view_rect(self) -> QRect | None:
+        layout = self.view.currentLayout()
+        if layout is None:
+            return None
+        rect = QRect()
+        for item in layout.selectedLayoutItems():
+            rect = rect.united(
+                self.view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+            )
+        return None if rect.isNull() else rect
+
+    def _take_edge_reach(self, event: QMouseEvent) -> bool:
+        """Let a corner or edge handle be taken a few pixels outside the
+        selection too, as on most canvases.
+
+        QGIS only treats the strip just inside a selected item's box as a
+        handle; a press on the box line or outside it, where the eye puts
+        the corner of a small box, moves the item (or selects a neighbour)
+        instead of resizing it. A hover or a left press in that outer
+        ring is re-sent from just inside the box. Returns True when it
+        was re-sent."""
+        if self._reaching or not self.select_mode():
+            return False
+        kind = event.type()
+        hover = (
+            kind == QEvent.Type.MouseMove and event.buttons() == Qt.MouseButton.NoButton
+        )
+        press = (
+            kind == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        )
+        if not (hover or press):
+            return False
+        try:
+            box = self._selection_view_rect()
+            if box is None:
+                return False
+            at = _local_point(event)
+            reach = _EDGE_REACH
+            if not box.adjusted(-reach, -reach, reach, reach).contains(
+                at
+            ) or box.adjusted(1, 1, -2, -2).contains(at):
+                return False
+            inside = box.adjusted(reach, reach, -reach, -reach)
+            if inside.width() < 1 or inside.height() < 1:
+                return False
+            moved = QPoint(
+                min(max(at.x(), inside.left()), inside.right()),
+                min(max(at.y(), inside.top()), inside.bottom()),
+            )
+            shifted = QMouseEvent(
+                event.type(),
+                QPointF(moved),
+                _global_point(event) + QPointF(moved - at),
+                event.button(),
+                event.buttons(),
+                event.modifiers(),
+            )
+            self._reaching = True
+            try:
+                QApplication.sendEvent(self.view.viewport(), shifted)
+            finally:
+                self._reaching = False
+            return True
+        except RuntimeError:
+            # The layout or view went away under the event.
+            return False
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)

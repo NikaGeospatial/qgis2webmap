@@ -327,6 +327,172 @@ class TestEditingThePage:
         assert _scale(pane) == pytest.approx(kept, rel=0.01)
 
 
+def _handle_rect(pane):
+    """The selection's handle box, in view pixels, found in the scene (the
+    mouse handles are not exposed to Python)."""
+    from qgis.PyQt.QtWidgets import QGraphicsRectItem
+
+    view = pane.preview.view
+    boxes = [
+        item
+        for item in view.scene().items()
+        if type(item) is QGraphicsRectItem
+        and item.zValue() == 10000
+        and item.isVisible()
+    ]
+    assert len(boxes) == 1
+    return view.mapFromScene(boxes[0].sceneBoundingRect()).boundingRect()
+
+
+def _hover(qgis_app, pane, point) -> None:
+    """The pointer arrives at `point` the way a hand brings it: several moves."""
+    from qgis.PyQt.QtCore import QPoint
+    from qgis.PyQt.QtTest import QTest
+
+    viewport = pane.preview.view.viewport()
+    start = QPoint(point.x() + 30, point.y() + 20)
+    for step in range(1, 6):
+        QTest.mouseMove(
+            viewport,
+            QPoint(
+                start.x() + (point.x() - start.x()) * step // 5,
+                start.y() + (point.y() - start.y()) * step // 5,
+            ),
+        )
+        qgis_app.processEvents()
+
+
+class TestResizingInThePage:
+    @pytest.fixture
+    def page(self, qgis_app, project):
+        from qgis.core import (
+            QgsLayoutItemLabel,
+            QgsLayoutItemLegend,
+            QgsLayoutItemMap,
+        )
+        from qgis.PyQt.QtCore import QRectF
+        from qgis.PyQt.QtGui import QColor
+
+        from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+        layout = _a4_layout(project)
+        items = {}
+        frame = QgsLayoutItemMap(layout)
+        frame.attemptSetSceneRect(QRectF(30, 60, 150, 100))
+        layout.addLayoutItem(frame)
+        items["map"] = frame
+        title = QgsLayoutItemLabel(layout)
+        title.setText("A title")
+        title.setBackgroundEnabled(True)
+        title.setBackgroundColor(QColor("#ccddee"))
+        title.attemptSetSceneRect(QRectF(30, 15, 120, 25))
+        layout.addLayoutItem(title)
+        items["title"] = title
+        legend = QgsLayoutItemLegend(layout)
+        legend.attemptSetSceneRect(QRectF(200, 60, 60, 40))
+        layout.addLayoutItem(legend)
+        legend.setResizeToContents(False)
+        items["legend"] = legend
+        widget = PagePane()
+        widget.resize(900, 650)
+        widget.show()
+        widget.show_layout(layout)
+        _settle(qgis_app)
+        yield widget, layout, items
+        widget.close()
+        widget.deleteLater()
+
+    @staticmethod
+    def _select(qgis_app, layout, item) -> None:
+        layout.deselectAll()
+        item.setSelected(True)
+        _settle(qgis_app, 0.1)
+
+    @pytest.mark.parametrize("size", [(900, 650), (480, 420)])
+    @pytest.mark.parametrize("name", ["map", "title", "legend"])
+    def test_the_handles_sit_on_the_item(self, qgis_app, page, name, size) -> None:
+        pane, layout, items = page
+        pane.resize(*size)
+        _settle(qgis_app)
+        item = items[name]
+        self._select(qgis_app, layout, item)
+        view = pane.preview.view
+        box = view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+        handles = _handle_rect(pane)
+        for got, want in (
+            (handles.left(), box.left()),
+            (handles.top(), box.top()),
+            (handles.right(), box.right()),
+            (handles.bottom(), box.bottom()),
+        ):
+            assert abs(got - want) <= 2
+
+    @pytest.mark.parametrize("reach", [-3, 0, 2])
+    @pytest.mark.parametrize("name", ["map", "title", "legend"])
+    def test_a_corner_drag_resizes_and_keeps_the_far_corner(
+        self, qgis_app, page, name, reach
+    ) -> None:
+        """Taken just inside, on, or just outside the corner: all resize."""
+        from qgis.PyQt.QtCore import QPoint, Qt
+
+        pane, layout, items = page
+        item = items[name]
+        self._select(qgis_app, layout, item)
+        stack = layout.undoStack().stack()
+        before, steps = item.sceneBoundingRect(), stack.count()
+        scale = _scale(pane)
+        box = pane.preview.view.mapFromScene(before).boundingRect()
+        corner = box.bottomRight() + QPoint(reach, reach)
+        _hover(qgis_app, pane, corner)
+        cursor = pane.preview.view.viewport().cursor().shape()
+        assert cursor == Qt.CursorShape.SizeFDiagCursor
+        _drag(qgis_app, pane, corner, corner + QPoint(50, 30))
+        after = item.sceneBoundingRect()
+        assert after.left() == pytest.approx(before.left(), abs=0.05)
+        assert after.top() == pytest.approx(before.top(), abs=0.05)
+        # The drag's first step only starts it: most of 50 x 30 px lands.
+        assert after.width() - before.width() == pytest.approx(50 / scale, rel=0.2)
+        assert after.height() - before.height() == pytest.approx(30 / scale, rel=0.2)
+        assert stack.count() == steps + 1
+        stack.undo()
+        assert item.sceneBoundingRect().width() == pytest.approx(before.width())
+        assert item.sceneBoundingRect().height() == pytest.approx(before.height())
+
+    @pytest.mark.parametrize("name", ["map", "title", "legend"])
+    def test_a_body_drag_moves_without_resizing(self, qgis_app, page, name) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, layout, items = page
+        item = items[name]
+        self._select(qgis_app, layout, item)
+        stack = layout.undoStack().stack()
+        before, steps = item.sceneBoundingRect(), stack.count()
+        scale = _scale(pane)
+        centre = pane.preview.view.mapFromScene(before.center())
+        _hover(qgis_app, pane, centre)
+        _drag(qgis_app, pane, centre, centre + QPoint(60, 40))
+        after = item.sceneBoundingRect()
+        assert after.width() == pytest.approx(before.width(), abs=0.05)
+        assert after.height() == pytest.approx(before.height(), abs=0.05)
+        assert after.x() - before.x() == pytest.approx(60 / scale, rel=0.2)
+        assert after.y() - before.y() == pytest.approx(40 / scale, rel=0.2)
+        assert stack.count() == steps + 1
+        stack.undo()
+        assert item.sceneBoundingRect().topLeft() == before.topLeft()
+
+    def test_a_press_far_outside_the_box_does_not_resize(self, qgis_app, page) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, layout, items = page
+        item = items["map"]
+        self._select(qgis_app, layout, item)
+        before = item.sceneBoundingRect()
+        box = pane.preview.view.mapFromScene(before).boundingRect()
+        away = box.bottomRight() + QPoint(15, 15)
+        _drag(qgis_app, pane, away, away + QPoint(50, 30))
+        assert item.sceneBoundingRect() == before
+
+
 @pytest.fixture
 def save_location(qgis_app):
     from nika_onlymap_exporter.ui.cartograph.layout_page import SaveLocation
