@@ -887,6 +887,10 @@ def _wayfinder(page: _Page) -> _Layout:
     return _wayfinder_down(page)
 
 
+#: The narrowest a Wayfinder's distance scale goes to give its legend room.
+_WAYFINDER_BAR_MIN_W = 45.0
+
+
 def _wayfinder_across(page: _Page) -> _Layout:
     pal = DAYLIGHT
     w, h = page.width, page.height
@@ -909,6 +913,17 @@ def _wayfinder_across(page: _Page) -> _Layout:
     bar_pt = scalebar_pt(page)
     sb_h = _scalebar_h(page, bar_pt)
     sb_w = min(max(content.w * 0.3, 60.0), 140.0 * s)
+    # A legend too tall beside the distance scale, and under it too, gets
+    # more columns before it is cut short: the scale gives up width, down
+    # to a bar that still reads, and the strip keeps its height.
+    room = legend_room_cap(content.h - head - foot, g)
+    while (
+        page.data.layer_names
+        and _legend_need(page, legend_pt, content.w) + g + sb_h > room
+        and sb_w > _WAYFINDER_BAR_MIN_W
+        and _legend_need(page, legend_pt, content.w - sb_w - 2 * g) > room
+    ):
+        sb_w = max(sb_w - 5.0, _WAYFINDER_BAR_MIN_W)
     # The legend beside the distance scale, or across the strip with the
     # scale under it when that keeps the strip lower.
     strip_h, under = _strip(
@@ -917,7 +932,7 @@ def _wayfinder_across(page: _Page) -> _Layout:
         legend_pt,
         (sb_w, sb_h),
         g,
-        legend_room_cap(content.h - head - foot, g),
+        room,
     )
     if page.data.layer_names:
         strip_h = max(strip_h, 13.0)
