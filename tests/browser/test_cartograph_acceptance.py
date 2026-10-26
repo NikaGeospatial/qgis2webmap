@@ -1073,7 +1073,7 @@ _SHEET_RECT = """() => {
     document.querySelector('om-cartograph').offsetWidth };
 }"""
 
-FIT_VIEWPORTS = [(1366, 768), (1024, 600), (800, 900)]
+FIT_VIEWPORTS = [(1366, 768), (1024, 600), (800, 900), (390, 844)]
 
 
 def _fit_open(page, path: Path, size: tuple[int, int], query: str = "") -> None:
@@ -1086,7 +1086,9 @@ class TestPageFitsTheWindow:
     """The page opens whole in the window, like "Fit page", on screen only."""
 
     @pytest.mark.parametrize("size", FIT_VIEWPORTS)
-    @pytest.mark.parametrize("name", ["survey-static.html", "atlas-live.html"])
+    @pytest.mark.parametrize(
+        "name", ["survey-static.html", "survey-a4-static.html", "atlas-live.html"]
+    )
     def test_the_whole_page_is_in_view(
         self, page, fixtures: Path, name: str, size: tuple[int, int]
     ) -> None:
@@ -1126,14 +1128,18 @@ class TestPageFitsTheWindow:
         button.click()
         assert page.evaluate(_SHEET_RECT)["kx"] < 1
 
+    @pytest.mark.parametrize(
+        ("name", "key"),
+        [("survey-static.html", "survey"), ("survey-a4-static.html", "survey_a4")],
+    )
     def test_png_export_keeps_the_true_page_pixels_in_a_small_window(
-        self, page, fixtures: Path, expected
+        self, page, fixtures: Path, expected, name: str, key: str
     ) -> None:
-        page.set_viewport_size({"width": 800, "height": 500})
+        page.set_viewport_size({"width": 390, "height": 844})
         with page.expect_download(timeout=60_000) as download_info:
-            page.goto((fixtures / "survey-static.html").as_uri() + "?export=png&dpi=96")
+            page.goto((fixtures / name).as_uri() + "?export=png&dpi=96")
         width, height = _png_size(Path(download_info.value.path()).read_bytes())
-        page_w, page_h = expected["survey"]["page_mm"]
+        page_w, page_h = expected[key]["page_mm"]
         assert width == pytest.approx(page_w / 25.4 * 96, abs=2)
         assert height == pytest.approx(page_h / 25.4 * 96, abs=2)
         assert (
@@ -1143,10 +1149,14 @@ class TestPageFitsTheWindow:
             is False
         )
 
+    @pytest.mark.parametrize(
+        ("name", "key"),
+        [("survey-static.html", "survey"), ("survey-a4-static.html", "survey_a4")],
+    )
     def test_print_is_unscaled_in_a_small_window(
-        self, page, fixtures: Path, expected
+        self, page, fixtures: Path, expected, name: str, key: str
     ) -> None:
-        _fit_open(page, fixtures / "survey-static.html", (800, 500))
+        _fit_open(page, fixtures / name, (390, 844))
         assert page.evaluate(_SHEET_RECT)["kx"] < 1
         page.emulate_media(media="print")
         assert (
@@ -1159,7 +1169,7 @@ class TestPageFitsTheWindow:
         assert page.locator("[data-qgis2webmap-fit-toggle]").is_hidden()
         pdf = page.pdf(prefer_css_page_size=True, print_background=True)
         width, height = _pdf_page_size_mm(pdf)
-        page_w, page_h = expected["survey"]["page_mm"]
+        page_w, page_h = expected[key]["page_mm"]
         assert width == pytest.approx(page_w, abs=0.5)
         assert height == pytest.approx(page_h, abs=0.5)
         assert pdf.count(b"/Type /Page\n") + pdf.count(b"/Type /Page ") >= 1

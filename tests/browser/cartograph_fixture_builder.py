@@ -68,6 +68,14 @@ def main(out_dir: Path) -> int:
             "survey": _write_survey(QgsProject.instance(), out_dir),
         }
         QgsProject.instance().clear()
+        expected["survey_a4"] = _write_survey(
+            QgsProject.instance(),
+            out_dir,
+            page_size="A4",
+            name="survey-a4-static.html",
+            landscape=False,
+        )
+        QgsProject.instance().clear()
         expected["survey_live"] = _write_survey_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["geo_live"] = _write_geo_live(QgsProject.instance(), out_dir)
@@ -112,7 +120,13 @@ def _runtime():
     return LocalRuntime(directory).load()
 
 
-def _write_survey(project, out_dir: Path) -> dict:
+def _write_survey(
+    project,
+    out_dir: Path,
+    page_size: str = "A3",
+    name: str = "survey-static.html",
+    landscape: bool = True,
+) -> dict:
     from cartograph_fixtures import all_static, build_survey_layout
     from qgis.core import QgsLayoutItemPage
     from qgis.PyQt.QtCore import QPointF
@@ -125,7 +139,12 @@ def _write_survey(project, out_dir: Path) -> dict:
     survey = build_survey_layout(project, Path(tempfile.mkdtemp()))
     pages = survey.layout.pageCollection()
     pages.deletePage(1)
-    pages.page(0).setPageSize("A3", QgsLayoutItemPage.Orientation.Landscape)
+    orientation = (
+        QgsLayoutItemPage.Orientation.Landscape
+        if landscape
+        else QgsLayoutItemPage.Orientation.Portrait
+    )
+    pages.page(0).setPageSize(page_size, orientation)
 
     main_map = survey.main_map
     extent = main_map.extent()
@@ -146,7 +165,7 @@ def _write_survey(project, out_dir: Path) -> dict:
         frame_modes=all_static(survey.layout),
         static_dpi=150,
     )
-    (out_dir / "survey-static.html").write_text(html, encoding="utf-8")
+    (out_dir / name).write_text(html, encoding="utf-8")
     size = pages.page(0).pageSize()
     return {
         "page_mm": [size.width(), size.height()],
