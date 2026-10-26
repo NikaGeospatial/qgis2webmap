@@ -757,6 +757,40 @@ class TestAtlasFilterAndOrder:
         assert paged == expected["atlas_ranked"]["pages"]
 
 
+class TestAtlasCoverageNotDrawn:
+    """The map left the coverage layer out; the atlas still pages through it."""
+
+    def test_every_page_turns_with_the_coverage_layer_not_drawn(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _needs_webgl(page)
+        want = expected["atlas_undrawn"]
+        _open(page, fixtures / "atlas-undrawn.html")
+        page.wait_for_function(
+            "() => document.querySelector('om-atlas')?.count > 0", timeout=60_000
+        )
+        seen = page.evaluate(
+            """(frameId) => {
+              const atlas = document.querySelector('om-atlas');
+              const frame = document.getElementById(frameId);
+              const pages = [];
+              for (let index = 0; index < atlas.count; index++) {
+                atlas.seek(index);
+                pages.push({
+                  id: Number(atlas.current.id),
+                  center: frame.getAttribute('center'),
+                });
+              }
+              return pages;
+            }""",
+            want["main_frame"],
+        )
+        # The identities of the pages are QGIS's own, in its order, and each
+        # page moved the frame to its own parcel.
+        assert [p["id"] for p in seen] == want["pages"]
+        assert len({p["center"] for p in seen}) == len(want["pages"])
+
+
 class TestAtlasFilterOutcomes:
     """An invalid atlas filter must never become an unfiltered atlas: the
     cartograph has no atlas at all. A valid filter pages exactly the parcels

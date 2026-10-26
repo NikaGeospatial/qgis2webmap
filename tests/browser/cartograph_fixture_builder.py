@@ -27,6 +27,8 @@ download instead. It writes:
   QGIS's own atlas centres each parcel.
 - `atlas-raster.html`: an atlas whose live frame draws only an embedded
   raster, one pure colour under each of the three parcels.
+- `atlas-undrawn.html`: the atlas whose map no longer draws the coverage
+  layer (only the roads), and the page order QGIS's own atlas makes.
 - `atlas-ranked.html`: an atlas filtered and sorted over NULLs, and the page
   order QGIS's own atlas makes.
 - `shared-live.html`: one layer drawn in two live frames, its rows written
@@ -86,6 +88,8 @@ def main(out_dir: Path) -> int:
         expected["atlas_dpi"] = _write_atlas_dpi(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas_raster"] = _write_atlas_raster(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas_undrawn"] = _write_atlas_undrawn(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["shared"] = _write_shared(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -379,6 +383,26 @@ def _write_atlas(project, out_dir: Path) -> dict:
     )
     (out_dir / "atlas-live.html").write_text(html, encoding="utf-8")
     return {"pages": atlas_page_count(built.layout)}
+
+
+def _write_atlas_undrawn(project, out_dir: Path) -> dict:
+    from atlas_fixtures import build_atlas_layout, qgis_atlas_page_ids
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    built = build_atlas_layout(project)
+    built.main_map.setLayers([built.roads])
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-undrawn.html").write_text(html, encoding="utf-8")
+    return {
+        "pages": qgis_atlas_page_ids(built.layout),
+        "main_frame": _frame_id(built.layout, built.main_map),
+    }
 
 
 def _write_atlas_raster(project, out_dir: Path) -> dict:

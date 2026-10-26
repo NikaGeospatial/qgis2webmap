@@ -1135,6 +1135,7 @@ class CartographController:
         if isinstance(item, QgsLayoutItemMap) and not sip.isdeleted(item):
             selected = item.uuid()
         self.frames_list.set_selected(selected)
+        self.membership.page_selection_changed(selected)
 
     def _show_frame_issues(self, item_id: str) -> None:
         """Map frames > "N issues": Checks, narrowed to what concerns the map."""

@@ -507,16 +507,17 @@ class TestAtlasBlocked:
         blocked = _rows(report, FidelityStatus.BLOCKED)
         assert any("Set the atlas map to Live in Map frames" in r for r in blocked)
 
-    def test_coverage_missing_from_the_live_map_blocks_with_the_remedy(
+    def test_no_live_map_follows_the_atlas_or_draws_the_coverage(
         self, atlas_layout
     ) -> None:
+        atlas_layout.main_map.setAtlasDriven(False)
         atlas_layout.main_map.setLayers([atlas_layout.roads])
         report = FidelityReportBuilder()
         reading = read_layout(atlas_layout.layout, report)
         assert reading.atlas is None
         assert reading.frames[0].atlas_fit is None
         blocked = _rows(report, FidelityStatus.BLOCKED)
-        assert any("Add the coverage layer 'parcels'" in r for r in blocked)
+        assert any("Show the coverage layer 'parcels'" in r for r in blocked)
 
     def test_no_coverage_layer_is_blocked(self, atlas_layout) -> None:
         atlas_layout.atlas.setCoverageLayer(None)
@@ -529,6 +530,7 @@ class TestAtlasBlocked:
     def test_a_blocked_atlas_writes_no_om_atlas(
         self, atlas_layout, fake_runtime
     ) -> None:
+        atlas_layout.main_map.setAtlasDriven(False)
         atlas_layout.main_map.setLayers([atlas_layout.roads])
         html = _export(atlas_layout, fake_runtime)
         assert "<om-atlas" not in html
@@ -772,6 +774,76 @@ class TestAtlasExtractionLeavesTheLayoutAlone:
         monkeypatch.undo()
         assert len(calls) == 2
         assert _layout_state(atlas_layout.layout) == before
+
+
+class TestCoverageLayerNotDrawn:
+    """QGIS pages an atlas through a coverage layer its map does not draw;
+    only a coverage layer that is gone (or unusable) leaves nothing to page."""
+
+    def test_a_coverage_layer_the_map_does_not_draw_still_pages_hidden(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        atlas_layout.main_map.setLayers([atlas_layout.roads])
+        report = FidelityReportBuilder()
+        sheet = _sheet(_export(atlas_layout, fake_runtime, report))
+
+        assert not _rows(report, FidelityStatus.BLOCKED)
+        (atlas,) = sheet.iter("om-atlas")
+        frame = next(
+            f for f in sheet.iter("om-frame") if f.get("id") == atlas.get("for")
+        )
+        layers = {layer.get("id"): layer for layer in frame.iter("om-layer")}
+        assert layers[atlas.get("layer")].get("visible") == "false"
+        roads = layers[atlas_layout.roads.id()]
+        assert roads.get("visible") != "false"
+        assert any(
+            "still pages through 'parcels'" in row
+            for row in _rows(report, FidelityStatus.PRESERVED)
+        )
+        # The pages are QGIS's own pages.
+        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
+        assert reading.atlas_requirement is not None
+        assert list(reading.atlas_requirement.page_ids) == qgis_atlas_page_ids(
+            atlas_layout.layout
+        )
+        assert len(reading.atlas_requirement.page_ids) == 3
+
+    def test_a_coverage_layer_removed_from_the_project_leaves_no_atlas(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        """QGIS itself turns the atlas off when its coverage layer leaves the
+        project, so there is nothing to page and nothing is written."""
+        atlas_layout.main_map.setLayers([atlas_layout.roads])
+        atlas_layout.project.removeMapLayer(atlas_layout.parcels.id())
+        assert not atlas_layout.atlas.enabled()
+        report = FidelityReportBuilder()
+        html = _export(atlas_layout, fake_runtime, report)
+        assert "<om-atlas" not in html
+
+    def test_an_unusable_coverage_layer_blocks_the_atlas(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        from qgis.core import QgsVectorLayer
+
+        broken = QgsVectorLayer("/no/such/parcels.gpkg", "broken", "ogr")
+        atlas_layout.project.addMapLayer(broken)
+        atlas_layout.main_map.setLayers([atlas_layout.roads])
+        atlas_layout.atlas.setCoverageLayer(broken)
+        report = FidelityReportBuilder()
+        html = _export(atlas_layout, fake_runtime, report)
+        assert "<om-atlas" not in html
+        assert _rows(report, FidelityStatus.BLOCKED)
+
+    def test_an_invalid_filter_still_blocks_a_coverage_layer_not_drawn(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        atlas_layout.main_map.setLayers([atlas_layout.roads])
+        atlas_layout.atlas.setFilterFeatures(True)
+        atlas_layout.atlas.setFilterExpression('"lot" = (')
+        report = FidelityReportBuilder()
+        html = _export(atlas_layout, fake_runtime, report)
+        assert "<om-atlas" not in html
+        assert _rows(report, FidelityStatus.BLOCKED)
 
 
 def _ranked_export(atlas_layout, runtime, *, filter_expression=None, sort=None):

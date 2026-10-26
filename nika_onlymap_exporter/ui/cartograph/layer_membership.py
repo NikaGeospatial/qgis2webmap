@@ -282,7 +282,7 @@ class _FrameCombo(QComboBox):
 class LayerMembershipBar(QWidget):
     """Above the Layers list in Cartograph: which map frame the list edits
     (a selector only when the layout has several), what that frame follows,
-    and the atlas warning."""
+    and the atlas note."""
 
     frame_changed = pyqtSignal(str)  # the selected map item's uuid
 
@@ -312,12 +312,10 @@ class LayerMembershipBar(QWidget):
         self.note.setProperty("role", "hint")
         column.addWidget(self.note)
 
-        self.atlas_warning = FittedLabel("", self)
-        # The checks list's own warning colour.
-        self.atlas_warning.setProperty("role", "checkVerdict")
-        self.atlas_warning.setProperty("tone", "warning")
-        column.addWidget(self.atlas_warning)
-        self.atlas_warning.hide()
+        self.atlas_note = FittedLabel("", self)
+        self.atlas_note.setProperty("role", "hint")
+        column.addWidget(self.atlas_note)
+        self.atlas_note.hide()
 
     def _on_activated(self, index: int) -> None:
         uuid = self.frame_combo.itemData(index)
@@ -352,15 +350,15 @@ class LayerMembershipBar(QWidget):
             text = ""
         self.note.setText(text)
 
-    def set_atlas_warning(self, layer_name: str | None) -> None:
+    def set_atlas_note(self, layer_name: str | None) -> None:
         if layer_name:
-            self.atlas_warning.setText(
+            self.atlas_note.setText(
                 tr(
-                    "The atlas takes its pages from {layer}, which this map no "
-                    "longer draws. Tick it again to export the atlas."
+                    "The atlas still pages through {layer}; it is just not "
+                    "drawn on this map."
                 ).format(layer=layer_name)
             )
-        self.atlas_warning.setVisible(bool(layer_name))
+        self.atlas_note.setVisible(bool(layer_name))
 
 
 def summary_text(included: int, total: int) -> str:
@@ -463,7 +461,7 @@ class LayerMembership:
             self._selected_uuid = ""
             self.bar.set_frames([], "")
             self.bar.set_kind(None)
-            self.bar.set_atlas_warning(None)
+            self.bar.set_atlas_note(None)
             self._dialog.sync_include_column()
             return
         from .frames import layout_map_items
@@ -513,14 +511,35 @@ class LayerMembership:
             return
         if item is None or layout is None:
             self.bar.set_kind(None)
-            self.bar.set_atlas_warning(None)
+            self.bar.set_atlas_note(None)
         else:
             self.bar.set_kind(membership_kind(item), item.followVisibilityPresetName())
             left_out = coverage_layer_left_out(layout, item)
-            self.bar.set_atlas_warning(left_out.name() if left_out else None)
+            self.bar.set_atlas_note(left_out.name() if left_out else None)
         self._dialog.sync_include_column()
 
     def _on_frame_chosen(self, uuid: str) -> None:
+        self._selected_uuid = uuid
+        self._shown = None
+        self.layout_changed()
+        # The chosen map is the one selected on the page. The page reports
+        # the same map back, which `page_selection_changed` finds already
+        # chosen, so nothing loops.
+        layout = self._layout()
+        item = self.map_item()
+        if layout is not None and item is not None:
+            layout.setSelectedItem(item)
+
+    def page_selection_changed(self, uuid: str | None) -> None:
+        """A map frame was selected on the page: the bar follows it. Other
+        selections (a label, nothing) leave the bar where it is."""
+        if not uuid or uuid == self._selected_uuid or self.bar is None:
+            return
+        if uuid not in {
+            self.bar.frame_combo.itemData(i)
+            for i in range(self.bar.frame_combo.count())
+        }:
+            return
         self._selected_uuid = uuid
         self._shown = None
         self.layout_changed()

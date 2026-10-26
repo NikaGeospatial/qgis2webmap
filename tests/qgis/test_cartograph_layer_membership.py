@@ -454,6 +454,80 @@ class TestSeveralFrames:
         assert _ticked(dialog, TRAILS)
 
 
+class TestSelectionSync:
+    """The bar and the page's selection follow each other, both ways."""
+
+    def _two_frames(self, world, dialog):
+        inset = _add_map(world.layout, "inset", QRectF(10, 170, 50, 30))
+        dialog._cartograph.membership.layout_changed()
+        return inset
+
+    def test_selecting_a_map_on_the_page_switches_the_bar(self, world, dialog) -> None:
+        inset = self._two_frames(world, dialog)
+        bar = dialog._cartograph.membership.bar
+        assert bar.frame_combo.currentText() == "main"
+        world.layout.setSelectedItem(inset)
+        assert bar.frame_combo.currentText() == "inset"
+        # The Include column now edits the inset.
+        _click_include(dialog, PEAKS)
+        assert PEAKS not in _drawn_names(inset)
+        assert PEAKS in _drawn_names(world.main)
+        world.layout.setSelectedItem(world.main)
+        assert bar.frame_combo.currentText() == "main"
+        assert _ticked(dialog, PEAKS)
+
+    def test_choosing_a_frame_in_the_bar_selects_its_map_on_the_page(
+        self, world, dialog
+    ) -> None:
+        inset = self._two_frames(world, dialog)
+        bar = dialog._cartograph.membership.bar
+        index = bar.frame_combo.findText("inset")
+        bar.frame_combo.setCurrentIndex(index)
+        bar.frame_combo.activated.emit(index)
+        assert [item.uuid() for item in world.layout.selectedLayoutItems()] == [
+            inset.uuid()
+        ]
+        index = bar.frame_combo.findText("main")
+        bar.frame_combo.setCurrentIndex(index)
+        bar.frame_combo.activated.emit(index)
+        assert [item.uuid() for item in world.layout.selectedLayoutItems()] == [
+            world.main.uuid()
+        ]
+
+    def test_selecting_something_else_leaves_the_bar_alone(self, world, dialog) -> None:
+        inset = self._two_frames(world, dialog)
+        bar = dialog._cartograph.membership.bar
+        world.layout.setSelectedItem(inset)
+        world.layout.setSelectedItem(world.legend)
+        assert bar.frame_combo.currentText() == "inset"
+        world.layout.deselectAll()
+        assert bar.frame_combo.currentText() == "inset"
+
+    def test_a_single_frame_layout_keeps_the_bar_hidden(self, world, dialog) -> None:
+        bar = dialog._cartograph.membership.bar
+        world.layout.setSelectedItem(world.main)
+        assert bar._frame_row.isHidden()
+        assert _ticked(dialog, PEAKS)
+
+    def test_the_two_directions_do_not_loop(self, world, dialog, monkeypatch) -> None:
+        inset = self._two_frames(world, dialog)
+        membership = dialog._cartograph.membership
+        calls = []
+        original = membership.layout_changed
+        monkeypatch.setattr(
+            membership, "layout_changed", lambda: (calls.append(1), original())
+        )
+        bar = membership.bar
+        index = bar.frame_combo.findText("inset")
+        bar.frame_combo.setCurrentIndex(index)
+        bar.frame_combo.activated.emit(index)
+        assert len(calls) == 1
+        calls.clear()
+        world.layout.setSelectedItem(world.main)
+        assert len(calls) == 1
+        assert inset.uuid() != world.main.uuid()
+
+
 class TestAtlasCoverage:
     def _atlas(self, world, dialog):
         atlas = world.layout.atlas()
@@ -464,30 +538,49 @@ class TestAtlasCoverage:
         dialog._cartograph.membership._shown = None
         dialog._cartograph.membership.layout_changed()
 
-    def test_removing_the_coverage_layer_warns_and_blocks_the_atlas(
+    def test_hiding_the_coverage_layer_keeps_the_atlas_valid(
         self, world, dialog, runtime
     ) -> None:
         from nika_onlymap_exporter.core.export_ir import FidelityStatus
 
         self._atlas(world, dialog)
         bar = dialog._cartograph.membership.bar
-        assert bar.atlas_warning.isHidden()
+        assert bar.atlas_note.isHidden()
 
         _click_include(dialog, PARCELS)
 
-        assert not bar.atlas_warning.isHidden()
-        assert PARCELS in bar.atlas_warning.text()
+        assert PARCELS not in _drawn_names(world.main)
+        # An informational note, not a warning: the atlas still pages.
+        assert not bar.atlas_note.isHidden()
+        assert PARCELS in bar.atlas_note.text()
+        assert "still pages through" in bar.atlas_note.text()
+        assert bar.atlas_note.property("tone") != "warning"
+        assert dialog.export_button.isEnabled()
         report = FidelityReportBuilder()
-        export_layout_to_cartograph(world.layout, world.project, runtime, report)
-        blocked = [r for r in report.items if r.status is FidelityStatus.BLOCKED]
-        assert blocked, "the atlas should be blocked in the checks"
+        html = export_layout_to_cartograph(world.layout, world.project, runtime, report)
+        assert not [r for r in report.items if r.status is FidelityStatus.BLOCKED]
+        assert "<om-atlas" in html
 
-        # Ticking it again clears the warning.
+        # Ticking it again clears the note.
         _click_include(dialog, PARCELS)
-        assert bar.atlas_warning.isHidden()
+        assert bar.atlas_note.isHidden()
         report = FidelityReportBuilder()
         export_layout_to_cartograph(world.layout, world.project, runtime, report)
         assert not [r for r in report.items if r.status is FidelityStatus.BLOCKED]
+
+    def test_a_coverage_layer_gone_from_the_project_leaves_no_atlas(
+        self, world, dialog, runtime
+    ) -> None:
+        self._atlas(world, dialog)
+        _click_include(dialog, PARCELS)
+        world.project.removeMapLayer(world.layers[PARCELS].id())
+        dialog._cartograph.membership._shown = None
+        dialog._cartograph.membership.layout_changed()
+        assert dialog._cartograph.membership.bar.atlas_note.isHidden()
+        html = export_layout_to_cartograph(
+            world.layout, world.project, runtime, FidelityReportBuilder()
+        )
+        assert "<om-atlas" not in html
 
 
 def _elevation_with_no_stored_range(tmp_path, finite: bool):

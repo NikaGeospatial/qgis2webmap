@@ -782,14 +782,19 @@ def _record_rasterised_layers(
         )
 
 
+def _frame_layer_ids(frame: MapFrameReading) -> list[str]:
+    """The QGIS ids of the layers a live frame is written with: what the map
+    draws, then any hidden layer it does not draw (an atlas coverage layer
+    the map left out, which the atlas still pages through)."""
+    ids = [layer.id() for layer in frame.map_item.layersToRender()]
+    ids.extend(layer_id for layer_id in frame.hidden_layer_ids if layer_id not in ids)
+    return ids
+
+
 def _assign_layer_dom_ids(frames: list[MapFrameReading]) -> list[MapFrameReading]:
     """Fill each live frame's `layer_dom_ids`, in `layersToRender()` order
     (top first -- the order `read_project`'s `layer_order` expects)."""
-    live = [
-        (mf.frame_id, [layer.id() for layer in mf.map_item.layersToRender()])
-        for mf in frames
-        if mf.mode == "live"
-    ]
+    live = [(mf.frame_id, _frame_layer_ids(mf)) for mf in frames if mf.mode == "live"]
     dom_ids = live_layer_dom_ids(live)
     layer_ids_by_frame = dict(live)
     result = []
@@ -1217,6 +1222,27 @@ def _read_atlas(
         (mf for mf in updated if mf.mode == "live" and _draws_layer(mf, coverage_id)),
         None,
     )
+    if (
+        driver is None
+        and driven_live
+        and layout.project().mapLayer(coverage_id) is not None
+    ):
+        # QGIS pages an atlas through a coverage layer its map does not draw,
+        # and so does the cartograph: the layer travels with the atlas frame,
+        # hidden, and the frame's own layer list is left alone.
+        first = driven_live[0]
+        position = next(
+            i for i, mf in enumerate(updated) if mf.frame_id == first.frame_id
+        )
+        updated[position] = replace(
+            first, hidden_layer_ids=(*first.hidden_layer_ids, coverage_id)
+        )
+        driver = updated[position]
+        report.preserved(
+            ATLAS_SUBJECT,
+            f"The atlas still pages through '{coverage_name}'; it is just not "
+            f"drawn on map {_name(first.map_item)}.",
+        )
     if driver is None:
         if driven_live:
             remedy = (
