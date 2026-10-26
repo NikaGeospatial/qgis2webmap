@@ -1065,3 +1065,151 @@ class TestItemOpacity:
             assert from_qgis[name] == pytest.approx(colour, abs=3), f"QGIS {name}"
             assert got[name] == pytest.approx(colour, abs=slack), f"browser {name}"
             assert got[name] == pytest.approx(from_qgis[name], abs=slack), name
+
+
+_SHEET_RECT = """() => {
+  const r = document.querySelector('om-cartograph').getBoundingClientRect();
+  return { x: r.x, y: r.y, w: r.width, h: r.height, kx: r.width /
+    document.querySelector('om-cartograph').offsetWidth };
+}"""
+
+FIT_VIEWPORTS = [(1366, 768), (1024, 600), (800, 900)]
+
+
+def _fit_open(page, path: Path, size: tuple[int, int], query: str = "") -> None:
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    _open(page, path, query)
+    page.wait_for_timeout(500)
+
+
+class TestPageFitsTheWindow:
+    """The page opens whole in the window, like "Fit page", on screen only."""
+
+    @pytest.mark.parametrize("size", FIT_VIEWPORTS)
+    @pytest.mark.parametrize("name", ["survey-static.html", "atlas-live.html"])
+    def test_the_whole_page_is_in_view(
+        self, page, fixtures: Path, name: str, size: tuple[int, int]
+    ) -> None:
+        if "live" in name:
+            _needs_webgl(page)
+        _fit_open(page, fixtures / name, size)
+        rect = page.evaluate(_SHEET_RECT)
+        assert rect["x"] >= -0.5 and rect["y"] >= -0.5
+        assert rect["x"] + rect["w"] <= size[0] + 0.5
+        assert rect["y"] + rect["h"] <= size[1] + 0.5
+        # Not shrunk by more than the window needs: one side touches.
+        assert max(rect["w"] / size[0], rect["h"] / size[1]) > 0.97 or rect["kx"] == 1
+        # Nothing to scroll to: the page stays put wherever the document is
+        # sent, and no scrollbar takes width from the window.
+        page.evaluate("() => window.scrollTo(0, 99999)")
+        assert page.evaluate(_SHEET_RECT) == rect
+        assert page.evaluate(
+            "() => innerWidth === document.documentElement.clientWidth"
+        )
+
+    def test_a_window_bigger_than_the_page_leaves_it_at_true_size(
+        self, page, fixtures: Path
+    ) -> None:
+        _fit_open(page, fixtures / "survey-static.html", (2400, 1800))
+        assert page.evaluate(_SHEET_RECT)["kx"] == pytest.approx(1, abs=1e-3)
+        assert page.locator("[data-qgis2webmap-fit-toggle]").is_hidden()
+
+    def test_the_button_toggles_actual_size_and_back(
+        self, page, fixtures: Path
+    ) -> None:
+        _fit_open(page, fixtures / "survey-static.html", (1024, 600))
+        button = page.locator("[data-qgis2webmap-fit-toggle]")
+        assert button.inner_text() == "Actual size"
+        button.click()
+        assert page.evaluate(_SHEET_RECT)["kx"] == pytest.approx(1, abs=1e-3)
+        assert button.inner_text() == "Fit page"
+        button.click()
+        assert page.evaluate(_SHEET_RECT)["kx"] < 1
+
+    def test_png_export_keeps_the_true_page_pixels_in_a_small_window(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        page.set_viewport_size({"width": 800, "height": 500})
+        with page.expect_download(timeout=60_000) as download_info:
+            page.goto((fixtures / "survey-static.html").as_uri() + "?export=png&dpi=96")
+        width, height = _png_size(Path(download_info.value.path()).read_bytes())
+        page_w, page_h = expected["survey"]["page_mm"]
+        assert width == pytest.approx(page_w / 25.4 * 96, abs=2)
+        assert height == pytest.approx(page_h / 25.4 * 96, abs=2)
+        assert (
+            page.evaluate(
+                "() => document.documentElement.hasAttribute('data-qgis2webmap-fit')"
+            )
+            is False
+        )
+
+    def test_print_is_unscaled_in_a_small_window(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        _fit_open(page, fixtures / "survey-static.html", (800, 500))
+        assert page.evaluate(_SHEET_RECT)["kx"] < 1
+        page.emulate_media(media="print")
+        assert (
+            page.evaluate(
+                "() => getComputedStyle(document.querySelector('om-cartograph'))"
+                ".transform"
+            )
+            == "none"
+        )
+        assert page.locator("[data-qgis2webmap-fit-toggle]").is_hidden()
+        pdf = page.pdf(prefer_css_page_size=True, print_background=True)
+        width, height = _pdf_page_size_mm(pdf)
+        page_w, page_h = expected["survey"]["page_mm"]
+        assert width == pytest.approx(page_w, abs=0.5)
+        assert height == pytest.approx(page_h, abs=0.5)
+        assert pdf.count(b"/Type /Page\n") + pdf.count(b"/Type /Page ") >= 1
+
+    def test_dragging_a_live_frame_moves_the_map_by_the_pointer_distance(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        """Under the scale, a drag of d screen pixels is d / k page pixels."""
+        _needs_webgl(page)
+        frame_id = expected["survey_live"]["main_frame"]
+        _fit_open(page, fixtures / "survey-live.html", (1024, 600))
+        k = page.evaluate(_SHEET_RECT)["kx"]
+        assert k < 1
+        lonlat = expected["survey_live"]["corners"][0]
+        read_x = """([frameId, lonlat]) => document.getElementById(frameId)
+            .georef.project(lonlat).xMm"""
+        before = page.evaluate(read_x, [frame_id, lonlat])
+        box = page.locator(f"#{frame_id}").bounding_box()
+        assert box is not None
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        distance = 60 * k
+        page.mouse.move(x, y)
+        page.mouse.down()
+        for step in range(1, 21):
+            page.mouse.move(x + distance * step / 20, y)
+        page.mouse.up()
+        page.wait_for_timeout(1500)
+        moved_mm = page.evaluate(read_x, [frame_id, lonlat]) - before
+        assert moved_mm == pytest.approx(60 * 25.4 / 96, rel=0.06)
+
+    def test_atlas_pages_still_turn_and_stay_in_view(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        _fit_open(page, fixtures / "atlas-live.html", (1024, 600))
+        page.wait_for_function(
+            "() => document.querySelector('om-atlas')?.count > 0", timeout=60_000
+        )
+        ids = []
+        for index in range(3):
+            ids.append(
+                page.evaluate(
+                    "(i) => { const a = document.querySelector('om-atlas');"
+                    " a.seek(i); return Number(a.current.id); }",
+                    index,
+                )
+            )
+            page.wait_for_timeout(300)
+            rect = page.evaluate(_SHEET_RECT)
+            assert rect["y"] + rect["h"] <= 600.5
+            assert rect["x"] + rect["w"] <= 1024.5
+        assert len(set(ids)) == 3
+

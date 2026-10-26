@@ -197,11 +197,12 @@ def write_cartograph_html(
         "<head>\n"
         '<meta charset="utf-8">\n'
         f"<title>{title}</title>\n"
-        f"<style>{css}</style>\n"
+        f"<style>{css}\n{FIT_PAGE_CSS}</style>\n"
         "</head>\n"
         '<body style="margin:0">\n'
         f"{body}"
         f'<script type="module">{script}</script>\n'
+        f"<script>{FIT_PAGE_SCRIPT}</script>\n"
         "</body>\n"
         "</html>\n"
     )
@@ -212,6 +213,95 @@ def write_cartograph_html(
 #: legend boxes, leaving light text on white. The page asks for its colours as
 #: drawn; the property is inherited, so it reaches the runtime's shadow trees.
 PRINT_COLOURS_CSS = "html{print-color-adjust:exact;-webkit-print-color-adjust:exact}"
+
+
+#: A page is laid out at its true size (A3 landscape is 1587 x 1123 px), which
+#: is taller than most windows, so a screen opened with the sheet cut off and
+#: the legend out of reach. On screen the page is scaled down, once, to fit the
+#: window, centred and never above 100%. The scale is a transform, so the
+#: sheet keeps its true layout and every map frame still maps pointer
+#: positions through it. `FIT_PAGE_SCRIPT` stands down for `?print=`,
+#: `?export=` and `?atlas=`, whose output must stay at true size, and the
+#: rules are `@media screen`, so printing never sees them.
+FIT_PAGE_ATTRIBUTE = "data-qgis2webmap-fit"
+FIT_PAGE_CSS = (
+    "@media screen{"
+    f"html[{FIT_PAGE_ATTRIBUTE}=fit] body{{overflow:hidden}}"
+    f"html[{FIT_PAGE_ATTRIBUTE}=fit] om-cartograph{{position:fixed!important;left:0;top:0;"
+    "transform-origin:0 0;"
+    "transform:translate(var(--q2w-fit-x),var(--q2w-fit-y)) scale(var(--q2w-fit-k))}"
+    "[data-qgis2webmap-fit-toggle]{position:fixed;right:12px;bottom:12px;"
+    "z-index:2147483646;font:600 12px/1 system-ui,sans-serif;padding:7px 10px;"
+    "color:#2a1f2d;background:rgba(255,255,255,.92);border:1px solid #bbb;"
+    "border-radius:6px;cursor:pointer}"
+    "}"
+    "@media print{[data-qgis2webmap-fit-toggle]{display:none!important}}"
+)
+FIT_PAGE_LABEL_FIT = "Fit page"
+FIT_PAGE_LABEL_ACTUAL = "Actual size"
+FIT_PAGE_SCRIPT = "\n".join(
+    [
+        "(() => {",
+        "  const asked = new URLSearchParams(location.search);",
+        "  if (['print', 'export', 'atlas'].some((name) => asked.has(name))) return;",
+        "  const root = document.documentElement;",
+        f"  const ATTRIBUTE = '{FIT_PAGE_ATTRIBUTE}';",
+        "  let button = null;",
+        # A reload (the browser preview following a save) keeps the choice.
+        "  try {",
+        "    const kept = sessionStorage.getItem('qgis2webmapFit');",
+        "    if (kept) root.dataset.qgis2webmapFitWanted = kept;",
+        "  } catch { /* storage may be blocked */ }",
+        "  const apply = () => {",
+        "    const sheet = document.querySelector('om-cartograph');",
+        "    if (!sheet || !sheet.offsetWidth || !sheet.offsetHeight) return;",
+        "    const width = sheet.offsetWidth;",
+        "    const height = sheet.offsetHeight;",
+        "    const k = Math.min(1,",
+        "      innerWidth / width, innerHeight / height);",
+        "    const fits = k < 1;",
+        "    if (!button) {",
+        "      button = document.createElement('button');",
+        "      button.type = 'button';",
+        "      button.setAttribute('data-qgis2webmap-fit-toggle', '');",
+        "      button.setAttribute('data-om-carto-screen-only', '');",
+        "      button.addEventListener('click', () => {",
+        "        root.dataset.qgis2webmapFitWanted =",
+        "          root.dataset.qgis2webmapFitWanted === 'actual' ? 'fit' : 'actual';",
+        "        try { sessionStorage.setItem('qgis2webmapFit',",
+        "          root.dataset.qgis2webmapFitWanted); } catch { /* blocked */ }",
+        "        apply();",
+        "        button.blur();",
+        "      });",
+        "      document.body.appendChild(button);",
+        "    }",
+        "    const wanted = root.dataset.qgis2webmapFitWanted !== 'actual';",
+        "    button.hidden = !fits;",
+        f"    button.textContent = wanted ? '{FIT_PAGE_LABEL_ACTUAL}'"
+        f" : '{FIT_PAGE_LABEL_FIT}';",
+        "    if (!fits || !wanted) { root.removeAttribute(ATTRIBUTE); return; }",
+        "    root.style.setProperty('--q2w-fit-k', String(k));",
+        "    root.style.setProperty('--q2w-fit-x',",
+        "      `${Math.max(0, (innerWidth - width * k) / 2)}px`);",
+        "    root.style.setProperty('--q2w-fit-y',",
+        "      `${Math.max(0, (innerHeight - height * k) / 2)}px`);",
+        "    root.setAttribute(ATTRIBUTE, 'fit');",
+        "  };",
+        "  const observed = new WeakSet();",
+        "  const watch = () => {",
+        "    const sheet = document.querySelector('om-cartograph');",
+        "    if (sheet && !observed.has(sheet)) {",
+        "      observed.add(sheet);",
+        "      new ResizeObserver(apply).observe(sheet);",
+        "    }",
+        "    apply();",
+        "  };",
+        "  window.addEventListener('resize', apply);",
+        "  new MutationObserver(watch).observe(document.body, { childList: true });",
+        "  watch();",
+        "})();",
+    ]
+)
 
 
 # --------------------------------------------------------------------------
