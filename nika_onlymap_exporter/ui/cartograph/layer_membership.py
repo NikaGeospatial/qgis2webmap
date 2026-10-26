@@ -19,6 +19,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import json
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -35,6 +36,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ...core.legend_edit import (
+    left_out_of_legend,
+    park_layer,
+    unpark_layer,
+)
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
 
@@ -122,6 +128,27 @@ def _position_for(
     return len(drawn)
 
 
+#: On a map item: JSON `{layer_id: style xml}`, the per-map styles of layers
+#: the map does not draw now.
+INACTIVE_OVERRIDES_PROPERTY = "qgis2webmap/inactive_style_overrides"
+
+
+def _inactive_overrides(map_item: QgsLayoutItemMap) -> dict[str, str]:
+    raw = map_item.customProperty(INACTIVE_OVERRIDES_PROPERTY)
+    try:
+        value = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _save_inactive_overrides(map_item: QgsLayoutItemMap, stash: dict[str, str]) -> None:
+    if stash:
+        map_item.setCustomProperty(INACTIVE_OVERRIDES_PROPERTY, json.dumps(stash))
+    else:
+        map_item.removeCustomProperty(INACTIVE_OVERRIDES_PROPERTY)
+
+
 def _apply_to_map(
     map_item: QgsLayoutItemMap, project: QgsProject, layers: Sequence[QgsMapLayer]
 ) -> None:
@@ -131,23 +158,30 @@ def _apply_to_map(
     the theme's per-layer styles stay with the map, so nothing is restyled.
     """
     kind = membership_kind(map_item)
+    stash = _inactive_overrides(map_item)
     if kind is MembershipKind.THEME:
         theme = map_item.followVisibilityPresetName()
-        overrides = project.mapThemeCollection().mapThemeStyleOverrides(theme)
+        overrides = dict(project.mapThemeCollection().mapThemeStyleOverrides(theme))
         map_item.setFollowVisibilityPreset(False)
         map_item.setKeepLayerStyles(True)
-        map_item.setLayerStyleOverrides(
-            {
-                layer.id(): overrides[layer.id()]
-                for layer in layers
-                if layer.id() in overrides
-            }
-        )
     elif kind is MembershipKind.CUSTOM and map_item.keepLayerStyles():
-        kept = map_item.layerStyleOverrides()
-        map_item.setLayerStyleOverrides(
-            {layer.id(): kept[layer.id()] for layer in layers if layer.id() in kept}
-        )
+        overrides = dict(map_item.layerStyleOverrides())
+    else:
+        overrides = {}
+    if kind is not MembershipKind.CANVAS:
+        # A layer that leaves the map keeps its style on the map, set aside,
+        # and gets it back when it returns (smoothing, suppressed labels).
+        ids = {layer.id() for layer in layers}
+        stash.update({key: value for key, value in overrides.items() if key not in ids})
+        active = {key: value for key, value in overrides.items() if key in ids}
+        for layer in layers:
+            if layer.id() not in active and layer.id() in stash:
+                active[layer.id()] = stash[layer.id()]
+        for layer in layers:
+            stash.pop(layer.id(), None)
+        map_item.setKeepLayerStyles(map_item.keepLayerStyles() or bool(active))
+        map_item.setLayerStyleOverrides(active)
+        _save_inactive_overrides(map_item, stash)
     map_item.setKeepLayerSet(True)
     map_item.setLayers(list(layers))
     map_item.invalidateCache()
@@ -161,8 +195,23 @@ def _legend_layer_nodes(legend: QgsLayoutItemLegend, layer_id: str) -> list:
     ]
 
 
+def _insert_new_layer(
+    legend: QgsLayoutItemLegend, layer: QgsMapLayer, final_layers: Sequence[QgsMapLayer]
+) -> None:
+    above = [other.id() for other in final_layers]
+    above = above[: above.index(layer.id())]
+    for neighbour in reversed(above):
+        nodes = _legend_layer_nodes(legend, neighbour)
+        if nodes:
+            parent = nodes[0].parent()
+            parent.insertLayer(parent.children().index(nodes[0]) + 1, layer)
+            return
+    legend.model().rootGroup().insertLayer(0, layer)
+
+
 def _sync_legend(
     legend: QgsLayoutItemLegend,
+    project: QgsProject,
     layer: QgsMapLayer,
     included: bool,
     final_layers: Sequence[QgsMapLayer],
@@ -185,22 +234,17 @@ def _sync_legend(
             for node in root.findLayers():
                 if node.layerId() not in final_ids and node.parent() is not None:
                     node.parent().removeChildNode(node)
-        for node in _legend_layer_nodes(legend, layer.id()):
-            if node.parent() is not None:
-                node.parent().removeChildNode(node)
+        # Its heading, class labels, left-out classes and place are kept.
+        park_layer(legend, layer.id())
     else:
         if not _is_manual(legend) or _legend_layer_nodes(legend, layer.id()):
             return
-        above = [other.id() for other in final_layers]
-        above = above[: above.index(layer.id())]
-        for neighbour in reversed(above):
-            nodes = _legend_layer_nodes(legend, neighbour)
-            if nodes:
-                parent = nodes[0].parent()
-                parent.insertLayer(parent.children().index(nodes[0]) + 1, layer)
-                break
-        else:
-            root.insertLayer(0, layer)
+        # A layer the legend listed when its map dropped it comes back as it
+        # was; one left out of the legend stays out; any other is new to it.
+        if not unpark_layer(legend, project, layer) and not left_out_of_legend(
+            legend, layer.id()
+        ):
+            _insert_new_layer(legend, layer, final_layers)
     legend.invalidateCache()
     adjust = getattr(legend, "adjustBoxSize", None)
     if adjust is not None:
@@ -241,7 +285,7 @@ def set_layer_included(
         stack.endCommand()
         for legend in layout_legends(layout, map_item):
             stack.beginCommand(legend, text)
-            _sync_legend(legend, layer, included, new_layers)
+            _sync_legend(legend, project, layer, included, new_layers)
             stack.endCommand()
     finally:
         stack.endMacro()

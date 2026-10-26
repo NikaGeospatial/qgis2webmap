@@ -58,6 +58,10 @@ TITLE_PROPERTY = "legend/title-label"
 #: On a legend: JSON `{layer_id: {property: value}}`, the node properties
 #: (heading, class order and labels) of layers taken out of it.
 REMOVED_STATE_PROPERTY = "qgis2webmap/legend_removed_state"
+#: On a legend: JSON `{layer_id: {"group": [names], "after": layer_id}}`, where
+#: each layer its map stopped drawing was listed, so it is listed there again
+#: when the map draws it again. A layer the legend did not list is not here.
+PARKED_PROPERTY = "qgis2webmap/legend_parked_with_map"
 #: On a legend: JSON list of layer ids a new template left out as support.
 SUPPORT_LEFT_OUT_PROPERTY = "qgis2webmap/legend_support_left_out"
 #: On a layer: its unit ("m"), when the data does not say it in its name.
@@ -391,9 +395,12 @@ def _remove_layer(legend: QgsLayoutItemLegend, node: QgsLayerTreeLayer) -> None:
 
 
 def _restore_layer(
-    legend: QgsLayoutItemLegend, project: QgsProject, layer: QgsMapLayer
+    legend: QgsLayoutItemLegend,
+    project: QgsProject,
+    layer: QgsMapLayer,
+    place: tuple[QgsLayerTreeGroup, int] | None = None,
 ) -> None:
-    parent, position = _insert_position(legend, project, layer)
+    parent, position = place or _insert_position(legend, project, layer)
     node = parent.insertLayer(position, layer)
     state = _removed_state(legend)
     for key, value in state.pop(layer.id(), {}).items():
@@ -404,6 +411,84 @@ def _restore_layer(
         support.discard(layer.id())
         legend.setCustomProperty(SUPPORT_LEFT_OUT_PROPERTY, json.dumps(sorted(support)))
     _refresh_node(legend, node)
+
+
+def _parked(legend: QgsLayoutItemLegend) -> dict[str, dict[str, object]]:
+    raw = legend.customProperty(PARKED_PROPERTY)
+    try:
+        value = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _save_parked(
+    legend: QgsLayoutItemLegend, parked: dict[str, dict[str, object]]
+) -> None:
+    if parked:
+        legend.setCustomProperty(PARKED_PROPERTY, json.dumps(parked))
+    else:
+        legend.removeCustomProperty(PARKED_PROPERTY)
+
+
+def left_out_of_legend(legend: QgsLayoutItemLegend, layer_id: str) -> bool:
+    """Whether the legend was edited to leave this layer out (by the user or
+    by a template), as opposed to never having listed it."""
+    return layer_id in _removed_state(legend) or layer_id in support_left_out(legend)
+
+
+def park_layer(legend: QgsLayoutItemLegend, layer_id: str) -> None:
+    """Take a layer off the legend because its map stopped drawing it, noting
+    where it stood. Its headings, class labels and order are kept as for any
+    removed layer, and `unpark_layer` puts it all back. Not an undo step."""
+    node = _node_for(legend, layer_id)
+    parent = node.parent() if node is not None else None
+    if node is None or parent is None:
+        return
+    siblings = [
+        child.layerId()
+        for child in parent.children()
+        if isinstance(child, QgsLayerTreeLayer)
+    ]
+    index = siblings.index(layer_id)
+    path: list[str] = []
+    group = parent
+    while group is not None and group.parent() is not None:
+        path.insert(0, group.name())
+        group = group.parent()
+    parked = _parked(legend)
+    parked[layer_id] = {"group": path, "after": siblings[index - 1] if index else ""}
+    _save_parked(legend, parked)
+    _remove_layer(legend, node)
+
+
+def unpark_layer(
+    legend: QgsLayoutItemLegend, project: QgsProject, layer: QgsMapLayer
+) -> bool:
+    """List a layer again if the legend listed it when its map dropped it,
+    in the group and place it had. A layer the legend never listed (or the
+    user took out) stays out. Returns whether it was listed."""
+    spec = _parked(legend).get(layer.id())
+    if spec is None or _node_for(legend, layer.id()) is not None:
+        return False
+    parked = _parked(legend)
+    del parked[layer.id()]
+    _save_parked(legend, parked)
+    group: QgsLayerTreeGroup = legend.model().rootGroup()
+    for name in spec.get("group") or []:  # type: ignore[attr-defined]
+        found = group.findGroup(str(name))
+        if found is None:
+            break
+        group = found
+    after = _node_for(legend, str(spec.get("after") or ""))
+    if after is not None and after.parent() is group:
+        place = (group, group.children().index(after) + 1)
+    elif not spec.get("after"):
+        place = (group, 0)
+    else:
+        place = None
+    _restore_layer(legend, project, layer, place)
+    return True
 
 
 def set_layer_listed(
