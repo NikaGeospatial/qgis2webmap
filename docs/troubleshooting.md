@@ -349,9 +349,8 @@ printed.
 
 The Checks tab says *This map follows the atlas, but it is a static frame*.
 A static frame is one picture, so it would show the same place on every page.
-In **Map frames**, on the Layout tab, set the map the atlas controls to **Live**. If it then
-says the coverage layer is missing, add that layer to the map's layers - tick
-**Hide coverage layer** in the layout's atlas settings if it should not show.
+In **Map frames**, on the Layout tab, set the map the atlas controls to **Live**. The coverage layer
+does not have to be drawn on that map; it only has to still be in the project.
 See [atlas cartographs](cartograph-atlas.md).
 
 ### CMYK and ICC are greyed out in Print settings

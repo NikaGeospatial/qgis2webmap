@@ -25,7 +25,7 @@ The verdicts are the same ones the [web map](supported-features.md) uses:
 | **Changed** | Comes across, but not identically - the row says how |
 | **Rasterised** | Drawn as a picture: every layer of a **static** frame, which QGIS paints into the frame's image, and, inside a live frame, a layer style the web cannot draw any other way - as on the web map |
 | **Not exported** | Left out. The rest of the page is still made |
-| **Blocked** | Cannot be made as asked - an atlas on a static map, or with no map that draws its coverage layer. The rest of the page is still saved, and the row says what to change |
+| **Blocked** | Cannot be made as asked - an atlas on a static map, or with no live map to turn its pages. The rest of the page is still saved, and the row says what to change |
 
 Layers drawn inside a **live** frame are translated exactly as for the web
 map, and their rows appear in the same report, one group per layer - see
@@ -120,5 +120,5 @@ Checks tab by its type:
 ## Atlas
 
 Covered in full on [atlas cartographs](cartograph-atlas.md). In short: kept,
-one page per feature, as long as the map it drives is live and draws the
-coverage layer - otherwise **Blocked**, with the fix.
+one page per feature, as long as the map it drives is live and the
+coverage layer is still in the project (the map need not draw it) - otherwise **Blocked**, with the fix.

@@ -25,9 +25,9 @@ On the cartograph's **Atlas** tab:
 4. Optionally, **Sort by** a field (tick **Descending** to reverse it), a
    **Filter** expression, and a **File names** expression for exported pages.
 5. In **Map frames**, on the **Layout** tab, make sure the map that follows the atlas is
-   **Live**, and that it **draws the coverage layer**. To keep the layer from
-   showing, tick **Hide coverage layer** in the layout's atlas settings rather
-   than removing it from the map.
+   **Live**. The coverage layer need not be drawn on it: leave it out of the
+   map's layers (or tick **Hide coverage layer**) and the atlas still pages
+   through it, hidden.
 
 ![The Atlas tab, with the atlas on, a coverage layer and its map chosen, and the page count.](images/cartograph-atlas-tab.png)
 
@@ -43,13 +43,14 @@ The cartograph saves itself as usual. One file holds every page.
 
 A static frame is a picture, rendered once. It would show the same place on
 every page. The cartograph turns pages by moving a live map to each feature,
-and it finds the features in that map's own data - so the coverage layer has
-to be in it.
+and it finds the features in that map's own data - so the coverage layer
+travels with that map, hidden when the map does not draw it. It only has to
+still be in the project.
 
 When either is missing, nothing half-works: no atlas is written, and the
 Checks tab marks it **Blocked** with the fix - *Set the atlas map to Live in
-Map frames*, or *Add the coverage layer
-... to map ...'s layers*.
+Map frames*, or *Show the coverage layer
+... in a map that is Live*.
 
 ## Turning the pages
 
