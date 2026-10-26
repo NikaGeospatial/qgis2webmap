@@ -84,13 +84,14 @@ from .layout_reader import (
 )
 from .layout_templates import (
     MAIN_FRAME_ID,
-    STANDARD_STEP,
+    STANDARD_PERCENT,
     FrameSlot,
     TemplateInput,
     TemplatePlan,
     TextSizes,
     plan_template,
     template_spec,
+    text_percent,
 )
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -310,15 +311,13 @@ def template_record(layout: QgsLayout) -> TemplateRecord | None:
 
 
 def layout_text_sizes(layout: QgsLayout, project: QgsProject) -> TextSizes:
-    """The size steps `layout` was built with; the project's (the picker's)
+    """The text sizes `layout` was built with; the project's (the picker's)
     when it records none."""
     raw = layout.customProperty(TEMPLATE_SIZES_PROPERTY)
     if raw:
         try:
             data = json.loads(str(raw))
-            return TextSizes(
-                str(data["title"]), str(data["legend"]), str(data["notes"])
-            )
+            return TextSizes(data["title"], data["legend"], data["notes"])
         except (ValueError, KeyError, TypeError):
             pass
     return project_text_sizes(project)
@@ -353,7 +352,7 @@ def layout_edited(layout: QgsLayout) -> bool:
 def rebuild_from_template(
     layout: QgsPrintLayout, project: QgsProject, sizes: TextSizes
 ) -> dict[str, str]:
-    """Build `layout` again from its template with the size steps `sizes`,
+    """Build `layout` again from its template with the text sizes `sizes`,
     in place: the same layout object and name, its items replaced. Returns
     the new map item uuid for each old one, by the item's id, so the choices
     kept per map frame can follow. Raises `ValueError` when `layout` has no
@@ -1115,32 +1114,31 @@ def set_project_figures(project: QgsProject, rows: Sequence[tuple[str, str]]) ->
 
 
 #: The project variables the title, legend and notes size steps are kept in
-#: (the step ids of `TEXT_SIZE_STEPS`); unset is Standard.
+#: (whole percent; older versions stored a step id, still read); unset is 100.
 TEXT_SIZE_VARIABLES = ("nika_size_title", "nika_size_legend", "nika_size_notes")
 
 
 def project_text_sizes(project: QgsProject) -> TextSizes:
     """The title, legend and notes size steps saved in the project
-    (`TEXT_SIZE_VARIABLES`); Standard for any that is unset."""
+    (`TEXT_SIZE_VARIABLES`); 100 for any that is unset."""
     variables = project.customVariables()
     title, legend, notes = (
-        str(variables.get(name) or "").strip() or STANDARD_STEP
-        for name in TEXT_SIZE_VARIABLES
+        text_percent(variables.get(name)) for name in TEXT_SIZE_VARIABLES
     )
     return TextSizes(title, legend, notes)
 
 
 def set_project_text_sizes(project: QgsProject, sizes: TextSizes) -> None:
-    """Save `sizes` to `TEXT_SIZE_VARIABLES`; Standard removes its variable,
+    """Save `sizes` to `TEXT_SIZE_VARIABLES`; 100 removes its variable,
     so a project that never changed a size carries none."""
     variables = dict(project.customVariables())
-    for name, step in zip(
+    for name, percent in zip(
         TEXT_SIZE_VARIABLES, (sizes.title, sizes.legend, sizes.notes), strict=True
     ):
-        if step == STANDARD_STEP:
+        if percent == STANDARD_PERCENT:
             variables.pop(name, None)
         else:
-            variables[name] = step
+            variables[name] = str(percent)
     project.setCustomVariables(variables)
 
 

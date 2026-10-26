@@ -122,45 +122,77 @@ class TemplateInput:
     #: label's coordinates run, for a design that labels its grid.
     extent_center: tuple[float, float] | None = None
     #: How much larger or smaller than standard the user wants the title, the
-    #: legend and the notes (and a key figure, which follows the notes): one
-    #: of `TEXT_SIZE_STEPS`, 1.0 being today's size. A smaller step never
-    #: goes under the readable floors, and the map takes the room it frees.
+    #: legend and the notes (and a key figure, which follows the notes), as a
+    #: factor between `MIN_TEXT_PERCENT` and `MAX_TEXT_PERCENT` percent, 1.0
+    #: being today's size. A smaller one never goes
+    #: under the readable floors, and the map takes the room it frees.
     title_scale: float = 1.0
     legend_scale: float = 1.0
     notes_scale: float = 1.0
 
 
-#: The five sizes the user picks for the title, the legend and the notes:
-#: (id, name, factor). Bounded steps, never a free zoom.
-TEXT_SIZE_STEPS: tuple[tuple[str, str, float], ...] = (
-    ("smaller", N_("Smaller"), 0.8),
-    ("small", N_("Small"), 0.9),
-    ("standard", N_("Standard"), 1.0),
-    ("large", N_("Large"), 1.15),
-    ("larger", N_("Larger"), 1.3),
-)
+#: The range of a text size, in percent of today's size, and its default.
+#: One slider position per percent; the designs are fitted within it.
+MIN_TEXT_PERCENT = 80
+MAX_TEXT_PERCENT = 130
+STANDARD_PERCENT = 100
 
-_STEP_FACTOR = {step_id: factor for step_id, _name, factor in TEXT_SIZE_STEPS}
-STANDARD_STEP = "standard"
+#: The named steps older versions stored, as percent. Read only, so a project
+#: saved with one still opens at the size it had.
+_LEGACY_STEP_PERCENT = {
+    "smaller": 80,
+    "small": 90,
+    "standard": 100,
+    "large": 115,
+    "larger": 130,
+}
+
+
+def text_percent(value: object) -> int:
+    """`value` as a whole percent within the allowed range: a number, a
+    numeric string, or a legacy step id ("smaller" ... "larger"). Anything
+    else reads as 100."""
+    if isinstance(value, bool):
+        return STANDARD_PERCENT
+    if isinstance(value, str):
+        text = value.strip().lower().removesuffix("%").strip()
+        if text in _LEGACY_STEP_PERCENT:
+            number: float = _LEGACY_STEP_PERCENT[text]
+        else:
+            try:
+                number = float(text)
+            except ValueError:
+                return STANDARD_PERCENT
+    elif isinstance(value, (int, float)):
+        number = float(value)
+    else:
+        return STANDARD_PERCENT
+    if number != number or number in (float("inf"), float("-inf")):
+        return STANDARD_PERCENT
+    return min(max(round(number), MIN_TEXT_PERCENT), MAX_TEXT_PERCENT)
 
 
 @dataclass(frozen=True)
 class TextSizes:
-    """The step ids (`TEXT_SIZE_STEPS`) chosen for the title, the legend and
-    the notes: what the picker holds and the project keeps. An id that is
-    not a step reads as Standard."""
+    """The size, in percent, chosen for the title, the legend and the notes:
+    what the picker holds and the project keeps. A value is read through
+    `text_percent`, so a legacy step id or a stray value is made sound."""
 
-    title: str = STANDARD_STEP
-    legend: str = STANDARD_STEP
-    notes: str = STANDARD_STEP
+    title: int = STANDARD_PERCENT
+    legend: int = STANDARD_PERCENT
+    notes: int = STANDARD_PERCENT
+
+    def __post_init__(self) -> None:
+        for name in ("title", "legend", "notes"):
+            object.__setattr__(self, name, text_percent(getattr(self, name)))
 
     def apply(self, data: TemplateInput) -> TemplateInput:
-        """`data` with these steps set as its scales."""
+        """`data` with these percentages set as its scales."""
         return replace(
             data,
-            title_scale=_STEP_FACTOR.get(self.title, 1.0),
-            legend_scale=_STEP_FACTOR.get(self.legend, 1.0),
-            notes_scale=_STEP_FACTOR.get(self.notes, 1.0),
+            title_scale=self.title / 100,
+            legend_scale=self.legend / 100,
+            notes_scale=self.notes / 100,
         )
 
 
@@ -264,7 +296,7 @@ class _Page:
         base = type_size(role, self.width, self.height)
         if factor == 1.0:
             return base
-        factor = min(max(factor, TEXT_SIZE_STEPS[0][2]), TEXT_SIZE_STEPS[-1][2])
+        factor = min(max(factor, MIN_TEXT_PERCENT / 100), MAX_TEXT_PERCENT / 100)
         return round(max(base * factor, MINIMUM_TYPE.size(role)), 2)
 
     @property

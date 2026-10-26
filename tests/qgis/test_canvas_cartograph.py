@@ -252,35 +252,50 @@ class TestKeyFigureVariables:
 
 
 class TestTextSizeVariables:
-    """The title, legend and notes size steps kept as project variables."""
+    """The title, legend and notes sizes (percent) kept as project variables."""
 
-    def test_written_steps_read_back_and_standard_leaves_no_variable(
+    def test_written_percents_read_back_and_standard_leaves_no_variable(
         self, project
     ) -> None:
         project.setCustomVariables({"other": "kept"})
         assert project_text_sizes(project) == TextSizes()
-        set_project_text_sizes(project, TextSizes("smaller", "standard", "larger"))
+        set_project_text_sizes(project, TextSizes(80, 100, 130))
         variables = project.customVariables()
-        assert variables["nika_size_title"] == "smaller"
+        assert variables["nika_size_title"] == "80"
         assert "nika_size_legend" not in variables
         assert variables["other"] == "kept"
-        assert project_text_sizes(project) == TextSizes("smaller", "standard", "larger")
+        assert project_text_sizes(project) == TextSizes(80, 100, 130)
         set_project_text_sizes(project, TextSizes())
         assert project.customVariables() == {"other": "kept"}
+
+    def test_a_project_saved_with_step_ids_reads_as_their_percent(
+        self, project
+    ) -> None:
+        project.setCustomVariables(
+            {
+                "nika_size_title": "smaller",
+                "nika_size_legend": "large",
+                "nika_size_notes": "nonsense",
+            }
+        )
+        assert project_text_sizes(project) == TextSizes(80, 115, 100)
+        set_project_text_sizes(project, project_text_sizes(project))
+        assert project.customVariables()["nika_size_legend"] == "115"
+        project.setCustomVariables({"nika_size_title": "400"})
+        assert project_text_sizes(project).title == 130
+        project.setCustomVariables({})
 
     def test_the_planner_input_takes_the_project_or_the_given_steps(
         self, project, parcels
     ) -> None:
         extent = parcels.extent()
-        set_project_text_sizes(project, TextSizes("small", "large", "standard"))
+        set_project_text_sizes(project, TextSizes(90, 115, 100))
         saved = view_input(extent, UTM, [parcels], project)
         assert (saved.title_scale, saved.legend_scale, saved.notes_scale) == (
             0.9,
             1.15,
             1.0,
         )
-        given = view_input(
-            extent, UTM, [parcels], project, text_sizes=TextSizes("larger")
-        )
+        given = view_input(extent, UTM, [parcels], project, text_sizes=TextSizes(130))
         assert (given.title_scale, given.legend_scale) == (1.3, 1.0)
         project.setCustomVariables({})

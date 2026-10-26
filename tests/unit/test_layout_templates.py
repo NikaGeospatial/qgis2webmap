@@ -31,10 +31,12 @@ from nika_onlymap_exporter.core.layout_templates import (
     FrameSlot,
     TemplateInput,
     TemplatePlan,
+    TextSizes,
     plan_template,
     template_ids,
     template_spec,
     text_height,
+    text_percent,
 )
 from nika_onlymap_exporter.core.page_style import MINIMUM_TYPE, parse_color
 from nika_onlymap_exporter.core.template_designs import ATLAS_SHEET_EXPRESSION
@@ -845,7 +847,7 @@ def test_daylight_with_an_endless_title_stays_on_the_page(
 
 
 class TestTextSizeSteps:
-    """The title, legend and notes sizes the user picks (TEXT_SIZE_STEPS)."""
+    """The title, legend and notes sizes the user picks, 80 to 130 percent."""
 
     _SMALLER, _LARGER = 0.8, 1.3
     _ELEMENTS = ("title_scale", "legend_scale", "notes_scale")
@@ -917,6 +919,61 @@ class TestTextSizeSteps:
             # A larger legend may reflow wider and shorter, which can give
             # the map height back; its smaller step still never costs room.
             assert larger <= standard + 0.01
+
+    @pytest.mark.parametrize(
+        ("stored", "percent"),
+        [
+            ("smaller", 80),
+            ("small", 90),
+            ("standard", 100),
+            ("large", 115),
+            ("larger", 130),
+            (" Large ", 115),
+            ("107", 107),
+            ("107%", 107),
+            (107, 107),
+            (106.6, 107),
+            ("79", 80),
+            (500, 130),
+            (-3, 80),
+            ("garbage", 100),
+            ("", 100),
+            (None, 100),
+            (True, 100),
+            (float("nan"), 100),
+            ("inf", 100),
+        ],
+    )
+    def test_a_stored_size_reads_as_a_clamped_percent(
+        self, stored: object, percent: int
+    ) -> None:
+        assert text_percent(stored) == percent
+        assert TextSizes(stored, stored, stored) == TextSizes(  # type: ignore[arg-type]
+            percent, percent, percent
+        )
+
+    def test_the_percent_is_the_scale_the_page_is_planned_with(self) -> None:
+        data = TextSizes(80, 107, "larger").apply(  # type: ignore[arg-type]
+            _strained("square", "A4", "portrait")
+        )
+        assert (data.title_scale, data.legend_scale, data.notes_scale) == (
+            0.8,
+            1.07,
+            1.3,
+        )
+
+    @pytest.mark.parametrize("template_id", template_ids())
+    def test_an_intermediate_percent_sits_between_its_neighbours(
+        self, template_id: str
+    ) -> None:
+        def main_area(percent: int) -> float:
+            data = TextSizes(percent, percent, percent).apply(
+                _strained("square", "A3", "portrait", figures=_FIGURES)
+            )
+            return self._main_area(plan_template(template_id, data))
+
+        low, mid, high = main_area(100), main_area(107), main_area(115)
+        assert high - 0.01 <= mid <= low + 0.01
 
     def test_standard_is_the_default_page(self) -> None:
         for template_id in template_ids():
