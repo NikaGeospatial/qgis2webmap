@@ -130,6 +130,7 @@ from .expression_tokens import (
     translate_label,
 )
 from .fidelity_report import FidelityReportBuilder
+from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
@@ -466,6 +467,17 @@ def _read_layout(
                         f"Locator inset drawing frame {target_id!r}'s footprint.",
                         item_id=mf.map_item.uuid(),
                     )
+                    if has_wider_context(mf.map_item) is False:
+                        report.approximated(
+                            f"Locator inset {_name(mf.map_item)}",
+                            "The layers it draws reach no further than the map "
+                            "it outlines, so it shows only a margin round it "
+                            "and has no wider context to place the map in. "
+                            "Select it on the page and delete it, or add a "
+                            "layer that covers the wider area and choose the "
+                            "inset's layers.",
+                            item_id=mf.map_item.uuid(),
+                        )
                     break
 
     # The atlas decides which live frames refit per page and which layer is

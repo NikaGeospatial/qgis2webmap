@@ -122,10 +122,22 @@ never changes the source data. Choose **Whole view** to keep the entire canvas
 extent, with extra surroundings where the frame has a different shape. This
 choice is remembered when you create a layout; cancelling changes nothing.
 
-A locator inset is a static frame - a picture of its map, as QGIS draws it.
-It needs context layers extending beyond the main view to make a useful
-overview; a project containing only a small local dataset can leave it mostly
-empty.
+A locator inset is a static frame - a picture of its map, as QGIS draws it,
+and it works offline: it draws the area-wide layers of the project (rasters,
+polygons and lines, not the points that mark places on the main map), without
+labels, and outlines the main map's extent. How much it shows comes from those
+layers - their extent, with a margin, up to eight times the main view - rather
+than a fixed zoom-out. When the layers reach no further than the main view
+there is no wider context to show: the inset then shows only a margin round the
+map, the template picker and Checks say so, and you can delete it on the page
+(the page keeps working) or add a layer that covers the wider area. A remote
+basemap is never added for you.
+
+Continuous rasters, such as elevation, are drawn with the source pixels visible
+when enlarged. In **Map frames**, a map's **⋯** menu has **Smooth when
+enlarged** for each continuous raster it draws: it blends the pixels for that
+map only, never changes the layer's own style, and is not offered for
+categorical rasters, whose classes it would blur.
 
 ## What the Daylight layout contains
 

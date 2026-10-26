@@ -120,10 +120,13 @@ class TestEveryTemplateBuildsAndExports:
         overviews = locator.overviews().asList()
         assert len(overviews) == 1
         assert overviews[0].linkedMap() is result.layout.itemById("main")
+        # The parcels reach no further than the main map, so there is no
+        # wider context: a modest margin, and the inset says so.
         assert (
             locator.extent().width()
-            > 4 * result.layout.itemById("main").extent().width()
+            > 2 * result.layout.itemById("main").extent().width()
         )
+        assert locator.customProperty("nika/locator-context") == "none"
         # Context, not the subject: drawn as QGIS draws it.
         assert result.frame_modes[locator.uuid()] == "static"
 

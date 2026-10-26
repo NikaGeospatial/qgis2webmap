@@ -90,6 +90,14 @@ from .layout_templates import (
     text_percent,
 )
 from .legend_edit import apply_template_defaults
+from .locator_context import (
+    LocatorView,
+    draw_quietly,
+    fit_to_aspect,
+    has_wider_context,
+    locator_view,
+    mark_context,
+)
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -108,6 +116,10 @@ _LEGEND_SCALE_STEP = 0.05
 #: entries left out under (`CanvasCartograph.legend_left_out`), "0" when
 #: none: the picker can say so beside the thumbnail.
 PREVIEW_LEGEND_LEFT_OUT_KEY = "legend-left-out"
+#: The `QImage.text()` key a template preview carries "1" under when its
+#: locator inset has no wider context to show (`locator_lacks_context`),
+#: else "0": the picker says so beside the thumbnail.
+PREVIEW_LOCATOR_NO_CONTEXT_KEY = "locator-no-context"
 #: Only a bound for the search; the box's width stops it long before.
 _LEGEND_MAX_COLUMNS = 12
 _LEGEND_TEXT_STYLES = (
@@ -350,11 +362,22 @@ def template_preview(
             text_sizes=text_sizes,
         )
         height_px = max(1, round(width_px * plan.page_height / plan.page_width))
+        no_context = "1" if locator_lacks_context(built.layout) else "0"
         image = QgsLayoutExporter(built.layout).renderPageToImage(
             0, QSize(width_px, height_px)
         )
     image.setText(PREVIEW_LEGEND_LEFT_OUT_KEY, str(left_out))
+    image.setText(PREVIEW_LOCATOR_NO_CONTEXT_KEY, no_context)
     return image
+
+
+def locator_lacks_context(layout: QgsLayout) -> bool:
+    """Whether the layout has a locator inset whose layers reach no further
+    than the map it outlines (`core/locator_context.py`)."""
+    return any(
+        isinstance(item, QgsLayoutItemMap) and has_wider_context(item) is False
+        for item in layout.items()
+    )
 
 
 class PendingPreview(QObject):
@@ -392,6 +415,7 @@ class PendingPreview(QObject):
         self._layout: QgsPrintLayout | None = built.layout
         self._size = size
         self._left_out = left_out
+        self._no_context = "1" if locator_lacks_context(built.layout) else "0"
         self._waiting = {
             id(item)
             for item in built.layout.items()
@@ -458,6 +482,7 @@ class PendingPreview(QObject):
         self._done = True
         image = self._paint()
         image.setText(PREVIEW_LEGEND_LEFT_OUT_KEY, str(self._left_out))
+        image.setText(PREVIEW_LOCATOR_NO_CONTEXT_KEY, self._no_context)
         self._release()
         self.finished.emit(image)
 
@@ -643,10 +668,18 @@ def _build_once(
             text_sizes=text_sizes,
         ),
     )
-    frames = {
-        slot.id: _frame(slot, extent, rotation, crs, project, layers)
-        for slot in plan.frames
-    }
+    frames: dict[str, FrameSpec] = {}
+    locators: dict[str, LocatorView] = {}
+    main_view: QgsRectangle | None = None
+    for slot in plan.frames:
+        spec_frame, view, locator = _frame(
+            slot, extent, rotation, crs, project, layers, main_view
+        )
+        frames[slot.id] = spec_frame
+        if slot.id == FRAME_ID:
+            main_view = view
+        if locator is not None:
+            locators[slot.id] = locator
     spec = template_spec(
         plan,
         frames,
@@ -656,9 +689,19 @@ def _build_once(
         spec,
         project,
         name=f"carto: {title or _UNTITLED}",
-        frame_layers={slot.id: list(layers) for slot in plan.frames},
+        frame_layers={
+            slot.id: list(locators[slot.id].layers)
+            if slot.id in locators
+            else list(layers)
+            for slot in plan.frames
+        },
         add_to_project=add_to_project,
     )
+    for slot_id, locator in locators.items():
+        inset = built.items_by_id[slot_id]
+        if isinstance(inset, QgsLayoutItemMap):
+            draw_quietly(inset)
+            mark_context(inset, locator.has_context)
     left_out = 0
     for item in plan.items:
         if isinstance(item, LegendSpec):
@@ -916,12 +959,23 @@ def _frame(
     crs: QgsCoordinateReferenceSystem,
     project: QgsProject,
     layers: Sequence[QgsMapLayer] = (),
-) -> FrameSpec:
-    """The frame for `slot`: the canvas view (a locator's zoomed out about
-    the same centre), as four corners in the canvas CRS."""
+    main_view: QgsRectangle | None = None,
+) -> tuple[FrameSpec, QgsRectangle, LocatorView | None]:
+    """The frame for `slot` as four corners in the canvas CRS, the view it
+    shows, and for a locator inset what it draws and shows of the wider
+    context (`core/locator_context.py`). `main_view` is what the main map
+    shows, which an inset outlines and shows the surroundings of."""
     view = QgsRectangle(extent)
-    if slot.zoom_out != 1.0:
-        view.scale(slot.zoom_out)
+    locator: LocatorView | None = None
+    if slot.overview_of is not None and slot.zoom_out != 1.0:
+        locator = locator_view(
+            QgsRectangle(main_view if main_view is not None else extent),
+            crs,
+            layers,
+            project,
+            slot.box.w / slot.box.h,
+        )
+        view = locator.extent
     elif slot.focus is not None:
         view = _view_around_focus(view, slot.box, slot.focus, rotation)
     if slot.id == FRAME_ID:
@@ -931,7 +985,11 @@ def _frame(
             view = fill_view(
                 view, slot.box.w / slot.box.h, crs, layers, project, rotation
             )
-    return FrameSpec(
+    if slot.id == FRAME_ID:
+        # What the map item shows is the view padded out to the frame's
+        # shape, which is what an inset outlines.
+        view = fit_to_aspect(view, slot.box.w / slot.box.h)
+    spec = FrameSpec(
         id=slot.id,
         box=slot.box,
         mode="static",
@@ -943,6 +1001,7 @@ def _frame(
         # `CanvasCartograph.spec` note).
         image_bytes=b"",
     )
+    return spec, view, locator
 
 
 def _view_around_focus(

@@ -90,6 +90,7 @@ from ...core import layout_templates
 from ...core.canvas_cartograph import (
     FIGURE_VARIABLES,
     PREVIEW_LEGEND_LEFT_OUT_KEY,
+    PREVIEW_LOCATOR_NO_CONTEXT_KEY,
     PendingPreview,
     project_figure_rows,
     project_text_sizes,
@@ -361,6 +362,12 @@ def legend_left_out(image: QImage) -> int:
         return 0
 
 
+def locator_without_context(image: QImage) -> bool:
+    """Whether the drawn page has a locator inset with no wider context to
+    show (`canvas_cartograph.locator_lacks_context`)."""
+    return image.text(PREVIEW_LOCATOR_NO_CONTEXT_KEY) == "1"
+
+
 class _TemplateRow(QFrame):
     """One card of the list: the page, large, then the name, the description,
     what this page includes and what else the design can show.
@@ -506,6 +513,19 @@ class _TemplateRow(QFrame):
             if left_out
             else ""
         )
+        if image is not None and locator_without_context(image):
+            crowded = " ".join(
+                part
+                for part in (
+                    crowded,
+                    tr(
+                        "Locator: the data reaches no further than this map, so "
+                        "it shows only a margin round it. Delete it on the "
+                        "page, or add a layer that covers the wider area."
+                    ),
+                )
+                if part
+            )
         changed = crowded != self.crowded.text()
         self.crowded.setText(crowded)
         self.crowded.setVisible(bool(crowded))

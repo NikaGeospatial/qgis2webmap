@@ -71,7 +71,7 @@ def is_continuous_raster(layer: QgsMapLayer) -> bool:
     return kind in ("singlebandgray", "multibandcolor", "hillshade")
 
 
-def _override_xml(map_item: QgsLayoutItemMap, layer: QgsMapLayer) -> str:
+def style_xml(map_item: QgsLayoutItemMap, layer: QgsMapLayer) -> str:
     """The style `map_item` draws `layer` in: its own override when it has
     one, else the layer's current style."""
     if map_item.keepLayerStyles():
@@ -100,7 +100,7 @@ def _resampling(xml: str) -> str:
 def smoothing_on(map_item: QgsLayoutItemMap, layer: QgsMapLayer) -> bool:
     """Whether `map_item` draws `layer` with bilinear resampling when zoomed
     in -- by its own override, or because the layer is already styled so."""
-    return _resampling(_override_xml(map_item, layer)) == BILINEAR
+    return _resampling(style_xml(map_item, layer)) == BILINEAR
 
 
 def _with_resampling(xml: str, method: str) -> str | None:
@@ -142,7 +142,7 @@ def set_smoothing(map_item: QgsLayoutItemMap, layer: QgsMapLayer, on: bool) -> b
     if smoothing_on(map_item, layer) == on:
         return False
     layer_id = layer.id()
-    _own_layers(map_item)
+    own_layers(map_item)
     overrides = (
         dict(map_item.layerStyleOverrides()) if map_item.keepLayerStyles() else {}
     )
@@ -154,16 +154,16 @@ def set_smoothing(map_item: QgsLayoutItemMap, layer: QgsMapLayer, on: bool) -> b
         overrides.pop(layer_id, None)
     else:
         updated = _with_resampling(
-            _override_xml(map_item, layer), BILINEAR if on else NEAREST
+            style_xml(map_item, layer), BILINEAR if on else NEAREST
         )
         if updated is None:
             return False
         overrides[layer_id] = updated
-    _store(map_item, overrides)
+    store_overrides(map_item, overrides)
     return True
 
 
-def _own_layers(map_item: QgsLayoutItemMap) -> None:
+def own_layers(map_item: QgsLayoutItemMap) -> None:
     """Make the map item's layer list its own, as it is drawn now, so a style
     override can apply: QGIS ignores overrides on a map that follows a map
     theme or the Layers panel. A theme's per-layer styles stay with the map,
@@ -195,7 +195,7 @@ def _own_layers(map_item: QgsLayoutItemMap) -> None:
         map_item.setLayers(list(map_item.layersToRender()))
 
 
-def _store(map_item: QgsLayoutItemMap, overrides: dict[str, str]) -> None:
+def store_overrides(map_item: QgsLayoutItemMap, overrides: dict[str, str]) -> None:
     map_item.setKeepLayerStyles(bool(overrides))
     map_item.setLayerStyleOverrides(overrides)
     map_item.invalidateCache()
