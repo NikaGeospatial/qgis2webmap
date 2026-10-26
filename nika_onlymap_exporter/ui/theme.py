@@ -1388,21 +1388,36 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     text-align: left;
 }}
 
-/* Map frames: a small card per map item. */
+/* Map frames: a quiet entry per map item, ruled apart, the frame selected on
+   the page marked by a bar at its left edge. */
 {d} QFrame[role="frameCard"] {{
-    background: {p.paper};
-    border: 1px solid {p.rule};
-    border-radius: 6px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid {p.rule};
+    border-left: 3px solid transparent;
+}}
+{d} QFrame[role="frameCard"][selected="true"] {{
+    border-left: 3px solid {p.link};
 }}
 {d} QLabel[role="frameName"] {{
     color: {p.ink};
     font-weight: 600;
 }}
-{d} QLabel[role="frameIssues"] {{
-    color: {p.warn};
+{d} QFrame[role="frameCard"] QLabel {{
+    border: none;
 }}
-{d} QLabel[role="frameIssues"][muted="true"] {{
-    color: {p.muted};
+{d} QToolButton[frameActions="true"]::menu-indicator {{
+    image: none;
+    width: 0;
+}}
+{d} QToolButton[role="frameIssues"] {{
+    background: transparent;
+    border: none;
+    color: {p.warn};
+    padding: 0 2px;
+}}
+{d} QToolButton[role="frameIssues"]:hover {{
+    text-decoration: underline;
 }}
 
 /* The template picker: one design per row, the chosen one ringed. */

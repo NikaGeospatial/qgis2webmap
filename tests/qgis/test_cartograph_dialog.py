@@ -1823,9 +1823,9 @@ class TestFramesTabExtras:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             (item_id,) = cartograph._frame_rows
-            button = cartograph.frames_list.card(item_id).match_button
-            assert button.isEnabled()
-            button.click()
+            action = cartograph.frames_list.card(item_id).canvas_action
+            assert action.isEnabled()
+            action.trigger()
             from qgis.core import QgsLayoutItemMap
 
             map_item = next(
@@ -1846,12 +1846,12 @@ class TestFramesTabExtras:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             (item_id,) = cartograph._frame_rows
-            button = cartograph.frames_list.card(item_id).match_button
-            assert not button.isEnabled()
+            action = cartograph.frames_list.card(item_id).canvas_action
+            assert not action.isEnabled()
         finally:
             dialog.close()
 
-    def test_each_frame_shows_its_count_of_changes(
+    def test_each_frame_shows_its_count_of_issues(
         self, qgis_app, project, tmp_path
     ) -> None:
         dialog, _target = TestPrintSettings()._real_dialog(
@@ -1859,16 +1859,16 @@ class TestFramesTabExtras:
         )
         try:
             cartograph = dialog._cartograph
-            labels = [
-                cartograph.frames_list.card(item_id).issues_label
+            badges = [
+                cartograph.frames_list.card(item_id).issues_button
                 for item_id in cartograph._frame_rows
             ]
-            assert labels
+            assert badges
             # Both survey frames are static (UTM), which is a "Changed" row each.
-            for label in labels:
-                assert not label.isHidden()
-                count, word = label.text().split()
-                assert int(count) >= 1 and word in ("change", "changes")
+            for badge in badges:
+                assert not badge.isHidden()
+                count, word, _arrow = badge.text().split()
+                assert int(count) >= 1 and word in ("issue", "issues")
         finally:
             dialog.close()
 

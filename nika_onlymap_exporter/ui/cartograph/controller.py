@@ -218,6 +218,7 @@ class CartographController:
 
         self._current_layout = None
         self._layout_changed_connected = False
+        self._selection_connected = False
         self._watched_stack: QUndoStack | None = None
         # True while this controller's own export reads (and briefly changes)
         # the layout: what that emits is not an edit.
@@ -966,6 +967,9 @@ class CartographController:
             )
         )
         self.frames_list.match_canvas_requested.connect(self._match_canvas)
+        self.frames_list.frame_selected.connect(self._select_frame_on_page)
+        self.frames_list.locate_requested.connect(self._locate_frame)
+        self.frames_list.issues_requested.connect(self._show_frame_issues)
         return self.frames_list
 
     # ---- Atlas tab -------------------------------------------------------
@@ -1053,6 +1057,53 @@ class CartographController:
             }
         )
         self.atlas_tab.rename_maps()
+
+    def _map_item(self, item_id: str):  # QgsLayoutItemMap | None
+        """The map item of the current layout with this uuid, if it is still there."""
+        from qgis.core import QgsLayoutItemMap
+
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            return None
+        return next(
+            (
+                item
+                for item in layout.items()
+                if isinstance(item, QgsLayoutItemMap) and item.uuid() == item_id
+            ),
+            None,
+        )
+
+    def _select_frame_on_page(self, item_id: str) -> None:
+        """Map frames: choosing an entry selects its map item on the page."""
+        item = self._map_item(item_id)
+        if item is not None and self._current_layout is not None:
+            self._current_layout.setSelectedItem(item)
+
+    def _locate_frame(self, item_id: str) -> None:
+        """Map frames > Locate on page: select the map item and bring it to
+        the middle of the page view."""
+        item = self._map_item(item_id)
+        if item is None:
+            return
+        self._select_frame_on_page(item_id)
+        self.page_pane.preview.view.centerOn(item)
+
+    def _on_page_selection_changed(self, item: object) -> None:
+        """The page's selection moved: mark the entry of a selected map."""
+        from qgis.core import QgsLayoutItemMap
+
+        selected = None
+        if isinstance(item, QgsLayoutItemMap) and not sip.isdeleted(item):
+            selected = item.uuid()
+        self.frames_list.set_selected(selected)
+
+    def _show_frame_issues(self, item_id: str) -> None:
+        """Map frames > "N issues": Checks, narrowed to what concerns the map."""
+        item = self._map_item(item_id)
+        if item is not None and hasattr(self.dialog, "fidelity_panel"):
+            self.dialog.fidelity_panel.search.setText(f"'{item.displayName()}'")
+        self.open_section("checks")
 
     def _map_canvas(self):
         iface = getattr(self.dialog, "iface", None)
@@ -1175,6 +1226,12 @@ class CartographController:
             with contextlib.suppress(Exception):
                 self._current_layout.changed.disconnect(self._on_layout_content_changed)
         self._layout_changed_connected = False
+        if self._current_layout is not None and self._selection_connected:
+            with contextlib.suppress(Exception):
+                self._current_layout.selectedItemChanged.disconnect(
+                    self._on_page_selection_changed
+                )
+        self._selection_connected = False
         if self._watched_stack is not None:
             with contextlib.suppress(TypeError, RuntimeError):
                 self._watched_stack.indexChanged.disconnect(
@@ -1214,6 +1271,9 @@ class CartographController:
             # undo and a redo.
             self._watched_stack = layout.undoStack().stack()
             self._watched_stack.indexChanged.connect(self._on_layout_content_changed)
+            with contextlib.suppress(Exception):
+                layout.selectedItemChanged.connect(self._on_page_selection_changed)
+                self._selection_connected = True
 
         self._rebuild_frames_rows()
         self.atlas_tab.show_layout(layout)
@@ -1613,12 +1673,11 @@ class CartographController:
         counts: dict[str, int] = {}
         if self._current_layout is not None:
             for item in layout_map_items(self._current_layout):
-                needle = f"'{item.name}'"
                 counts[item.item_id] = sum(
                     1
                     for row in report.items
                     if row.status is not FidelityStatus.PRESERVED
-                    and needle in row.subject
+                    and row.item_id == item.item_id
                 )
         self._frame_issue_counts = counts
         for item_id, count in counts.items():

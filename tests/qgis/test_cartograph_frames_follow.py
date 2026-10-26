@@ -15,6 +15,8 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtTest import QTest
 from test_cartograph_dialog import (
     _add_layout,
     _choose_cartograph,
@@ -113,5 +115,100 @@ class TestFramesFollowItemEdits:
             assert card.name_label.text() == "Overview"
             assert card.mode_combo.currentData() == "static"
             assert dialog.state.frame_choices("Survey")[main.uuid()].mode == "static"
+        finally:
+            dialog.close()
+
+
+class TestFrameIssuesAndSelection:
+    def test_issue_counts_go_by_item_identity_not_by_name(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import FidelityStatus
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        dialog, cartograph, _layout, maps = _setup(project)
+        try:
+            main, inset = maps["main"].uuid(), maps["inset"].uuid()
+            report = FidelityReportBuilder()
+            # A row about "main" that happens to name a layer called "inset",
+            # and a layer row that only mentions "main" in its text.
+            report.raster_fallback(
+                "Map frame 'main': layer 'inset'",
+                "Drawn into this frame's picture.",
+                "layer-1",
+                item_id=main,
+            )
+            report.approximated(
+                "Map frame 'main'", "Web Mercator, 'inset' differs.", item_id=main
+            )
+            report.approximated("Symbology of 'main'", "Changed.", "layer-2")
+            report.preserved("Map frame 'inset'", "Kept.", item_id=inset)
+            assert report.items[0].status is not FidelityStatus.PRESERVED
+            cartograph._count_frame_issues(report)
+            assert cartograph._frame_issue_counts == {main: 2, inset: 0}
+            assert cartograph.frames_list.card(main).issues_button.text() == (
+                "2 issues →"
+            )
+            assert cartograph.frames_list.card(inset).issues_button.isHidden()
+        finally:
+            dialog.close()
+
+    def test_a_real_export_tags_every_frame_row_with_its_item(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.core import QgsLayoutItemMap
+
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.core.layout_reader import read_layout
+
+        layout = _add_layout(
+            project, "Survey", [("Map", "EPSG:3857"), ("Map 2", "EPSG:32648")]
+        )
+        # A rotated UTM map cannot draw in its own CRS: it is exported static.
+        layout.itemById("Map 2").setMapRotation(15)
+        report = FidelityReportBuilder()
+        read_layout(layout, report)
+        ids = {
+            i.id(): i.uuid() for i in layout.items() if isinstance(i, QgsLayoutItemMap)
+        }
+        frame_rows = [r for r in report.items if r.subject.startswith("Map frame")]
+        assert frame_rows, [r.subject for r in report.items]
+        assert all(r.item_id in ids.values() for r in frame_rows)
+        assert {r.item_id for r in frame_rows} == set(ids.values())
+
+    def test_the_badge_opens_checks_on_that_map(self, qgis_app, project) -> None:
+        dialog, cartograph, _layout, maps = _setup(project)
+        try:
+            item_id = maps["inset"].uuid()
+            cartograph.open_section("frames")
+            cartograph.frames_list.set_issue_count(item_id, 2)
+            cartograph.frames_list.card(item_id).issues_button.click()
+            assert cartograph.panel_tabs.currentIndex() == cartograph._tab_keys.index(
+                "checks"
+            )
+            assert dialog.fidelity_panel.search.text() == "'inset'"
+        finally:
+            dialog.close()
+
+    def test_entries_and_the_page_select_each_other(self, qgis_app, project) -> None:
+        dialog, cartograph, layout, maps = _setup(project)
+        try:
+            cartograph.open_section("frames")
+            qgis_app.processEvents()
+            inset, main = maps["inset"], maps["main"]
+            card = cartograph.frames_list.card(inset.uuid())
+            QTest.mouseClick(card.name_label, Qt.MouseButton.LeftButton)
+            assert layout.selectedLayoutItems() == [inset]
+            # Selecting on the page marks the other entry.
+            layout.setSelectedItem(main)
+            assert cartograph.frames_list.card(main.uuid()).property("selected")
+            assert not card.property("selected")
+            # Locate on page selects it again.
+            card.locate_action.trigger()
+            assert layout.selectedLayoutItems() == [inset]
+            assert card.property("selected")
+            # A non-map item clears the marks.
+            layout.deselectAll()
+            assert not card.property("selected")
         finally:
             dialog.close()
