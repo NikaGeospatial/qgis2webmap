@@ -698,13 +698,27 @@ def default_mode_for_map(item: QgsLayoutItemMap) -> FrameMode:
     in a projected CRS: live in one of the runtime's own camera projections,
     and live in any other CRS the frame draws in exactly (`draws_in_own_plane`
     with every layer able to follow); static (pixel-exact, never reprojected)
-    for anything else, so a default never makes a map less like QGIS."""
+    for anything else, so a default never makes a map less like QGIS.
+
+    A map the layout's enabled atlas drives is live whatever its CRS: only a
+    live map can follow the pages, so a static default would export none."""
+    if _atlas_drives(item):
+        return "live"
     crs = item.crs()
     if default_frame_mode(crs.authid() if crs.isValid() else "") == "live":
         return "live"
     if draws_in_own_plane(item) and not plane_blocking_layers(item):
         return "live"
     return "static"
+
+
+def _atlas_drives(item: QgsLayoutItemMap) -> bool:
+    """True when `item` is controlled by an atlas that is turned on."""
+    if not item.atlasDriven():
+        return False
+    layout = item.layout()
+    atlas = layout.atlas() if layout is not None else None
+    return atlas is not None and atlas.enabled()
 
 
 def plane_blocking_layers(item: QgsLayoutItemMap) -> list[str]:
@@ -1215,7 +1229,7 @@ def _read_atlas(
                 f"Map frame {_name(mf.map_item)}",
                 "This map follows the atlas, but it is a static frame: its "
                 "picture is rendered once, so it would show the same place on "
-                "every page. Set the atlas map to Live in Map frames.",
+                "every page. Set the atlas map to Interactive in Map frames.",
                 item_id=mf.map_item.uuid(),
             )
             continue
@@ -1264,11 +1278,11 @@ def _read_atlas(
                 "drawn)."
             )
         elif driven_static:
-            remedy = "Set the atlas map to Live in Map frames."
+            remedy = "Set the atlas map to Interactive in Map frames."
         else:
             remedy = (
                 f"Show the coverage layer '{coverage_name}' in a map that is "
-                "Live in Map frames."
+                "Interactive in Map frames."
             )
         report.blocked(
             ATLAS_SUBJECT,
