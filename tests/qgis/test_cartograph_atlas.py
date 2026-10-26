@@ -21,6 +21,7 @@ from atlas_fixtures import (
 
 from nika_onlymap_exporter.core.cartograph_export import (
     finish_cartograph,
+    finish_cartograph_full,
     prepare_cartograph,
 )
 from nika_onlymap_exporter.core.cartograph_ir import ATLAS_ORDER_KEY, TextSpec
@@ -145,16 +146,34 @@ class TestAtlasSpec:
         assert reading.atlas.filter == "d.id == 2"
         assert not _rows(report, FidelityStatus.APPROXIMATED)
 
-    def test_an_invalid_filter_is_reported_not_guessed(self, atlas_layout) -> None:
+    def test_an_invalid_filter_writes_no_atlas_at_all(self, atlas_layout) -> None:
         atlas_layout.atlas.setFilterFeatures(True)
         atlas_layout.atlas.setFilterExpression('"lot" = = 1')
         report = FidelityReportBuilder()
         reading = read_layout(atlas_layout.layout, report)
-        assert reading.atlas.filter is None
-        assert any(
-            "not a valid QGIS expression" in row
-            for row in _rows(report, FidelityStatus.APPROXIMATED)
+        # Not every parcel instead: no atlas, and the frame is not left
+        # asking an atlas it will not have to refit it.
+        assert reading.atlas is None
+        assert reading.atlas_requirement is None
+        assert all(frame.atlas_fit is None for frame in reading.frames)
+        blocked = _rows(report, FidelityStatus.BLOCKED)
+        assert any("not a valid QGIS expression" in row for row in blocked)
+        # Nothing was "approximated by paging everything".
+        assert not any(
+            "page for each" in row for row in _rows(report, FidelityStatus.APPROXIMATED)
         )
+
+    def test_an_unknown_field_is_as_invalid_as_a_typo(self, atlas_layout) -> None:
+        atlas_layout.atlas.setFilterFeatures(True)
+        atlas_layout.atlas.setFilterExpression('"nothing_here" = 1')
+        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
+        assert reading.atlas is None
+
+    def test_an_invalid_sort_writes_no_atlas_either(self, atlas_layout) -> None:
+        atlas_layout.atlas.setSortFeatures(True)
+        atlas_layout.atlas.setSortExpression('"lot" +')
+        reading = read_layout(atlas_layout.layout, FidelityReportBuilder())
+        assert reading.atlas is None
 
     def test_page_count_follows_qgis(self, atlas_layout) -> None:
         assert atlas_page_count(atlas_layout.layout) == 3
@@ -165,6 +184,73 @@ class TestAtlasSpec:
         assert atlas_layout.atlas.updateFeatures() == 2
         atlas_layout.atlas.setEnabled(False)
         assert atlas_page_count(atlas_layout.layout) is None
+
+
+def _lots(layout, ids) -> list[str]:
+    """The parcels' `lot` names behind feature `ids`, in that order."""
+    names = {
+        feature.id(): feature["lot"]
+        for feature in layout.atlas().coverageLayer().getFeatures()
+    }
+    return [names[i] for i in ids]
+
+
+class TestAtlasFilterOutcome:
+    """The three outcomes of an atlas filter -- invalid, valid and matching
+    nothing, valid and matching some -- and the way back from the first,
+    judged by which parcels get a page, not how many."""
+
+    def _read(self, atlas_layout, expression: str):
+        atlas_layout.atlas.setFilterFeatures(bool(expression))
+        atlas_layout.atlas.setFilterExpression(expression)
+        return read_layout(atlas_layout.layout, FidelityReportBuilder())
+
+    def test_a_subset_pages_exactly_the_matching_parcels(self, atlas_layout) -> None:
+        reading = self._read(atlas_layout, "\"size\" = 'small'")
+        assert _lots(atlas_layout.layout, reading.atlas_requirement.page_ids) == [
+            "C-3",
+            "B-2",
+        ]
+
+    def test_a_filter_that_matches_nothing_is_an_atlas_with_no_pages(
+        self, atlas_layout
+    ) -> None:
+        reading = self._read(atlas_layout, "\"lot\" = 'nowhere'")
+        assert reading.atlas is not None
+        assert reading.atlas.filter == "false"
+        assert reading.atlas_requirement.page_ids == ()
+
+    def test_correcting_the_filter_brings_back_the_right_pages(
+        self, atlas_layout
+    ) -> None:
+        assert self._read(atlas_layout, '"lot" = =').atlas is None
+        reading = self._read(atlas_layout, "\"lot\" LIKE 'A%'")
+        assert _lots(atlas_layout.layout, reading.atlas_requirement.page_ids) == ["A-1"]
+        assert self._read(atlas_layout, "").atlas_requirement.page_ids == (1, 2, 3)
+
+    def test_the_written_pages_are_what_the_saved_document_pages(
+        self, atlas_layout, fake_runtime
+    ) -> None:
+        """What the panel is told is the page list of the finished document,
+        for each outcome: none for an invalid filter, `()` for zero matches."""
+        outcomes = {}
+        for expression in ('"lot" = =', "\"lot\" = 'nowhere'", "\"size\" = 'small'"):
+            atlas_layout.atlas.setFilterFeatures(True)
+            atlas_layout.atlas.setFilterExpression(expression)
+            report = FidelityReportBuilder()
+            prepared = prepare_cartograph(
+                atlas_layout.layout, atlas_layout.project, fake_runtime, report
+            )
+            finished = finish_cartograph_full(prepared, atlas_layout.project, report)
+            outcomes[expression] = (
+                finished.atlas_pages,
+                "<om-atlas" in finished.html,
+            )
+        assert outcomes == {
+            '"lot" = =': (None, False),
+            "\"lot\" = 'nowhere'": ((), True),
+            "\"size\" = 'small'": ((1, 3), True),
+        }
 
 
 class TestAtlasFit:

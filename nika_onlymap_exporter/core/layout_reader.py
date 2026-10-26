@@ -277,6 +277,9 @@ class AtlasRequirement:
     # The coverage layer's feature ids in the order QGIS pages them, when the
     # atlas sorts: `finish_cartograph` writes each feature's place into it.
     page_order: tuple[int, ...] = ()
+    # The coverage layer's feature ids that get a page, in page order: what
+    # the written atlas will page, whatever the atlas sorts or filters by.
+    page_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1132,6 +1135,16 @@ def _draws_layer(frame: MapFrameReading, layer_id: str) -> bool:
     return any(layer.id() == layer_id for layer in frame.map_item.layersToRender())
 
 
+def _without_atlas_fit(frames: Sequence[MapFrameReading]) -> list[MapFrameReading]:
+    """`frames` with no atlas refit: with no `<om-atlas>` nothing would refit
+    them, so the attributes go rather than leave the validator a dangling
+    atlas-fit."""
+    return [
+        replace(mf, atlas_fit=None, atlas_margin=None, atlas_cameras_from_qgis=False)
+        for mf in frames
+    ]
+
+
 def _read_atlas(
     layout: QgsPrintLayout,
     frames: Sequence[MapFrameReading],
@@ -1219,19 +1232,16 @@ def _read_atlas(
             "with a live map that carries the coverage layer "
             f"'{coverage_name}', and this layout has none. {remedy}",
         )
-        # No `<om-atlas>`, so nothing would refit these frames: drop the
-        # attributes rather than leave the validator a dangling atlas-fit.
-        return _AtlasPlan(
-            frames=tuple(
-                replace(
-                    mf,
-                    atlas_fit=None,
-                    atlas_margin=None,
-                    atlas_cameras_from_qgis=False,
-                )
-                for mf in updated
-            )
-        )
+        return _AtlasPlan(frames=tuple(_without_atlas_fit(updated)))
+
+    pages = _AtlasPages.of(layout, atlas, coverage)
+    if pages.blocked is not None:
+        # An atlas whose filter or sort cannot be applied must not page
+        # every feature instead: nothing is written, and the rows say why.
+        report.blocked(ATLAS_SUBJECT, pages.blocked)
+        return _AtlasPlan(frames=tuple(_without_atlas_fit(updated)))
+    for detail in pages.preserved:
+        report.preserved(ATLAS_SUBJECT, detail)
 
     if atlas.hideCoverage():
         for index, mf in enumerate(updated):
@@ -1256,7 +1266,6 @@ def _read_atlas(
             "page; the cartograph draws all of them.",
         )
 
-    pages = _AtlasPages.of(layout, atlas, coverage, report)
     spec = AtlasSpec(
         for_=driver.frame_id,
         layer=coverage_id,  # swapped for its <om-layer id> by read_layout
@@ -1281,6 +1290,7 @@ def _read_atlas(
             layer_id=coverage_id,
             layer_name=coverage_name,
             page_order=pages.order,
+            page_ids=pages.ids,
         ),
     )
 
@@ -1347,7 +1357,8 @@ def _count_features(layer: QgsVectorLayer, expression: str | None) -> int:
 
 def atlas_page_count(layout: QgsPrintLayout) -> int | None:
     """How many pages the layout's atlas has in QGIS, or `None` when the
-    atlas is off or has no coverage layer. For the Atlas tab's page count.
+    atlas is off, has no coverage layer or has a filter QGIS cannot evaluate.
+    For the Atlas tab's page count.
 
     Counted without touching the atlas itself (`QgsLayoutAtlas.updateFeatures`
     would move the layout designer's atlas preview): the coverage layer's
@@ -1363,6 +1374,9 @@ def atlas_page_count(layout: QgsPrintLayout) -> int | None:
     if coverage is None or not coverage.isValid():
         return None
     expression = atlas.filterExpression() if atlas.filterFeatures() else None
+    if expression and expression_error(expression, coverage) is not None:
+        # An expression QGIS cannot evaluate gives no count, not every feature.
+        return None
     return _count_features(coverage, expression or None)
 
 
@@ -1458,6 +1472,12 @@ class _AtlasPages:
     filter_source: str | None = None
     order: tuple[int, ...] = ()
     sort_source: str | None = None
+    # The ids that get a page, in page order.
+    ids: tuple[int, ...] = ()
+    # Set when the filter or sort cannot be applied: why, and so why no atlas
+    # is written. Paging every feature instead would be a different atlas.
+    blocked: str | None = None
+    preserved: tuple[str, ...] = ()
 
     @classmethod
     def of(
@@ -1465,57 +1485,76 @@ class _AtlasPages:
         layout: QgsPrintLayout,
         atlas,
         coverage: QgsVectorLayer,
-        report: FidelityReportBuilder,
     ) -> _AtlasPages:
         filter_expression = (
             atlas.filterExpression().strip() if atlas.filterFeatures() else ""
         )
         sort_expression = atlas.sortExpression().strip() if atlas.sortFeatures() else ""
-        if not filter_expression and not sort_expression:
-            return cls()
         for expression, what in (
             (filter_expression, "filter"),
             (sort_expression, "sort"),
         ):
-            if expression and QgsExpression(expression).hasParserError():
-                report.approximated(
-                    ATLAS_SUBJECT,
-                    f"The atlas {what} `{expression}` is not a valid QGIS "
-                    "expression, so it was left out: the cartograph has a page "
-                    "for each of the layer's features, in the layer's own order.",
+            error = expression_error(expression, coverage) if expression else None
+            if error is not None:
+                return cls(
+                    blocked=(
+                        f"No atlas pages were exported: the atlas {what} "
+                        f"`{expression}` is not a valid QGIS expression "
+                        f"({error}), and paging every feature of "
+                        f"'{coverage.name()}' instead would not be the atlas "
+                        f"you asked for. Correct the {what} in the Atlas "
+                        "panel, or clear it."
+                    )
                 )
-                return cls()
         every = _feature_ids(coverage)
+        if not filter_expression and not sort_expression:
+            return cls(ids=tuple(every))
         pages = _qgis_page_ids(layout)
         if pages is None or len(set(every)) != len(every):
-            report.approximated(
-                ATLAS_SUBJECT,
-                f"The atlas filter or sort of '{coverage.name()}' could not be "
-                "carried over: QGIS could not page the layer, or its features "
-                "have no ids of their own to name them by, so the cartograph "
-                "has a page for each feature, in the layer's own order.",
+            return cls(
+                blocked=(
+                    "No atlas pages were exported: the atlas filter or sort of "
+                    f"'{coverage.name()}' could not be carried over (QGIS could "
+                    "not page the layer, or its features have no ids of their "
+                    "own to name them by), and paging every feature instead "
+                    "would not be the atlas you asked for."
+                )
             )
-            return cls()
         filter_js: str | None = None
+        preserved: list[str] = []
         if filter_expression:
             filter_js = atlas_id_filter(pages, every)
-            report.preserved(
-                ATLAS_SUBJECT,
+            preserved.append(
                 f"Atlas filter `{filter_expression}` kept: {len(pages)} of "
-                f"{len(every)} features get a page, as QGIS evaluates it.",
+                f"{len(every)} features get a page, as QGIS evaluates it."
             )
         if sort_expression:
-            report.preserved(
-                ATLAS_SUBJECT,
-                f"Pages are sorted by `{sort_expression}`, in the order QGIS "
-                "puts them.",
+            preserved.append(
+                f"Pages are sorted by `{sort_expression}`, in the order QGIS puts them."
             )
         return cls(
             filter=filter_js,
             filter_source=filter_expression or None,
             order=tuple(pages) if sort_expression else (),
             sort_source=sort_expression or None,
+            ids=tuple(pages),
+            preserved=tuple(preserved),
         )
+
+
+def expression_error(expression: str, layer: QgsVectorLayer | None) -> str | None:
+    """Why QGIS cannot evaluate `expression` over `layer`'s features (a syntax
+    error, an unknown field or function), or `None` when it can."""
+    parsed = QgsExpression(expression)
+    if parsed.hasParserError():
+        return parsed.parserErrorString().strip() or "syntax error"
+    context = QgsExpressionContext()
+    if layer is not None:
+        context.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
+        context.setFields(layer.fields())
+    if not parsed.prepare(context):
+        return parsed.evalErrorString().strip() or "it cannot be evaluated"
+    return None
 
 
 def _feature_ids(layer: QgsVectorLayer) -> list[int]:

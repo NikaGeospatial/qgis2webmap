@@ -88,10 +88,14 @@ example - so it never prints a sheet for a feature nobody can see.
 ## Exporting and printing every page
 
 Two buttons at the foot of the Atlas tab work on the saved cartograph. They
-stay greyed out until it has atlas pages.
+stay greyed out until the saved cartograph has atlas pages: while the Filter
+or Sort is not a valid QGIS expression (the reason is shown beside the field,
+and no atlas is saved rather than one that pages every feature), and while the
+filter matches no feature.
 
 - **Export all pages (PNG, ZIP)...** opens the cartograph, which renders every
-  page at 300 dpi, one after another through the same live map, and downloads
+  page at the cartograph's saved resolution (Print settings, 300 dpi unless
+  changed), one after another through the same live map, and downloads
   them as **one ZIP** (`<name>-atlas.zip`), each page named by the **File
   names** expression. One ZIP rather than one download per page, because
   browsers block a run of separate downloads.

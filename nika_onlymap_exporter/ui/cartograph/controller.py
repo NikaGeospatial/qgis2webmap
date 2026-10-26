@@ -982,7 +982,9 @@ class CartographController:
             return
         self._open_saved(path, f"atlas={kind}")
 
-    def _show_atlas_outcome(self, report: FidelityReportBuilder, html: str) -> None:
+    def _show_atlas_outcome(
+        self, report: FidelityReportBuilder, atlas_pages: tuple[int, ...] | None
+    ) -> None:
         from ...core.export_ir import FidelityStatus
         from ...core.layout_reader import ATLAS_SUBJECT
 
@@ -992,7 +994,11 @@ class CartographController:
             if row.subject == ATLAS_SUBJECT
             and row.status in (FidelityStatus.BLOCKED, FidelityStatus.UNSUPPORTED)
         )
-        self.atlas_tab.show_outcome(problems, pages_written="<om-atlas" in html)
+        # The pages the saved document will actually page, not whether an
+        # `<om-atlas` happens to be in it.
+        self.atlas_tab.show_outcome(
+            problems, pages=None if atlas_pages is None else len(atlas_pages)
+        )
 
     def _rebuild_frames_rows(self) -> None:
         self._frame_rows.clear()
@@ -1474,7 +1480,7 @@ class CartographController:
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
         self._count_frame_issues(report)
-        self._show_atlas_outcome(report, html)
+        self._show_atlas_outcome(report, finished.atlas_pages)
         if self._pending_spec is not None:
             self._collect_legend_entries(self._pending_spec, finished.projects)
             if self._colour_vision is not None:

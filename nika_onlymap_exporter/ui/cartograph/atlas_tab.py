@@ -39,10 +39,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ...core.layout_reader import atlas_page_count
+from ...core.layout_reader import atlas_page_count, expression_error
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
 from .frames import layout_map_items
+from .panel_section import PanelSection
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     # QtWidgets on Qt 5, QtGui on Qt 6.
@@ -96,11 +97,14 @@ class AtlasTab(QWidget):
         # No box: it sits in the panel's Atlas tab, under that name already,
         # and an untitled box kept an empty title's gap above its fields.
         settings = QWidget(self)
-        form = QFormLayout(settings)
+        settings_column = QVBoxLayout(settings)
+        settings_column.setContentsMargins(0, 0, 0, 0)
+        form = QFormLayout()
         form.setContentsMargins(0, 4, 0, 4)
         # Labels above their fields: the tab is a side panel a third of the
         # dialog wide, where label and field side by side ran off its edge.
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        settings_column.addLayout(form)
         self.coverage_combo = QgsMapLayerComboBox(settings)
         self.coverage_combo.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)
         self.coverage_combo.setAllowEmptyLayer(True)
@@ -114,6 +118,17 @@ class AtlasTab(QWidget):
         self.map_combo.currentIndexChanged.connect(self._on_map)
         form.addRow(tr("Map that follows it"), self.map_combo)
 
+        # What most atlases never touch sits under the choices every atlas
+        # needs; it opens by itself when something in it is set or wrong.
+        self.advanced_section = PanelSection(
+            "atlas-advanced", tr("Sorting, filtering and file names"), settings
+        )
+        settings_column.addWidget(self.advanced_section)
+        advanced = QFormLayout()
+        advanced.setContentsMargins(0, 0, 0, 0)
+        advanced.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        self.advanced_section.body_layout.addLayout(advanced)
+
         sort_row = QHBoxLayout()
         self.sort_edit = QgsFieldExpressionWidget(settings)
         self.sort_edit.setAllowEmptyFieldName(True)
@@ -122,26 +137,40 @@ class AtlasTab(QWidget):
         self.descending_check = QCheckBox(tr("Descending"), settings)
         self.descending_check.toggled.connect(self._on_sort_direction)
         sort_row.addWidget(self.descending_check)
-        form.addRow(tr("Sort by"), sort_row)
+        sort_column = QVBoxLayout()
+        sort_column.setContentsMargins(0, 0, 0, 0)
+        sort_column.addLayout(sort_row)
+        self.sort_error_label = self._error_label(settings)
+        sort_column.addWidget(self.sort_error_label)
+        advanced.addRow(tr("Sort by"), sort_column)
 
         self.filter_edit = QgsFieldExpressionWidget(settings)
         self.filter_edit.setToolTip(
             tr("Only features for which this is true get a page. Blank: all.")
         )
         self.filter_edit.fieldChanged.connect(self._on_filter)
-        form.addRow(tr("Filter"), self.filter_edit)
+        filter_column = QVBoxLayout()
+        filter_column.setContentsMargins(0, 0, 0, 0)
+        filter_column.addWidget(self.filter_edit)
+        self.filter_error_label = self._error_label(settings)
+        filter_column.addWidget(self.filter_error_label)
+        advanced.addRow(tr("Filter"), filter_column)
 
         self.filename_edit = QgsFieldExpressionWidget(settings)
         self.filename_edit.setToolTip(
             tr("How each page's image is named when all pages are exported.")
         )
         self.filename_edit.fieldChanged.connect(self._on_filename)
-        form.addRow(tr("File names"), self.filename_edit)
+        advanced.addRow(tr("File names"), self.filename_edit)
         page.addWidget(settings)
         self.settings_box = settings
 
         self.count_label = FittedLabel("", self)
         page.addWidget(self.count_label)
+        # What the saved cartograph pages, as opposed to what QGIS pages.
+        self.saved_label = FittedLabel("", self)
+        self.saved_label.setWordWrap(True)
+        page.addWidget(self.saved_label)
         self.problem_label = FittedLabel("", self)
         self.problem_label.setWordWrap(True)
         self.problem_label.setProperty("role", "warning")
@@ -169,8 +198,20 @@ class AtlasTab(QWidget):
         page.addLayout(buttons)
         page.addStretch(1)
 
+        # Pages in the saved cartograph's atlas; `None` when it has none.
+        self._saved_pages: int | None = None
+        self._filter_error: str | None = None
+        self._sort_error: str | None = None
         self.show_layout(None)
-        self.show_outcome(problems=(), pages_written=False)
+        self.show_outcome(problems=(), pages=None)
+
+    @staticmethod
+    def _error_label(parent: QWidget) -> FittedLabel:
+        label = FittedLabel("", parent)
+        label.setWordWrap(True)
+        label.setProperty("role", "warning")
+        label.setVisible(False)
+        return label
 
     # ---- Showing ---------------------------------------------------------
 
@@ -207,18 +248,70 @@ class AtlasTab(QWidget):
         self._shown = _atlas_state(layout)
         self._update_count()
 
-    def show_outcome(self, problems: tuple[str, ...], pages_written: bool) -> None:
+    def show_outcome(self, problems: tuple[str, ...], pages: int | None) -> None:
         """What the last save made of the atlas: why it does not page, if it
-        does not, and whether the all-pages buttons have pages to work on."""
+        does not, and how many pages the saved atlas has (`None`: no atlas at
+        all; 0: an atlas whose filter matches nothing). The all-pages buttons
+        are enabled by that count alone, and only while the atlas settings
+        are valid."""
         self.problem_label.setText("\n".join(problems))
         self.problem_label.setVisible(bool(problems))
-        for button, ready_tip in self._ready_tips.items():
-            button.setEnabled(pages_written)
-            button.setToolTip(
-                ready_tip
-                if pages_written
-                else tr("The saved cartograph has no atlas pages yet")
+        self._saved_pages = pages
+        self._refresh_saved_state()
+
+    def _refresh_saved_state(self) -> None:
+        pages = self._saved_pages
+        invalid = self._filter_error is not None or self._sort_error is not None
+        if pages is None:
+            saved = ""
+        elif pages == 0:
+            saved = tr("The saved cartograph has no pages: no feature matches.")
+        else:
+            saved = plural(
+                pages,
+                "{n} page saved in the cartograph",
+                "{n} pages saved in the cartograph",
             )
+        self.saved_label.setText(saved)
+        self.saved_label.setVisible(bool(saved) and not invalid)
+        usable = bool(pages) and not invalid
+        if invalid:
+            reason = tr("Correct the atlas filter or sort first")
+        elif pages == 0:
+            reason = tr("No feature matches the atlas, so there are no pages")
+        else:
+            reason = tr("The saved cartograph has no atlas pages yet")
+        for button, ready_tip in self._ready_tips.items():
+            button.setEnabled(usable)
+            button.setToolTip(ready_tip if usable else reason)
+
+    def _validate_expressions(self) -> None:
+        """Show beside the Sort and Filter fields why QGIS cannot use what
+        is typed there; an atlas with such a field is not exported."""
+        coverage = self.coverage_combo.currentLayer()
+        atlas = self._layout.atlas() if self._layout is not None else None
+        sorting = bool(atlas and atlas.sortFeatures())
+        filtering = bool(atlas and atlas.filterFeatures())
+        for kind, edit, label, active in (
+            ("sort", self.sort_edit, self.sort_error_label, sorting),
+            ("filter", self.filter_edit, self.filter_error_label, filtering),
+        ):
+            text = edit.expression().strip()
+            error = (
+                expression_error(text, coverage)
+                if text and active and coverage is not None
+                else None
+            )
+            setattr(self, f"_{kind}_error", error)
+            label.setText(
+                tr("Not a valid expression: {error}").format(error=error)
+                if error
+                else ""
+            )
+            label.setVisible(error is not None)
+            if error is not None or (text and active):
+                self.advanced_section.set_open(True)
+        self._refresh_saved_state()
 
     def _watch_undo(self, layout: QgsPrintLayout | None) -> None:
         """Follow `layout`'s undo stack, so an Undo or Redo of an atlas edit
@@ -262,6 +355,7 @@ class AtlasTab(QWidget):
         self.map_combo.setCurrentIndex(chosen)
 
     def _update_count(self) -> None:
+        self._validate_expressions()
         count = atlas_page_count(self._layout) if self._layout is not None else None
         self.count_label.setText(
             ""

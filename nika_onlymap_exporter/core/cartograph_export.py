@@ -215,6 +215,11 @@ class FinishedCartograph:
 
     html: str
     projects: tuple[ExportProject, ...] = ()
+    # The coverage layer's feature ids the written `<om-atlas>` pages, in page
+    # order; `None` when the document carries no atlas (off, blocked, or its
+    # coverage layer did not survive the export), `()` for an atlas that
+    # matches nothing.
+    atlas_pages: tuple[int, ...] | None = None
 
 
 class StaticFrameCache:
@@ -642,7 +647,13 @@ def finish_cartograph_full(
         # final symbology is known.
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
         live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
+    requirement = prepared.atlas_requirement
     return FinishedCartograph(
+        atlas_pages=(
+            requirement.page_ids
+            if requirement is not None and spec.atlas is not None
+            else None
+        ),
         html=write_cartograph_html(
             spec,
             prepared.bundle,

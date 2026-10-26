@@ -2709,13 +2709,13 @@ class TestAtlasTab:
                 "Opens the cartograph with every page ready to print - choose "
                 "Save as PDF for one multi-page PDF",
             ]
-            for pages_written, tips in (
-                (False, greyed),
-                (True, ready),
-                (False, greyed),
+            for pages, tips in (
+                (None, greyed),
+                (3, ready),
+                (None, greyed),
             ):
-                tab.show_outcome((), pages_written=pages_written)
-                assert [b.isEnabled() for b in buttons] == [pages_written] * 2
+                tab.show_outcome((), pages=pages)
+                assert [b.isEnabled() for b in buttons] == [pages is not None] * 2
                 assert [b.toolTip() for b in buttons] == tips
         finally:
             dialog.close()
@@ -2741,6 +2741,161 @@ class TestAtlasTab:
             )
             assert "Live" in tab.problem_label.text()
             assert not tab.zip_button.isEnabled()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def _type_filter(self, tab, expression: str) -> None:
+        tab.advanced_section.set_open(True)
+        tab.window()._cartograph.open_section("atlas")
+        tab.filter_edit.setExpression(expression)
+        tab.filter_edit.fieldChanged.emit(tab.filter_edit.expression())
+
+    def test_an_invalid_filter_says_so_beside_the_field_and_blocks_export(
+        self, qgis_app, project, tmp_path, fake_cartograph_export
+    ) -> None:
+        dialog, _built = self._atlas_dialog(project, tmp_path)
+        try:
+            dialog.show()
+            tab = dialog._cartograph.atlas_tab
+            buttons = (tab.zip_button, tab.print_button)
+            # A saved atlas with pages, as the last good save left it.
+            tab.show_outcome((), pages=3)
+            assert [b.isEnabled() for b in buttons] == [True, True]
+            self._type_filter(tab, '"lot" =')
+            assert tab.filter_error_label.isVisible()
+            assert tab.filter_error_label.text().startswith("Not a valid expression")
+            assert not tab.sort_error_label.isVisible()
+            # Not "0 pages in QGIS", and no export from the earlier save.
+            assert tab.count_label.text() == ""
+            assert not tab.saved_label.isVisible()
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            assert "Correct" in buttons[0].toolTip()
+            # An unknown field is as invalid as a typo.
+            self._type_filter(tab, '"nothing_here" = 1')
+            assert tab.filter_error_label.isVisible()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_valid_zero_match_and_subset_are_told_apart_from_invalid(
+        self, qgis_app, project, tmp_path, fake_cartograph_export
+    ) -> None:
+        dialog, _built = self._atlas_dialog(project, tmp_path)
+        try:
+            dialog.show()
+            tab = dialog._cartograph.atlas_tab
+            buttons = (tab.zip_button, tab.print_button)
+            self._type_filter(tab, "\"lot\" = 'nowhere'")
+            assert not tab.filter_error_label.isVisible()
+            assert tab.count_label.text() == "0 pages in QGIS"
+            tab.show_outcome((), pages=0)
+            assert tab.saved_label.isVisible()
+            assert "no feature matches" in tab.saved_label.text()
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            assert "No feature matches" in buttons[0].toolTip()
+
+            self._type_filter(tab, "\"size\" = 'small'")
+            assert tab.count_label.text() == "2 pages in QGIS"
+            tab.show_outcome((), pages=2)
+            assert tab.saved_label.text() == "2 pages saved in the cartograph"
+            assert [b.isEnabled() for b in buttons] == [True, True]
+
+            # Recovery: invalid, then corrected.
+            self._type_filter(tab, '"size" =')
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            self._type_filter(tab, "\"lot\" = 'A-1'")
+            assert not tab.filter_error_label.isVisible()
+            assert tab.count_label.text() == "1 page in QGIS"
+            tab.show_outcome((), pages=1)
+            assert [b.isEnabled() for b in buttons] == [True, True]
+            assert tab.saved_label.text() == "1 page saved in the cartograph"
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_the_advanced_expressions_sit_below_the_basic_choices(
+        self, qgis_app, project, tmp_path, fake_cartograph_export
+    ) -> None:
+        dialog, _built = self._atlas_dialog(project, tmp_path)
+        try:
+            dialog.show()
+            dialog._cartograph.open_section("atlas")
+            tab = dialog._cartograph.atlas_tab
+            qgis_app.processEvents()
+
+            def top(widget) -> int:
+                return widget.mapTo(tab, widget.rect().topLeft()).y()
+
+            section = tab.advanced_section
+            assert top(tab.coverage_combo) < top(tab.map_combo) < top(section)
+            assert top(section) < top(tab.count_label) < top(tab.zip_button)
+            # Opens by itself when an expression is set or wrong.
+            section.set_open(False)
+            tab.show_layout(tab._layout)
+            assert not section.is_open()
+            tab._layout.atlas().setFilterFeatures(True)
+            tab._layout.atlas().setFilterExpression('"lot" =')
+            tab.show_layout(tab._layout)
+            assert section.is_open()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_a_saved_atlas_follows_the_filter_through_to_the_pages_it_pages(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        """Real saves: invalid writes no atlas, zero matches writes an atlas
+        with no pages, a subset pages those parcels only, and correcting the
+        filter brings the right parcels back."""
+        import os
+        import re
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
+        dialog, _built = self._atlas_dialog(project, tmp_path)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            tab = cartograph.atlas_tab
+            buttons = (tab.zip_button, tab.print_button)
+            assert _wait_for(qgis_app, lambda: tab.zip_button.isEnabled(), timeout=60)
+
+            def saved(expression: str):
+                before = cartograph._builds_started
+                self._type_filter(tab, expression)
+                assert _wait_for(
+                    qgis_app,
+                    lambda: (
+                        cartograph._builds_started > before and cartograph._job is None
+                    ),
+                    timeout=90,
+                )
+                text = cartograph._current_path().read_text(encoding="utf-8")
+                atlas = re.search(r"<om-atlas[^>]*>", text)
+                return atlas.group(0) if atlas else None
+
+            assert saved('"lot" =') is None
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            assert tab.filter_error_label.isVisible()
+            assert tab.problem_label.isVisible()
+
+            nowhere = saved("\"lot\" = 'nowhere'")
+            assert nowhere is not None and 'filter="false"' in nowhere
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            assert "no feature matches" in tab.saved_label.text()
+
+            small = saved("\"size\" = 'small'")
+            assert small is not None and "d.id == 2" in small
+            assert [b.isEnabled() for b in buttons] == [True, True]
+            assert tab.saved_label.text() == "2 pages saved in the cartograph"
+
+            assert saved('"lot" =') is None
+            assert [b.isEnabled() for b in buttons] == [False, False]
+            fixed = saved("\"lot\" = 'A-1'")
+            assert fixed is not None and "d.id == 2" in fixed
+            assert [b.isEnabled() for b in buttons] == [True, True]
+            assert tab.saved_label.text() == "1 page saved in the cartograph"
         finally:
             dialog.close()
             project.setFileName("")
