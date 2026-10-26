@@ -102,7 +102,7 @@ Both are also at the end of the list itself.
 **Browse templates...**, on its own line under the list, is the same
 as **From canvas...**: it opens the template picker, which remembers the design
 you chose last time, and builds another layout. The layout shown is kept as it
-is; to change that layout, use its Text size sliders. A layout made from a
+is; to change its text, move, resize or edit the items in the layout preview. A layout made from a
 template says **Based on** and the template's name under the button. Greyed out when there is no map canvas.
 
 Below the list are three tabs - **Layout**, **Atlas** and **Checks** - and,
@@ -127,16 +127,6 @@ what is in it, such as *Default theme* or *1 live, 1 static*.
 - **Theme** - the page's look: **Default**, **Dark**, **Sepia**,
   **Blueprint** or **Minimal**. It colours the page and the furniture - legend,
   scale bar, north arrow, grid - not your map data.
-- **Title / Legend / Notes sliders** - the same text sizes as the template
-  picker's *Text sizes*, shown only for a layout made from a template. Each
-  layout keeps its own (they start at the picker's). When you let go of a
-  slider (or pause after a key press) the page is built again from its template with the new sizes, in
-  place: same layout, same name and file, and the title, attribution, theme and
-  map frame choices stay. If you moved, resized or edited anything on the page
-  since it was built, you are asked first - *Rebuild the page from the
-  template? Your moves and edits on this page will be replaced.* - and **No**
-  leaves the page and the sliders as they were. Rebuilding is not itself an
-  undo step.
 
 ### Map frames
 

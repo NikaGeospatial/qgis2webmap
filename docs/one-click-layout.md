@@ -57,7 +57,9 @@ keys move them. They apply to every design (the notes size also sets Signal's ke
 figures), so a smaller size gives the map more of the page and a larger one
 takes it back. The text never goes under the readable minimum for the page, so
 a smaller size does nothing once that is reached. 100% is the default, and
-the choice is saved with the project.
+the choice is saved with the project. The Layout tab has no such sliders: once a
+layout exists, change its text by selecting, moving or resizing the items in the
+layout preview, or pick the sizes here before creating it.
 
 ![The template picker: the All, Essentials and Characterful buttons, page size and orientation at the top, and the designs as large previews of the current map, each with its name, a one-line description and what it includes.](images/cartograph-templates.png)
 
