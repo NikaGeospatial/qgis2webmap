@@ -55,9 +55,6 @@ from qgis.PyQt.QtWidgets import (
 from ...core import cartograph_export
 from ...core.atomic_write import write_text_atomic
 from ...core.canvas_cartograph import (
-    layout_edited,
-    layout_text_sizes,
-    rebuild_from_template,
     template_record,
 )
 from ...core.cartograph_ir import CartographSpec
@@ -92,7 +89,6 @@ from .frames_list import FrameRow, FramesList
 from .layout_page import LayoutPicker, PagePane, SaveLocation
 from .panel_section import PanelSection
 from .status import page_label, status_text
-from .template_picker import TextSizeControls
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
@@ -226,7 +222,6 @@ class CartographController:
         # True while this controller's own export reads (and briefly changes)
         # the layout: what that emits is not an edit.
         self._exporting = False
-        self._rebuilding_layout = False
         self._manager_connected = False
         self._frame_rows: dict[str, dict[str, QComboBox]] = {}
 
@@ -501,16 +496,6 @@ class CartographController:
         page_note.setProperty("role", "hint")
         self.page_page_note = page_note
         self.page_section.body_layout.addWidget(page_note)
-        # Only for a layout made from a template: the template is what the
-        # sizes rebuild the page from (`_sync_size_controls`).
-        self.size_controls = TextSizeControls(
-            TextSizes(), self.page_section.body, stacked=True
-        )
-        self.size_controls.toggle.setChecked(True)
-        self.size_controls.toggle.hide()
-        self.size_controls.setVisible(False)
-        self.size_controls.changed.connect(self._on_layout_sizes_changed)
-        self.page_section.body_layout.addWidget(self.size_controls)
         self.frames_section = PanelSection("frames", tr("Map frames"), sections)
         self.frames_section.body_layout.addWidget(self.build_frames_tab())
         self.layers_section = PanelSection("layers", tr("Layers"), sections)
@@ -876,16 +861,12 @@ class CartographController:
         finally:
             self._loading_page = False
 
-    def _sync_size_controls(self) -> None:
-        """Show the selected layout's text sizes, for a layout made from a
-        template; any other layout has no template to rebuild from."""
+    def _sync_based_on(self) -> None:
+        """Show the selected layout's template and the editor link."""
         layout = self._current_layout
         record = template_record(layout) if layout is not None else None
-        self.size_controls.setVisible(record is not None)
         self._show_based_on(record)
         self._update_editor_link()
-        if layout is not None and record is not None:
-            self.size_controls.set_sizes(layout_text_sizes(layout, self.project))
 
     def _show_based_on(self, record) -> None:  # TemplateRecord | None
         """ "Based on <design>" under the template button, for a layout made
@@ -920,56 +901,6 @@ class CartographController:
         if layout is None or not hasattr(iface, "openLayoutDesigner"):
             return
         iface.openLayoutDesigner(layout)
-
-    def _on_layout_sizes_changed(self) -> None:
-        """A text size moved: build the page again from its template with
-        the new sizes, in place. Moves and edits the user made on the page
-        are lost to that, so they are asked about first; Cancel leaves the
-        page as it is and puts the sliders back."""
-        from qgis.PyQt.QtWidgets import QMessageBox
-
-        layout = self._current_layout
-        if layout is None or sip.isdeleted(layout):
-            return
-        sizes = self.size_controls.sizes()
-        if layout_edited(layout) and (
-            QMessageBox.question(
-                self.dialog,
-                tr("Text sizes"),
-                tr(
-                    "Rebuild the page from the template? Your moves and edits "
-                    "on this page will be replaced."
-                ),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            != QMessageBox.StandardButton.Yes
-        ):
-            self.size_controls.set_sizes(layout_text_sizes(layout, self.project))
-            return
-        name = layout.name()
-        self._rebuilding_layout = True
-        try:
-            new_ids = rebuild_from_template(layout, self.project, sizes)
-        except Exception as exc:  # a view the template cannot be built from
-            self.size_controls.set_sizes(layout_text_sizes(layout, self.project))
-            self.dialog.status_label.setText(
-                tr("Could not rebuild the page: {error}").format(error=str(exc))
-            )
-            return
-        finally:
-            self._rebuilding_layout = False
-        # The choices made per map frame follow the frames to their new ids.
-        choices = self.state.frame_choices(name)
-        self.state.cartograph_frames[name] = {
-            new_ids[old]: choice for old, choice in choices.items() if old in new_ids
-        }
-        self.page_pane.show_layout(layout)
-        self._rebuild_frames_rows()
-        self.atlas_tab.show_layout(layout)
-        self._update_section_summaries()
-        save_state(self.project, self.state)
-        self.schedule_autosave()
 
     def _apply_page_fields(self, spec: CartographSpec) -> CartographSpec:
         """The Cartograph tab's title, attribution and theme on the page root."""
@@ -1252,7 +1183,7 @@ class CartographController:
         self.atlas_tab.show_layout(layout)
         self._update_file_default()
         self._load_page_fields()
-        self._sync_size_controls()
+        self._sync_based_on()
         self.update_window_title()
         if switching:
             self._forget_last_save()
@@ -1306,7 +1237,7 @@ class CartographController:
             self._current_layout.refresh()
 
     def _on_layout_content_changed(self, *_args: object) -> None:
-        if self._exporting or self._rebuilding_layout:
+        if self._exporting:
             return
         if self._current_layout is not None and sip.isdeleted(self._current_layout):
             # Being deleted: its destructor clears the undo stack, which moves

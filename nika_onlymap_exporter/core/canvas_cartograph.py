@@ -46,8 +46,6 @@ from qgis.core import (
     QgsLayerTreeLayer,
     QgsLayout,
     QgsLayoutExporter,
-    QgsLayoutItem,
-    QgsLayoutItemLabel,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsLayoutUtils,
@@ -60,7 +58,6 @@ from qgis.core import (
     QgsPointXY,
     QgsPrintLayout,
     QgsProject,
-    QgsReadWriteContext,
     QgsRectangle,
     QgsRendererCategory,
     QgsTextRenderer,
@@ -69,7 +66,6 @@ from qgis.core import (
 from qgis.gui import QgsMapCanvas
 from qgis.PyQt.QtCore import QObject, QRectF, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
-from qgis.PyQt.QtXml import QDomDocument
 
 from . import layout_templates
 from .cartograph_import import RoundTripIssue
@@ -232,7 +228,6 @@ def cartograph_from_view(
             placeholders=dict(placeholders or {}),
             figures=tuple(project_figures(project)),
         ),
-        project_text_sizes(project) if text_sizes is None else text_sizes,
     )
     map_item = built.items_by_id[FRAME_ID]
     mode: FrameMode = default_mode_for_map(map_item)
@@ -251,14 +246,9 @@ def cartograph_from_view(
     )
 
 
-#: The layout custom properties a layout made from a template carries: the
-#: view and choices it was built from (JSON, `TemplateRecord`), the text
-#: size steps it was built with, and a fingerprint of its items as built
-#: (`layout_edited`). A layout without the first is not one the template
-#: can rebuild.
+#: The layout custom property a layout made from a template carries: the
+#: view and choices it was built from (JSON, `TemplateRecord`).
 TEMPLATE_PROPERTY = "nika/template"
-TEMPLATE_SIZES_PROPERTY = "nika/template-sizes"
-TEMPLATE_FINGERPRINT_PROPERTY = "nika/template-fingerprint"
 
 
 @dataclass(frozen=True)
@@ -277,14 +267,8 @@ class TemplateRecord:
     figures: tuple[tuple[str, str], ...]
 
 
-def _record_template(
-    layout: QgsPrintLayout, record: TemplateRecord, sizes: TextSizes
-) -> None:
+def _record_template(layout: QgsPrintLayout, record: TemplateRecord) -> None:
     layout.setCustomProperty(TEMPLATE_PROPERTY, json.dumps(dataclasses.asdict(record)))
-    layout.setCustomProperty(
-        TEMPLATE_SIZES_PROPERTY, json.dumps(dataclasses.asdict(sizes))
-    )
-    layout.setCustomProperty(TEMPLATE_FINGERPRINT_PROPERTY, _layout_fingerprint(layout))
 
 
 def template_record(layout: QgsLayout) -> TemplateRecord | None:
@@ -308,104 +292,6 @@ def template_record(layout: QgsLayout) -> TemplateRecord | None:
         )
     except (ValueError, KeyError, TypeError):
         return None
-
-
-def layout_text_sizes(layout: QgsLayout, project: QgsProject) -> TextSizes:
-    """The text sizes `layout` was built with; the project's (the picker's)
-    when it records none."""
-    raw = layout.customProperty(TEMPLATE_SIZES_PROPERTY)
-    if raw:
-        try:
-            data = json.loads(str(raw))
-            return TextSizes(data["title"], data["legend"], data["notes"])
-        except (ValueError, KeyError, TypeError):
-            pass
-    return project_text_sizes(project)
-
-
-def _layout_fingerprint(layout: QgsLayout) -> str:
-    """The items' kind, id, place, size and text, as a short hash: what a
-    move, a resize, an added or removed item or a text edit changes."""
-    rows = []
-    for item in layout.items():
-        if not isinstance(item, QgsLayoutItem) or not item.id():
-            continue
-        rect = item.sceneBoundingRect()
-        text = item.text() if isinstance(item, QgsLayoutItemLabel) else ""
-        rows.append(
-            f"{type(item).__name__}|{item.id()}|{rect.x():.2f}|{rect.y():.2f}"
-            f"|{rect.width():.2f}|{rect.height():.2f}|{text}"
-        )
-    rows.sort()
-    return hashlib.sha1("\n".join(rows).encode()).hexdigest()
-
-
-def layout_edited(layout: QgsLayout) -> bool:
-    """Whether the user changed `layout` since the template built it. The
-    undo stack tells a session's edits, but is empty again once the project
-    is reopened; the items' fingerprint stored at the build tells both."""
-    return layout.customProperty(TEMPLATE_FINGERPRINT_PROPERTY) != _layout_fingerprint(
-        layout
-    )
-
-
-def rebuild_from_template(
-    layout: QgsPrintLayout, project: QgsProject, sizes: TextSizes
-) -> dict[str, str]:
-    """Build `layout` again from its template with the text sizes `sizes`,
-    in place: the same layout object and name, its items replaced. Returns
-    the new map item uuid for each old one, by the item's id, so the choices
-    kept per map frame can follow. Raises `ValueError` when `layout` has no
-    record or its view cannot be rebuilt; the layout is then untouched."""
-    record = template_record(layout)
-    if record is None:
-        raise ValueError("the layout was not made from a template")
-    crs = QgsCoordinateReferenceSystem.fromWkt(record.crs_wkt)
-    layers = [
-        found
-        for found in (project.mapLayer(layer_id) for layer_id in record.layer_ids)
-        if found is not None
-    ]
-    old_ids = {
-        item.uuid(): item.id()
-        for item in layout.items()
-        if isinstance(item, QgsLayoutItemMap)
-    }
-    with _project_dirty_state_kept(project):
-        _plan, _spec, built, _left_out = _build_from_view(
-            QgsRectangle(*record.extent),
-            crs,
-            layers,
-            project,
-            rotation=record.rotation,
-            page_size=record.page_size,
-            orientation=record.orientation,
-            template_id=record.template_id,
-            placeholders=record.placeholders,
-            add_to_project=False,
-            figures=record.figures,
-            text_sizes=sizes,
-        )
-    name = layout.name()
-    document = QDomDocument()
-    element = built.layout.writeXml(document, QgsReadWriteContext())
-    document.appendChild(element)
-    layout.clear()
-    loaded = layout.loadFromTemplate(document, QgsReadWriteContext(), True)
-    layout.setName(name)
-    if not loaded:
-        raise ValueError("the rebuilt page could not be loaded into the layout")
-    new_by_id = {
-        item.id(): item.uuid()
-        for item in layout.items()
-        if isinstance(item, QgsLayoutItemMap)
-    }
-    _record_template(layout, record, sizes)
-    return {
-        old: new_by_id[item_id]
-        for old, item_id in old_ids.items()
-        if item_id in new_by_id
-    }
 
 
 @contextlib.contextmanager
