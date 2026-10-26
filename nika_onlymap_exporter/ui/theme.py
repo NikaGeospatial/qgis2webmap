@@ -1375,6 +1375,13 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.accent_soft};
     border-color: {p.muted};
 }}
+/* The mode of editing the view inside a map: the filled button says it is
+   on (the banner over the page takes the palette's highlight). */
+{d} QPushButton[role="secondary"]:checked {{
+    background: {p.accent};
+    color: {p.on_accent};
+    border-color: {p.accent_hover};
+}}
 {d} QLabel[role="saveName"] {{
     color: {p.ink};
     font-weight: 600;

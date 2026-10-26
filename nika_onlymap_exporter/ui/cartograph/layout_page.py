@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from qgis.core import QgsLayoutItemLegend
+from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
@@ -66,6 +66,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..i18n import plural, tr
+from .content_edit import ContentEditor
 from .item_controls import ContextControls
 from .item_placement import ItemPlacer
 from .item_text_size import step_text_size, text_size_points
@@ -233,6 +234,9 @@ class LayoutPreview(QStackedWidget):
     placing_changed = pyqtSignal(bool)
     # An item was double-clicked in Select mode (the item).
     item_double_clicked = pyqtSignal(object)
+    # The mode where a drag pans and the wheel zooms a map's content began or
+    # ended (whether it is on).
+    content_edit_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -299,6 +303,11 @@ class LayoutPreview(QStackedWidget):
         self.placer = ItemPlacer(self.view)
         self.placer.placed.connect(self.item_placed)
         self.placer.active_changed.connect(self.placing_changed)
+        # Also after the filters above: while it is on, a press on the map
+        # being edited is its drag, never the select tool's move or resize.
+        self.content_editor = ContentEditor(self.view)
+        self.content_editor.active_changed.connect(self._on_content_edit_changed)
+        self.content_editor.edited.connect(self.selection_changed)
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.setInterval(0)
@@ -310,6 +319,7 @@ class LayoutPreview(QStackedWidget):
             return
         if self.view.currentLayout() is not layout:
             self.placer.cancel()
+            self.content_editor.finish()
             self.view.setCurrentLayout(layout)
             self._select = QgsLayoutViewToolSelect(self.view)
             self._select.setLayout(layout)
@@ -360,6 +370,7 @@ class LayoutPreview(QStackedWidget):
         if layout is None or sip.isdeleted(layout):
             return False
         chosen = layout.selectedLayoutItems()
+        self.content_editor.finish()
         delete_items(layout, chosen)
         self.selection_changed.emit()
         return bool(chosen)
@@ -376,8 +387,23 @@ class LayoutPreview(QStackedWidget):
         # was measured with them still taking room.
         self._fit_timer.start()
 
+    def edit_content(self, map_item) -> None:  # QgsLayoutItemMap | None
+        """Pan and zoom what `map_item` shows inside its frame (a drag pans,
+        the wheel zooms); `None` ends it. The page stays as the user has it."""
+        if map_item is None:
+            self.content_editor.finish()
+            return
+        self._user_zoomed = True
+        self.placer.cancel()
+        self.content_editor.begin(map_item)
+
+    def _on_content_edit_changed(self, on: bool) -> None:
+        if not sip.isdeleted(self):
+            self.content_edit_changed.emit(on)
+
     def set_select_mode(self, select: bool) -> None:
         """Select/Move (True) or Pan (False)."""
+        self.content_editor.finish()
         self._select_mode = select
         self.view.setTool(self._select if select and self._select else self._pan)
 
@@ -418,6 +444,8 @@ class LayoutPreview(QStackedWidget):
                 self._step_undo(redo=True)
                 return True
             if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+                if self.content_editor.active:
+                    return True  # editing the view inside a frame, not the frame
                 return self.select_mode() and self.delete_selected()
         if (
             event is not None
@@ -629,6 +657,9 @@ class PagePane(QWidget):
         self.select_button.setChecked(True)
         self._modes = modes
         self.select_button.toggled.connect(self.preview.set_select_mode)
+        # Select is already on while the view inside a frame is being edited,
+        # so clicking it is not a toggle: it must still end that mode.
+        self.select_button.clicked.connect(lambda: self.preview.edit_content(None))
         self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
         self.fit_button.clicked.connect(self.preview.fit_page)
         bar.addWidget(self.fit_button)
@@ -716,6 +747,8 @@ class PagePane(QWidget):
         self.preview.selection_changed.connect(self._show_text_size)
         self.preview.selection_changed.connect(self._refresh_controls)
         self.preview.item_placed.connect(self._on_item_placed)
+        self.controls.edit_view_toggled.connect(self._on_edit_view_toggled)
+        self.preview.content_edit_changed.connect(self.controls.set_editing)
         # The legend's editor lives in the strip: the preview's double-click
         # on a legend opens the strip, as for any item.
         self.controls.set_legend_editor_factory(lambda parent: LegendEditor(parent))
@@ -791,6 +824,12 @@ class PagePane(QWidget):
         view = self.preview.view
         horizontal, vertical = view.horizontalScrollBar(), view.verticalScrollBar()
         scroll = (horizontal.value(), vertical.value())
+        editor = self.preview.content_editor
+        if editor.active:
+            layout = self.preview.view.currentLayout()
+            chosen = [] if layout is None else layout.selectedLayoutItems()
+            if len(chosen) != 1 or chosen[0] is not editor.target():
+                editor.finish()
         shown = self.controls.isVisible()
         try:
             self.controls.refresh()
@@ -804,6 +843,10 @@ class PagePane(QWidget):
                 layout.activate()
             horizontal.setValue(scroll[0])
             vertical.setValue(scroll[1])
+
+    def _on_edit_view_toggled(self, on: bool) -> None:
+        item = self.controls.selected_item() if on else None
+        self.preview.edit_content(item if isinstance(item, QgsLayoutItemMap) else None)
 
     def _on_item_placed(self, item: object) -> None:
         self._refresh_controls()

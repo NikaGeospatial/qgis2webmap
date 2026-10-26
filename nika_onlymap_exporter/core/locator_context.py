@@ -225,20 +225,26 @@ def _undoable(locator: QgsLayoutItemMap, text: str, change: object) -> None:
             stack.endCommand()
 
 
-def fit_locator_to_context(
+def is_locator(item: QgsLayoutItemMap) -> bool:
+    """Whether `item` is an inset: one this module made, or any map that
+    outlines another map through an overview."""
+    return has_wider_context(item) is not None or _main_map(item) is not None
+
+
+def locator_view_for(
     locator: QgsLayoutItemMap, layers: Sequence[QgsMapLayer] | None = None
 ) -> LocatorView | None:
-    """Fit the inset `locator` to the wider context of `layers` (`None`: the
-    layers it draws now), round the map it outlines. Undoable. Returns the
-    view, or `None` when the item outlines no map."""
+    """The view `fit_locator_to_context` would give the inset `locator` for
+    `layers` (`None`: the layers it draws now), without applying it; `None`
+    when the item outlines no map."""
     main = _main_map(locator)
     layout = locator.layout()
     project = layout.project() if layout is not None else None
     if main is None or project is None:
         return None
-    chosen = list(layers) if layers is not None else list(locator.layers())
+    chosen = list(layers) if layers is not None else list(locator.layersToRender())
     size = locator.rect()
-    view = locator_view(
+    return locator_view(
         main.extent(),
         main.crs(),
         chosen,
@@ -246,6 +252,18 @@ def fit_locator_to_context(
         size.width() / size.height(),
         context_layers=chosen,
     )
+
+
+def fit_locator_to_context(
+    locator: QgsLayoutItemMap, layers: Sequence[QgsMapLayer] | None = None
+) -> LocatorView | None:
+    """Fit the inset `locator` to the wider context of `layers` (`None`: the
+    layers it draws now), round the map it outlines. Undoable. Returns the
+    view, or `None` when the item outlines no map."""
+    view = locator_view_for(locator, layers)
+    main = _main_map(locator)
+    if view is None or main is None:
+        return None
 
     def apply() -> None:
         locator.setCrs(main.crs())

@@ -38,7 +38,15 @@ from qgis.core import (
 )
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QEvent, QObject, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QFont, QIcon, QKeyEvent, QPixmap, QWheelEvent
+from qgis.PyQt.QtGui import (
+    QColor,
+    QFont,
+    QIcon,
+    QKeyEvent,
+    QMouseEvent,
+    QPixmap,
+    QWheelEvent,
+)
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QColorDialog,
@@ -47,6 +55,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
@@ -57,9 +66,24 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ...core.locator_context import (
+    draw_quietly,
+    fit_locator_to_context,
+    is_locator,
+    locator_view_for,
+    omit_locator,
+)
 from ..i18n import tr
 from .frames_list import LIVE, STATIC, FramesList, _QuietCombo
-from .layout_items import delete_items, item_edit, link_map, map_frames, map_label
+from .layer_membership import drawn_layers, set_layer_included
+from .layout_items import (
+    delete_items,
+    item_edit,
+    link_map,
+    map_frames,
+    map_label,
+    one_step,
+)
 
 #: What opens a legend editor: called with the strip as parent, it returns a
 #: widget that has `set_legend(QgsLayoutItemLegend | None)`.
@@ -199,11 +223,25 @@ class _MapChoice(QWidget):
         self.chosen.emit(str(self.combo.itemData(index)))
 
 
+class _StayOpenMenu(QMenu):
+    """A menu of check boxes: ticking one leaves it open for the next, as a
+    list of choices does; Escape or a click outside closes it."""
+
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
+        action = self.actionAt(event.pos()) if event is not None else None
+        if action is not None and action.isCheckable() and action.isEnabled():
+            action.trigger()
+            return
+        super().mouseReleaseEvent(event)
+
+
 class ContextControls(QFrame):
     """The strip under the preview bar: what can be changed on the selected item."""
 
     #: "Use canvas extent" for a map (its uuid): the controller owns the canvas.
     canvas_extent_requested = pyqtSignal(str)
+    #: "Edit view" was switched on or off for the selected map.
+    edit_view_toggled = pyqtSignal(bool)
     #: An item was edited here (the page's own refresh follows its undo stack).
     edited = pyqtSignal()
 
@@ -318,6 +356,18 @@ class ContextControls(QFrame):
         self.map_page, column = self._page()
         row = QHBoxLayout()
         row.setSpacing(6)
+        self.edit_view_button = QPushButton(tr("Edit view"), self.map_page)
+        self.edit_view_button.setProperty("role", "secondary")
+        self.edit_view_button.setCheckable(True)
+        self.edit_view_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.edit_view_button.setToolTip(
+            tr(
+                "Drag to pan and use the wheel to zoom what this map shows, "
+                "inside its frame. Esc finishes; Select moves the frame."
+            )
+        )
+        self.edit_view_button.toggled.connect(self._on_edit_view)
+        row.addWidget(self.edit_view_button)
         self.canvas_button = QPushButton(tr("Use canvas extent"), self.map_page)
         self.canvas_button.setProperty("role", "secondary")
         self.canvas_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -327,6 +377,10 @@ class ContextControls(QFrame):
         self.canvas_button.clicked.connect(self._on_canvas)
         row.addWidget(self.canvas_button)
         row.addStretch(1)
+        column.addLayout(row)
+
+        row = QHBoxLayout()
+        row.setSpacing(6)
         rotation_label = QLabel(tr("Rotation"), self.map_page)
         rotation_label.setProperty("role", "hint")
         row.addWidget(rotation_label)
@@ -339,10 +393,6 @@ class ContextControls(QFrame):
         rotation_label.setBuddy(self.rotation_spin)
         self.rotation_spin.editingFinished.connect(self._on_rotation)
         row.addWidget(self.rotation_spin)
-        column.addLayout(row)
-
-        row = QHBoxLayout()
-        row.setSpacing(6)
         self.mode_combo = _QuietCombo(self.map_page)
         self.mode_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.mode_combo.addItem(tr("Interactive"), LIVE)
@@ -364,6 +414,37 @@ class ContextControls(QFrame):
         row.addWidget(self.dpi_combo)
         row.addStretch(1)
         column.addLayout(row)
+
+        # Only for an inset: what it draws and how much it shows.
+        self.inset_row = QWidget(self.map_page)
+        inset = QHBoxLayout(self.inset_row)
+        inset.setContentsMargins(0, 0, 0, 0)
+        inset.setSpacing(6)
+        self.context_button = QPushButton(tr("Context layers..."), self.inset_row)
+        self.context_button.setProperty("role", "secondary")
+        self.context_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.context_button.setToolTip(tr("Choose which layers this inset draws"))
+        self.context_menu = _StayOpenMenu(self.context_button)
+        self.context_menu.aboutToShow.connect(self._fill_context_menu)
+        self.context_button.setMenu(self.context_menu)
+        inset.addWidget(self.context_button)
+        self.fit_button = QPushButton(tr("Fit context"), self.inset_row)
+        self.fit_button.setProperty("role", "secondary")
+        self.fit_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.fit_button.clicked.connect(self._on_fit_context)
+        inset.addWidget(self.fit_button)
+        self.remove_inset_button = QPushButton(tr("Remove inset"), self.inset_row)
+        self.remove_inset_button.setProperty("role", "secondary")
+        self.remove_inset_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.remove_inset_button.setToolTip(tr("Take this inset off the page"))
+        self.remove_inset_button.clicked.connect(self._on_remove_inset)
+        inset.addWidget(self.remove_inset_button)
+        inset.addStretch(1)
+        column.addWidget(self.inset_row)
+        self.context_note = QLabel(self.map_page)
+        self.context_note.setProperty("role", "hint")
+        self.context_note.setWordWrap(True)
+        column.addWidget(self.context_note)
 
     def _build_legend_page(self) -> None:
         self.legend_page, column = self._page()
@@ -568,6 +649,7 @@ class ContextControls(QFrame):
         self.pages.setCurrentWidget(self.map_page)
         self.rotation_spin.setValue(item.mapRotation())
         self._show_frame_state()
+        self._show_inset(item)
 
     def _show_frame_state(self) -> None:
         item = self._item
@@ -600,6 +682,103 @@ class ContextControls(QFrame):
             self.dpi_combo.setVisible(card.mode() == STATIC)
         finally:
             self._loading = was_loading
+
+    def set_editing(self, editing: bool) -> None:
+        """Show whether the view inside the selected map is being edited."""
+        was_loading = self._loading
+        self._loading = True
+        try:
+            self.edit_view_button.setChecked(editing)
+        finally:
+            self._loading = was_loading
+
+    def _show_inset(self, item: QgsLayoutItemMap) -> None:
+        inset = is_locator(item)
+        self.edit_view_button.setText(
+            tr("Edit inset view") if inset else tr("Edit view")
+        )
+        self.inset_row.setVisible(inset)
+        self.context_note.setVisible(False)
+        if not inset:
+            return
+        view = locator_view_for(item)
+        can_fit = view is not None and view.has_context
+        self.fit_button.setEnabled(can_fit)
+        if view is None:
+            note = tr("This inset outlines no map, so there is no view to fit.")
+        elif not view.has_context:
+            note = tr(
+                "No wider context: the layers this inset draws reach no "
+                "further than the map it outlines. Add a layer that covers "
+                "more ground (Context layers...), or remove the inset."
+            )
+        else:
+            note = ""
+        self.fit_button.setToolTip(
+            note or tr("Fit the inset to the wider area its layers cover")
+        )
+        self.context_note.setText(note)
+        self.context_note.setVisible(bool(note))
+
+    def _fill_context_menu(self) -> None:
+        menu = self.context_menu
+        menu.clear()
+        item, layout = self._live_item(), self._layout
+        if not isinstance(item, QgsLayoutItemMap) or layout is None:
+            return
+        project = layout.project()
+        drawn = {layer.id() for layer in drawn_layers(item)}
+        for node in project.layerTreeRoot().findLayers():
+            layer = node.layer()
+            if layer is None:
+                continue
+            action = menu.addAction(layer.name())
+            action.setCheckable(True)
+            action.setChecked(layer.id() in drawn)
+            layer_id = layer.id()
+            action.toggled.connect(
+                lambda checked, lid=layer_id: self._on_context_layer(lid, checked)
+            )
+
+    def _on_context_layer(self, layer_id: str, included: bool) -> None:
+        item, layout = self._live_item(), self._layout
+        if self._loading or not isinstance(item, QgsLayoutItemMap) or layout is None:
+            return
+        with one_step(layout, tr("Choose inset layers")):
+            changed = set_layer_included(
+                layout, layout.project(), item, layer_id, included
+            )
+            if changed:
+                # An inset stays quiet: a layer added to it has no labels.
+                with item_edit(layout, item, tr("Choose inset layers")):
+                    draw_quietly(item)
+        if changed:
+            self._show_inset(item)
+            self.edited.emit()
+
+    def _on_fit_context(self) -> None:
+        item = self._live_item()
+        if not isinstance(item, QgsLayoutItemMap):
+            return
+        view = locator_view_for(item)
+        if view is None or not view.has_context:
+            self._show_inset(item)
+            return
+        fit_locator_to_context(item)
+        self._show_inset(item)
+        self.edited.emit()
+
+    def _on_remove_inset(self) -> None:
+        item = self._live_item()
+        if not isinstance(item, QgsLayoutItemMap):
+            return
+        omit_locator(item)
+        self.edited.emit()
+        self.refresh()
+
+    def _on_edit_view(self, on: bool) -> None:
+        if not self._loading:
+            self.edit_view_toggled.emit(on)
 
     def _show_legend(self, layout: QgsLayout, item: QgsLayoutItemLegend) -> None:
         self.pages.setCurrentWidget(self.legend_page)
