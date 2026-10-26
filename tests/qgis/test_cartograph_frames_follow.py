@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
-from test_cartograph_dialog import (  # noqa: E402
+from test_cartograph_dialog import (
     _add_layout,
     _choose_cartograph,
     _dialog,
