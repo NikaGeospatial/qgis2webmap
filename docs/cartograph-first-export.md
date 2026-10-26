@@ -121,7 +121,7 @@ the top of the panel, under **Print layout**:
 ![The Cartograph screen, with the Print layout list highlighted.](images/cartograph-01-source.png)
 
 The page on the left is now the layout, captioned with its size -
-*QGIS layout · A4 landscape*. It is QGIS's own drawing of the layout and
+*Layout preview — QGIS · A4 landscape*. It is QGIS's own drawing of the layout and
 follows every change you make. Zoom with the bar under it or the mouse wheel,
 and drag to pan.
 

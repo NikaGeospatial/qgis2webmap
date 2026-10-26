@@ -15,7 +15,7 @@ lead_image:
 Choose **Cartograph** from the title menu at the top of the plugin's dialog
 (**Web map ▾**) and the dialog becomes one screen: the print layout's
 page on the left and a panel of settings on the right. The header holds
-**colour vision**, **Preview** and **Share**, and there is no Export
+**colour vision**, **Preview in browser** and **Export & share**, and there is no Export
 button. The web map's tabs are described in
 [the dialog, tab by tab](the-dialog.md). The **Settings** and **Help** icons
 at the right of the header are shared and work the same way.
@@ -47,15 +47,18 @@ own file, frames, page fields and print settings.
 
 ## The page
 
-The left side shows the selected layout, captioned **QGIS layout ·** and its
-page size - *QGIS layout · A4 landscape*, for example. It is QGIS's own
+The left side shows the selected layout, captioned **Layout preview — QGIS ·** and its
+page size - *Layout preview — QGIS · A4 landscape*, for example. It is QGIS's own
 drawing of the print layout, live: a change in the layout designer, a
 restyled layer or a new title shows at once.
 
 It is not the HTML. The cartograph can differ in places - a north arrow the
 browser draws its own way, the page's theme - and the **Checks** tab lists
 every difference. Beside the caption, a link such as **2 changes in the HTML**
-opens Checks. To see the real cartograph, press **Preview**.
+opens Checks. To see the real cartograph, press **Preview in browser**. **Open layout editor**,
+beside the caption, opens the layout in QGIS's own layout designer. The Page
+settings (title, attribution, theme) change the HTML, so they show in
+**Preview in browser**, not in this preview.
 
 Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
 100% is the page at its real size on your screen. The mouse wheel zooms too.
@@ -96,10 +99,11 @@ Both are also at the end of the list itself.
 
 ![The panel's Print layout list, with the Add... menu open on From canvas... and Import cartograph....](images/cartograph-import.png)
 
-**New layout from template...**, on its own line under the list, is the same
+**Browse templates...**, on its own line under the list, is the same
 as **From canvas...**: it opens the template picker, which remembers the design
 you chose last time, and builds another layout. The layout shown is kept as it
-is. Greyed out when there is no map canvas.
+is; to change that layout, use its Text size sliders. A layout made from a
+template says **Based on** and the template's name under the button. Greyed out when there is no map canvas.
 
 Below the list are three tabs - **Layout**, **Atlas** and **Checks** - and,
 at the foot of the panel, [where the file saves](#where-it-saves).
@@ -272,12 +276,12 @@ At the top right, reachable whatever the panel shows:
   on the canvas and in the browser, and check which legend classes become
   indistinguishable. Stays pressed while a simulation is on, and its tooltip
   names it.
-- **Preview** - opens the saved cartograph in your default browser.
-- **Share** - opens the [Share menu](#the-share-menu).
+- **Preview in browser** - opens the saved cartograph in your default browser.
+- **Export & share** - opens the [Export & share menu](#the-share-menu).
 
 Then the **Settings** and **Help** icons, as on the web map.
 
-![The header on Cartograph: the colour vision icon, Preview and Share, then the Settings and Help icons.](images/cartograph-corner.png)
+![The header on Cartograph: the colour vision icon, Preview in browser and Export & share, then the Settings and Help icons.](images/cartograph-corner.png)
 
 The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
@@ -287,16 +291,19 @@ live map from a file path. Nothing leaves your computer.
 
 ## The Share menu
 
+The header's **Export & share** button. Outputs come first, then the file
+actions, then the greyed NIKA rows.
+
 | Row | What it does | Available |
 |---|---|---|
-| **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
-| **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
-| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |
-| **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
 | **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size, with its background colours kept even when the browser's **Background graphics** is off - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
 | **Export PNG...** | Opens the cartograph, which renders a 300 dpi image of the page and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
 | **Export QGIS layout template (.qpt)...** | Saves the source layout as a `.qpt` template, to load into another project | Once a layout is selected |
 | **Print settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Export PDF | Once a layout is selected |
+| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |
+| **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
+| **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
+| **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
 
 **Ctrl+O** and **Ctrl+P** work from anywhere in the dialog, without opening
 the menu.

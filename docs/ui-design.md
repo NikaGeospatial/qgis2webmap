@@ -73,7 +73,7 @@ So the cartograph is one screen:
 
 - **Left: the live page.** It is QGIS's own layout canvas, so a change in the
   layout designer or to a layer shows at once. It is labelled
-  *QGIS layout · A4 landscape* because it is QGIS's drawing, not the HTML;
+  *Layout preview — QGIS · A4 landscape* because it is QGIS's drawing, not the HTML;
   the two can differ, and saying so beats a preview that quietly disagrees
   with the file. A link beside the caption counts the differences and opens
   Checks. A zoom bar says what the wheel and a drag already do.
