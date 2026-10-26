@@ -392,6 +392,9 @@ def page(qgis_app, project):
     layout.addLayoutItem(legend)
     legend.setResizeToContents(False)
     items["legend"] = legend
+    # The gestures below measure a drag's reach, not snapping: whether a
+    # neighbour's edge catches it depends on the pixels the page is shown at.
+    layout.snapper().setSnapToItems(False)
     widget = PagePane()
     widget.resize(900, 650)
     widget.show()
@@ -480,6 +483,31 @@ class TestResizingInThePage:
         assert stack.count() == steps + 1
         stack.undo()
         assert item.sceneBoundingRect().topLeft() == before.topLeft()
+
+    @pytest.mark.parametrize("name", ["map", "title", "legend"])
+    def test_a_resize_leaves_the_others_and_the_lettering_alone(
+        self, qgis_app, page, name
+    ) -> None:
+        """Resizing a box is not changing its lettering, and moves nothing else."""
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, layout, items = page
+        item = items[name]
+        self._select(qgis_app, layout, item)
+        others = {k: v.sceneBoundingRect() for k, v in items.items() if k != name}
+        size = pane.text_size_label.text()
+        lettering = item.textFormat().size() if hasattr(item, "textFormat") else None
+        box = pane.preview.view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+        corner = box.bottomRight()
+        _hover(qgis_app, pane, corner)
+        _drag(qgis_app, pane, corner, corner - QPoint(30, 20))
+        assert item.sceneBoundingRect().width() < box.width()
+        assert {
+            k: v.sceneBoundingRect() for k, v in items.items() if k != name
+        } == others
+        if lettering is not None:
+            assert item.textFormat().size() == pytest.approx(lettering)
+        assert pane.text_size_label.text() == size
 
     def test_a_press_far_outside_the_box_does_not_resize(self, qgis_app, page) -> None:
         from qgis.PyQt.QtCore import QPoint

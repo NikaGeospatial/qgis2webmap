@@ -4170,6 +4170,71 @@ class TestDesignerEditsAutosave:
         finally:
             dialog.close()
 
+    def test_adding_editing_and_deleting_in_the_preview_autosave(
+        self, qgis_app, project, fake_cartograph_export, tmp_path
+    ) -> None:
+        """The preview's Add menu, selected-item controls and Delete are undo
+        commands on the layout: the autosave follows each, and the controls
+        share the Map frames list's choices."""
+        from qgis.core import QgsLayoutItemLabel
+        from qgis.PyQt.QtCore import QPointF, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        dialog, cartograph, layout, _label, map_item = self._ready(project, qgis_app)
+        try:
+            dialog.resize(1200, 800)
+            dialog.show()
+            pane = cartograph.page_pane
+            assert _wait_for(qgis_app, lambda: pane.preview.isVisible())
+            assert pane.controls._frames is cartograph.frames_list
+            target = tmp_path / "survey.html"
+            cartograph.file_edit.setText(str(target))
+            pane._fill_add_menu()
+            text = next(a for a in pane.add_menu.actions() if a.text() == "Text")
+            made, started = self._counts(cartograph, text.trigger)
+            assert made == 0 and pane.preview.placer.active
+            viewport = pane.preview.view.viewport()
+            point = pane.preview.view.mapFromScene(QPointF(150, 150))
+            made, started = self._counts(
+                cartograph,
+                lambda: QTest.mouseClick(
+                    viewport,
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.NoModifier,
+                    point,
+                ),
+            )
+            assert made >= 1 and started
+            added = [i for i in layout.items() if isinstance(i, QgsLayoutItemLabel)]
+            fresh = next(i for i in added if i is not _label)
+            edit = pane.controls.text_edit
+            edit.selectAll()
+            QTest.keyClicks(edit, "Added in the preview")
+            made, started = self._counts(
+                cartograph, lambda: QTest.keyClick(edit, Qt.Key.Key_Return)
+            )
+            assert made >= 1 and started and fresh.text() == "Added in the preview"
+            made, started = self._counts(cartograph, pane.controls.delete_button.click)
+            assert made >= 1 and started and fresh not in layout.items()
+            layout.deselectAll()
+            map_item.setSelected(True)
+            qgis_app.processEvents()
+            mode = pane.controls.mode_combo
+            assert pane.controls.pages.currentWidget() is pane.controls.map_page
+            mode.setCurrentIndex(1)
+            made, started = self._counts(cartograph, lambda: mode.activated.emit(1))
+            assert made >= 1 and started
+            card = cartograph.frames_list.card(map_item.uuid())
+            assert card.mode() == "static"
+            assert (
+                cartograph.state.frame_choices(cartograph.state.cartograph_layout)[
+                    map_item.uuid()
+                ].mode
+                == "static"
+            )
+        finally:
+            dialog.close()
+
     def test_a_burst_of_edits_is_one_build(
         self, qgis_app, project, fake_cartograph_export, tmp_path
     ) -> None:
