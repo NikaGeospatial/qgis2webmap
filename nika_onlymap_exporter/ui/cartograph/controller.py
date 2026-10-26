@@ -86,6 +86,7 @@ from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
+from .layer_membership import LayerMembership
 from .layout_page import LayoutPicker, PagePane, SaveLocation
 from .panel_section import PanelSection
 from .status import page_label, status_text
@@ -228,6 +229,8 @@ class CartographController:
         # What each listed map item's row shows: (name, CRS authid), so a
         # rename or CRS change of an item already listed is noticed.
         self._frame_identities: dict[str, tuple[str, str]] = {}
+        # Which layers the layout's map frame draws, edited from the Layers list.
+        self.membership = LayerMembership(self)
 
         self._job: BackgroundJob | None = None
         self._last_saved_at: float | None = None
@@ -571,6 +574,9 @@ class CartographController:
     def seat_shared(self, layers_page: QWidget, report_page: QWidget) -> None:
         """Put the dialog's Layers list and report in this panel - the same
         widgets the web map shows as tabs."""
+        self.layers_section.body_layout.addWidget(
+            self.membership.attach(self.layers_section)
+        )
         self.layers_section.body_layout.addWidget(layers_page)
         self._checks_layout.addWidget(report_page)
         layers_page.show()
@@ -1283,6 +1289,7 @@ class CartographController:
                 self._selection_connected = True
 
         self._rebuild_frames_rows()
+        self.membership.layout_changed()
         self.atlas_tab.show_layout(layout)
         self._update_file_default()
         self._load_page_fields()
@@ -1355,6 +1362,7 @@ class CartographController:
                 item.item_id: (item.name, item.crs_authid) for item in items
             } != self._frame_identities:
                 self._refresh_frame_identities(items)
+            self.membership.layout_changed()
         self.schedule_autosave()
 
     def _update_file_default(self) -> None:

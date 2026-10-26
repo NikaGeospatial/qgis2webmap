@@ -2025,7 +2025,7 @@ class MainDialog(QDialog):
             item.setText(0, layer.name())
             item.setData(0, Qt.ItemDataRole.UserRole, layer.id())
             for column, value in (
-                (1, settings.include),
+                (1, self._cartograph.membership.included(layer.id(), settings.include)),
                 (2, settings.popup),
                 (3, settings.label),
             ):
@@ -2365,7 +2365,11 @@ class MainDialog(QDialog):
             return
         settings = self.state.for_layer(layer_id)
         checked = item.checkState(column) == Qt.CheckState.Checked
-        if column == 1:
+        if column == 1 and self._cartograph.membership.is_active():
+            # In Cartograph the tick is the map frame's own layer list; the
+            # web map's Include selection stays as it was.
+            self._cartograph.membership.set_included(layer_id, checked)
+        elif column == 1:
             settings.include = checked
         elif column == 2:
             settings.popup = checked
@@ -2373,6 +2377,29 @@ class MainDialog(QDialog):
             settings.label = checked
         self._sync_cartograph_layer_settings()
         self._update_export_readiness()
+
+    def sync_include_column(self) -> None:
+        """Show each layer's Include tick for the output on screen: the web
+        map's selection, or in Cartograph the selected map frame's layers."""
+        if not hasattr(self, "layer_tree"):
+            return
+        self.layer_tree.blockSignals(True)
+        try:
+            for index in range(self.layer_tree.topLevelItemCount()):
+                item = self.layer_tree.topLevelItem(index)
+                layer_id = item.data(0, Qt.ItemDataRole.UserRole) if item else None
+                if not layer_id:
+                    continue
+                on = self._cartograph.membership.included(
+                    layer_id, self.state.for_layer(layer_id).include
+                )
+                item.setCheckState(
+                    1, Qt.CheckState.Checked if on else Qt.CheckState.Unchecked
+                )
+        finally:
+            self.layer_tree.blockSignals(False)
+        if hasattr(self, "status_label"):
+            self._update_export_readiness()
 
     # ---- Appearance tab -------------------------------------------------
 
@@ -2943,6 +2970,7 @@ class MainDialog(QDialog):
         """
         self.state.output = output
         web = output is DialogOutput.WEB_MAP
+        self.sync_include_column()
         # Layers and the checks are one set of widgets for both outputs: tabs
         # on the web map, sections of the panel on the cartograph.
         if web:
@@ -3905,8 +3933,12 @@ class MainDialog(QDialog):
             )
 
         self._update_export_summary(len(selected))
+        # In Cartograph the count is the selected map frame's real layers.
+        carto_summary = self._cartograph.membership.summary(available)
         self._cartograph.layers_section.set_summary(
-            plural(
+            carto_summary
+            if carto_summary is not None
+            else plural(
                 len(available),
                 "{included} of {n} layer included",
                 "{included} of {n} layers included",
