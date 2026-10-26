@@ -27,6 +27,7 @@ from qgis.core import (
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsLayoutPoint,
+    QgsLayoutSize,
     QgsMapThemeCollection,
     QgsPointXY,
     QgsPrintLayout,
@@ -119,6 +120,8 @@ def world(qgis_app, project) -> World:
     legend = QgsLayoutItemLegend(layout)
     layout.addLayoutItem(legend)
     legend.attemptMove(QgsLayoutPoint(170, 10))
+    legend.setResizeToContents(False)
+    legend.attemptResize(QgsLayoutSize(60, 60))
     legend.setLinkedMap(main)
     project.layoutManager().addLayout(layout)
     return World(project, layout, main, legend, layers)
@@ -485,3 +488,75 @@ class TestAtlasCoverage:
         report = FidelityReportBuilder()
         export_layout_to_cartograph(world.layout, world.project, runtime, report)
         assert not [r for r in report.items if r.status is FidelityStatus.BLOCKED]
+
+
+def _elevation_with_no_stored_range(tmp_path, finite: bool):
+    """A coloured elevation raster as the Grand Canyon demo project saved it:
+    the colour ramp is there, the renderer's minimum and maximum are NaN."""
+    import numpy as np
+    from osgeo import gdal, osr
+    from qgis.core import (
+        QgsColorRampShader,
+        QgsRasterLayer,
+        QgsRasterShader,
+        QgsSingleBandPseudoColorRenderer,
+    )
+
+    path = str(tmp_path / "dem.tif")
+    dataset = gdal.GetDriverByName("GTiff").Create(path, 10, 10, 1, gdal.GDT_Float32)
+    dataset.SetGeoTransform((0, 1, 0, 10, 0, -1))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    dataset.SetProjection(srs.ExportToWkt())
+    dataset.GetRasterBand(1).WriteArray(
+        np.linspace(500, 2800, 100, dtype="float32").reshape(10, 10)
+    )
+    dataset.FlushCache()
+    dataset = None
+    layer = QgsRasterLayer(path, "Elevation (m)")
+    shader = QgsColorRampShader()
+    shader.setColorRampItemList(
+        [
+            QgsColorRampShader.ColorRampItem(500.0, QColor("#2b83ba")),
+            QgsColorRampShader.ColorRampItem(2800.0, QColor("#d7191c")),
+        ]
+    )
+    nan = float("nan")
+    low, high = (500.0, 2800.0) if finite else (nan, nan)
+    shader.setMinimumValue(low)
+    shader.setMaximumValue(high)
+    raster_shader = QgsRasterShader()
+    raster_shader.setRasterShaderFunction(shader)
+    renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, raster_shader)
+    renderer.setClassificationMin(low)
+    renderer.setClassificationMax(high)
+    layer.setRenderer(renderer)
+    return layer
+
+
+class TestUnavailableRasterRange:
+    """QGIS's own legend prints a ramp's range with the number formatter, so a
+    layer saved without one reads "nan". The plugin cannot rewrite that text;
+    it says so in the checks, and its own HTML never prints a range."""
+
+    def test_the_checks_name_a_layer_whose_range_qgis_cannot_print(
+        self, world, runtime, tmp_path
+    ) -> None:
+        raster = _elevation_with_no_stored_range(tmp_path, finite=False)
+        world.project.addMapLayer(raster)
+        world.main.setLayers([raster, world.layers[PARCELS]])
+        report = FidelityReportBuilder()
+        html = export_layout_to_cartograph(world.layout, world.project, runtime, report)
+        rows = [row for row in report.items if "nan" in row.detail]
+        assert len(rows) == 1
+        assert "Elevation (m)" in rows[0].detail
+        # Never in the cartograph's own legend text.
+        assert ">nan<" not in html and "\nnan\n" not in html
+
+    def test_a_layer_with_a_range_gets_no_note(self, world, runtime, tmp_path) -> None:
+        raster = _elevation_with_no_stored_range(tmp_path, finite=True)
+        world.project.addMapLayer(raster)
+        world.main.setLayers([raster, world.layers[PARCELS]])
+        report = FidelityReportBuilder()
+        export_layout_to_cartograph(world.layout, world.project, runtime, report)
+        assert not [row for row in report.items if "nan" in row.detail]

@@ -130,6 +130,7 @@ from .expression_tokens import (
     translate_label,
 )
 from .fidelity_report import FidelityReportBuilder
+from .raster_legend import layers_with_unavailable_range
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
 
@@ -1837,6 +1838,14 @@ def _read_legend(
             )
         else:
             report.preserved(label, "Legend rows derive from the live frame.")
+    for layer_name in layers_with_unavailable_range(item, linked):
+        report.approximated(
+            label,
+            f"QGIS has no finite range stored for '{layer_name}', so its own "
+            'legend prints that layer\'s range as "nan" in the layout, the '
+            "image and the PDF. The cartograph's legend shows no range for it. "
+            "Set its minimum and maximum in the layer's Symbology to fix it in QGIS.",
+        )
     left_out = _legend_left_out(item, linked)
     if left_out:
         report.approximated(
