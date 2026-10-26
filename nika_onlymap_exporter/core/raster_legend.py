@@ -28,7 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap, QgsMapLayer
 
 
-def _ramp_range(
+def ramp_range(
     legend_node: QgsColorRampLegendNode, layer: QgsMapLayer | None
 ) -> tuple[float, float] | None:
     """The range QGIS prints beside a ramp: the node's own where QGIS 4 tells
@@ -62,7 +62,7 @@ def layers_with_unavailable_range(
         for legend_node in model.layerLegendNodes(node):
             if not isinstance(legend_node, QgsColorRampLegendNode):
                 continue
-            bounds = _ramp_range(legend_node, node.layer())
+            bounds = ramp_range(legend_node, node.layer())
             if bounds is not None and not all(math.isfinite(b) for b in bounds):
                 names.append(node.name())
                 break

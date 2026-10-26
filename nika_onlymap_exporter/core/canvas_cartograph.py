@@ -89,6 +89,7 @@ from .layout_templates import (
     template_spec,
     text_percent,
 )
+from .legend_edit import apply_template_defaults
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -663,6 +664,7 @@ def _build_once(
         if isinstance(item, LegendSpec):
             legend = built.items_by_id[item.id]
             if isinstance(legend, QgsLayoutItemLegend):
+                apply_template_defaults(legend)
                 if item.wrap_width is not None and not legend_headings_wrap():
                     _wrap_headings(legend, item.wrap_width)
                 left_out += _fit_legend(legend, plan.legend_min_pt)
