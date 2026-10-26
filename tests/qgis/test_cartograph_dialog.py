@@ -1085,7 +1085,7 @@ class TestCartographShareMenu:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.cartograph_share_button.text() == "Export & share"
+            assert cartograph.cartograph_share_button.text() == "Share"
             rows = [
                 a.text()
                 for a in cartograph.cartograph_share_button.menu().actions()

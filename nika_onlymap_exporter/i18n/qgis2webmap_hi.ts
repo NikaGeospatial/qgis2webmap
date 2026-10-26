@@ -1543,8 +1543,9 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1737" />
-      <source>Export &amp; share</source>
-      <translation>निर्यात और साझा करें</translation>
+      <location filename="../ui/main_dialog.py" line="3075" />
+      <source>Share</source>
+      <translation>साझा करें</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1888" />
@@ -1979,78 +1980,78 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>मानचित्र कैनवास जो दिखाता है उससे एक बनाएँ, या कोई मानचित्र पट्टिका खोलें।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="370" />
+      <location filename="../ui/cartograph/layout_page.py" line="373" />
       <source>QGIS's drawing of the print layout. The cartograph can differ in places - see Checks - and Preview in browser shows it.</source>
       <translation>मुद्रण लेआउट का QGIS द्वारा बनाया गया रूप। मानचित्र पट्टिका कुछ जगह अलग हो सकती है - जाँच देखें - और ब्राउज़र में पूर्वावलोकन उसे दिखाता है।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="384" />
+      <location filename="../ui/cartograph/layout_page.py" line="387" />
       <source>See them in Checks</source>
       <translation>इन्हें जाँच में देखें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="390" />
+      <location filename="../ui/cartograph/layout_page.py" line="393" />
       <source>Open layout editor</source>
       <translation>लेआउट संपादक खोलें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select</source>
       <translation>चुनें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select, move and resize items (hold Space to pan)</source>
       <translation>आइटम चुनें, खिसकाएँ और आकार बदलें (पैन के लिए स्पेस दबाए रखें)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan</source>
       <translation>पैन</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan the page</source>
       <translation>पृष्ठ पैन करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit page</source>
       <translation>पेज फ़िट करें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit the whole page</source>
       <translation>पूरा पेज दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="422" />
+      <location filename="../ui/cartograph/layout_page.py" line="425" />
       <source>Zoom out</source>
       <translation>ज़ूम आउट</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="430" />
+      <location filename="../ui/cartograph/layout_page.py" line="433" />
       <source>Zoom in</source>
       <translation>ज़ूम इन</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} change in the HTML</source>
       <translation>HTML में {n} बदलाव</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} changes in the HTML</source>
       <translation>HTML में {n} बदलाव</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="543" />
+      <location filename="../ui/cartograph/layout_page.py" line="546" />
       <location filename="../ui/main_dialog.py" line="3351" />
       <source>Change...</source>
       <translation>बदलें...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="548" />
+      <location filename="../ui/cartograph/layout_page.py" line="551" />
       <source>Show in folder</source>
       <translation>फ़ोल्डर में दिखाएँ</translation>
     </message>
@@ -2060,7 +2061,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>मानचित्र कैनवस जो दिखाता है उससे एक मुद्रण लेआउट बनाता है - शीर्षक, मानचित्र, लेजेंड, स्केल बार और उत्तर तीर - और उसे यहाँ उपयोग करता है। इसे कभी भी लेआउट डिज़ाइनर में संपादित करें।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="460" />
+      <location filename="../ui/cartograph/layout_page.py" line="463" />
       <source>Layout preview — QGIS · {page}</source>
       <translation>लेआउट पूर्वावलोकन — QGIS · {page}</translation>
     </message>
@@ -3700,11 +3701,6 @@ They are also online at &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="3132" />
       <source>Preview</source>
       <translation>पूर्वावलोकन</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="3075" />
-      <source>Share</source>
-      <translation>साझा करें</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3091" />

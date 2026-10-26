@@ -1543,8 +1543,9 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1737" />
-      <source>Export &amp; share</source>
-      <translation>Exportar y compartir</translation>
+      <location filename="../ui/main_dialog.py" line="3075" />
+      <source>Share</source>
+      <translation>Compartir</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1888" />
@@ -1979,78 +1980,78 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Crea uno a partir de lo que muestra el lienzo del mapa o abre una lámina cartográfica.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="370" />
+      <location filename="../ui/cartograph/layout_page.py" line="373" />
       <source>QGIS's drawing of the print layout. The cartograph can differ in places - see Checks - and Preview in browser shows it.</source>
       <translation>Representación de QGIS del diseño de impresión. La lámina cartográfica puede diferir en algunos puntos (consulte Comprobaciones), y Vista previa en el navegador la muestra.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="384" />
+      <location filename="../ui/cartograph/layout_page.py" line="387" />
       <source>See them in Checks</source>
       <translation>Verlos en Comprobaciones</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="390" />
+      <location filename="../ui/cartograph/layout_page.py" line="393" />
       <source>Open layout editor</source>
       <translation>Abrir el editor de diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select</source>
       <translation>Seleccionar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select, move and resize items (hold Space to pan)</source>
       <translation>Seleccionar, mover y redimensionar elementos (mantenga Espacio para desplazarse)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan</source>
       <translation>Desplazar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan the page</source>
       <translation>Desplazar la página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit page</source>
       <translation>Ajustar página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit the whole page</source>
       <translation>Ajustar toda la página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="422" />
+      <location filename="../ui/cartograph/layout_page.py" line="425" />
       <source>Zoom out</source>
       <translation>Alejar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="430" />
+      <location filename="../ui/cartograph/layout_page.py" line="433" />
       <source>Zoom in</source>
       <translation>Acercar</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} change in the HTML</source>
       <translation>{n} cambio en el HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} changes in the HTML</source>
       <translation>{n} cambios en el HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="543" />
+      <location filename="../ui/cartograph/layout_page.py" line="546" />
       <location filename="../ui/main_dialog.py" line="3351" />
       <source>Change...</source>
       <translation>Cambiar...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="548" />
+      <location filename="../ui/cartograph/layout_page.py" line="551" />
       <source>Show in folder</source>
       <translation>Mostrar en la carpeta</translation>
     </message>
@@ -2060,7 +2061,7 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Crea un diseño de impresión a partir de lo que muestra el lienzo del mapa: título, mapa, leyenda, barra de escala y flecha de norte, y lo usa aquí. Edítalo en cualquier momento en el diseñador de diseños.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="460" />
+      <location filename="../ui/cartograph/layout_page.py" line="463" />
       <source>Layout preview — QGIS · {page}</source>
       <translation>Vista previa del diseño — QGIS · {page}</translation>
     </message>
@@ -3700,11 +3701,6 @@ También están en línea en &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="3132" />
       <source>Preview</source>
       <translation>Vista previa</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="3075" />
-      <source>Share</source>
-      <translation>Compartir</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3091" />

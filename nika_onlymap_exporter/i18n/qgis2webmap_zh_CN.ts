@@ -1543,8 +1543,9 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1737" />
-      <source>Export &amp; share</source>
-      <translation>导出和分享</translation>
+      <location filename="../ui/main_dialog.py" line="3075" />
+      <source>Share</source>
+      <translation>分享</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1888" />
@@ -1979,78 +1980,78 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>根据地图画布显示的内容创建一个，或打开图版。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="370" />
+      <location filename="../ui/cartograph/layout_page.py" line="373" />
       <source>QGIS's drawing of the print layout. The cartograph can differ in places - see Checks - and Preview in browser shows it.</source>
       <translation>这是 QGIS 绘制的打印布局。图版可能在某些地方有所不同（见“检查”），“在浏览器中预览”会显示它。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="384" />
+      <location filename="../ui/cartograph/layout_page.py" line="387" />
       <source>See them in Checks</source>
       <translation>在“检查”中查看</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="390" />
+      <location filename="../ui/cartograph/layout_page.py" line="393" />
       <source>Open layout editor</source>
       <translation>打开布局编辑器</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select</source>
       <translation>选择</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="405" />
+      <location filename="../ui/cartograph/layout_page.py" line="408" />
       <source>Select, move and resize items (hold Space to pan)</source>
       <translation>选择、移动和调整项目大小（按住空格键平移）</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan</source>
       <translation>平移</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="407" />
+      <location filename="../ui/cartograph/layout_page.py" line="410" />
       <source>Pan the page</source>
       <translation>平移页面</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit page</source>
       <translation>适合页面</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="418" />
+      <location filename="../ui/cartograph/layout_page.py" line="421" />
       <source>Fit the whole page</source>
       <translation>显示整页</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="422" />
+      <location filename="../ui/cartograph/layout_page.py" line="425" />
       <source>Zoom out</source>
       <translation>缩小</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="430" />
+      <location filename="../ui/cartograph/layout_page.py" line="433" />
       <source>Zoom in</source>
       <translation>放大</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} change in the HTML</source>
       <translation>HTML 中有 {n} 处更改</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="443" />
+      <location filename="../ui/cartograph/layout_page.py" line="446" />
       <source>{n} changes in the HTML</source>
       <translation>HTML 中有 {n} 处更改</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="543" />
+      <location filename="../ui/cartograph/layout_page.py" line="546" />
       <location filename="../ui/main_dialog.py" line="3351" />
       <source>Change...</source>
       <translation>更改...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="548" />
+      <location filename="../ui/cartograph/layout_page.py" line="551" />
       <source>Show in folder</source>
       <translation>在文件夹中显示</translation>
     </message>
@@ -2060,7 +2061,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>根据地图画布当前显示的内容——标题、地图、图例、比例尺和指北针——创建一个打印布局，并在此处使用它。可随时在布局设计器中编辑它。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_page.py" line="460" />
+      <location filename="../ui/cartograph/layout_page.py" line="463" />
       <source>Layout preview — QGIS · {page}</source>
       <translation>布局预览 — QGIS · {page}</translation>
     </message>
@@ -3700,11 +3701,6 @@ They are also online at &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="3132" />
       <source>Preview</source>
       <translation>预览</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="3075" />
-      <source>Share</source>
-      <translation>分享</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3091" />

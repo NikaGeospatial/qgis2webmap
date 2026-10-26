@@ -15,7 +15,7 @@ lead_image:
 Choose **Cartograph** from the title menu at the top of the plugin's dialog
 (**Web map ▾**) and the dialog becomes one screen: the print layout's
 page on the left and a panel of settings on the right. The header holds
-**colour vision**, **Preview in browser** and **Export & share**, and there is no Export
+**colour vision**, **Preview in browser** and **Share**, and there is no Export
 button. The web map's tabs are described in
 [the dialog, tab by tab](the-dialog.md). The **Settings** and **Help** icons
 at the right of the header are shared and work the same way.
@@ -277,11 +277,11 @@ At the top right, reachable whatever the panel shows:
   indistinguishable. Stays pressed while a simulation is on, and its tooltip
   names it.
 - **Preview in browser** - opens the saved cartograph in your default browser.
-- **Export & share** - opens the [Export & share menu](#the-share-menu).
+- **Share** - opens the [Share menu](#the-share-menu).
 
 Then the **Settings** and **Help** icons, as on the web map.
 
-![The header on Cartograph: the colour vision icon, Preview in browser and Export & share, then the Settings and Help icons.](images/cartograph-corner.png)
+![The header on Cartograph: the colour vision icon, Preview in browser and Share, then the Settings and Help icons.](images/cartograph-corner.png)
 
 The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
@@ -291,7 +291,7 @@ live map from a file path. Nothing leaves your computer.
 
 ## The Share menu
 
-The header's **Export & share** button. Outputs come first, then the file
+The header's **Share** button. Outputs come first, then the file
 actions, then the greyed NIKA rows.
 
 | Row | What it does | Available |

@@ -1734,7 +1734,7 @@ class CartographController:
         )
         self.cartograph_preview_button.clicked.connect(self.preview)
 
-        self.cartograph_share_button = button(tr("Export & share"), "share")
+        self.cartograph_share_button = button(tr("Share"), "share")
         self.cartograph_share_button.setProperty("hasMenu", True)
         self.cartograph_share_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.InstantPopup
