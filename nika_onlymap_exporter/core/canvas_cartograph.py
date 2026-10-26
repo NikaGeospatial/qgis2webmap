@@ -569,6 +569,8 @@ def view_input(
     and the picker's check of what each page includes. `figures` and
     `text_sizes` `None` take the project's (`project_figures`,
     `project_text_sizes`)."""
+    from .template_framing import project_framing
+
     data = TemplateInput(
         extent_width=extent.width(),
         extent_height=extent.height(),
@@ -587,6 +589,7 @@ def view_input(
         rotation=rotation,
         figures=project_figures(project) if figures is None else tuple(figures),
         extent_center=(extent.center().x(), extent.center().y()),
+        fill_frame=project_framing(project) == "fill",
     )
     sizes = project_text_sizes(project) if text_sizes is None else text_sizes
     return sizes.apply(data)

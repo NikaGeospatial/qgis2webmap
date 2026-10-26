@@ -94,7 +94,9 @@ layout preview, or pick the sizes here before creating it.
 - **Signal** - a data-led page: the map with up to three key figures you
   supply. Type them under the list when Signal is selected - a value such as
   *214* and what it counts, such as *parcels surveyed*. They are saved with
-  the project. With no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
+  the project. With a substantial legend, Signal can arrange the figures in a
+  row or give the key a full-height column to keep its entries readable. With
+  no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
@@ -118,7 +120,8 @@ room.
 **Map framing** controls how the canvas view fits the template. **Fill frame
 (crop edges)** fills the main map frame and trims projected raster boundaries
 where possible. It crops the view, preserves its centre and projection, and
-never changes the source data. Choose **Whole view** to keep the entire canvas
+never changes the source data. Daylight and Caption also expand their map
+frames to use the available space in this mode. Choose **Whole view** to keep the entire canvas
 extent, with extra surroundings where the frame has a different shape. This
 choice is remembered when you create a layout; cancelling changes nothing.
 

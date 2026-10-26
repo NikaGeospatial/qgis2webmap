@@ -74,3 +74,27 @@ def test_projected_raster_fills_frame_without_changing_source(
     assert item.crs() == crs
     assert raster.source() == source
     assert item.extent().width() < extent.width()
+
+
+@pytest.mark.parametrize("template_id", ["classic", "report-figure"])
+def test_fill_uses_page_space_while_whole_keeps_canvas_shape(project, template_id):
+    extent = QgsRectangle(300000, 4000000, 320000, 4010000)
+    crs = QgsCoordinateReferenceSystem("EPSG:32612")
+    project.setTitle("Regional reference")
+    with preview_framing("whole"):
+        whole = cartograph_from_view(
+            extent, crs, [], project, template_id=template_id, orientation="landscape"
+        )
+    with preview_framing("fill"):
+        filled = cartograph_from_view(
+            extent, crs, [], project, template_id=template_id, orientation="landscape"
+        )
+    whole_box, fill_box = whole.plan.frames[0].box, filled.plan.frames[0].box
+    assert whole_box.w / whole_box.h == pytest.approx(2)
+    assert fill_box.w * fill_box.h > whole_box.w * whole_box.h * 1.1
+    item = filled.layout.itemById("main")
+    assert item.extent().center().x() == pytest.approx(extent.center().x(), abs=0.01)
+    assert item.extent().center().y() == pytest.approx(extent.center().y(), abs=0.01)
+    tolerance = QgsRectangle(extent)
+    tolerance.grow(0.001)  # CRS round trips can move an edge by a few nanometres.
+    assert tolerance.contains(item.extent())

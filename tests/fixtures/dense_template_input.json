@@ -1,0 +1,113 @@
+{
+  "extent_width": 76612.93557412783,
+  "extent_height": 45066.43269066326,
+  "crs_is_geographic": false,
+  "crs_authid": "EPSG:32612",
+  "crs_def": "+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs",
+  "page_size": "A4",
+  "orientation": "landscape",
+  "title": "Grand Canyon | Access, water & terrain",
+  "layer_names": [
+    "Viewpoints",
+    "Named summits",
+    "Water monitoring \u00b7 archive",
+    "Road surface",
+    "Trail development",
+    "Rivers & tributaries",
+    "National park boundary \u00b7 2021",
+    "Land interests \u00b7 2021",
+    "Contours \u00b7 500 m",
+    "Hillshade",
+    "Elevation bands (m)"
+  ],
+  "credits": [
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "National Park Service GIS \u00b7 archived source snapshots",
+    "Local elevation DEM \u00b7 classified into six cartographic bands"
+  ],
+  "legend_labels": [
+    [
+      "Viewpoints"
+    ],
+    [
+      "Named summits"
+    ],
+    [
+      "Stream monitoring site",
+      "Spring monitoring site"
+    ],
+    [
+      "Paved road",
+      "Gravel road",
+      "Natural-surface road",
+      "Cinder-surface road",
+      "Surface unrecorded"
+    ],
+    [
+      "Minimally developed",
+      "Highly developed",
+      "Fully developed",
+      "Development unrecorded"
+    ],
+    [
+      "Colorado River",
+      "Little Colorado River",
+      "Mapped tributary"
+    ],
+    [
+      "National park boundary \u00b7 2021"
+    ],
+    [
+      "Federal land (fee)",
+      "Federal interest (less than fee)",
+      "Private land",
+      "Other public land"
+    ],
+    [
+      "Contours \u00b7 500 m"
+    ],
+    [
+      "Band 1 (Gray)",
+      ""
+    ],
+    [
+      "Band 1 (Gray)",
+      "Below 1,000 m",
+      "1,000\u20131,400 m",
+      "1,400\u20131,800 m",
+      "1,800\u20132,200 m",
+      "2,200\u20132,600 m",
+      "Above 2,600 m"
+    ]
+  ],
+  "notes": "Roads and trails are classified from archived NPS surface and development attributes. The Colorado River and mapped tributaries provide regional context; monitoring symbols mark archived stream, spring and lake records, not current operating facilities.\n\nElevation is grouped into six bands over shaded relief, with 500 m contours. Land interests and the national park boundary use the 2021 NPS source. Missing trail classifications remain explicitly unrecorded.\n\nSource editions: regional hydrography and monitoring 2001; transport catalogue 2015; land data 2021. Three illustrative atlas sheets support export testing. This is an offline cartographic reference, not a current access or navigation map.",
+  "placeholders": {},
+  "author": "Cartographic reference fixture",
+  "rotation": 0.0,
+  "figures": [
+    [
+      "79",
+      "archived monitoring sites"
+    ],
+    [
+      "6",
+      "elevation bands"
+    ],
+    [
+      "3",
+      "illustrative atlas sheets"
+    ]
+  ],
+  "extent_center": [
+    394701.87504268705,
+    4006861.5896752523
+  ],
+  "fill_frame": true,
+  "title_scale": 1.0,
+  "legend_scale": 1.0,
+  "notes_scale": 1.0
+}

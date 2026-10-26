@@ -13,12 +13,11 @@ millimetre boxes out, no `qgis` import. A plan names the map frames it wants
 (`FrameSlot`) -- the main map, and for some templates a locator inset -- and
 `core/canvas_cartograph.py` fills them from the real canvas.
 
-**Frames keep their designed shape.** Except in Daylight (`classic`) and
-Caption (`report-figure`), which keep the canvas's aspect as the one-click
-layout always has, a template's frame is the box the design gives it, and
-the layout builder's `zoomToExtent()` pads the canvas extent out to that box
--- so the whole canvas view is always on the page, with more of the
-surroundings where the box is relatively wider or taller. A design that lays
+**Frames keep their designed shape.** In Whole view framing, Daylight
+(`classic`) and Caption (`report-figure`) keep the canvas's aspect. Fill
+framing lets them use all the available map space. The other templates use
+the box their design gives them. Whole view pads the extent out to that box;
+Fill crops the view instead. A design that lays
 panels over its map names the frame's clear part (`FrameSlot.focus`), and
 the view is fitted there instead of centred.
 
@@ -121,6 +120,9 @@ class TemplateInput:
     #: The canvas extent's centre in map units, when known: how long a grid
     #: label's coordinates run, for a design that labels its grid.
     extent_center: tuple[float, float] | None = None
+    #: Fill framing may use all available map space instead of keeping the
+    #: canvas aspect in Daylight and Caption. Whole-view planning is unchanged.
+    fill_frame: bool = False
     #: How much larger or smaller than standard the user wants the title, the
     #: legend and the notes (and a key figure, which follows the notes), as a
     #: factor between `MIN_TEXT_PERCENT` and `MAX_TEXT_PERCENT` percent, 1.0
@@ -488,6 +490,8 @@ def _shown_area(plan: TemplatePlan, data: TemplateInput) -> float:
     area when it keeps the extent's aspect, less the padding otherwise."""
     slot = plan.frames[0]
     box = slot.focus or slot.box
+    if data.fill_frame:
+        return box.w * box.h
     w, h = _fit(data.extent_width / data.extent_height, box.w, box.h)
     return w * h
 
@@ -499,7 +503,8 @@ def _shown_area(plan: TemplatePlan, data: TemplateInput) -> float:
 
 def _classic(page: _Page) -> _Layout:
     """Daylight: the everyday sheet. A title under a short accent mark, the
-    map at the canvas's own shape (so the page shows exactly the view), a
+    map at the canvas's own shape in Whole view, or filling its available
+    space in Fill frame, a
     compact legend beside it or under it -- whichever leaves the larger
     map -- and the scale bar and source line along the foot."""
     pal = DAYLIGHT
@@ -554,10 +559,18 @@ def _daylight_group(
     body_h = content_h - head_h - foot_h - g
     legend_pt = _legend_pt(page)
     rows = _legend_rows(page)
+
+    def frame_size(width: float, height: float) -> tuple[float, float]:
+        return (
+            (width, height)
+            if page.data.fill_frame
+            else _fit(page.aspect, width, height)
+        )
+
     options: list[tuple[float, float, str, float, float]] = []
     if rows:
         side_w = min(_legend_width(page, legend_pt), content_w * 0.3)
-        fw, fh = _fit(page.aspect, content_w - side_w - g, body_h)
+        fw, fh = frame_size(content_w - side_w - g, body_h)
         side_h = _legend_need(page, legend_pt, side_w)
         if side_h <= fh:
             options.append((fw, fh, "right", side_w, side_h))
@@ -567,13 +580,13 @@ def _daylight_group(
         below_w = content_w
         for _ in range(6):
             below_h = _legend_need(page, legend_pt, below_w)
-            fw, fh = _fit(page.aspect, content_w, body_h - below_h - g)
+            fw, fh = frame_size(content_w, body_h - below_h - g)
             settled = max(fw, natural_w)
             if abs(settled - below_w) < 0.01:
                 break
             below_w = settled
         below_h = _legend_need(page, legend_pt, below_w)
-        fw, fh = _fit(page.aspect, content_w, body_h - below_h - g)
+        fw, fh = frame_size(content_w, body_h - below_h - g)
         if below_h <= body_h * 0.5 or not options:
             if below_h > body_h * 0.5:
                 # Neither fits: across the page under the map, which keeps
@@ -583,10 +596,10 @@ def _daylight_group(
                 below_h = min(
                     _legend_need(page, legend_pt, below_w), legend_room_cap(body_h, g)
                 )
-                fw, fh = _fit(page.aspect, content_w, body_h - below_h - g)
+                fw, fh = frame_size(content_w, body_h - below_h - g)
             options.append((fw, fh, "below", below_w, below_h))
     else:
-        fw, fh = _fit(page.aspect, content_w, body_h)
+        fw, fh = frame_size(content_w, body_h)
         options.append((fw, fh, "", 0.0, 0.0))
     # max() keeps the first of equals: a tie goes to the legend beside.
     fw, fh, where, legend_w, legend_h = max(options, key=lambda o: o[0] * o[1])
@@ -717,7 +730,8 @@ def _map_only(page: _Page) -> _Layout:
 
 
 def _report_figure(page: _Page) -> _Layout:
-    """Caption: a figure for a report. The map at the canvas's own shape,
+    """Caption: a figure for a report. The map at the canvas's own shape
+    in Whole view, or filling its available space in Fill frame,
     and under it a caption -- the title as its lead, the project's notes as
     its text, at a reading measure -- with the scale bar and source line
     beside it, or under it on a narrow page. No legend: the report's text
@@ -726,6 +740,14 @@ def _report_figure(page: _Page) -> _Layout:
     sp = page.spacing
     m, g = sp.margin, sp.gutter
     content_w, content_h = page.width - 2 * m, page.height - 2 * m
+
+    def frame_size(height: float) -> tuple[float, float]:
+        return (
+            (content_w, height)
+            if page.data.fill_frame
+            else _fit(page.aspect, content_w, height)
+        )
+
     measure = min(150.0 * page.scale, content_w)
     # The caption is as wide as the map -- whose size depends on the room
     # the caption leaves, so narrowed until the two agree -- but never
@@ -734,13 +756,13 @@ def _report_figure(page: _Page) -> _Layout:
     caption_w = content_w
     for _ in range(8):
         zone = _Caption(page, caption_w, measure, content_h)
-        fw, fh = _fit(page.aspect, content_w, content_h - zone.height - g)
+        fw, fh = frame_size(content_h - zone.height - g)
         settled = abs(max(fw, least) - caption_w) < 0.01
         caption_w = max(fw, least)
         if settled:
             break
     zone = _Caption(page, caption_w, measure, content_h)
-    fw, fh = _fit(page.aspect, content_w, content_h - zone.height - g)
+    fw, fh = frame_size(content_h - zone.height - g)
     left = m + (content_w - fw) / 2
     top = m + (content_h - fh - g - zone.height) / 2
     frame = Box(left, top, fw, fh)
@@ -1247,7 +1269,14 @@ def _dashboard(page: _Page) -> _Layout:
                 y = column.y
                 figure_items: list[CartographItem] = []
                 if figures:
-                    figure_items, y = _figure_stack(page, figures, column, pal)
+                    # With a substantial key, three stacked values consume
+                    # the room needed to explain the map. A wide enough
+                    # column can keep the figures in a single readable row.
+                    if _legend_rows(page) > 12 and len(figures) > 1:
+                        figure_items, y = _figure_row(page, figures, column, pal)
+                        y += g * 1.5
+                    else:
+                        figure_items, y = _figure_stack(page, figures, column, pal)
                 foot_h = _stacked_foot_height(page, column.w)
                 room = column.y + column.h - foot_h - g - y
                 notes_pt, notes_h = _fit_body(
@@ -1339,15 +1368,71 @@ def _dashboard(page: _Page) -> _Layout:
             )
             return frame, items
 
-        # The column on a landscape sheet and the figures over the map on a
-        # portrait one, unless the other shows the canvas view larger: a
-        # wide view on a landscape sheet takes the band. max() keeps the
-        # first of equals.
+        def legend_column() -> tuple[Box, list[CartographItem]]:
+            """Give a substantial key its own full-height column.
+
+            Figures and notes share the map's column instead of squeezing
+            every class into the space below three large numbers.
+            """
+            arranged: list[CartographItem] = []
+            foot_h = _foot_height(page, body.w)
+            available_h = body.h - foot_h - g
+            key_w = min(
+                max(_legend_width(page, legend_pt), body.w * 0.28), body.w * 0.4
+            )
+            key = Box(body.x + body.w - key_w, body.y, key_w, available_h)
+            left_w = body.w - key_w - 1.5 * g
+            y = body.y
+            if figures:
+                figure_items, y = _figure_row(
+                    page, figures, Box(body.x, y, left_w, 1.0), pal
+                )
+                arranged += figure_items
+                y += g
+            notes_pt, notes_h = _fit_body(
+                page.notes,
+                left_w,
+                note_pt,
+                MINIMUM_TYPE.body,
+                available_h * 0.3,
+            )
+            map_h = body.y + available_h - y - (notes_h + g if notes_h else 0.0)
+            frame = Box(body.x, y, left_w, map_h)
+            if notes_h:
+                arranged.append(
+                    _notes(
+                        Box(body.x, frame.y + frame.h + g, left_w, notes_h),
+                        notes_pt,
+                        pal,
+                        z=8,
+                    )
+                )
+            arranged += _legend(page, key, pal, legend_pt, z=9)
+            arranged += _foot(
+                page, Box(body.x, body.y + body.h - foot_h, body.w, foot_h), pal, z=10
+            )
+            return frame, arranged
+
+        # Keep the whole key readable before maximising the map. Stacking
+        # figures and prose above a dense key can otherwise win on map area
+        # while losing most of the classes that explain it.
         arrangements = [column, band] if page.landscape else [band, column]
+        if _legend_rows(page) > 12:
+            arrangements.append(legend_column)
         aspect = page.data.extent_width / page.data.extent_height
+
+        def content_score(option: tuple[Box, list[CartographItem]]) -> tuple:
+            key = next((i for i in option[1] if isinstance(i, LegendSpec)), None)
+            if key is None:
+                return (True, legend_pt, _fit_area(aspect, option[0]))
+            _, _, need = _legend_fit(page, key.font_size, key.box.w, key.box.h)
+            complete = need <= key.box.h + 1e-6
+            readability = key.font_size if complete else key.box.h / max(need, 1.0)
+            return (complete, readability, _fit_area(aspect, option[0]))
+
         frame, arranged = max(
             (arrange() for arrange in arrangements),
-            key=lambda option: _fit_area(aspect, option[0]),
+            key=content_score,
         )
         items += arranged
     return (_main(frame, pal),), items, _page_style(pal)
