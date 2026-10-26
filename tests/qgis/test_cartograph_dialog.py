@@ -3653,6 +3653,7 @@ class TestPanel:
             assert actions[0] is cartograph.add_from_canvas_action
             assert cartograph.add_from_canvas_action.isEnabled()
             actions[0].trigger()
+            qgis_app.processEvents()
             assert calls == ["canvas"]
             actions[1].trigger()
             assert calls == ["canvas", "import"]
