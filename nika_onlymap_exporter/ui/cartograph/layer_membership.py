@@ -313,7 +313,9 @@ class LayerMembershipBar(QWidget):
         column.addWidget(self.note)
 
         self.atlas_warning = FittedLabel("", self)
-        self.atlas_warning.setProperty("role", "warning")
+        # The checks list's own warning colour.
+        self.atlas_warning.setProperty("role", "checkVerdict")
+        self.atlas_warning.setProperty("tone", "warning")
         column.addWidget(self.atlas_warning)
         self.atlas_warning.hide()
 
