@@ -48,6 +48,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     its last entries out, and the card and the **Checks** tab say how many.
     **Import cartograph** turns a
     cartograph back into a QGIS layout.
+  - **Legends you can edit**: double-click a legend on the page to choose
+    which layers and classes it lists, rename them in the legend only (the
+    layer keeps its name), reorder them, put removed entries back, and set
+    its map, columns, text size and row spacing - one Undo step each. A new
+    template's legend leaves out technical support layers (a hillshade, a web
+    basemap), restorable from the same list, and heads an elevation ramp with
+    its unit. A ramp whose range QGIS never computed is marked in the editor
+    rather than restyled.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
     margin, fixed and predefined scales; every page as one PNG ZIP, or
     printed together into one multi-page PDF.

@@ -12,12 +12,17 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
+import shutil
+from pathlib import Path
+
 import pytest
+from qgis.PyQt.QtCore import QSize
 
 qgis_core = pytest.importorskip("qgis.core")
 
 from legend_fixtures import CLASS_COUNT, LegendWorld, build_world
-from qgis.core import QgsLayoutItemLegend, QgsPrintLayout, QgsProject
+from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap, QgsPrintLayout, QgsProject
 
 from nika_onlymap_exporter.core import legend_edit as le
 from nika_onlymap_exporter.core.cartograph_export import export_layout_to_cartograph
@@ -426,6 +431,53 @@ class TestUnavailableRange:
         assert set(notes) == {""}
 
 
+class TestNativeExport:
+    def _legend_red(self, world) -> int:
+        import numpy as np
+        from qgis.core import QgsLayoutExporter
+        from qgis.PyQt.QtGui import QImage
+
+        legend = _legend(world.layout)
+        exporter = QgsLayoutExporter(world.layout)
+        page = world.layout.pageCollection().page(0).rect()
+        size = QSize(
+            round(page.width() * 120 / 25.4), round(page.height() * 120 / 25.4)
+        )
+        image = exporter.renderPageToImage(0, size, 120)
+        scale = 120 / 25.4
+        box = legend.sceneBoundingRect()
+        crop = image.copy(
+            int(box.x() * scale),
+            int(box.y() * scale),
+            int(box.width() * scale),
+            int(box.height() * scale),
+        ).convertToFormat(QImage.Format.Format_RGBA8888)
+        raw = np.frombuffer(crop.constBits().asstring(crop.sizeInBytes()), np.uint8)
+        pixels = raw.reshape(crop.height(), crop.bytesPerLine() // 4, 4)
+        red = (pixels[..., 0] > 140) & (pixels[..., 1] < 40) & (pixels[..., 2] < 40)
+        return int(red.sum())
+
+    def test_a_hidden_entry_is_gone_from_the_image_and_the_pdf(
+        self, world, tmp_path
+    ) -> None:
+        from qgis.core import QgsLayoutExporter
+
+        legend = _legend(world.layout)
+        assert self._legend_red(world) > 0  # the summits' dark red marker
+        le.set_layer_listed(
+            world.layout, legend, world.project, world.layers[SUMMITS].id(), False
+        )
+        assert self._legend_red(world) == 0
+        pdf = tmp_path / "out.pdf"
+        result = QgsLayoutExporter(world.layout).exportToPdf(
+            str(pdf), QgsLayoutExporter.PdfExportSettings()
+        )
+        assert result == QgsLayoutExporter.Success and pdf.stat().st_size > 1000
+        # Undo brings the entry back to the render.
+        world.layout.undoStack().stack().undo()
+        assert self._legend_red(world) > 0
+
+
 class TestPersistence:
     def _edit(self, world) -> None:
         legend = _legend(world.layout)
@@ -483,10 +535,41 @@ class TestPersistence:
         html = export_layout_to_cartograph(
             world.layout, world.project, runtime, FidelityReportBuilder()
         )
-        assert "Cover" in html and "Forest" in html
-        assert "Class 06" not in html  # the class taken out
-        assert "Class 05" in html
-        assert "Hillshade" not in html or "hide" in html
+        rows = re.findall(r"<om-legend-row [^>]*>", html)
+
+        def row(layer, **attrs):
+            key = layer.name().replace(" ", "_")
+            return [
+                r
+                for r in rows
+                if f'layer="{key}_' in r
+                and all(f'{k}="{v}"' in r for k, v in attrs.items())
+            ]
+
+        land, summits = world.layers[LAND], world.layers[SUMMITS]
+        # Layer heading, class label and the class taken out.
+        assert row(land, label="Cover", order=0)
+        assert row(land, match=0, label="Forest")
+        assert row(land, match=5, hide="")
+        assert not row(land, match=1, hide="")
+        # A layer out of the legend is hidden there, not dropped from the page.
+        assert row(summits, hide="")
+        assert row(world.layers[SHADE], hide="")
+        # The elevation ramp keeps its unit in the heading.
+        assert row(world.layers[ELEV], label="Elevation tint (m)")
+
+    def test_a_template_legend_change_reaches_the_autosave_hook(self, world) -> None:
+        # The dialog autosaves from the layout stack's index; an edit moves it.
+        legend = _legend(world.layout)
+        seen: list[int] = []
+        stack = world.layout.undoStack().stack()
+        stack.indexChanged.connect(seen.append)
+        le.set_layer_listed(
+            world.layout, legend, world.project, world.layers[SUMMITS].id(), False
+        )
+        assert len(seen) == 1
+        stack.undo()
+        assert len(seen) == 2
 
     def test_removal_never_removes_the_layer_from_the_exported_map(
         self, world, runtime
@@ -498,3 +581,39 @@ class TestPersistence:
             world.layout, world.project, runtime, FidelityReportBuilder()
         )
         assert "Named summits" in html  # drawn by the map frame, if not legended
+
+
+GRAND_CANYON = Path("/home/abhijay/Nika/demo-maps/carto-grand-canyon")
+
+
+@pytest.mark.skipif(not GRAND_CANYON.exists(), reason="the demo project is not here")
+class TestGrandCanyon:
+    def test_a_new_template_legend_leaves_the_hillshade_out_restorably(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from qgis.core import QgsRectangle
+
+        from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
+
+        copy = tmp_path / "gc"
+        shutil.copytree(GRAND_CANYON, copy, ignore=shutil.ignore_patterns("*.png"))
+        assert project.read(str(copy / "carto-grand-canyon.qgz"))
+        layers = [n.layer() for n in project.layerTreeRoot().findLayers() if n.layer()]
+        view = project.viewSettings().defaultViewExtent()
+        extent, crs = QgsRectangle(view), view.crs()
+        built = cartograph_from_view(
+            extent, crs, layers, project, template_id="classic"
+        )
+        legend = _legend(built.layout)
+        entries = le.entries(legend, project)
+        hillshade = project.mapLayersByName("Hillshade")[0]
+        assert not _by(entries, hillshade).included
+        assert _by(entries, hillshade).support
+        elevation = project.mapLayersByName("Elevation tint (m)")[0]
+        assert _by(entries, elevation).label == "Elevation tint (m)"
+        assert _by(entries, elevation).included
+        # The hillshade is still drawn by the map.
+        maps = [i for i in built.layout.items() if isinstance(i, QgsLayoutItemMap)]
+        assert hillshade.id() in [x.id() for x in maps[0].layersToRender()]
+        assert le.restore_removed(built.layout, legend, project) == 1
+        assert hillshade.id() in _listed(legend)

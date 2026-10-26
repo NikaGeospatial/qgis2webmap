@@ -167,7 +167,10 @@ def _source_nodes(layer: QgsMapLayer) -> list:
 
 
 def _text(value: object) -> str:
-    return "" if value is None else str(value)
+    # A legend node with no label answers a null QVariant on QGIS 3.
+    if value is None or getattr(value, "isNull", lambda: False)():
+        return ""
+    return str(value)
 
 
 def _source_class_label(legend_node: object, layer: QgsMapLayer) -> tuple[str, bool]:
