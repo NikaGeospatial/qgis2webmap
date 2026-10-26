@@ -48,6 +48,7 @@ from qgis.core import (
 from qgis.gui import QgsColorButton
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
+    QModelIndex,
     QObject,
     QSettings,
     QSize,
@@ -90,6 +91,9 @@ from qgis.PyQt.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTabWidget,
     QTextBrowser,
     QToolButton,
@@ -311,6 +315,31 @@ SHUTDOWN_WAIT_MS = 5000
 
 # Marks the per-layer options row, so it is never mistaken for a field row.
 LAYER_OPTIONS_ROLE = "__layer_options__"
+
+# Set on a Popups or Labels cell the selected map frame cannot use (an Image
+# frame): the cell is drawn greyed and ignores clicks and the keyboard.
+CELL_INACTIVE_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
+# PyQt ships no stubs, so the delegate is `Any` to mypy; the ignore is that boundary.
+class _InactiveCellDelegate(QStyledItemDelegate):  # type: ignore[misc, unused-ignore]
+    """Draws a cell marked `CELL_INACTIVE_ROLE` disabled and keeps it from
+    being toggled, without disabling the rest of its row (Include stays live)."""
+
+    def initStyleOption(  # noqa: N802 - Qt override
+        self, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> None:
+        super().initStyleOption(option, index)
+        if index.data(CELL_INACTIVE_ROLE):
+            option.state &= ~QStyle.StateFlag.State_Enabled
+
+    def editorEvent(  # noqa: N802 - Qt override
+        self, event, model, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> bool:
+        if index.data(CELL_INACTIVE_ROLE):
+            return False
+        return bool(super().editorEvent(event, model, option, index))
+
 
 # Centres first: they are the only positions not already holding map chrome, so
 # they are what most people should pick.
@@ -1876,6 +1905,7 @@ class MainDialog(QDialog):
         # Qt's 50 px floor and the whole tree 5 px too wide. The names elide
         # instead, so every checkbox and heading stays whole.
         self.layer_tree.header().setMinimumSectionSize(32)
+        self.layer_tree.setItemDelegate(_InactiveCellDelegate(self.layer_tree))
         self.layer_tree.itemChanged.connect(self._on_layer_item_changed)
         # Always reserved: a scrollbar appearing as a layer opens took its
         # width from the tree and slid the checkbox columns sideways.
@@ -1892,6 +1922,13 @@ class MainDialog(QDialog):
         # spelled out below the list, where six lines of it crowded the tab;
         # the button is there to be noticed, unlike a bare tooltip.
         self.layers_info_button = _info_button(self._layers_help_text(False), page)
+        # Cartograph only: what the selected map frame does with the Popups and
+        # Labels columns (see `_sync_layer_capabilities`).
+        self.frame_behaviour_hint = FittedLabel("", page)
+        self.frame_behaviour_hint.setProperty("role", "hint")
+        self.frame_behaviour_hint.setWordWrap(True)
+        self.frame_behaviour_hint.hide()
+        layout.addWidget(self.frame_behaviour_hint)
 
         # Bulk action. Setting a mode field-by-field across a dozen layers is
         # exactly the tedium qgis2web users report, so the escape hatch is here
@@ -1915,6 +1952,7 @@ class MainDialog(QDialog):
             )
         )
         apply_all.clicked.connect(self._on_apply_mode_to_all)
+        self.bulk_apply_button = apply_all
         bulk.addWidget(apply_all)
         bulk.addStretch(1)
         bulk.addWidget(self.layers_info_button)
@@ -1923,10 +1961,11 @@ class MainDialog(QDialog):
         return page
 
     @staticmethod
-    def _layers_help_text(cartograph: bool) -> str:
+    def _layers_help_text(cartograph: bool, frame_mode: str | None = None) -> str:
         """The Layers columns' help, for the output showing them: Include
         means the web map's export selection there, and the selected map
-        frame's own layer list in Cartograph."""
+        frame's own layer list in Cartograph. `frame_mode` is that frame's
+        mode ("live" or "static"); an image frame cannot use popups."""
         include = (
             tr(
                 "<b>Include</b> - tick or untick to add the layer to or remove "
@@ -1939,6 +1978,14 @@ class MainDialog(QDialog):
                 "entirely. Its data is not written, so the file gets smaller."
             )
         )
+        if cartograph and frame_mode == "static":
+            return f"{include}<br>" + tr(
+                "This frame is an image drawn from the QGIS layout, so popups "
+                "and attribute fields do not apply to it and are greyed out. "
+                "Labels are drawn into the image as QGIS shows them. Your "
+                "popup and label choices are kept for when the frame is "
+                "interactive again. Raster layers have no popups or labels."
+            )
         rest = tr(
             "<b>Popups</b> - untick and clicking a feature does nothing. "
             "The attribute values are left out of the file entirely, so "
@@ -1951,6 +1998,8 @@ class MainDialog(QDialog):
             "fields instead - those values leave the file too, unless the "
             "map draws with them."
         )
+        if cartograph:
+            rest += "<br>" + tr("Raster layers have no popups or labels.")
         return f"{include}<br>{rest}"
 
     def _set_layers_compact(self, compact: bool) -> None:
@@ -2068,6 +2117,7 @@ class MainDialog(QDialog):
         # These drop-downs are rebuilt on every layer change, long after
         # `theme.apply` attached the rest, so they are attached here.
         theme.attach_menus(self.layer_tree)
+        self._sync_layer_capabilities()
         self._update_export_readiness()
 
     def _expanded_layer_ids(self) -> set[str]:
@@ -2425,8 +2475,101 @@ class MainDialog(QDialog):
                 )
         finally:
             self.layer_tree.blockSignals(False)
+        self._sync_layer_capabilities()
         if hasattr(self, "status_label"):
             self._update_export_readiness()
+
+    def selected_frame_mode(self) -> str | None:
+        """The selected map frame's mode, "live" (interactive) or "static"
+        (an image); None outside Cartograph or with no frame selected."""
+        membership = self._cartograph.membership
+        if not membership.is_active():
+            return None
+        from ..core.layout_reader import default_mode_for_map
+
+        item = membership.map_item()
+        choice = self.state.frame_choices(self.state.cartograph_layout).get(item.uuid())
+        return str(choice.mode) if choice is not None else default_mode_for_map(item)
+
+    def _sync_layer_capabilities(self) -> None:
+        """Make the Popups and Labels columns truthful for what is selected.
+
+        In Cartograph a raster layer has no popups or labels to choose, and an
+        image frame is baked from the QGIS layout, so popup settings (and the
+        attribute-field rows) cannot change it. Controls are greyed, never
+        cleared: the stored settings return when the frame is interactive
+        again. The web map is left exactly as it was.
+        """
+        if not hasattr(self, "layer_tree") or not hasattr(self, "frame_behaviour_hint"):
+            return
+        cartograph = self.state.output is DialogOutput.CARTOGRAPH
+        mode = self.selected_frame_mode()
+        image = mode == "static"
+        reason_image = tr(
+            "This frame is an image drawn from the QGIS layout, so this has "
+            "no effect on it. Your choice is kept for an interactive frame."
+        )
+        reason_raster = tr("A raster layer has no popups or labels.")
+        tree = self.layer_tree
+        tree.blockSignals(True)
+        try:
+            for index in range(tree.topLevelItemCount()):
+                item = tree.topLevelItem(index)
+                layer_id = item.data(0, Qt.ItemDataRole.UserRole) if item else None
+                if not layer_id:
+                    continue
+                layer = self.project.mapLayer(layer_id)
+                raster = cartograph and not isinstance(layer, QgsVectorLayer)
+                settings = self.state.for_layer(layer_id)
+                for column, value in ((2, settings.popup), (3, settings.label)):
+                    if raster:
+                        # No data at all: Qt draws no check box.
+                        item.setData(column, Qt.ItemDataRole.CheckStateRole, None)
+                    else:
+                        item.setCheckState(
+                            column,
+                            Qt.CheckState.Checked if value else Qt.CheckState.Unchecked,
+                        )
+                    item.setData(column, CELL_INACTIVE_ROLE, image and not raster)
+                    item.setToolTip(
+                        column,
+                        reason_raster
+                        if raster
+                        else (reason_image if image and cartograph else ""),
+                    )
+                # Field rows and the "this layer only" rows are popup and HTML
+                # map settings: nothing in an image reads them.
+                for child_index in range(item.childCount()):
+                    row = tree.itemWidget(item.child(child_index), 0)
+                    if row is not None:
+                        row.setEnabled(not image)
+                        row.setToolTip(reason_image if image else "")
+        finally:
+            tree.blockSignals(False)
+        tree.viewport().update()
+        for column, name in ((2, tr("Popups")), (3, tr("Labels"))):
+            tree.headerItem().setToolTip(
+                column,
+                tr("{column} - not used by an image frame").format(column=name)
+                if image
+                else "",
+            )
+        self.bulk_mode_combo.setEnabled(not image)
+        self.bulk_apply_button.setEnabled(not image)
+        self.layers_info_button.setToolTip(self._layers_help_text(cartograph, mode))
+        if cartograph and mode is not None:
+            self.frame_behaviour_hint.setText(
+                tr(
+                    "This frame is an image drawn from the QGIS layout. "
+                    "Popups and fields do not apply; labels are drawn into it."
+                )
+                if image
+                else tr(
+                    "This frame is interactive: popups and labels are drawn "
+                    "live in the browser."
+                )
+            )
+        self.frame_behaviour_hint.setVisible(cartograph and mode is not None)
 
     # ---- Appearance tab -------------------------------------------------
 
@@ -3023,7 +3166,7 @@ class MainDialog(QDialog):
                     self.tabs.removeTab(index)
             self._cartograph.seat_shared(self._layers_page, self._fidelity_page)
         self._set_layers_compact(not web)
-        self.layers_info_button.setToolTip(self._layers_help_text(not web))
+        self._sync_layer_capabilities()
         self.fidelity_panel.set_compact(not web)
         if hasattr(self, "fidelity_strip"):
             self.fidelity_strip.setVisible(web)

@@ -1131,6 +1131,7 @@ class CartographController:
             )
         self.frames_list.set_frames(rows)
         self.frames_list.set_canvas_available(self._map_canvas() is not None)
+        self.dialog.sync_include_column()
         for row in rows:
             card = self.frames_list.card(row.item_id)
             self._frame_rows[row.item_id] = {
@@ -1282,6 +1283,7 @@ class CartographController:
         mode = mode_combo.currentData()
         self.state.frame_choices(self.state.cartograph_layout)[item_id].mode = mode
         self._update_section_summaries()
+        self.dialog.sync_include_column()
         self._on_cartograph_setting_changed()
 
     def _on_frame_dpi_changed(self, item_id: str, dpi_combo: QComboBox) -> None:
