@@ -230,14 +230,21 @@ class TestTheRefinedDesigns:
         assert re.search(r">Scale 1:\{\{frame\.[\w-]+\.scale\}\}<", html)
         assert re.search(r">\{\{frame\.[\w-]+\.crs\}\}<", html)
 
-    @pytest.mark.parametrize("template_id", ["story-map", "dark"])
+    def test_after_hours_keeps_the_whole_frame_clear(self, parcels, project) -> None:
+        """After Hours sets its title, legend and scale outside the map, so
+        no part of the frame is covered and there is no focus to fit."""
+        result = cartograph_from_view(
+            _view(parcels), UTM, [parcels], project, template_id="dark"
+        )
+        assert result.plan.frames[0].focus is None
+
     def test_the_view_sits_in_the_clear_part_of_the_frame(
-        self, template_id, parcels, project
+        self, parcels, project
     ) -> None:
         project.setTitle("Kranji parcels: land use survey, 2026")
         view = _view(parcels)
         result = cartograph_from_view(
-            view, UTM, [parcels], project, template_id=template_id
+            view, UTM, [parcels], project, template_id="story-map"
         )
         slot = result.plan.frames[0]
         assert slot.focus is not None
