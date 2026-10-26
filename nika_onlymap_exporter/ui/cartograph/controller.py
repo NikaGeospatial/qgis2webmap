@@ -1347,7 +1347,7 @@ class CartographController:
             self._current_layout.refresh()
 
     def _on_layout_content_changed(self, *_args: object) -> None:
-        if self._exporting:
+        if self._exporting or self.membership.editing:
             return
         if self._current_layout is not None and sip.isdeleted(self._current_layout):
             # Being deleted: its destructor clears the undo stack, which moves

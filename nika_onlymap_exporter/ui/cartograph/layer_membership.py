@@ -389,6 +389,9 @@ class LayerMembership:
         # What the bar and the Include column last showed, so the many layout
         # changes that are not about layers (a moved label) redo nothing.
         self._shown: tuple[object, ...] | None = None
+        # True while one tick's undo macro runs: what the layout emits then is
+        # one edit, announced once when it is done.
+        self.editing = False
 
     # ---- Wiring ----------------------------------------------------------
 
@@ -533,8 +536,7 @@ class LayerMembership:
         hints = self._order_hints.setdefault(item.uuid(), {})
         before = [layer.id() for layer in drawn_layers(item)]
         controller = self._controller
-        was_rebuilding = controller._rebuilding_layout
-        controller._rebuilding_layout = True
+        self.editing = True
         try:
             changed = set_layer_included(
                 layout,
@@ -545,7 +547,7 @@ class LayerMembership:
                 hints.get(layer_id),
             )
         finally:
-            controller._rebuilding_layout = was_rebuilding
+            self.editing = False
         if changed:
             if not included:
                 hints[layer_id] = before
