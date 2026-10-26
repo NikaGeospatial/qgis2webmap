@@ -1716,6 +1716,7 @@ def _fit_title(
     title.)"""
     if not text.strip():
         return max_pt, 0.0
+    width *= _TITLE_LINE_FILL
     tallest = max_lines * max_pt * PT_MM * TITLE_LINE_HEIGHT + 0.01
     size = fit_text_size(
         text,
@@ -2898,6 +2899,11 @@ _LOWER_EM = 0.58
 _NARROW_EM = 0.34
 _SPACE_EM = 0.34
 _BOLD_FACTOR = 1.1
+#: The share of a title box's width its estimate may fill. The advances
+#: above come within about 2% of DejaVu Sans Bold on running text (a little
+#: under on lowercase words), and a title that wraps one line more than
+#: estimated overflows its box -- so titles are broken a little early.
+_TITLE_LINE_FILL = 0.95
 #: Line heights the runtime sets (`cartograph.css`): titles 1.2, text 1.4.
 TITLE_LINE_HEIGHT = 1.2
 TEXT_LINE_HEIGHT = 1.4
