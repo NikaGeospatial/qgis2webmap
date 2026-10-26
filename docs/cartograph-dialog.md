@@ -63,6 +63,11 @@ settings (title, attribution, theme) change the HTML, so they show in
 Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
 100% is the page at its real size on your screen. The mouse wheel zooms too.
 
+Click an item on the page to select it, drag it to move it, or drag one of its
+corner or edge handles to resize it; each drag is one undo step. With a title,
+label or legend selected, the zoom bar also shows its text size: **A−** and
+**A+** change it one point at a time, also as undo steps.
+
 Left of them, **Select** and **Pan** (Select is on when the page opens). With
 **Select** you click an item to select it, drag it to move it, or drag a
 handle to resize it, with the same snapping and **Shift**/**Alt** keys as the
