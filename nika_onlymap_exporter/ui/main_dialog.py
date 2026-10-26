@@ -574,7 +574,7 @@ def _info_button(text: str, parent: QWidget) -> QToolButton:
     button.setAccessibleName(tr("What these columns do"))
     button.clicked.connect(
         lambda: QToolTip.showText(
-            button.mapToGlobal(button.rect().bottomLeft()), text, button
+            button.mapToGlobal(button.rect().bottomLeft()), button.toolTip(), button
         )
     )
     return button
@@ -1890,23 +1890,7 @@ class MainDialog(QDialog):
         # untouched rather than used. Behind a visible "i" button rather than
         # spelled out below the list, where six lines of it crowded the tab;
         # the button is there to be noticed, unlike a bare tooltip.
-        self.layers_info_button = _info_button(
-            tr(
-                "<b>Include</b> - untick to leave the layer out of the map "
-                "entirely. Its data is not written, so the file gets smaller.<br>"
-                "<b>Popups</b> - untick and clicking a feature does nothing. "
-                "The attribute values are left out of the file entirely, so "
-                "this is also how you keep data out of a map you are sending "
-                "someone.<br>"
-                "<b>Labels</b> - untick to drop the text QGIS draws beside "
-                "features. The features themselves still appear.<br>"
-                "Unticking Popups or Labels only affects that layer; the map "
-                "still works, with less on it. Expand a layer to hide single "
-                "fields instead - those values leave the file too, unless the "
-                "map draws with them."
-            ),
-            page,
-        )
+        self.layers_info_button = _info_button(self._layers_help_text(False), page)
 
         # Bulk action. Setting a mode field-by-field across a dozen layers is
         # exactly the tedium qgis2web users report, so the escape hatch is here
@@ -1936,6 +1920,37 @@ class MainDialog(QDialog):
         layout.addLayout(bulk)
         self._bulk_row = bulk
         return page
+
+    @staticmethod
+    def _layers_help_text(cartograph: bool) -> str:
+        """The Layers columns' help, for the output showing them: Include
+        means the web map's export selection there, and the selected map
+        frame's own layer list in Cartograph."""
+        include = (
+            tr(
+                "<b>Include</b> - tick or untick to add the layer to or remove "
+                "it from the selected map frame, and from the legends that "
+                "follow that frame. It does not change the web map's selection."
+            )
+            if cartograph
+            else tr(
+                "<b>Include</b> - untick to leave the layer out of the map "
+                "entirely. Its data is not written, so the file gets smaller."
+            )
+        )
+        rest = tr(
+            "<b>Popups</b> - untick and clicking a feature does nothing. "
+            "The attribute values are left out of the file entirely, so "
+            "this is also how you keep data out of a map you are sending "
+            "someone.<br>"
+            "<b>Labels</b> - untick to drop the text QGIS draws beside "
+            "features. The features themselves still appear.<br>"
+            "Unticking Popups or Labels only affects that layer; the map "
+            "still works, with less on it. Expand a layer to hide single "
+            "fields instead - those values leave the file too, unless the "
+            "map draws with them."
+        )
+        return f"{include}<br>{rest}"
 
     def _set_layers_compact(self, compact: bool) -> None:
         """Fit the cartograph's narrow panel: the bulk action stacks, and the
@@ -2999,6 +3014,7 @@ class MainDialog(QDialog):
                     self.tabs.removeTab(index)
             self._cartograph.seat_shared(self._layers_page, self._fidelity_page)
         self._set_layers_compact(not web)
+        self.layers_info_button.setToolTip(self._layers_help_text(not web))
         self.fidelity_panel.set_compact(not web)
         if hasattr(self, "fidelity_strip"):
             self.fidelity_strip.setVisible(web)

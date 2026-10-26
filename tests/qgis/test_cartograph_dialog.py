@@ -3761,6 +3761,24 @@ class TestPanel:
         finally:
             dialog.close()
 
+    def test_layers_help_describes_include_for_the_active_output(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import DialogOutput
+
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            tip = dialog.layers_info_button.toolTip()
+            assert "selected map frame" in tip
+            assert "data is not written" not in tip
+            dialog.output_switcher.actions_by_output[DialogOutput.WEB_MAP].trigger()
+            tip = dialog.layers_info_button.toolTip()
+            assert "data is not written" in tip
+            assert "map frame" not in tip
+        finally:
+            dialog.close()
+
     def test_each_tab_has_one_scrolling_surface_in_the_smallest_window(
         self, qgis_app, project
     ) -> None:
