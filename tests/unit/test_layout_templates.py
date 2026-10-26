@@ -122,7 +122,7 @@ class TestEveryDesignFitsEveryPage:
 #: Designs that lay furniture over the map on purpose (story map, dark
 #: full-bleed, infographic tiles on a band) are checked only for what must
 #: still not collide: no two pieces of furniture on top of each other.
-_OVERLAID = {"story-map", "dark", "dashboard", "field-map"}
+_OVERLAID = {"story-map", "dashboard", "field-map"}
 #: Boxes that are backgrounds for what sits on them, by design.
 _BACKGROUNDS = (
     "border",
@@ -504,7 +504,7 @@ TEN = (
 )
 #: Designs that lay furniture over their map on purpose, each piece on an
 #: opaque panel.
-_OVER_THE_MAP = {"story-map", "dark"}
+_OVER_THE_MAP = {"story-map"}
 
 _LONG_TITLE = (
     "Flood-prone parcels along the Kranji reservoir catchment, surveyed "

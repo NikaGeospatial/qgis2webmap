@@ -1439,39 +1439,28 @@ def _dashboard(page: _Page) -> _Layout:
 
 
 def _dark(page: _Page) -> _Layout:
-    """After Hours: a dark full-bleed map. A dark page, the map to within a
-    few millimetres of its edges, and everything that is read -- title,
-    legend, scale bar -- on opaque dark panels, so its contrast never
-    depends on the map's colours; the canvas view sits in the frame's clear
-    part. The source line is on the page under the map. No north arrow
-    unless the map is turned."""
+    """After Hours: a dark sheet with an uninterrupted map.
+
+    The heading, legend and foot get their own space. A dense legend belongs
+    beside or below the map, never on top of terrain. Choose the arrangement
+    that keeps the complete key readable and shows the largest canvas view.
+    """
     pal = GRAPHITE
     sp = page.spacing
-    s = page.scale
-    m = max(6.0, sp.margin * 0.6)
-    g = sp.gutter
-    credit_pt = page.pt("credit")
-    content_w = page.width - 2 * m
-    credits_h = text_height(page.credits, content_w, credit_pt)
-    frame = Box(
-        m, m, content_w, page.height - 2 * m - (credits_h + g / 2 if credits_h else 0.0)
-    )
-    inset = g
-    pad = sp.pad * 1.5
-    overlays: list[Box] = []
-    items: list[CartographItem] = []
-    share = 0.36 if page.landscape else 0.5
-    panel_w = min(max(frame.w * share, 80.0 * s), 135.0 * s, frame.w - 2 * inset)
+    m, g = max(6.0, sp.margin * 0.6), sp.gutter
+    width = page.width - 2 * m
+    pad = sp.pad
     title_pt, title_h = _fit_title(
         page.title,
-        panel_w - 2 * pad,
+        width - 2 * pad,
         round(page.pt("title") * 1.2, 2),
         MINIMUM_TYPE.title,
         max_lines=3,
     )
-    if title_h:
-        panel = Box(frame.x + inset, frame.y + inset, panel_w, title_h + 2 * pad)
-        overlays.append(panel)
+    items: list[CartographItem] = []
+    head_h = title_h + 2 * pad if title_h else 0.0
+    if head_h:
+        panel = Box(m, m, width, head_h)
         items.append(_solid("panel-title", panel, pal.panel, z=1))
         items.append(
             text_on_panel(
@@ -1485,78 +1474,49 @@ def _dark(page: _Page) -> _Layout:
                 z=2,
             )
         )
-    plate_w = min(_scale_bar_w(page) + 2 * sp.pad, frame.w * 0.45)
-    plate = Box(
-        frame.x + frame.w - inset - plate_w,
-        frame.y + frame.h - inset - _bar_h(page) - 2 * sp.pad,
-        plate_w,
-        _bar_h(page) + 2 * sp.pad,
-    )
-    overlays.append(plate)
-    items.append(_solid("panel-scale", plate, pal.panel, z=3))
-    items.append(_scale_bar(_inset(plate, sp.pad), pal, font_pt=scalebar_pt(page), z=4))
-    rows = _legend_rows(page)
+    foot_h = _foot_height(page, width)
+    body_y = m + head_h + (g if head_h else 0.0)
+    foot_y = page.height - m - foot_h
+    body = Box(m, body_y, width, foot_y - g - body_y)
+    frame = body
     legend_pt = _legend_pt(page)
-    if rows:
-        # As narrow as its rows allow, up to a third of the map; a legend
-        # that would then be taller than half the map widens (beside the
-        # scale plate, never under it) before it grows taller.
-        widest = frame.w - plate_w - 3 * inset
-        widths = [min(_legend_width(page, legend_pt), frame.w * 0.32)]
-        widths += [w for w in (frame.w * 0.45, frame.w * 0.6) if w > widths[0]]
-        options = [
-            (_legend_need(page, legend_pt, width), width)
-            for width in (min(w, widest) for w in widths)
+    if _legend_rows(page):
+        options: list[tuple[Box, Box]] = []
+        # More room for a dense key comes from columns, not map overlays.
+        for share in (0.25, 0.32, 0.4):
+            rail_w = body.w * share
+            options.append(
+                (
+                    Box(body.x, body.y, body.w - rail_w - g, body.h),
+                    Box(body.x + body.w - rail_w, body.y, rail_w, body.h),
+                )
+            )
+        key_h = min(_legend_need(page, legend_pt, body.w), body.h * 0.4)
+        options.append(
+            (
+                Box(body.x, body.y, body.w, body.h - key_h - g),
+                Box(body.x, body.y + body.h - key_h, body.w, key_h),
+            )
+        )
+
+        def score(option: tuple[Box, Box]) -> tuple:
+            map_box, key_box = option
+            size, _, _ = _legend_plan(page, legend_pt, key_box)
+            _, _, need = _legend_fit(page, size, key_box.w, key_box.h)
+            return (
+                need <= key_box.h + 1e-6,
+                size,
+                _fit_area(page.aspect, map_box),
+            )
+
+        frame, legend_box = max(options, key=score)
+        items += [
+            replace(item, bg=pal.panel)
+            for item in _legend(page, legend_box, pal, legend_pt, z=3)
         ]
-        # Over the map, the map keeps half its frame's height clear
-        # (`MAP_MIN_SHARE`); entries that still do not fit are left out.
-        tallest = legend_room_cap(frame.h - 2 * inset)
-        legend_h, legend_w = next((o for o in options if o[0] <= tallest), min(options))
-        legend_h = min(legend_h, tallest)
-        legend_box = Box(
-            frame.x + inset, frame.y + frame.h - inset - legend_h, legend_w, legend_h
-        )
-        size, columns, wrap = _legend_plan(page, legend_pt, legend_box)
-        legend = legend_or_none(
-            page.data.layer_names,
-            legend_box,
-            columns=columns,
-            bg=pal.panel,
-            color=pal.panel_ink,
-            font_size=size,
-            wrap_width=wrap,
-            z=5,
-        )
-        if legend is not None:
-            overlays.append(legend_box)
-            items.append(legend)
-    if page.rotated:
-        north = Box(
-            frame.x + frame.w - inset - _NORTH_W, frame.y + inset, _NORTH_W, _NORTH_H
-        )
-        overlays.append(north)
-        items.append(_solid("panel-north", north, pal.panel, z=6))
-        items.append(_north(north, pal, z=7))
-    credit = source_line(
-        page.credits,
-        Box(m, frame.y + frame.h + g / 2, content_w, credits_h or 1.0),
-        palette=pal,
-        font_size=credit_pt,
-        align="end",
-    )
-    if credit is not None:
-        items.append(credit)
-    focus = clear_area(frame, overlays, page.aspect, gap=inset)
+    items += _foot(page, Box(m, foot_y, width, foot_h), pal, z=5)
     return (
-        (
-            FrameSlot(
-                MAIN_FRAME_ID,
-                frame,
-                frame_bg=pal.page,
-                frame_stroke=pal.page,
-                focus=focus,
-            ),
-        ),
+        (FrameSlot(MAIN_FRAME_ID, frame, frame_bg=pal.page, frame_stroke=pal.page),),
         items,
         _page_style(pal),
     )

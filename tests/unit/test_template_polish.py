@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from nika_onlymap_exporter.core.cartograph_ir import ShapeSpec, TextSpec
 from nika_onlymap_exporter.core.layout_templates import (
     TemplateInput,
@@ -49,3 +51,20 @@ def test_adapted_title_block_ships_its_permission_notice():
             text = (root / source["notice"]).read_text()
             assert "Permission is hereby granted" in text
             assert "Copyright" in text
+
+
+@pytest.mark.parametrize("size", ["A4", "A3"])
+@pytest.mark.parametrize("orientation", ["portrait", "landscape"])
+def test_after_hours_keeps_its_dense_key_and_heading_off_the_map(size, orientation):
+    data = json.loads(
+        (Path(__file__).parents[1] / "fixtures/dense_template_input.json").read_text()
+    )
+    data.update(page_size=size, orientation=orientation)
+    plan = plan_template("dark", TemplateInput(**data))
+    frame = plan.frames[0].box
+    assert frame.w * frame.h >= 0.4 * plan.page_width * plan.page_height
+    for item in plan.items:
+        box = item.box
+        overlap_w = min(frame.x + frame.w, box.x + box.w) - max(frame.x, box.x)
+        overlap_h = min(frame.y + frame.h, box.y + box.h) - max(frame.y, box.y)
+        assert overlap_w <= 1e-6 or overlap_h <= 1e-6, item.id
