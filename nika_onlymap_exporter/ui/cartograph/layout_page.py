@@ -366,6 +366,9 @@ class PagePane(QWidget):
         self._change_count = 0
         self.caption = QLabel(self)
         self.caption.setProperty("role", "pageCaption")
+        # The caption may clip in a narrow window rather than widen the page
+        # pane and squeeze the control panel beside it (its tooltip says it all).
+        self.caption.setMinimumWidth(1)
         self.caption.setToolTip(
             tr(
                 "QGIS's drawing of the print layout. The cartograph can differ "
