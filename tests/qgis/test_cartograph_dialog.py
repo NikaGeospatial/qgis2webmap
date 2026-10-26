@@ -2484,6 +2484,99 @@ class TestAtlasTab:
         finally:
             dialog.close()
 
+    def _rotated_utm_atlas(self, project, tmp_path, *, atlas_on=True):
+        """The atlas layout, its map in a rotated UTM zone: a CRS whose
+        Interactive/Image default is Image unless the atlas drives the map."""
+        from qgis.core import QgsCoordinateReferenceSystem
+
+        from atlas_fixtures import build_atlas_layout
+
+        built = build_atlas_layout(project)
+        built.main_map.setCrs(QgsCoordinateReferenceSystem("EPSG:32648"))
+        built.main_map.setMapRotation(15)
+        built.atlas.setEnabled(atlas_on)
+        project.layoutManager().addLayout(built.layout)
+        project.setFileName(str(tmp_path / "parcels.qgz"))
+        return built
+
+    def _open_on(self, project, built):
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
+        return dialog
+
+    def test_an_atlas_driven_frame_opens_interactive_and_exports_pages(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.export_ir import FidelityStatus
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.core.layout_reader import (
+            atlas_page_count,
+            read_layout,
+        )
+
+        built = self._rotated_utm_atlas(project, tmp_path)
+        dialog = self._open_on(project, built)
+        try:
+            cartograph = dialog._cartograph
+            item_id = built.main_map.uuid()
+            card = cartograph.frames_list.card(item_id)
+            assert card.mode_combo.currentData() == "live"
+            assert card.mode_combo.currentText() == "Interactive"
+            choices = dialog.state.frame_choices(built.layout.name())
+            report = FidelityReportBuilder()
+            reading = read_layout(
+                built.layout,
+                report,
+                frame_modes={i: c.mode for i, c in choices.items()},
+            )
+            assert reading.atlas is not None
+            assert not [
+                i
+                for i in report.by_status(FidelityStatus.BLOCKED)
+                if "No atlas pages" in i.detail
+            ]
+            assert atlas_page_count(built.layout) == 3
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_an_explicit_image_choice_survives_reopening(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        built = self._rotated_utm_atlas(project, tmp_path)
+        dialog = self._open_on(project, built)
+        try:
+            card = dialog._cartograph.frames_list.card(built.main_map.uuid())
+            card.mode_combo.setCurrentIndex(card.mode_combo.findData("static"))
+            assert (
+                dialog.state.frame_choices(built.layout.name())[
+                    built.main_map.uuid()
+                ].mode
+                == "static"
+            )
+        finally:
+            dialog.close()
+        dialog = self._open_on(project, built)
+        try:
+            card = dialog._cartograph.frames_list.card(built.main_map.uuid())
+            assert card.mode_combo.currentData() == "static"
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    def test_without_an_atlas_the_default_is_unchanged(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        built = self._rotated_utm_atlas(project, tmp_path, atlas_on=False)
+        dialog = self._open_on(project, built)
+        try:
+            card = dialog._cartograph.frames_list.card(built.main_map.uuid())
+            assert card.mode_combo.currentData() == "static"
+        finally:
+            dialog.close()
+            project.setFileName("")
+
     def test_it_mirrors_the_layouts_atlas(self, qgis_app, project, tmp_path) -> None:
         dialog, built = self._atlas_dialog(project, tmp_path)
         try:
@@ -2512,6 +2605,68 @@ class TestAtlasTab:
             )
             built.layout.undoStack().stack().undo()
             assert not built.atlas.filterFeatures()
+        finally:
+            dialog.close()
+            project.setFileName("")
+
+    @pytest.mark.parametrize(
+        ("key", "read", "typed"),
+        [
+            (
+                "filter_edit",
+                lambda a: (a.filterFeatures(), a.filterExpression()),
+                "\"lot\" = 'A-1'",
+            ),
+            (
+                "sort_edit",
+                lambda a: (a.sortFeatures(), a.sortExpression()),
+                'lower("lot")',
+            ),
+            (
+                "filename_edit",
+                lambda a: (True, a.filenameExpression()),
+                "'sheet_' || \"lot\"",
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("finish", ["Return", "Tab"])
+    def test_enter_applies_a_typed_expression_like_tab(
+        self, qgis_app, project, tmp_path, key, read, typed, finish
+    ) -> None:
+        """Real key presses in the field's line edit: Enter keeps the text
+        and applies it as one undo step, exactly as Tab does."""
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        dialog, built = self._atlas_dialog(project, tmp_path)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            cartograph.open_section("atlas")
+            tab = cartograph.atlas_tab
+            tab.advanced_section.set_open(True)
+            qgis_app.processEvents()
+            widget = getattr(tab, key)
+            line = widget.findChild(QComboBox).lineEdit()
+            line.setFocus()
+            undo = built.layout.undoStack().stack()
+            steps = undo.count()
+            line.selectAll()
+            QTest.keyClicks(line, typed)
+            QTest.keyClick(line, getattr(Qt.Key, f"Key_{finish}"))
+            qgis_app.processEvents()
+            assert line.text() == typed
+            assert widget.expression() == typed
+            assert read(built.atlas)[1] == typed
+            assert undo.count() == steps + 1
+            # Leaving the field afterwards must not add a second step.
+            QTest.keyClick(line, Qt.Key.Key_Tab)
+            qgis_app.processEvents()
+            assert line.text() == typed
+            assert undo.count() == steps + 1
+            undo.undo()
+            assert read(built.atlas)[1] != typed
         finally:
             dialog.close()
             project.setFileName("")
@@ -2722,7 +2877,7 @@ class TestAtlasTab:
             assert _wait_for(
                 qgis_app, lambda: not tab.problem_label.isHidden(), timeout=60
             )
-            assert "Live" in tab.problem_label.text()
+            assert "Interactive" in tab.problem_label.text()
             assert not tab.zip_button.isEnabled()
         finally:
             dialog.close()

@@ -130,7 +130,7 @@ class AtlasTab(QWidget):
         self.advanced_section.body_layout.addLayout(advanced)
 
         sort_row = QHBoxLayout()
-        self.sort_edit = QgsFieldExpressionWidget(settings)
+        self.sort_edit = _typed_expression_widget(settings)
         self.sort_edit.setAllowEmptyFieldName(True)
         self.sort_edit.fieldChanged.connect(self._on_sort_expression)
         sort_row.addWidget(self.sort_edit, 1)
@@ -144,7 +144,7 @@ class AtlasTab(QWidget):
         sort_column.addWidget(self.sort_error_label)
         advanced.addRow(tr("Sort by"), sort_column)
 
-        self.filter_edit = QgsFieldExpressionWidget(settings)
+        self.filter_edit = _typed_expression_widget(settings)
         self.filter_edit.setToolTip(
             tr("Only features for which this is true get a page. Blank: all.")
         )
@@ -156,7 +156,7 @@ class AtlasTab(QWidget):
         filter_column.addWidget(self.filter_error_label)
         advanced.addRow(tr("Filter"), filter_column)
 
-        self.filename_edit = QgsFieldExpressionWidget(settings)
+        self.filename_edit = _typed_expression_widget(settings)
         self.filename_edit.setToolTip(
             tr("How each page's image is named when all pages are exported.")
         )
@@ -496,6 +496,19 @@ class AtlasTab(QWidget):
             tr("Change Atlas Filename"),
             lambda layout: layout.atlas().setFilenameExpression(expression),
         )
+
+
+def _typed_expression_widget(parent: QWidget) -> QgsFieldExpressionWidget:
+    """An expression picker whose Enter applies what was typed, like Tab.
+
+    The picker's editable combo inserts a typed entry at the bottom on Enter,
+    which resets the field to empty; "no insert" leaves the typed text for the
+    picker to commit as the expression."""
+    widget = QgsFieldExpressionWidget(parent)
+    combo = widget.findChild(QComboBox)
+    if combo is not None:
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+    return widget
 
 
 def _atlas_state(layout: QgsPrintLayout | None) -> tuple[object, ...]:
