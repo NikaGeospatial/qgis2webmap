@@ -934,10 +934,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="corner"][hasMenu="true"] {{
     padding-right: 22px;
 }}
-{d} QToolButton[role="corner"][tight="true"] {{
+{d} QToolButton[role="corner"][iconOnly="true"] {{
     padding: 3px 6px;
 }}
-{d} QToolButton[role="corner"][tight="true"]:checked {{
+{d} QToolButton[role="corner"][iconOnly="true"]:checked {{
     background: {p.accent_soft};
     border-color: {p.muted};
 }}
@@ -1734,7 +1734,7 @@ _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     ('QToolButton[role="primary"][hasMenu="false"]', (3, 16, 3, 16), 1, True),
     ('QToolButton[role="corner"]', (3, 11, 3, 9), 1, False),
     ('QToolButton[role="corner"][hasMenu="true"]', (3, 22, 3, 9), 1, False),
-    ('QToolButton[role="corner"][tight="true"]', (3, 6, 3, 6), 1, False),
+    ('QToolButton[role="corner"][iconOnly="true"]', (3, 6, 3, 6), 1, False),
     ('QToolButton[role="corner"][accent="true"]', (3, 3, 3, 9), 1, True),
 )
 # Lopsided only to offset the slack Qt leaves right of a text-beside-icon

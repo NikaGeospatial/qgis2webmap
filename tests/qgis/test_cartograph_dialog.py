@@ -3380,11 +3380,14 @@ class TestWorkspace:
                 return tabs.geometry().intersects(footer.geometry())
 
             dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+            # Twice: the panel re-measures itself in a zero-delay step.
+            qgis_app.processEvents()
             qgis_app.processEvents()
             assert dialog.height() == MINIMUM_DIALOG_HEIGHT
             assert not overlapping()
             assert bar.maximum() > 0
             dialog.resize(1152, 768)
+            qgis_app.processEvents()
             qgis_app.processEvents()
             assert not overlapping()
             assert bar.maximum() == 0
