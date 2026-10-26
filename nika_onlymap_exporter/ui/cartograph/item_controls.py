@@ -1,12 +1,13 @@
 """The controls for the item selected on the page preview.
 
-A compact strip under the preview's bar, shown only while one item is
-selected and collapsible to its header: the page keeps the room. What it
-offers depends on the item:
+The body of the panel's Edit tab: its heading says what is selected (or, with
+nothing selected, how to select something), and the controls for it follow.
+What it offers depends on the item:
 
-- Text: the words, bold, alignment and colour. The size of the lettering is
-  the bar's A- / A+ (`item_text_size`); resizing the box is the handles on the
-  page - the two are separate on purpose.
+- Every text-carrying item: the size of the lettering, A- / A+
+  (`item_text_size`); resizing the box is the handles on the page - the two
+  are separate on purpose.
+- Text: the words, bold, alignment and colour.
 - Map: use the QGIS canvas's extent, rotation, and how it appears in the HTML
   (Interactive or Image, and an Image's resolution). Those two are the Map
   frames list's own choices: this strip sets and shows them through that list,
@@ -75,6 +76,7 @@ from ...core.locator_context import (
 )
 from ..i18n import tr
 from .frames_list import LIVE, STATIC, FramesList, _QuietCombo
+from .item_text_size import text_size_points
 from .layer_membership import drawn_layers, set_layer_included
 from .layout_items import (
     delete_items,
@@ -85,12 +87,9 @@ from .layout_items import (
     one_step,
 )
 
-#: What opens a legend editor: called with the strip as parent, it returns a
+#: What opens a legend editor: called with the tab body as parent, it returns a
 #: widget that has `set_legend(QgsLayoutItemLegend | None)`.
 LegendEditorFactory = Callable[[QWidget], QWidget]
-
-#: The most room the hosted legend editor takes from the page, in pixels.
-_LEGEND_EDITOR_MAX_HEIGHT = 240
 
 
 class _CurrentPageStack(QStackedWidget):
@@ -236,7 +235,7 @@ class _StayOpenMenu(QMenu):
 
 
 class ContextControls(QFrame):
-    """The strip under the preview bar: what can be changed on the selected item."""
+    """The Edit tab's body: what can be changed on the selected item."""
 
     #: "Use canvas extent" for a map (its uuid): the controller owns the canvas.
     canvas_extent_requested = pyqtSignal(str)
@@ -244,6 +243,8 @@ class ContextControls(QFrame):
     edit_view_toggled = pyqtSignal(bool)
     #: An item was edited here (the page's own refresh follows its undo stack).
     edited = pyqtSignal()
+    #: A / A+ was pressed: the selected item's lettering one step (bigger?).
+    text_size_step = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -251,29 +252,23 @@ class ContextControls(QFrame):
         self._layout: QgsLayout | None = None
         self._item: QgsLayoutItem | None = None
         self._loading = False
-        self._collapsed = False
-        self._compact = False
         self._frames: FramesList | None = None
         self._legend_factory: LegendEditorFactory | None = None
         self._legend_editor: QWidget | None = None
         self._text_dirty = False
-        self._head = ""
 
         column = QVBoxLayout(self)
-        column.setContentsMargins(6, 4, 6, 4)
-        column.setSpacing(4)
+        column.setContentsMargins(0, 4, 0, 0)
+        column.setSpacing(6)
 
         head = QHBoxLayout()
         head.setSpacing(6)
-        self.toggle = QToolButton(self)
-        self.toggle.setProperty("role", "secondary")
-        self.toggle.setProperty("hasMenu", False)
-        self.toggle.setProperty("zoom", True)
-        self.toggle.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.toggle.setToolTip(tr("Show or hide this item's controls"))
-        self.toggle.clicked.connect(self._on_toggle)
-        head.addWidget(self.toggle)
-        head.addStretch(1)
+        # "Selected: Legend", or the hint with nothing selected. The tab's
+        # own title never changes, so the tab bar does not jump.
+        self.heading = QLabel(self)
+        self.heading.setWordWrap(True)
+        self.heading.setMinimumWidth(1)
+        head.addWidget(self.heading, 1)
         self.delete_button = _small_button(
             tr("Delete"), tr("Delete the selected item (Delete key)"), self
         )
@@ -282,16 +277,24 @@ class ContextControls(QFrame):
         head.addWidget(self.delete_button)
         column.addLayout(head)
 
-        self.pages = _CurrentPageStack(self)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        # Everything below the heading belongs to a selected item.
+        self.body = QWidget(self)
+        body = QVBoxLayout(self.body)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(6)
+        self._build_text_size_row(body)
+        self.pages = _CurrentPageStack(self.body)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.pages.currentChanged.connect(lambda _index: self.pages.updateGeometry())
-        column.addWidget(self.pages)
+        body.addWidget(self.pages)
+        column.addWidget(self.body)
+        column.addStretch(1)
         self._build_text_page()
         self._build_map_page()
         self._build_legend_page()
         self._build_linked_page("scale_bar")
         self._build_linked_page("north_arrow")
-        self.setVisible(False)
+        self.refresh()
 
     # ---- pages -----------------------------------------------------------
 
@@ -302,6 +305,42 @@ class ContextControls(QFrame):
         column.setSpacing(4)
         self.pages.addWidget(page)
         return page, column
+
+    def _build_text_size_row(self, body: QVBoxLayout) -> None:
+        """A- / the size / A+: the lettering of a text, a title or a legend."""
+        self.text_size_row = QWidget(self.body)
+        row = QHBoxLayout(self.text_size_row)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        self.text_smaller_button = _small_button(
+            "A\N{MINUS SIGN}",
+            tr(
+                "Smaller lettering in the selected item "
+                "(drag its handles to resize the box)"
+            ),
+            self.text_size_row,
+        )
+        self.text_bigger_button = _small_button(
+            "A+",
+            tr(
+                "Bigger lettering in the selected item "
+                "(drag its handles to resize the box)"
+            ),
+            self.text_size_row,
+        )
+        self.text_size_label = QLabel(self.text_size_row)
+        self.text_size_label.setProperty("role", "hint")
+        self.text_size_label.setMinimumWidth(40)
+        self.text_size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row.addWidget(self.text_smaller_button)
+        row.addWidget(self.text_size_label)
+        row.addWidget(self.text_bigger_button)
+        row.addStretch(1)
+        self.text_smaller_button.clicked.connect(
+            lambda: self.text_size_step.emit(False)
+        )
+        self.text_bigger_button.clicked.connect(lambda: self.text_size_step.emit(True))
+        body.addWidget(self.text_size_row)
 
     def _build_text_page(self) -> None:
         self.text_page, column = self._page()
@@ -363,7 +402,8 @@ class ContextControls(QFrame):
         self.edit_view_button.setToolTip(
             tr(
                 "Drag to pan and use the wheel to zoom what this map shows, "
-                "inside its frame. Esc finishes; Select moves the frame."
+                "inside its frame. Esc finishes; a click elsewhere on the page "
+                "goes back to moving the frame."
             )
         )
         self.edit_view_button.toggled.connect(self._on_edit_view)
@@ -498,30 +538,18 @@ class ContextControls(QFrame):
         frames.dpi_changed.connect(lambda *_args: self._show_frame_state())
         frames.cards_changed.connect(self._show_frame_state)
 
-    def set_compact(self, compact: bool) -> None:
-        """A short window: the strip rests as its header, so the page keeps
-        the room; the header opens it, and so does a double-click or adding
-        an item. A tall window shows it open again."""
-        if compact == self._compact:
-            return
-        self._compact = compact
-        self._collapsed = compact
-        self._show_collapsed()
-
     def set_layout(self, layout: QgsLayout | None) -> None:
         self._layout = layout
         self._item = None
         self.refresh()
 
     def selected_item(self) -> QgsLayoutItem | None:
-        """The one selected item the strip is showing, if any."""
+        """The one selected item the tab is showing, if any."""
         return self._item
 
     def reveal(self, focus: bool = True) -> None:
-        """Open the strip (a double-click on the item) and, for text, put the
-        cursor in the words."""
-        self._collapsed = False
-        self._show_collapsed()
+        """The Edit tab has just been brought up for the item (a double-click
+        on it, or placing it): for text, put the cursor in the words."""
         if (
             focus
             and self._item is not None
@@ -545,14 +573,18 @@ class ContextControls(QFrame):
             self._text_dirty = False
         self._item = item
         if item is None or layout is None:
-            self.setVisible(False)
-            self._set_legend_editor_item(None)
+            self._show_nothing_selected()
             return
         self._loading = True
         try:
             kind = self._kind(item)
-            self._head = self._title(kind)
-            self._show_collapsed()
+            self.heading.setText(self._title(kind))
+            self.heading.setProperty("role", "")
+            self.heading.style().unpolish(self.heading)
+            self.heading.style().polish(self.heading)
+            self.delete_button.setVisible(True)
+            self.body.setVisible(True)
+            self._show_text_size(item)
             if kind == "text":
                 self._show_text(item)
             elif kind == "map":
@@ -572,7 +604,27 @@ class ContextControls(QFrame):
         finally:
             self._loading = False
         self._sync_button_styles()
-        self.setVisible(True)
+
+    def _show_nothing_selected(self) -> None:
+        self.heading.setText(
+            tr(
+                "Select an item on the page to edit it. "
+                "Add item puts a new one on the page."
+            )
+        )
+        self.heading.setProperty("role", "hint")
+        self.heading.style().unpolish(self.heading)
+        self.heading.style().polish(self.heading)
+        self.delete_button.setVisible(False)
+        self.text_size_row.setVisible(False)
+        self.body.setVisible(False)
+        self._set_legend_editor_item(None)
+
+    def _show_text_size(self, item: QgsLayoutItem) -> None:
+        size = text_size_points(item)
+        self.text_size_row.setVisible(size is not None)
+        if size is not None:
+            self.text_size_label.setText(tr("{size} pt").format(size=f"{size:g}"))
 
     def _sync_button_styles(self) -> None:
         """Pictures on the buttons that have one (the theme paints them), the
@@ -612,19 +664,6 @@ class ContextControls(QFrame):
             "north_arrow": tr("North arrow"),
         }
         return tr("Selected: {item}").format(item=names.get(kind or "", ""))
-
-    def _on_toggle(self) -> None:
-        self._collapsed = not self._collapsed
-        self._show_collapsed()
-
-    def _show_collapsed(self) -> None:
-        self.pages.setVisible(not self._collapsed)
-        arrow = (
-            "\N{BLACK RIGHT-POINTING SMALL TRIANGLE}"
-            if self._collapsed
-            else "\N{BLACK DOWN-POINTING SMALL TRIANGLE}"
-        )
-        self.toggle.setText(f"{arrow} {self._head}")
 
     def _show_text(self, item: QgsLayoutItemLabel) -> None:
         self.pages.setCurrentWidget(self.text_page)
@@ -791,8 +830,11 @@ class ContextControls(QFrame):
     def _set_legend_editor_item(self, legend: QgsLayoutItemLegend | None) -> None:
         if legend is not None and self._legend_editor is None and self._legend_factory:
             self._legend_editor = self._legend_factory(self.legend_page)
-            # Its entry list scrolls: the page keeps most of the room.
-            self._legend_editor.setMaximumHeight(_LEGEND_EDITOR_MAX_HEIGHT)
+            # The Edit tab scrolls, so the editor keeps its whole minimum
+            # height: squeezed, its rows overlapped.
+            self._legend_editor.setMinimumHeight(
+                self._legend_editor.minimumSizeHint().height()
+            )
             self.legend_slot.addWidget(self._legend_editor)
         editor = self._legend_editor
         if editor is not None and not sip.isdeleted(editor):

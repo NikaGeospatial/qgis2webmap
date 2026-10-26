@@ -3667,7 +3667,7 @@ class TestPanel:
         finally:
             dialog.close()
 
-    def test_the_tabs_are_layout_atlas_checks(self, qgis_app, project) -> None:
+    def test_the_tabs_are_layout_atlas_checks_edit(self, qgis_app, project) -> None:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
@@ -3675,11 +3675,12 @@ class TestPanel:
             cartograph = dialog._cartograph
             tabs = cartograph.panel_tabs
             titles = [tabs.tabText(i) for i in range(tabs.count())]
-            assert titles == ["Layout", "Atlas", "Checks"]
-            assert cartograph._tab_keys == ("layout", "atlas", "checks")
+            assert titles == ["Layout", "Atlas", "Checks", "Edit"]
+            assert cartograph._tab_keys == ("layout", "atlas", "checks", "edit")
             assert tabs.widget(0) is cartograph.layout_scroll
             assert tabs.widget(1).widget() is cartograph.atlas_tab
             assert tabs.widget(2) is cartograph.checks_page
+            assert tabs.widget(3).widget() is cartograph.page_pane.controls
             # The Layout tab's sections, and no others.
             assert list(cartograph.sections) == ["page", "frames", "layers"]
         finally:
@@ -4818,5 +4819,316 @@ class TestLayoutSelectorAndTemplates:
                 for row in group.changes
             ).lower()
             assert "legend" in rows and "left out" in rows
+        finally:
+            dialog.close()
+
+
+class TestEditTab:
+    """The selected item's editing lives in the panel's Edit tab, after
+    Checks: a double-click or Add item brings it up, a single click does not."""
+
+    def _ready(self, project, qgis_app, size=(1280, 800)):
+        from qgis.core import QgsLayoutItemLabel, QgsLayoutItemLegend, QgsLayoutItemMap
+        from qgis.PyQt.QtCore import QRectF
+
+        layout = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        map_item = next(i for i in layout.items() if isinstance(i, QgsLayoutItemMap))
+        map_item.attemptSetSceneRect(QRectF(10, 20, 120, 100))
+        label = QgsLayoutItemLabel(layout)
+        label.setText("A title")
+        label.attemptSetSceneRect(QRectF(10, 5, 100, 12))
+        layout.addLayoutItem(label)
+        legend = QgsLayoutItemLegend(layout)
+        legend.setLinkedMap(map_item)
+        legend.attemptSetSceneRect(QRectF(170, 30, 60, 50))
+        layout.addLayoutItem(legend)
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        cartograph = dialog._cartograph
+        cartograph._autosave_timer.stop()
+        dialog.resize(*size)
+        dialog.show()
+        _wait_for(qgis_app, lambda: cartograph.page_pane.preview.isVisible())
+        for _ in range(30):
+            qgis_app.processEvents()
+        return (
+            dialog,
+            cartograph,
+            layout,
+            {"map": map_item, "text": label, "legend": legend},
+        )
+
+    @staticmethod
+    def _point(cartograph, item):
+        view = cartograph.page_pane.preview.view
+        return view.mapFromScene(item.sceneBoundingRect().center())
+
+    @staticmethod
+    def _click(qgis_app, cartograph, item, double=False) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        viewport = cartograph.page_pane.preview.view.viewport()
+        point = TestEditTab._point(cartograph, item)
+        QTest.mouseMove(viewport, point)
+        qgis_app.processEvents()
+        click = QTest.mouseDClick if double else QTest.mouseClick
+        if double:
+            QTest.mouseClick(
+                viewport,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                point,
+            )
+        click(
+            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point
+        )
+        for _ in range(10):
+            qgis_app.processEvents()
+
+    @staticmethod
+    def _tab(cartograph) -> str:
+        return cartograph._tab_keys[cartograph.panel_tabs.currentIndex()]
+
+    def test_the_tab_follows_checks_and_its_title_never_changes(
+        self, qgis_app, project
+    ) -> None:
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            tabs = cartograph.panel_tabs
+            index = cartograph._tab_keys.index("edit")
+            assert index == cartograph._tab_keys.index("checks") + 1
+            assert tabs.tabText(index) == "Edit"
+            controls = cartograph.page_pane.controls
+            layout.deselectAll()
+            qgis_app.processEvents()
+            assert "Select an item on the page to edit it." in controls.heading.text()
+            assert controls.body.isHidden() and controls.delete_button.isHidden()
+            items["legend"].setSelected(True)
+            qgis_app.processEvents()
+            assert controls.heading.text() == "Selected: Legend"
+            assert not controls.body.isHidden()
+            assert tabs.tabText(index) == "Edit"
+        finally:
+            dialog.close()
+
+    def test_a_single_click_selects_without_switching_tabs(
+        self, qgis_app, project
+    ) -> None:
+        dialog, cartograph, _layout, items = self._ready(project, qgis_app)
+        try:
+            cartograph.open_section("layout")
+            self._click(qgis_app, cartograph, items["legend"])
+            assert items["legend"].isSelected()
+            assert self._tab(cartograph) == "layout"
+            assert cartograph.page_pane.controls.heading.text() == "Selected: Legend"
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize(
+        ("name", "page"),
+        [("map", "map_page"), ("legend", "legend_page"), ("text", "text_page")],
+    )
+    def test_a_double_click_brings_up_the_edit_tab_on_the_right_page(
+        self, qgis_app, project, name, page
+    ) -> None:
+        dialog, cartograph, _layout, items = self._ready(project, qgis_app)
+        try:
+            cartograph.open_section("checks")
+            self._click(qgis_app, cartograph, items[name], double=True)
+            assert self._tab(cartograph) == "edit"
+            controls = cartograph.page_pane.controls
+            assert controls.pages.currentWidget() is getattr(controls, page)
+            assert controls.selected_item() is items[name]
+        finally:
+            dialog.close()
+
+    def test_add_item_brings_up_the_edit_tab(self, qgis_app, project) -> None:
+        from qgis.core import QgsLayoutItemLabel
+        from qgis.PyQt.QtCore import QPointF, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            cartograph.open_section("layout")
+            pane = cartograph.page_pane
+            pane._fill_add_menu()
+            next(a for a in pane.add_menu.actions() if a.text() == "Text").trigger()
+            # Choosing alone does not move the user; the click that places does.
+            assert self._tab(cartograph) == "layout"
+            point = pane.preview.view.mapFromScene(QPointF(150, 150))
+            QTest.mouseClick(
+                pane.preview.view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                point,
+            )
+            for _ in range(10):
+                qgis_app.processEvents()
+            assert self._tab(cartograph) == "edit"
+            assert pane.controls.pages.currentWidget() is pane.controls.text_page
+            fresh = [
+                i
+                for i in layout.items()
+                if isinstance(i, QgsLayoutItemLabel) and i is not items["text"]
+            ]
+            assert len(fresh) == 1 and fresh[0].isSelected()
+        finally:
+            dialog.close()
+
+    def test_the_delete_button_deletes_in_one_undo_step(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.core import QgsLayoutItemLegend
+
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            items["legend"].setSelected(True)
+            qgis_app.processEvents()
+            stack = layout.undoStack().stack()
+            count = stack.count()
+            cartograph.page_pane.controls.delete_button.click()
+            assert items["legend"] not in layout.items()
+            assert stack.count() == count + 1
+            stack.undo()
+            # Undo brings back an equal item (a new object).
+            assert any(isinstance(i, QgsLayoutItemLegend) for i in layout.items())
+        finally:
+            dialog.close()
+
+    def test_the_delete_key_on_the_page_still_deletes(self, qgis_app, project) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            self._click(qgis_app, cartograph, items["text"])
+            view = cartograph.page_pane.preview.view
+            view.setFocus()
+            stack = layout.undoStack().stack()
+            count = stack.count()
+            QTest.keyClick(view, Qt.Key.Key_Backspace)
+            assert items["text"] not in layout.items()
+            assert stack.count() == count + 1
+        finally:
+            dialog.close()
+
+    def test_a_plus_in_the_tab_is_one_font_step_and_one_undo(
+        self, qgis_app, project
+    ) -> None:
+        dialog, cartograph, layout, items = self._ready(project, qgis_app)
+        try:
+            label = items["text"]
+            label.setSelected(True)
+            qgis_app.processEvents()
+            controls = cartograph.page_pane.controls
+            assert not controls.text_size_row.isHidden()
+            size = label.textFormat().size()
+            stack = layout.undoStack().stack()
+            count = stack.count()
+            controls.text_bigger_button.click()
+            assert label.textFormat().size() == pytest.approx(size + 1)
+            assert stack.count() == count + 1
+            assert controls.text_size_label.text() == f"{size + 1:g} pt"
+            stack.undo()
+            assert label.textFormat().size() == pytest.approx(size)
+        finally:
+            dialog.close()
+
+    def test_the_preview_bar_has_no_text_size_or_mode_buttons(
+        self, qgis_app, project
+    ) -> None:
+        dialog, cartograph, _layout, _items = self._ready(project, qgis_app)
+        try:
+            pane = cartograph.page_pane
+            for name in (
+                "select_button",
+                "pan_button",
+                "text_size_bar",
+                "text_bigger_button",
+                "text_smaller_button",
+            ):
+                assert not hasattr(pane, name), name
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize("size", [(1280, 800), (720, 320)])
+    def test_the_legend_editor_has_room_and_nothing_overlaps(
+        self, qgis_app, project, size
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, QRect
+        from qgis.PyQt.QtWidgets import (
+            QAbstractButton,
+            QAbstractScrollArea,
+            QAbstractSpinBox,
+            QComboBox,
+            QLabel,
+            QWidget,
+        )
+
+        dialog, cartograph, _layout, items = self._ready(project, qgis_app, size)
+        try:
+            cartograph.open_section("edit")
+            items["legend"].setSelected(True)
+            for _ in range(30):
+                qgis_app.processEvents()
+            controls = cartograph.page_pane.controls
+            editor = controls._legend_editor
+            assert editor is not None and editor.isVisible()
+            # The tab scrolls rather than squeezing the editor.
+            assert editor.height() >= editor.minimumSizeHint().height()
+            leaves = (
+                QAbstractButton,
+                QAbstractScrollArea,
+                QAbstractSpinBox,
+                QComboBox,
+                QLabel,
+            )
+            boxes = []
+            for w in editor.findChildren(QWidget):
+                if isinstance(w, leaves) and w.isVisibleTo(editor):
+                    top_left = w.mapTo(editor, QPoint(0, 0))
+                    boxes.append((w, QRect(top_left, w.size())))
+            assert boxes
+            for i, (a, ra) in enumerate(boxes):
+                for b, rb in boxes[i + 1 :]:
+                    if a.isAncestorOf(b) or b.isAncestorOf(a):
+                        continue
+                    inter = ra.intersected(rb)
+                    assert (
+                        inter.isEmpty() or inter.width() <= 1 or inter.height() <= 1
+                    ), (
+                        type(a).__name__,
+                        a.text() if hasattr(a, "text") else "",
+                        type(b).__name__,
+                        b.text() if hasattr(b, "text") else "",
+                        ra,
+                        rb,
+                    )
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize("name", ["text", "map", "legend"])
+    def test_a_short_window_scrolls_the_edit_tab_like_the_others(
+        self, qgis_app, project, name
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QScrollArea
+
+        dialog, cartograph, _layout, items = self._ready(project, qgis_app, (720, 320))
+        try:
+            cartograph.open_section("edit")
+            items[name].setSelected(True)
+            for _ in range(30):
+                qgis_app.processEvents()
+            surfaces = [
+                area
+                for area in dialog.findChildren(QScrollArea)
+                if area.isVisible()
+                and area.height() > 40
+                and area.verticalScrollBar().maximum() > 0
+            ]
+            assert len(surfaces) == 1
+            controls = cartograph.page_pane.controls
+            assert controls.delete_button.isVisibleTo(dialog)
         finally:
             dialog.close()

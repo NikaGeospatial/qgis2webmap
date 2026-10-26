@@ -256,6 +256,8 @@ class TestPreviewHook:
         pane.resize(900, 640)
         pane.show_layout(world.layout)
         pane.show()
+        pane.controls.resize(420, 700)
+        pane.controls.show()
         preview = pane.preview
         _pump()
         preview._fit()
@@ -279,6 +281,8 @@ class TestPreviewHook:
         pane.resize(900, 640)
         pane.show_layout(world.layout)
         pane.show()
+        pane.controls.resize(420, 700)
+        pane.controls.show()
         preview = pane.preview
         _pump()
         preview._fit()

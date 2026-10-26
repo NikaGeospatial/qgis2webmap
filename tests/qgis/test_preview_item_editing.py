@@ -42,6 +42,9 @@ def _pane(qgis_app, project, maps=1, size=(900, 650)):
     pane.resize(*size)
     pane.show()
     pane.show_layout(layout)
+    # The Edit tab's body, which the dialog seats in its panel.
+    pane.controls.resize(420, 640)
+    pane.controls.show()
     _settle(qgis_app)
     return pane, layout, frames
 
@@ -186,7 +189,7 @@ class TestPlacing:
         if title != "Text":
             assert item.linkedMap() is frames[0]
         # The controls for it are showing.
-        assert not pane.controls.isHidden()
+        assert not pane.controls.body.isHidden()
         stack.undo()
         assert len(_items_of(layout, kind)) == before
         stack.redo()
@@ -439,24 +442,22 @@ class TestTextControls:
         pane, _layout, label = text
         box = label.sceneBoundingRect()
         size = label.textFormat().size()
-        pane.text_bigger_button.click()
+        pane.controls.text_bigger_button.click()
         assert label.textFormat().size() == pytest.approx(size + 1)
         assert label.sceneBoundingRect() == box
-        assert "handles" in pane.text_bigger_button.toolTip()
+        assert "handles" in pane.controls.text_bigger_button.toolTip()
 
-    def test_a_bad_selection_hides_the_strip(self, qgis_app, text) -> None:
+    def test_nothing_selected_shows_the_hint_and_hides_the_controls(
+        self, qgis_app, text
+    ) -> None:
         pane, layout, _label = text
+        assert pane.controls.heading.text() == "Selected: Text"
         layout.deselectAll()
         _settle(qgis_app, 0.1)
-        assert pane.controls.isHidden()
-
-    def test_the_strip_collapses_to_its_header(self, qgis_app, text) -> None:
-        pane, _layout, _label = text
-        pane.controls.toggle.click()
-        assert pane.controls.pages.isHidden()
-        assert not pane.controls.isHidden()
-        pane.controls.toggle.click()
-        assert not pane.controls.pages.isHidden()
+        controls = pane.controls
+        assert controls.body.isHidden()
+        assert controls.delete_button.isHidden()
+        assert "Select an item on the page" in controls.heading.text()
 
 
 class TestDelete:
@@ -471,7 +472,7 @@ class TestDelete:
         pane.controls.delete_button.click()
         assert not _items_of(layout, QgsLayoutItemLabel)
         assert _undo_count(layout) == steps + 1
-        assert pane.controls.isHidden()
+        assert pane.controls.body.isHidden()
         layout.undoStack().stack().undo()
         assert len(_items_of(layout, QgsLayoutItemLabel)) == 1
 
@@ -796,49 +797,3 @@ class TestWhatAddingMakesSurvives:
         assert _items_of(again, QgsLayoutItemLegend)
         bar = _items_of(again, QgsLayoutItemScaleBar)[0]
         assert bar.linkedMap() is not None
-
-
-class TestShortWindow:
-    def test_the_strip_rests_as_its_header_and_opens_on_demand(
-        self, qgis_app, project
-    ) -> None:
-        pane, layout, frames = _pane(qgis_app, project, size=(700, 300))
-        try:
-            layout.deselectAll()
-            frames[0].setSelected(True)
-            _settle(qgis_app, 0.1)
-            assert not pane.controls.isHidden()
-            assert pane.controls.pages.isHidden()
-            # Room kept for the page: the strip is one row.
-            assert pane.controls.height() < 60
-            pane.controls.toggle.click()
-            assert not pane.controls.pages.isHidden()
-            # Adding something opens it, as the words are what comes next.
-            pane.controls.toggle.click()
-            _place(qgis_app, pane, "Text")
-            assert not pane.controls.pages.isHidden()
-            pane.resize(700, 600)
-            _settle(qgis_app, 0.1)
-            assert not pane.controls.pages.isHidden()
-        finally:
-            pane.close()
-            pane.deleteLater()
-
-    def test_a_placed_item_is_not_left_under_the_strip(self, qgis_app, project) -> None:
-        from qgis.core import QgsLayoutItemLabel
-
-        pane, layout, _frames = _pane(qgis_app, project, size=(700, 420))
-        try:
-            pane.preview.zoom_in()
-            pane.preview.zoom_in()
-            _settle(qgis_app, 0.1)
-            view = pane.preview.view
-            low = view.mapToScene(view.viewport().rect().bottomLeft())
-            _place(qgis_app, pane, "Text", x=low.x() + 10, y=low.y() - 8)
-            _settle(qgis_app, 0.1)
-            label = _items_of(layout, QgsLayoutItemLabel)[0]
-            box = view.mapFromScene(label.sceneBoundingRect()).boundingRect()
-            assert view.viewport().rect().contains(box)
-        finally:
-            pane.close()
-            pane.deleteLater()

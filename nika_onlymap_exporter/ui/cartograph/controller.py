@@ -537,7 +537,12 @@ class CartographController:
         self._checks_layout = QVBoxLayout(self.checks_page)
         self._checks_layout.setContentsMargins(0, 4, 0, 0)
         self.panel_tabs.addTab(self.checks_page, tr("Checks"))
-        self._tab_keys = ("layout", "atlas", "checks")
+        # Edit: what can be changed on the item selected on the page. The
+        # page pane builds the controls; the tab only seats them.
+        self.edit_scroll = _panel_scroll(self.page_pane.controls)
+        self.panel_tabs.addTab(self.edit_scroll, tr("Edit"))
+        self._tab_keys = ("layout", "atlas", "checks", "edit")
+        self.page_pane.edit_requested.connect(self._show_edit_tab)
         column.addWidget(self.panel_tabs, 1)
 
         # Takes the tabs' room while they are hidden, so the layout list
@@ -615,9 +620,14 @@ class CartographController:
         width = PANEL_WIDTH_SMALL if total < PANEL_WIDE_WINDOW else PANEL_WIDTH_LARGE
         self.workspace.setSizes([max(1, total - width), width])
 
+    def _show_edit_tab(self) -> None:
+        """A double-click on an item, or placing a new one: its controls."""
+        self.panel_tabs.setCurrentIndex(self._tab_keys.index("edit"))
+        self.page_pane.controls.reveal()
+
     def open_section(self, key: str) -> None:
         """Bring a part of the panel into view - a jump from elsewhere, such
-        as a check's "Show in Layers". "atlas" and "checks" are tabs; the
+        as a check's "Show in Layers". "atlas", "checks" and "edit" are tabs; the
         rest are sections of the Layout tab."""
         if key in self._tab_keys:
             self.panel_tabs.setCurrentIndex(self._tab_keys.index(key))

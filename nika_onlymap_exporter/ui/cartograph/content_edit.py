@@ -4,9 +4,9 @@ In the layout designer this is the "Move item content" tool. Here it is an
 explicit mode of the preview, switched on from the selected map's controls
 ("Edit view" / "Edit inset view"): a drag pans the map's *content* inside its
 frame and the wheel zooms it about the pointer, while the frame itself can
-neither move nor resize - that is Select mode's job. The mode ends with
-Escape, the same button, a click on Select or Pan, a click on anything else
-on the page, or selecting another item.
+neither move nor resize. The mode ends with Escape, the same button, a click
+on anything else on the page, selecting another item, showing another layout
+or deleting the map.
 
 Every gesture is one undo step on the layout's own stack, applied through
 QgsLayoutItemMap's content operations (`moveContent`, `zoomContent`) so a

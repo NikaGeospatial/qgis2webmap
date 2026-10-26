@@ -17,7 +17,7 @@ import time
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _a4_layout, _settle
 from test_locator_context import _region
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -279,7 +279,7 @@ class TestTheModeIsClear:
         assert inset.displayName() in banner.text()
         assert "Esc" in banner.text()
 
-    @pytest.mark.parametrize("how", ["escape", "toggle", "select", "pan", "other"])
+    @pytest.mark.parametrize("how", ["escape", "toggle", "other", "delete", "layout"])
     def test_every_exit_ends_the_mode(self, qgis_app, near_far, how) -> None:
         pane, layout, main, inset, _region = near_far
         _edit_on(qgis_app, pane, layout, inset)
@@ -287,12 +287,12 @@ class TestTheModeIsClear:
             _escape(pane)
         elif how == "toggle":
             pane.controls.edit_view_button.click()
-        elif how == "select":
-            pane.select_button.click()
-        elif how == "pan":
-            pane.pan_button.click()
-        else:
+        elif how == "other":
             _select(qgis_app, pane, layout, main)
+        elif how == "delete":
+            pane.controls.delete_button.click()
+        else:
+            pane.show_layout(_a4_layout(layout.project()))
         _settle(qgis_app, 0.05)
         assert not pane.preview.content_editor.active
         assert not pane.controls.edit_view_button.isChecked()
@@ -365,7 +365,7 @@ class TestSelectModeStillMovesAndResizes:
     ) -> None:
         pane, layout, _main, inset, _region = near_far
         _edit_on(qgis_app, pane, layout, inset)
-        pane.select_button.click()
+        _escape(pane)
         _settle(qgis_app, 0.1)
         before = _geometry(inset)
         box = pane.preview.view.mapFromScene(inset.sceneBoundingRect()).boundingRect()

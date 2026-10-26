@@ -226,17 +226,11 @@ class TestEditingThePage:
         rect = frame.sceneBoundingRect()
         return _viewport_point(pane, rect.center().x(), rect.center().y())
 
-    def test_select_is_the_default_mode(self, editing) -> None:
-        from qgis.PyQt.QtCore import Qt
-
+    def test_the_page_is_always_in_select_mode(self, editing) -> None:
         pane, _layout, _frame = editing
-        assert pane.select_button.isChecked()
-        assert not pane.pan_button.isChecked()
         assert pane.preview.select_mode()
-        assert pane.select_button.toolTip() != ""
-        # Reachable by Tab, with a name for a screen reader.
-        assert pane.select_button.focusPolicy() == Qt.FocusPolicy.StrongFocus
-        assert pane.select_button.accessibleName()
+        assert not hasattr(pane, "select_button")
+        assert not hasattr(pane, "pan_button")
 
     def test_a_drag_moves_the_item_as_one_undo_step(self, qgis_app, editing) -> None:
         pane, layout, frame = editing
@@ -299,22 +293,6 @@ class TestEditingThePage:
         _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
         assert frame.pos() == before
         assert layout.undoStack().stack().count() == count
-
-    def test_pan_mode_moves_the_view_not_the_item(self, qgis_app, editing) -> None:
-        pane, layout, frame = editing
-        pane.pan_button.click()
-        assert not pane.preview.select_mode()
-        pane.zoom_in_button.click()
-        pane.zoom_in_button.click()
-        _settle(qgis_app)
-        before, count = frame.pos(), layout.undoStack().stack().count()
-        centre = self._centre(pane, frame)
-        _drag(qgis_app, pane, centre, centre + type(centre)(60, 40))
-        assert frame.pos() == before
-        assert layout.undoStack().stack().count() == count
-        assert not frame.isSelected()
-        pane.select_button.click()
-        assert pane.preview.select_mode()
 
     def test_selecting_stops_the_page_refitting(self, qgis_app, editing) -> None:
         pane, _layout, frame = editing
@@ -495,7 +473,7 @@ class TestResizingInThePage:
         item = items[name]
         self._select(qgis_app, layout, item)
         others = {k: v.sceneBoundingRect() for k, v in items.items() if k != name}
-        size = pane.text_size_label.text()
+        size = pane.controls.text_size_label.text()
         lettering = item.textFormat().size() if hasattr(item, "textFormat") else None
         box = pane.preview.view.mapFromScene(item.sceneBoundingRect()).boundingRect()
         corner = box.bottomRight()
@@ -507,7 +485,7 @@ class TestResizingInThePage:
         } == others
         if lettering is not None:
             assert item.textFormat().size() == pytest.approx(lettering)
-        assert pane.text_size_label.text() == size
+        assert pane.controls.text_size_label.text() == size
 
     def test_a_press_far_outside_the_box_does_not_resize(self, qgis_app, page) -> None:
         from qgis.PyQt.QtCore import QPoint
@@ -643,18 +621,18 @@ class TestSelectedTextSize:
     def test_the_control_shows_only_for_text_items(self, qgis_app, page) -> None:
         pane, layout, items = page
         title = items["title"]
-        assert pane.text_size_bar.isHidden()
+        assert pane.controls.text_size_row.isHidden()
         self._select(qgis_app, layout, items["title"])
-        assert not pane.text_size_bar.isHidden()
+        assert not pane.controls.text_size_row.isHidden()
         base = title.textFormat().size()
-        assert pane.text_size_label.text() == f"{base:g} pt"
+        assert pane.controls.text_size_label.text() == f"{base:g} pt"
         self._select(qgis_app, layout, items["legend"])
-        assert not pane.text_size_bar.isHidden()
+        assert not pane.controls.text_size_row.isHidden()
         self._select(qgis_app, layout, items["map"])
-        assert pane.text_size_bar.isHidden()
+        assert pane.controls.text_size_row.isHidden()
         layout.deselectAll()
         _settle(qgis_app, 0.1)
-        assert pane.text_size_bar.isHidden()
+        assert pane.controls.text_size_row.isHidden()
 
     def test_a_step_is_one_undo_and_keeps_box_zoom_and_scroll(
         self, qgis_app, page
@@ -667,10 +645,10 @@ class TestSelectedTextSize:
         view = pane.preview.view
         box, scale, steps = title.sceneBoundingRect(), _scale(pane), stack.count()
         scroll = (view.horizontalScrollBar().value(), view.verticalScrollBar().value())
-        pane.text_bigger_button.click()
+        pane.controls.text_bigger_button.click()
         _settle(qgis_app)
         assert title.textFormat().size() == pytest.approx(base + 1)
-        assert pane.text_size_label.text() == f"{base + 1:g} pt"
+        assert pane.controls.text_size_label.text() == f"{base + 1:g} pt"
         assert stack.count() == steps + 1
         assert title.sceneBoundingRect() == box
         assert _scale(pane) == pytest.approx(scale)
@@ -678,14 +656,14 @@ class TestSelectedTextSize:
             view.horizontalScrollBar().value(),
             view.verticalScrollBar().value(),
         ) == scroll
-        pane.text_smaller_button.click()
-        pane.text_smaller_button.click()
+        pane.controls.text_smaller_button.click()
+        pane.controls.text_smaller_button.click()
         assert title.textFormat().size() == pytest.approx(base - 1)
         stack.undo()
         stack.undo()
         stack.undo()
         assert title.textFormat().size() == pytest.approx(base)
-        assert pane.text_size_label.text() == f"{base:g} pt"
+        assert pane.controls.text_size_label.text() == f"{base:g} pt"
         assert stack.count() == steps + 3
 
     def test_the_legend_scales_all_its_levels_and_is_marked_chosen(
@@ -700,7 +678,7 @@ class TestSelectedTextSize:
         self._select(qgis_app, layout, legend)
         title_before = legend.style(QgsLegendStyle.Title).textFormat().size()
         rows_before = legend.style(QgsLegendStyle.SymbolLabel).textFormat().size()
-        pane.text_bigger_button.click()
+        pane.controls.text_bigger_button.click()
         rows = legend.style(QgsLegendStyle.SymbolLabel).textFormat().size()
         assert rows == pytest.approx(rows_before + 1)
         assert legend.style(QgsLegendStyle.Title).textFormat().size() == pytest.approx(
@@ -726,7 +704,7 @@ class TestSelectedTextSize:
         theme.apply(pane)
         pane.resize(800, 500)
         self._select(qgis_app, layout, title)
-        words = (pane.select_button, pane.pan_button, pane.fit_button)
+        words = (pane.fit_button, pane.add_button)
         assert not any(b.property("tight") for b in words)
         assert pane.fit_button.text() == "Fit page"
         pane.resize(300, 500)
@@ -736,14 +714,13 @@ class TestSelectedTextSize:
             assert button.toolButtonStyle() == (
                 button.toolButtonStyle().__class__.ToolButtonIconOnly
             )
-            assert button.toolTip()
-            assert button.accessibleName() == button.toolTip()
+            assert button.toolTip().startswith(button.accessibleName())
         for button in pane.zoom_bar.findChildren(QToolButton):
             if button.isVisibleTo(pane):
                 spot = button.mapTo(pane, button.rect().topLeft())
                 assert spot.x() >= 0 and spot.x() + button.width() <= pane.width()
         base = title.textFormat().size()
-        pane.text_bigger_button.click()
+        pane.controls.text_bigger_button.click()
         assert title.textFormat().size() == pytest.approx(base + 1)
         pane.resize(800, 500)
         _settle(qgis_app, 0.1)
@@ -760,3 +737,168 @@ class TestSelectedTextSize:
         pane.preview.step_text_size(False)
         assert title.textFormat().size() == pytest.approx(4)
         assert layout.undoStack().stack().count() == steps
+
+
+def _held_moves(qgis_app, pane, start, end, button) -> None:
+    """Press `button` at `start`, move along a path to `end`, release - the
+    way `_drag` does, for a button other than the left one."""
+    from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, Qt
+    from qgis.PyQt.QtGui import QMouseEvent
+    from qgis.PyQt.QtTest import QTest
+    from qgis.PyQt.QtWidgets import QApplication
+
+    viewport = pane.preview.view.viewport()
+    QTest.mouseMove(viewport, start)
+    qgis_app.processEvents()
+    QTest.mousePress(viewport, button, Qt.KeyboardModifier.NoModifier, start)
+    for step in range(1, 9):
+        point = QPoint(
+            start.x() + (end.x() - start.x()) * step // 8,
+            start.y() + (end.y() - start.y()) * step // 8,
+        )
+        QApplication.sendEvent(
+            viewport,
+            QMouseEvent(
+                QEvent.Type.MouseMove,
+                QPointF(point),
+                QPointF(viewport.mapToGlobal(point)),
+                Qt.MouseButton.NoButton,
+                button,
+                Qt.KeyboardModifier.NoModifier,
+            ),
+        )
+        qgis_app.processEvents()
+    QTest.mouseRelease(viewport, button, Qt.KeyboardModifier.NoModifier, end)
+    _settle(qgis_app, 0.05)
+
+
+class TestThePageIsAlwaysInSelectMode:
+    """With no Select / Pan buttons the page is moved around by the middle
+    button or Space + drag (QgsLayoutView's temporary pan tools), the wheel
+    and the scroll bars - and none of those touch an item."""
+
+    @staticmethod
+    def _zoomed(qgis_app, pane) -> None:
+        pane.zoom_in_button.click()
+        pane.zoom_in_button.click()
+        _settle(qgis_app)
+
+    @staticmethod
+    def _scroll(pane) -> tuple[int, int]:
+        view = pane.preview.view
+        return view.horizontalScrollBar().value(), view.verticalScrollBar().value()
+
+    def test_there_are_no_mode_buttons(self, page) -> None:
+        pane, _layout, _items = page
+        assert not hasattr(pane, "select_button")
+        assert not hasattr(pane, "pan_button")
+        assert pane.preview.select_mode()
+        # The way to pan is said where the zoom is.
+        for button in (pane.fit_button, pane.zoom_in_button, pane.zoom_out_button):
+            assert "Space" in button.toolTip()
+            assert "middle mouse button" in button.toolTip()
+
+    def test_a_middle_button_drag_pans_the_page_and_moves_nothing(
+        self, qgis_app, page
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+
+        pane, layout, items = page
+        self._zoomed(qgis_app, pane)
+        frame = items["map"]
+        frame.setSelected(True)
+        _settle(qgis_app, 0.1)
+        before, count = frame.pos(), layout.undoStack().stack().count()
+        scroll = self._scroll(pane)
+        box = pane.preview.view.mapFromScene(frame.sceneBoundingRect()).boundingRect()
+        start = box.center()
+        _held_moves(
+            qgis_app, pane, start, start + QPoint(-60, -40), Qt.MouseButton.MiddleButton
+        )
+        assert self._scroll(pane) != scroll
+        assert frame.pos() == before
+        assert layout.undoStack().stack().count() == count
+        assert frame.isSelected()
+        assert pane.preview.select_mode()
+
+    def test_space_and_a_drag_pans_the_page_and_moves_nothing(
+        self, qgis_app, page
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        pane, layout, items = page
+        self._zoomed(qgis_app, pane)
+        frame = items["map"]
+        frame.setSelected(True)
+        _settle(qgis_app, 0.1)
+        before, count = frame.pos(), layout.undoStack().stack().count()
+        scroll = self._scroll(pane)
+        view = pane.preview.view
+        view.setFocus()
+        box = view.mapFromScene(frame.sceneBoundingRect()).boundingRect()
+        start = box.center()
+        QTest.keyPress(view, Qt.Key.Key_Space)
+        _held_moves(
+            qgis_app, pane, start, start + QPoint(-60, -40), Qt.MouseButton.LeftButton
+        )
+        QTest.keyRelease(view, Qt.Key.Key_Space)
+        _settle(qgis_app, 0.05)
+        assert self._scroll(pane) != scroll
+        assert frame.pos() == before
+        assert layout.undoStack().stack().count() == count
+        # Space released: a drag moves the item again.
+        assert pane.preview.select_mode()
+        centre = box.center() + QPoint(-60, -40)
+        _drag(qgis_app, pane, centre, centre + QPoint(30, 20))
+        assert layout.undoStack().stack().count() == count + 1
+
+    def test_the_scroll_bars_and_wheel_pan_and_zoom(self, qgis_app, page) -> None:
+        pane, _layout, _items = page
+        self._zoomed(qgis_app, pane)
+        bar = pane.preview.view.verticalScrollBar()
+        bar.setValue(bar.minimum())
+        before = self._scroll(pane)
+        bar.setValue(bar.minimum() + 20)
+        assert self._scroll(pane) != before
+
+
+class TestSelectingDoesNotDisturbThePage:
+    """The selected item's controls are in the Edit tab, so selecting never
+    resizes or scrolls the page; and a press with a little jitter on an
+    unselected item used to move it."""
+
+    @pytest.mark.parametrize("name", ["map", "legend", "title"])
+    def test_a_press_with_one_pixel_of_jitter_moves_nothing(
+        self, qgis_app, page, name
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, layout, items = page
+        layout.deselectAll()
+        _settle(qgis_app, 0.1)
+        item = items[name]
+        before, count = item.sceneBoundingRect(), layout.undoStack().stack().count()
+        viewport = pane.preview.view.viewport().size()
+        centre = pane.preview.view.mapFromScene(item.sceneBoundingRect().center())
+        _drag(qgis_app, pane, centre, centre + QPoint(1, 0))
+        assert item.isSelected()
+        assert item.sceneBoundingRect() == before
+        assert layout.undoStack().stack().count() == count
+        # Nothing on the page resized, whatever was selected.
+        assert pane.preview.view.viewport().size() == viewport
+
+    @pytest.mark.parametrize("name", ["map", "legend", "title"])
+    def test_a_pure_click_adds_no_undo_step(self, qgis_app, page, name) -> None:
+        pane, layout, items = page
+        layout.deselectAll()
+        _settle(qgis_app, 0.1)
+        item = items[name]
+        stack = layout.undoStack().stack()
+        count = stack.count()
+        centre = pane.preview.view.mapFromScene(item.sceneBoundingRect().center())
+        _drag(qgis_app, pane, centre, centre)
+        assert item.isSelected()
+        assert stack.count() == count, [
+            stack.text(i) for i in range(count, stack.count())
+        ]

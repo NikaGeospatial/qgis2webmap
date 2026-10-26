@@ -1425,11 +1425,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     text-align: left;
 }}
 
-/* The selected page item's controls, under the preview bar. */
+/* The selected page item's controls: the body of the panel's Edit tab. */
 {d} QFrame[role="itemControls"] {{
-    background: {p.field};
-    border: 1px solid {p.rule};
-    border-radius: 6px;
+    background: transparent;
+    border: none;
 }}
 {d} QFrame[role="itemControls"] QLabel {{
     border: none;

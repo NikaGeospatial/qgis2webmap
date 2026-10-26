@@ -48,7 +48,6 @@ from qgis.PyQt.QtGui import (
 from qgis.PyQt.QtWidgets import (
     QAction,
     QApplication,
-    QButtonGroup,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -204,8 +203,10 @@ def _global_point(event: QMouseEvent) -> QPointF:
     return QPointF(event.globalPos())
 
 
-# Shorter than this, the selected item's controls rest as their header.
-_COMPACT_HEIGHT = 440
+# How far the pointer must travel from a press on the page before it is a drag:
+# a click with a little hand jitter must neither move an item nor leave an
+# empty "Move Items" step on the undo stack.
+_DRAG_THRESHOLD_PX = 3
 
 # How far outside a selected item's box a corner or edge handle still reaches.
 _EDGE_REACH = 4
@@ -215,11 +216,12 @@ class LayoutPreview(QStackedWidget):
     """The layout's page, as the layout designer draws it - or, with no
     layout, the two ways to make one.
 
-    Two tools, as in the designer: Select (the default), QGIS's own select
-    tool, which moves and resizes items as undo commands on the layout's
-    stack; and Pan, where a drag moves the view and nothing on the page. The
-    wheel zooms in both; Space or the middle button pans while Select is on,
-    which QgsLayoutView does itself.
+    The page is always in QGIS's own select tool, which moves and resizes
+    items as undo commands on the layout's stack. The wheel zooms; holding
+    Space while dragging pans the page (done here, not by QgsLayoutView's
+    temporary pan tool: a left press on a selected item still reached that
+    item's handles and moved it on release), as do the middle button
+    (QgsLayoutView's own) and the scroll bars.
     """
 
     new_from_template_requested = pyqtSignal()
@@ -232,7 +234,7 @@ class LayoutPreview(QStackedWidget):
     # whether the page is waiting for that click.
     item_placed = pyqtSignal(object)
     placing_changed = pyqtSignal(bool)
-    # An item was double-clicked in Select mode (the item).
+    # A selected item was double-clicked on the page (the item).
     item_double_clicked = pyqtSignal(object)
     # The mode where a drag pans and the wheel zooms a map's content began or
     # ended (whether it is on).
@@ -247,7 +249,6 @@ class LayoutPreview(QStackedWidget):
         # once the view has a layout: it is made in `show_layout`, and
         # made before that it crashes on the first wheel turn.
         self._select: QgsLayoutViewToolSelect | None = None
-        self._select_mode = True
         self.view.setTool(self._pan)
         self.addWidget(self.view)
 
@@ -290,6 +291,9 @@ class LayoutPreview(QStackedWidget):
         # resized, which once stopped the page fitting at all.
         self._user_zoomed = False
         self._reaching = False
+        self._space_down = False
+        self._pan_from: QPoint | None = None
+        self._press_at: QPoint | None = None
         self.view.viewport().installEventFilter(self)
         # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, on the
         # layout's own stack as in the designer. A key filter rather than a
@@ -326,7 +330,7 @@ class LayoutPreview(QStackedWidget):
             layout.selectionChanged.connect(self._on_selection_changed)
             # An undo or redo may change the selected item's text size.
             layout.undoStack().stack().indexChanged.connect(self._on_selection_changed)
-            self.set_select_mode(self._select_mode)
+            self.view.setTool(self._select)
             self._user_zoomed = False
         self.setCurrentWidget(self.view)
         self._fit_timer.start()
@@ -401,12 +405,6 @@ class LayoutPreview(QStackedWidget):
         if not sip.isdeleted(self):
             self.content_edit_changed.emit(on)
 
-    def set_select_mode(self, select: bool) -> None:
-        """Select/Move (True) or Pan (False)."""
-        self.content_editor.finish()
-        self._select_mode = select
-        self.view.setTool(self._select if select and self._select else self._pan)
-
     def select_mode(self) -> bool:
         return self._select is not None and self.view.tool() is self._select
 
@@ -430,7 +428,98 @@ class LayoutPreview(QStackedWidget):
             return
         self.view.zoomFull()
 
+    def _space_pan(self, watched: QObject | None, event: QEvent) -> bool | None:
+        """Hold Space and drag to pan the page; None when `event` is not
+        part of that."""
+        kind = event.type()
+        viewport = self.view.viewport()
+        if watched is self.view and isinstance(event, QKeyEvent):
+            if event.key() != Qt.Key.Key_Space:
+                return None
+            if kind == QEvent.Type.KeyPress and self.select_mode():
+                if not event.isAutoRepeat():
+                    self._space_down = True
+                    viewport.setCursor(Qt.CursorShape.OpenHandCursor)
+                return True
+            if kind == QEvent.Type.KeyRelease and self._space_down:
+                if not event.isAutoRepeat():
+                    self._end_space_pan()
+                return True
+            return None
+        if watched is self.view and kind == QEvent.Type.FocusOut:
+            self._end_space_pan()
+            return None
+        if watched is not viewport or not self._space_down:
+            return None
+        if not isinstance(event, QMouseEvent):
+            return None
+        if (
+            kind == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._pan_from = _local_point(event)
+            viewport.setCursor(Qt.CursorShape.ClosedHandCursor)
+            return True
+        if self._pan_from is None:
+            return None
+        if kind == QEvent.Type.MouseMove:
+            at = _local_point(event)
+            horizontal, vertical = (
+                self.view.horizontalScrollBar(),
+                self.view.verticalScrollBar(),
+            )
+            horizontal.setValue(horizontal.value() - (at.x() - self._pan_from.x()))
+            vertical.setValue(vertical.value() - (at.y() - self._pan_from.y()))
+            self._pan_from = at
+            return True
+        if kind == QEvent.Type.MouseButtonRelease:
+            self._pan_from = None
+            viewport.setCursor(Qt.CursorShape.OpenHandCursor)
+            return True
+        return None
+
+    def _end_space_pan(self) -> None:
+        self._space_down = False
+        self._pan_from = None
+        if not sip.isdeleted(self.view):
+            self.view.viewport().unsetCursor()
+
+    def _within_click_jitter(self, event: QEvent) -> bool:
+        """A left-button move that has not yet left the press's neighbourhood
+        is held back from the select tool: it is still a click."""
+        if not isinstance(event, QMouseEvent) or not self.select_mode():
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.LeftButton and not self._reaching:
+                self._press_at = _local_point(event)
+            return False
+        if kind == QEvent.Type.MouseButtonRelease:
+            self._press_at = None
+            return False
+        if (
+            kind != QEvent.Type.MouseMove
+            or self._press_at is None
+            or not event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            return False
+        away = _local_point(event) - self._press_at
+        if abs(away.x()) + abs(away.y()) > _DRAG_THRESHOLD_PX:
+            self._press_at = None  # a real drag from here on
+            return False
+        return True
+
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if event is not None:
+            panned = self._space_pan(watched, event)
+            if panned is not None:
+                return panned
+        if (
+            event is not None
+            and watched is self.view.viewport()
+            and self._within_click_jitter(event)
+        ):
+            return True
         if (
             event is not None
             and watched is self.view
@@ -581,6 +670,10 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.start()
 
 
+#: How to move the page, said on the Fit page and zoom buttons.
+_PAN_HINT = "Pan: hold Space or the middle mouse button and drag. Zoom: the wheel"
+
+
 class PagePane(QWidget):
     """The preview with what it is said above it and how to move it below.
 
@@ -588,11 +681,16 @@ class PagePane(QWidget):
     layout, and the cartograph can differ from it - a north arrow the
     runtime draws its own way, the Page settings applied on export - so it
     is named for what it is; Preview in browser shows the HTML itself. Below: Fit page,
-    zoom out, the zoom level and zoom in, which the wheel and a drag also do
-    but nothing on screen said so.
+    Add item, zoom out, the zoom level and zoom in, which the wheel and a drag
+    also do but nothing on screen said so.
+
+    What can be changed on the selected item is `controls`, which the host
+    seats in the panel's Edit tab; `edit_requested` asks it to bring that tab
+    up (a double-click on an item, or placing a new one).
     """
 
     shown = pyqtSignal()
+    edit_requested = pyqtSignal()
     changes_requested = pyqtSignal()
     open_editor_requested = pyqtSignal()
 
@@ -643,24 +741,9 @@ class PagePane(QWidget):
         bar = QHBoxLayout(self.zoom_bar)
         bar.setContentsMargins(0, 0, 0, 0)
         bar.setSpacing(4)
-        self.select_button = self._bar_button(
-            tr("Select"), tr("Select, move and resize items (hold Space to pan)")
+        self.fit_button = self._bar_button(
+            tr("Fit page"), tr("Fit the whole page"), tr(_PAN_HINT)
         )
-        self.pan_button = self._bar_button(tr("Pan"), tr("Pan the page"))
-        modes = QButtonGroup(self)
-        modes.setExclusive(True)
-        for button in (self.select_button, self.pan_button):
-            button.setCheckable(True)
-            button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-            modes.addButton(button)
-            bar.addWidget(button)
-        self.select_button.setChecked(True)
-        self._modes = modes
-        self.select_button.toggled.connect(self.preview.set_select_mode)
-        # Select is already on while the view inside a frame is being edited,
-        # so clicking it is not a toggle: it must still end that mode.
-        self.select_button.clicked.connect(lambda: self.preview.edit_content(None))
-        self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
         self.fit_button.clicked.connect(self.preview.fit_page)
         bar.addWidget(self.fit_button)
         # Text, a legend, a scale bar or a north arrow: choosing one waits for
@@ -677,42 +760,10 @@ class PagePane(QWidget):
         # Marked while the page waits for the click that places the item.
         self.add_button.setCheckable(True)
         bar.addWidget(self.add_button)
-        # Text size of the selected title, note or legend: shown only then.
-        self.text_size_bar = QWidget(self.zoom_bar)
-        text_row = QHBoxLayout(self.text_size_bar)
-        text_row.setContentsMargins(8, 0, 0, 0)
-        text_row.setSpacing(4)
-        self.text_smaller_button = self._bar_button(
-            "A\N{MINUS SIGN}",
-            tr(
-                "Smaller lettering in the selected item "
-                "(drag its handles to resize the box)"
-            ),
-        )
-        self.text_bigger_button = self._bar_button(
-            "A+",
-            tr(
-                "Bigger lettering in the selected item "
-                "(drag its handles to resize the box)"
-            ),
-        )
-        self.text_size_label = QLabel(self.text_size_bar)
-        self.text_size_label.setProperty("role", "hint")
-        self.text_size_label.setMinimumWidth(40)
-        self.text_size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        text_row.addWidget(self.text_smaller_button)
-        text_row.addWidget(self.text_size_label)
-        text_row.addWidget(self.text_bigger_button)
-        self.text_smaller_button.clicked.connect(
-            lambda: self.preview.step_text_size(False)
-        )
-        self.text_bigger_button.clicked.connect(
-            lambda: self.preview.step_text_size(True)
-        )
-        self.text_size_bar.setVisible(False)
-        bar.addWidget(self.text_size_bar)
         bar.addStretch(1)
-        self.zoom_out_button = self._bar_button("\N{MINUS SIGN}", tr("Zoom out"))
+        self.zoom_out_button = self._bar_button(
+            "\N{MINUS SIGN}", tr("Zoom out"), tr(_PAN_HINT)
+        )
         self.zoom_out_button.clicked.connect(self.preview.zoom_out)
         bar.addWidget(self.zoom_out_button)
         self.zoom_label = QLabel(self.zoom_bar)
@@ -720,43 +771,39 @@ class PagePane(QWidget):
         self.zoom_label.setMinimumWidth(44)
         self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bar.addWidget(self.zoom_label)
-        self.zoom_in_button = self._bar_button("+", tr("Zoom in"))
+        self.zoom_in_button = self._bar_button("+", tr("Zoom in"), tr(_PAN_HINT))
         self.zoom_in_button.clicked.connect(self.preview.zoom_in)
         bar.addWidget(self.zoom_in_button)
         column.addWidget(self.zoom_bar)
-        # What can be changed on the selected item; absent while none is.
-        self.controls = ContextControls(self)
-        column.addWidget(self.controls)
+        # What can be changed on the selected item: seated by the host in
+        # the panel's Edit tab, not in this column.
+        self.controls = ContextControls()
+        self.destroyed.connect(self.controls.deleteLater)
 
         # Named in words while there is room, in pictures (the words stay as
         # tooltips) when the bar would cut them short.
-        self._word_buttons = (
-            self.select_button,
-            self.pan_button,
-            self.fit_button,
-            self.add_button,
-        )
-        for button, icon in zip(
-            self._word_buttons, ("select", "pan", "fit", "add"), strict=True
-        ):
+        self._word_buttons = (self.fit_button, self.add_button)
+        for button, icon in zip(self._word_buttons, ("fit", "add"), strict=True):
             button.setProperty("lineIcon", icon)
             button.setIconSize(QSize(15, 15))
         self._icons_only = False
 
         self.preview.view.zoomLevelChanged.connect(self._show_zoom)
-        self.preview.selection_changed.connect(self._show_text_size)
         self.preview.selection_changed.connect(self._refresh_controls)
         self.preview.item_placed.connect(self._on_item_placed)
         self.controls.edit_view_toggled.connect(self._on_edit_view_toggled)
         self.preview.content_edit_changed.connect(self.controls.set_editing)
-        # The legend's editor lives in the strip: the preview's double-click
-        # on a legend opens the strip, as for any item.
+        self.controls.text_size_step.connect(self.preview.step_text_size)
+        # The legend's editor lives in the Edit tab: the preview's double-click
+        # on a legend opens the tab, as for any item.
         self.controls.set_legend_editor_factory(lambda parent: LegendEditor(parent))
         self.preview.legend_edit_requested.connect(
-            lambda _legend: self.controls.reveal()
+            lambda _legend: self.edit_requested.emit()
         )
         self.preview.placing_changed.connect(self.add_button.setChecked)
-        self.preview.item_double_clicked.connect(lambda _item: self.controls.reveal())
+        self.preview.item_double_clicked.connect(
+            lambda _item: self.edit_requested.emit()
+        )
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
 
@@ -768,10 +815,10 @@ class PagePane(QWidget):
         )
         self._show_page_parts()
 
-    def _bar_button(self, text: str, name: str) -> QToolButton:
+    def _bar_button(self, text: str, name: str, hint: str = "") -> QToolButton:
         button = QToolButton(self.zoom_bar)
         button.setText(text)
-        button.setToolTip(name)
+        button.setToolTip(f"{name}. {hint}" if hint else name)
         button.setAccessibleName(name)
         button.setProperty("role", "secondary")
         button.setProperty("hasMenu", False)
@@ -818,31 +865,19 @@ class PagePane(QWidget):
                     )
 
     def _refresh_controls(self) -> None:
-        """Follow the selection in the controls strip. Its appearing or going
-        takes room from the page, which must not move under the user's view:
-        the scroll position is put back."""
-        view = self.preview.view
-        horizontal, vertical = view.horizontalScrollBar(), view.verticalScrollBar()
-        scroll = (horizontal.value(), vertical.value())
+        """Follow the selection in the Edit tab. A view being edited inside a
+        frame ends when the selection is no longer that frame."""
         editor = self.preview.content_editor
         if editor.active:
             layout = self.preview.view.currentLayout()
             chosen = [] if layout is None else layout.selectedLayoutItems()
             if len(chosen) != 1 or chosen[0] is not editor.target():
                 editor.finish()
-        shown = self.controls.isVisible()
         try:
             self.controls.refresh()
         except RuntimeError:
             # The layout or an item went away under the signal.
-            self.controls.setVisible(False)
-            return
-        if self.controls.isVisible() != shown or shown:
-            layout = self.layout()
-            if layout is not None:
-                layout.activate()
-            horizontal.setValue(scroll[0])
-            vertical.setValue(scroll[1])
+            self.controls.set_layout(None)
 
     def _on_edit_view_toggled(self, on: bool) -> None:
         item = self.controls.selected_item() if on else None
@@ -850,15 +885,7 @@ class PagePane(QWidget):
 
     def _on_item_placed(self, item: object) -> None:
         self._refresh_controls()
-        self.controls.reveal()
-        # The strip may have taken the room the new item was placed in: bring
-        # it back into view, scrolling no further than that.
-        if item is not None and not sip.isdeleted(item):
-            QTimer.singleShot(0, lambda: self._show_item(item))
-
-    def _show_item(self, item) -> None:  # QgsLayoutItem
-        if not sip.isdeleted(item) and not sip.isdeleted(self):
-            self.preview.view.ensureVisible(item, 12, 12)
+        self.edit_requested.emit()
 
     def _show_page_parts(self) -> None:
         showing = self.preview.showing_page()
@@ -866,19 +893,10 @@ class PagePane(QWidget):
         self.changes_link.setVisible(showing and self._change_count > 0)
         self.editor_link.setVisible(showing)
         self.zoom_bar.setVisible(showing)
-        self._show_text_size()
         self._show_zoom()
 
-    def _show_text_size(self) -> None:
-        item = self.preview.text_item()
-        size = text_size_points(item) if item is not None else None
-        self.text_size_bar.setVisible(size is not None and self.zoom_bar.isVisible())
-        if size is not None:
-            self.text_size_label.setText(tr("{size} pt").format(size=f"{size:g}"))
-        self._fit_bar()
-
     def _fit_bar(self) -> None:
-        """Words on Select, Pan and Fit page while the bar has room for them;
+        """Words on Fit page and Add item while the bar has room for them;
         pictures with the same words as tooltips when it has not."""
         if not hasattr(self, "_word_buttons") or self._fitting_bar:
             return
@@ -915,7 +933,6 @@ class PagePane(QWidget):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
-        self.controls.set_compact(self.height() < _COMPACT_HEIGHT)
         self._fit_bar()
 
     def changeEvent(self, event: QEvent | None) -> None:  # noqa: N802 - Qt override
