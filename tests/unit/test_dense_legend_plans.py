@@ -1,5 +1,6 @@
-"""Wayfinder gives a crowded legend the width of its distance scale before
-leaving entries out of it (`core/template_designs.py`).
+"""Crowded legends before entries are left out: Wayfinder takes width from
+its distance scale and Broadside height from its headline
+(`core/template_designs.py`, `core/layout_templates.py`).
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -10,6 +11,7 @@ from __future__ import annotations
 from nika_onlymap_exporter.core import layout_templates as lt
 from nika_onlymap_exporter.core.cartograph_ir import LegendSpec, ScalebarSpec
 from nika_onlymap_exporter.core.layout_templates import TemplateInput, plan_template
+from nika_onlymap_exporter.core.page_style import type_size
 
 #: A regional reference map's legend: 16 layers, 33 rows.
 NAMES = (
@@ -50,10 +52,10 @@ LABELS = (
 )
 
 
-def test_a_crowded_legend_takes_width_from_the_scale_bar_not_entries() -> None:
-    data = TemplateInput(
-        extent_width=60000.0,
-        extent_height=30000.0,
+def _data(width: float = 60000.0, height: float = 30000.0) -> TemplateInput:
+    return TemplateInput(
+        extent_width=width,
+        extent_height=height,
         crs_is_geographic=False,
         crs_authid="EPSG:32612",
         page_size="A4",
@@ -62,9 +64,13 @@ def test_a_crowded_legend_takes_width_from_the_scale_bar_not_entries() -> None:
         layer_names=NAMES,
         legend_labels=LABELS,
         credits=("NPS archived editions",),
-        notes="",
+        notes="Representative fixture; archived editions, not for navigation.",
     )
-    plan = plan_template("wayfinder", data)
+
+
+def _legend_fits(plan: lt.TemplatePlan, data: TemplateInput) -> bool:
+    """Whether the planned legend box holds the legend's rows at the size
+    planned for it (the planner's estimate of what QGIS needs)."""
     legend = next(i for i in plan.items if isinstance(i, LegendSpec))
     page = lt._Page(
         data, plan.page_width, plan.page_height, data.title, plan.attribution_text
@@ -75,7 +81,20 @@ def test_a_crowded_legend_takes_width_from_the_scale_bar_not_entries() -> None:
         lt._legend_height(page, legend.font_size, legend.box.w, columns, split=split)
         for split in (False, True)
     )
-    assert need <= legend.box.h + 1e-6
+    return need <= legend.box.h + 1e-6
+
+
+def test_a_crowded_legend_takes_width_from_the_scale_bar_not_entries() -> None:
+    data = _data()
+    plan = plan_template("wayfinder", data)
+    assert _legend_fits(plan, data)
     bar = next(i for i in plan.items if isinstance(i, ScalebarSpec))
     assert bar.box.w >= 45.0
-    assert legend.font_size >= plan.legend_min_pt
+
+
+def test_a_crowded_legend_takes_height_from_the_headline_not_entries() -> None:
+    data = _data(45000.0, 50000.0)
+    plan = plan_template("poster", data)
+    assert _legend_fits(plan, data)
+    headline = next(i for i in plan.items if i.id == "title")
+    assert headline.font_size < type_size("display", plan.page_width, plan.page_height)

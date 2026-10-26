@@ -878,6 +878,25 @@ def _poster(page: _Page) -> _Layout:
     (a footer band on a portrait sheet, or under a wide view) with the
     story, the legend and the scale bar. The source line runs along the
     foot."""
+    headline_floor = max(MINIMUM_TYPE.display, page.pt("title"))
+    # The headline steps down, toward the page's title size, only when the
+    # legend would otherwise be left short: the poster keeps its big
+    # headline for a map with a short legend, and a crowded legend gets
+    # the height instead of losing entries.
+    largest = page.pt("display")
+    sizes = [largest, (largest + headline_floor) / 2, headline_floor]
+    for display_max in sizes[:-1]:
+        layout, holds = _poster_page(page, display_max, headline_floor)
+        if holds:
+            return layout
+    return _poster_page(page, sizes[-1], headline_floor)[0]
+
+
+def _poster_page(
+    page: _Page, display_max: float, headline_floor: float
+) -> tuple[_Layout, bool]:
+    """Broadside's page with the headline at most `display_max` pt, and
+    whether its legend fits the rail or band planned for it."""
     pal = PAPER
     sp = page.spacing
     s = page.scale
@@ -886,8 +905,8 @@ def _poster(page: _Page) -> _Layout:
     headline_pt, headline_h = _fit_title(
         page.title,
         content_w,
-        page.pt("display"),
-        max(MINIMUM_TYPE.display, page.pt("title")),
+        display_max,
+        headline_floor,
         max_lines=2,
     )
     items: list[CartographItem] = []
@@ -910,6 +929,7 @@ def _poster(page: _Page) -> _Layout:
     body = Box(m, y, content_w, bottom - y)
     story_pt = round(page.pt("body") * 1.15, 2)
     has_rail = bool(page.notes or page.data.layer_names)
+    holds = True
     if not has_rail:
         frame = Box(body.x, body.y, body.w, body.h - _bar_h(page) - g)
         items += _foot_row(
@@ -921,7 +941,7 @@ def _poster(page: _Page) -> _Layout:
         )
     else:
 
-        def beside() -> tuple[Box, list[CartographItem]]:
+        def beside() -> tuple[Box, list[CartographItem], bool]:
             rail_w = min(max(body.w * 0.27, 60.0 * s), 110.0 * s)
             # A legend too long for the rail at the page's legend size
             # widens it, up to as wide as the map (`MAP_MIN_SHARE`).
@@ -932,13 +952,16 @@ def _poster(page: _Page) -> _Layout:
                 rail_w = min(rail_w + 5.0, widest)
             frame = Box(body.x, body.y, body.w - rail_w - 1.5 * g, body.h)
             rail = Box(frame.x + frame.w + 1.5 * g, body.y, rail_w, body.h)
-            return frame, _rail(page, rail, pal, story_pt, z=3)
+            fits = _rail_holds_legend(
+                page, rail_w, body.h, story_pt, MINIMUM_TYPE.legend
+            )
+            return frame, _rail(page, rail, pal, story_pt, z=3), fits
 
-        def under() -> tuple[Box, list[CartographItem]]:
+        def under() -> tuple[Box, list[CartographItem], bool]:
             band = _PosterBand(page, body, story_pt)
             frame = Box(body.x, body.y, body.w, body.h - band.height - 1.5 * g)
             band_box = Box(body.x, frame.y + frame.h + 1.5 * g, body.w, band.height)
-            return frame, band.items(band_box, pal, z=3)
+            return frame, band.items(band_box, pal, z=3), True
 
         # The rail beside the map on a landscape sheet and the band under it
         # on a portrait one, unless the other shows the canvas view larger:
@@ -946,7 +969,7 @@ def _poster(page: _Page) -> _Layout:
         # first of equals, the orientation's own.
         arrangements = [beside, under] if page.landscape else [under, beside]
         aspect = page.data.extent_width / page.data.extent_height
-        frame, rail_items = max(
+        frame, rail_items, holds = max(
             (arrange() for arrange in arrangements),
             key=lambda option: _fit_area(aspect, option[0]),
         )
@@ -959,7 +982,7 @@ def _poster(page: _Page) -> _Layout:
     )
     if credit is not None:
         items.append(credit)
-    return (_main(frame, pal, stroke=_NO_STROKE),), items, _page_style(pal)
+    return ((_main(frame, pal, stroke=_NO_STROKE),), items, _page_style(pal)), holds
 
 
 def _main_and_locator(page: _Page) -> _Layout:
@@ -2626,14 +2649,18 @@ def _rail_notes(
 
 
 def _rail_holds_legend(
-    page: _Page, width: float, height: float, story_pt: float
+    page: _Page,
+    width: float,
+    height: float,
+    story_pt: float,
+    font_pt: float | None = None,
 ) -> bool:
     """Whether a rail `width` x `height` mm has room under its story for
-    every legend row at the page's legend size."""
+    every legend row at `font_pt` (the page's legend size by default)."""
     g = page.spacing.gutter
     notes_h = _rail_notes(page, width, height, story_pt)[1]
     room = height - _bar_h(page) - g - (notes_h + g * 1.5 if notes_h else 0.0)
-    return _legend_need(page, _legend_pt(page), width) <= room
+    return _legend_need(page, font_pt or _legend_pt(page), width) <= room
 
 
 class _PosterBand:
