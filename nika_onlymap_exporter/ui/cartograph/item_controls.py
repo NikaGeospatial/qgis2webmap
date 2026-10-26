@@ -64,6 +64,9 @@ from .layout_items import delete_items, item_edit, link_map, map_frames, map_lab
 #: widget that has `set_legend(QgsLayoutItemLegend | None)`.
 LegendEditorFactory = Callable[[QWidget], QWidget]
 
+#: The most room the hosted legend editor takes from the page, in pixels.
+_LEGEND_EDITOR_MAX_HEIGHT = 240
+
 _ALIGNMENTS = (
     (Qt.AlignmentFlag.AlignLeft, "align-left", "Align text left"),
     (Qt.AlignmentFlag.AlignHCenter, "align-center", "Centre text"),
@@ -348,7 +351,9 @@ class ContextControls(QFrame):
 
     def _build_legend_page(self) -> None:
         self.legend_page, column = self._page()
-        row = QHBoxLayout()
+        self.legend_basics = QWidget(self.legend_page)
+        row = QHBoxLayout(self.legend_basics)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
         self.legend_map = _MapChoice(self.legend_page)
         self.legend_map.chosen.connect(self._on_link)
@@ -363,7 +368,7 @@ class ContextControls(QFrame):
         columns_label.setBuddy(self.columns_spin)
         self.columns_spin.editingFinished.connect(self._on_columns)
         row.addWidget(self.columns_spin)
-        column.addLayout(row)
+        column.addWidget(self.legend_basics)
         # Where the legend editor sits, when the host provides one.
         self.legend_slot = QVBoxLayout()
         self.legend_slot.setContentsMargins(0, 0, 0, 0)
@@ -584,11 +589,15 @@ class ContextControls(QFrame):
         self.pages.setCurrentWidget(self.legend_page)
         self.legend_map.show_maps(layout, item.linkedMap())
         self.columns_spin.setValue(max(1, item.columnCount()))
+        # The hosted editor has its own map and columns: not twice.
+        self.legend_basics.setVisible(self._legend_factory is None)
         self._set_legend_editor_item(item)
 
     def _set_legend_editor_item(self, legend: QgsLayoutItemLegend | None) -> None:
         if legend is not None and self._legend_editor is None and self._legend_factory:
             self._legend_editor = self._legend_factory(self.legend_page)
+            # Its entry list scrolls: the page keeps most of the room.
+            self._legend_editor.setMaximumHeight(_LEGEND_EDITOR_MAX_HEIGHT)
             self.legend_slot.addWidget(self._legend_editor)
         editor = self._legend_editor
         if editor is not None and not sip.isdeleted(editor):
