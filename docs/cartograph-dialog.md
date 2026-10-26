@@ -176,9 +176,17 @@ cartograph it sets how the layers in **live** frames behave:
   out of the file - not merely hidden.
 - **Labels** applies: unticked, the layer's labels are not drawn in live
   frames.
-- **Include** does not choose a cartograph's layers. A frame draws the layers
-  its map item draws in the layout - its own locked layer list, or the
-  project's visible layers - so change that in the layout designer.
+- **Include** chooses the layers of the map frame named at the top of the
+  section (**Layers for:**, a choice of frame when the layout has several).
+  Unticking a layer takes it off that map in the layout itself, so it
+  disappears from the preview, the HTML, the image and the PDF, and from the
+  legends linked to that map. **Undo** in the layout (Ctrl+Z) puts it all back,
+  in its old place. A map that followed the QGIS Layers panel or a map theme
+  gets its own list of layers the first time you change a tick, drawn with the
+  styles it had; the note under the selector says which it is. If the layout's
+  atlas takes its pages from a layer the map no longer draws, a warning says so
+  and the atlas buttons stay off until it is ticked again. The web map keeps
+  its own Include choices, which switching output never touches.
 
 Static frames are pictures drawn by QGIS, so none of this changes them.
 Changing anything here saves the cartograph again.
