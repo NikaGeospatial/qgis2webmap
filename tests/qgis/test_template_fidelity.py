@@ -22,6 +22,7 @@ from nika_onlymap_exporter.core.cartograph_ir import LegendSpec
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
 from nika_onlymap_exporter.core.layout_reader import read_layout
+from nika_onlymap_exporter.core.page_style import DAYLIGHT, PAPER
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 pytest.importorskip("qgis.core")
@@ -98,21 +99,21 @@ def test_a_locator_keeps_its_outline_in_the_html(parcels, project, runtime) -> N
     html = _export(_build(parcels, project, "locator"), project, runtime)
     frames = re.findall(r"<om-frame [^>]*>", html)
     assert len(frames) == 2
-    assert 'frame-stroke="#d9cfdc"' in frames[0]
-    assert 'frame-stroke="#5e5263"' in frames[1]
+    assert f'frame-stroke="{DAYLIGHT.hairline}"' in frames[0]
+    assert f'frame-stroke="{DAYLIGHT.rule}"' in frames[1]
 
 
 def test_a_light_template_keeps_its_chosen_white_and_ink(
     parcels, project, runtime
 ) -> None:
-    """Daylight chooses white paper, aubergine ink and a quiet frame edge:
+    """Daylight chooses white paper, deep teal ink and a quiet frame edge:
     chosen, so carried -- the HTML theme's own paper and ink never stand
     in for them."""
     html = _export(_build(parcels, project, "classic"), project, runtime)
     legend = re.search(r"<om-legend [^>]*>", html).group(0)
     assert 'bg="#ffffff"' in legend
-    assert 'color="#2a1f2d"' in legend
-    assert 'frame-stroke="#d9cfdc"' in html
+    assert f'color="{DAYLIGHT.ink}"' in legend
+    assert f'frame-stroke="{DAYLIGHT.hairline}"' in html
     assert re.search(r'<om-cartograph [^>]*\bbg="#ffffff"', html)
 
 
@@ -261,14 +262,17 @@ def test_a_legend_size_a_design_chose_is_carried(project) -> None:
     assert read.font_size is None
 
 
-@pytest.mark.parametrize("template_id", ["classic", "poster"])
+@pytest.mark.parametrize(
+    ("template_id", "accent"),
+    [("classic", DAYLIGHT.accent), ("poster", PAPER.accent)],
+)
 def test_an_accent_rule_keeps_its_colour_in_the_html(
-    template_id, parcels, project, runtime
+    template_id, accent, parcels, project, runtime
 ) -> None:
     """A thin filled rule names its edge in its own colour: with no edge
     colour the runtime draws its default dark line, which on a rule under
     a millimetre high hides the accent altogether."""
     html = _export(_build(parcels, project, template_id), project, runtime)
     rule = re.search(r'<om-shape id="[^"]*rule[^"]*"[^>]*>', html).group(0)
-    assert 'fill="#9a5a12"' in rule
-    assert 'stroke="#9a5a12"' in rule
+    assert f'fill="{accent}"' in rule
+    assert f'stroke="{accent}"' in rule
