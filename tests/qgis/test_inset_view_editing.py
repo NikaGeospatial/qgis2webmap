@@ -27,7 +27,7 @@ from qgis.PyQt.QtGui import QKeyEvent, QWheelEvent  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
 
-from nika_onlymap_exporter.core.canvas_cartograph import (
+from nika_onlymap_exporter.core.canvas_cartograph import (  # noqa: E402
     cartograph_from_view,
 )
 from nika_onlymap_exporter.ui.cartograph.content_edit import (  # noqa: E402
