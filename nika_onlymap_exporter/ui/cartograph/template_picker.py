@@ -143,6 +143,8 @@ _PAGE_EDGE = "#b7aeb9"
 #: work area (taskbars excluded) the picker opens across.
 _DEFAULT_SIZE = QSize(860, 720)
 _MINIMUM_SIZE = QSize(640, 480)
+#: The line height of the text the minimum size was laid out for.
+_TEXT_HEIGHT = 22
 _SCREEN_SHARE_W = 0.9
 _SCREEN_SHARE_H = 0.88
 #: On a large screen the picker grows to this share of it, past the default.
@@ -305,10 +307,11 @@ class _PageCache:
 _SHARED_PAGES = _PageCache(_SHARED_CACHE_LIMIT, _SHARED_CACHE_BYTES)
 
 
-def dialog_sizes(available: QSize) -> tuple[QSize, QSize]:
+def dialog_sizes(available: QSize, text_scale: float = 1.0) -> tuple[QSize, QSize]:
     """The picker's opening and minimum size on a screen whose work area is
     `available`: the default, more on a large screen, never past
-    90% x 88% of the work area."""
+    90% x 88% of the work area. The minimum grows with `text_scale`, the
+    text height against the one it was laid out for (`_TEXT_HEIGHT`)."""
     cap_w = int(available.width() * _SCREEN_SHARE_W)
     cap_h = int(available.height() * _SCREEN_SHARE_H)
     width = min(
@@ -317,8 +320,10 @@ def dialog_sizes(available: QSize) -> tuple[QSize, QSize]:
     height = min(
         cap_h, max(_DEFAULT_SIZE.height(), int(available.height() * _LARGE_SHARE_H))
     )
+    # Larger text needs more room for the same controls and cards.
     minimum = QSize(
-        min(_MINIMUM_SIZE.width(), cap_w), min(_MINIMUM_SIZE.height(), cap_h)
+        min(round(_MINIMUM_SIZE.width() * text_scale), cap_w),
+        min(round(_MINIMUM_SIZE.height() * text_scale), cap_h),
     )
     return QSize(max(width, minimum.width()), max(height, minimum.height())), minimum
 
@@ -1017,22 +1022,16 @@ class TemplatePicker(QDialog):
         self._controls.setVerticalSpacing(8)
         self._controls.setColumnStretch(2, 1)
         self._controls_arrangement_now: str | None = None
+        self._base_minimum_height = _MINIMUM_SIZE.height()
+        self._screen_cap_height = 1 << 20
         layout.addLayout(self._controls)
 
         # Beside the design filter when they fit together, so the choice
         # costs the card list no height (`_place_controls`).
-        self.framing_group = QWidget(self)
-        self.framing_group.setMinimumWidth(1)
-        framing_row = QHBoxLayout(self.framing_group)
-        framing_row.setContentsMargins(0, 0, 0, 0)
-        framing_row.setSpacing(4)
-        framing_label = QLabel(tr("Map framing"), self.framing_group)
-        framing_label.setProperty("role", "hint")
-        framing_row.addWidget(framing_label)
-        self.framing_combo = QComboBox(self.framing_group)
+        self.framing_combo = QComboBox(self)
         self.framing_combo.setAccessibleName(tr("Map framing"))
-        self.framing_combo.addItem(tr("Fill frame (crop edges)"), "fill")
-        self.framing_combo.addItem(tr("Whole view"), "whole")
+        self.framing_combo.addItem(tr("Framing: fill the frame"), "fill")
+        self.framing_combo.addItem(tr("Framing: whole view"), "whole")
         self.framing_combo.setToolTip(
             tr(
                 "Fill crops the view, not the data. "
@@ -1048,8 +1047,6 @@ class TemplatePicker(QDialog):
                 self.framing_combo.setCurrentIndex(
                     self.framing_combo.findData(project_framing(project))
                 )
-        framing_label.setBuddy(self.framing_combo)
-        framing_row.addWidget(self.framing_combo)
         self._place_controls("row")
 
         # The designs as cards: one column on a narrow dialog, two or three
@@ -1439,9 +1436,14 @@ class TemplatePicker(QDialog):
                 available = screen.availableGeometry()
         if available is None or available.isEmpty():
             available = QRect(0, 0, 1280, 800)
-        size, minimum = dialog_sizes(available.size())
+        text_scale = max(1.0, self.fontMetrics().height() / _TEXT_HEIGHT)
+        size, minimum = dialog_sizes(available.size(), text_scale)
+        self._base_minimum_height = minimum.height()
+        self._screen_cap_height = int(available.height() * _SCREEN_SHARE_H)
         self.setMinimumSize(minimum)
         self.resize(size)
+        self._controls_arrangement_now = None
+        self._place_controls(self._controls_arrangement())
 
     def _controls_arrangement(self) -> str:
         """`row` when the filter, the page settings and the framing fit on
@@ -1451,7 +1453,7 @@ class TemplatePicker(QDialog):
         room = self.width() - (margins.left() + margins.right() if margins else 0)
         gap = self._controls.horizontalSpacing()
         filter_w = self.filter_group.sizeHint().width()
-        framing_w = self.framing_group.sizeHint().width()
+        framing_w = self.framing_combo.sizeHint().width()
         if (
             filter_w + self.page_settings.sizeHint().width() + framing_w + 2 * gap
             <= room
@@ -1463,19 +1465,26 @@ class TemplatePicker(QDialog):
         if arrangement == self._controls_arrangement_now:
             return
         self._controls_arrangement_now = arrangement
-        for widget in (self.filter_group, self.page_settings, self.framing_group):
+        for widget in (self.filter_group, self.page_settings, self.framing_combo):
             self._controls.removeWidget(widget)
         left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         self._controls.addWidget(self.filter_group, 0, 0, left)
+        # A third line is height the cards need: the dialog may not shrink
+        # past it, as far as the screen allows.
+        line = self.framing_combo.sizeHint().height() + self._controls.verticalSpacing()
+        extra = line * (arrangement == "stack")
+        self.setMinimumHeight(
+            min(self._base_minimum_height + extra, self._screen_cap_height)
+        )
         if arrangement == "row":
             self._controls.addWidget(self.page_settings, 0, 1, left)
-            self._controls.addWidget(self.framing_group, 0, 2, left)
+            self._controls.addWidget(self.framing_combo, 0, 2, left)
         elif arrangement == "pair":
-            self._controls.addWidget(self.framing_group, 0, 1, 1, 2, left)
+            self._controls.addWidget(self.framing_combo, 0, 1, 1, 2, left)
             self._controls.addWidget(self.page_settings, 1, 0, 1, 3, left)
         else:
             self._controls.addWidget(self.page_settings, 1, 0, 1, 3, left)
-            self._controls.addWidget(self.framing_group, 2, 0, 1, 3, left)
+            self._controls.addWidget(self.framing_combo, 2, 0, 1, 3, left)
 
     def _relayout(self) -> None:
         """Size the cards to the list: as many columns as fit, every card the

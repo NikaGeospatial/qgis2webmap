@@ -132,6 +132,7 @@ def _listed(templates) -> list[str]:
 
 
 def _settings(tmp_path) -> QSettings:
+    tmp_path.mkdir(exist_ok=True)
     return QSettings(str(tmp_path / "picker.ini"), QSettings.Format.IniFormat)
 
 
@@ -1497,6 +1498,55 @@ class TestKeyFigures:
             assert view.viewport().rect().contains(card)
         finally:
             picker.reject()
+
+    @pytest.mark.parametrize(
+        "font_scale",
+        [1.0, 1.25],
+    )
+    def test_big_fonts_keep_the_cards(
+        self,
+        qgis_app,
+        tmp_path,
+        fifteen,
+        figures_project,
+        font_scale,
+    ):
+        """Larger text widens the controls; the page keeps its share of the
+        card and a card still fits the list."""
+        original = qgis_app.font()
+        scaled = qgis_app.font()
+        if original.pointSizeF() > 0:
+            scaled.setPointSizeF(original.pointSizeF() * font_scale)
+        else:
+            scaled.setPixelSize(round(original.pixelSize() * font_scale))
+        if font_scale != 1.0:
+            qgis_app.setFont(scaled)
+        try:
+            settings = _settings(tmp_path)
+            settings.setValue(template_picker.SETTINGS_KEY, "dashboard|A4|auto")
+            small = TemplatePicker(
+                _Renderer(), qsettings=settings, project=figures_project
+            )
+            try:
+                _shown(qgis_app, small, QSize(640, 480))
+                _drain(qgis_app, small)
+                view = small.template_list
+                card = view.visualItemRect(small._items["dashboard"])
+                assert view.viewport().rect().contains(card)
+            finally:
+                small.reject()
+            picker = TemplatePicker(
+                _Renderer(), qsettings=_settings(tmp_path / "second")
+            )
+            try:
+                _shown(qgis_app, picker, QSize(700, 480))
+                _drain(qgis_app, picker)
+                row = picker.rows["classic"]
+                assert row.preview.width() >= 0.4 * row.width()
+            finally:
+                picker.reject()
+        finally:
+            qgis_app.setFont(original)
 
     def test_they_come_back_when_the_picker_opens_again(
         self, qgis_app, tmp_path, fifteen, figures_project
