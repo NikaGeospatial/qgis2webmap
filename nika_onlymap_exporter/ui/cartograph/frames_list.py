@@ -148,6 +148,12 @@ class FrameCard(QFrame):
         self.show_mode()
         self.set_issue_count(row.issues)
 
+    def set_identity(self, name: str, crs: str) -> None:
+        """Show a renamed or reprojected map item; the controls are untouched."""
+        self.name_label.setText(name)
+        self.name_label.setToolTip(name)
+        self.crs_label.setText(crs)
+
     def mode(self) -> str:
         return str(self.mode_combo.currentData())
 
@@ -235,6 +241,17 @@ class FramesList(QWidget):
             self._connect(card)
             self._cards_box.addWidget(card)
             self._cards[row.item_id] = card
+
+    def update_identity(self, identities: dict[str, tuple[str, str]]) -> None:
+        """Follow a rename or CRS change of maps already listed, in place.
+
+        The cards, and so whichever control has focus, stay; a row whose
+        map not listed is ignored (`set_frames` is for a changed set).
+        """
+        for item_id, (name, crs) in identities.items():
+            card = self._cards.get(item_id)
+            if card is not None:
+                card.set_identity(name, crs)
 
     def _connect(self, card: FrameCard) -> None:
         card.mode_combo.currentIndexChanged.connect(

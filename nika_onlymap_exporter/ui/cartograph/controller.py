@@ -84,7 +84,7 @@ from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, PreviewServer
 from ..runtime_setup import ensure_runtime
-from .frames import layout_map_items
+from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
 from .layout_page import LayoutPicker, PagePane, SaveLocation
 from .panel_section import PanelSection
@@ -224,6 +224,9 @@ class CartographController:
         self._exporting = False
         self._manager_connected = False
         self._frame_rows: dict[str, dict[str, QComboBox]] = {}
+        # What each listed map item's row shows: (name, CRS authid), so a
+        # rename or CRS change of an item already listed is noticed.
+        self._frame_identities: dict[str, tuple[str, str]] = {}
 
         self._job: BackgroundJob | None = None
         self._last_saved_at: float | None = None
@@ -1002,6 +1005,7 @@ class CartographController:
 
     def _rebuild_frames_rows(self) -> None:
         self._frame_rows.clear()
+        self._frame_identities.clear()
         if self._current_layout is None:
             self.frames_list.set_frames(None)
             return
@@ -1023,6 +1027,10 @@ class CartographController:
                     issues=self._frame_issue_counts.get(frame_item.item_id),
                 )
             )
+            self._frame_identities[frame_item.item_id] = (
+                frame_item.name,
+                frame_item.crs_authid,
+            )
         self.frames_list.set_frames(rows)
         self.frames_list.set_canvas_available(self._map_canvas() is not None)
         for row in rows:
@@ -1031,6 +1039,20 @@ class CartographController:
                 "mode": card.mode_combo,
                 "dpi": card.dpi_combo,
             }
+
+    def _refresh_frame_identities(self, items: list[FrameItem]) -> None:
+        """A map item was renamed or reprojected: the rows and the Atlas map
+        choice follow, in place."""
+        self._frame_identities = {
+            item.item_id: (item.name, item.crs_authid) for item in items
+        }
+        self.frames_list.update_identity(
+            {
+                item.item_id: (item.name, item.crs_authid or tr("Unknown CRS"))
+                for item in items
+            }
+        )
+        self.atlas_tab.rename_maps()
 
     def _map_canvas(self):
         iface = getattr(self.dialog, "iface", None)
@@ -1258,12 +1280,14 @@ class CartographController:
             # the index. `layoutRemoved` picks another layout once it is gone.
             return
         if self._current_layout is not None:
-            current_ids = {
-                item.item_id for item in layout_map_items(self._current_layout)
-            }
-            if current_ids != set(self._frame_rows.keys()):
+            items = layout_map_items(self._current_layout)
+            if {item.item_id for item in items} != set(self._frame_rows.keys()):
                 self._rebuild_frames_rows()
                 self.atlas_tab.show_layout(self._current_layout)
+            elif {
+                item.item_id: (item.name, item.crs_authid) for item in items
+            } != self._frame_identities:
+                self._refresh_frame_identities(items)
         self.schedule_autosave()
 
     def _update_file_default(self) -> None:

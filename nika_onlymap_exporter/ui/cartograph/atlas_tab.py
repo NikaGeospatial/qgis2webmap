@@ -357,6 +357,17 @@ class AtlasTab(QWidget):
                 chosen = self.map_combo.count() - 1
         self.map_combo.setCurrentIndex(chosen)
 
+    def rename_maps(self) -> None:
+        """Show the maps' current names without rebuilding the list, so the
+        choice (kept by item uuid) and the combo's focus stay as they are."""
+        if self._layout is None:
+            return
+        names = {frame.item_id: frame.name for frame in layout_map_items(self._layout)}
+        for index in range(self.map_combo.count()):
+            name = names.get(self.map_combo.itemData(index))
+            if name is not None and name != self.map_combo.itemText(index):
+                self.map_combo.setItemText(index, name)
+
     def _update_count(self) -> None:
         self._validate_expressions()
         count = atlas_page_count(self._layout) if self._layout is not None else None
