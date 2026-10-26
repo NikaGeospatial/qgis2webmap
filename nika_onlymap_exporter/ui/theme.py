@@ -101,6 +101,16 @@ LINE_ICONS = {
         '<circle cx="8" cy="11.4" r="0.4" fill="{c}"/>'
     ),
     "back": '<path d="M9.8 3.5 5.3 8l4.5 4.5"/>',
+    # The page preview's bar when it has no room for words.
+    "select": '<path d="M4 2.5v10l2.6-2.4 1.8 3.4 1.6-.8-1.8-3.3 3.4-.2z"/>',
+    "pan": (
+        '<path d="M8 1.8v12.4M1.8 8h12.4M6.3 3.5 8 1.8l1.7 1.7M6.3 12.5 8 '
+        '14.2l1.7-1.7M3.5 6.3 1.8 8l1.7 1.7M12.5 6.3 14.2 8l-1.7 1.7"/>'
+    ),
+    "fit": (
+        '<path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/>'
+        '<rect x="5" y="5" width="6" height="6" rx="0.8"/>'
+    ),
 }
 
 
@@ -924,10 +934,10 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="corner"][hasMenu="true"] {{
     padding-right: 22px;
 }}
-{d} QToolButton[role="corner"][iconOnly="true"] {{
+{d} QToolButton[role="corner"][tight="true"] {{
     padding: 3px 6px;
 }}
-{d} QToolButton[role="corner"][iconOnly="true"]:checked {{
+{d} QToolButton[role="corner"][tight="true"]:checked {{
     background: {p.accent_soft};
     border-color: {p.muted};
 }}
@@ -1340,6 +1350,13 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:focus {{
     padding: 1px 9px;
 }}
+/* The bar short of room: pictures with tooltips instead of cut-off words. */
+{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"][tight="true"] {{
+    padding: 2px 7px;
+}}
+{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"][tight="true"]:focus {{
+    padding: 1px 6px;
+}}
 /* The zoom bar's Select / Pan switch: the mode in use is the filled one. */
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:checked {{
     background: {p.accent_soft};
@@ -1717,7 +1734,7 @@ _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     ('QToolButton[role="primary"][hasMenu="false"]', (3, 16, 3, 16), 1, True),
     ('QToolButton[role="corner"]', (3, 11, 3, 9), 1, False),
     ('QToolButton[role="corner"][hasMenu="true"]', (3, 22, 3, 9), 1, False),
-    ('QToolButton[role="corner"][iconOnly="true"]', (3, 6, 3, 6), 1, False),
+    ('QToolButton[role="corner"][tight="true"]', (3, 6, 3, 6), 1, False),
     ('QToolButton[role="corner"][accent="true"]', (3, 3, 3, 9), 1, True),
 )
 # Lopsided only to offset the slack Qt leaves right of a text-beside-icon

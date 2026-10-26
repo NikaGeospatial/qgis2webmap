@@ -89,6 +89,7 @@ from .frames_list import FrameRow, FramesList
 from .layer_membership import LayerMembership
 from .layout_page import LayoutPicker, PagePane, SaveLocation
 from .panel_section import PanelSection
+from .stacked_scroll import StackedScrolling
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -391,11 +392,11 @@ class CartographController:
         panel_scroll.setFrameShape(QFrame.Shape.NoFrame)
         panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         panel_scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        panel_scroll.setMinimumWidth(PANEL_MIN_WIDTH)
+        panel_scroll.setMinimumWidth(PANEL_MIN_WIDTH - 12)
         panel = _PanelColumn()
-        panel.setMinimumWidth(PANEL_MIN_WIDTH)
+        panel.setMinimumWidth(PANEL_MIN_WIDTH - 12)
         column = QVBoxLayout(panel)
-        column.setContentsMargins(12, 0, 0, 0)
+        column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(6)
 
         layout_heading = QLabel(tr("Print layout"), panel)
@@ -476,8 +477,27 @@ class CartographController:
         sections_column.setContentsMargins(0, 4, 6, 0)
         sections_column.setSpacing(2)
         self.page_section = PanelSection(
-            "page", tr("Page"), sections, open_by_default=True
+            "page", tr("Browser appearance"), sections, open_by_default=True
         )
+        self.page_section.setToolTip(
+            tr(
+                "Settings for the web page only. The layout itself is edited in "
+                "the preview and the layout editor."
+            )
+        )
+        # Next to the heading, before the fields: these are web-page-only
+        # settings, which the QGIS layout preview beside the panel never shows.
+        page_note = FittedLabel(
+            tr(
+                "Only the web page changes, not the layout preview here. "
+                "See these with Preview in browser."
+            ),
+            self.page_section.body,
+        )
+        page_note.setWordWrap(True)
+        page_note.setProperty("role", "hint")
+        self.page_page_note = page_note
+        self.page_section.body_layout.addWidget(page_note)
         page_form = QFormLayout()
         page_form.setContentsMargins(0, 0, 0, 0)
         page_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
@@ -499,17 +519,6 @@ class CartographController:
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
         self.page_section.body_layout.addLayout(page_form)
-        page_note = FittedLabel(
-            tr(
-                "These change the HTML, seen with Preview in browser - not the "
-                "QGIS layout preview."
-            ),
-            self.page_section.body,
-        )
-        page_note.setWordWrap(True)
-        page_note.setProperty("role", "hint")
-        self.page_page_note = page_note
-        self.page_section.body_layout.addWidget(page_note)
         self.frames_section = PanelSection("frames", tr("Map frames"), sections)
         self.frames_section.body_layout.addWidget(self.build_frames_tab())
         self.layers_section = PanelSection("layers", tr("Layers"), sections)
@@ -548,10 +557,15 @@ class CartographController:
         self.file_edit.change_requested.connect(self._on_choose_file)
         self.file_edit.reveal_requested.connect(self.on_reveal)
         column.addWidget(self.file_edit)
-        self.cartograph_status_label = FittedLabel("", panel)
+        # Beside the scrolling column, not in it: whether the work is saved
+        # is always in sight, however short the window.
+        panel_side = QWidget(splitter)
+        panel_side_column = QVBoxLayout(panel_side)
+        panel_side_column.setContentsMargins(12, 0, 0, 0)
+        panel_side_column.setSpacing(2)
+        self.cartograph_status_label = FittedLabel("", panel_side)
         self.cartograph_status_label.setWordWrap(True)
         self.cartograph_status_label.setProperty("role", "hint")
-        column.addWidget(self.cartograph_status_label)
         # Everything below the list belongs to a layout; with none there is
         # nothing to set, so it is hidden rather than left to type into.
         self._layout_only = (
@@ -563,7 +577,18 @@ class CartographController:
 
         panel_scroll.setWidget(panel)
         self.panel_scroll = panel_scroll
-        splitter.addWidget(panel_scroll)
+        # One scrolling surface at a time: the tabs while the column fits, the
+        # column (with the tabs grown to their content) when it does not.
+        self._stacked_scrolling = StackedScrolling(
+            panel_scroll,
+            self.panel_tabs,
+            PANEL_TABS_MIN_HEIGHT,
+            lambda width: panel.heightForWidth(width),
+        )
+        panel_side_column.insertWidget(0, panel_scroll, 1)
+        panel_side_column.addWidget(self.cartograph_status_label)
+        panel_side.setMinimumWidth(PANEL_MIN_WIDTH)
+        splitter.addWidget(panel_side)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         splitter.setSizes([10_000, PANEL_WIDTH])

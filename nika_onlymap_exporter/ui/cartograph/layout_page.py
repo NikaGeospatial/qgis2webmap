@@ -32,6 +32,7 @@ from qgis.PyQt.QtCore import (
     QPoint,
     QPointF,
     QRect,
+    QSize,
     Qt,
     QTimer,
     pyqtSignal,
@@ -501,6 +502,7 @@ class PagePane(QWidget):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
         self._change_count = 0
+        self._fitting_bar = False
         self.caption = QLabel(self)
         self.caption.setProperty("role", "pageCaption")
         # The caption may clip in a narrow window rather than widen the page
@@ -598,6 +600,16 @@ class PagePane(QWidget):
         bar.addWidget(self.zoom_in_button)
         column.addWidget(self.zoom_bar)
 
+        # Named in words while there is room, in pictures (the words stay as
+        # tooltips) when the bar would cut them short.
+        self._word_buttons = (self.select_button, self.pan_button, self.fit_button)
+        for button, icon in zip(
+            self._word_buttons, ("select", "pan", "fit"), strict=True
+        ):
+            button.setProperty("lineIcon", icon)
+            button.setIconSize(QSize(15, 15))
+        self._icons_only = False
+
         self.preview.view.zoomLevelChanged.connect(self._show_zoom)
         self.preview.selection_changed.connect(self._show_text_size)
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
@@ -645,6 +657,35 @@ class PagePane(QWidget):
         self.text_size_bar.setVisible(size is not None and self.zoom_bar.isVisible())
         if size is not None:
             self.text_size_label.setText(tr("{size} pt").format(size=f"{size:g}"))
+        self._fit_bar()
+
+    def _fit_bar(self) -> None:
+        """Words on Select, Pan and Fit page while the bar has room for them;
+        pictures with the same words as tooltips when it has not."""
+        if not hasattr(self, "_word_buttons") or self._fitting_bar:
+            return
+        self._fitting_bar = True
+        try:
+            self._set_icons_only(False)
+            self.zoom_bar.layout().activate()
+            short = self.zoom_bar.layout().sizeHint().width() > self.width()
+            if short:
+                self._set_icons_only(True)
+        finally:
+            self._fitting_bar = False
+
+    def _set_icons_only(self, icons_only: bool) -> None:
+        self._icons_only = icons_only
+        style = (
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+            if icons_only
+            else Qt.ToolButtonStyle.ToolButtonTextOnly
+        )
+        for button in self._word_buttons:
+            button.setToolButtonStyle(style)
+            button.setProperty("tight", icons_only)
+            button.style().unpolish(button)
+            button.style().polish(button)
 
     def _show_zoom(self, *_args: object) -> None:
         # 100% is the page at its real size on this screen, as QGIS's own
@@ -654,8 +695,18 @@ class PagePane(QWidget):
         level = view.transform().m11() / per_mm if per_mm else 0.0
         self.zoom_label.setText(f"{round(level * 100)}%")
 
+    def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        self._fit_bar()
+
+    def changeEvent(self, event: QEvent | None) -> None:  # noqa: N802 - Qt override
+        super().changeEvent(event)
+        if event is not None and event.type() == QEvent.Type.FontChange:
+            self._fit_bar()
+
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
+        self._fit_bar()
         self.shown.emit()
 
 

@@ -684,6 +684,43 @@ class TestSelectedTextSize:
             pytest.approx(rows_before)
         )
 
+    def test_a_narrow_bar_uses_pictures_with_tooltips_and_still_works(
+        self, qgis_app, page
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        from nika_onlymap_exporter.ui import theme
+
+        pane, layout, items = page
+        title = items["title"]
+        # Themed, as in the dialog: its buttons may shrink to their contents.
+        pane.setObjectName("PagePaneUnderTest")
+        theme.apply(pane)
+        pane.resize(600, 500)
+        self._select(qgis_app, layout, title)
+        words = (pane.select_button, pane.pan_button, pane.fit_button)
+        assert not any(b.property("tight") for b in words)
+        assert pane.fit_button.text() == "Fit page"
+        pane.resize(300, 500)
+        _settle(qgis_app, 0.1)
+        for button in words:
+            assert button.property("tight") is True
+            assert button.toolButtonStyle() == (
+                button.toolButtonStyle().__class__.ToolButtonIconOnly
+            )
+            assert button.toolTip()
+            assert button.accessibleName() == button.toolTip()
+        for button in pane.zoom_bar.findChildren(QToolButton):
+            if button.isVisibleTo(pane):
+                spot = button.mapTo(pane, button.rect().topLeft())
+                assert spot.x() >= 0 and spot.x() + button.width() <= pane.width()
+        base = title.textFormat().size()
+        pane.text_bigger_button.click()
+        assert title.textFormat().size() == pytest.approx(base + 1)
+        pane.resize(600, 500)
+        _settle(qgis_app, 0.1)
+        assert not any(b.property("tight") for b in words)
+
     def test_the_size_has_limits(self, qgis_app, page) -> None:
         pane, layout, items = page
         title = items["title"]

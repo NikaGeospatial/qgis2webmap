@@ -3738,6 +3738,78 @@ class TestPanel:
         finally:
             dialog.close()
 
+    def test_page_section_groups_the_browser_only_fields(
+        self, qgis_app, project
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            cartograph = dialog._cartograph
+            section = cartograph.page_section
+            assert section.header.text() == "Browser appearance"
+            note = cartograph.page_page_note
+            assert "web page" in note.text()
+            assert "not the layout preview" in note.text()
+            body = section.body_layout
+            positions = {
+                body.itemAt(i).widget() or body.itemAt(i).layout(): i
+                for i in range(body.count())
+            }
+            fields = [item for item in positions if not hasattr(item, "text")]
+            assert fields
+            assert positions[note] < min(positions[f] for f in fields)
+            assert cartograph.cartograph_preview_button.text() == "Preview in browser"
+        finally:
+            dialog.close()
+
+    def test_each_tab_has_one_scrolling_surface_in_the_smallest_window(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QScrollArea
+
+        from nika_onlymap_exporter.core.export_ir import FidelityItem, FidelityStatus
+        from nika_onlymap_exporter.core.fidelity_summary import summarise
+        from nika_onlymap_exporter.ui.main_dialog import (
+            MINIMUM_DIALOG_HEIGHT,
+            MINIMUM_DIALOG_WIDTH,
+        )
+
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph.layout_combo.setCurrentText("Survey")
+            dialog.show()
+            rows = [
+                FidelityItem(f"Symbology {n}", FidelityStatus.APPROXIMATED, "x.", "r")
+                for n in range(8)
+            ]
+            dialog._fidelity_page.show_summary(summarise(rows, {"r": "roads"}))
+            for size in ((MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT), (1000, 520)):
+                dialog.resize(*size)
+                for index in range(cartograph.panel_tabs.count()):
+                    cartograph.panel_tabs.setCurrentIndex(index)
+                    for _ in range(20):
+                        qgis_app.processEvents()
+                    surfaces = [
+                        area
+                        for area in dialog.findChildren(QScrollArea)
+                        if area.isVisible()
+                        and area.height() > 40
+                        and area.verticalScrollBar().maximum() > 0
+                    ]
+                    assert len(surfaces) <= 1, (size, index, len(surfaces))
+            dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+            for _ in range(20):
+                qgis_app.processEvents()
+            status = cartograph.cartograph_status_label
+            assert status.isVisible()
+            spot = status.mapTo(dialog, status.rect().bottomLeft())
+            assert 0 <= spot.y() <= dialog.height()
+            assert not cartograph.panel_scroll.isAncestorOf(status)
+        finally:
+            dialog.close()
+
     def test_the_tabs_keep_room_in_a_short_window(self, qgis_app, project) -> None:
         from nika_onlymap_exporter.ui.cartograph.controller import (
             PANEL_TABS_MIN_HEIGHT,
