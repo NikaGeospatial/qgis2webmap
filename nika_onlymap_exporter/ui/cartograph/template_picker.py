@@ -338,7 +338,7 @@ def _preview_box(card_width: int, list_height: int, tall: bool = False) -> QSize
         width = max(_MIN_BOX_WIDTH // 2, round(card_width * 0.34))
         height = min(round(width * _PAGE_ASPECT), cap)
         return QSize(round(height / _PAGE_ASPECT), height)
-    width = max(_MIN_BOX_WIDTH, min(RENDER_WIDTH, round(card_width * 0.46)))
+    width = max(_MIN_BOX_WIDTH, min(RENDER_WIDTH, round(card_width * 0.54)))
     height = round(width / _PAGE_ASPECT)
     if height > cap:
         height = cap
@@ -463,6 +463,18 @@ class _TemplateRow(QFrame):
         self.includes.setVisible(False)
         self.supports.setVisible(False)
         self.crowded.setVisible(False)
+        self.preview_button = QPushButton(tr("Preview"), self.text)
+        self.preview_button.setProperty("role", "secondary")
+        self.preview_button.setAutoDefault(False)
+        # The list's Space key opens the selected preview. Ten extra Tab
+        # stops, including offscreen cards, would make the picker harder.
+        self.preview_button.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.preview_button.setToolTip(f"{tr('Preview')} (Space)")
+        self.preview_button.setAccessibleDescription(tr(template.name))
+        self.preview_button.clicked.connect(
+            lambda: picker.open_large_preview(self.template_id)
+        )
+        text.addWidget(self.preview_button, 0, Qt.AlignmentFlag.AlignLeft)
         text.addStretch(1)
         self.cues = CardCues()
         self.set_cues(declared_cues(template))
@@ -874,6 +886,17 @@ class _ViewportWatcher(QObject):
         return False
 
 
+class _TemplateList(QListWidget):
+    preview_requested = pyqtSignal()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.key() == Qt.Key.Key_Space and not event.modifiers():
+            self.preview_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class TemplatePicker(QDialog):
     """The modal template picker. After `exec()` accepts, `template_id`,
     `page_size` and `orientation` hold the choice.
@@ -1071,7 +1094,10 @@ class TemplatePicker(QDialog):
 
         # The designs as cards: one column on a narrow dialog, two or three
         # side by side on a wide one (`_relayout`). Only the list scrolls.
-        self.template_list = QListWidget(self)
+        self.template_list = _TemplateList(self)
+        self.template_list.preview_requested.connect(
+            lambda: self.open_large_preview(self.template_id)
+        )
         self.template_list.setProperty("role", "templateList")
         self.template_list.setAccessibleName(tr("Layout templates"))
         self.template_list.setViewMode(QListView.ViewMode.ListMode)
@@ -1202,6 +1228,38 @@ class TemplatePicker(QDialog):
         button = self.filter_buttons.get(key)
         if button is not None:
             button.setChecked(True)
+
+    def open_large_preview(self, template_id: str) -> None:
+        """Inspect a page; no layout is created and no setting is saved."""
+        from .template_preview_dialog import TemplatePreviewDialog
+
+        self.choose(template_id)
+        key = self._key(template_id)
+        self._timer.stop()
+        self._scroll_rest.stop()
+        self._cancel_inflight()
+
+        def render(width: int):
+            with preview_framing(key[7]):
+                return self._render(
+                    template_id, key[1], key[2], width, figures=key[5], sizes=key[6]
+                )
+
+        template = self._templates[template_id]
+        preview = TemplatePreviewDialog(
+            tr(template.name),
+            tr(template.description),
+            f"{self.page_combo.currentText()} · {self.orientation_combo.currentText()}",
+            render,
+            self,
+        )
+        try:
+            preview.show()
+            preview.start()
+            preview.exec()
+        finally:
+            preview.deleteLater()
+            self._reprioritise()
 
     def accept(self) -> None:
         self._timer.stop()

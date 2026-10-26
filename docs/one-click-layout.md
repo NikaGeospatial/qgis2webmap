@@ -75,9 +75,9 @@ layout preview, or pick the sizes here before creating it.
   open-data licences require them. *Best for: pasting into a report, slide or web page.*
 - **Caption** - a report figure: the map with a caption under it (the title
   as a bold lead, then the project's abstract), the scale bar and the source. *Best for: reports and papers that caption their figures.*
-- **After Hours** - a dark page with the map to the edges; the title, legend
-  and scale bar sit on solid dark panels, so they stay readable whatever the
-  map's colours. *Best for: dark-room screens and projected displays.*
+- **After Hours** - a dark page with an uninterrupted map. Its heading,
+  legend and scale have their own space, so a dense key never covers the
+  terrain. The legend fits beside or below the map at a readable size. *Best for: dark-room screens and projected displays.*
 
 **Characterful**
 
@@ -116,6 +116,11 @@ The panels' text comes from the project: the title from **Project Properties
 author from **Metadata**. Templates never put stand-in text on the page: until
 there is an abstract, a design leaves its text panel out and gives the map the
 room.
+
+Each card has **Preview** to inspect a larger page before creating it. You
+can also select a design in the list and press **Space**. Only that page is
+rendered at the inspection size; closing it creates no layout and saves no
+settings.
 
 **Map framing** controls how the canvas view fits the template. **Fill frame
 (crop edges)** fills the main map frame and trims projected raster boundaries
