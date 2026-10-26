@@ -74,7 +74,7 @@ class TestSmoothingFromTheFrameCard:
     def test_only_continuous_rasters_are_offered_and_only_for_the_chosen_map(
         self, qgis_app, project, tmp_path
     ) -> None:
-        dialog, cartograph, layout, maps, smooth, classes = _setup(project, tmp_path)
+        dialog, cartograph, _layout, maps, smooth, classes = _setup(project, tmp_path)
         try:
             card = cartograph.frames_list.card(maps["main"].uuid())
             _open_actions(qgis_app, card).close()
@@ -117,7 +117,7 @@ class TestSmoothingFromTheFrameCard:
     def test_a_map_with_no_continuous_raster_has_no_entry(
         self, qgis_app, project, tmp_path
     ) -> None:
-        dialog, cartograph, layout, maps, _smooth, classes = _setup(project, tmp_path)
+        dialog, cartograph, _layout, maps, _smooth, classes = _setup(project, tmp_path)
         try:
             maps["inset"].setLayers([classes])
             card = cartograph.frames_list.card(maps["inset"].uuid())
