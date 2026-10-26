@@ -2077,7 +2077,8 @@ class MainDialog(QDialog):
                 layer_item.setHidden(False)
                 for child_index in range(layer_item.childCount()):
                     layer_item.child(child_index).setHidden(False)
-                layer_item.setExpanded(layer_id in saved)
+                if self._expanded_before_search is not None:
+                    layer_item.setExpanded(layer_id in saved)
                 continue
 
             name_match = needle in _search_key(layer_item.text(0))
