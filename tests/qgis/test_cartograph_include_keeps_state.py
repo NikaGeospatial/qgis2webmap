@@ -184,6 +184,28 @@ class TestLegendSurvivesInclude:
         again = [n.name() for n in rich.legend.model().rootGroup().findLayers()]
         assert again == names
 
+    def test_every_legend_property_of_the_node_comes_back(self, rich, dialog) -> None:
+        # A continuous raster whose ramp rows are hidden carries
+        # `legend/node-order` = "empty"; losing it brings the rows back.
+        node = le._node_for(rich.legend, rich.elevation.id())
+        node.setCustomProperty("legend/node-order", "empty")
+        node.setCustomProperty("legend/example-extra", "kept")
+
+        def properties(layer):
+            found = le._node_for(rich.legend, layer.id())
+            return {key: found.customProperty(key) for key in found.customProperties()}
+
+        before = {
+            layer.id(): properties(layer) for layer in (rich.sites, rich.elevation)
+        }
+        _toggle(dialog, ELEVATION)
+        _toggle(dialog, SITES)
+        after = {
+            layer.id(): properties(layer) for layer in (rich.sites, rich.elevation)
+        }
+        assert after == before
+        assert after[rich.elevation.id()]["legend/node-order"] == "empty"
+
 
 class TestMapStylingSurvivesInclude:
     def test_smoothing_and_suppressed_labels_come_back(self, rich, dialog) -> None:
