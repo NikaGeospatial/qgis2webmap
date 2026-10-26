@@ -178,6 +178,7 @@ def write_cartograph_html(
     if has_live:
         # Inert until the core loader is set (see the module docstring).
         body = (
+            f"{LOADING_MARKUP}"
             f'<template id="{_TEMPLATE_ID}">{sheet}</template>\n'
             f'<noscript><p style="font:16px sans-serif;margin:2em">'
             f"{html.escape(NOSCRIPT_MESSAGE)}</p></noscript>\n"
@@ -197,7 +198,7 @@ def write_cartograph_html(
         "<head>\n"
         '<meta charset="utf-8">\n'
         f"<title>{title}</title>\n"
-        f"<style>{css}\n{FIT_PAGE_CSS}</style>\n"
+        f"<style>{css}\n{FIT_PAGE_CSS}{LOADING_CSS}</style>\n"
         "</head>\n"
         '<body style="margin:0">\n'
         f"{body}"
@@ -214,6 +215,53 @@ def write_cartograph_html(
 #: drawn; the property is inherited, so it reaches the runtime's shadow trees.
 PRINT_COLOURS_CSS = "html{print-color-adjust:exact;-webkit-print-color-adjust:exact}"
 
+
+#: A large live page can keep the browser busy for a minute or more before it
+#: draws anything, and until then the page is blank. So a small notice is
+#: written into the HTML ahead of the data: the browser paints it as soon as
+#: it has parsed that far, before any script runs. The page script removes it
+#: when every map has settled; if that takes longer than the budget of
+#: *free* time (stretches where the page was blocked do not count, so the
+#: message is not shown merely because the browser was busy), it says so
+#: plainly instead. Screen only: CSS hides it in print, and an inline script
+#: drops it from the `?print=`, `?export=` and `?atlas=` routes, whose output
+#: is captured from the sheet and must not carry it.
+LOADING_ATTRIBUTE = "data-qgis2webmap-loading"
+LOADING_TEXT = "Loading map\u2026"
+LOADING_SLOW_TEXT = (
+    "This map is large and is taking a long time to draw. Keep waiting, "
+    "or open it on a computer with a graphics card."
+)
+LOADING_BUDGET_MS = 20000
+LOADING_CSS = (
+    "@media screen{"
+    f"[{LOADING_ATTRIBUTE}]{{position:fixed;left:50%;top:12px;"
+    "transform:translateX(-50%);max-width:min(90vw,34em);z-index:2147483645;"
+    "box-sizing:border-box;padding:8px 14px;border-radius:6px;"
+    "font:13px/1.4 system-ui,sans-serif;color:#2a1f2d;"
+    "background:rgba(255,255,255,.94);border:1px solid #bbb;"
+    "box-shadow:0 1px 6px rgba(0,0,0,.18);pointer-events:none}"
+    f"[{LOADING_ATTRIBUTE}]::before{{content:'';display:inline-block;"
+    "width:10px;height:10px;margin-right:8px;vertical-align:-1px;"
+    "border:2px solid #bbb;border-top-color:#6d5b72;border-radius:50%;"
+    "animation:q2w-loading-spin 1s linear infinite}"
+    f"[{LOADING_ATTRIBUTE}][data-slow]::before{{display:none}}"
+    "@keyframes q2w-loading-spin{to{transform:rotate(360deg)}}"
+    "@media (prefers-reduced-motion:reduce){"
+    f"[{LOADING_ATTRIBUTE}]::before{{animation:none}}}}"
+    "}"
+    f"@media print{{[{LOADING_ATTRIBUTE}]{{display:none!important}}}}"
+)
+LOADING_MARKUP = (
+    f'<div {LOADING_ATTRIBUTE} role="status" data-om-carto-screen-only>'
+    f"<span>{html.escape(LOADING_TEXT)}</span></div>\n"
+    "<script>if (['print', 'export', 'atlas'].some((name) =>"
+    " new URLSearchParams(location.search).has(name))) {"
+    f" document.querySelector('[{LOADING_ATTRIBUTE}]').remove(); }}</script>\n"
+    # Without JavaScript nothing would ever remove it.
+    f"<noscript><style>[{LOADING_ATTRIBUTE}]{{display:none!important}}</style>"
+    "</noscript>\n"
+)
 
 #: A page is laid out at its true size (A3 landscape is 1587 x 1123 px), which
 #: is taller than most windows, so a screen opened with the sheet cut off and
@@ -395,6 +443,7 @@ def _render_script(
     # what makes the Share menu's Export PDF/PNG work at all.
     lines += _RASTER_GATE
     lines.append("carto.installUrlActions();")
+    lines += _LOADING_WATCH
     lines += _ATLAS_ACTIONS
     indent = "\n      "
     return indent + indent.join(lines) + "\n    "
@@ -484,6 +533,41 @@ _RASTER_GATE = [
     "    await frame();",
     "    if (rasters.lastRead === before && !rasters.failed.length) return null;",
     "  }",
+    "}",
+]
+
+
+#: Removes the loading notice once every map has settled, or swaps its text for
+#: the slow-draw message after `LOADING_BUDGET_MS` of free time. The ticks
+#: count only stretches where the page was able to run (a tick that arrives
+#: late means the thread was blocked, or the tab was hidden), and a test may
+#: shorten the budget with `window.qgis2webmapLoadingBudgetMs`.
+_LOADING_WATCH = [
+    f"const loadingNote = document.querySelector('[{LOADING_ATTRIBUTE}]');",
+    "if (loadingNote) {",
+    "  const loadingSheet = document.querySelector('om-cartograph');",
+    "  const BUDGET = Number(window.qgis2webmapLoadingBudgetMs)",
+    f"    || {LOADING_BUDGET_MS};",
+    "  const TICK_MS = 250;",
+    "  let free = 0;",
+    "  let last = performance.now();",
+    "  const timer = setInterval(() => {",
+    "    const now = performance.now();",
+    "    if (now - last < TICK_MS * 3) free += now - last;",
+    "    last = now;",
+    "    if (free >= BUDGET && !loadingNote.hasAttribute('data-slow')) {",
+    "      loadingNote.setAttribute('data-slow', '');",
+    "      loadingNote.firstElementChild.textContent =",
+    f"        {json.dumps(LOADING_SLOW_TEXT)};",
+    "    }",
+    "  }, TICK_MS);",
+    "  const finish = () => { clearInterval(timer); loadingNote.remove(); };",
+    "  const EVER = 2 ** 31 - 1;",
+    "  (async () => {",
+    "    await carto.whenPageReady(loadingSheet, EVER);",
+    "    await Promise.all([...loadingSheet.querySelectorAll('om-map')].map(",
+    "      (map) => map.whenSettled?.({ timeout: EVER })));",
+    "  })().then(finish, finish);",
     "}",
 ]
 

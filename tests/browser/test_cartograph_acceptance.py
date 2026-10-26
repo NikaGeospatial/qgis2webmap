@@ -1316,3 +1316,103 @@ class TestBrowserPreviewFollowsTheLayout:
         url = f"http://127.0.0.1:{server.port}{PAGE_PATH}?export=png&dpi=96"
         with urllib.request.urlopen(url, timeout=10) as response:
             assert "EventSource" not in response.read().decode()
+
+
+_LOADING = "[data-qgis2webmap-loading]"
+
+#: Makes the page's maps slow to settle: every `whenSettled` waits for
+#: `window.__releaseSettle()` first, and the page's patience is cut to 1.5 s.
+_SLOW_SETTLE = """
+window.qgis2webmapLoadingBudgetMs = 1500;
+window.__holdSettle = new Promise((resolve) => {
+  window.__releaseSettle = resolve;
+});
+const defineElement = customElements.define.bind(customElements);
+customElements.define = (name, constructor, options) => {
+  if (name === 'om-map' && constructor.prototype.whenSettled) {
+    const original = constructor.prototype.whenSettled;
+    constructor.prototype.whenSettled = async function (...args) {
+      await window.__holdSettle;
+      return original.apply(this, args);
+    };
+  }
+  defineElement(name, constructor, options);
+};
+"""
+
+
+class TestLoadingNotice:
+    """A heavy page says it is loading, then says it is slow, never lingers."""
+
+    def test_it_is_in_the_html_before_the_data(self, fixtures: Path) -> None:
+        html = (fixtures / "story-live.html").read_text(encoding="utf-8")
+        assert html.index("data-qgis2webmap-loading") < html.index("<template")
+
+    def test_a_static_page_has_none(self, fixtures: Path) -> None:
+        html = (fixtures / "survey-static.html").read_text(encoding="utf-8")
+        assert "<div data-qgis2webmap-loading" not in html
+
+    def test_a_page_that_settles_shows_no_notice_afterwards(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        _open(page, fixtures / "story-live.html")
+        page.wait_for_selector(_LOADING, state="detached", timeout=60_000)
+        assert page.locator(_LOADING).count() == 0
+
+    def test_a_slow_page_says_loading_then_that_it_is_slow_then_clears(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_SLOW_SETTLE)
+        page.goto((fixtures / "story-live.html").as_uri())
+        note = page.locator(_LOADING)
+        note.wait_for(state="visible", timeout=30_000)
+        assert "Loading map" in note.inner_text()
+        assert "taking a long time" not in note.inner_text()
+        page.wait_for_function(
+            "(s) => document.querySelector(s)?.hasAttribute('data-slow')",
+            arg=_LOADING,
+            timeout=30_000,
+        )
+        text = note.inner_text()
+        assert "taking a long time to draw" in text
+        assert "graphics card" in text
+        # An overlay: the sheet does not move when it appears or goes.
+        before = page.evaluate(_SHEET_RECT)
+        page.evaluate("() => window.__releaseSettle()")
+        page.wait_for_selector(_LOADING, state="detached", timeout=60_000)
+        assert page.evaluate(_SHEET_RECT) == before
+
+    def test_time_the_page_was_blocked_does_not_count(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_SLOW_SETTLE)
+        page.goto((fixtures / "story-live.html").as_uri())
+        page.locator(_LOADING).wait_for(state="visible", timeout=30_000)
+        # Blocked for longer than the whole budget: that is not free time.
+        page.evaluate(
+            "() => { const end = Date.now() + 2500; while (Date.now() < end); }"
+        )
+        assert not page.evaluate(
+            "(s) => document.querySelector(s).hasAttribute('data-slow')", _LOADING
+        )
+
+    def test_it_is_not_printed(self, page, fixtures: Path) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_SLOW_SETTLE)
+        page.goto((fixtures / "story-live.html").as_uri())
+        page.locator(_LOADING).wait_for(state="visible", timeout=30_000)
+        page.emulate_media(media="print")
+        assert page.locator(_LOADING).is_hidden()
+
+    @pytest.mark.parametrize("query", ["?print=1", "?export=png&dpi=96", "?atlas=zip"])
+    def test_the_output_routes_never_have_it(
+        self, page, fixtures: Path, query: str
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_SLOW_SETTLE)
+        page.goto((fixtures / "story-live.html").as_uri() + query)
+        page.wait_for_selector("om-cartograph", state="attached", timeout=30_000)
+        assert page.locator(_LOADING).count() == 0
