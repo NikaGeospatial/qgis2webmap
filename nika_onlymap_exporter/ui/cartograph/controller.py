@@ -250,6 +250,10 @@ class CartographController:
         # disk) leaves it behind, so an action never opens an older file.
         self._edits_made = 0
         self._edits_saved = 0
+        # The user asked for a check and no build has answered yet; and the
+        # report state the Checks tab and strip were last drawn for.
+        self._check_requested = False
+        self._shown_report_state: ReportState | None = None
         self._loading_page = False
         self._colour_vision: AccessibilityDialog | None = None
         self._legend_entries: tuple[LegendEntry, ...] = ()
@@ -1381,6 +1385,7 @@ class CartographController:
         self._edits_made += 1
         self._autosave_timer.start()
         self._update_status_label()
+        self._sync_report_display()
 
     def _run_autosave(self) -> None:
         """The debounce timer's slot. Never lets an exception escape: from a
@@ -1412,7 +1417,9 @@ class CartographController:
         runtime = self._load_runtime()
         if runtime is None:
             self._cancel_waiting_pages()
+            self._check_requested = False
             self._update_status_label()
+            self._sync_report_display()
             return
 
         path = Path(path_text)
@@ -1459,6 +1466,7 @@ class CartographController:
         # The Layers tab's popup and label choices, copied: the worker must
         # not read state the GUI thread may be editing.
         layers = copy.deepcopy(dict(self.state.layers))
+        self._built_layers_signature = self._layers_signature()
         # The live project's part of reading each frame's layers, still on
         # this thread; the worker finishes it from the snapshot.
         try:
@@ -1552,7 +1560,9 @@ class CartographController:
             self._last_error = tr("Could not save the cartograph: {error}").format(
                 error=str(exc)
             )
+            self._check_requested = False
             self._update_status_label()
+            self._sync_report_display()
             return
         if not current:
             # Saved for a layout (or file) no longer on screen: its own file is
@@ -1561,6 +1571,7 @@ class CartographController:
             self._update_status_label()
             return
         self._last_error = ""
+        self._check_requested = False
         self._edits_saved = max(
             self._edits_saved, self._edits_made if edits is None else edits
         )
@@ -1612,7 +1623,9 @@ class CartographController:
         self._last_error = tr("Could not build the cartograph: {message}").format(
             message=message
         )
+        self._check_requested = False
         self._update_status_label()
+        self._sync_report_display()
 
     def _is_current_build(self, path: Path, built_for: str | None) -> bool:
         """Whether a finished build is for the layout and file now selected."""
@@ -1719,17 +1732,79 @@ class CartographController:
         panel = self.dialog.fidelity_panel
         strip = self.dialog.fidelity_strip
         self._update_checks_summary()
-        if self._last_summary is None:
+        state = self._report_state()
+        self._shown_report_state = state
+        summary = self._last_summary
+        if state is ReportState.FAILED:
+            panel.show_error(
+                self._last_error,
+                why=tr(
+                    "{message}\n\nThe full error is in the QGIS message log. "
+                    "Nothing about the cartograph is known until a check "
+                    "finishes, so none of it is shown as a verdict."
+                ).format(message=self._last_error),
+            )
+        elif state is ReportState.CHECKING:
+            panel.show_checking()
+        elif summary is None:
             panel.show_not_checked()
-            strip.show_message(
-                strip_message(ReportState.NOT_CHECKED, tr=tr, plural=plural)
+        else:
+            panel.show_summary(summary)
+            panel.set_out_of_date(state is ReportState.OUT_OF_DATE)
+        strip.show_message(
+            strip_message(
+                state,
+                summary,
+                self._last_error,
+                tr=tr,
+                plural=plural,
+            )
+        )
+
+    def _report_state(self) -> ReportState:
+        """Where the cartograph's report stands: failed, being checked, not
+        there yet, older than the edits made, or current."""
+        if self._last_error:
+            return ReportState.FAILED
+        building = self._job is not None or self._autosave_timer.isActive()
+        if self._check_requested and building:
+            return ReportState.CHECKING
+        if self._last_summary is None:
+            return ReportState.NOT_CHECKED
+        if self._edits_saved < self._edits_made:
+            return ReportState.OUT_OF_DATE
+        return ReportState.CURRENT
+
+    def _sync_report_display(self) -> None:
+        """Redraw the Checks tab and strip when the report's state changed,
+        not on every edit: drawing a report rebuilds its list."""
+        if self.state.output is not DialogOutput.CARTOGRAPH:
+            return
+        if self._report_state() is not self._shown_report_state:
+            self.show_fidelity()
+
+    def check_now(self) -> None:
+        """The Checks tab's and strip's "Check now" / "Try again" / "Check
+        again": rebuild the selected layout now and show that result. A
+        cartograph is checked by saving it, so this is a save that does not
+        wait for the debounce."""
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout) or not self.file_edit.text().strip():
+            self.dialog.status_label.setText(
+                tr("Choose a print layout first - there is nothing to check yet.")
             )
             return
-        panel.show_summary(self._last_summary)
-        panel.set_out_of_date(False)
-        strip.show_message(
-            strip_message(ReportState.CURRENT, self._last_summary, tr=tr, plural=plural)
-        )
+        self._last_error = ""
+        self._check_requested = True
+        self.schedule_autosave()
+        self._autosave_timer.stop()
+        self._run_autosave()
+        self._sync_report_display()
+
+    @property
+    def report_needs_check(self) -> bool:
+        """Whether the Checks tab offers a check rather than a report."""
+        return self._report_state() is not ReportState.CURRENT
 
     # ---- Corner: Accessibility, Preview, Share ----------------------------
 
@@ -1920,7 +1995,7 @@ class CartographController:
         # run yet) count as edits made.
         self.sync_layer_settings()
         needed = self._edits_made
-        if self._edits_saved >= needed:
+        if self._edits_saved >= needed and self._job is None:
             self._clear_footer()
             self._open_url(self._page_url(path, query))
             return

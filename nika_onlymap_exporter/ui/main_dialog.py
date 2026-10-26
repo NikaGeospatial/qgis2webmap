@@ -2620,7 +2620,7 @@ class MainDialog(QDialog):
         # The page itself lives in `fidelity_panel`. The dialog owns reading the
         # project and where a jump lands, so those are wired here.
         self.fidelity_panel = FidelityPanel(self)
-        self.fidelity_panel.check_requested.connect(self._check_fidelity)
+        self.fidelity_panel.check_requested.connect(self._on_check_requested)
         self.fidelity_panel.show_layer_requested.connect(self._show_layer_in_list)
         self.fidelity_panel.show_tab_requested.connect(self._show_tab)
         return self.fidelity_panel
@@ -2738,6 +2738,15 @@ class MainDialog(QDialog):
         if not self._fidelity_is_stale or self._fidelity_state is ReportState.CHECKING:
             return
         self._check_fidelity()
+
+    def _on_check_requested(self) -> None:
+        """The panel's Check now / Try again / Check again, for the output on
+        screen: the Web map reads the project, a Cartograph rebuilds the
+        selected layout."""
+        if self._web_fidelity_on_screen():
+            self._check_fidelity()
+        else:
+            self._cartograph.check_now()
 
     def _check_fidelity(self) -> None:
         """Read the project for a fresh report, or show a cached one."""
@@ -3666,10 +3675,10 @@ class MainDialog(QDialog):
         # else the strip offers is reading, which happens on the Fidelity tab.
         if not self._web_fidelity_on_screen():
             # A cartograph is checked by saving it.
-            if self._cartograph.has_report:
+            if self._cartograph.has_report and not self._cartograph.report_needs_check:
                 self._show_fidelity_tab()
             else:
-                self._cartograph.schedule_autosave()
+                self._cartograph.check_now()
             return
         if self._fidelity_state in (ReportState.NOT_CHECKED, ReportState.OUT_OF_DATE):
             self._check_fidelity()

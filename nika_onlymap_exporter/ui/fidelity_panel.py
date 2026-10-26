@@ -553,7 +553,7 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
                 tr("Reading the project to see what the export changes."),
             )
 
-    def show_error(self, message: str) -> None:
+    def show_error(self, message: str, why: str | None = None) -> None:
         """Why the check did not finish. Never a verdict: a crash in the report
         says nothing about the map, and showing it as "Blocked" said it did."""
         self._summary = None
@@ -563,11 +563,12 @@ class FidelityPanel(QWidget):  # type: ignore[misc, unused-ignore]
         self.map_facts.setVisible(False)
         self._update_filter_counts()
         self.tree.clear()
-        why = tr(
-            "The project could not be read: {message}\n\nThe full error is in "
-            "the QGIS message log. Nothing about the map is known until a "
-            "check finishes, so none of it is shown as a verdict."
-        ).format(message=message)
+        if why is None:
+            why = tr(
+                "The project could not be read: {message}\n\nThe full error is in "
+                "the QGIS message log. Nothing about the map is known until a "
+                "check finishes, so none of it is shown as a verdict."
+            ).format(message=message)
         # The narrow list has no detail pane to point at, so it says why itself.
         self._placeholder_row(
             tr("Check failed"), tr("See the detail for why."), compact_text=why
