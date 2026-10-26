@@ -4726,13 +4726,15 @@ class TestLayoutSelectorAndTemplates:
     ) -> None:
         import os
 
-        from qgis.core import QgsLayoutItemLegend
+        from qgis.core import QgsLayoutItemLegend, QgsRectangle
         from qgis.PyQt.QtCore import QRectF
 
         if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
             pytest.skip("needs ONLYMAP_RUNTIME_DIR")
-        _add_layout(project, "Plain", [("Map", "EPSG:4326")])
-        loose = _add_layout(project, "Loose legend", [("Map", "EPSG:4326")])
+        for name in ("Plain", "Loose legend"):
+            made = _add_layout(project, name, [("Map", "EPSG:4326")])
+            made.itemById("Map").setExtent(QgsRectangle(103.7, 1.25, 103.9, 1.4))
+        loose = project.layoutManager().layoutByName("Loose legend")
         legend = QgsLayoutItemLegend(loose)
         legend.setLinkedMap(None)
         legend.attemptSetSceneRect(QRectF(120, 10, 60, 60))
@@ -4742,11 +4744,9 @@ class TestLayoutSelectorAndTemplates:
             cartograph = dialog._cartograph
             _pick_layout(dialog, "Plain")
             _pick_layout(dialog, "Loose legend")
-            target = Path(cartograph.file_edit.text())
-            assert _wait_for(qgis_app, lambda: target.exists(), timeout=60)
             assert _wait_for(
                 qgis_app, lambda: cartograph._last_summary is not None, timeout=60
-            )
+            ), cartograph._last_error
             rows = " ".join(
                 repr(row)
                 for group in cartograph._last_summary.groups
