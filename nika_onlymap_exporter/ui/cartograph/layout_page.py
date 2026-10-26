@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
     QEvent,
     QObject,
@@ -60,6 +61,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..i18n import plural, tr
+from .item_text_size import step_text_size, text_size_points
 
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
@@ -211,6 +213,8 @@ class LayoutPreview(QStackedWidget):
 
     from_canvas_requested = pyqtSignal()
     import_requested = pyqtSignal()
+    # The selection changed, or an item in it was edited.
+    selection_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -290,10 +294,39 @@ class LayoutPreview(QStackedWidget):
             self.view.setCurrentLayout(layout)
             self._select = QgsLayoutViewToolSelect(self.view)
             self._select.setLayout(layout)
+            layout.selectionChanged.connect(self._on_selection_changed)
+            # An undo or redo may change the selected item's text size.
+            layout.undoStack().stack().indexChanged.connect(self._on_selection_changed)
             self.set_select_mode(self._select_mode)
             self._user_zoomed = False
         self.setCurrentWidget(self.view)
         self._fit_timer.start()
+
+    def _on_selection_changed(self, *_args: object) -> None:
+        # Only the layout on show matters; one left behind may still emit.
+        if not sip.isdeleted(self):
+            self.selection_changed.emit()
+
+    def text_item(self):  # QgsLayoutItem | None
+        """The one selected item whose text size can be stepped, if any."""
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return None
+        chosen = layout.selectedLayoutItems()
+        if len(chosen) != 1 or text_size_points(chosen[0]) is None:
+            return None
+        return chosen[0]
+
+    def step_text_size(self, bigger: bool) -> bool:
+        """The selected item's text one step bigger or smaller, as an undo
+        step on the layout. The page keeps its zoom and scroll."""
+        layout = self.view.currentLayout()
+        item = self.text_item()
+        if layout is None or item is None:
+            return False
+        changed = step_text_size(layout, item, bigger)
+        self.selection_changed.emit()
+        return changed
 
     def showing_page(self) -> bool:
         return self.currentWidget() is self.view
@@ -525,6 +558,32 @@ class PagePane(QWidget):
         self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
         self.fit_button.clicked.connect(self.preview.fit_page)
         bar.addWidget(self.fit_button)
+        # Text size of the selected title, note or legend: shown only then.
+        self.text_size_bar = QWidget(self.zoom_bar)
+        text_row = QHBoxLayout(self.text_size_bar)
+        text_row.setContentsMargins(8, 0, 0, 0)
+        text_row.setSpacing(4)
+        self.text_smaller_button = self._bar_button(
+            "A\N{MINUS SIGN}", tr("Smaller text in the selected item")
+        )
+        self.text_bigger_button = self._bar_button(
+            "A+", tr("Bigger text in the selected item")
+        )
+        self.text_size_label = QLabel(self.text_size_bar)
+        self.text_size_label.setProperty("role", "hint")
+        self.text_size_label.setMinimumWidth(40)
+        self.text_size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        text_row.addWidget(self.text_smaller_button)
+        text_row.addWidget(self.text_size_label)
+        text_row.addWidget(self.text_bigger_button)
+        self.text_smaller_button.clicked.connect(
+            lambda: self.preview.step_text_size(False)
+        )
+        self.text_bigger_button.clicked.connect(
+            lambda: self.preview.step_text_size(True)
+        )
+        self.text_size_bar.setVisible(False)
+        bar.addWidget(self.text_size_bar)
         bar.addStretch(1)
         self.zoom_out_button = self._bar_button("\N{MINUS SIGN}", tr("Zoom out"))
         self.zoom_out_button.clicked.connect(self.preview.zoom_out)
@@ -540,6 +599,7 @@ class PagePane(QWidget):
         column.addWidget(self.zoom_bar)
 
         self.preview.view.zoomLevelChanged.connect(self._show_zoom)
+        self.preview.selection_changed.connect(self._show_text_size)
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
 
@@ -576,7 +636,15 @@ class PagePane(QWidget):
         self.changes_link.setVisible(showing and self._change_count > 0)
         self.editor_link.setVisible(showing)
         self.zoom_bar.setVisible(showing)
+        self._show_text_size()
         self._show_zoom()
+
+    def _show_text_size(self) -> None:
+        item = self.preview.text_item()
+        size = text_size_points(item) if item is not None else None
+        self.text_size_bar.setVisible(size is not None and self.zoom_bar.isVisible())
+        if size is not None:
+            self.text_size_label.setText(tr("{size} pt").format(size=f"{size:g}"))
 
     def _show_zoom(self, *_args: object) -> None:
         # 100% is the page at its real size on this screen, as QGIS's own

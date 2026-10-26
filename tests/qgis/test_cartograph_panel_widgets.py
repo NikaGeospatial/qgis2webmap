@@ -362,46 +362,47 @@ def _hover(qgis_app, pane, point) -> None:
         qgis_app.processEvents()
 
 
+@pytest.fixture
+def page(qgis_app, project):
+    from qgis.core import (
+        QgsLayoutItemLabel,
+        QgsLayoutItemLegend,
+        QgsLayoutItemMap,
+    )
+    from qgis.PyQt.QtCore import QRectF
+    from qgis.PyQt.QtGui import QColor
+
+    from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+    layout = _a4_layout(project)
+    items = {}
+    frame = QgsLayoutItemMap(layout)
+    frame.attemptSetSceneRect(QRectF(30, 60, 150, 100))
+    layout.addLayoutItem(frame)
+    items["map"] = frame
+    title = QgsLayoutItemLabel(layout)
+    title.setText("A title")
+    title.setBackgroundEnabled(True)
+    title.setBackgroundColor(QColor("#ccddee"))
+    title.attemptSetSceneRect(QRectF(30, 15, 120, 25))
+    layout.addLayoutItem(title)
+    items["title"] = title
+    legend = QgsLayoutItemLegend(layout)
+    legend.attemptSetSceneRect(QRectF(200, 60, 60, 40))
+    layout.addLayoutItem(legend)
+    legend.setResizeToContents(False)
+    items["legend"] = legend
+    widget = PagePane()
+    widget.resize(900, 650)
+    widget.show()
+    widget.show_layout(layout)
+    _settle(qgis_app)
+    yield widget, layout, items
+    widget.close()
+    widget.deleteLater()
+
+
 class TestResizingInThePage:
-    @pytest.fixture
-    def page(self, qgis_app, project):
-        from qgis.core import (
-            QgsLayoutItemLabel,
-            QgsLayoutItemLegend,
-            QgsLayoutItemMap,
-        )
-        from qgis.PyQt.QtCore import QRectF
-        from qgis.PyQt.QtGui import QColor
-
-        from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
-
-        layout = _a4_layout(project)
-        items = {}
-        frame = QgsLayoutItemMap(layout)
-        frame.attemptSetSceneRect(QRectF(30, 60, 150, 100))
-        layout.addLayoutItem(frame)
-        items["map"] = frame
-        title = QgsLayoutItemLabel(layout)
-        title.setText("A title")
-        title.setBackgroundEnabled(True)
-        title.setBackgroundColor(QColor("#ccddee"))
-        title.attemptSetSceneRect(QRectF(30, 15, 120, 25))
-        layout.addLayoutItem(title)
-        items["title"] = title
-        legend = QgsLayoutItemLegend(layout)
-        legend.attemptSetSceneRect(QRectF(200, 60, 60, 40))
-        layout.addLayoutItem(legend)
-        legend.setResizeToContents(False)
-        items["legend"] = legend
-        widget = PagePane()
-        widget.resize(900, 650)
-        widget.show()
-        widget.show_layout(layout)
-        _settle(qgis_app)
-        yield widget, layout, items
-        widget.close()
-        widget.deleteLater()
-
     @staticmethod
     def _select(qgis_app, layout, item) -> None:
         layout.deselectAll()
@@ -602,3 +603,95 @@ class TestPanelSectionDirection:
         assert row.indexOf(section.summary) == 1
         assert section.header.arrowType() == Qt.ArrowType.RightArrow
         parent.deleteLater()
+
+
+class TestSelectedTextSize:
+    @staticmethod
+    def _select(qgis_app, layout, item) -> None:
+        layout.deselectAll()
+        item.setSelected(True)
+        _settle(qgis_app, 0.1)
+
+    def test_the_control_shows_only_for_text_items(self, qgis_app, page) -> None:
+        pane, layout, items = page
+        title = items["title"]
+        assert pane.text_size_bar.isHidden()
+        self._select(qgis_app, layout, items["title"])
+        assert not pane.text_size_bar.isHidden()
+        base = title.textFormat().size()
+        assert pane.text_size_label.text() == f"{base:g} pt"
+        self._select(qgis_app, layout, items["legend"])
+        assert not pane.text_size_bar.isHidden()
+        self._select(qgis_app, layout, items["map"])
+        assert pane.text_size_bar.isHidden()
+        layout.deselectAll()
+        _settle(qgis_app, 0.1)
+        assert pane.text_size_bar.isHidden()
+
+    def test_a_step_is_one_undo_and_keeps_box_zoom_and_scroll(
+        self, qgis_app, page
+    ) -> None:
+        pane, layout, items = page
+        title = items["title"]
+        self._select(qgis_app, layout, title)
+        base = title.textFormat().size()
+        stack = layout.undoStack().stack()
+        view = pane.preview.view
+        box, scale, steps = title.sceneBoundingRect(), _scale(pane), stack.count()
+        scroll = (view.horizontalScrollBar().value(), view.verticalScrollBar().value())
+        pane.text_bigger_button.click()
+        _settle(qgis_app)
+        assert title.textFormat().size() == pytest.approx(base + 1)
+        assert pane.text_size_label.text() == f"{base + 1:g} pt"
+        assert stack.count() == steps + 1
+        assert title.sceneBoundingRect() == box
+        assert _scale(pane) == pytest.approx(scale)
+        assert (
+            view.horizontalScrollBar().value(),
+            view.verticalScrollBar().value(),
+        ) == scroll
+        pane.text_smaller_button.click()
+        pane.text_smaller_button.click()
+        assert title.textFormat().size() == pytest.approx(base - 1)
+        stack.undo()
+        stack.undo()
+        stack.undo()
+        assert title.textFormat().size() == pytest.approx(base)
+        assert pane.text_size_label.text() == f"{base:g} pt"
+        assert stack.count() == steps + 3
+
+    def test_the_legend_scales_all_its_levels_and_is_marked_chosen(
+        self, qgis_app, page
+    ) -> None:
+        from qgis.core import QgsLegendStyle
+
+        from nika_onlymap_exporter.core.layout_reader import chosen_style_property
+
+        pane, layout, items = page
+        legend = items["legend"]
+        self._select(qgis_app, layout, legend)
+        title_before = legend.style(QgsLegendStyle.Title).textFormat().size()
+        rows_before = legend.style(QgsLegendStyle.SymbolLabel).textFormat().size()
+        pane.text_bigger_button.click()
+        rows = legend.style(QgsLegendStyle.SymbolLabel).textFormat().size()
+        assert rows == pytest.approx(rows_before + 1)
+        assert legend.style(QgsLegendStyle.Title).textFormat().size() == pytest.approx(
+            title_before * rows / rows_before
+        )
+        assert legend.customProperty(chosen_style_property("font-size")) == rows
+        layout.undoStack().stack().undo()
+        assert legend.style(QgsLegendStyle.SymbolLabel).textFormat().size() == (
+            pytest.approx(rows_before)
+        )
+
+    def test_the_size_has_limits(self, qgis_app, page) -> None:
+        pane, layout, items = page
+        title = items["title"]
+        self._select(qgis_app, layout, title)
+        text_format = title.textFormat()
+        text_format.setSize(4)
+        title.setTextFormat(text_format)
+        steps = layout.undoStack().stack().count()
+        pane.preview.step_text_size(False)
+        assert title.textFormat().size() == pytest.approx(4)
+        assert layout.undoStack().stack().count() == steps
