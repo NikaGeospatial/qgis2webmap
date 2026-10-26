@@ -342,6 +342,9 @@ class FramesList(QWidget):
     issues_requested = pyqtSignal(str)  # item_id
     smoothing_changed = pyqtSignal(str, str, bool)  # item_id, layer id, smoothed
     actions_opening = pyqtSignal(str)  # item_id: its actions menu is opening
+    # The entries were replaced (their widgets are new); for anything that
+    # mirrors them, such as the page preview's selected-item controls.
+    cards_changed = pyqtSignal()
 
     def __init__(
         self, dpi_choices: Sequence[int], parent: QWidget | None = None
@@ -406,6 +409,7 @@ class FramesList(QWidget):
             self._cards_box.addWidget(card)
             self._cards[row.item_id] = card
         self.set_selected(self._marked)
+        self.cards_changed.emit()
 
     def update_identity(self, identities: dict[str, tuple[str, str]]) -> None:
         """Follow a rename or CRS change of maps already listed, in place.

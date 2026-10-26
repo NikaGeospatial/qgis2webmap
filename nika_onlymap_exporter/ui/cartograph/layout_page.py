@@ -66,8 +66,18 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..i18n import plural, tr
+from .item_controls import ContextControls
+from .item_placement import ItemPlacer
 from .item_text_size import step_text_size, text_size_points
-from .legend_editor import LegendEditorWindow
+from .layout_items import (
+    LINKED_KINDS,
+    ItemKind,
+    delete_items,
+    kind_title,
+    map_frames,
+    map_label,
+)
+from .legend_editor import LegendEditor
 
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
@@ -193,6 +203,9 @@ def _global_point(event: QMouseEvent) -> QPointF:
     return QPointF(event.globalPos())
 
 
+# Shorter than this, the selected item's controls rest as their header.
+_COMPACT_HEIGHT = 440
+
 # How far outside a selected item's box a corner or edge handle still reaches.
 _EDGE_REACH = 4
 
@@ -214,11 +227,15 @@ class LayoutPreview(QStackedWidget):
     selection_changed = pyqtSignal()
     # A legend on the page was double-clicked (the item, a QgsLayoutItemLegend).
     legend_edit_requested = pyqtSignal(object)
+    # An item was added with a click or drag on the page (the item), and
+    # whether the page is waiting for that click.
+    item_placed = pyqtSignal(object)
+    placing_changed = pyqtSignal(bool)
+    # An item was double-clicked in Select mode (the item).
+    item_double_clicked = pyqtSignal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._legend_editor: LegendEditorWindow | None = None
-        self.legend_edit_requested.connect(self._show_legend_editor)
         self.view = QgsLayoutView(self)
         self.view.setProperty("role", "layoutPreview")
         self._pan = QgsLayoutViewToolPan(self.view)
@@ -277,6 +294,11 @@ class LayoutPreview(QStackedWidget):
         # Not the first Tab stop: opening the dialog put the focus ring round
         # the page. A click still focuses it; the zoom bar is the keyboard's.
         self.view.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        # After the filters above, so it sees a press first while it is waiting
+        # for the click that places a new item.
+        self.placer = ItemPlacer(self.view)
+        self.placer.placed.connect(self.item_placed)
+        self.placer.active_changed.connect(self.placing_changed)
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.setInterval(0)
@@ -287,10 +309,7 @@ class LayoutPreview(QStackedWidget):
             self.setCurrentWidget(self._empty)
             return
         if self.view.currentLayout() is not layout:
-            if self._legend_editor is not None and not sip.isdeleted(
-                self._legend_editor
-            ):
-                self._legend_editor.close()
+            self.placer.cancel()
             self.view.setCurrentLayout(layout)
             self._select = QgsLayoutViewToolSelect(self.view)
             self._select.setLayout(layout)
@@ -327,6 +346,23 @@ class LayoutPreview(QStackedWidget):
         changed = step_text_size(layout, item, bigger)
         self.selection_changed.emit()
         return changed
+
+    def add_item(self, kind: ItemKind, map_item) -> None:  # QgsLayoutItemMap | None
+        """The next click or drag on the page places a new item of `kind`
+        (about `map_item`, for a legend, scale bar or north arrow). The page
+        stays as the user has it."""
+        self._user_zoomed = True
+        self.placer.begin(kind, map_item)
+
+    def delete_selected(self) -> bool:
+        """Delete the selected items as one undo step."""
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return False
+        chosen = layout.selectedLayoutItems()
+        delete_items(layout, chosen)
+        self.selection_changed.emit()
+        return bool(chosen)
 
     def showing_page(self) -> bool:
         return self.currentWidget() is self.view
@@ -381,6 +417,16 @@ class LayoutPreview(QStackedWidget):
             if event.matches(QKeySequence.StandardKey.Redo):
                 self._step_undo(redo=True)
                 return True
+            if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+                return self.select_mode() and self.delete_selected()
+        if (
+            event is not None
+            and watched is self.view.viewport()
+            and event.type() == QEvent.Type.MouseButtonDblClick
+            and isinstance(event, QMouseEvent)
+            and self.select_mode()
+        ):
+            self._announce_double_click(_local_point(event))
         if (
             event is not None
             and watched is self.view.viewport()
@@ -414,19 +460,15 @@ class LayoutPreview(QStackedWidget):
         item = layout.layoutItemAt(QPointF(self.view.mapToScene(point)), False)
         return item if isinstance(item, QgsLayoutItemLegend) else None
 
-    def _show_legend_editor(self, legend) -> None:
-        """The legend editor in a small window beside the page's top right
-        corner, following the double-clicked legend."""
-        if self._legend_editor is None or sip.isdeleted(self._legend_editor):
-            self._legend_editor = LegendEditorWindow(self.window())
-        editor = self._legend_editor
-        editor.set_legend(legend)
-        if not editor.isVisible():
-            editor.resize(editor.sizeHint().expandedTo(QSize(320, 440)))
-            corner = self.mapToGlobal(QPoint(self.width() - editor.width() - 8, 8))
-            editor.move(corner)
-        editor.show()
-        editor.raise_()
+    def _announce_double_click(self, point: QPoint) -> None:
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return
+        scene_point = QPointF(self.view.mapToScene(point))
+        for item in layout.selectedLayoutItems():
+            if item.sceneBoundingRect().contains(scene_point):
+                self.item_double_clicked.emit(item)
+                return
 
     def _selection_view_rect(self) -> QRect | None:
         layout = self.view.currentLayout()
@@ -590,16 +632,38 @@ class PagePane(QWidget):
         self.fit_button = self._bar_button(tr("Fit page"), tr("Fit the whole page"))
         self.fit_button.clicked.connect(self.preview.fit_page)
         bar.addWidget(self.fit_button)
+        # Text, a legend, a scale bar or a north arrow: choosing one waits for
+        # the click on the page that places it.
+        self.add_button = self._bar_button(
+            tr("Add"),
+            tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
+        )
+        self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.add_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.add_menu = QMenu(self.add_button)
+        self.add_menu.aboutToShow.connect(self._fill_add_menu)
+        self.add_button.setMenu(self.add_menu)
+        # Marked while the page waits for the click that places the item.
+        self.add_button.setCheckable(True)
+        bar.addWidget(self.add_button)
         # Text size of the selected title, note or legend: shown only then.
         self.text_size_bar = QWidget(self.zoom_bar)
         text_row = QHBoxLayout(self.text_size_bar)
         text_row.setContentsMargins(8, 0, 0, 0)
         text_row.setSpacing(4)
         self.text_smaller_button = self._bar_button(
-            "A\N{MINUS SIGN}", tr("Smaller text in the selected item")
+            "A\N{MINUS SIGN}",
+            tr(
+                "Smaller lettering in the selected item "
+                "(drag its handles to resize the box)"
+            ),
         )
         self.text_bigger_button = self._bar_button(
-            "A+", tr("Bigger text in the selected item")
+            "A+",
+            tr(
+                "Bigger lettering in the selected item "
+                "(drag its handles to resize the box)"
+            ),
         )
         self.text_size_label = QLabel(self.text_size_bar)
         self.text_size_label.setProperty("role", "hint")
@@ -629,12 +693,20 @@ class PagePane(QWidget):
         self.zoom_in_button.clicked.connect(self.preview.zoom_in)
         bar.addWidget(self.zoom_in_button)
         column.addWidget(self.zoom_bar)
+        # What can be changed on the selected item; absent while none is.
+        self.controls = ContextControls(self)
+        column.addWidget(self.controls)
 
         # Named in words while there is room, in pictures (the words stay as
         # tooltips) when the bar would cut them short.
-        self._word_buttons = (self.select_button, self.pan_button, self.fit_button)
+        self._word_buttons = (
+            self.select_button,
+            self.pan_button,
+            self.fit_button,
+            self.add_button,
+        )
         for button, icon in zip(
-            self._word_buttons, ("select", "pan", "fit"), strict=True
+            self._word_buttons, ("select", "pan", "fit", "add"), strict=True
         ):
             button.setProperty("lineIcon", icon)
             button.setIconSize(QSize(15, 15))
@@ -642,6 +714,16 @@ class PagePane(QWidget):
 
         self.preview.view.zoomLevelChanged.connect(self._show_zoom)
         self.preview.selection_changed.connect(self._show_text_size)
+        self.preview.selection_changed.connect(self._refresh_controls)
+        self.preview.item_placed.connect(self._on_item_placed)
+        # The legend's editor lives in the strip: the preview's double-click
+        # on a legend opens the strip, as for any item.
+        self.controls.set_legend_editor_factory(lambda parent: LegendEditor(parent))
+        self.preview.legend_edit_requested.connect(
+            lambda _legend: self.controls.reveal()
+        )
+        self.preview.placing_changed.connect(self.add_button.setChecked)
+        self.preview.item_double_clicked.connect(lambda _item: self.controls.reveal())
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
 
@@ -665,12 +747,75 @@ class PagePane(QWidget):
 
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
+        self.controls.set_layout(layout)
         self.caption.setText(
             tr("Layout preview — QGIS · {page}").format(page=_page_name(layout))
             if layout is not None
             else ""
         )
         self._show_page_parts()
+
+    def _fill_add_menu(self) -> None:
+        """Text always; a legend, scale bar or north arrow about the layout's
+        map - or, with several, a choice of which."""
+        menu = self.add_menu
+        menu.clear()
+        layout = self.preview.view.currentLayout()
+        maps = [] if layout is None or sip.isdeleted(layout) else map_frames(layout)
+        for kind in (ItemKind.TEXT, *LINKED_KINDS):
+            title = kind_title(kind)
+            if kind not in LINKED_KINDS:
+                menu.addAction(
+                    title, lambda kind=kind: self.preview.add_item(kind, None)
+                )
+            elif not maps:
+                action = menu.addAction(title)
+                action.setEnabled(False)
+                action.setToolTip(tr("Needs a map on the page"))
+            elif len(maps) == 1:
+                menu.addAction(
+                    title, lambda kind=kind, m=maps[0]: self.preview.add_item(kind, m)
+                )
+            else:
+                sub = menu.addMenu(title)
+                for map_item in maps:
+                    sub.addAction(
+                        map_label(map_item),
+                        lambda kind=kind, m=map_item: self.preview.add_item(kind, m),
+                    )
+
+    def _refresh_controls(self) -> None:
+        """Follow the selection in the controls strip. Its appearing or going
+        takes room from the page, which must not move under the user's view:
+        the scroll position is put back."""
+        view = self.preview.view
+        horizontal, vertical = view.horizontalScrollBar(), view.verticalScrollBar()
+        scroll = (horizontal.value(), vertical.value())
+        shown = self.controls.isVisible()
+        try:
+            self.controls.refresh()
+        except RuntimeError:
+            # The layout or an item went away under the signal.
+            self.controls.setVisible(False)
+            return
+        if self.controls.isVisible() != shown or shown:
+            layout = self.layout()
+            if layout is not None:
+                layout.activate()
+            horizontal.setValue(scroll[0])
+            vertical.setValue(scroll[1])
+
+    def _on_item_placed(self, item: object) -> None:
+        self._refresh_controls()
+        self.controls.reveal()
+        # The strip may have taken the room the new item was placed in: bring
+        # it back into view, scrolling no further than that.
+        if item is not None and not sip.isdeleted(item):
+            QTimer.singleShot(0, lambda: self._show_item(item))
+
+    def _show_item(self, item) -> None:  # QgsLayoutItem
+        if not sip.isdeleted(item) and not sip.isdeleted(self):
+            self.preview.view.ensureVisible(item, 12, 12)
 
     def _show_page_parts(self) -> None:
         showing = self.preview.showing_page()
@@ -727,6 +872,7 @@ class PagePane(QWidget):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
+        self.controls.set_compact(self.height() < _COMPACT_HEIGHT)
         self._fit_bar()
 
     def changeEvent(self, event: QEvent | None) -> None:  # noqa: N802 - Qt override

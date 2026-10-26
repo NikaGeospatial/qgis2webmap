@@ -111,6 +111,14 @@ LINE_ICONS = {
         '<path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/>'
         '<rect x="5" y="5" width="6" height="6" rx="0.8"/>'
     ),
+    # Adding to and editing items on the page preview.
+    "add": '<path d="M8 3v10M3 8h10"/>',
+    "trash": (
+        '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4"/>'
+    ),
+    "align-left": '<path d="M2.5 3.5h11M2.5 6.5h7M2.5 9.5h11M2.5 12.5h7"/>',
+    "align-center": '<path d="M2.5 3.5h11M4.5 6.5h7M2.5 9.5h11M4.5 12.5h7"/>',
+    "align-right": '<path d="M2.5 3.5h11M6.5 6.5h7M2.5 9.5h11M6.5 12.5h7"/>',
 }
 
 
@@ -1345,6 +1353,11 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     min-width: 0;
     padding: 2px 10px;
 }}
+/* A bar button that opens a menu (Add) shows no arrow: the label says it. */
+{d} QToolButton[zoom="true"]::menu-indicator {{
+    image: none;
+    width: 0;
+}}
 /* Focused, the ring's extra pixel comes out of the padding, so the button
    keeps its size and its label is never cut short. */
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:focus {{
@@ -1403,6 +1416,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     color: {p.link};
     padding: 4px 0;
     text-align: left;
+}}
+
+/* The selected page item's controls, under the preview bar. */
+{d} QFrame[role="itemControls"] {{
+    background: {p.field};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+}}
+{d} QFrame[role="itemControls"] QLabel {{
+    border: none;
+    background: transparent;
 }}
 
 /* Map frames: a quiet entry per map item, ruled apart, the frame selected on

@@ -382,6 +382,7 @@ class CartographController:
         self.page_preview.import_requested.connect(self.on_import_cartograph)
         self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
         self.page_pane.open_editor_requested.connect(self.on_open_layout_editor)
+        self.page_pane.controls.canvas_extent_requested.connect(self._match_canvas)
         self.page_pane.shown.connect(
             lambda: QTimer.singleShot(0, self.fit_panel_to_window)
         )
@@ -1023,6 +1024,7 @@ class CartographController:
         self.frames_list.issues_requested.connect(self._show_frame_issues)
         self.frames_list.actions_opening.connect(self._refresh_smoothing_options)
         self.frames_list.smoothing_changed.connect(self._set_raster_smoothing)
+        self.page_pane.controls.bind_frames(self.frames_list)
         return self.frames_list
 
     # ---- Atlas tab -------------------------------------------------------

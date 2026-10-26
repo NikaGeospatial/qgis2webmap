@@ -20,10 +20,9 @@ from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 
 from nika_onlymap_exporter.core import legend_edit as le
-from nika_onlymap_exporter.ui.cartograph.layout_page import LayoutPreview
+from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
 from nika_onlymap_exporter.ui.cartograph.legend_editor import (
     LegendEditor,
-    LegendEditorWindow,
 )
 
 
@@ -253,31 +252,34 @@ class TestEditorEntries:
 
 class TestPreviewHook:
     def test_double_clicking_a_legend_opens_the_editor(self, world, legend) -> None:
-        preview = LayoutPreview()
-        preview.resize(900, 640)
-        preview.show_layout(world.layout)
-        preview.show()
+        pane = PagePane()
+        pane.resize(900, 640)
+        pane.show_layout(world.layout)
+        pane.show()
+        preview = pane.preview
         _pump()
         preview._fit()
         _pump()
         centre = preview.view.mapFromScene(QPointF(legend.sceneBoundingRect().center()))
         assert preview.view.viewport().rect().contains(centre)
-        assert preview._legend_editor is None
         QTest.mouseDClick(
             preview.view.viewport(), Qt.MouseButton.LeftButton, pos=centre
         )
         _pump()
-        editor = preview._legend_editor
-        assert isinstance(editor, LegendEditorWindow) and editor.isVisible()
+        controls = pane.controls
+        editor = controls._legend_editor
+        assert controls.pages.currentWidget() is controls.legend_page
+        assert not controls.pages.isHidden()
+        assert isinstance(editor, LegendEditor) and editor.isVisible()
         assert editor.legend() is legend
-        editor.close()
-        preview.close()
+        pane.close()
 
     def test_a_double_click_on_the_map_opens_nothing(self, world) -> None:
-        preview = LayoutPreview()
-        preview.resize(900, 640)
-        preview.show_layout(world.layout)
-        preview.show()
+        pane = PagePane()
+        pane.resize(900, 640)
+        pane.show_layout(world.layout)
+        pane.show()
+        preview = pane.preview
         _pump()
         preview._fit()
         _pump()
@@ -290,5 +292,8 @@ class TestPreviewHook:
             preview.view.viewport(), Qt.MouseButton.LeftButton, pos=centre
         )
         _pump()
-        assert preview._legend_editor is None
-        preview.close()
+        assert (
+            pane.controls._legend_editor is None
+            or pane.controls._legend_editor.isHidden()
+        )
+        pane.close()
