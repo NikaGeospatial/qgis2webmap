@@ -2487,9 +2487,8 @@ class TestAtlasTab:
     def _rotated_utm_atlas(self, project, tmp_path, *, atlas_on=True):
         """The atlas layout, its map in a rotated UTM zone: a CRS whose
         Interactive/Image default is Image unless the atlas drives the map."""
-        from qgis.core import QgsCoordinateReferenceSystem
-
         from atlas_fixtures import build_atlas_layout
+        from qgis.core import QgsCoordinateReferenceSystem
 
         built = build_atlas_layout(project)
         built.main_map.setCrs(QgsCoordinateReferenceSystem("EPSG:32648"))
