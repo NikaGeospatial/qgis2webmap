@@ -67,7 +67,7 @@ from ...core.fidelity_summary import (
     strip_message,
     summarise,
 )
-from ...core.layout_templates import TextSizes
+from ...core.layout_templates import TextSizes, get_template
 from ...core.portable_names import avoid_windows_reserved
 from ...core.print_settings import PrintSettings, apply_to_spec
 from ...core.save_folders import cartographs_folder, unused_path
@@ -367,6 +367,7 @@ class CartographController:
         self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
         self.page_preview.import_requested.connect(self.on_import_cartograph)
         self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
+        self.page_pane.open_editor_requested.connect(self.on_open_layout_editor)
         self.page_pane.shown.connect(
             lambda: QTimer.singleShot(0, self.fit_panel_to_window)
         )
@@ -420,12 +421,13 @@ class CartographController:
         # The design picker, always in sight. It makes ANOTHER layout from the
         # canvas; the layout shown above is not changed.
         self.new_from_template_button = QToolButton(panel)
-        self.new_from_template_button.setText(tr("New layout from template..."))
+        self.new_from_template_button.setText(tr("Browse templates..."))
         self.new_from_template_button.setProperty("role", "secondary")
         self.new_from_template_button.setProperty("hasMenu", False)
         self._new_from_template_tip = tr(
-            "Pick a design and build another print layout from what the "
-            "map canvas shows. The layout shown here is kept as it is."
+            "New layout from template: pick a design and build another print "
+            "layout from what the map canvas shows. The layout shown here is "
+            "kept as it is."
         )
         self.new_from_template_button.setToolTip(self._new_from_template_tip)
         self.new_from_template_button.setSizePolicy(
@@ -433,6 +435,11 @@ class CartographController:
         )
         self.new_from_template_button.clicked.connect(self.create_from_canvas)
         column.addWidget(self.new_from_template_button)
+        # Which design the selected layout came from, for a template-made one.
+        self.based_on_label = FittedLabel("", panel)
+        self.based_on_label.setProperty("role", "hint")
+        self.based_on_label.setVisible(False)
+        column.addWidget(self.based_on_label)
 
         self.layout_empty_note = FittedLabel(
             tr(
@@ -483,6 +490,17 @@ class CartographController:
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
         self.page_section.body_layout.addLayout(page_form)
+        page_note = FittedLabel(
+            tr(
+                "These change the HTML, seen with Preview in browser - not the "
+                "QGIS layout preview."
+            ),
+            self.page_section.body,
+        )
+        page_note.setWordWrap(True)
+        page_note.setProperty("role", "hint")
+        self.page_page_note = page_note
+        self.page_section.body_layout.addWidget(page_note)
         # Only for a layout made from a template: the template is what the
         # sizes rebuild the page from (`_sync_size_controls`).
         self.size_controls = TextSizeControls(
@@ -864,8 +882,44 @@ class CartographController:
         layout = self._current_layout
         record = template_record(layout) if layout is not None else None
         self.size_controls.setVisible(record is not None)
+        self._show_based_on(record)
+        self._update_editor_link()
         if layout is not None and record is not None:
             self.size_controls.set_sizes(layout_text_sizes(layout, self.project))
+
+    def _show_based_on(self, record) -> None:  # TemplateRecord | None
+        """ "Based on <design>" under the template button, for a layout made
+        from a template; nothing for any other layout."""
+        name = ""
+        if record is not None:
+            try:
+                name = tr(get_template(record.template_id).name)
+            except ValueError:  # a design this version no longer has
+                name = ""
+        self.based_on_label.setText(tr("Based on {name}").format(name=name))
+        self.based_on_label.setVisible(bool(name))
+
+    def _editor_iface(self):
+        return getattr(self.dialog, "iface", None)
+
+    def _update_editor_link(self) -> None:
+        link = self.page_pane.editor_link
+        ready = self._current_layout is not None and hasattr(
+            self._editor_iface(), "openLayoutDesigner"
+        )
+        link.setEnabled(ready)
+        link.setToolTip(
+            tr("Edit this layout in QGIS's layout designer.")
+            if ready
+            else tr("Choose a print layout first.")
+        )
+
+    def on_open_layout_editor(self) -> None:
+        layout = self._current_layout
+        iface = self._editor_iface()
+        if layout is None or not hasattr(iface, "openLayoutDesigner"):
+            return
+        iface.openLayoutDesigner(layout)
 
     def _on_layout_sizes_changed(self) -> None:
         """A text size moved: build the page again from its template with
@@ -1674,13 +1728,13 @@ class CartographController:
 
         # The page beside the panel is QGIS's drawing; this opens the
         # cartograph itself, in the browser, as the web map's Preview does.
-        self.cartograph_preview_button = button(tr("Preview"), "preview")
+        self.cartograph_preview_button = button(tr("Preview in browser"), "preview")
         self.cartograph_preview_button.setToolTip(
             tr("Open the cartograph in your browser.")
         )
         self.cartograph_preview_button.clicked.connect(self.preview)
 
-        self.cartograph_share_button = button(tr("Share"), "share")
+        self.cartograph_share_button = button(tr("Export & share"), "share")
         self.cartograph_share_button.setProperty("hasMenu", True)
         self.cartograph_share_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.InstantPopup
@@ -1918,26 +1972,7 @@ class CartographController:
             self._cartograph_share_tips[key] = tip
             return action
 
-        add(
-            "copy_path",
-            tr("Copy file path"),
-            tr("Copies the cartograph's path"),
-            self.on_copy_path,
-        )
-        add(
-            "reveal",
-            _reveal_label(),
-            tr("Shows the cartograph in your file manager"),
-            self.on_reveal,
-        )
-        add(
-            "open_browser",
-            tr("Open in browser"),
-            tr("Opens the cartograph in your browser"),
-            self.on_open_in_browser,
-            "Ctrl+O",
-        )
-
+        # Outputs first, then the file's own actions, then NIKA.
         menu.addSection(tr("Export"))
         add(
             "export_pdf",
@@ -1963,6 +1998,28 @@ class CartographController:
             tr("Print settings..."),
             tr("Page size, bleed, crop marks and colour profile for Export PDF"),
             self.on_print_settings,
+        )
+
+        menu.addSection(tr("File"))
+        add(
+            "open_browser",
+            tr("Open in browser"),
+            tr("Opens the cartograph in your browser"),
+            self.on_open_in_browser,
+            "Ctrl+O",
+        )
+
+        add(
+            "copy_path",
+            tr("Copy file path"),
+            tr("Copies the cartograph's path"),
+            self.on_copy_path,
+        )
+        add(
+            "reveal",
+            _reveal_label(),
+            tr("Shows the cartograph in your file manager"),
+            self.on_reveal,
         )
 
         # NIKA after everything that works on the file, each named for what

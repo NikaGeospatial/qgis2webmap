@@ -65,7 +65,7 @@ def _percent(pane) -> int:
 
 class TestPagePane:
     def test_the_caption_names_the_layout_and_its_page(self, pane) -> None:
-        assert pane.caption.text() == "QGIS layout · A4 landscape"
+        assert pane.caption.text() == "Layout preview — QGIS · A4 landscape"
         assert not pane.caption.isHidden()
         assert not pane.zoom_bar.isHidden()
 

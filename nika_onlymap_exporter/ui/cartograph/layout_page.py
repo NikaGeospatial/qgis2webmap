@@ -346,16 +346,17 @@ class LayoutPreview(QStackedWidget):
 class PagePane(QWidget):
     """The preview with what it is said above it and how to move it below.
 
-    Above: "QGIS layout · A4 landscape". The page is QGIS's drawing of the
+    Above: "Layout preview — QGIS · A4 landscape". The page is QGIS's drawing of the
     layout, and the cartograph can differ from it - a north arrow the
     runtime draws its own way, the Page settings applied on export - so it
-    is named for what it is; Preview shows the HTML itself. Below: Fit page,
+    is named for what it is; Preview in browser shows the HTML itself. Below: Fit page,
     zoom out, the zoom level and zoom in, which the wheel and a drag also do
     but nothing on screen said so.
     """
 
     shown = pyqtSignal()
     changes_requested = pyqtSignal()
+    open_editor_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -368,7 +369,7 @@ class PagePane(QWidget):
         self.caption.setToolTip(
             tr(
                 "QGIS's drawing of the print layout. The cartograph can differ "
-                "in places - see Checks - and Preview shows it in the browser."
+                "in places - see Checks - and Preview in browser shows it."
             )
         )
         caption_row = QHBoxLayout()
@@ -384,6 +385,14 @@ class PagePane(QWidget):
         self.changes_link.clicked.connect(self.changes_requested)
         self.changes_link.setVisible(False)
         caption_row.addWidget(self.changes_link)
+        # QGIS's own layout designer for the layout shown; the controller
+        # enables it when there is a layout and an iface to open it with.
+        self.editor_link = QPushButton(tr("Open layout editor"), self)
+        self.editor_link.setProperty("role", "link")
+        self.editor_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.editor_link.clicked.connect(self.open_editor_requested)
+        self.editor_link.setEnabled(False)
+        caption_row.addWidget(self.editor_link)
         column.addLayout(caption_row)
         self.preview = LayoutPreview(self)
         column.addWidget(self.preview, 1)
@@ -448,7 +457,7 @@ class PagePane(QWidget):
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
         self.caption.setText(
-            tr("QGIS layout · {page}").format(page=_page_name(layout))
+            tr("Layout preview — QGIS · {page}").format(page=_page_name(layout))
             if layout is not None
             else ""
         )
@@ -458,6 +467,7 @@ class PagePane(QWidget):
         showing = self.preview.showing_page()
         self.caption.setVisible(showing)
         self.changes_link.setVisible(showing and self._change_count > 0)
+        self.editor_link.setVisible(showing)
         self.zoom_bar.setVisible(showing)
         self._show_zoom()
 

@@ -1078,6 +1078,35 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
+    def test_export_and_share_lists_outputs_before_file_actions(
+        self, qgis_app, project
+    ) -> None:
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            assert cartograph.cartograph_share_button.text() == "Export & share"
+            rows = [
+                a.text()
+                for a in cartograph.cartograph_share_button.menu().actions()
+                if not a.isSeparator()
+            ]
+            assert rows[:7] == [
+                "Export PDF...",
+                "Export PNG...",
+                "Export QGIS layout template (.qpt)...",
+                "Print settings...",
+                "Open in browser",
+                "Copy file path",
+                rows[6],
+            ]
+            assert rows[7:] == [
+                "Prepare enhancement prompt...",
+                "Prepare critique prompt...",
+            ]
+        finally:
+            dialog.close()
+
     def test_export_qpt_is_gated_on_a_selected_layout_not_the_file(
         self, qgis_app, project
     ) -> None:
@@ -2156,6 +2185,43 @@ class TestLayoutTextSizes:
             )
             cartograph._select_layout(layout.name())
             assert cartograph.size_controls.isVisibleTo(cartograph.page_section.body)
+        finally:
+            dialog.close()
+
+    def test_based_on_names_the_template_only_for_a_template_layout(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = self._template_dialog(
+            project, picked_template, template="field-map"
+        )
+        try:
+            label = cartograph.based_on_label
+            assert label.text() == "Based on Fieldbook"
+            assert not label.isHidden()
+            plain = _add_layout(project, "plain", [("m", "EPSG:4326")])
+            cartograph._select_layout(plain.name())
+            assert label.isHidden()
+            cartograph._select_layout(layout.name())
+            assert not label.isHidden()
+        finally:
+            dialog.close()
+
+    def test_open_layout_editor_hands_the_selected_layout_to_qgis(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        try:
+            opened: list[object] = []
+            dialog.iface.openLayoutDesigner = opened.append
+            cartograph._update_editor_link()
+            link = cartograph.page_pane.editor_link
+            assert link.isEnabled()
+            link.click()
+            assert opened == [layout]
+            del dialog.iface.openLayoutDesigner
+            cartograph._update_editor_link()
+            assert not link.isEnabled()
+            assert link.toolTip()
         finally:
             dialog.close()
 
@@ -3450,7 +3516,7 @@ class TestPanel:
             )
             assert dialog.output_switcher.toolTip() == "Choose what to make"
             preview = dialog._cartograph.cartograph_preview_button
-            assert preview.text() == "Preview"
+            assert preview.text() == "Preview in browser"
         finally:
             dialog.close()
 
@@ -3756,7 +3822,7 @@ class TestPanel:
             button = cartograph.new_from_template_button
             # Named for what it does: another layout, never a change of the
             # one shown.
-            assert button.text() == "New layout from template..."
+            assert button.text() == "Browse templates..."
             assert "kept as it is" in button.toolTip()
             assert button.isEnabled() and not button.isHidden()
             assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
@@ -3764,6 +3830,25 @@ class TestPanel:
             button.setFocus()
             QTest.keyClick(button, Qt.Key.Key_Space)
             assert calls == ["canvas"]
+        finally:
+            dialog.close()
+
+    def test_browse_templates_opens_the_picker_and_adds_a_layout(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        original = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph._select_layout("Survey")
+            before = len(project.layoutManager().layouts())
+            cartograph.new_from_template_button.click()
+            assert picked_template.shown == 1
+            layouts = project.layoutManager().layouts()
+            assert len(layouts) == before + 1
+            assert project.layoutManager().layoutByName("Survey") is original
+            assert original.itemById("Overview") is not None
         finally:
             dialog.close()
 
