@@ -2242,9 +2242,9 @@ class TestLayoutTextSizes:
             )
             before = self._main_mm(layout)
             controls = cartograph.size_controls
-            controls.sliders["title"].setValue(0)
+            controls.sliders["title"].setValue(80)
             assert _wait_for(
-                qgis_app, lambda: layout_text_sizes(layout, project).title == "smaller"
+                qgis_app, lambda: layout_text_sizes(layout, project).title == 80
             )
             after = self._main_mm(layout)
             assert after[0] * after[1] > before[0] * before[1]
@@ -2275,7 +2275,7 @@ class TestLayoutTextSizes:
         )
         try:
             slider = cartograph.size_controls.sliders["legend"]
-            for value in (1, 0, 3):
+            for value in (90, 80, 115):
                 slider.setValue(value)
             assert _wait_for(qgis_app, lambda: calls)
             time.sleep(0.5)
@@ -2289,7 +2289,7 @@ class TestLayoutTextSizes:
     ) -> None:
         dialog, cartograph, layout = self._template_dialog(project, picked_template)
         try:
-            cartograph.size_controls.sliders["notes"].setValue(4)
+            cartograph.size_controls.sliders["notes"].setValue(130)
             cartograph.size_controls.commit()
             cartograph.size_controls.changed.emit()
             name = layout.name()
@@ -2301,9 +2301,9 @@ class TestLayoutTextSizes:
             dialog._cartograph._select_layout(name)
             controls = dialog._cartograph.size_controls
             assert controls.isVisibleTo(dialog._cartograph.page_section.body)
-            assert controls.sizes().notes == "larger"
-            assert controls.sizes().title == "standard"
-            assert controls.sliders["notes"].value() == 4
+            assert controls.sizes().notes == 130
+            assert controls.sizes().title == 100
+            assert controls.sliders["notes"].value() == 130
         finally:
             dialog.close()
 
@@ -2327,23 +2327,78 @@ class TestLayoutTextSizes:
             self._move(layout, "title")
             moved = (layout.itemById("title").x(), layout.itemById("title").y())
             controls = cartograph.size_controls
-            controls.sliders["title"].setValue(0)
+            controls.sliders["title"].setValue(80)
             controls._timer.stop()
             controls._commit_and_emit()
             assert len(asked) == 1
             assert "Rebuild the page from the template?" in asked[0]
             item = layout.itemById("title")
             assert (item.x(), item.y()) == moved
-            assert layout_text_sizes(layout, project).title == "standard"
-            assert controls.sliders["title"].value() == 2
+            assert layout_text_sizes(layout, project).title == 100
+            assert controls.sliders["title"].value() == 100
             answer[0] = QMessageBox.StandardButton.Yes
-            controls.sliders["title"].setValue(0)
+            controls.sliders["title"].setValue(80)
             controls._timer.stop()
             controls._commit_and_emit()
             assert len(asked) == 2
-            assert layout_text_sizes(layout, project).title == "smaller"
+            assert layout_text_sizes(layout, project).title == 80
             item = layout.itemById("title")
             assert (item.x(), item.y()) != moved
+        finally:
+            dialog.close()
+
+    def test_a_drag_on_an_edited_page_asks_once_and_a_wheel_never(
+        self, qgis_app, project, picked_template, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, QPointF, Qt
+        from qgis.PyQt.QtGui import QWheelEvent
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+
+        from nika_onlymap_exporter.core.canvas_cartograph import layout_text_sizes
+        from nika_onlymap_exporter.ui.cartograph import template_picker
+
+        dialog, cartograph, layout = self._template_dialog(project, picked_template)
+        asked: list[str] = []
+
+        def question(parent, title, text, *args):
+            asked.append(text)
+            return QMessageBox.StandardButton.No
+
+        monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+        try:
+            self._move(layout, "title")
+            controls = cartograph.size_controls
+            slider = controls.sliders["title"]
+            centre = QPointF(slider.width() / 2, slider.height() / 2)
+            wheel = QWheelEvent(
+                centre,
+                centre,
+                QPoint(0, 0),
+                QPoint(0, -120),
+                Qt.MouseButton.NoButton,
+                Qt.KeyboardModifier.NoModifier,
+                Qt.ScrollPhase.NoScrollPhase,
+                False,
+            )
+            QApplication.sendEvent(slider, wheel)
+            time.sleep((template_picker._SIZES_DELAY_MS + 100) / 1000)
+            qgis_app.processEvents()
+            assert slider.value() == 100
+            assert asked == []
+            # One drag through many values: one question, and declining
+            # snaps the handle back without asking again.
+            slider.setSliderDown(True)
+            for value in (95, 88, 80):
+                slider.setValue(value)
+            slider.setSliderDown(False)
+            assert _wait_for(qgis_app, lambda: asked)
+            time.sleep((template_picker._SIZES_DELAY_MS + 100) / 1000)
+            qgis_app.processEvents()
+            assert len(asked) == 1
+            assert slider.value() == 100
+            assert controls.sizes().title == 100
+            assert layout_text_sizes(layout, project).title == 100
+            assert not controls._timer.isActive()
         finally:
             dialog.close()
 
@@ -2359,7 +2414,7 @@ class TestLayoutTextSizes:
         )
         try:
             controls = cartograph.size_controls
-            for value in (0, 4):
+            for value in (80, 130):
                 controls.sliders["title"].setValue(value)
                 controls._timer.stop()
                 controls._commit_and_emit()

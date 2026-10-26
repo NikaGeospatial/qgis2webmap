@@ -7,7 +7,7 @@ is the real page QGIS would build, drawn by QGIS (`template_preview`), so
 what the thumbnail shows is what the layout will be. The one thing it also
 writes is a design's key figures, typed under the list and saved to the
 project's variables as it accepts, where the layout then reads them. The
-other is the Title, Legend and Notes size steps (`TextSizes`), kept the same
+other is the Title, Legend and Notes sizes in percent (`TextSizes`), kept the same
 way.
 
 **Previews draw one at a time** on a zero-length timer: a heavy project can
@@ -61,6 +61,7 @@ from qgis.PyQt.QtGui import (
     QRegularExpressionValidator,
     QResizeEvent,
     QShowEvent,
+    QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
@@ -98,8 +99,9 @@ from ...core.canvas_cartograph import (
 from ...core.layout_templates import (
     CHARACTERFUL,
     ESSENTIAL,
+    MAX_TEXT_PERCENT,
+    MIN_TEXT_PERCENT,
     PAGE_SIZE_ORDER,
-    TEXT_SIZE_STEPS,
     LayoutTemplate,
     TemplatePlan,
     TextSizes,
@@ -184,8 +186,6 @@ _FIGURE_VALUE_MAX = 24
 _FIGURE_LABEL_MAX = 80
 #: How long a size slider rests before the pages are drawn again.
 _SIZES_DELAY_MS = 250
-#: The Standard step's position on a size slider.
-STANDARD_INDEX = 2
 #: The widest a value's field grows, in logical pixels.
 _FIGURE_VALUE_WIDTH = 160
 
@@ -678,15 +678,30 @@ class _KeyFigures(QFrame):
             label.setCursorPosition(0)
 
 
-class TextSizeControls(QFrame):
-    """The Title, Legend and Notes size steps (`TEXT_SIZE_STEPS`), three
-    labelled sliders with five snapping positions in a row under the list:
-    the design's text made smaller gives the map room, larger takes it. They
-    apply to every design. Each label names the current step.
+class _SizeSlider(QSlider):
+    """A slider that never answers the mouse wheel and takes focus from the
+    keyboard only: a wheel turn over it scrolls the panel behind it, and a
+    click leaves no focus ring that holds on to the next keys."""
 
-    `changed` fires once a pause follows the last move (or the handle is
-    released), not on every value a drag passes; `sizes()` is the steps as
-    last committed, `live_sizes()` as the handles stand."""
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
+        if event is not None:
+            event.ignore()
+
+
+class TextSizeControls(QFrame):
+    """The Title, Legend and Notes sizes (`TextSizes`), three labelled
+    sliders in a row under the list, each from `MIN_TEXT_PERCENT` to
+    `MAX_TEXT_PERCENT` percent in steps of one: the design's text made
+    smaller gives the map room, larger takes it. They apply to every design.
+    Each label shows the current percent as the handle moves.
+
+    `changed` fires once per gesture: when a drag ends, or a pause follows a
+    click or key press. `sizes()` is the percents as last committed,
+    `live_sizes()` as the handles stand."""
 
     changed = pyqtSignal()
 
@@ -731,15 +746,16 @@ class TextSizeControls(QFrame):
             column.setSpacing(6)
             caption = QLabel(self)
             caption.setProperty("role", "hint")
-            slider = QSlider(Qt.Orientation.Horizontal, self)
-            slider.setRange(0, len(TEXT_SIZE_STEPS) - 1)
-            slider.setPageStep(1)
+            slider = _SizeSlider(self)
+            slider.setRange(MIN_TEXT_PERCENT, MAX_TEXT_PERCENT)
+            slider.setSingleStep(1)
+            slider.setPageStep(5)
             slider.setFixedHeight(24)
-            slider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             slider.setAccessibleName(self._names[element])
             slider.setProperty("tip", tips[element])
-            slider.setValue(self._index(getattr(sizes, element)))
+            slider.setValue(getattr(sizes, element))
             slider.valueChanged.connect(lambda _v, e=element: self._on_value(e))
+            # The drag ends: apply once, not for every percent it passed.
             slider.sliderReleased.connect(self._timer.start)
             column.addWidget(caption)
             column.addWidget(slider)
@@ -762,16 +778,9 @@ class TextSizeControls(QFrame):
         changed = self.live_sizes() != TextSizes()
         self.toggle.setText(tr("Text sizes (changed)") if changed else tr("Text sizes"))
 
-    @staticmethod
-    def _index(step_id: str) -> int:
-        for index, (known, _name, _factor) in enumerate(TEXT_SIZE_STEPS):
-            if known == step_id:
-                return index
-        return STANDARD_INDEX
-
     def _describe(self, element: str) -> None:
         slider = self.sliders[element]
-        step = tr(TEXT_SIZE_STEPS[slider.value()][1])
+        step = f"{slider.value()}%"
         label = f"{self._names[element]}: {step}"
         self._captions[element].setText(label)
         self._label_toggle()
@@ -784,26 +793,23 @@ class TextSizeControls(QFrame):
     def _on_value(self, element: str) -> None:
         self._describe(element)
         if not self.sliders[element].isSliderDown():
-            # A key press or wheel step: wait out a run of them.
+            # A click on the groove or a key press: wait out a run of them.
             self._timer.start()
 
     def live_sizes(self) -> TextSizes:
         return TextSizes(
-            **{
-                element: TEXT_SIZE_STEPS[slider.value()][0]
-                for element, slider in self.sliders.items()
-            }
+            **{element: slider.value() for element, slider in self.sliders.items()}
         )
 
     def sizes(self) -> TextSizes:
         return self._committed
 
     def set_sizes(self, sizes: TextSizes) -> None:
-        """Show `sizes` as the committed steps, without a `changed`."""
+        """Show `sizes` as the committed percents, without a `changed`."""
         self._timer.stop()
         for element, slider in self.sliders.items():
             slider.blockSignals(True)
-            slider.setValue(self._index(getattr(sizes, element)))
+            slider.setValue(getattr(sizes, element))
             slider.blockSignals(False)
             self._describe(element)
         self._committed = self.live_sizes()

@@ -883,17 +883,40 @@ def figures_project(project):
     project.setCustomVariables({})
 
 
-def _slide(qgis_app, picker, element: str, step: str) -> None:
-    """Move a size slider to `step` as the keyboard would, and let the pause
+def _slide(qgis_app, picker, element: str, percent: int) -> None:
+    """Move a size slider to `percent` as the keyboard would, and let the pause
     after it pass and the pages it asks for draw."""
     slider = picker.size_controls.sliders[element]
-    slider.setValue([s[0] for s in layout_templates.TEXT_SIZE_STEPS].index(step))
+    slider.setValue(percent)
     QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
     _drain(qgis_app, picker)
 
 
+def _wheel(widget, delta: int = -120):
+    """Send `widget` a mouse wheel turn; returns the event, to read whether
+    anything accepted it."""
+    from qgis.PyQt.QtCore import QPoint, QPointF
+    from qgis.PyQt.QtGui import QWheelEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    centre = QPointF(widget.width() / 2, widget.height() / 2)
+    event = QWheelEvent(
+        centre,
+        centre,
+        QPoint(0, 0),
+        QPoint(0, delta),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    event.setAccepted(True)
+    QApplication.sendEvent(widget, event)
+    return event
+
+
 class TestTextSizeControls:
-    def test_three_keyboard_reachable_sliders_with_five_steps(
+    def test_three_keyboard_reachable_percent_sliders(
         self, qgis_app, tmp_path, fifteen, figures_project
     ):
         picker = TemplatePicker(
@@ -908,18 +931,17 @@ class TestTextSizeControls:
             assert list(controls.sliders) == ["title", "legend", "notes"]
             for name, slider in controls.sliders.items():
                 assert slider.accessibleName() == name.capitalize()
-                assert slider.focusPolicy() != Qt.FocusPolicy.NoFocus
-                assert (slider.minimum(), slider.maximum()) == (0, 4)
-                assert slider.value() == template_picker.STANDARD_INDEX
-                assert slider.accessibleDescription() == "Standard"
-                assert (
-                    controls._captions[name].text() == f"{name.capitalize()}: Standard"
-                )
+                assert slider.focusPolicy() == Qt.FocusPolicy.TabFocus
+                assert (slider.minimum(), slider.maximum()) == (80, 130)
+                assert slider.singleStep() == 1
+                assert slider.value() == 100
+                assert slider.accessibleDescription() == "100%"
+                assert controls._captions[name].text() == f"{name.capitalize()}: 100%"
             assert picker.text_sizes == TextSizes()
         finally:
             picker.reject()
 
-    def test_keys_step_the_slider_and_the_label_names_the_step(
+    def test_keys_step_the_slider_and_the_label_shows_the_percent(
         self, qgis_app, tmp_path, fifteen, figures_project
     ):
         picker = TemplatePicker(
@@ -931,13 +953,75 @@ class TestTextSizeControls:
             slider = picker.size_controls.sliders["legend"]
             slider.setFocus()
             QTest.keyClick(slider, Qt.Key.Key_Left)
-            assert picker.size_controls._captions["legend"].text() == "Legend: Small"
+            assert picker.size_controls._captions["legend"].text() == "Legend: 99%"
             QTest.keyClick(slider, Qt.Key.Key_Home)
-            assert picker.size_controls._captions["legend"].text() == "Legend: Smaller"
+            assert picker.size_controls._captions["legend"].text() == "Legend: 80%"
             QTest.keyClick(slider, Qt.Key.Key_PageUp)
-            assert slider.value() == 1
-            assert "Small" in slider.toolTip()
+            assert slider.value() == 85
+            assert "85%" in slider.toolTip()
             assert picker.size_controls.toggle.text() == "Text sizes (changed)"
+            slider.setValue(100)
+            assert picker.size_controls.toggle.text() == "Text sizes"
+        finally:
+            picker.reject()
+
+    def test_a_wheel_turn_over_a_slider_changes_nothing_and_is_not_taken(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            picker.size_controls.toggle.click()
+            for slider in picker.size_controls.sliders.values():
+                for delta in (-120, 120):
+                    event = _wheel(slider, delta)
+                    assert slider.value() == 100
+                    # Not accepted: it goes on to scroll the panel behind.
+                    assert not event.isAccepted()
+            assert not picker.size_controls._timer.isActive()
+        finally:
+            picker.reject()
+
+    def test_a_click_does_not_leave_the_slider_focused(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            picker.size_controls.toggle.click()
+            slider = picker.size_controls.sliders["title"]
+            QTest.mouseClick(slider, Qt.MouseButton.LeftButton)
+            assert not slider.hasFocus()
+            assert slider.focusPolicy() == Qt.FocusPolicy.TabFocus
+        finally:
+            picker.reject()
+
+    def test_a_drag_updates_the_label_live_and_applies_once_on_release(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            controls = picker.size_controls
+            controls.toggle.click()
+            applied: list[TextSizes] = []
+            controls.changed.connect(lambda: applied.append(controls.sizes()))
+            slider = controls.sliders["notes"]
+            slider.setSliderDown(True)
+            for value in (95, 107, 120, 107):
+                slider.setValue(value)
+                assert controls._captions["notes"].text() == f"Notes: {value}%"
+            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
+            assert applied == []
+            slider.setSliderDown(False)
+            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
+            assert applied == [TextSizes(notes=107)]
         finally:
             picker.reject()
 
@@ -954,8 +1038,8 @@ class TestTextSizeControls:
             before = picker._key("classic")
             drawn = len(renderer.calls)
             slider = picker.size_controls.sliders["legend"]
-            # Dragging through the steps changes nothing until it rests.
-            for value in (3, 4):
+            # Moving through the values changes nothing until it rests.
+            for value in (107, 130):
                 slider.setValue(value)
             assert picker._key("classic") == before
             assert len(renderer.calls) == drawn
@@ -963,9 +1047,25 @@ class TestTextSizeControls:
             _drain(qgis_app, picker)
             after = picker._key("classic")
             assert after != before
-            assert after[6] == TextSizes(legend="larger")
+            assert after[6] == TextSizes(legend=130)
             assert len(renderer.calls) > drawn
-            assert renderer.sizes["classic"] == TextSizes(legend="larger")
+            assert renderer.sizes["classic"] == TextSizes(legend=130)
+        finally:
+            picker.reject()
+
+    def test_an_intermediate_percent_is_drawn_and_scales_the_page(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        renderer = _Renderer()
+        picker = TemplatePicker(
+            renderer, qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            _shown(qgis_app, picker)
+            _drain(qgis_app, picker)
+            _slide(qgis_app, picker, "title", 107)
+            assert renderer.sizes["classic"] == TextSizes(title=107)
+            assert TextSizes(title=107).apply(_PROJECT).title_scale == 1.07
         finally:
             picker.reject()
 
@@ -977,30 +1077,46 @@ class TestTextSizeControls:
         )
         try:
             # Accepted straight after the move, before the pause has passed.
-            picker.size_controls.sliders["title"].setValue(1)
-            picker.size_controls.sliders["notes"].setValue(4)
+            picker.size_controls.sliders["title"].setValue(90)
+            picker.size_controls.sliders["notes"].setValue(130)
             picker.accept()
         finally:
             picker.reject()
         variables = figures_project.customVariables()
-        assert variables["nika_size_title"] == "small"
-        assert variables["nika_size_notes"] == "larger"
+        assert variables["nika_size_title"] == "90"
+        assert variables["nika_size_notes"] == "130"
         assert "nika_size_legend" not in variables
         reopened = TemplatePicker(
             _Renderer(), qsettings=_settings(tmp_path), project=figures_project
         )
         try:
-            assert reopened.text_sizes == TextSizes("small", "standard", "larger")
-            assert reopened.size_controls.sliders["notes"].value() == 4
+            assert reopened.text_sizes == TextSizes(90, 100, 130)
+            assert reopened.size_controls.sliders["notes"].value() == 130
         finally:
             reopened.reject()
+
+    def test_a_project_saved_with_step_ids_opens_at_their_percent(
+        self, qgis_app, tmp_path, fifteen, figures_project
+    ):
+        figures_project.setCustomVariables(
+            {"nika_size_title": "small", "nika_size_notes": "larger"}
+        )
+        picker = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+        )
+        try:
+            assert picker.text_sizes == TextSizes(90, 100, 130)
+            assert picker.size_controls.sliders["title"].value() == 90
+            assert picker.size_controls.sliders["notes"].value() == 130
+        finally:
+            picker.reject()
 
     def test_cancel_saves_no_size(self, qgis_app, tmp_path, fifteen, figures_project):
         picker = TemplatePicker(
             _Renderer(), qsettings=_settings(tmp_path), project=figures_project
         )
         try:
-            picker.size_controls.sliders["title"].setValue(4)
+            picker.size_controls.sliders["title"].setValue(130)
             picker.cancel_button.click()
         finally:
             picker.reject()
