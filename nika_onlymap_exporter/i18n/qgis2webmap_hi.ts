@@ -157,190 +157,163 @@
       <translation>जाँच पूरी नहीं हो सकी: {error}</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="136" />
-      <source>Smaller</source>
-      <translation>छोटा</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="137" />
-      <location filename="../ui/main_dialog.py" line="352" />
-      <source>Small</source>
-      <translation>छोटा</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="138" />
-      <source>Standard</source>
-      <translation>मानक</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="139" />
-      <location filename="../ui/main_dialog.py" line="353" />
-      <source>Large</source>
-      <translation>बड़ा</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="140" />
-      <source>Larger</source>
-      <translation>बड़ा</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="1407" />
+      <location filename="../core/layout_templates.py" line="1439" />
       <source>Daylight</source>
       <translation>दिन का उजाला</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1440" />
       <source>A balanced everyday sheet: title, large map, legend, scale and source.</source>
       <translation>रोज़मर्रा के लिए संतुलित शीट: शीर्षक, बड़ा मानचित्र, लेजेंड, स्केल और स्रोत।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1416" />
+      <location filename="../core/layout_templates.py" line="1448" />
       <source>Clearline</source>
       <translation>स्पष्ट रेखा</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1417" />
+      <location filename="../core/layout_templates.py" line="1449" />
       <source>A wide map with the legend in columns below: for long legends.</source>
       <translation>नीचे स्तंभों में लेजेंड वाला चौड़ा मानचित्र: लंबे लेजेंड के लिए।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1425" />
+      <location filename="../core/layout_templates.py" line="1457" />
       <source>Bare Map</source>
       <translation>सादा मानचित्र</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1426" />
+      <location filename="../core/layout_templates.py" line="1458" />
       <source>Just the map and its data credits, for placing in another document.</source>
       <translation>केवल मानचित्र और उसके डेटा श्रेय, किसी अन्य दस्तावेज़ में लगाने के लिए।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1434" />
+      <location filename="../core/layout_templates.py" line="1466" />
       <source>Caption</source>
       <comment>layout template name: a report figure, caption under the map</comment>
       <translation>कैप्शन सहित आकृति</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1435" />
+      <location filename="../core/layout_templates.py" line="1467" />
       <source>A report figure: the map with a caption, scale bar and source under it.</source>
       <translation>एक रिपोर्ट आकृति: मानचित्र, उसके नीचे कैप्शन, स्केल बार और स्रोत के साथ।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1443" />
+      <location filename="../core/layout_templates.py" line="1475" />
       <source>Fieldbook</source>
       <translation>फ़ील्ड नोटबुक</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1476" />
       <source>A survey sheet with a labelled grid and a title block: scale, CRS, date.</source>
       <translation>लेबल लगे ग्रिड और शीर्षक ब्लॉक वाली सर्वेक्षण शीट: स्केल, CRS, तारीख़।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1458" />
+      <location filename="../core/layout_templates.py" line="1490" />
       <source>Broadside</source>
       <translation>पोस्टर</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1459" />
+      <location filename="../core/layout_templates.py" line="1491" />
       <source>A bold poster: big headline, dominant map, story and legend in a rail.</source>
       <translation>एक दमदार पोस्टर: बड़ा मुख्य शीर्षक, प्रमुख मानचित्र, और एक पट्टी में विवरण व लेजेंड।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1467" />
+      <location filename="../core/layout_templates.py" line="1499" />
       <source>Near &amp; Far</source>
       <translation>पास और दूर</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1468" />
+      <location filename="../core/layout_templates.py" line="1500" />
       <source>The map with a locator inset that shows where it is.</source>
       <translation>स्थान दिखाने वाले लोकेटर इनसेट के साथ मानचित्र।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1476" />
+      <location filename="../core/layout_templates.py" line="1508" />
       <source>On the Map</source>
       <translation>मानचित्र पर</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1477" />
+      <location filename="../core/layout_templates.py" line="1509" />
       <source>The map fills the page; the title and story sit on a panel over it.</source>
       <translation>मानचित्र पूरे पेज को भरता है; शीर्षक और विवरण उस पर एक पैनल में रहते हैं।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1517" />
       <source>Signal</source>
       <translation>संकेत</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1486" />
+      <location filename="../core/layout_templates.py" line="1518" />
       <source>A data-led page: the map with up to three key figures you supply.</source>
       <translation>डेटा-केंद्रित पेज: मानचित्र के साथ आपके दिए गए तीन तक मुख्य आँकड़े।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1527" />
       <source>After Hours</source>
       <translation>आधी रात</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1496" />
+      <location filename="../core/layout_templates.py" line="1528" />
       <source>A dark page with the map to the edges and text on dark panels.</source>
       <translation>किनारों तक फैले मानचित्र और गहरे पैनलों पर टेक्स्ट वाला गहरा पेज।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1411" />
+      <location filename="../core/layout_templates.py" line="1443" />
       <source>Best for: everyday maps, reports and emails.</source>
       <translation>सबसे उपयुक्त: रोज़मर्रा के मानचित्र, रिपोर्ट और ईमेल।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1420" />
+      <location filename="../core/layout_templates.py" line="1452" />
       <source>Best for: wide maps with long legends.</source>
       <translation>सबसे उपयुक्त: लंबे लेजेंड वाले चौड़े मानचित्र।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1429" />
+      <location filename="../core/layout_templates.py" line="1461" />
       <source>Best for: pasting into a report, slide or web page.</source>
       <translation>सबसे उपयुक्त: रिपोर्ट, स्लाइड या वेब पृष्ठ में चिपकाना।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1438" />
+      <location filename="../core/layout_templates.py" line="1470" />
       <source>Best for: reports and papers that caption their figures.</source>
       <translation>सबसे उपयुक्त: वे रिपोर्ट और शोधपत्र जो अपने चित्रों को शीर्षक देते हैं।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1447" />
+      <location filename="../core/layout_templates.py" line="1479" />
       <source>Best for: field surveys and site records.</source>
       <translation>सबसे उपयुक्त: क्षेत्र सर्वेक्षण और साइट के रिकॉर्ड।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1494" />
       <source>Best for: posters and wall displays.</source>
       <translation>सबसे उपयुक्त: पोस्टर और दीवार पर लगने वाले डिस्प्ले।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1503" />
       <source>Best for: maps of a small area that need locating.</source>
       <translation>सबसे उपयुक्त: छोटे क्षेत्र के वे मानचित्र जिनका स्थान बताना ज़रूरी है।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1480" />
+      <location filename="../core/layout_templates.py" line="1512" />
       <source>Best for: presentations and maps with a story.</source>
       <translation>सबसे उपयुक्त: प्रस्तुतियाँ और कहानी कहने वाले मानचित्र।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1489" />
+      <location filename="../core/layout_templates.py" line="1521" />
       <source>Best for: data summaries and briefings with key figures.</source>
       <translation>सबसे उपयुक्त: मुख्य आँकड़ों वाले डेटा सारांश और ब्रीफ़िंग।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1499" />
+      <location filename="../core/layout_templates.py" line="1531" />
       <source>Best for: dark-room screens and projected displays.</source>
       <translation>सबसे उपयुक्त: अँधेरे कमरे की स्क्रीन और प्रोजेक्टर डिस्प्ले।</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1453" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1142" />
@@ -348,15 +321,15 @@
       <translation>लेजेंड</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1452" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1484" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1143" />
@@ -365,12 +338,12 @@
       <translation>स्केल बार</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1430" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1144" />
@@ -380,55 +353,55 @@
       <translation>स्रोत पंक्ति</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1421" />
+      <location filename="../core/layout_templates.py" line="1453" />
       <source>legend band</source>
       <translation>लेजेंड बैंड</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1439" />
+      <location filename="../core/layout_templates.py" line="1471" />
       <source>caption</source>
       <translation>कैप्शन</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1449" />
+      <location filename="../core/layout_templates.py" line="1481" />
       <source>grid</source>
       <translation>ग्रिड</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1450" />
+      <location filename="../core/layout_templates.py" line="1482" />
       <source>title block</source>
       <translation>शीर्षक ब्लॉक</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1451" />
+      <location filename="../core/layout_templates.py" line="1483" />
       <source>north arrow</source>
       <translation>उत्तर तीर</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
+      <location filename="../core/layout_templates.py" line="1495" />
       <source>headline</source>
       <translation>मुख्य शीर्षक</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <source>notes panel</source>
       <translation>नोट्स पैनल</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <location filename="../core/template_designs.py" line="1140" />
       <source>locator</source>
       <translation>लोकेटर</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <source>key figures</source>
       <translation>मुख्य आँकड़े</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <location filename="../core/template_designs.py" line="1130" />
       <source>notes</source>
       <translation>नोट्स</translation>
@@ -826,7 +799,7 @@ Anything that cannot be translated exactly is reported in the log rather than dr
     </message>
     <message>
       <location filename="../processing/export_project.py" line="143" />
-      <location filename="../ui/cartograph/template_picker.py" line="715" />
+      <location filename="../ui/cartograph/template_picker.py" line="730" />
       <location filename="../ui/main_dialog.py" line="2393" />
       <source>Legend</source>
       <translation>लेजेंड</translation>
@@ -1426,7 +1399,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="482" />
-      <location filename="../ui/cartograph/template_picker.py" line="714" />
+      <location filename="../ui/cartograph/template_picker.py" line="729" />
       <source>Title</source>
       <translation>शीर्षक</translation>
     </message>
@@ -1792,8 +1765,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="938" />
-      <location filename="../ui/cartograph/template_picker.py" line="698" />
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="713" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes</source>
       <translation>पाठ के आकार</translation>
     </message>
@@ -2342,47 +2315,47 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>{profile} के रूप में सहेजा गया, जो यहाँ उपलब्ध नहीं है: {reason}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="159" />
+      <location filename="../ui/cartograph/template_picker.py" line="161" />
       <source>Letter (ANSI A)</source>
       <translation>Letter (ANSI A)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="160" />
+      <location filename="../ui/cartograph/template_picker.py" line="162" />
       <source>Tabloid (ANSI B)</source>
       <translation>Tabloid (ANSI B)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="161" />
+      <location filename="../ui/cartograph/template_picker.py" line="163" />
       <source>Legal</source>
       <translation>Legal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="164" />
+      <location filename="../ui/cartograph/template_picker.py" line="166" />
       <source>Automatic (fits the map)</source>
       <translation>स्वचालित (मानचित्र के अनुसार फ़िट)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="165" />
+      <location filename="../ui/cartograph/template_picker.py" line="167" />
       <source>Portrait</source>
       <translation>पोर्ट्रेट</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="166" />
+      <location filename="../ui/cartograph/template_picker.py" line="168" />
       <source>Landscape</source>
       <translation>लैंडस्केप</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="171" />
+      <location filename="../ui/cartograph/template_picker.py" line="173" />
       <source>All</source>
       <translation>सभी</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="172" />
+      <location filename="../ui/cartograph/template_picker.py" line="174" />
       <source>Essentials</source>
       <translation>ज़रूरी</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="173" />
+      <location filename="../ui/cartograph/template_picker.py" line="175" />
       <source>Characterful</source>
       <translation>विशिष्ट</translation>
     </message>
@@ -2394,7 +2367,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/template_picker.py" line="395" />
-      <location filename="../ui/cartograph/template_picker.py" line="1353" />
+      <location filename="../ui/cartograph/template_picker.py" line="1359" />
       <source>Preview could not be drawn</source>
       <translation>पूर्वावलोकन नहीं बनाया जा सका</translation>
     </message>
@@ -2425,61 +2398,61 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>वैकल्पिक। बिना मूल्य वाला लेबल छोड़ दिया जाता है। आँकड़े प्रोजेक्ट के साथ सहेजे जाते हैं।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="716" />
+      <location filename="../ui/cartograph/template_picker.py" line="731" />
       <source>Notes</source>
       <translation>नोट्स</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="719" />
+      <location filename="../ui/cartograph/template_picker.py" line="734" />
       <source>Size of the title</source>
       <translation>शीर्षक का आकार</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="720" />
+      <location filename="../ui/cartograph/template_picker.py" line="735" />
       <source>Size of the legend</source>
       <translation>लेजेंड का आकार</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="721" />
+      <location filename="../ui/cartograph/template_picker.py" line="736" />
       <source>Size of the notes and key figures</source>
       <translation>नोट्स और मुख्य आँकड़ों का आकार</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="870" />
+      <location filename="../ui/cartograph/template_picker.py" line="876" />
       <source>Choose a layout template</source>
       <translation>एक लेआउट टेम्पलेट चुनें</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="936" />
+      <location filename="../ui/cartograph/template_picker.py" line="942" />
       <source>Each preview shows the map the canvas shows now.</source>
       <translation>हर पूर्वावलोकन नक्शे को वैसा ही दिखाता है जैसा कैनवास अभी दिखा रहा है।</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="946" />
+      <location filename="../ui/cartograph/template_picker.py" line="952" />
       <source>Show designs</source>
       <translation>डिज़ाइन दिखाएँ</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="978" />
-      <location filename="../ui/cartograph/template_picker.py" line="983" />
       <location filename="../ui/cartograph/template_picker.py" line="984" />
+      <location filename="../ui/cartograph/template_picker.py" line="989" />
+      <location filename="../ui/cartograph/template_picker.py" line="990" />
       <source>Page size</source>
       <translation>पृष्ठ आकार</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="990" />
-      <location filename="../ui/cartograph/template_picker.py" line="995" />
       <location filename="../ui/cartograph/template_picker.py" line="996" />
+      <location filename="../ui/cartograph/template_picker.py" line="1001" />
+      <location filename="../ui/cartograph/template_picker.py" line="1002" />
       <source>Orientation</source>
       <translation>अभिविन्यास</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1014" />
+      <location filename="../ui/cartograph/template_picker.py" line="1020" />
       <source>Layout templates</source>
       <translation>लेआउट टेम्पलेट</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1080" />
+      <location filename="../ui/cartograph/template_picker.py" line="1086" />
       <source>Create layout</source>
       <translation>लेआउट बनाएँ</translation>
     </message>
@@ -2514,12 +2487,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>यह क्या गिनता है, जैसे सर्वेक्षित भूखंड</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes (changed)</source>
       <translation>पाठ के आकार (बदले गए)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="780" />
+      <location filename="../ui/cartograph/template_picker.py" line="789" />
       <source>Smaller text gives the map more room.</source>
       <translation>छोटा पाठ मानचित्र को अधिक जगह देता है।</translation>
     </message>
@@ -2534,12 +2507,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>{cue}: {hint}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1037" />
+      <location filename="../ui/cartograph/template_picker.py" line="1043" />
       <source>{name}: {description}</source>
       <translation>{name}: {description}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1481" />
+      <location filename="../ui/cartograph/template_picker.py" line="1487" />
       <source>Selected: {name}</source>
       <translation>चुना गया: {name}</translation>
     </message>
@@ -3286,6 +3259,16 @@ They are also online at &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="351" />
       <source>Normal</source>
       <translation>सामान्य</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="352" />
+      <source>Small</source>
+      <translation>छोटा</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="353" />
+      <source>Large</source>
+      <translation>बड़ा</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="354" />

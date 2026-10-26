@@ -157,190 +157,163 @@
       <translation>تعذّر إكمال الفحص: {error}</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="136" />
-      <source>Smaller</source>
-      <translation>أصغر</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="137" />
-      <location filename="../ui/main_dialog.py" line="352" />
-      <source>Small</source>
-      <translation>صغير</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="138" />
-      <source>Standard</source>
-      <translation>قياسي</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="139" />
-      <location filename="../ui/main_dialog.py" line="353" />
-      <source>Large</source>
-      <translation>كبير</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="140" />
-      <source>Larger</source>
-      <translation>أكبر</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="1407" />
+      <location filename="../core/layout_templates.py" line="1439" />
       <source>Daylight</source>
       <translation>ضوء النهار</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1440" />
       <source>A balanced everyday sheet: title, large map, legend, scale and source.</source>
       <translation>لوحة متوازنة للاستخدام اليومي: عنوان وخريطة كبيرة ووسيلة إيضاح ومقياس رسم ومصدر.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1416" />
+      <location filename="../core/layout_templates.py" line="1448" />
       <source>Clearline</source>
       <translation>خط واضح</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1417" />
+      <location filename="../core/layout_templates.py" line="1449" />
       <source>A wide map with the legend in columns below: for long legends.</source>
       <translation>خريطة عريضة مع وسيلة الإيضاح في أعمدة أسفلها: لوسائل الإيضاح الطويلة.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1425" />
+      <location filename="../core/layout_templates.py" line="1457" />
       <source>Bare Map</source>
       <translation>خريطة بسيطة</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1426" />
+      <location filename="../core/layout_templates.py" line="1458" />
       <source>Just the map and its data credits, for placing in another document.</source>
       <translation>الخريطة وبيانات الإسناد الخاصة بها فقط، لوضعها في مستند آخر.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1434" />
+      <location filename="../core/layout_templates.py" line="1466" />
       <source>Caption</source>
       <comment>layout template name: a report figure, caption under the map</comment>
       <translation>شكل مع تعليق</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1435" />
+      <location filename="../core/layout_templates.py" line="1467" />
       <source>A report figure: the map with a caption, scale bar and source under it.</source>
       <translation>شكل تقرير: الخريطة مع تعليق توضيحي وشريط مقياس ومصدر تحتها.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1443" />
+      <location filename="../core/layout_templates.py" line="1475" />
       <source>Fieldbook</source>
       <translation>دفتر الميدان</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1476" />
       <source>A survey sheet with a labelled grid and a title block: scale, CRS, date.</source>
       <translation>لوحة مسح مع شبكة موسومة ولوحة عنوان: المقياس، CRS، التاريخ.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1458" />
+      <location filename="../core/layout_templates.py" line="1490" />
       <source>Broadside</source>
       <translation>ملصق</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1459" />
+      <location filename="../core/layout_templates.py" line="1491" />
       <source>A bold poster: big headline, dominant map, story and legend in a rail.</source>
       <translation>ملصق جريء: عنوان رئيسي كبير وخريطة مهيمنة ونص ووسيلة إيضاح في شريط جانبي.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1467" />
+      <location filename="../core/layout_templates.py" line="1499" />
       <source>Near &amp; Far</source>
       <translation>قريب وبعيد</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1468" />
+      <location filename="../core/layout_templates.py" line="1500" />
       <source>The map with a locator inset that shows where it is.</source>
       <translation>الخريطة مع إطار تحديد موقع يوضح مكانها.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1476" />
+      <location filename="../core/layout_templates.py" line="1508" />
       <source>On the Map</source>
       <translation>على الخريطة</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1477" />
+      <location filename="../core/layout_templates.py" line="1509" />
       <source>The map fills the page; the title and story sit on a panel over it.</source>
       <translation>تملأ الخريطة الصفحة؛ ويظهر العنوان والنص على لوحة فوقها.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1517" />
       <source>Signal</source>
       <translation>إشارة</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1486" />
+      <location filename="../core/layout_templates.py" line="1518" />
       <source>A data-led page: the map with up to three key figures you supply.</source>
       <translation>صفحة قائمة على البيانات: الخريطة مع حتى ثلاثة أرقام رئيسية تحددها أنت.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1527" />
       <source>After Hours</source>
       <translation>منتصف الليل</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1496" />
+      <location filename="../core/layout_templates.py" line="1528" />
       <source>A dark page with the map to the edges and text on dark panels.</source>
       <translation>صفحة داكنة مع خريطة ممتدة حتى الحواف ونص على لوحات داكنة.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1411" />
+      <location filename="../core/layout_templates.py" line="1443" />
       <source>Best for: everyday maps, reports and emails.</source>
       <translation>الأنسب لـ: الخرائط اليومية والتقارير والرسائل الإلكترونية.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1420" />
+      <location filename="../core/layout_templates.py" line="1452" />
       <source>Best for: wide maps with long legends.</source>
       <translation>الأنسب لـ: الخرائط العريضة ذات وسائل الإيضاح الطويلة.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1429" />
+      <location filename="../core/layout_templates.py" line="1461" />
       <source>Best for: pasting into a report, slide or web page.</source>
       <translation>الأنسب لـ: اللصق في تقرير أو شريحة أو صفحة ويب.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1438" />
+      <location filename="../core/layout_templates.py" line="1470" />
       <source>Best for: reports and papers that caption their figures.</source>
       <translation>الأنسب لـ: التقارير والأوراق البحثية التي تضع تعليقات على أشكالها.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1447" />
+      <location filename="../core/layout_templates.py" line="1479" />
       <source>Best for: field surveys and site records.</source>
       <translation>الأنسب لـ: المسوحات الميدانية وسجلات المواقع.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1494" />
       <source>Best for: posters and wall displays.</source>
       <translation>الأنسب لـ: الملصقات وشاشات العرض الجدارية.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1503" />
       <source>Best for: maps of a small area that need locating.</source>
       <translation>الأنسب لـ: خرائط المناطق الصغيرة التي تحتاج إلى تحديد موقعها.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1480" />
+      <location filename="../core/layout_templates.py" line="1512" />
       <source>Best for: presentations and maps with a story.</source>
       <translation>الأنسب لـ: العروض التقديمية والخرائط التي تروي قصة.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1489" />
+      <location filename="../core/layout_templates.py" line="1521" />
       <source>Best for: data summaries and briefings with key figures.</source>
       <translation>الأنسب لـ: ملخصات البيانات والإحاطات ذات الأرقام الرئيسية.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1499" />
+      <location filename="../core/layout_templates.py" line="1531" />
       <source>Best for: dark-room screens and projected displays.</source>
       <translation>الأنسب لـ: الشاشات في الغرف المظلمة وعروض الإسقاط.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1453" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1142" />
@@ -348,15 +321,15 @@
       <translation>وسيلة الإيضاح</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1452" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1484" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1143" />
@@ -365,12 +338,12 @@
       <translation>شريط المقياس</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1430" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1144" />
@@ -380,55 +353,55 @@
       <translation>سطر المصدر</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1421" />
+      <location filename="../core/layout_templates.py" line="1453" />
       <source>legend band</source>
       <translation>نطاق وسيلة الإيضاح</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1439" />
+      <location filename="../core/layout_templates.py" line="1471" />
       <source>caption</source>
       <translation>تعليق توضيحي</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1449" />
+      <location filename="../core/layout_templates.py" line="1481" />
       <source>grid</source>
       <translation>شبكة</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1450" />
+      <location filename="../core/layout_templates.py" line="1482" />
       <source>title block</source>
       <translation>لوحة العنوان</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1451" />
+      <location filename="../core/layout_templates.py" line="1483" />
       <source>north arrow</source>
       <translation>سهم الشمال</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
+      <location filename="../core/layout_templates.py" line="1495" />
       <source>headline</source>
       <translation>عنوان رئيسي</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <source>notes panel</source>
       <translation>لوحة الملاحظات</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <location filename="../core/template_designs.py" line="1140" />
       <source>locator</source>
       <translation>محدد الموقع</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <source>key figures</source>
       <translation>أرقام رئيسية</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <location filename="../core/template_designs.py" line="1130" />
       <source>notes</source>
       <translation>ملاحظات</translation>
@@ -826,7 +799,7 @@ Anything that cannot be translated exactly is reported in the log rather than dr
     </message>
     <message>
       <location filename="../processing/export_project.py" line="143" />
-      <location filename="../ui/cartograph/template_picker.py" line="715" />
+      <location filename="../ui/cartograph/template_picker.py" line="730" />
       <location filename="../ui/main_dialog.py" line="2393" />
       <source>Legend</source>
       <translation>وسيلة الإيضاح</translation>
@@ -1426,7 +1399,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="482" />
-      <location filename="../ui/cartograph/template_picker.py" line="714" />
+      <location filename="../ui/cartograph/template_picker.py" line="729" />
       <source>Title</source>
       <translation>العنوان</translation>
     </message>
@@ -1792,8 +1765,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="938" />
-      <location filename="../ui/cartograph/template_picker.py" line="698" />
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="713" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes</source>
       <translation>أحجام النص</translation>
     </message>
@@ -2342,47 +2315,47 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>محفوظ كـ {profile}، وهو غير متاح هنا: {reason}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="159" />
+      <location filename="../ui/cartograph/template_picker.py" line="161" />
       <source>Letter (ANSI A)</source>
       <translation>Letter (ANSI A)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="160" />
+      <location filename="../ui/cartograph/template_picker.py" line="162" />
       <source>Tabloid (ANSI B)</source>
       <translation>Tabloid (ANSI B)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="161" />
+      <location filename="../ui/cartograph/template_picker.py" line="163" />
       <source>Legal</source>
       <translation>Legal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="164" />
+      <location filename="../ui/cartograph/template_picker.py" line="166" />
       <source>Automatic (fits the map)</source>
       <translation>تلقائي (يلائم الخريطة)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="165" />
+      <location filename="../ui/cartograph/template_picker.py" line="167" />
       <source>Portrait</source>
       <translation>عمودي</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="166" />
+      <location filename="../ui/cartograph/template_picker.py" line="168" />
       <source>Landscape</source>
       <translation>أفقي</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="171" />
+      <location filename="../ui/cartograph/template_picker.py" line="173" />
       <source>All</source>
       <translation>الكل</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="172" />
+      <location filename="../ui/cartograph/template_picker.py" line="174" />
       <source>Essentials</source>
       <translation>الأساسيات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="173" />
+      <location filename="../ui/cartograph/template_picker.py" line="175" />
       <source>Characterful</source>
       <translation>المميزة</translation>
     </message>
@@ -2394,7 +2367,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/template_picker.py" line="395" />
-      <location filename="../ui/cartograph/template_picker.py" line="1353" />
+      <location filename="../ui/cartograph/template_picker.py" line="1359" />
       <source>Preview could not be drawn</source>
       <translation>تعذّر رسم المعاينة</translation>
     </message>
@@ -2425,61 +2398,61 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>اختياري. يُحذف أي تسمية بلا قيمة. تُحفظ الأرقام مع المشروع.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="716" />
+      <location filename="../ui/cartograph/template_picker.py" line="731" />
       <source>Notes</source>
       <translation>ملاحظات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="719" />
+      <location filename="../ui/cartograph/template_picker.py" line="734" />
       <source>Size of the title</source>
       <translation>حجم العنوان</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="720" />
+      <location filename="../ui/cartograph/template_picker.py" line="735" />
       <source>Size of the legend</source>
       <translation>حجم وسيلة الإيضاح</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="721" />
+      <location filename="../ui/cartograph/template_picker.py" line="736" />
       <source>Size of the notes and key figures</source>
       <translation>حجم الملاحظات والأرقام الرئيسية</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="870" />
+      <location filename="../ui/cartograph/template_picker.py" line="876" />
       <source>Choose a layout template</source>
       <translation>اختر قالب تخطيط</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="936" />
+      <location filename="../ui/cartograph/template_picker.py" line="942" />
       <source>Each preview shows the map the canvas shows now.</source>
       <translation>تعرض كل معاينة الخريطة كما تظهر في اللوحة الآن.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="946" />
+      <location filename="../ui/cartograph/template_picker.py" line="952" />
       <source>Show designs</source>
       <translation>إظهار الأنماط</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="978" />
-      <location filename="../ui/cartograph/template_picker.py" line="983" />
       <location filename="../ui/cartograph/template_picker.py" line="984" />
+      <location filename="../ui/cartograph/template_picker.py" line="989" />
+      <location filename="../ui/cartograph/template_picker.py" line="990" />
       <source>Page size</source>
       <translation>حجم الصفحة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="990" />
-      <location filename="../ui/cartograph/template_picker.py" line="995" />
       <location filename="../ui/cartograph/template_picker.py" line="996" />
+      <location filename="../ui/cartograph/template_picker.py" line="1001" />
+      <location filename="../ui/cartograph/template_picker.py" line="1002" />
       <source>Orientation</source>
       <translation>الاتجاه</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1014" />
+      <location filename="../ui/cartograph/template_picker.py" line="1020" />
       <source>Layout templates</source>
       <translation>قوالب التخطيط</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1080" />
+      <location filename="../ui/cartograph/template_picker.py" line="1086" />
       <source>Create layout</source>
       <translation>إنشاء تخطيط</translation>
     </message>
@@ -2514,12 +2487,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>ما الذي يحصيه، مثل القطع المساحية التي جرى مسحها</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes (changed)</source>
       <translation>أحجام النص (معدّلة)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="780" />
+      <location filename="../ui/cartograph/template_picker.py" line="789" />
       <source>Smaller text gives the map more room.</source>
       <translation>النص الأصغر يمنح الخريطة مساحة أكبر.</translation>
     </message>
@@ -2534,12 +2507,12 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>{cue}: {hint}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1037" />
+      <location filename="../ui/cartograph/template_picker.py" line="1043" />
       <source>{name}: {description}</source>
       <translation>{name}: {description}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1481" />
+      <location filename="../ui/cartograph/template_picker.py" line="1487" />
       <source>Selected: {name}</source>
       <translation>المحدد: {name}</translation>
     </message>
@@ -3286,6 +3259,16 @@ They are also online at &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="351" />
       <source>Normal</source>
       <translation>عادي</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="352" />
+      <source>Small</source>
+      <translation>صغير</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="353" />
+      <source>Large</source>
+      <translation>كبير</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="354" />

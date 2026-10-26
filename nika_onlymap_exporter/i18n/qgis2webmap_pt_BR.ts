@@ -157,190 +157,163 @@
       <translation>Não foi possível concluir a verificação: {error}</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="136" />
-      <source>Smaller</source>
-      <translation>Menor</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="137" />
-      <location filename="../ui/main_dialog.py" line="352" />
-      <source>Small</source>
-      <translation>Pequeno</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="138" />
-      <source>Standard</source>
-      <translation>Padrão</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="139" />
-      <location filename="../ui/main_dialog.py" line="353" />
-      <source>Large</source>
-      <translation>Grande</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="140" />
-      <source>Larger</source>
-      <translation>Maior</translation>
-    </message>
-    <message>
-      <location filename="../core/layout_templates.py" line="1407" />
+      <location filename="../core/layout_templates.py" line="1439" />
       <source>Daylight</source>
       <translation>Luz do dia</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1408" />
+      <location filename="../core/layout_templates.py" line="1440" />
       <source>A balanced everyday sheet: title, large map, legend, scale and source.</source>
       <translation>Uma folha equilibrada para o dia a dia: título, mapa grande, legenda, escala e origem.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1416" />
+      <location filename="../core/layout_templates.py" line="1448" />
       <source>Clearline</source>
       <translation>Linha clara</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1417" />
+      <location filename="../core/layout_templates.py" line="1449" />
       <source>A wide map with the legend in columns below: for long legends.</source>
       <translation>Um mapa largo com a legenda em colunas abaixo: para legendas longas.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1425" />
+      <location filename="../core/layout_templates.py" line="1457" />
       <source>Bare Map</source>
       <translation>Mapa simples</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1426" />
+      <location filename="../core/layout_templates.py" line="1458" />
       <source>Just the map and its data credits, for placing in another document.</source>
       <translation>Somente o mapa e os créditos de seus dados, para inserir em outro documento.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1434" />
+      <location filename="../core/layout_templates.py" line="1466" />
       <source>Caption</source>
       <comment>layout template name: a report figure, caption under the map</comment>
       <translation>Figura comentada</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1435" />
+      <location filename="../core/layout_templates.py" line="1467" />
       <source>A report figure: the map with a caption, scale bar and source under it.</source>
       <translation>Uma figura de relatório: o mapa com um texto explicativo, barra de escala e origem embaixo.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1443" />
+      <location filename="../core/layout_templates.py" line="1475" />
       <source>Fieldbook</source>
       <translation>Caderno de campo</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1476" />
       <source>A survey sheet with a labelled grid and a title block: scale, CRS, date.</source>
       <translation>Uma folha de levantamento com uma grade rotulada e um carimbo: escala, CRS, data.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1458" />
+      <location filename="../core/layout_templates.py" line="1490" />
       <source>Broadside</source>
       <translation>Cartaz</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1459" />
+      <location filename="../core/layout_templates.py" line="1491" />
       <source>A bold poster: big headline, dominant map, story and legend in a rail.</source>
       <translation>Um cartaz marcante: título grande, mapa em destaque, texto e legenda em uma faixa lateral.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1467" />
+      <location filename="../core/layout_templates.py" line="1499" />
       <source>Near &amp; Far</source>
       <translation>Perto e longe</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1468" />
+      <location filename="../core/layout_templates.py" line="1500" />
       <source>The map with a locator inset that shows where it is.</source>
       <translation>O mapa com um quadro localizador que mostra onde ele está.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1476" />
+      <location filename="../core/layout_templates.py" line="1508" />
       <source>On the Map</source>
       <translation>No mapa</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1477" />
+      <location filename="../core/layout_templates.py" line="1509" />
       <source>The map fills the page; the title and story sit on a panel over it.</source>
       <translation>O mapa preenche a página; o título e o texto ficam em um painel sobre ele.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1517" />
       <source>Signal</source>
       <translation>Sinal</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1486" />
+      <location filename="../core/layout_templates.py" line="1518" />
       <source>A data-led page: the map with up to three key figures you supply.</source>
       <translation>Uma página voltada a dados: o mapa com até três números-chave que você informa.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1527" />
       <source>After Hours</source>
       <translation>Meia-noite</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1496" />
+      <location filename="../core/layout_templates.py" line="1528" />
       <source>A dark page with the map to the edges and text on dark panels.</source>
       <translation>Uma página escura com o mapa sangrado até a borda e texto em painéis escuros.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1411" />
+      <location filename="../core/layout_templates.py" line="1443" />
       <source>Best for: everyday maps, reports and emails.</source>
       <translation>Ideal para: mapas do dia a dia, relatórios e e-mails.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1420" />
+      <location filename="../core/layout_templates.py" line="1452" />
       <source>Best for: wide maps with long legends.</source>
       <translation>Ideal para: mapas largos com legendas longas.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1429" />
+      <location filename="../core/layout_templates.py" line="1461" />
       <source>Best for: pasting into a report, slide or web page.</source>
       <translation>Ideal para: colar em um relatório, slide ou página da web.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1438" />
+      <location filename="../core/layout_templates.py" line="1470" />
       <source>Best for: reports and papers that caption their figures.</source>
       <translation>Ideal para: relatórios e artigos que legendam suas figuras.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1447" />
+      <location filename="../core/layout_templates.py" line="1479" />
       <source>Best for: field surveys and site records.</source>
       <translation>Ideal para: levantamentos de campo e registros de locais.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1494" />
       <source>Best for: posters and wall displays.</source>
       <translation>Ideal para: pôsteres e telas de parede.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1503" />
       <source>Best for: maps of a small area that need locating.</source>
       <translation>Ideal para: mapas de uma área pequena que precisam de localização.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1480" />
+      <location filename="../core/layout_templates.py" line="1512" />
       <source>Best for: presentations and maps with a story.</source>
       <translation>Ideal para: apresentações e mapas com uma história.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1489" />
+      <location filename="../core/layout_templates.py" line="1521" />
       <source>Best for: data summaries and briefings with key figures.</source>
       <translation>Ideal para: resumos de dados e briefings com números-chave.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1499" />
+      <location filename="../core/layout_templates.py" line="1531" />
       <source>Best for: dark-room screens and projected displays.</source>
       <translation>Ideal para: telas em salas escuras e exibições projetadas.</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1453" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1485" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1142" />
@@ -348,15 +321,15 @@
       <translation>legenda</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1452" />
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
-      <location filename="../core/layout_templates.py" line="1490" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1484" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
+      <location filename="../core/layout_templates.py" line="1522" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1143" />
@@ -365,12 +338,12 @@
       <translation>barra de escala</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1412" />
-      <location filename="../core/layout_templates.py" line="1421" />
-      <location filename="../core/layout_templates.py" line="1430" />
-      <location filename="../core/layout_templates.py" line="1439" />
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1500" />
+      <location filename="../core/layout_templates.py" line="1444" />
+      <location filename="../core/layout_templates.py" line="1453" />
+      <location filename="../core/layout_templates.py" line="1462" />
+      <location filename="../core/layout_templates.py" line="1471" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1532" />
       <location filename="../core/template_designs.py" line="1121" />
       <location filename="../core/template_designs.py" line="1130" />
       <location filename="../core/template_designs.py" line="1144" />
@@ -380,55 +353,55 @@
       <translation>linha de origem</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1421" />
+      <location filename="../core/layout_templates.py" line="1453" />
       <source>legend band</source>
       <translation>faixa de legenda</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1439" />
+      <location filename="../core/layout_templates.py" line="1471" />
       <source>caption</source>
       <translation>texto explicativo</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1449" />
+      <location filename="../core/layout_templates.py" line="1481" />
       <source>grid</source>
       <translation>grade</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1450" />
+      <location filename="../core/layout_templates.py" line="1482" />
       <source>title block</source>
       <translation>carimbo</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1451" />
+      <location filename="../core/layout_templates.py" line="1483" />
       <source>north arrow</source>
       <translation>seta norte</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
+      <location filename="../core/layout_templates.py" line="1495" />
       <source>headline</source>
       <translation>título principal</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1463" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1495" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <source>notes panel</source>
       <translation>painel de notas</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1472" />
-      <location filename="../core/layout_templates.py" line="1481" />
+      <location filename="../core/layout_templates.py" line="1504" />
+      <location filename="../core/layout_templates.py" line="1513" />
       <location filename="../core/template_designs.py" line="1140" />
       <source>locator</source>
       <translation>localizador</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <source>key figures</source>
       <translation>números-chave</translation>
     </message>
     <message>
-      <location filename="../core/layout_templates.py" line="1490" />
+      <location filename="../core/layout_templates.py" line="1522" />
       <location filename="../core/template_designs.py" line="1130" />
       <source>notes</source>
       <translation>notas</translation>
@@ -826,7 +799,7 @@ Tudo o que não pode ser levado com exatidão é informado no log em vez de ser 
     </message>
     <message>
       <location filename="../processing/export_project.py" line="143" />
-      <location filename="../ui/cartograph/template_picker.py" line="715" />
+      <location filename="../ui/cartograph/template_picker.py" line="730" />
       <location filename="../ui/main_dialog.py" line="2393" />
       <source>Legend</source>
       <translation>Legenda</translation>
@@ -1426,7 +1399,7 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="482" />
-      <location filename="../ui/cartograph/template_picker.py" line="714" />
+      <location filename="../ui/cartograph/template_picker.py" line="729" />
       <source>Title</source>
       <translation>Título</translation>
     </message>
@@ -1792,8 +1765,8 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="938" />
-      <location filename="../ui/cartograph/template_picker.py" line="698" />
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="713" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes</source>
       <translation>Tamanhos de texto</translation>
     </message>
@@ -2342,47 +2315,47 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
       <translation>Salvo como {profile}, que não está disponível aqui: {reason}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="159" />
+      <location filename="../ui/cartograph/template_picker.py" line="161" />
       <source>Letter (ANSI A)</source>
       <translation>Letter (ANSI A)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="160" />
+      <location filename="../ui/cartograph/template_picker.py" line="162" />
       <source>Tabloid (ANSI B)</source>
       <translation>Tabloid (ANSI B)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="161" />
+      <location filename="../ui/cartograph/template_picker.py" line="163" />
       <source>Legal</source>
       <translation>Legal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="164" />
+      <location filename="../ui/cartograph/template_picker.py" line="166" />
       <source>Automatic (fits the map)</source>
       <translation>Automático (ajusta ao mapa)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="165" />
+      <location filename="../ui/cartograph/template_picker.py" line="167" />
       <source>Portrait</source>
       <translation>Retrato</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="166" />
+      <location filename="../ui/cartograph/template_picker.py" line="168" />
       <source>Landscape</source>
       <translation>Paisagem</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="171" />
+      <location filename="../ui/cartograph/template_picker.py" line="173" />
       <source>All</source>
       <translation>Todos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="172" />
+      <location filename="../ui/cartograph/template_picker.py" line="174" />
       <source>Essentials</source>
       <translation>Essenciais</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="173" />
+      <location filename="../ui/cartograph/template_picker.py" line="175" />
       <source>Characterful</source>
       <translation>Com personalidade</translation>
     </message>
@@ -2394,7 +2367,7 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
     </message>
     <message>
       <location filename="../ui/cartograph/template_picker.py" line="395" />
-      <location filename="../ui/cartograph/template_picker.py" line="1353" />
+      <location filename="../ui/cartograph/template_picker.py" line="1359" />
       <source>Preview could not be drawn</source>
       <translation>Não foi possível desenhar a visualização</translation>
     </message>
@@ -2425,61 +2398,61 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
       <translation>Opcional. Um rótulo sem valor é deixado de fora. Os números são salvos com o projeto.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="716" />
+      <location filename="../ui/cartograph/template_picker.py" line="731" />
       <source>Notes</source>
       <translation>Notas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="719" />
+      <location filename="../ui/cartograph/template_picker.py" line="734" />
       <source>Size of the title</source>
       <translation>Tamanho do título</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="720" />
+      <location filename="../ui/cartograph/template_picker.py" line="735" />
       <source>Size of the legend</source>
       <translation>Tamanho da legenda</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="721" />
+      <location filename="../ui/cartograph/template_picker.py" line="736" />
       <source>Size of the notes and key figures</source>
       <translation>Tamanho das notas e dos números-chave</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="870" />
+      <location filename="../ui/cartograph/template_picker.py" line="876" />
       <source>Choose a layout template</source>
       <translation>Escolha um modelo de layout</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="936" />
+      <location filename="../ui/cartograph/template_picker.py" line="942" />
       <source>Each preview shows the map the canvas shows now.</source>
       <translation>Cada prévia mostra o mapa como a tela o mostra agora.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="946" />
+      <location filename="../ui/cartograph/template_picker.py" line="952" />
       <source>Show designs</source>
       <translation>Mostrar modelos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="978" />
-      <location filename="../ui/cartograph/template_picker.py" line="983" />
       <location filename="../ui/cartograph/template_picker.py" line="984" />
+      <location filename="../ui/cartograph/template_picker.py" line="989" />
+      <location filename="../ui/cartograph/template_picker.py" line="990" />
       <source>Page size</source>
       <translation>Tamanho da página</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="990" />
-      <location filename="../ui/cartograph/template_picker.py" line="995" />
       <location filename="../ui/cartograph/template_picker.py" line="996" />
+      <location filename="../ui/cartograph/template_picker.py" line="1001" />
+      <location filename="../ui/cartograph/template_picker.py" line="1002" />
       <source>Orientation</source>
       <translation>Orientação</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1014" />
+      <location filename="../ui/cartograph/template_picker.py" line="1020" />
       <source>Layout templates</source>
       <translation>Modelos de layout</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1080" />
+      <location filename="../ui/cartograph/template_picker.py" line="1086" />
       <source>Create layout</source>
       <translation>Criar layout</translation>
     </message>
@@ -2514,12 +2487,12 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
       <translation>O que ele conta, como parcelas levantadas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="763" />
+      <location filename="../ui/cartograph/template_picker.py" line="779" />
       <source>Text sizes (changed)</source>
       <translation>Tamanhos de texto (alterados)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="780" />
+      <location filename="../ui/cartograph/template_picker.py" line="789" />
       <source>Smaller text gives the map more room.</source>
       <translation>Texto menor deixa mais espaço para o mapa.</translation>
     </message>
@@ -2534,12 +2507,12 @@ Os mapas que você já publicou continuam online. Você precisará entrar de nov
       <translation>{cue}: {hint}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1037" />
+      <location filename="../ui/cartograph/template_picker.py" line="1043" />
       <source>{name}: {description}</source>
       <translation>{name}: {description}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/template_picker.py" line="1481" />
+      <location filename="../ui/cartograph/template_picker.py" line="1487" />
       <source>Selected: {name}</source>
       <translation>Selecionado: {name}</translation>
     </message>
@@ -3286,6 +3259,16 @@ Eles também estão online em &lt;{url}&gt;.
       <location filename="../ui/main_dialog.py" line="351" />
       <source>Normal</source>
       <translation>Normal</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="352" />
+      <source>Small</source>
+      <translation>Pequeno</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="353" />
+      <source>Large</source>
+      <translation>Grande</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="354" />
