@@ -3673,8 +3673,10 @@ class TestPanel:
             from qgis.PyQt.QtWidgets import QFormLayout
 
             atlas = cartograph.atlas_tab
-            form = atlas.settings_box.layout()
-            assert form.rowWrapPolicy() == QFormLayout.RowWrapPolicy.WrapAllRows
+            forms = atlas.settings_box.findChildren(QFormLayout)
+            assert forms
+            for form in forms:
+                assert form.rowWrapPolicy() == QFormLayout.RowWrapPolicy.WrapAllRows
             assert atlas.zip_button.y() < atlas.print_button.y()
         finally:
             dialog.close()
