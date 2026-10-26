@@ -264,6 +264,64 @@ class TestPrepareThenFinish:
             image = QImage.fromData(frame.image_bytes, "PNG")
             assert image.width() == round(frame.box.w / 25.4 * dpi)
 
+    def _frames(self, survey, fake_runtime, **kwargs) -> dict:
+        from nika_onlymap_exporter.core.cartograph_ir import FrameSpec
+
+        prepared = prepare_cartograph(
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            FidelityReportBuilder(),
+            frame_modes=all_static(survey.layout),
+            raster_cache=None,
+            **kwargs,
+        )
+        return {i.id: i for i in prepared.items if isinstance(i, FrameSpec)}
+
+    def test_a_static_frame_is_drawn_at_the_saved_resolution_never_below(
+        self, survey, fake_runtime
+    ) -> None:
+        # The browser renders the page at the saved dpi; a picture drawn
+        # below it is enlarged there and goes soft.
+        from qgis.PyQt.QtGui import QImage
+
+        low, high = survey.main_map.uuid(), survey.inset_map.uuid()
+        dpis = {low: 150, high: 400}
+        for export_dpi, expected in ((None, (150, 400)), (300, (300, 400))):
+            frames = self._frames(
+                survey, fake_runtime, frame_dpis=dpis, export_dpi=export_dpi
+            )
+            for uuid, want in zip((low, high), expected):
+                frame = frames[element_id("frame", uuid)]
+                assert frame.dpi == want
+                image = QImage.fromData(frame.image_bytes, "PNG")
+                assert image.width() == round(frame.box.w / 25.4 * want)
+
+    def test_a_frame_too_large_for_the_saved_resolution_says_so(
+        self, survey, fake_runtime, monkeypatch
+    ) -> None:
+        import nika_onlymap_exporter.core.export_resolution as resolution
+
+        # A small canvas limit stands in for the real one, so no huge
+        # picture is drawn here.
+        monkeypatch.setattr(resolution, "MAX_FRAME_SIDE_PX", 1500)
+        report = FidelityReportBuilder()
+        # 2400 dpi on this survey's main map is over what a browser canvas
+        # can hold: it is drawn at what fits, and the report says so.
+        prepared = prepare_cartograph(
+            survey.layout,
+            survey.project,
+            fake_runtime,
+            report,
+            frame_modes=all_static(survey.layout),
+            export_dpi=2400,
+            raster_cache=None,
+        )
+        assert any("not the saved 2400 dpi" in i.detail for i in report.items)
+        for item in prepared.items:
+            if hasattr(item, "image_bytes"):
+                assert item.dpi < 2400
+
 
 # --------------------------------------------------------------------------
 # Ids: brace-free, token-safe, unique

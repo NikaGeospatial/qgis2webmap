@@ -147,7 +147,7 @@ One card per map item on the layout:
   **Static - an image**: a picture of the map as QGIS draws it, in its own
   CRS;
 - the image resolution, for a static frame only: **150**, **200** (the
-  default) or **300 dpi**;
+  default) or **300 dpi**, never below the saved export resolution;
 - **Match QGIS canvas** - sets the map's extent to what the QGIS canvas
   shows. It is an edit to your layout, so the layout designer's **Undo** takes
   it back.

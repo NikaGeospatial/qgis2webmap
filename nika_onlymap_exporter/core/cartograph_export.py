@@ -99,6 +99,7 @@ from .export_ir import (
     OutputMode,
     RasterSpec,
 )
+from .export_resolution import frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .layout_reader import (
@@ -395,6 +396,7 @@ def export_layout_to_cartograph(
     frame_modes: Mapping[str, FrameMode] | None = None,
     frame_dpis: Mapping[str, int] | None = None,
     static_dpi: int = 200,
+    export_dpi: int | None = None,
     title_override: str | None = None,
     writer: OnlyMapWriter | None = None,
     layer_settings: Mapping[str, LayerSettings] | None = None,
@@ -410,6 +412,7 @@ def export_layout_to_cartograph(
         frame_modes=frame_modes,
         frame_dpis=frame_dpis,
         static_dpi=static_dpi,
+        export_dpi=export_dpi,
         title_override=title_override,
     )
     prepared = prepare_live_reads(
@@ -456,13 +459,18 @@ def prepare_cartograph(
     frame_modes: Mapping[str, FrameMode] | None = None,
     frame_dpis: Mapping[str, int] | None = None,
     static_dpi: int = 200,
+    export_dpi: int | None = None,
     title_override: str | None = None,
     raster_cache: StaticFrameCache | None = _DEFAULT_CACHE,
 ) -> PreparedCartograph:
     """Everything that touches `layout`. GUI thread only.
 
     `frame_modes` and `frame_dpis` are keyed by map item uuid; a static frame
-    missing from `frame_dpis` renders at `static_dpi`.
+    missing from `frame_dpis` renders at `static_dpi`. `export_dpi` is the
+    resolution the cartograph is saved at (`core/export_resolution.py`): no
+    static frame is drawn below it, since its page is rendered at that
+    resolution and a lower picture would be enlarged there. `None` leaves
+    each frame at its own choice.
 
     `raster_cache` reuses static-frame rasters across calls (the module's
     shared cache by default); `None` renders every static frame afresh.
@@ -501,6 +509,8 @@ def prepare_cartograph(
     for frame in reading.frames:
         if frame.mode == "static":
             dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
+            if export_dpi is not None:
+                dpi = _resolution_for(frame, dpi, export_dpi, report)
             items.append(_build_static_frame(layout, project, frame, dpi, raster_cache))
         else:
             frame_spec, source = _build_live_frame(
@@ -965,6 +975,28 @@ def _cartograph_id(layout: QgsPrintLayout) -> str:
     name = layout.name() or "cartograph"
     sanitized = _ID_SANITIZE_RE.sub("-", name).strip("-")
     return sanitized or "cartograph"
+
+
+def _resolution_for(
+    frame: MapFrameReading,
+    frame_dpi: int,
+    export_dpi: int,
+    report: FidelityReportBuilder,
+) -> int:
+    """The resolution `frame`'s picture is drawn at on a cartograph saved at
+    `export_dpi`: never lower, within what a browser canvas holds -- and said
+    when the frame is too large to reach it."""
+    resolution = frame_resolution(frame_dpi, export_dpi, frame.box.w, frame.box.h)
+    if resolution.limited:
+        report.approximated(
+            f"Map frame {frame.map_item.displayName()}",
+            f"Drawn at {resolution.dpi} dpi, not the saved {resolution.wanted} "
+            "dpi: at that resolution this frame's picture would be larger than "
+            "a browser can draw. Make the map smaller or save a lower "
+            "resolution.",
+            item_id=frame.frame_id,
+        )
+    return resolution.dpi
 
 
 def _build_static_frame(

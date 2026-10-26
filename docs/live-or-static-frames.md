@@ -22,7 +22,7 @@ the map's card in **Map frames** (on the cartograph's **Layout** tab).
 | Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-a-live-frame-draws-in) | The map's **own CRS**, untouched |
 | Styling | Translated, with the web map's [fidelity](supported-features.md) - the Checks tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
-| Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default) |
+| Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default), or the saved export resolution when that is higher |
 | Needs WebGL in the reader's browser | Yes - without it the frame shows a note instead of the map | No |
 | File size | Larger - the map's data and the map runtime, a few megabytes | Small - an image per frame |
 | Can drive an [atlas](cartograph-atlas.md) | Yes | No |
@@ -116,7 +116,11 @@ printer; choose 300 for print-shop work. Each step up roughly doubles the
 image's share of the file.
 
 Printing does not re-render a static frame, so its DPI is the sharpest it will
-ever print. A live frame has no such ceiling: when the page is printed or
+ever print. The page is rendered at the saved resolution (300 dpi unless Print
+settings say otherwise), and a picture below that would be enlarged and go soft,
+so a static frame is always drawn at least at the saved resolution: the DPI you
+choose can only raise it. A frame too large to reach the saved resolution within
+what a browser can draw is drawn at the most that fits, and Checks says so. A live frame has no such ceiling: when the page is printed or
 exported it is re-rendered at the print resolution.
 
 ## Legends, scale bars and labels follow the frame

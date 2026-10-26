@@ -58,6 +58,7 @@ from ...core.canvas_cartograph import (
     template_record,
 )
 from ...core.cartograph_ir import CartographSpec
+from ...core.export_resolution import DEFAULT_EXPORT_DPI
 from ...core.fidelity_summary import (
     ReportState,
     ReportSummary,
@@ -1466,6 +1467,11 @@ class CartographController:
         from ...core.fidelity_report import FidelityReportBuilder
 
         report = FidelityReportBuilder()
+        print_settings = self._print_settings()
+        # The resolution the cartograph is saved at (the runtime's own
+        # default when no print settings were saved): a static frame is
+        # drawn at least that sharp, whatever its own choice.
+        export_dpi = print_settings.dpi if print_settings else DEFAULT_EXPORT_DPI
 
         # The layout half here, on the GUI thread: it hides and renders the
         # layout's own items, and the layout may be open in its designer.
@@ -1480,6 +1486,7 @@ class CartographController:
                 frame_modes=frame_modes,
                 frame_dpis=frame_dpis,
                 static_dpi=DEFAULT_STATIC_DPI,
+                export_dpi=export_dpi,
             )
         except Exception as exc:
             self._on_build_failed(str(exc), traceback.format_exc())
@@ -1489,7 +1496,6 @@ class CartographController:
         prepared = dataclasses.replace(
             prepared, spec=self._apply_page_fields(prepared.spec)
         )
-        print_settings = self._print_settings()
         if print_settings is not None:
             prepared = dataclasses.replace(
                 prepared, spec=apply_to_spec(prepared.spec, print_settings)

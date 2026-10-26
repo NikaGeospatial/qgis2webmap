@@ -138,6 +138,7 @@ def fake_cartograph_export(monkeypatch):
         frame_modes,
         frame_dpis,
         static_dpi=200,
+        export_dpi=None,
         title_override=None,
     ):
         report.approximated("Map frame 'Overview'", "Rendered as a static raster.")
@@ -145,6 +146,7 @@ def fake_cartograph_export(monkeypatch):
             {
                 "frame_modes": dict(frame_modes),
                 "frame_dpis": dict(frame_dpis),
+                "export_dpi": export_dpi,
                 "prepare_on_gui_thread": on_gui_thread(),
             }
         )
@@ -937,6 +939,9 @@ class TestBuildThreadsAndJobs:
                 rows[0][0]: 150,
                 rows[1][0]: 300,
             }
+            # No print settings saved: the runtime's own 300 dpi, which a
+            # static frame is never drawn below.
+            assert fake_cartograph_export.calls[-1]["export_dpi"] == 300
         finally:
             dialog.close()
 
