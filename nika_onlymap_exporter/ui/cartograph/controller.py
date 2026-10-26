@@ -238,10 +238,13 @@ class CartographController:
         # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
         # the hand-off prompt's print-safety line.
         self._last_page_label: str | None = None
-        # Builds started so far, and the pages to open once the build numbered
-        # at least so much has saved: (query, build number). See `_open_saved`.
+        # Builds started so far, and the pages to open once a save has landed
+        # that carries at least so many edits: (query, edit revision). See
+        # `_open_saved`.
         self._builds_started = 0
         self._open_after_save: list[tuple[str, int]] = []
+        # The edit revision the running build was started at.
+        self._job_edits = 0
         # Saves asked for, and how many of them the file on disk carries: the
         # file is current only when the two meet. A failed save (worker or
         # disk) leaves it behind, so an action never opens an older file.
@@ -1481,6 +1484,7 @@ class CartographController:
         self._builds_started += 1
         build_number = self._builds_started
         edits = self._edits_made
+        self._job_edits = edits
         job.succeeded.connect(
             lambda finished: self._on_build_succeeded(
                 path, finished, report, built_for, build_number, edits
@@ -1570,10 +1574,12 @@ class CartographController:
             if self._colour_vision is not None:
                 self._colour_vision.refresh()
         ready = [
-            query for query, needed in self._open_after_save if build_number >= needed
+            query
+            for query, needed in self._open_after_save
+            if self._edits_saved >= needed
         ]
         self._open_after_save = [
-            entry for entry in self._open_after_save if build_number < entry[1]
+            entry for entry in self._open_after_save if self._edits_saved < entry[1]
         ]
         if ready:
             self._clear_footer()  # no longer "saving first"
@@ -1627,10 +1633,24 @@ class CartographController:
         changed - the same settings-polling the web map's live preview uses
         (`DialogState.snapshot`), for the one part of it a cartograph reads."""
         self._update_status_label()
+        self.sync_layer_settings()
+
+    def sync_layer_settings(self) -> bool:
+        """Mark the cartograph dirty if the Layers tab's popup or label
+        choices differ from the last ones seen. Called straight from the
+        settings' change handlers and before any action decides the file is
+        current, so it never waits for the status tick. Returns whether a
+        change was found."""
+        if self.state.output is not DialogOutput.CARTOGRAPH:
+            # The Web map's own settings; the first tick after switching over
+            # compares them against the last build.
+            return False
         layers = self._layers_signature()
-        if layers != self._built_layers_signature:
-            self._built_layers_signature = layers
-            self.schedule_autosave()
+        if layers == self._built_layers_signature:
+            return False
+        self._built_layers_signature = layers
+        self.schedule_autosave()
+        return True
 
     def _layers_signature(self) -> str:
         import json
@@ -1896,21 +1916,21 @@ class CartographController:
         """Open the cartograph in the browser as it is with every edit made
         so far: now if it is saved, otherwise once the save carrying the
         latest edits lands. A failed save or another layout cancels it."""
-        if self._autosave_timer.isActive():
-            # Edits not yet in any build: wait for the next one to start.
-            needed = self._builds_started + 1
-        elif self._job is not None:
-            # The running build carries every edit so far.
-            needed = self._builds_started
-        elif self._edits_saved >= self._edits_made:
+        # Settings edited since the last look (the status tick may not have
+        # run yet) count as edits made.
+        self.sync_layer_settings()
+        needed = self._edits_made
+        if self._edits_saved >= needed:
             self._clear_footer()
             self._open_url(self._page_url(path, query))
             return
-        else:
-            # The last save failed, so the file is older than the edits: save
-            # again and open that. Failing again says why, and opens nothing.
+        running_carries_it = self._job is not None and self._job_edits >= needed
+        if not running_carries_it and not self._autosave_timer.isActive():
+            # Nothing on the way carries the latest edits (the last save
+            # failed, or the running build predates them): save again and
+            # open that. Failing again says why, and opens nothing.
             self.schedule_autosave()
-            needed = self._builds_started + 1
+            needed = self._edits_made
         self._open_after_save.append((query, needed))
         self.dialog.status_label.setText(
             tr("Saving the latest changes first - it opens when saved.")

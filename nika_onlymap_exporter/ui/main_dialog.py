@@ -2326,6 +2326,7 @@ class MainDialog(QDialog):
         color = button.color()
         if button.isNull() or color is None or not color.isValid():
             settings.highlight_color = None
+            self._sync_cartograph_layer_settings()
             return
         settings.highlight_color = (
             f"#{color.red():02x}{color.green():02x}"
@@ -2355,6 +2356,7 @@ class MainDialog(QDialog):
             for field_name in popup_field_names(layer):
                 settings.fields[field_name] = value
 
+        self._sync_cartograph_layer_settings()
         self.refresh_layers()
 
     def _on_layer_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
@@ -2369,6 +2371,7 @@ class MainDialog(QDialog):
             settings.popup = checked
         elif column == 3:
             settings.label = checked
+        self._sync_cartograph_layer_settings()
         self._update_export_readiness()
 
     # ---- Appearance tab -------------------------------------------------
@@ -2640,7 +2643,16 @@ class MainDialog(QDialog):
     @_fidelity_is_stale.setter
     def _fidelity_is_stale(self, stale: bool) -> None:
         self._fidelity_dirty = stale
+        if stale:
+            self._sync_cartograph_layer_settings()
         self._refresh_fidelity_freshness()
+
+    def _sync_cartograph_layer_settings(self) -> None:
+        """A Layers tab setting just changed: tell the Cartograph now, so a
+        Preview or Share right after it never opens the file without it."""
+        cartograph = getattr(self, "_cartograph", None)
+        if cartograph is not None:
+            cartograph.sync_layer_settings()
 
     def _show_fidelity(
         self, report: FidelityReportBuilder, signature: str | None = None
