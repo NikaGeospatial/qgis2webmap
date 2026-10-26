@@ -51,7 +51,9 @@ def _output_names() -> dict[DialogOutput, str]:
 def _output_descriptions() -> dict[DialogOutput, str]:
     return {
         DialogOutput.WEB_MAP: tr("An interactive map to pan, zoom and click"),
-        DialogOutput.CARTOGRAPH: tr("A print layout with live maps, to read or print"),
+        DialogOutput.CARTOGRAPH: tr(
+            "A print layout with interactive maps, to read or print"
+        ),
     }
 
 

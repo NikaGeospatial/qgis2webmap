@@ -49,9 +49,9 @@ from .export_project import ExportProjectAlgorithm
 
 # Order is part of a saved model's parameters. Append, never reorder.
 FRAME_MODES = (
-    ("auto", N_("Automatic (live where it matches QGIS, static otherwise)")),
-    ("live", N_("All live")),
-    ("static", N_("All static")),
+    ("auto", N_("Automatic (interactive where it matches QGIS, image otherwise)")),
+    ("live", N_("All interactive")),
+    ("static", N_("All image")),
 )
 
 
@@ -88,11 +88,11 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             "Exports a QGIS print layout to a cartograph: one portable HTML "
             "file that opens by double-click and prints at true page size "
             "from the browser.\n\n"
-            "Map items become live frames (pan and zoom, in Web Mercator or in "
-            "the map's own CRS) or static frames (a pixel-exact image in the "
-            "layout's own CRS). By default a map is live when the browser can "
+            "Map items become interactive frames (pan and zoom, in Web Mercator or in "
+            "the map's own CRS) or image frames (a pixel-exact image in the "
+            "layout's own CRS). By default a map is interactive when the browser can "
             "draw it as QGIS does (EPSG:3857 or EPSG:4326, or any other "
-            "unrotated map of vector layers or image tiles) and static "
+            "unrotated map of vector layers or image tiles) and image "
             "otherwise; 'Frames' overrides that for every map on the "
             "layout.\n\n"
             "Anything that cannot be translated exactly is reported in the log. "
@@ -116,7 +116,7 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
         )
         dpi = QgsProcessingParameterNumber(
             self.DPI,
-            tr("Static frame resolution (dpi)"),
+            tr("Image frame resolution (dpi)"),
             type=Qgis.ProcessingNumberParameterType.Integer,
             defaultValue=DEFAULT_STATIC_DPI,
             minValue=72,

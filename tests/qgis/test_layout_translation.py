@@ -320,7 +320,7 @@ class TestLiveLegendChecks:
             item
             for item in report.items
             if item.subject.startswith("Legend")
-            and "derive from the live frame" in item.detail
+            and "derive from the interactive frame" in item.detail
         ]
 
     def test_single_symbol_layers_in_one_column_are_kept(self, project) -> None:

@@ -113,7 +113,7 @@ class AtlasTab(QWidget):
 
         self.map_combo = QComboBox(settings)
         self.map_combo.setToolTip(
-            tr("The map that zooms to each feature. It must be a Live frame.")
+            tr("The map that zooms to each feature. It must be an Interactive frame.")
         )
         self.map_combo.currentIndexChanged.connect(self._on_map)
         form.addRow(tr("Map that follows it"), self.map_combo)

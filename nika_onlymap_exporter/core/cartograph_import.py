@@ -746,8 +746,8 @@ class _Converter:
             if attrs.text(static_only) is not None:
                 self.issues.add(
                     attrs.subject,
-                    f"Attribute '{static_only}' only applies to a static frame; "
-                    "ignored on this live frame.",
+                    f"Attribute '{static_only}' only applies to an image frame; "
+                    "ignored on this interactive frame.",
                 )
         self._report_children(node, attrs.subject, frozenset({"om-map"}))
         embedded_map = next(
@@ -756,7 +756,7 @@ class _Converter:
         if embedded_map is not None:
             self.issues.add(
                 attrs.subject,
-                "The map embedded in this live frame was not imported; in QGIS "
+                "The map embedded in this interactive frame was not imported; in QGIS "
                 "the frame draws the project's own layers.",
             )
         return FrameSpec(
@@ -782,7 +782,7 @@ class _Converter:
         if not src:
             self.issues.add(
                 attrs.subject,
-                "This static frame has no <img> to show, so it was left out.",
+                "This image frame has no <img> to show, so it was left out.",
             )
             raise _ElementSkippedError
         if not src.startswith("data:"):

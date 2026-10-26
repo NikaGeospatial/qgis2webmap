@@ -39,7 +39,7 @@ RGB_NOTE = (
     "from a PDF."
 )
 CMYK_NOTE = (
-    "Needs QGIS built on Qt 6.8 or newer and a cartograph with static frames "
+    "Needs QGIS built on Qt 6.8 or newer and a cartograph with Image frames "
     "only; the plugin runs the QGIS PDF/X-4 exporter."
 )
 ICC_NOTE = (
@@ -194,13 +194,13 @@ class TestProfile:
             index = dialog.profile_combo.findData(profile)
             item = model.item(index)
             assert not item.isEnabled()
-            assert "live frame" in item.toolTip()
+            assert "Interactive frame" in item.toolTip()
             assert (
                 dialog.profile_combo.itemData(index, Qt.ItemDataRole.ToolTipRole)
                 == item.toolTip()
             )
             assert not dialog.profile_available(profile)
-            assert "Static" in dialog.profile_tooltip(profile)
+            assert "Image" in dialog.profile_tooltip(profile)
         assert dialog.profile_available(PROFILE_RGB)
         assert model.item(dialog.profile_combo.findData(PROFILE_RGB)).isEnabled()
 
@@ -217,7 +217,7 @@ class TestProfile:
         dialog = make_dialog(PrintSettings(profile=PROFILE_CMYK), has_live_frame=True)
         assert dialog.profile_combo.currentData() == PROFILE_RGB
         assert not dialog.downgrade_label.isHidden()
-        assert "live frame" in dialog.downgrade_label.text()
+        assert "Interactive frame" in dialog.downgrade_label.text()
         assert make_dialog(
             PrintSettings(profile=PROFILE_CMYK)
         ).downgrade_label.isHidden()

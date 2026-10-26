@@ -693,7 +693,7 @@ class _Builder:
         if frame.corners is None:
             self.issue(
                 subject,
-                "The static frame has no corners, so it shows the full extent of "
+                "The image frame has no corners, so it shows the full extent of "
                 "its layers instead of the cartograph's view.",
             )
             return crs, None, 0.0
@@ -743,8 +743,8 @@ class _Builder:
         if frame.center is None or frame.zoom is None:
             self.issue(
                 subject,
-                "The live frame has no camera (center and zoom), so it shows the "
-                "full extent of its layers instead.",
+                "The interactive frame has no camera (center and zoom), so it shows "
+                "the full extent of its layers instead.",
             )
             return WEB_MERCATOR, None, frame.bearing
         if frame.plane_crs or frame.plane_crs_def:

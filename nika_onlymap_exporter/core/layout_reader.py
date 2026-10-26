@@ -446,7 +446,7 @@ def _read_layout(
         if mode == "static":
             report.approximated(
                 f"Map frame {_name(item)}",
-                "Rendered as a static, pixel-exact raster rather than a live map.",
+                "Rendered as a pixel-exact image rather than an interactive map.",
                 item_id=item.uuid(),
             )
             _record_rasterised_layers(item, report)
@@ -772,16 +772,18 @@ def _record_live_frame_projection(
     authid = crs.authid() if crs.isValid() else ""
     label = f"Map frame {_name(item)}"
     if authid == "EPSG:3857":
-        report.preserved(label, "Exported as a live frame.", item_id=item.uuid())
+        report.preserved(
+            label, "Exported as an interactive frame.", item_id=item.uuid()
+        )
         return
     if draws_in_own_plane(item):
         return
     report.approximated(
         label,
-        "Exported as a live frame, which the cartograph draws in Web Mercator "
+        "Exported as an interactive frame, which the cartograph draws in Web Mercator "
         f"(EPSG:3857); QGIS draws this map in {authid or 'its own CRS'}, so "
         "shapes, and distances away from the centre, differ slightly. Set the "
-        "frame to Static in Map frames to keep QGIS's projection exactly.",
+        "frame to Image in Map frames to keep QGIS's projection exactly.",
         item_id=item.uuid(),
     )
 
@@ -800,7 +802,7 @@ def _record_rasterised_layers(
     for layer in item.layersToRender():
         report.raster_fallback(
             f"Map frame {_name(item)}: layer '{layer.name()}'",
-            "Drawn into this static frame's picture by QGIS, exactly as QGIS "
+            "Drawn into this image frame's picture by QGIS, exactly as QGIS "
             "draws it; in the cartograph it is part of the picture, not a "
             "layer a reader can click.",
             layer.id(),
@@ -1227,7 +1229,7 @@ def _read_atlas(
             driven_static.append(mf)
             report.blocked(
                 f"Map frame {_name(mf.map_item)}",
-                "This map follows the atlas, but it is a static frame: its "
+                "This map follows the atlas, but it is an image frame: its "
                 "picture is rendered once, so it would show the same place on "
                 "every page. Set the atlas map to Interactive in Map frames.",
                 item_id=mf.map_item.uuid(),
@@ -1287,7 +1289,7 @@ def _read_atlas(
         report.blocked(
             ATLAS_SUBJECT,
             "No atlas pages were exported: the cartograph turns atlas pages "
-            "with a live map that carries the coverage layer "
+            "with an interactive map that carries the coverage layer "
             f"'{coverage_name}', and this layout has none. {remedy}",
         )
         return _AtlasPlan(frames=tuple(_without_atlas_fit(updated)))
@@ -1313,7 +1315,7 @@ def _read_atlas(
                 report.approximated(
                     f"Map frame {_name(mf.map_item)}",
                     f"QGIS hides the atlas coverage layer '{coverage_name}' on "
-                    "atlas pages, but this static frame's picture is rendered "
+                    "atlas pages, but this image frame's picture is rendered "
                     "outside an atlas page, so it shows the layer.",
                     item_id=mf.map_item.uuid(),
                 )
@@ -1869,7 +1871,7 @@ def _read_legend(
         rows = _literal_legend_rows(linked)
         report.approximated(
             label,
-            "This legend is on a static frame, so its rows were derived once "
+            "This legend is on an image frame, so its rows were derived once "
             "from the layers' renderers at export time rather than kept "
             "live.",
         )
@@ -1883,13 +1885,13 @@ def _read_legend(
         if changes:
             report.approximated(
                 label,
-                "Legend rows derive from the live frame, with QGIS's labels "
+                "Legend rows derive from the interactive frame, with QGIS's labels "
                 "and line and point swatches, but the browser's legend "
                 + _join_phrases(changes)
                 + ".",
             )
         else:
-            report.preserved(label, "Legend rows derive from the live frame.")
+            report.preserved(label, "Legend rows derive from the interactive frame.")
     for layer_name in layers_with_unavailable_range(item, linked):
         report.approximated(
             label,

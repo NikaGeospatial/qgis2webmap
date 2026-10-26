@@ -96,7 +96,7 @@ PROFILE_NOTES = {
         "printed from a PDF."
     ),
     PROFILE_CMYK: N_(
-        "Needs QGIS built on Qt 6.8 or newer and a cartograph with static "
+        "Needs QGIS built on Qt 6.8 or newer and a cartograph with Image "
         "frames only; the plugin runs the QGIS PDF/X-4 exporter."
     ),
     PROFILE_ICC: N_(
@@ -194,9 +194,9 @@ class PrintSettingsDialog(QDialog):
             why = reason
         elif has_live_frame:
             why = tr(
-                "This cartograph has a live frame. CMYK and ICC PDFs come from "
-                "QGIS, which can only print static frames as the browser shows "
-                "them: set every frame to Static in Map frames."
+                "This cartograph has an Interactive frame. CMYK and ICC PDFs come from "
+                "QGIS, which can only print Image frames as the browser shows "
+                "them: set every frame to Image in Map frames."
             )
         else:
             return {}

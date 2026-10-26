@@ -2498,8 +2498,8 @@ class CartographController:
                 tr("Export PDF"),
                 tr(
                     "A CMYK or ICC PDF is made by QGIS from the print layout, "
-                    "which only works when every frame is static. Set the live "
-                    "frames to Static in Map frames, or choose RGB in Print "
+                    "which only works when every frame is an Image. Set the "
+                    "Interactive frames to Image in Map frames, or choose RGB in Print "
                     "settings."
                 ),
             )

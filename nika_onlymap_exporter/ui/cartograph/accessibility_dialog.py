@@ -412,7 +412,7 @@ class AccessibilityDialog(QDialog):
         if not self._entries:
             return tr(
                 "No legend classes to check yet. Save the cartograph with a "
-                "live map frame first."
+                "Interactive map frame first."
             )
         if condition:
             count = len(self._lint.under(condition))

@@ -781,18 +781,18 @@ def _draws_in_plane(
     if not blockers:
         report.preserved(
             plane.subject,
-            f"Exported as a live frame, drawn in {plane.crs} as in QGIS.",
+            f"Exported as an interactive frame, drawn in {plane.crs} as in QGIS.",
             item_id=plane.item_id,
         )
         return True
     names = ", ".join(f"'{name}'" for name in blockers)
     report.approximated(
         plane.subject,
-        "Exported as a live frame in Web Mercator (EPSG:3857) rather than in "
+        "Exported as an interactive frame in Web Mercator (EPSG:3857) rather than in "
         f"{plane.crs}, because {names} cannot be drawn in another projection "
         "by the browser (rasters and non-image tiles stay in Web Mercator); "
         "shapes, and distances away from the centre, differ slightly from "
-        "QGIS. Set the frame to Static in Map frames to keep QGIS's "
+        "QGIS. Set the frame to Image in Map frames to keep QGIS's "
         "projection exactly.",
         item_id=plane.item_id,
     )
