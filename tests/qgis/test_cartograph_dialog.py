@@ -39,18 +39,16 @@ def _choose_cartograph(dialog) -> None:
     dialog.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
 
 
-def _pick_in_layout_list(dialog, kind: str) -> None:
-    """Pick a row of the layout list the way a click does: the list moves to
-    it, then reports it activated."""
-    from qgis.PyQt.QtWidgets import QApplication
+def _click_new_from_template(dialog) -> None:
+    """Click "New from template..." the way a user does: on the button's
+    label side, not its menu arrow."""
+    from qgis.PyQt.QtCore import QPoint, Qt
+    from qgis.PyQt.QtTest import QTest
 
-    combo = dialog._cartograph.layout_combo
-    index = combo.findData(kind)
-    assert index >= 0
-    combo.setCurrentIndex(index)
-    combo.activated.emit(index)
-    # The picker opens once the list has closed (`create_from_canvas_later`).
-    QApplication.processEvents()
+    button = dialog._cartograph.new_from_template_button
+    QTest.mouseClick(
+        button, Qt.MouseButton.LeftButton, pos=QPoint(10, button.height() // 2)
+    )
 
 
 def _choose_web(dialog) -> None:
@@ -473,19 +471,19 @@ class TestFramesTab:
             dialog.close()
 
     def test_no_layouts_shows_the_empty_state(self, qgis_app, project) -> None:
-        """No layout to pick: the list offers only the two ways to make one,
-        the preview says so with the same two buttons, and the settings that
-        belong to a layout are hidden rather than left to type into."""
+        """No layout to pick: the list is empty, the preview says so and offers
+        "New from template..." clearly, and the settings that belong to a
+        layout are hidden rather than left to type into."""
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             combo = cartograph.layout_combo
             assert combo.currentText() == ""
-            assert [combo.itemData(i) for i in range(combo.count())] == [
-                "canvas",
-                "import",
-            ]
+            assert combo.count() == 0
+            template = cartograph.page_preview.template_button
+            assert template.text() == "New from template..."
+            assert template.isVisibleTo(cartograph.page_preview)
             assert not cartograph.layout_empty_note.isHidden()
             assert not cartograph.page_preview.showing_page()
             for section in cartograph.sections.values():
@@ -1917,36 +1915,12 @@ class TestCanvasAndImport:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.layout_combo.can_build_from_canvas()
-            _pick_in_layout_list(dialog, "canvas")
+            _click_new_from_template(dialog)
             name = cartograph.layout_combo.currentText()
-            assert name.startswith("carto: ")
+            assert name.startswith("Daylight \u00b7 ")
             assert project.layoutManager().layoutByName(name) is not None
             assert dialog.state.cartograph_layout == name
             assert len(cartograph._frame_rows) == 1
-        finally:
-            dialog.close()
-
-    def test_the_menu_and_list_open_the_picker_after_they_close(
-        self, qgis_app, project, picked_template
-    ) -> None:
-        """The modal picker must not start inside the popup's own event
-        handler: its first click would be taken by the popup's grab."""
-        from qgis.PyQt.QtWidgets import QApplication
-
-        dialog, _canvas = self._canvas_dialog(project)
-        try:
-            _choose_cartograph(dialog)
-            cartograph = dialog._cartograph
-            cartograph.add_from_canvas_action.trigger()
-            assert picked_template.shown == 0
-            QApplication.processEvents()
-            assert picked_template.shown == 1
-            index = cartograph.layout_combo.findData("canvas")
-            cartograph.layout_combo.activated.emit(index)
-            assert picked_template.shown == 1
-            QApplication.processEvents()
-            assert picked_template.shown == 2
         finally:
             dialog.close()
 
@@ -1957,7 +1931,7 @@ class TestCanvasAndImport:
         dialog, _canvas = self._canvas_dialog(project)
         try:
             _choose_cartograph(dialog)
-            _pick_in_layout_list(dialog, "canvas")
+            _click_new_from_template(dialog)
             assert picked_template.shown == 1
             # The picker's previews draw the real page for this canvas.
             (preview,) = picked_template.previews
@@ -1980,7 +1954,7 @@ class TestCanvasAndImport:
         try:
             _choose_cartograph(dialog)
             before = len(project.layoutManager().layouts())
-            _pick_in_layout_list(dialog, "canvas")
+            _click_new_from_template(dialog)
             assert picked_template.shown == 1
             assert len(project.layoutManager().layouts()) == before
         finally:
@@ -2137,18 +2111,22 @@ class TestCanvasAndImport:
         try:
             dialog.share_actions["cartograph"].trigger()
             assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
-            assert dialog._cartograph.layout_combo.currentText().startswith("carto: ")
+            assert dialog._cartograph.layout_combo.currentText().startswith(
+                "Daylight \u00b7 "
+            )
         finally:
             dialog.close()
 
-    def test_without_a_canvas_from_canvas_says_why(self, qgis_app, project) -> None:
+    def test_without_a_canvas_new_from_template_says_why(
+        self, qgis_app, project
+    ) -> None:
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            combo = dialog._cartograph.layout_combo
-            assert not combo.can_build_from_canvas()
-            assert "no map canvas" in combo.canvas_tooltip()
-            assert not dialog._cartograph.page_preview.canvas_button.isEnabled()
+            cartograph = dialog._cartograph
+            assert not cartograph.new_from_template_button.isEnabled()
+            assert "no map canvas" in cartograph.new_from_template_button.toolTip()
+            assert not cartograph.page_preview.template_button.isEnabled()
         finally:
             dialog.close()
 
@@ -2184,7 +2162,7 @@ class TestLayoutTextSizes:
         picked_template.choice = (template, "A4", "landscape")
         dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
         _choose_cartograph(dialog)
-        _pick_in_layout_list(dialog, "canvas")
+        _click_new_from_template(dialog)
         cartograph = dialog._cartograph
         layout = project.layoutManager().layoutByName(
             cartograph.layout_combo.currentText()
@@ -2960,26 +2938,26 @@ class TestCartographTab:
         finally:
             dialog.close()
 
-    def test_the_list_ends_with_the_two_ways_to_make_a_layout(
+    def test_import_is_on_the_new_from_template_menu(
         self, qgis_app, project, monkeypatch
     ) -> None:
-        """Picking one runs it and leaves the list on the layout it showed."""
+        """The list holds layouts only; Import is the secondary action on the
+        New from template button's menu."""
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             combo = cartograph.layout_combo
-            kinds = [combo.itemData(i) for i in range(combo.count())]
-            assert kinds == ["layout", None, "canvas", "import"]
+            assert [combo.itemText(i) for i in range(combo.count())] == ["Survey"]
             calls: list[str] = []
             monkeypatch.setattr(
                 cartograph, "on_import_cartograph", lambda: calls.append("import")
             )
             # Connected at build time, so reconnect to reach the stand-in.
-            combo.import_requested.disconnect()
-            combo.import_requested.connect(cartograph.on_import_cartograph)
-            _pick_in_layout_list(dialog, "import")
+            cartograph.import_action.triggered.disconnect()
+            cartograph.import_action.triggered.connect(cartograph.on_import_cartograph)
+            cartograph.import_action.trigger()
             assert calls == ["import"]
             assert combo.currentText() == "Survey"
             assert dialog.state.cartograph_layout == "Survey"
@@ -3510,7 +3488,7 @@ class TestWorkspace:
 
 
 class TestPanel:
-    """The panel beside the page: the layout list with its Add... button,
+    """The panel beside the page: the layout list with its Rename... button,
     then the Layout, Atlas and Checks tabs, and its first width."""
 
     def test_settings_hide_the_outputs_actions_and_back_restores_them(
@@ -3886,52 +3864,25 @@ class TestPanel:
         )
         return calls
 
-    def test_add_offers_from_canvas_and_import(
+    def test_the_button_has_a_menu_arrow_carrying_import(
         self, qgis_app, project, monkeypatch
     ) -> None:
         from qgis.PyQt.QtWidgets import QToolButton
 
         calls = self._stand_ins(monkeypatch)
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
-        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
-        try:
-            _choose_cartograph(dialog)
-            cartograph = dialog._cartograph
-            button = cartograph.add_layout_button
-            assert button.text() == "Add..."
-            assert button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
-            actions = button.menu().actions()
-            assert [action.text() for action in actions] == [
-                "From canvas...",
-                "Import cartograph...",
-            ]
-            assert actions[0] is cartograph.add_from_canvas_action
-            assert cartograph.add_from_canvas_action.isEnabled()
-            actions[0].trigger()
-            qgis_app.processEvents()
-            assert calls == ["canvas"]
-            actions[1].trigger()
-            assert calls == ["canvas", "import"]
-        finally:
-            dialog.close()
-
-    def test_without_a_canvas_add_from_canvas_is_off(
-        self, qgis_app, project, monkeypatch
-    ) -> None:
-        calls = self._stand_ins(monkeypatch)
-        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert not cartograph.add_from_canvas_action.isEnabled()
-            assert not cartograph.page_preview.canvas_button.isEnabled()
+            button = cartograph.new_from_template_button
+            assert button.popupMode() == QToolButton.ToolButtonPopupMode.MenuButtonPopup
+            (action,) = button.menu().actions()
+            assert action.text() == "Import cartograph..."
+            assert action is cartograph.import_action
             # Import needs no canvas.
-            (_from_canvas, import_action) = (
-                cartograph.add_layout_button.menu().actions()
-            )
-            assert import_action.isEnabled()
-            import_action.trigger()
+            assert not button.isEnabled() and action.isEnabled()
+            action.trigger()
             assert calls == ["import"]
         finally:
             dialog.close()
@@ -3951,7 +3902,7 @@ class TestPanel:
             button = cartograph.new_from_template_button
             # Named for what it does: another layout, never a change of the
             # one shown.
-            assert button.text() == "Browse templates..."
+            assert button.text() == "New from template..."
             assert "kept as it is" in button.toolTip()
             assert button.isEnabled() and not button.isHidden()
             assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
@@ -3959,10 +3910,13 @@ class TestPanel:
             button.setFocus()
             QTest.keyClick(button, Qt.Key.Key_Space)
             assert calls == ["canvas"]
+            # A click on its label side does the same.
+            _click_new_from_template(dialog)
+            assert calls == ["canvas", "canvas"]
         finally:
             dialog.close()
 
-    def test_browse_templates_opens_the_picker_and_adds_a_layout(
+    def test_new_from_template_opens_the_picker_and_adds_a_layout(
         self, qgis_app, project, picked_template
     ) -> None:
         original = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
@@ -3972,7 +3926,7 @@ class TestPanel:
             cartograph = dialog._cartograph
             cartograph._select_layout("Survey")
             before = len(project.layoutManager().layouts())
-            cartograph.new_from_template_button.click()
+            _click_new_from_template(dialog)
             assert picked_template.shown == 1
             layouts = project.layoutManager().layouts()
             assert len(layouts) == before + 1
@@ -4562,5 +4516,242 @@ class TestLayerDisclosure:
             for _ in range(3):
                 qgis_app.processEvents()
             assert tree.topLevelItem(0).isExpanded()
+        finally:
+            dialog.close()
+
+
+def _pick_layout(dialog, name: str) -> None:
+    """Choose `name` in the layout list as a user does: open the list and
+    click its row."""
+    from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtTest import QTest
+
+    combo = dialog._cartograph.layout_combo
+    combo.showPopup()
+    view = combo.view()
+    row = combo.findText(name)
+    assert row >= 0
+    rect = view.visualRect(view.model().index(row, 0))
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+    combo.hidePopup()
+
+
+def _rename_through_dialog(dialog, typed: str, *, press_twice: bool = False):
+    """Click "Rename...", type `typed` in the box and click OK. Returns the
+    inline message the dialog showed (None if it accepted at once)."""
+    from qgis.PyQt.QtCore import QPoint, Qt, QTimer
+    from qgis.PyQt.QtTest import QTest
+    from qgis.PyQt.QtWidgets import QApplication, QDialogButtonBox
+
+    shown: list[str | None] = []
+
+    def drive() -> None:
+        box = QApplication.activeModalWidget()
+        assert box is not None
+        box.name_edit.setText(typed)
+        ok = box.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+        QTest.mouseClick(ok, Qt.MouseButton.LeftButton)
+        if box.isVisible():
+            shown.append(box.message.text() if not box.message.isHidden() else "")
+            box.reject()
+        else:
+            shown.append(None)
+
+    QTimer.singleShot(0, drive)
+    button = dialog._cartograph.rename_layout_button
+    QTest.mouseClick(
+        button, Qt.MouseButton.LeftButton, pos=QPoint(8, button.height() // 2)
+    )
+    return shown[0]
+
+
+class TestLayoutSelectorAndTemplates:
+    """The layout list holds layouts; "New from template..." makes a new one,
+    named for its design and the project; Rename... renames the one shown."""
+
+    def _dialog(self, project, picked_template, title="Grand Canyon"):
+        dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+        project.setTitle(title)
+        _choose_cartograph(dialog)
+        return dialog
+
+    def test_the_list_holds_only_the_projects_layouts(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        _add_layout(project, "Parcels", [("Map", "EPSG:4326")])
+        dialog = self._dialog(project, picked_template)
+        try:
+            combo = dialog._cartograph.layout_combo
+            names = sorted(
+                layout.name() for layout in project.layoutManager().layouts()
+            )
+            assert sorted(combo.itemText(i) for i in range(combo.count())) == names
+            assert all(combo.itemData(i) in (None, "") for i in range(combo.count()))
+            picked_template.choice = ("legend-below", "A4", "landscape")
+            _click_new_from_template(dialog)
+            names = sorted(
+                layout.name() for layout in project.layoutManager().layouts()
+            )
+            assert sorted(combo.itemText(i) for i in range(combo.count())) == names
+            assert "Clearline · Grand Canyon" in names
+        finally:
+            dialog.close()
+
+    def test_a_template_makes_a_named_new_layout_and_a_second_gets_a_number(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        original = _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
+        dialog = self._dialog(project, picked_template)
+        try:
+            picked_template.choice = ("legend-below", "A4", "landscape")
+            _click_new_from_template(dialog)
+            assert dialog._cartograph.layout_combo.currentText() == (
+                "Clearline · Grand Canyon"
+            )
+            _click_new_from_template(dialog)
+            assert dialog._cartograph.layout_combo.currentText() == (
+                "Clearline · Grand Canyon (2)"
+            )
+            picked_template.choice = ("locator", "A4", "landscape")
+            _click_new_from_template(dialog)
+            names = {layout.name() for layout in project.layoutManager().layouts()}
+            assert "Near & Far · Grand Canyon" in names
+            assert project.layoutManager().layoutByName("Survey") is original
+        finally:
+            dialog.close()
+
+    def test_an_untitled_project_still_gets_a_sensible_name(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog = self._dialog(project, picked_template, title="")
+        try:
+            picked_template.choice = ("field-map", "A4", "landscape")
+            _click_new_from_template(dialog)
+            assert dialog._cartograph.layout_combo.currentText() == (
+                "Fieldbook · Untitled map"
+            )
+        finally:
+            dialog.close()
+
+    def test_picking_a_layout_switches_and_keeps_the_edits_of_the_other(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        from qgis.core import QgsLayoutItemLabel
+
+        first = _add_layout(project, "First", [("Map", "EPSG:4326")])
+        _add_layout(project, "Second", [("Map", "EPSG:4326")])
+        dialog = self._dialog(project, picked_template)
+        try:
+            cartograph = dialog._cartograph
+            _pick_layout(dialog, "First")
+            assert cartograph.layout_combo.currentText() == "First"
+            assert cartograph.state.cartograph_layout == "First"
+            label = QgsLayoutItemLabel(first)
+            label.setText("Edited in A")
+            first.addLayoutItem(label)
+            cartograph.title_edit.setText("A's title")
+            cartograph.title_edit.textEdited.emit("A's title")
+            cartograph._autosave_timer.stop()
+
+            _pick_layout(dialog, "Second")
+            assert cartograph.state.cartograph_layout == "Second"
+            assert cartograph._current_layout is project.layoutManager().layoutByName(
+                "Second"
+            )
+            assert cartograph.title_edit.text() != "A's title"
+
+            _pick_layout(dialog, "First")
+            assert cartograph.state.cartograph_layout == "First"
+            assert cartograph.title_edit.text() == "A's title"
+            texts = [
+                item.text()
+                for item in first.items()
+                if isinstance(item, QgsLayoutItemLabel)
+            ]
+            assert "Edited in A" in texts
+        finally:
+            dialog.close()
+
+    def test_rename_changes_the_layout_everywhere_it_shows(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        _add_layout(project, "First", [("Map", "EPSG:4326")])
+        second = _add_layout(project, "Second", [("Map", "EPSG:4326")])
+        dialog = self._dialog(project, picked_template)
+        try:
+            cartograph = dialog._cartograph
+            _pick_layout(dialog, "Second")
+            cartograph._autosave_timer.stop()
+            button = cartograph.rename_layout_button
+            assert button.accessibleName() == "Rename layout"
+            assert _rename_through_dialog(dialog, "Gorge sheet") is None
+            assert second.name() == "Gorge sheet"
+            combo = cartograph.layout_combo
+            assert combo.currentText() == "Gorge sheet"
+            assert combo.findText("Second") < 0
+            assert cartograph.state.cartograph_layout == "Gorge sheet"
+            assert "Gorge sheet" in dialog.status_label.text()
+        finally:
+            dialog.close()
+
+    def test_rename_refuses_an_empty_or_taken_name_inline(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        _add_layout(project, "First", [("Map", "EPSG:4326")])
+        second = _add_layout(project, "Second", [("Map", "EPSG:4326")])
+        dialog = self._dialog(project, picked_template)
+        try:
+            cartograph = dialog._cartograph
+            _pick_layout(dialog, "Second")
+            cartograph._autosave_timer.stop()
+            assert "needs a name" in _rename_through_dialog(dialog, "   ")
+            assert "already exists" in _rename_through_dialog(dialog, "First")
+            assert second.name() == "Second"
+            assert cartograph.layout_combo.currentText() == "Second"
+        finally:
+            dialog.close()
+
+    def test_the_rename_button_is_off_with_no_layout(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog = self._dialog(project, picked_template)
+        try:
+            assert not dialog._cartograph.rename_layout_button.isEnabled()
+        finally:
+            dialog.close()
+
+    def test_switching_to_a_layout_with_a_dropped_item_reports_it_in_checks(
+        self, qgis_app, project, tmp_path, picked_template
+    ) -> None:
+        import os
+
+        from qgis.core import QgsLayoutItemLegend
+        from qgis.PyQt.QtCore import QRectF
+
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
+        _add_layout(project, "Plain", [("Map", "EPSG:4326")])
+        loose = _add_layout(project, "Loose legend", [("Map", "EPSG:4326")])
+        legend = QgsLayoutItemLegend(loose)
+        legend.setLinkedMap(None)
+        legend.attemptSetSceneRect(QRectF(120, 10, 60, 60))
+        loose.addLayoutItem(legend)
+        dialog = self._dialog(project, picked_template)
+        try:
+            cartograph = dialog._cartograph
+            _pick_layout(dialog, "Plain")
+            _pick_layout(dialog, "Loose legend")
+            target = Path(cartograph.file_edit.text())
+            assert _wait_for(qgis_app, lambda: target.exists(), timeout=60)
+            assert _wait_for(
+                qgis_app, lambda: cartograph._last_summary is not None, timeout=60
+            )
+            rows = " ".join(
+                repr(row)
+                for group in cartograph._last_summary.groups
+                for row in group.changes
+            ).lower()
+            assert "legend" in rows and "left out" in rows
         finally:
             dialog.close()

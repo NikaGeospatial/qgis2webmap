@@ -84,19 +84,31 @@ class TestCanvasLayout:
         self, project, parcels
     ) -> None:
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
-        assert result.layout.name() == "carto: Survey"
-        assert project.layoutManager().layoutByName("carto: Survey") is result.layout
+        assert result.layout.name() == "Daylight \u00b7 Survey"
+        assert (
+            project.layoutManager().layoutByName("Daylight \u00b7 Survey")
+            is result.layout
+        )
 
     def test_a_second_click_gets_a_unique_name(self, project, parcels) -> None:
         canvas = _utm_canvas(parcels)
         cartograph_from_canvas(canvas, project)
         second = cartograph_from_canvas(canvas, project)
-        assert second.layout.name() == "carto: Survey (2)"
+        assert second.layout.name() == "Daylight \u00b7 Survey (2)"
+
+    def test_the_name_says_which_design_the_layout_is(self, project, parcels) -> None:
+        canvas = _utm_canvas(parcels)
+        for template_id, design in (
+            ("legend-below", "Clearline"),
+            ("field-map", "Fieldbook"),
+        ):
+            result = cartograph_from_canvas(canvas, project, template_id=template_id)
+            assert result.layout.name() == f"{design} \u00b7 Survey"
 
     def test_untitled_project(self, project, parcels) -> None:
         project.setTitle("")
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
-        assert result.layout.name() == "carto: map"
+        assert result.layout.name() == "Daylight \u00b7 Untitled map"
         assert not any(item.id == "title" for item in result.plan.items)
 
     def test_map_item_shows_the_canvas_view(self, project, parcels) -> None:

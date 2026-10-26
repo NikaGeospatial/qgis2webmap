@@ -36,6 +36,7 @@ from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QAction,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -88,7 +89,13 @@ from ..runtime_setup import ensure_runtime
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
 from .layer_membership import LayerMembership
-from .layout_page import LayoutPicker, PagePane, SaveLocation
+from .layout_page import (
+    LayoutPicker,
+    PagePane,
+    RenameLayoutDialog,
+    SaveLocation,
+    new_layout_button,
+)
 from .panel_section import PanelSection
 from .stacked_scroll import StackedScrolling
 from .status import page_label, status_text
@@ -307,11 +314,7 @@ class CartographController:
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
         has_canvas = self._map_canvas() is not None
-        self.layout_combo.set_canvas_available(
-            has_canvas, tr("There is no map canvas to build from.")
-        )
-        self.page_preview.canvas_button.setEnabled(has_canvas)
-        self.add_from_canvas_action.setEnabled(has_canvas)
+        self.page_preview.template_button.setEnabled(has_canvas)
         self.new_from_template_button.setEnabled(has_canvas)
         self.new_from_template_button.setToolTip(
             self._new_from_template_tip
@@ -375,7 +378,7 @@ class CartographController:
 
         self.page_pane = PagePane(splitter)
         self.page_preview = self.page_pane.preview
-        self.page_preview.from_canvas_requested.connect(self.create_from_canvas)
+        self.page_preview.new_from_template_requested.connect(self.create_from_canvas)
         self.page_preview.import_requested.connect(self.on_import_cartograph)
         self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
         self.page_pane.open_editor_requested.connect(self.on_open_layout_editor)
@@ -407,34 +410,23 @@ class CartographController:
         picker_row.setSpacing(6)
         self.layout_combo = LayoutPicker(panel)
         self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
-        self.layout_combo.from_canvas_requested.connect(self.create_from_canvas_later)
-        self.layout_combo.import_requested.connect(self.on_import_cartograph)
         picker_row.addWidget(self.layout_combo, 1)
-        # The two ways to make a layout, always in sight: at the end of the
-        # list as well, but a list is for choosing, and once a project has
-        # a layout nobody scrolls past it looking for "new".
-        self.add_layout_button = QToolButton(panel)
-        self.add_layout_button.setText(tr("Add..."))
-        self.add_layout_button.setProperty("role", "secondary")
-        self.add_layout_button.setProperty("hasMenu", True)
-        self.add_layout_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        add_menu = QMenu(self.add_layout_button)
-        self.add_from_canvas_action = add_menu.addAction(tr("From canvas..."))
-        self.add_from_canvas_action.triggered.connect(self.create_from_canvas_later)
-        add_menu.addAction(tr("Import cartograph...")).triggered.connect(
-            self.on_import_cartograph
-        )
-        self.add_layout_button.setMenu(add_menu)
-        picker_row.addWidget(self.add_layout_button)
+        # Only existing layouts are listed above; this renames the one shown.
+        self.rename_layout_button = QToolButton(panel)
+        self.rename_layout_button.setText(tr("Rename..."))
+        self.rename_layout_button.setProperty("role", "secondary")
+        self.rename_layout_button.setProperty("hasMenu", False)
+        self.rename_layout_button.setAccessibleName(tr("Rename layout"))
+        self.rename_layout_button.setToolTip(tr("Rename the print layout shown"))
+        self.rename_layout_button.clicked.connect(self.on_rename_layout)
+        picker_row.addWidget(self.rename_layout_button)
         column.addLayout(picker_row)
-        # The design picker, always in sight. It makes ANOTHER layout from the
-        # canvas; the layout shown above is not changed.
-        self.new_from_template_button = QToolButton(panel)
-        self.new_from_template_button.setText(tr("Browse templates..."))
-        self.new_from_template_button.setProperty("role", "secondary")
-        self.new_from_template_button.setProperty("hasMenu", False)
+        # The one way to make a layout, always in sight: it makes ANOTHER
+        # layout from the canvas in the design picked; the layout shown above
+        # is not changed. Its menu holds the import.
+        self.new_from_template_button, self.import_action = new_layout_button(
+            panel, "secondary"
+        )
         self._new_from_template_tip = tr(
             "New layout from template: pick a design and build another print "
             "layout from what the map canvas shows. The layout shown here is "
@@ -445,6 +437,7 @@ class CartographController:
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         self.new_from_template_button.clicked.connect(self.create_from_canvas)
+        self.import_action.triggered.connect(self.on_import_cartograph)
         column.addWidget(self.new_from_template_button)
         # Which design the selected layout came from, for a template-made one.
         self.based_on_label = FittedLabel("", panel)
@@ -454,8 +447,8 @@ class CartographController:
 
         self.layout_empty_note = FittedLabel(
             tr(
-                "This project has no print layouts yet. Build one from the "
-                "canvas, or import a cartograph."
+                "This project has no print layouts yet. Start from a template, "
+                "or import a cartograph."
             ),
             panel,
         )
@@ -674,26 +667,20 @@ class CartographController:
             tr("One page per feature: on") if on else tr("One page per feature: off"),
         )
 
-    def create_from_canvas_later(self) -> None:
-        """`create_from_canvas`, once the list or menu that asked for it has
-        finished closing. The picker is modal and runs its own event loop; shown
-        from inside the popup's own event handler, the popup's mouse grab is
-        still in force and the picker's first click is taken by it - the
-        window vanishes and only comes back on a click elsewhere."""
-        QTimer.singleShot(0, self.create_from_canvas)
-
     def create_from_canvas(self) -> None:
         """One-click mode (issue #1 S4): the canvas becomes a "carto:" print
         layout in the project, selected as this cartograph's source -- in the
-        layout template the user picks (`template_picker.py`)."""
+        layout template the user picks (`template_picker.py`), named
+        "<design> · <project title>"."""
         from ...core.canvas_cartograph import (
             LayerRevisions,
             cartograph_from_canvas,
             preview_state_key,
+            template_layout_name,
             template_preview_async,
             view_input,
         )
-        from ...core.layout_templates import plan_template
+        from ...core.layout_templates import get_template, plan_template
         from .template_picker import ask_template
 
         canvas = self._map_canvas()
@@ -799,6 +786,11 @@ class CartographController:
                 orientation=orientation,
                 template_id=template_id,
                 placeholders=placeholders,
+                layout_name=template_layout_name(
+                    tr(get_template(template_id).name),
+                    self.project.title(),
+                    tr("Untitled map"),
+                ),
             )
         except Exception as exc:  # a canvas state nobody anticipated
             self.dialog.status_label.setText(
@@ -865,6 +857,26 @@ class CartographController:
                 + details,
             )
         self.dialog.status_label.setText(message)
+
+    def on_rename_layout(self) -> None:
+        """Rename layout...: the layout shown, through QGIS's layout manager.
+        The manager's `layoutRenamed` signal does the rest (`_on_layout_renamed`
+        moves the saved settings and refreshes the list, caption and title)."""
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            return
+        old = layout.name()
+        taken = {pl.name() for pl in self.project.layoutManager().printLayouts()}
+        dialog = RenameLayoutDialog(old, taken, self.dialog)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        new = dialog.new_name()
+        if new == old:
+            return
+        layout.setName(new)
+        self.dialog.status_label.setText(
+            tr('Renamed the print layout "{old}" to "{new}".').format(old=old, new=new)
+        )
 
     def _show_new_layout(self, name: str) -> None:
         """Select a layout that was just added to the project."""
@@ -1331,6 +1343,7 @@ class CartographController:
         self._current_layout = layout
         self.state.cartograph_layout = name or ""
         self.page_pane.show_layout(layout)
+        self.rename_layout_button.setEnabled(layout is not None)
         for widget in self._layout_only:
             widget.setVisible(layout is not None)
         self._panel_filler.setVisible(layout is None)

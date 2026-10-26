@@ -3,7 +3,7 @@ real `QgsPrintLayout` in the project.
 
 Issue #1 section 4, step 5 is the differentiator this module exists for: the
 canvas is not exported straight to HTML, it becomes a print layout named
-"carto: <project title>" that the user can keep editing in QGIS -- and the
+"<design> · <project title>" that the user can keep editing in QGIS -- and the
 cartograph then follows that layout like any other (the dialog selects it as
 the source). So the plugin is not a dead end in either direction.
 
@@ -85,6 +85,7 @@ from .layout_templates import (
     TemplateInput,
     TemplatePlan,
     TextSizes,
+    get_template,
     plan_template,
     template_spec,
     text_percent,
@@ -103,8 +104,8 @@ WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
 #: The main frame's id in the spec and the map item's id in the layout.
 FRAME_ID = MAIN_FRAME_ID
-#: What the layout is called when the project has no title.
-_UNTITLED = "map"
+#: What the layout is called after, when the project has no title.
+_UNTITLED = "Untitled map"
 _ID_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 #: A legend's text, symbols and spacing are drawn smaller to fit the box
 #: its template planned in steps of this share of their planned sizes --
@@ -136,12 +137,21 @@ _LEGEND_SIDES = (
 )
 
 
+def template_layout_name(
+    design_name: str, title: str, untitled: str = _UNTITLED
+) -> str:
+    """ "<design> · <project title>" - what a layout made from a template is
+    called, so the list says both which design and which map. A project
+    without a title says `untitled` instead."""
+    return f"{design_name} \u00b7 {title.strip() or untitled}"
+
+
 @dataclass(frozen=True)
 class CanvasCartograph:
     """The one-click result.
 
     - `layout` is already in the project's layout manager, uniquely named
-      "carto: <title>" -- select it as the cartograph's source.
+      "<design> · <title>" -- select it as the cartograph's source.
     - `spec` is what the layout was built from. Its frame is a georeference
       only (corners in the canvas CRS, no raster yet): export from `layout`
       with `prepare_cartograph(..., frame_modes=frame_modes)`, never by
@@ -170,6 +180,7 @@ def cartograph_from_canvas(
     template_id: str = "classic",
     placeholders: Mapping[str, str] | None = None,
     text_sizes: TextSizes | None = None,
+    layout_name: str | None = None,
 ) -> CanvasCartograph:
     """Plan and build the one-click cartograph for what `canvas` shows now:
     its extent, rotation, destination CRS and layers (in drawing order), in
@@ -186,6 +197,7 @@ def cartograph_from_canvas(
         template_id=template_id,
         placeholders=placeholders,
         text_sizes=text_sizes,
+        layout_name=layout_name,
     )
 
 
@@ -201,6 +213,7 @@ def cartograph_from_view(
     template_id: str = "classic",
     placeholders: Mapping[str, str] | None = None,
     text_sizes: TextSizes | None = None,
+    layout_name: str | None = None,
 ) -> CanvasCartograph:
     """`cartograph_from_canvas` for a view given as plain values -- the same
     thing without a widget, for callers (and tests) that have no canvas.
@@ -222,6 +235,7 @@ def cartograph_from_view(
         placeholders=placeholders,
         add_to_project=True,
         text_sizes=text_sizes,
+        layout_name=layout_name,
     )
     _record_template(
         built.layout,
@@ -595,6 +609,7 @@ def _build_from_view(
     add_to_project: bool,
     figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
+    layout_name: str | None = None,
 ) -> _Built:
     """Plan and build the page; the last value is how many legend entries
     the built legend leaves out (`_fit_legend`).
@@ -617,6 +632,7 @@ def _build_from_view(
             add_to_project=add,
             figures=figures,
             text_sizes=text_sizes,
+            layout_name=layout_name,
         )
 
     first = build(orientation, add_to_project)
@@ -646,6 +662,7 @@ def _build_once(
     add_to_project: bool,
     figures: Sequence[tuple[str, str]] | None,
     text_sizes: TextSizes | None,
+    layout_name: str | None = None,
 ) -> _Built:
     if not crs.isValid():
         raise ValueError("the canvas has no valid CRS")
@@ -688,7 +705,7 @@ def _build_once(
     built = build_layout(
         spec,
         project,
-        name=f"carto: {title or _UNTITLED}",
+        name=layout_name or template_layout_name(get_template(template_id).name, title),
         frame_layers={
             slot.id: list(locators[slot.id].layers)
             if slot.id in locators

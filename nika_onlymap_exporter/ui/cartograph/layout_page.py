@@ -7,10 +7,9 @@ is now split: `LayoutPreview` on the left is QGIS's own layout canvas, live -
 it is the same scene the layout designer draws, so a change there, a restyled
 layer or a new title shows at once - and the few settings sit beside it.
 
-- `LayoutPicker` is the layout list, with "From canvas..." and "Import..." at
-  its end, where ArcGIS Pro keeps "New layout": both make a layout, which is
-  what the list chooses between. They were a radio button that acted like a
-  button and a button beside the list.
+- `LayoutPicker` is the layout list: existing print layouts only. Making one
+  is `new_layout_button`'s job ("New from template..." and, on its menu,
+  "Import cartograph..."), so a row of the list is never an action.
 - `SaveLocation` says where the file saves, in one line. The path was a text
   box asked for before anything else; the file saves itself, so where it goes
   is a detail to change, not a question to answer first.
@@ -45,16 +44,20 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QResizeEvent,
     QShowEvent,
-    QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QAction,
     QApplication,
     QButtonGroup,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QMenu,
     QPushButton,
     QStackedWidget,
     QToolButton,
@@ -69,21 +72,14 @@ from .legend_editor import LegendEditorWindow
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
 
-# What a row of the layout list is, in its `Qt.UserRole` data.
-LAYOUT, FROM_CANVAS, IMPORT = "layout", "canvas", "import"
-_KIND = Qt.ItemDataRole.UserRole
-
 
 class LayoutPicker(QComboBox):
-    """The project's print layouts, then the two ways to make another.
+    """The project's print layouts, and nothing else.
 
-    `currentText()` is always a layout's name or "": picking one of the two
-    actions at the end puts the list back where it was and emits the action's
-    signal instead, so the rest of the tab never sees them as a selection.
+    Making a layout is the "New from template..." button's job, not a row of
+    this list: every row here is a layout that exists, and choosing one shows
+    that layout.
     """
-
-    from_canvas_requested = pyqtSignal()
-    import_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -93,97 +89,95 @@ class LayoutPicker(QComboBox):
         # minimum, because a styled combo box otherwise reports its longest
         # item as the least it can take.
         self.setMinimumWidth(PICKER_MIN_WIDTH)
-        self._last_layout_index = -1
-        self._canvas_reason = ""
-        self.activated.connect(self._on_activated)
-        self.currentIndexChanged.connect(self._remember)
 
     def set_layouts(self, names: list[str]) -> None:
         """Replace the list. Signals are the caller's to block."""
         self.clear()
-        for name in names:
-            self.addItem(name, LAYOUT)
-        if names:
-            self.insertSeparator(self.count())
-        self.addItem(tr("From canvas..."), FROM_CANVAS)
-        self.addItem(tr("Import cartograph..."), IMPORT)
-        self.setItemData(
-            self.count() - 1,
-            tr("Turn a cartograph HTML file back into a QGIS print layout"),
-            Qt.ItemDataRole.ToolTipRole,
-        )
-        self._apply_canvas_state()
+        self.addItems(names)
         if not names:
             self.setCurrentIndex(-1)
 
     def select_layout(self, name: str) -> None:
         """Show `name` without emitting anything - for the caller's own
-        refreshes, which must still be what an action returns the list to."""
+        refreshes."""
         self.blockSignals(True)
         self.setCurrentIndex(self.findText(name) if name else -1)
         self.blockSignals(False)
-        self._remember(self.currentIndex())
 
     def current_layout(self) -> str:
-        """The layout shown, or "" while an action row is passing through."""
-        return self.currentText() if self.currentData() == LAYOUT else ""
+        """The layout shown, or "" with none."""
+        return self.currentText()
 
-    def set_canvas_available(self, available: bool, reason: str = "") -> None:
-        """Grey out "From canvas..." when there is no canvas, saying why."""
-        self._canvas_reason = "" if available else reason
-        self._apply_canvas_state()
 
-    def can_build_from_canvas(self) -> bool:
-        index = self.findData(FROM_CANVAS)
-        model = self.model()
-        if index < 0 or not isinstance(model, QStandardItemModel):
-            return False
-        item = model.item(index)
-        return item is not None and item.isEnabled()
+class RenameLayoutDialog(QDialog):
+    """Asks for a layout's new name. An empty or taken name is refused in
+    the dialog itself, which stays open with the reason under the field."""
 
-    def canvas_tooltip(self) -> str:
-        index = self.findData(FROM_CANVAS)
-        return str(self.itemData(index, Qt.ItemDataRole.ToolTipRole) or "")
+    def __init__(
+        self, current: str, taken: set[str], parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Rename layout"))
+        self._current = current
+        self._taken = taken
+        column = QVBoxLayout(self)
+        column.addWidget(QLabel(tr("Layout name"), self))
+        self.name_edit = QLineEdit(current, self)
+        self.name_edit.setAccessibleName(tr("Layout name"))
+        self.name_edit.selectAll()
+        column.addWidget(self.name_edit)
+        self.message = QLabel("", self)
+        self.message.setProperty("role", "hint")
+        self.message.setWordWrap(True)
+        self.message.setVisible(False)
+        column.addWidget(self.message)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        buttons.accepted.connect(self._try_accept)
+        buttons.rejected.connect(self.reject)
+        self.name_edit.returnPressed.connect(self._try_accept)
+        self.name_edit.textEdited.connect(lambda _text: self.message.setVisible(False))
+        column.addWidget(buttons)
 
-    def _apply_canvas_state(self) -> None:
-        index = self.findData(FROM_CANVAS)
-        model = self.model()
-        if index < 0 or not isinstance(model, QStandardItemModel):
-            return
-        item = model.item(index)
-        if item is None:
-            return
-        item.setEnabled(not self._canvas_reason)
-        item.setToolTip(
-            self._canvas_reason
-            or tr(
-                "Builds a print layout from what the map canvas shows - title, "
-                "map, legend, scale bar and north arrow - and uses it here. "
-                "Edit it in the layout designer any time."
+    def new_name(self) -> str:
+        return self.name_edit.text().strip()
+
+    def _try_accept(self) -> None:
+        name = self.new_name()
+        if not name:
+            self._refuse(tr("A layout needs a name."))
+        elif name != self._current and name in self._taken:
+            self._refuse(
+                tr('A layout called "{name}" already exists.').format(name=name)
             )
-        )
+        else:
+            self.accept()
 
-    def _remember(self, index: int) -> None:
-        if index >= 0 and self.itemData(index) == LAYOUT:
-            self._last_layout_index = index
+    def _refuse(self, text: str) -> None:
+        self.message.setText(text)
+        self.message.setVisible(True)
+        self.name_edit.setFocus()
 
-    def _on_activated(self, index: int) -> None:
-        kind = self.itemData(index)
-        if kind == LAYOUT:
-            return
-        # Back to the layout that was showing before the action was picked.
-        self.blockSignals(True)
-        self.setCurrentIndex(
-            self._last_layout_index
-            if self._last_layout_index < self.count()
-            and self.itemData(self._last_layout_index) == LAYOUT
-            else -1
-        )
-        self.blockSignals(False)
-        if kind == FROM_CANVAS:
-            self.from_canvas_requested.emit()
-        elif kind == IMPORT:
-            self.import_requested.emit()
+
+def new_layout_button(parent: QWidget, role: str) -> tuple[QToolButton, QAction]:
+    """ "New from template..." with a small menu arrow carrying "Import
+    cartograph...": the one place a layout is made. Returns the button and the
+    import action; the caller connects `clicked` and the action."""
+    button = QToolButton(parent)
+    button.setText(tr("New from template..."))
+    button.setProperty("role", role)
+    button.setProperty("hasMenu", True)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+    menu = QMenu(button)
+    import_action = menu.addAction(tr("Import cartograph..."))
+    import_action.setToolTip(
+        tr("Turn a cartograph HTML file back into a QGIS print layout")
+    )
+    button.setMenu(menu)
+    button.setAccessibleName(tr("New from template"))
+    return button, import_action
 
 
 def _local_point(event: QMouseEvent) -> QPoint:
@@ -214,7 +208,7 @@ class LayoutPreview(QStackedWidget):
     which QgsLayoutView does itself.
     """
 
-    from_canvas_requested = pyqtSignal()
+    new_from_template_requested = pyqtSignal()
     import_requested = pyqtSignal()
     # The selection changed, or an item in it was edited.
     selection_changed = pyqtSignal()
@@ -245,7 +239,10 @@ class LayoutPreview(QStackedWidget):
         heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         column.addWidget(heading)
         note = QLabel(
-            tr("Build one from what the map canvas shows, or open a cartograph."),
+            tr(
+                "Pick a template to build one from what the map canvas shows, "
+                "or import a cartograph."
+            ),
             empty,
         )
         note.setProperty("role", "layoutEmptyNote")
@@ -254,18 +251,10 @@ class LayoutPreview(QStackedWidget):
         column.addWidget(note)
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        self.canvas_button = QToolButton(empty)
-        self.canvas_button.setText(tr("From canvas..."))
-        self.canvas_button.setProperty("role", "primary")
-        self.canvas_button.setProperty("hasMenu", False)
-        self.canvas_button.clicked.connect(self.from_canvas_requested)
-        buttons.addWidget(self.canvas_button)
-        self.import_button = QToolButton(empty)
-        self.import_button.setText(tr("Import cartograph..."))
-        self.import_button.setProperty("role", "secondary")
-        self.import_button.setProperty("hasMenu", False)
-        self.import_button.clicked.connect(self.import_requested)
-        buttons.addWidget(self.import_button)
+        self.template_button, import_action = new_layout_button(empty, "primary")
+        self.template_button.clicked.connect(self.new_from_template_requested)
+        import_action.triggered.connect(self.import_requested)
+        buttons.addWidget(self.template_button)
         buttons.addStretch(1)
         column.addLayout(buttons)
         column.addStretch(1)
