@@ -852,7 +852,7 @@ class TestDirectionAndLength:
             # An unchosen card's name starts at the text's edge: no gap kept
             # for a blank tick (which showed as an indent right to left).
             other = picker.rows["legend-below"]
-            assert other.name.width() == other.text.width()
+            assert other.name.geometry().right() == other.text.rect().right()
             filters = [picker.filter_buttons[k].x() for k in ("all", ESSENTIAL)]
             assert filters[0] > filters[1]
         finally:

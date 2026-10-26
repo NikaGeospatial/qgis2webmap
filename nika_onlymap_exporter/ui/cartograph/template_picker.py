@@ -436,6 +436,19 @@ class _TemplateRow(QFrame):
         self.name.setProperty("role", "templateName")
         self.name.setWordWrap(True)
         name_row.addWidget(self.name, 1)
+        self.preview_button = QPushButton(tr("Preview"), self.text)
+        self.preview_button.setProperty("role", "secondary")
+        self.preview_button.setAutoDefault(False)
+        # Beside the name, so the card is no taller for it. The list's
+        # Space key opens the selected preview. Ten extra Tab stops,
+        # including offscreen cards, would make the picker harder.
+        self.preview_button.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.preview_button.setToolTip(f"{tr('Preview')} (Space)")
+        self.preview_button.setAccessibleDescription(tr(template.name))
+        self.preview_button.clicked.connect(
+            lambda: picker.open_large_preview(self.template_id)
+        )
+        name_row.addWidget(self.preview_button, 0, Qt.AlignmentFlag.AlignTop)
         self.tick = QLabel("", self.text)
         self.tick.setProperty("role", "templateTick")
         self.tick.setVisible(False)
@@ -463,18 +476,6 @@ class _TemplateRow(QFrame):
         self.includes.setVisible(False)
         self.supports.setVisible(False)
         self.crowded.setVisible(False)
-        self.preview_button = QPushButton(tr("Preview"), self.text)
-        self.preview_button.setProperty("role", "secondary")
-        self.preview_button.setAutoDefault(False)
-        # The list's Space key opens the selected preview. Ten extra Tab
-        # stops, including offscreen cards, would make the picker harder.
-        self.preview_button.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
-        self.preview_button.setToolTip(f"{tr('Preview')} (Space)")
-        self.preview_button.setAccessibleDescription(tr(template.name))
-        self.preview_button.clicked.connect(
-            lambda: picker.open_large_preview(self.template_id)
-        )
-        text.addWidget(self.preview_button, 0, Qt.AlignmentFlag.AlignLeft)
         text.addStretch(1)
         self.cues = CardCues()
         self.set_cues(declared_cues(template))
