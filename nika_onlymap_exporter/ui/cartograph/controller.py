@@ -111,6 +111,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from ...core.cvd import Condition, LegendEntry
     from ...core.export_ir import ExportProject
     from ...core.fidelity_report import FidelityReportBuilder
+    from ...core.layout_builder import BuiltLayout
     from ..main_dialog import MainDialog
     from .accessibility_dialog import AccessibilityDialog
 
@@ -121,6 +122,9 @@ AUTOSAVE_DEBOUNCE_MS = 600
 #: How long a restyle burst must rest before the preview is redrawn.
 REFRESH_DEBOUNCE_MS = 120
 STATUS_TICK_MS = 1000
+# How stale "Saved 3 min ago" may get. Every change to what the line says
+# (a save, an edit, an error) refreshes it at once; this only moves the age on.
+STATUS_AGE_REFRESH_MS = 30_000
 # How long closing waits for a running build, as `main_dialog`'s own job.
 SHUTDOWN_WAIT_MS = 5000
 DPI_CHOICES = (150, 200, 300)
@@ -305,6 +309,9 @@ class CartographController:
         self._status_timer = QTimer(dialog)
         self._status_timer.setInterval(STATUS_TICK_MS)
         self._status_timer.timeout.connect(self._on_status_tick)
+        self._status_age_timer = QTimer(dialog)
+        self._status_age_timer.setInterval(STATUS_AGE_REFRESH_MS)
+        self._status_age_timer.timeout.connect(self._update_status_label)
 
         self._corner: QWidget | None = None
 
@@ -313,6 +320,8 @@ class CartographController:
     def showing(self) -> None:
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
+        self._status_age_timer.start()
+        self._update_status_label()
         has_canvas = self._map_canvas() is not None
         self.page_preview.template_button.setEnabled(has_canvas)
         self.new_from_template_button.setEnabled(has_canvas)
@@ -326,6 +335,7 @@ class CartographController:
     def hiding(self) -> None:
         """The dialog just switched back to the web map."""
         self._status_timer.stop()
+        self._status_age_timer.stop()
 
     @property
     def busy(self) -> bool:
@@ -338,6 +348,7 @@ class CartographController:
         self._autosave_timer.stop()
         self._refresh_timer.stop()
         self._status_timer.stop()
+        self._status_age_timer.stop()
         # Same rule as the web map's job (`MainDialog._shutdown`): a build
         # thread still running when its dialog is destroyed takes QGIS down.
         self._shut_down = True
@@ -599,9 +610,12 @@ class CartographController:
     def seat_shared(self, layers_page: QWidget, report_page: QWidget) -> None:
         """Put the dialog's Layers list and report in this panel - the same
         widgets the web map shows as tabs."""
-        self.layers_section.body_layout.addWidget(
-            self.membership.attach(self.layers_section)
-        )
+        # Seated on every switch into Cartograph; the bar is made only once,
+        # or each switch stacked another copy of its note.
+        if self.membership.bar is None:
+            self.layers_section.body_layout.addWidget(
+                self.membership.attach(self.layers_section)
+            )
         self.layers_section.body_layout.addWidget(layers_page)
         self._checks_layout.addWidget(report_page)
         layers_page.show()
@@ -852,6 +866,7 @@ class CartographController:
         for item_id, mode in built.frame_modes.items():
             dpi = built.frame_dpis.get(item_id, DEFAULT_STATIC_DPI)
             choices[item_id] = FrameChoice(mode=mode, dpi=dpi)
+        self._carry_in_page_fields(name, built)
         self._show_new_layout(name)
         message = tr('Imported as the print layout "{name}".').format(name=name)
         if built.issues:
@@ -868,6 +883,20 @@ class CartographController:
                 + details,
             )
         self.dialog.status_label.setText(message)
+
+    def _carry_in_page_fields(self, name: str, built: BuiltLayout) -> None:
+        """The imported cartograph's title, attribution and theme become the
+        new layout's Browser appearance, so Preview and the next save keep
+        them. A field already filled in for that layout name is left alone."""
+        from ...core.cartograph_ir import CARTOGRAPH_THEMES
+
+        page = self.state.page_choice(name)
+        if not page.title:
+            page.title = built.page_title.strip()
+        if not page.attribution:
+            page.attribution = built.page_attribution.strip()
+        if page.theme == "default" and built.page_theme in CARTOGRAPH_THEMES:
+            page.theme = built.page_theme or "default"
 
     def on_rename_layout(self) -> None:
         """Rename layout...: the layout shown, through QGIS's layout manager.
@@ -1747,11 +1776,12 @@ class CartographController:
         write_text_atomic(path, content)
 
     def _on_status_tick(self) -> None:
-        """Once a second while Cartograph is on screen: refresh the "Saved 2 s
-        ago" line, and save again when the Layers tab's popup or label choices
-        changed - the same settings-polling the web map's live preview uses
-        (`DialogState.snapshot`), for the one part of it a cartograph reads."""
-        self._update_status_label()
+        """Once a second while Cartograph is on screen: save again when the
+        Layers tab's popup or label choices changed - the same settings-polling
+        the web map's live preview uses (`DialogState.snapshot`), for the one
+        part of it a cartograph reads. The "Saved 2 min ago" line is not
+        redrawn here: it refreshes when something changes, and every
+        `STATUS_AGE_REFRESH_MS` for its age."""
         self.sync_layer_settings()
 
     def sync_layer_settings(self) -> bool:

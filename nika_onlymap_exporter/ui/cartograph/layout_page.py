@@ -131,10 +131,15 @@ class RenameLayoutDialog(QDialog):
         self._current = current
         self._taken = taken
         column = QVBoxLayout(self)
-        column.addWidget(QLabel(tr("Layout name"), self))
+        # The name being replaced, whole and wrapped: a long one runs past the
+        # box below, and what is being renamed should be readable.
+        self.current_label = QLabel(tr('Renaming "{name}"').format(name=current), self)
+        self.current_label.setWordWrap(True)
+        self.current_label.setProperty("role", "hint")
+        column.addWidget(self.current_label)
+        column.addWidget(QLabel(tr("New layout name"), self))
         self.name_edit = QLineEdit(current, self)
         self.name_edit.setAccessibleName(tr("Layout name"))
-        self.name_edit.selectAll()
         column.addWidget(self.name_edit)
         self.message = QLabel("", self)
         self.message.setProperty("role", "hint")
@@ -150,6 +155,29 @@ class RenameLayoutDialog(QDialog):
         self.name_edit.returnPressed.connect(self._try_accept)
         self.name_edit.textEdited.connect(lambda _text: self.message.setVisible(False))
         column.addWidget(buttons)
+        self.setMinimumWidth(self._wanted_width())
+        # After the dialog is built and focused: a click or Tab in must not
+        # have left the text unselected.
+        self.name_edit.setFocus()
+        self.name_edit.selectAll()
+
+    def _wanted_width(self) -> int:
+        """Room to read about 45 characters of a name, or all of the current
+        one if it is longer, never wider than most of the screen."""
+        metrics = self.name_edit.fontMetrics()
+        text = max(
+            metrics.horizontalAdvance(self._current),
+            45 * metrics.averageCharWidth(),
+        )
+        wanted = text + 80  # the field's padding and the dialog's margins
+        screen = self.screen()
+        available = screen.availableGeometry().width() if screen else 1280
+        return int(min(wanted, available * 0.8))
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        # Whatever focus did on show, the name is selected to type over.
+        self.name_edit.selectAll()
 
     def new_name(self) -> str:
         return self.name_edit.text().strip()
@@ -968,8 +996,9 @@ def _page_name(layout) -> str:  # QgsPrintLayout
 class SaveLocation(QWidget):
     """Where the cartograph saves: its file name, then the folder under it.
 
-        parcels-Survey.html                     Change...
-        ~/Documents/QGIS2WebMap/Cartographs     Show in folder
+        parcels-Survey.html
+        ~/Documents/QGIS2WebMap/Cartographs
+        [Change...] [Show in folder]
 
     The name first and whole, because it is what someone sharing the file
     looks for; the folder below, shortened in the middle if it must be, with
@@ -1002,16 +1031,25 @@ class SaveLocation(QWidget):
         self.folder_label.setProperty("role", "saveLocation")
         self.folder_label.setMinimumWidth(1)
         grid.addWidget(self.folder_label, 1, 0)
+        # Their own row: beside the path they were squeezed to a cut-off
+        # "Change..." in the narrow panel. Whole-word buttons, side by side.
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 4, 0, 0)
+        buttons.setSpacing(6)
         self.change_button = QPushButton(tr("Change..."), self)
-        self.change_button.setProperty("role", "link")
+        self.change_button.setToolTip(tr("Choose another file to save to"))
+        self.change_button.setAccessibleName(tr("Change the file to save to"))
         self.change_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.change_button.clicked.connect(self.change_requested)
-        grid.addWidget(self.change_button, 0, 1, Qt.AlignmentFlag.AlignRight)
+        buttons.addWidget(self.change_button)
         self.reveal_button = QPushButton(tr("Show in folder"), self)
-        self.reveal_button.setProperty("role", "link")
+        self.reveal_button.setToolTip(tr("Open the folder holding this file"))
+        self.reveal_button.setAccessibleName(tr("Show the file in its folder"))
         self.reveal_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reveal_button.clicked.connect(self.reveal_requested)
-        grid.addWidget(self.reveal_button, 1, 1, Qt.AlignmentFlag.AlignRight)
+        buttons.addWidget(self.reveal_button)
+        buttons.addStretch(1)
+        grid.addLayout(buttons, 2, 0)
         grid.setColumnStretch(0, 1)
 
     def text(self) -> str:

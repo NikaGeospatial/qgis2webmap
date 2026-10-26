@@ -14,10 +14,10 @@ from __future__ import annotations
 def format_elapsed(seconds: float) -> str:
     """A short "n s/min/h ago" fragment, English only - `status_text` wraps it."""
     seconds = max(0.0, seconds)
-    if seconds < 1:
-        return "just now"
+    # No seconds: the line is redrawn every 30 s, so a count of seconds would
+    # always be out of date by the time it was read.
     if seconds < 60:
-        return f"{int(seconds)} s ago"
+        return "just now"
     minutes = seconds / 60
     if minutes < 60:
         return f"{int(minutes)} min ago"

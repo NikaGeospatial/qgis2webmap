@@ -176,6 +176,11 @@ class BuiltLayout:
     items_by_id: Mapping[str, QgsLayoutItem]
     frame_modes: Mapping[str, FrameMode]
     frame_dpis: Mapping[str, int]
+    # The cartograph's own page fields, for the Browser appearance settings of
+    # an imported layout; blank (or None) when the file named none.
+    page_title: str = ""
+    page_attribution: str = ""
+    page_theme: str | None = None
 
 
 def unique_layout_name(project: QgsProject, base: str) -> str:
@@ -258,6 +263,9 @@ def import_cartograph_file(path: Path, project: QgsProject) -> BuiltLayout:
         items_by_id=built.items_by_id,
         frame_modes=built.frame_modes,
         frame_dpis=built.frame_dpis,
+        page_title=imported.spec.title,
+        page_attribution=imported.spec.attribution,
+        page_theme=imported.spec.theme,
     )
 
 

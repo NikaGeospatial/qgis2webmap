@@ -1839,6 +1839,7 @@ class MainDialog(QDialog):
             tr("Follows the QGIS Layers panel. Expand a layer for its fields."),
             page,
         )
+        self.layers_intro = intro
         intro.setToolTip(
             tr(
                 "Layers come from the QGIS Layers panel and follow it live - "
@@ -1965,6 +1966,10 @@ class MainDialog(QDialog):
         # explicit minimum, because a styled combo box reports its longest
         # item as its minimum whatever its size policy says.
         self.bulk_mode_combo.setMinimumWidth(COMPACT_COMBO_WIDTH if compact else 0)
+        # "Follows the QGIS Layers panel" is the web map's rule. In Cartograph
+        # each map frame says for itself where its layers come from (the bar
+        # above), and may well have its own list, so the line would contradict it.
+        self.layers_intro.setVisible(not compact)
         # Stacked under the button, the bare "i" explained nothing and looked
         # like a stray icon; with room for it, it says what it is for.
         self.layers_info_button.setText(tr("What these columns do") if compact else "")

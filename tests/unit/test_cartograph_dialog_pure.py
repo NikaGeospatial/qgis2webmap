@@ -63,7 +63,7 @@ class TestStatusText:
         )
         assert text == "Could not save the cartograph: disk full"
 
-    def test_a_recent_save_reads_in_seconds_and_megabytes(self) -> None:
+    def test_a_recent_save_reads_just_now_and_megabytes(self) -> None:
         text = status_text(
             saved_at=998.0,
             saved_bytes=int(2.1 * 1024 * 1024),
@@ -71,13 +71,14 @@ class TestStatusText:
             now=1000.0,
             translate=lambda s: s,
         )
-        assert text == "Saved 2 s ago · 2.1 MB"
+        assert text == "Saved just now · 2.1 MB"
 
 
 class TestFormatHelpers:
     def test_elapsed_buckets(self) -> None:
         assert format_elapsed(0.4) == "just now"
-        assert format_elapsed(2) == "2 s ago"
+        assert format_elapsed(59) == "just now"
+        assert format_elapsed(60) == "1 min ago"
         assert format_elapsed(125) == "2 min ago"
         assert format_elapsed(7200) == "2 h ago"
 
