@@ -69,19 +69,27 @@ class LocatorView:
 
 
 def default_context_layers(layers: Sequence[QgsMapLayer]) -> list[QgsMapLayer]:
-    """The layers an inset draws by default: the area-wide ones -- rasters,
-    polygons and lines -- and not the points that mark places on the main
-    map. Where there is nothing else, the points themselves."""
-    area = [
+    """The layers an inset draws by default: the quiet area-wide ones --
+    rasters and polygons -- and not the points that mark places on the main
+    map, nor lines: a busy network (roads, streams, contours) at the inset's
+    scale buries the outline of the main map. Where there are no areas, the
+    lines; where there is nothing else, the points themselves."""
+    areas = [
         layer
         for layer in layers
         if isinstance(layer, QgsRasterLayer)
         or (
             isinstance(layer, QgsVectorLayer)
-            and layer.geometryType() != Qgis.GeometryType.Point
+            and layer.geometryType() == Qgis.GeometryType.Polygon
         )
     ]
-    return area or list(layers)
+    lines = [
+        layer
+        for layer in layers
+        if isinstance(layer, QgsVectorLayer)
+        and layer.geometryType() == Qgis.GeometryType.Line
+    ]
+    return areas or lines or list(layers)
 
 
 def _extent_in(

@@ -57,6 +57,12 @@ def _region(project, width: float, name: str = "region") -> QgsVectorLayer:
     return layer
 
 
+def _feature(wkt: str) -> QgsFeature:
+    feature = QgsFeature()
+    feature.setGeometry(QgsGeometry.fromWkt(wkt))
+    return feature
+
+
 def _points(project) -> QgsVectorLayer:
     layer = QgsVectorLayer("Point?crs=EPSG:32648&field=name:string", "places", "memory")
     feature = QgsFeature(layer.fields())
@@ -159,6 +165,21 @@ class TestWhatTheInsetDraws:
         inset = result.layout.itemById("locator")
         assert places not in inset.layersToRender()
         assert places in result.layout.itemById("main").layersToRender()
+
+    def test_a_busy_network_does_not_bury_the_outline(self, project, parcels) -> None:
+        roads = QgsVectorLayer("LineString?crs=EPSG:32648", "roads", "memory")
+        roads.dataProvider().addFeatures(
+            [_feature("LINESTRING(360000 140000, 372000 151000)")]
+        )
+        region = _region(project, 3000)
+        assert default_context_layers([roads, region, parcels]) == [region, parcels]
+        result = _build(project, [roads, region, parcels])
+        assert roads not in result.layout.itemById("locator").layersToRender()
+        assert roads in result.layout.itemById("main").layersToRender()
+
+    def test_a_page_of_only_lines_still_has_an_inset_of_them(self, project) -> None:
+        roads = QgsVectorLayer("LineString?crs=EPSG:32648", "roads", "memory")
+        assert default_context_layers([roads]) == [roads]
 
     def test_a_page_of_only_points_still_has_an_inset_of_them(self, project) -> None:
         places = _points(project)
