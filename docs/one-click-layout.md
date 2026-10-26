@@ -49,11 +49,14 @@ Ledger's sheet number; point at it to see where each comes from. Point at a card
 for (also listed below). **Create layout** builds the one selected.
 
 The **Text sizes** button beside the buttons opens three sliders, **Title**,
-**Legend** and **Notes**, each with five positions: Smaller (0.8x), Small
-(0.9x), Standard, Large (1.15x) and Larger (1.3x); the arrow keys move them. They apply to every design (the notes size also sets Signal's key
-figures), so a smaller step gives the map more of the page and a larger one
+**Legend** and **Notes**, each a smooth slider from 80% to 130% of the design's
+text size in steps of 1%; the label shows the percent as you drag, and the page
+is redrawn when you let go. The mouse wheel never moves them (it scrolls the
+panel), and a click does not leave one focused; Tab reaches them and the arrow
+keys move them. They apply to every design (the notes size also sets Signal's key
+figures), so a smaller size gives the map more of the page and a larger one
 takes it back. The text never goes under the readable minimum for the page, so
-a smaller step does nothing once that is reached. Standard is the default, and
+a smaller size does nothing once that is reached. 100% is the default, and
 the choice is saved with the project.
 
 ![The template picker: the All, Essentials and Characterful buttons, page size and orientation at the top, and the designs as large previews of the current map, each with its name, a one-line description and what it includes.](images/cartograph-templates.png)
