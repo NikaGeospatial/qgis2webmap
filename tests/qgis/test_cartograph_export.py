@@ -731,3 +731,55 @@ class TestPagePolish:
         )
         sheet = html[html.index("<template") :]
         assert "<om-widget" not in sheet
+
+
+class TestNoWebMapOnlyAdvice:
+    """A cartograph's report must not send the reader to the web map's Map
+    tab, which the Cartograph output does not have."""
+
+    @staticmethod
+    def _details(report: FidelityReportBuilder) -> dict[str, str]:
+        return {item.subject: item.detail for item in report.items}
+
+    @staticmethod
+    def _with_tiles_and_terrain(project, monkeypatch):
+        from qgis.core import QgsRasterLayer
+
+        from nika_onlymap_exporter.core import project_reader
+
+        tiles = QgsRasterLayer(
+            "type=xyz&url=https://tile.example/{z}/{x}/{y}.png&zmax=18&zmin=0",
+            "backdrop",
+            "wms",
+        )
+        project.addMapLayer(tiles)
+        monkeypatch.setattr(
+            project_reader, "_project_terrain_kind", lambda _project: "raster DEM"
+        )
+
+    def test_live_frames_state_what_is_missing_without_map_tab_advice(
+        self, project, fake_runtime, monkeypatch
+    ) -> None:
+        layout = _live_layout(project)
+        self._with_tiles_and_terrain(project, monkeypatch)
+        report = FidelityReportBuilder()
+        export_layout_to_cartograph(layout, project, fake_runtime, report)
+        details = self._details(report)
+        assert "Terrain" in details
+        assert "not exported" in details["Terrain"]
+        assert "Basemap" not in details
+        for subject, detail in details.items():
+            assert "Map tab" not in detail, subject
+            assert "Appearance tab" not in detail, subject
+
+    def test_the_web_map_report_keeps_its_map_tab_advice(
+        self, project, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core.project_reader import read_project
+
+        _live_layout(project)
+        self._with_tiles_and_terrain(project, monkeypatch)
+        report = FidelityReportBuilder()
+        read_project(project, report)
+        details = self._details(report)
+        assert "Map tab" in details["Terrain"]

@@ -201,6 +201,7 @@ def _report_terrain(
     project_terrain_kind: str | None,
     settings: ExportSettings,
     report: FidelityReportBuilder,
+    map_tab_advice: bool = True,
 ) -> None:
     """What happened to relief - which is never a translation, always a swap.
 
@@ -208,6 +209,10 @@ def _report_terrain(
     tiles it can fetch. There is no route from one to the other short of tiling
     and hosting the DEM, so the honest options are global relief from a public
     tileset or none at all. Both are stated rather than assumed.
+
+    `map_tab_advice` is off where there is no Map tab to switch relief on in
+    (a cartograph's frames): the row then says what is not exported and
+    nothing about where to change it.
     """
     note = terrain_note(settings.terrain, basemap=settings.basemap)
     if note is not None:
@@ -224,11 +229,16 @@ def _report_terrain(
 
     kind = project_terrain_kind
     if kind is not None:
+        advice = (
+            " Switch Terrain on under the Map tab for global relief instead, "
+            "or the map exports flat."
+            if map_tab_advice
+            else " The frame is drawn flat."
+        )
         report.unsupported(
             "Terrain",
             f"This project uses a {kind} terrain, which is not exported - a DEM "
-            "on your disk cannot travel with the map. Switch Terrain on under "
-            "the Map tab for global relief instead, or the map exports flat.",
+            f"on your disk cannot travel with the map.{advice}",
         )
 
 
@@ -343,7 +353,9 @@ def prepare_project(
 
     `report_map_title` is off for a cartograph's live frames: the title and
     description rows advise on the web map's Map name field, which a frame
-    has no use for.
+    has no use for, and the Terrain row leaves out the advice to change it on the web
+    map's Map tab. The Basemap row is left out: a frame's layers are the
+    layout's choice.
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
@@ -564,10 +576,16 @@ def finish_project(
         report.approximated("Basemap", OSM_FILE_NOTE)
     elif note is not None:
         report.approximated("Basemap", note)
-    elif pending.has_tile_layer and not any(layer.tiles for layer in layers):
+    elif (
+        pending.report_map_title
+        and pending.has_tile_layer
+        and not any(layer.tiles for layer in layers)
+    ):
         # The project has a backdrop and the export will not. Silence here is
         # how someone ships a map of bare shapes floating on white and only
-        # finds out when the recipient asks what they are looking at.
+        # finds out when the recipient asks what they are looking at. Not for
+        # a cartograph's frames: the layout chooses each frame's layers, so a
+        # tile layer left out of one is a choice, not a lost backdrop.
         report.unsupported(
             "Basemap",
             "This project has a tile layer, but the export has no basemap, so "
@@ -582,7 +600,7 @@ def finish_project(
     layers = _translate_scale_visibility(pending.scale_basis, layers, extent, report)
     layers = _declutter(layers, report)
 
-    _report_terrain(pending.terrain_kind, settings, report)
+    _report_terrain(pending.terrain_kind, settings, report, pending.report_map_title)
 
     # Extrusion and relief cannot coexist: columns would rise from sea level
     # and vanish inside the mountains. Under relief the runtime drapes every
