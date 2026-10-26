@@ -126,6 +126,38 @@ class TestLayout:
         assert dialog.settings().crop_marks is True
         assert dialog.settings().crop_marks_effective is False
 
+    def test_embed_fonts_is_off_and_explained_for_browser_printing(
+        self, make_dialog
+    ) -> None:
+        dialog = make_dialog(PrintSettings(embed_fonts=False))
+        assert dialog.settings().profile == PROFILE_RGB
+        assert not dialog.embed_fonts_check.isEnabled()
+        assert not dialog.embed_fonts_note.isHidden()
+        assert "browser" in dialog.embed_fonts_note.text()
+        # The preference is kept for the native export.
+        assert dialog.settings().embed_fonts is False
+        _select(dialog.profile_combo, PROFILE_CMYK)
+        assert dialog.embed_fonts_check.isEnabled()
+        assert dialog.embed_fonts_note.isHidden()
+        assert dialog.settings().embed_fonts is False
+        _select(dialog.profile_combo, PROFILE_RGB)
+        assert not dialog.embed_fonts_check.isEnabled()
+
+    def test_smaller_sheet_shows_the_clipping_consequence(self, make_dialog) -> None:
+        dialog = make_dialog(PrintSettings(page=PAGE_FROM_LAYOUT), page=(420, 297))
+        assert dialog.size_note_label.isHidden()
+        _select(dialog.size_combo, "A4|portrait")
+        assert not dialog.size_note_label.isHidden()
+        text = dialog.size_note_label.text()
+        assert "without moving or scaling" in text
+        assert "420 x 297 mm" in text and "210 x 297 mm" in text
+        assert "cut off" in text
+        _select(dialog.size_combo, "A2|landscape")
+        assert "cut off" not in dialog.size_note_label.text()
+        assert not dialog.size_note_label.isHidden()
+        _select(dialog.size_combo, PAGE_FROM_LAYOUT)
+        assert dialog.size_note_label.isHidden()
+
     def test_export_is_the_default_button(self, make_dialog) -> None:
         dialog = make_dialog()
         assert dialog.export_button.isDefault()

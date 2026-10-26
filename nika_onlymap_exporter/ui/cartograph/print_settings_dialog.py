@@ -165,6 +165,7 @@ class PrintSettingsDialog(QDialog):
         self.action = ""
         self._qsettings = qsettings if qsettings is not None else QSettings()
         self._icc_path = settings.icc_path
+        self._layout_size_mm = layout_page_mm
         self._profile_reasons = self._compute_profile_reasons(
             has_live_frame, colour_support
         )
@@ -231,6 +232,7 @@ class PrintSettingsDialog(QDialog):
                 )
         self.size_combo.addItem(tr("Custom..."), PAGE_CUSTOM)
         self.size_combo.currentIndexChanged.connect(self._sync_custom_visibility)
+        self.size_combo.currentIndexChanged.connect(self._sync_size_note)
         form.addRow(tr("Size"), self.size_combo)
 
         self.custom_row = QWidget()
@@ -241,6 +243,13 @@ class PrintSettingsDialog(QDialog):
         custom.addWidget(self.custom_width)
         custom.addWidget(self.custom_height)
         form.addRow("", self.custom_row)
+
+        # Changing the sheet does not reflow the layout: the consequence is
+        # spelled out here, before anything is exported.
+        self.size_note_label = FittedLabel()
+        form.addRow("", self.size_note_label)
+        self.custom_width.valueChanged.connect(self._sync_size_note)
+        self.custom_height.valueChanged.connect(self._sync_size_note)
 
         self.dpi_combo = QComboBox()
         for dpi in RESOLUTIONS:
@@ -291,6 +300,7 @@ class PrintSettingsDialog(QDialog):
         self._last_profile_index = 0
         self.profile_combo.activated.connect(self._on_profile_activated)
         self.profile_combo.currentIndexChanged.connect(self._sync_note)
+        self.profile_combo.currentIndexChanged.connect(self._sync_embed_fonts)
         form.addRow(tr("Profile"), self.profile_combo)
         box.addLayout(form)
 
@@ -308,11 +318,10 @@ class PrintSettingsDialog(QDialog):
             )
         )
         self.embed_fonts_check = QCheckBox(tr("Embed fonts"))
-        self.embed_fonts_check.setToolTip(
-            tr("Off turns text into outlines in the QGIS PDF")
-        )
         box.addWidget(self.flatten_check)
         box.addWidget(self.embed_fonts_check)
+        self.embed_fonts_note = FittedLabel()
+        box.addWidget(self.embed_fonts_note)
         return group
 
     def _build_buttons(self) -> QDialogButtonBox:
@@ -366,8 +375,10 @@ class PrintSettingsDialog(QDialog):
         self.downgrade_label.setVisible(bool(reason))
         self._set_profile(profile)
         self._sync_custom_visibility()
+        self._sync_size_note()
         self._sync_crop_marks()
         self._sync_note()
+        self._sync_embed_fonts()
 
     def settings(self) -> PrintSettings:
         """The settings as currently shown."""
@@ -408,6 +419,53 @@ class PrintSettingsDialog(QDialog):
 
     def _sync_custom_visibility(self, *_args: object) -> None:
         self.custom_row.setVisible(self.size_combo.currentData() == PAGE_CUSTOM)
+
+    def _sync_size_note(self, *_args: object) -> None:
+        """Say what the chosen sheet does to the items before any export."""
+        layout_w, layout_h = self._layout_size_mm
+        trim_w, trim_h = self.settings().trim_size_mm(self._layout_size_mm)
+        if abs(trim_w - layout_w) < 0.5 and abs(trim_h - layout_h) < 0.5:
+            text = ""
+        else:
+            text = tr(
+                "This changes the sheet only, without moving or scaling the "
+                "items: they keep their positions from the top-left corner."
+            )
+            if trim_w < layout_w - 0.5 or trim_h < layout_h - 0.5:
+                text += " " + tr(
+                    "The layout is {layout_w} x {layout_h} mm and this sheet is "
+                    "{sheet_w} x {sheet_h} mm, so anything beyond the sheet is "
+                    "cut off."
+                ).format(
+                    layout_w=f"{layout_w:g}",
+                    layout_h=f"{layout_h:g}",
+                    sheet_w=f"{trim_w:g}",
+                    sheet_h=f"{trim_h:g}",
+                )
+        self.size_note_label.setText(text)
+        self.size_note_label.setVisible(bool(text))
+
+    def _sync_embed_fonts(self, *_args: object) -> None:
+        """Embed fonts only reaches the QGIS PDF: a browser prints with its
+        own font handling. The saved preference is kept either way."""
+        native = str(self.profile_combo.currentData()) != PROFILE_RGB
+        self.embed_fonts_check.setEnabled(native)
+        if native:
+            self.embed_fonts_check.setToolTip(
+                tr("Off turns text into outlines in the QGIS PDF")
+            )
+            self.embed_fonts_note.setText("")
+        else:
+            self.embed_fonts_check.setToolTip(
+                tr("The browser decides how fonts are embedded when it prints")
+            )
+            self.embed_fonts_note.setText(
+                tr(
+                    "Embed fonts applies to CMYK and ICC PDFs from QGIS. In the "
+                    "browser the print dialog controls it; your choice is kept."
+                )
+            )
+        self.embed_fonts_note.setVisible(bool(self.embed_fonts_note.text()))
 
     def _sync_crop_marks(self, *_args: object) -> None:
         has_bleed = BLEED_MM.get(str(self.bleed_combo.currentData())) is not None
