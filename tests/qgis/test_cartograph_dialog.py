@@ -662,6 +662,43 @@ class TestBuildThreadsAndJobs:
         finally:
             dialog.close()
 
+    def test_an_open_browser_preview_follows_the_layout_and_each_save(
+        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+    ) -> None:
+        """The preview server shows the layout on screen: switching layouts
+        and saving an edit each publish the saved file again."""
+        _add_layout(project, "A", [("Map", "EPSG:4326")])
+        _add_layout(project, "B", [("Map", "EPSG:4326")])
+        dialog = _dialog(project)
+        try:
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            monkeypatch.setattr(cartograph, "_open_url", lambda url: None)
+            cartograph.layout_combo.setCurrentText("A")
+            a = tmp_path / "a.html"
+            cartograph.file_edit.setText(str(a))
+            cartograph._on_file_edited(str(a))
+            assert _wait_for(qgis_app, lambda: a.exists())
+            assert _wait_for(qgis_app, lambda: cartograph._job is None)
+            cartograph.on_open_in_browser()
+            server = cartograph._preview_server
+            assert server is not None
+            assert server.published()[0] == a.resolve()
+            before = server.revision
+
+            fake_cartograph_export.html_text["value"] = "<html>A edited</html>"
+            cartograph.schedule_autosave()
+            assert _wait_for(qgis_app, lambda: server.revision > before)
+            assert server.published()[0] == a.resolve()
+
+            cartograph.layout_combo.setCurrentText("B")
+            b = cartograph._current_path()
+            assert _wait_for(qgis_app, lambda: b.exists())
+            assert _wait_for(qgis_app, lambda: server.published()[0] == b.resolve())
+            assert cartograph._preview_server is server
+        finally:
+            dialog.close()
+
     def test_a_build_landing_after_a_switch_saves_only_its_own_layout(
         self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
     ) -> None:

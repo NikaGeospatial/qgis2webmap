@@ -1301,3 +1301,8 @@ class TestBrowserPreviewFollowsTheLayout:
         assert width == pytest.approx(page_w / 25.4 * 96, abs=2)
         assert height == pytest.approx(page_h / 25.4 * 96, abs=2)
         assert "EventSource" not in first.read_text(encoding="utf-8")
+        import urllib.request
+
+        url = f"http://127.0.0.1:{server.port}{PAGE_PATH}?export=png&dpi=96"
+        with urllib.request.urlopen(url, timeout=10) as response:
+            assert "EventSource" not in response.read().decode()
