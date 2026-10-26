@@ -2186,6 +2186,9 @@ class TestCanvasAndImport:
             (new_name,) = after - before
             assert dialog._cartograph.layout_combo.currentText() == new_name
             assert len(dialog._cartograph._frame_rows) == 2
+            # The import's own commands are not the user's edits.
+            imported = project.layoutManager().layoutByName(new_name)
+            assert not imported.undoStack().stack().canUndo()
         finally:
             dialog.close()
 
@@ -4875,6 +4878,36 @@ class TestLayoutSelectorAndTemplates:
             names = {layout.name() for layout in project.layoutManager().layouts()}
             assert "Near & Far · Grand Canyon" in names
             assert project.layoutManager().layoutByName("Survey") is original
+        finally:
+            dialog.close()
+
+    def test_undo_starts_at_the_users_first_edit_not_the_template_build(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        from qgis.core import QgsLayoutItemLabel
+
+        dialog = self._dialog(project, picked_template)
+        try:
+            picked_template.choice = ("legend-below", "A4", "landscape")
+            _click_new_from_template(dialog)
+            layout = dialog._cartograph._current_layout
+            stack = layout.undoStack().stack()
+            items = len(layout.items())
+            assert not stack.canUndo()
+            title = next(
+                i
+                for i in layout.items()
+                if isinstance(i, QgsLayoutItemLabel) and i.id() == "title"
+            )
+            before = title.text()
+            layout.undoStack().beginCommand(title, "Edit text")
+            title.setText("Mine")
+            layout.undoStack().endCommand()
+            assert stack.count() == 1
+            stack.undo()
+            stack.undo()  # a second Undo has nothing to take apart
+            assert title.text() == before
+            assert len(layout.items()) == items
         finally:
             dialog.close()
 

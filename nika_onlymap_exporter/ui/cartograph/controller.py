@@ -222,6 +222,13 @@ class _PanelColumn(QWidget):
         return max(layout.minimumHeightForWidth(width), layout.minimumSize().height())
 
 
+def _forget_build_commands(layout: QgsPrintLayout) -> None:
+    """A layout just built from a template or an import starts with an empty
+    undo stack: the commands that created its items are not the user's edits,
+    and Undo must not take the design apart."""
+    layout.undoStack().stack().clear()
+
+
 class CartographController:
     """Owns the Cartograph output's widgets, state and autosave job."""
 
@@ -824,6 +831,7 @@ class CartographController:
                 )
             )
             return
+        _forget_build_commands(result.layout)
         name = result.layout.name()
         choices = self.state.frame_choices(name)
         for item_id, mode in result.frame_modes.items():
@@ -861,6 +869,7 @@ class CartographController:
         except (CartographImportError, OSError) as exc:
             QMessageBox.warning(self.dialog, tr("Import cartograph"), str(exc))
             return
+        _forget_build_commands(built.layout)
         name = built.layout.name()
         choices = self.state.frame_choices(name)
         for item_id, mode in built.frame_modes.items():
