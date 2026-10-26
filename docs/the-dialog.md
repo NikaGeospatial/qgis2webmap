@@ -180,6 +180,8 @@ contain, given every choice above. It is a consequence, not a setting.
 One list, driven by the QGIS Layers panel, bottom layer first — the same order
 the map draws in.
 
+The **Search layers and fields** box above the list filters it as you type, by layer name or field name (case and accents ignored). A matching field opens its layer; **Esc** or the clear button brings the list back as it was, and no tick or choice changes.
+
 ### The three columns
 
 The **i** at the bottom right of the tab sums these up.

@@ -1849,6 +1849,101 @@ class TestDialogConstruction:
         assert widget.currentData() == PopupFieldMode.NO_LABEL.value
         dialog.close()
 
+    def _search_dialog(self, project, make_memory_layer):
+        """Two layers with distinct names and distinct field names."""
+        dialog = self._dialog(project, make_memory_layer)
+        project.addMapLayer(
+            make_memory_layer(
+                "rivers", fields="elevation:string", features=[("b", [3.0, 4.0])]
+            )
+        )
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        QCoreApplication.processEvents()
+        return dialog
+
+    @staticmethod
+    def _top(dialog, name):
+        tree = dialog.layer_tree
+        return next(
+            tree.topLevelItem(i)
+            for i in range(tree.topLevelItemCount())
+            if tree.topLevelItem(i).text(0) == name
+        )
+
+    def test_search_by_layer_name_hides_the_others(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._search_dialog(project, make_memory_layer)
+        dialog.layer_search.setText("RIV")
+        assert self._top(dialog, "roads").isHidden()
+        assert not self._top(dialog, "rivers").isHidden()
+        dialog.close()
+
+    def test_search_by_field_name_expands_the_parent_to_that_field(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._search_dialog(project, make_memory_layer)
+        dialog.layer_search.setText("elEvation")
+        rivers = self._top(dialog, "rivers")
+        assert self._top(dialog, "roads").isHidden()
+        assert rivers.isExpanded()
+        fields = _field_items(dialog, rivers)
+        assert [f.isHidden() for f in fields] == [False]
+        dialog.layer_search.setText("")
+        dialog.close()
+
+    def test_search_never_changes_choices_and_clearing_restores_expansion(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+
+        dialog = self._search_dialog(project, make_memory_layer)
+        roads = self._top(dialog, "roads")
+        rivers = self._top(dialog, "rivers")
+        roads.setExpanded(True)
+        rivers.setCheckState(2, Qt.CheckState.Unchecked)
+        combo = _mode_combo(dialog, _field_items(dialog, rivers)[0])
+        combo.setCurrentIndex(combo.findData(PopupFieldMode.NO_LABEL.value))
+        before = dialog.state.for_layer(rivers.data(0, Qt.ItemDataRole.UserRole))
+        before = (before.include, before.popup, before.label, dict(before.fields))
+
+        dialog.layer_search.setText("zzz-no-match")
+        assert roads.isHidden() and rivers.isHidden()
+        dialog.layer_search.setText("elevation")
+        assert rivers.isExpanded() and roads.isHidden()
+        dialog.layer_search.setText("")
+
+        after = dialog.state.for_layer(rivers.data(0, Qt.ItemDataRole.UserRole))
+        assert before == (after.include, after.popup, after.label, dict(after.fields))
+        assert rivers.checkState(2) == Qt.CheckState.Unchecked
+        assert _mode_combo(dialog, _field_items(dialog, rivers)[0]).currentData() == (
+            PopupFieldMode.NO_LABEL.value
+        )
+        assert not roads.isHidden() and not rivers.isHidden()
+        assert roads.isExpanded() and not rivers.isExpanded()
+        dialog.close()
+
+    def test_escape_clears_the_search_box_only_when_it_has_text(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtCore import QEvent, Qt
+        from qgis.PyQt.QtGui import QKeyEvent
+        from qgis.PyQt.QtWidgets import QApplication
+
+        dialog = self._search_dialog(project, make_memory_layer)
+        box = dialog.layer_search
+        assert box.isClearButtonEnabled()
+        assert box.placeholderText() == "Search layers and fields"
+        box.setText("riv")
+        event = QKeyEvent(
+            QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier
+        )
+        QApplication.sendEvent(box, event)
+        assert box.text() == "" and event.isAccepted()
+        assert not self._top(dialog, "roads").isHidden()
+        dialog.close()
+
     def test_every_layer_offers_the_three_per_layer_overrides(
         self, qgis_app, project, make_memory_layer
     ) -> None:

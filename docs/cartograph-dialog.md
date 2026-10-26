@@ -172,7 +172,7 @@ the list rebuilds.
 
 ### Layers
 
-The same list as the web map's Layers tab, with the same **Include**,
+The same list as the web map's Layers tab (search box included), with the same **Include**,
 **Popups** and **Labels** columns and **Set every field to**. For a
 cartograph it sets how the layers in **live** frames behave:
 

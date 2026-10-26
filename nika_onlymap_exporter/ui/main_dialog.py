@@ -30,6 +30,7 @@ import re
 import sys
 import time
 import traceback
+import unicodedata
 from collections.abc import Callable
 from dataclasses import replace
 from html import escape as escape_html
@@ -816,6 +817,24 @@ class _HelpBrowser(QTextBrowser):
                 QTextBrowser.focusNextPrevChild(self, forward)
                 event.accept()
                 return
+        super().keyPressEvent(event)
+
+
+def _search_key(text: str) -> str:
+    """Case- and accent-insensitive form of `text` for the layer search."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+class _SearchBox(QLineEdit):
+    """Esc empties the box when it holds text; only on an empty box does it
+    pass on, so it still closes the dialog."""
+
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:  # noqa: N802 - Qt override
+        if event is not None and event.key() == Qt.Key.Key_Escape and self.text():
+            self.clear()
+            event.accept()
+            return
         super().keyPressEvent(event)
 
 
@@ -1828,6 +1847,16 @@ class MainDialog(QDialog):
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
+        self.layer_search = _SearchBox(page)
+        self.layer_search.setClearButtonEnabled(True)
+        self.layer_search.setPlaceholderText(tr("Search layers and fields"))
+        self.layer_search.setAccessibleName(tr("Search layers and fields"))
+        self.layer_search.textChanged.connect(self._apply_layer_filter)
+        layout.addWidget(self.layer_search)
+        # Expanded layers as they were when a search began, put back when it
+        # ends; None while no search is active.
+        self._expanded_before_search: set[str] | None = None
+
         self.layer_tree = QTreeWidget(page)
         self.layer_tree.setColumnCount(4)
         self.layer_tree.setHeaderLabels(
@@ -1976,14 +2005,11 @@ class MainDialog(QDialog):
 
         # Rebuilt on every project change, which would otherwise fold what the
         # user had just opened.
-        expanded_ids = {
-            item.data(0, Qt.ItemDataRole.UserRole)
-            for item in (
-                self.layer_tree.topLevelItem(index)
-                for index in range(self.layer_tree.topLevelItemCount())
-            )
-            if item is not None and item.isExpanded()
-        }
+        expanded_ids = (
+            self._expanded_before_search
+            if self._expanded_before_search is not None
+            else self._expanded_layer_ids()
+        )
 
         self.layer_tree.blockSignals(True)
         self.layer_tree.clear()
@@ -2012,10 +2038,67 @@ class MainDialog(QDialog):
             item.setExpanded(layer.id() in expanded_ids)
 
         self.layer_tree.blockSignals(False)
+        self._apply_layer_filter(self.layer_search.text())
         # These drop-downs are rebuilt on every layer change, long after
         # `theme.apply` attached the rest, so they are attached here.
         theme.attach_menus(self.layer_tree)
         self._update_export_readiness()
+
+    def _expanded_layer_ids(self) -> set[str]:
+        return {
+            item.data(0, Qt.ItemDataRole.UserRole)
+            for item in (
+                self.layer_tree.topLevelItem(index)
+                for index in range(self.layer_tree.topLevelItemCount())
+            )
+            if item is not None and item.isExpanded()
+        }
+
+    def _apply_layer_filter(self, text: str) -> None:
+        """Hide layers and fields that do not match the search box.
+
+        A matching field expands its layer; a matching layer name keeps its
+        own rows. Only visibility and expansion change - never a checkbox or
+        a field's mode - and clearing the box restores the expansion the
+        list had when the search began.
+        """
+        needle = _search_key(text.strip())
+        tree = self.layer_tree
+        if needle and self._expanded_before_search is None:
+            self._expanded_before_search = self._expanded_layer_ids()
+        saved = self._expanded_before_search or set()
+
+        for index in range(tree.topLevelItemCount()):
+            layer_item = tree.topLevelItem(index)
+            if layer_item is None:
+                continue
+            layer_id = layer_item.data(0, Qt.ItemDataRole.UserRole)
+            if not needle:
+                layer_item.setHidden(False)
+                for child_index in range(layer_item.childCount()):
+                    layer_item.child(child_index).setHidden(False)
+                layer_item.setExpanded(layer_id in saved)
+                continue
+
+            name_match = needle in _search_key(layer_item.text(0))
+            field_matches = [
+                child.data(0, Qt.ItemDataRole.UserRole) != LAYER_OPTIONS_ROLE
+                and needle in _search_key(str(child.data(0, Qt.ItemDataRole.UserRole)))
+                for child in (
+                    layer_item.child(i) for i in range(layer_item.childCount())
+                )
+            ]
+            # A name-only match keeps all its rows; a field match narrows the
+            # layer to just those fields.
+            for child_index, match in enumerate(field_matches):
+                layer_item.child(child_index).setHidden(
+                    not (match or (name_match and not any(field_matches)))
+                )
+            layer_item.setHidden(not (name_match or any(field_matches)))
+            layer_item.setExpanded(any(field_matches) or layer_id in saved)
+
+        if not needle:
+            self._expanded_before_search = None
 
     def _add_field_rows(
         self,
