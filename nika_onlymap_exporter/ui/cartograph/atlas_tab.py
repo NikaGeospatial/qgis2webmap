@@ -79,13 +79,13 @@ class AtlasTab(QWidget):
         self._open_all_pages = open_all_pages
 
         page = QVBoxLayout(self)
-        intro = FittedLabel(
+        intro = FittedLabel(tr("One page per feature of a coverage layer."), self)
+        intro.setToolTip(
             tr(
                 "One page per feature of a coverage layer, like QGIS's own "
                 "atlas: the map that follows the atlas zooms to each feature "
                 "in turn, and text can show the feature's fields."
-            ),
-            self,
+            )
         )
         intro.setWordWrap(True)
         page.addWidget(intro)

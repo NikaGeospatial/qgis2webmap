@@ -1836,12 +1836,15 @@ class MainDialog(QDialog):
         page = QWidget(self)
         layout = QVBoxLayout(page)
         intro = FittedLabel(
+            tr("Follows the QGIS Layers panel. Expand a layer for its fields."),
+            page,
+        )
+        intro.setToolTip(
             tr(
                 "Layers come from the QGIS Layers panel and follow it live - "
                 "reorder or rename them there and this list updates. Expand a "
                 "layer to choose how each of its fields appears in popups."
-            ),
-            page,
+            )
         )
         # Wrapped: on one line it ran off the edge of a normal-sized dialog.
         intro.setWordWrap(True)
