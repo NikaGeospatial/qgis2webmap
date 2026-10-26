@@ -287,7 +287,7 @@ actions, then the greyed NIKA rows.
 | Row | What it does | Available |
 |---|---|---|
 | **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size, with its background colours kept even when the browser's **Background graphics** is off - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
-| **Export PNG...** | Opens the cartograph, which renders a 300 dpi image of the page and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
+| **Export PNG...** | Opens the cartograph, which renders an image of the page at the saved resolution and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
 | **Export QGIS layout template (.qpt)...** | Saves the source layout as a `.qpt` template, to load into another project | Once a layout is selected |
 | **Print settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Export PDF | Once a layout is selected |
 | **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |

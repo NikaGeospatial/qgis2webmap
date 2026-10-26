@@ -49,7 +49,7 @@ A page of only static frames prints the same either way.
 ## Export PNG
 
 **Share → Export PNG...** opens the cartograph, which renders the page as a
-**300 dpi** PNG and downloads it through your browser - into your Downloads
+PNG at the **saved resolution** (300 dpi unless Print settings say otherwise) and downloads it through your browser - into your Downloads
 folder, as with any download. Live frames are re-rendered at that resolution,
 not enlarged from the screen.
 

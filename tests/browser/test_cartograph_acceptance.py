@@ -757,6 +757,152 @@ class TestAtlasFilterAndOrder:
         assert paged == expected["atlas_ranked"]["pages"]
 
 
+class TestAtlasFilterOutcomes:
+    """An invalid atlas filter must never become an unfiltered atlas: the
+    cartograph has no atlas at all. A valid filter pages exactly the parcels
+    QGIS pages (none, some), and correcting the filter brings them back."""
+
+    _PAGED_LOTS = """() => {
+      const atlas = document.querySelector('om-atlas');
+      const seen = [];
+      for (let index = 0; index < atlas.count; index++) {
+        atlas.seek(index);
+        seen.push(atlas.current.properties.lot);
+      }
+      return seen;
+    }"""
+
+    def _paged_lots(
+        self, page, fixtures: Path, name: str, expected_pages: int
+    ) -> list[str]:
+        _needs_webgl(page)
+        _open(page, fixtures / f"atlas-filter-{name}.html")
+        if expected_pages:
+            page.wait_for_function(
+                "(n) => document.querySelector('om-atlas')?.count === n",
+                arg=expected_pages,
+                timeout=60_000,
+            )
+        else:
+            # Nothing to wait for but the atlas having had time to count.
+            page.wait_for_function(
+                "() => document.querySelector('om-atlas')", timeout=60_000
+            )
+            page.wait_for_timeout(2000)
+        return page.evaluate(self._PAGED_LOTS)
+
+    def test_an_invalid_filter_leaves_no_atlas_to_page(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        assert expected["atlas_filters"]["invalid"] is None
+        html = (fixtures / "atlas-filter-invalid.html").read_text(encoding="utf-8")
+        assert "<om-atlas" not in html
+        _needs_webgl(page)
+        # Its all-pages trigger finds nothing to export, rather than all three.
+        page.goto((fixtures / "atlas-filter-invalid.html").as_uri() + "?atlas=zip")
+        alert = page.locator("[data-qgis2webmap-atlas-notice][role=alert]")
+        alert.wait_for(timeout=60_000)
+        assert "no atlas" in alert.inner_text()
+        assert page.evaluate("() => document.querySelector('om-atlas')") is None
+
+    def test_a_filter_matching_nothing_is_an_atlas_with_no_pages(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        assert expected["atlas_filters"]["zero"] == []
+        assert self._paged_lots(page, fixtures, "zero", 0) == []
+        page.goto((fixtures / "atlas-filter-zero.html").as_uri() + "?atlas=print")
+        alert = page.locator("[data-qgis2webmap-atlas-notice][role=alert]")
+        alert.wait_for(timeout=60_000)
+        assert "no pages" in alert.inner_text()
+
+    def test_a_subset_pages_exactly_the_parcels_qgis_pages(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        want = expected["atlas_filters"]["subset"]
+        assert want == ["C-3", "B-2"]
+        assert self._paged_lots(page, fixtures, "subset", 2) == want
+
+    def test_correcting_the_filter_pages_the_corrected_parcel(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        want = expected["atlas_filters"]["corrected"]
+        assert want == ["A-1"]
+        assert self._paged_lots(page, fixtures, "corrected", 1) == want
+
+
+class TestAtlasResolution:
+    """Print, PNG and ZIP of an atlas all render at the cartograph's saved
+    resolution, not at a figure of their own: the same small sheet saved at
+    72 and at 144 dpi gives images of one size and of twice that, on every
+    route."""
+
+    DPIS = (72, 144)
+
+    @staticmethod
+    def _want(expected, dpi: int) -> tuple[float, float]:
+        width_mm, height_mm = expected["atlas_dpi"]["page_mm"]
+        return width_mm / 25.4 * dpi, height_mm / 25.4 * dpi
+
+    def _zip_sizes(self, page, fixtures: Path, name: str, query: str = ""):
+        import zipfile
+
+        _needs_webgl(page)
+        with page.expect_download(timeout=180_000) as download_info:
+            page.goto((fixtures / name).as_uri() + "?atlas=zip" + query)
+        with zipfile.ZipFile(download_info.value.path()) as archive:
+            return [_png_size(archive.read(entry)) for entry in archive.namelist()]
+
+    def _print_sizes(self, page, fixtures: Path, name: str, query: str = ""):
+        _needs_webgl(page)
+        page.add_init_script(
+            "window.print = () => { window.__printedSizes = [...document"
+            ".querySelectorAll('[data-qgis2webmap-atlas-print] img')]"
+            ".map((image) => [image.naturalWidth, image.naturalHeight]); };"
+        )
+        page.goto((fixtures / name).as_uri() + "?atlas=print" + query)
+        page.wait_for_function(
+            "() => window.__printedSizes !== undefined", timeout=180_000
+        )
+        return page.evaluate("() => window.__printedSizes")
+
+    def test_zip_and_print_follow_the_saved_resolution(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        pages = expected["atlas_dpi"]["pages"]
+        zip_widths = {}
+        for dpi in self.DPIS:
+            want_w, want_h = self._want(expected, dpi)
+            name = f"atlas-dpi-{dpi}.html"
+            for route in (self._zip_sizes, self._print_sizes):
+                sizes = route(page, fixtures, name)
+                assert len(sizes) == pages
+                for width, height in sizes:
+                    assert width == pytest.approx(want_w, abs=2), (route, dpi)
+                    assert height == pytest.approx(want_h, abs=2), (route, dpi)
+                zip_widths.setdefault(route.__name__, {})[dpi] = sizes[0][0]
+        for widths in zip_widths.values():
+            assert widths[144] / widths[72] == pytest.approx(2, abs=0.02)
+
+    def test_png_export_follows_the_saved_resolution(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        for dpi in self.DPIS:
+            want_w, want_h = self._want(expected, dpi)
+            with page.expect_download(timeout=120_000) as download_info:
+                # The very address the plugin's Export PNG opens.
+                page.goto((fixtures / f"atlas-dpi-{dpi}.html").as_uri() + "?export=png")
+            width, height = _png_size(Path(download_info.value.path()).read_bytes())
+            assert width == pytest.approx(want_w, abs=2), dpi
+            assert height == pytest.approx(want_h, abs=2), dpi
+
+    def test_an_address_that_names_a_resolution_overrides_the_saved_one(
+        self, page, fixtures: Path, expected
+    ) -> None:
+        want_w, _ = self._want(expected, 72)
+        sizes = self._zip_sizes(page, fixtures, "atlas-dpi-144.html", "&dpi=72")
+        assert all(width == pytest.approx(want_w, abs=2) for width, _ in sizes)
+
+
 class TestSharedLayerData:
     def test_a_layer_in_two_live_frames_is_written_once_and_drawn_in_both(
         self, page, fixtures: Path, expected

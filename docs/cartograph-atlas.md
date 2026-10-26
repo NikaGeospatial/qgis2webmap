@@ -105,7 +105,7 @@ filter matches no feature.
   nothing is printed and the page says which one failed. Choose **Save as
   PDF** for one multi-page PDF; in a Chromium-based browser every page is at
   its true size. Each page is an
-  image rendered at 200 dpi, so text in that PDF is not selectable.
+  image rendered at that same resolution, so text in that PDF is not selectable.
 
 **Export PNG...** and **Export PDF...** in the Share menu work on the page the
 cartograph opens on, page 1. For a single page, a cartograph opened with

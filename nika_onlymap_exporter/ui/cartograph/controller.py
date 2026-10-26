@@ -1929,7 +1929,7 @@ class CartographController:
         add(
             "export_png",
             tr("Export PNG..."),
-            tr("300 dpi image of the first page"),
+            tr("Image of the first page at the saved resolution"),
             self.on_export_png,
         )
         add(
@@ -2267,7 +2267,9 @@ class CartographController:
         path = self._current_path()
         if path is None or not path.exists():
             return
-        self._open_saved(path, "export=png&dpi=300")
+        # No `dpi=`: the saved cartograph carries its resolution, which the
+        # runtime's PNG export and the atlas routes all read.
+        self._open_saved(path, "export=png")
 
     def on_export_qpt(self) -> None:
         if self._current_layout is None:

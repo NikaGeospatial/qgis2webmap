@@ -743,7 +743,7 @@ class TestBuildThreadsAndJobs:
             assert opened == []
             assert "opens when saved" in dialog.status_label.text()
             assert _wait_for(qgis_app, lambda: opened)
-            assert opened == [("export=png&dpi=300", "<html>edited</html>")]
+            assert opened == [("export=png", "<html>edited</html>")]
             assert "opens when saved" not in dialog.status_label.text()
         finally:
             dialog.close()
@@ -876,7 +876,7 @@ class TestBuildThreadsAndJobs:
             disk["full"] = False
             cartograph.on_export_png()
             assert _wait_for(qgis_app, lambda: opened)
-            assert opened == [("export=png&dpi=300", "<html>edited</html>")]
+            assert opened == [("export=png", "<html>edited</html>")]
             cartograph.on_export_png()  # current now: opens at once
             assert len(opened) == 2
         finally:
@@ -1187,7 +1187,7 @@ class TestCartographShareMenu:
             dialog._cartograph.on_export_png()
             assert len(opened) == 3
             assert any("print=1" in url for url in opened)
-            assert any("export=png" in url and "dpi=300" in url for url in opened)
+            assert any("export=png" in url for url in opened)
         finally:
             dialog.close()
 
@@ -1224,7 +1224,7 @@ class TestCartographShareMenu:
             cartograph._open_all_pages("zip")
             assert [url.query() for url in opened] == [
                 "",
-                "export=png&dpi=300",
+                "export=png",
                 "atlas=zip",
             ]
             for url in opened:
@@ -1262,7 +1262,7 @@ class TestCartographShareMenu:
             assert [url.query() for url in opened] == [
                 "",
                 "print=1",
-                "export=png&dpi=300",
+                "export=png",
                 "cvd=deutan",
                 "atlas=zip",
                 "atlas=print",

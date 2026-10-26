@@ -47,6 +47,7 @@ import math
 import os
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -79,6 +80,10 @@ def main(out_dir: Path) -> int:
         QgsProject.instance().clear()
         QgsProject.instance().clear()
         expected["atlas_ranked"] = _write_atlas_ranked(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas_filters"] = _write_atlas_filters(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
+        expected["atlas_dpi"] = _write_atlas_dpi(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas_raster"] = _write_atlas_raster(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
@@ -454,6 +459,70 @@ def _write_atlas_fixed(project, out_dir: Path) -> dict:
         centre = to_wgs84.transform(feature.geometry().boundingBox().center())
         centres[str(feature.id())] = [centre.x(), centre.y()]
     return {"main_frame": _frame_id(built.layout, built.main_map), "centres": centres}
+
+
+def _write_atlas_filters(project, out_dir: Path) -> dict:
+    """The atlas filter's outcomes, one cartograph each, over the same layout:
+    invalid, valid and matching nothing, valid subset, and the invalid filter
+    corrected. `pages` are the lots QGIS's own atlas pages for each."""
+    from atlas_fixtures import build_atlas_layout, qgis_atlas_page_ids
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    built = build_atlas_layout(project)
+    lots = {f.id(): f["lot"] for f in built.parcels.getFeatures()}
+    expected: dict[str, list[str] | None] = {}
+    for name, expression in (
+        ("invalid", '"lot" ='),
+        ("zero", "\"lot\" = 'nowhere'"),
+        ("subset", "\"size\" = 'small'"),
+        ("corrected", "\"lot\" = 'A-1'"),
+    ):
+        built.atlas.setFilterFeatures(True)
+        built.atlas.setFilterExpression(expression)
+        html = export_layout_to_cartograph(
+            built.layout, project, _runtime(), FidelityReportBuilder()
+        )
+        (out_dir / f"atlas-filter-{name}.html").write_text(html, encoding="utf-8")
+        # QGIS cannot page an invalid filter at all: no pages to compare to.
+        expected[name] = (
+            None
+            if name == "invalid"
+            else [lots[i] for i in qgis_atlas_page_ids(built.layout)]
+        )
+    return expected
+
+
+def _write_atlas_dpi(project, out_dir: Path) -> dict:
+    """One small atlas saved at two resolutions: a 148 x 105 mm sheet, three
+    pages, `dpi` 72 and 144 -- so the images of every route can be measured
+    against the sheet and the saved resolution."""
+    from atlas_fixtures import build_atlas_layout
+    from qgis.core import QgsLayoutSize, QgsUnitTypes
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        finish_cartograph,
+        prepare_cartograph,
+        prepare_live_reads,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+    built = build_atlas_layout(project)
+    built.layout.pageCollection().page(0).setPageSize(
+        QgsLayoutSize(148, 105, QgsUnitTypes.LayoutMillimeters)
+    )
+    built.main_map.attemptResize(QgsLayoutSize(128, 85, QgsUnitTypes.LayoutMillimeters))
+    for dpi in (72, 144):
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(built.layout, project, _runtime(), report)
+        prepared = replace(prepared, spec=replace(prepared.spec, dpi=dpi))
+        prepared = prepare_live_reads(prepared, project, report)
+        html = finish_cartograph(prepared, project, report)
+        (out_dir / f"atlas-dpi-{dpi}.html").write_text(html, encoding="utf-8")
+    return {"page_mm": [148, 105], "pages": 3}
 
 
 def _write_atlas_ranked(project, out_dir: Path) -> dict:

@@ -558,11 +558,14 @@ _ATLAS_ACTIONS = [
     "  if (!atlas) throw new Error('this cartograph has no atlas');",
     "  atlas.refresh?.();",
     "  const query = new URLSearchParams(location.search);",
-    "  const dpiAsked = (fallback) =>",
-    "    Math.min(600, Math.max(72, Number(query.get('dpi')) || fallback));",
+    # One resolution for every route: the address's `dpi=` when it names one,
+    # else the cartograph's own saved `dpi` (what the runtime's PNG export
+    # also falls back to), else 300.
+    "  const dpiAsked = () => Math.min(600, Math.max(72,",
+    "    Number(query.get('dpi')) || Number(sheet.getAttribute('dpi')) || 300));",
     "  const stem = sheet.getAttribute('cartograph-id') || 'cartograph';",
     "  if (kind === 'zip') {",
-    "    const dpi = dpiAsked(300);",
+    "    const dpi = dpiAsked();",
     "    const result = await carto.renderCartographAtlas(sheet, { dpi });",
     "    const link = document.createElement('a');",
     "    link.href = URL.createObjectURL(result.blob);",
@@ -580,7 +583,7 @@ _ATLAS_ACTIONS = [
     # rendered one after another, and every address made for one is revoked
     # whatever happens: when a page fails, when the reader cancels, and when
     # the print dialog closes.
-    "  const dpi = dpiAsked(200);",
+    "  const dpi = dpiAsked();",
     "  const widthMm = sheet.offsetWidth * 25.4 / 96;",
     "  const heightMm = sheet.offsetHeight * 25.4 / 96;",
     "  const sheets = document.createElement('div');",
