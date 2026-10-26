@@ -24,6 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from qgis.core import QgsLayoutItemLegend
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
@@ -63,6 +64,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ..i18n import plural, tr
 from .item_text_size import step_text_size, text_size_points
+from .legend_editor import LegendEditorWindow
 
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
@@ -216,9 +218,13 @@ class LayoutPreview(QStackedWidget):
     import_requested = pyqtSignal()
     # The selection changed, or an item in it was edited.
     selection_changed = pyqtSignal()
+    # A legend on the page was double-clicked (the item, a QgsLayoutItemLegend).
+    legend_edit_requested = pyqtSignal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._legend_editor: LegendEditorWindow | None = None
+        self.legend_edit_requested.connect(self._show_legend_editor)
         self.view = QgsLayoutView(self)
         self.view.setProperty("role", "layoutPreview")
         self._pan = QgsLayoutViewToolPan(self.view)
@@ -292,6 +298,10 @@ class LayoutPreview(QStackedWidget):
             self.setCurrentWidget(self._empty)
             return
         if self.view.currentLayout() is not layout:
+            if self._legend_editor is not None and not sip.isdeleted(
+                self._legend_editor
+            ):
+                self._legend_editor.close()
             self.view.setCurrentLayout(layout)
             self._select = QgsLayoutViewToolSelect(self.view)
             self._select.setLayout(layout)
@@ -385,6 +395,16 @@ class LayoutPreview(QStackedWidget):
         if (
             event is not None
             and watched is self.view.viewport()
+            and event.type() == QEvent.Type.MouseButtonDblClick
+            and isinstance(event, QMouseEvent)
+            and self.select_mode()
+        ):
+            legend = self._legend_at(_local_point(event))
+            if legend is not None:
+                self.legend_edit_requested.emit(legend)
+        if (
+            event is not None
+            and watched is self.view.viewport()
             and isinstance(event, QMouseEvent)
             and self._take_edge_reach(event)
         ):
@@ -397,6 +417,27 @@ class LayoutPreview(QStackedWidget):
         ):
             self._user_zoomed = True
         return False
+
+    def _legend_at(self, point: QPoint):  # QgsLayoutItemLegend | None
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return None
+        item = layout.layoutItemAt(QPointF(self.view.mapToScene(point)), False)
+        return item if isinstance(item, QgsLayoutItemLegend) else None
+
+    def _show_legend_editor(self, legend) -> None:
+        """The legend editor in a small window beside the page's top right
+        corner, following the double-clicked legend."""
+        if self._legend_editor is None or sip.isdeleted(self._legend_editor):
+            self._legend_editor = LegendEditorWindow(self.window())
+        editor = self._legend_editor
+        editor.set_legend(legend)
+        if not editor.isVisible():
+            editor.resize(editor.sizeHint().expandedTo(QSize(320, 440)))
+            corner = self.mapToGlobal(QPoint(self.width() - editor.width() - 8, 8))
+            editor.move(corner)
+        editor.show()
+        editor.raise_()
 
     def _selection_view_rect(self) -> QRect | None:
         layout = self.view.currentLayout()

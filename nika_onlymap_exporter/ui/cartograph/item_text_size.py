@@ -61,6 +61,16 @@ def step_text_size(layout: QgsLayout, item: QgsLayoutItem, bigger: bool) -> bool
         max(round(current + (STEP_POINTS if bigger else -STEP_POINTS)), MIN_POINTS),
         MAX_POINTS,
     )
+    return set_text_size(layout, item, target)
+
+
+def set_text_size(layout: QgsLayout, item: QgsLayoutItem, points: float) -> bool:
+    """Set the item's text to `points` (within the limits), as one undoable
+    edit. Returns whether anything changed."""
+    current = text_size_points(item)
+    if current is None:
+        return False
+    target = min(max(round(points), MIN_POINTS), MAX_POINTS)
     if abs(target - current) < 0.01:
         return False
     stack = layout.undoStack()
