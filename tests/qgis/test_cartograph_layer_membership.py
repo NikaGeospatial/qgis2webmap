@@ -9,6 +9,8 @@ Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,29 +19,34 @@ import pytest
 
 qgis_core = pytest.importorskip("qgis.core")
 
-from qgis.core import (  # noqa: E402
+from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsFeature,
     QgsGeometry,
     QgsLayoutExporter,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
+    QgsLayoutPoint,
     QgsMapThemeCollection,
     QgsPointXY,
     QgsPrintLayout,
     QgsProject,
     QgsRectangle,
+    QgsSymbol,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QPoint, QRectF, QSize, Qt  # noqa: E402
-from qgis.PyQt.QtTest import QTest  # noqa: E402
+from qgis.PyQt.QtCore import QPoint, QRectF, QSize, Qt
+from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtTest import QTest
 
-from nika_onlymap_exporter.core.cartograph_export import (  # noqa: E402
+from nika_onlymap_exporter.core.cartograph_export import (
     export_layout_to_cartograph,
 )
-from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder  # noqa: E402
-from nika_onlymap_exporter.core.settings import DialogOutput  # noqa: E402
-from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle  # noqa: E402
+from nika_onlymap_exporter.core.fidelity_report import (
+    FidelityReportBuilder,
+)
+from nika_onlymap_exporter.core.settings import DialogOutput
+from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 PEAKS, TRAILS, PARCELS = "Named peaks", "Trails", "Parcels"
 # One colour per layer, so a rendered page says which layers are on it.
@@ -61,8 +68,6 @@ class World:
 
 
 def _layer(name: str, geometry: str, wkt_points, colour: str) -> QgsVectorLayer:
-    from qgis.core import QgsSymbol
-
     layer = QgsVectorLayer(f"{geometry}?crs=EPSG:4326&field=n:string", name, "memory")
     features = []
     for x, y in wkt_points:
@@ -79,7 +84,7 @@ def _layer(name: str, geometry: str, wkt_points, colour: str) -> QgsVectorLayer:
     layer.dataProvider().addFeatures(features)
     layer.updateExtents()
     symbol = QgsSymbol.defaultSymbol(layer.geometryType())
-    symbol.setColor(__import__("qgis.PyQt.QtGui", fromlist=["QColor"]).QColor(colour))
+    symbol.setColor(QColor(colour))
     if geometry == "Point":
         symbol.setSize(6)
     elif geometry == "LineString":
@@ -113,7 +118,7 @@ def world(qgis_app, project) -> World:
     main = _add_map(layout, "main", QRectF(10, 10, 150, 150))
     legend = QgsLayoutItemLegend(layout)
     layout.addLayoutItem(legend)
-    legend.attemptMove(__import__("qgis.core", fromlist=["x"]).QgsLayoutPoint(170, 10))
+    legend.attemptMove(QgsLayoutPoint(170, 10))
     legend.setLinkedMap(main)
     project.layoutManager().addLayout(layout)
     return World(project, layout, main, legend, layers)
@@ -269,8 +274,6 @@ class TestOneFrame:
         assert stack.index() == depth
 
     def test_the_web_maps_selection_is_a_separate_list(self, world, dialog) -> None:
-        from nika_onlymap_exporter.core.settings import DialogOutput
-
         peaks_id = world.layers[PEAKS].id()
         assert dialog.state.for_layer(peaks_id).include
         _click_include(dialog, PEAKS)
@@ -346,9 +349,6 @@ class TestTransitions:
     def test_a_map_following_a_theme_keeps_the_themes_styles(
         self, world, dialog
     ) -> None:
-        from qgis.core import QgsSymbol
-        from qgis.PyQt.QtGui import QColor
-
         root = world.project.layerTreeRoot()
         parcels = world.layers[PARCELS]
         collection = world.project.mapThemeCollection()
