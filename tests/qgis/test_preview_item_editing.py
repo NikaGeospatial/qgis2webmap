@@ -139,7 +139,7 @@ class TestAddMenu:
         pane.resize(600, 500)
         _settle(qgis_app, 0.1)
         assert not pane.add_button.property("tight")
-        assert pane.add_button.text() == "Add"
+        assert pane.add_button.text() == "Add item"
         pane.resize(300, 500)
         _settle(qgis_app, 0.1)
         assert pane.add_button.property("tight") is True

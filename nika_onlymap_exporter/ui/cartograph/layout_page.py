@@ -635,7 +635,7 @@ class PagePane(QWidget):
         # Text, a legend, a scale bar or a north arrow: choosing one waits for
         # the click on the page that places it.
         self.add_button = self._bar_button(
-            tr("Add"),
+            tr("Add item"),
             tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
         )
         self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
