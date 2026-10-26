@@ -322,8 +322,8 @@ class LegendEditor(QWidget):
     def _style_item(self, item: QTreeWidgetItem, entry: LegendEntry) -> None:
         text = entry.label
         if entry.note:
-            note = _range_note() if entry.note == edit.RANGE_UNAVAILABLE else entry.note
-            text = f"{text} — {note}"
+            short = tr("range unavailable")
+            text = f"{text} — {short}" if entry.note == edit.RANGE_UNAVAILABLE else text
         item.setText(0, text)
         item.setData(0, _ENTRY, entry)
         flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable

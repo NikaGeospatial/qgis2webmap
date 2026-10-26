@@ -243,7 +243,9 @@ class TestEditorEntries:
         widget = LegendEditor()
         widget.set_legend(legend)
         text = " ".join(item.text(0) for item in widget.entry_items())
-        assert "range unavailable — set min/max in Symbology" in text
+        assert "Colour ramp — range unavailable" in text
+        assert "set min/max" not in text  # the long form is in the note below
+        assert "range unavailable — set min/max in Symbology" in widget.note.text()
         shader = layer.renderer().shader().rasterShaderFunction()
         assert shader.minimumValue() != shader.minimumValue()
         widget.close()
