@@ -76,9 +76,13 @@ from ..exporters.frame_raster import (
     frame_corners_wgs84,
     render_static_frame,
 )
-from ..packaging.dependency_scanner import report_remote_dependency
+from ..packaging.dependency_scanner import (
+    data_bytes_by_layer,
+    report_remote_dependency,
+)
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
+from ..ui.i18n import tr
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
 from .cartograph_ir import (
@@ -117,6 +121,7 @@ from .project_reader import (
     prepare_project,
     read_project,
 )
+from .report_facts import format_bytes
 from .runtime_legend import fit_frame_legends
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
@@ -660,6 +665,7 @@ def finish_cartograph_full(
         # final symbology is known.
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
         live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
+    _warn_when_inline_data_is_heavy(projects, report)
     requirement = prepared.atlas_requirement
     return FinishedCartograph(
         atlas_pages=(
@@ -674,6 +680,57 @@ def finish_cartograph_full(
             embedded_rasters=tuple(embedded_rasters.items()),
         ),
         projects=tuple(projects),
+    )
+
+
+#: Inline vector data past this makes the page hang before it draws: the
+#: browser parses all of it and builds every feature on the main thread. A
+#: 60 MB page (41 MB of dense polygons) kept a software-rendered browser busy
+#: for over a minute with a blank map.
+INLINE_VECTOR_DATA_WARN_BYTES = 25 * 1024 * 1024
+
+#: How many of the heaviest layers the warning names.
+_HEAVY_LAYERS_NAMED = 3
+
+
+def _warn_when_inline_data_is_heavy(
+    projects: list[ExportProject], report: FidelityReportBuilder
+) -> None:
+    """Warn when the page's inline vector data is large enough to hang it.
+
+    The page carries each layer once however many frames draw it, so layers
+    are counted by id across the live frames.
+    """
+    sizes: dict[str, int] = {}
+    names: dict[str, str] = {}
+    for project in projects:
+        vector_ids = {
+            layer.layer_id
+            for layer in project.exportable_layers
+            if layer.geojson is not None
+        }
+        for layer_id, size in data_bytes_by_layer(project).items():
+            if layer_id in vector_ids:
+                sizes[layer_id] = size
+        names.update(
+            {layer.layer_id: layer.name for layer in project.exportable_layers}
+        )
+    total = sum(sizes.values())
+    if total <= INLINE_VECTOR_DATA_WARN_BYTES:
+        return
+    heaviest = sorted(sizes, key=lambda layer_id: sizes[layer_id], reverse=True)
+    listed = ", ".join(
+        f"'{names[layer_id]}' ({format_bytes(sizes[layer_id])})"
+        for layer_id in heaviest[:_HEAVY_LAYERS_NAMED]
+    )
+    report.approximated(
+        tr("Map data size"),
+        tr(
+            "The page carries {size} of vector data, which can leave the map "
+            "blank for a long time while it opens, especially on a computer "
+            "without a graphics card. Heaviest: {layers}. Simplify the "
+            "geometry of those layers, or set the frame to Image in Map frames."
+        ).format(size=format_bytes(total), layers=listed),
     )
 
 

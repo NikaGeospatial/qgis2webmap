@@ -841,3 +841,43 @@ class TestNoWebMapOnlyAdvice:
         read_project(project, report)
         details = self._details(report)
         assert "Map tab" in details["Terrain"]
+
+
+class TestHeavyInlineDataWarning:
+    """A page whose vector data is large hangs before it draws: say so."""
+
+    def _items(self, project, fake_runtime):
+        from nika_onlymap_exporter.core.cartograph_export import (
+            finish_cartograph_full,
+        )
+
+        layout, _main, _inset, parcels, roads = _two_live_frames_layout(project)
+        report = FidelityReportBuilder()
+        prepared = prepare_cartograph(layout, project, fake_runtime, report)
+        finish_cartograph_full(prepared, project, report)
+        items = [i for i in report.items if i.subject == "Map data size"]
+        return items, parcels, roads
+
+    def test_a_small_page_is_not_warned_about(self, project, fake_runtime) -> None:
+        items, _parcels, _roads = self._items(project, fake_runtime)
+        assert items == []
+
+    def test_a_heavy_page_names_its_layers_and_the_ways_out(
+        self, project, fake_runtime, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core import cartograph_export
+
+        monkeypatch.setattr(cartograph_export, "INLINE_VECTOR_DATA_WARN_BYTES", 1)
+        items, parcels, roads = self._items(project, fake_runtime)
+        assert len(items) == 1
+        detail = items[0].detail
+        assert f"'{parcels.name()}'" in detail
+        assert f"'{roads.name()}'" in detail
+        assert "Simplify" in detail and "Image" in detail
+
+    def test_the_limit_is_twenty_five_megabytes(self) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            INLINE_VECTOR_DATA_WARN_BYTES,
+        )
+
+        assert INLINE_VECTOR_DATA_WARN_BYTES == 25 * 1024 * 1024
