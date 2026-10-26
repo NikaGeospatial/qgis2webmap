@@ -724,7 +724,7 @@ class TestSelectedTextSize:
         # Themed, as in the dialog: its buttons may shrink to their contents.
         pane.setObjectName("PagePaneUnderTest")
         theme.apply(pane)
-        pane.resize(600, 500)
+        pane.resize(800, 500)
         self._select(qgis_app, layout, title)
         words = (pane.select_button, pane.pan_button, pane.fit_button)
         assert not any(b.property("tight") for b in words)
@@ -745,7 +745,7 @@ class TestSelectedTextSize:
         base = title.textFormat().size()
         pane.text_bigger_button.click()
         assert title.textFormat().size() == pytest.approx(base + 1)
-        pane.resize(600, 500)
+        pane.resize(800, 500)
         _settle(qgis_app, 0.1)
         assert not any(b.property("tight") for b in words)
 
