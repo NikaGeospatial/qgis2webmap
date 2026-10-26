@@ -1,0 +1,21 @@
+{
+  "sources": [
+    {
+      "name": "QLayoutDesigner",
+      "author": "Nikolaos Sorkos",
+      "url": "https://github.com/nicksorkos/QLayoutDesigner",
+      "revision": "a43374058292af3defa3df10a5f822d8c2b2f17c",
+      "license": "MIT",
+      "notice": "QLayoutDesigner-MIT.txt",
+      "use": "Fieldbook ruled metadata-cell composition, adapted to native layout items and responsive page sizing."
+    },
+    {
+      "name": "Layout Composer",
+      "author": "Defani Arman Alfitriansyah",
+      "url": "https://github.com/Defani/Layout-Composer",
+      "revision": "71e46fc5508b77fdba8addec6e36f48e117ced45",
+      "license": "MIT",
+      "use": "Evaluated as a reference; its JS editor, remote fonts, assets and data are not incorporated."
+    }
+  ]
+}

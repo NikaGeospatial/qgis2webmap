@@ -911,11 +911,19 @@ class TestTextSizeSteps:
             if isinstance(item, TextSpec) and item.font_size
         }
 
+        def shown_area(plan):
+            # Reflow can change the frame's aspect. Compare the size of the
+            # actual map content, not empty padding around a wide/tall view.
+            data = _strained(shape, size, orientation, figures=_FIGURES)
+            frame = plan.frames[0].focus or plan.frames[0].box
+            factor = min(frame.w / data.extent_width, frame.h / data.extent_height)
+            return data.extent_width * data.extent_height * factor**2
+
         smaller, standard, larger = (
-            self._main_area(plan_at(f)) for f in (self._SMALLER, 1.0, self._LARGER)
+            shown_area(plan_at(f)) for f in (self._SMALLER, 1.0, self._LARGER)
         )
         assert smaller >= standard - 0.01
-        if element != "legend_scale":
+        if element not in {"legend_scale", "all"}:
             # A larger legend may reflow wider and shorter, which can give
             # the map height back; its smaller step still never costs room.
             assert larger <= standard + 0.01

@@ -73,25 +73,24 @@ class PagePalette:
     tile: str
 
 
-#: The everyday light sheet: white paper, aubergine ink (the colour the
-#: templates have always drawn rules and borders in).
+#: The everyday light sheet: white paper, deep teal ink and quiet grey rules.
 DAYLIGHT = PagePalette(
     name="daylight",
     dark=False,
     page="#ffffff",
-    ink="#2a1f2d",
-    muted="#5e5263",
+    ink="#20383d",
+    muted="#526368",
     panel="#ffffff",
-    panel_ink="#2a1f2d",
+    panel_ink="#20383d",
     veil="rgba(255, 255, 255, 0.88)",
     plate="#ffffff",
     plate_opacity=0.88,
-    rule="#2a1f2d",
-    hairline="#d9cfdc",
-    accent="#9a5a12",
-    band="#2a1f2d",
+    rule="#526368",
+    hairline="#d6dfdd",
+    accent="#13757b",
+    band="#20383d",
     band_ink="#ffffff",
-    tile="#f1ebf1",
+    tile="#f0f5f3",
 )
 
 #: A warmer light sheet on NIKA's paper colour.
@@ -203,23 +202,23 @@ TYPE_A4 = TypeScale(
     display=32.0,
     title=18.0,
     subtitle=11.0,
-    body=9.0,
+    body=10.0,
     caption=8.0,
-    legend=8.0,
+    legend=9.0,
     credit=7.0,
 )
 
 #: The smallest each role is ever set, whatever the page: on A5 the A4
-#: sizes shrink by `page_scale` but stop here, so body text stays 7 pt and
+#: sizes shrink by `page_scale` but stop here, so body text stays 8 pt and
 #: captions 6.5 pt -- readable in print.
 MINIMUM_TYPE = TypeScale(
     display=18.0,
     title=12.0,
     subtitle=8.0,
-    body=7.0,
+    body=8.0,
     caption=6.5,
-    legend=6.5,
-    credit=6.0,
+    legend=8.0,
+    credit=6.5,
 )
 
 

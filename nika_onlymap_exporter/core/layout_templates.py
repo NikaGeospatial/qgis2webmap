@@ -366,6 +366,16 @@ def template_ids() -> tuple[str, ...]:
     return tuple(template.id for template in TEMPLATES)
 
 
+def starter_templates() -> tuple[LayoutTemplate, ...]:
+    """One starter per useful composition, without cosmetic near-duplicates.
+
+    The complete registry is also used by the template geometry and fidelity
+    probes; the picker is deliberately a smaller, task-oriented collection.
+    """
+    omitted = {"story-map", "night-desk", "marginalia", "atlas-ledger", "town-hall"}
+    return tuple(template for template in TEMPLATES if template.id not in omitted)
+
+
 def get_template(template_id: str) -> LayoutTemplate:
     for template in TEMPLATES:
         if template.id == template_id:
@@ -597,7 +607,7 @@ def _legend_below(page: _Page) -> _Layout:
     sp = page.spacing
     m, g = sp.margin, sp.gutter
     content_w, content_h = page.width - 2 * m, page.height - 2 * m
-    head = _Heading(page, content_w, pal, accent=False)
+    head = _Heading(page, content_w - 2 * g, pal, accent=False)
     legend_pt = _legend_pt(page)
     rows = _legend_rows(page)
     side_w = min(60.0 * min(page.scale, 2.0), content_w * 0.34)
@@ -634,7 +644,18 @@ def _legend_below(page: _Page) -> _Layout:
     frame_h = min(room_h, content_w / (1.25 if page.landscape else 0.8))
     top = m + (room_h - frame_h) / 2
     frame = Box(m, top + head.height, content_w, frame_h)
-    items = head.items(m, top, content_w)
+    items = head.items(m + g, top + g / 4, content_w - 2 * g)
+    # A quiet full-width masthead distinguishes this legend-led sheet from
+    # Daylight's freestanding heading. These are ordinary editable items.
+    if page.title:
+        masthead = Box(m, top, content_w, max(head.height - g / 2, 1.0))
+        items.insert(0, _solid("panel-masthead", masthead, pal.band, z=1))
+        items = [
+            replace(item, color=pal.band_ink)
+            if isinstance(item, TextSpec) and item.id == "title"
+            else item
+            for item in items
+        ]
     rule_y = frame.y + frame.h + g
     items.append(_solid("rule", Box(m, rule_y, content_w, rule_h), pal.hairline, z=3))
     band = Box(m, rule_y + rule_h + g, content_w, band_h)
@@ -777,7 +798,7 @@ def _field_map(page: _Page) -> _Layout:
             crs_def=None if data.crs_is_geographic else data.crs_def,
             interval=interval,
             labels="outside",
-            color=pal.muted,
+            color="#657064",
             z=1,
         ),
     ]
@@ -2451,7 +2472,12 @@ class _Caption:
 class _TitleBlock:
     """Fieldbook's ruled title block: the title with the north arrow at its
     right, a rule, then scale, CRS, and author and date, then the scale
-    bar across the block's foot."""
+    bar across the block's foot.
+
+    The ruled metadata-cell treatment is adapted from Nikolaos Sorkos's
+    QLayoutDesigner title block (MIT, a433740). Its notice is shipped in
+    licenses/QLayoutDesigner-MIT.txt; no external assets or dependencies.
+    """
 
     def __init__(self, page: _Page, palette: PagePalette) -> None:
         self.page = page
@@ -2522,6 +2548,15 @@ class _TitleBlock:
                 f"{author} · {{{{date}}}}" if author else "{{date}}",
             )
         ):
+            if index:
+                items.append(
+                    _solid(
+                        f"rule-metadata-{index}",
+                        Box(inner.x, y, inner.w, sp.rule),
+                        pal.hairline,
+                        z=5,
+                    )
+                )
             items.append(
                 TextSpec(
                     id=f"block-{index}",
