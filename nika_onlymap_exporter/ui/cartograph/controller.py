@@ -1009,6 +1009,8 @@ class CartographController:
         self.frames_list.frame_selected.connect(self._select_frame_on_page)
         self.frames_list.locate_requested.connect(self._locate_frame)
         self.frames_list.issues_requested.connect(self._show_frame_issues)
+        self.frames_list.actions_opening.connect(self._refresh_smoothing_options)
+        self.frames_list.smoothing_changed.connect(self._set_raster_smoothing)
         return self.frames_list
 
     # ---- Atlas tab -------------------------------------------------------
@@ -1181,6 +1183,45 @@ class CartographController:
         item.zoomToExtent(extent)
         layout.undoStack().endCommand()
         self.schedule_autosave()
+
+    def _refresh_smoothing_options(self, item_id: str) -> None:
+        """The map's actions menu is opening: list the continuous rasters it
+        draws now, each with whether this map smooths it."""
+        from ...core.raster_smoothing import smoothable_layers, smoothing_on
+
+        item = self._map_item(item_id)
+        options: list[tuple[str, str, bool]] = []
+        try:
+            if item is not None:
+                options = [
+                    (layer.id(), layer.name(), smoothing_on(item, layer))
+                    for layer in smoothable_layers(item)
+                ]
+        except Exception:  # a slot must not raise: the menu just has no entry
+            options = []
+        self.frames_list.card(item_id).set_smoothing_options(options)
+
+    def _set_raster_smoothing(
+        self, item_id: str, layer_id: str, smoothed: bool
+    ) -> None:
+        """Map frames > Smooth when enlarged: one raster of one map item,
+        an edit to the user's layout on its undo stack, as any other."""
+        from ...core.raster_smoothing import set_smoothing
+
+        layout = self._current_layout
+        item = self._map_item(item_id)
+        layer = self.project.mapLayer(layer_id)
+        if layout is None or item is None or layer is None:
+            return
+        layout.undoStack().beginCommand(item, tr("Smooth raster when enlarged"))
+        try:
+            changed = set_smoothing(item, layer, smoothed)
+        except Exception:  # a slot must not raise; the edit simply is not made
+            changed = False
+        finally:
+            layout.undoStack().endCommand()
+        if changed:
+            self.schedule_autosave()
 
     def _on_frame_mode_changed(
         self, item_id: str, mode_combo: QComboBox, dpi_combo: QComboBox

@@ -68,7 +68,10 @@ def test_cards_show_name_crs_mode_and_dpi(frames):
         "300 dpi",
     ]
     assert [main.mode_combo.itemText(i) for i in range(2)] == ["Interactive", "Image"]
-    assert [a.text() for a in main.actions_button.menu().actions()] == [
+    # The smoothing submenu is there only for a map drawing a continuous raster.
+    assert [
+        a.text() for a in main.actions_button.menu().actions() if a.isVisible()
+    ] == [
         "Use canvas extent",
         "Locate on page",
     ]

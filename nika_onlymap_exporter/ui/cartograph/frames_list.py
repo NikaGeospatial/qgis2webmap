@@ -106,6 +106,8 @@ class FrameCard(QFrame):
     """One map item: name and type, CRS and issues, and the image resolution."""
 
     selected = pyqtSignal(str)  # item_id: the user chose this entry
+    smoothing_chosen = pyqtSignal(str, str, bool)  # item_id, layer id, smoothed
+    actions_opening = pyqtSignal(str)  # item_id: the actions menu is about to show
     _issues: int | None = None
 
     def __init__(
@@ -163,6 +165,22 @@ class FrameCard(QFrame):
         self.locate_action.setToolTip(tr("Select this map on the layout page"))
         menu.addAction(self.canvas_action)
         menu.addAction(self.locate_action)
+        # A choice per continuous raster the map draws, offered only when it
+        # draws one: see `set_smoothing_options`.
+        self.smoothing_menu = QMenu(tr("Smooth when enlarged"), menu)
+        self.smoothing_menu.setToolTip(
+            tr(
+                "Blend the pixels of a continuous raster, such as elevation, "
+                "when this map draws them larger than they are. Only this "
+                "map changes, never the layer's own style. It applies to an "
+                "Image map and to the PDF QGIS makes; an Interactive map is "
+                "drawn by the browser."
+            )
+        )
+        self.smoothing_menu_action = menu.addMenu(self.smoothing_menu)
+        self.smoothing_menu_action.setVisible(False)
+        self.actions_menu = menu
+        menu.aboutToShow.connect(lambda: self.actions_opening.emit(self.item_id))
         self.actions_button.setMenu(menu)
         head.addWidget(self.actions_button)
         layout.addLayout(head)
@@ -210,6 +228,23 @@ class FrameCard(QFrame):
 
         self.set_identity(row.name, row.crs)
         self.set_values(row)
+
+    def set_smoothing_options(self, options: Sequence[tuple[str, str, bool]]) -> None:
+        """The continuous rasters this map draws as (layer id, name, smoothed)
+        entries of the "Smooth when enlarged" submenu; none hides it."""
+        self.smoothing_menu.clear()
+        for layer_id, name, smoothed in options:
+            action = QAction(name, self.smoothing_menu)
+            action.setCheckable(True)
+            action.setChecked(smoothed)
+            action.setData(layer_id)
+            action.triggered.connect(
+                lambda checked, layer_id=layer_id: self.smoothing_chosen.emit(
+                    self.item_id, layer_id, checked
+                )
+            )
+            self.smoothing_menu.addAction(action)
+        self.smoothing_menu_action.setVisible(bool(options))
 
     def set_identity(self, name: str, crs: str) -> None:
         """Show a renamed or reprojected map item; the controls are untouched."""
@@ -305,6 +340,8 @@ class FramesList(QWidget):
     locate_requested = pyqtSignal(str)  # item_id
     frame_selected = pyqtSignal(str)  # item_id
     issues_requested = pyqtSignal(str)  # item_id
+    smoothing_changed = pyqtSignal(str, str, bool)  # item_id, layer id, smoothed
+    actions_opening = pyqtSignal(str)  # item_id: its actions menu is opening
 
     def __init__(
         self, dpi_choices: Sequence[int], parent: QWidget | None = None
@@ -398,6 +435,18 @@ class FramesList(QWidget):
             lambda _checked=False, card=card: self._on_issues(card)
         )
         card.selected.connect(lambda _id, card=card: self._on_selected(card))
+        card.smoothing_chosen.connect(
+            lambda item_id, layer_id, smoothed, card=card: (
+                self.smoothing_changed.emit(item_id, layer_id, smoothed)
+                if self._is_current(card)
+                else None
+            )
+        )
+        card.actions_opening.connect(
+            lambda item_id, card=card: (
+                self.actions_opening.emit(item_id) if self._is_current(card) else None
+            )
+        )
 
     def _is_current(self, card: FrameCard) -> bool:
         """A replaced card may outlive `set_frames` until Qt deletes it."""
