@@ -370,3 +370,98 @@ class TestAtomicWrite:
         written = out.read_bytes()
         assert written.startswith(b"%PDF-") and written != b"%PDF-stale"
         assert not list(tmp_path.glob(".print.pdf.*"))
+
+
+class TestTransparentLayers:
+    """A semi-transparent layer over a raster must stay see-through in the
+    PDF: forcing vector output would draw it opaque."""
+
+    @staticmethod
+    def _layout(project, tmp_path, opacity):
+        from legend_fixtures import WGS84, ramp_layer, write_tif
+        from qgis.core import (
+            QgsFeature,
+            QgsFillSymbol,
+            QgsGeometry,
+            QgsLayoutItemLabel,
+            QgsLayoutItemMap,
+            QgsLayoutPoint,
+            QgsLayoutSize,
+            QgsPrintLayout,
+            QgsRectangle,
+            QgsVectorLayer,
+        )
+
+        raster = ramp_layer(write_tif(tmp_path / "elevation.tif"), "elevation")
+        tract = QgsVectorLayer("Polygon?crs=EPSG:4326", "tract", "memory")
+        feature = QgsFeature()
+        feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(0, 0, 5, 10)))
+        tract.dataProvider().addFeatures([feature])
+        tract.renderer().setSymbol(
+            QgsFillSymbol.createSimple({"color": "#ffffff", "outline_style": "no"})
+        )
+        tract.setOpacity(opacity)
+        project.addMapLayers([raster, tract])
+        layout = QgsPrintLayout(project)
+        layout.initializeDefaults()
+        layout.setName("tracts")
+        mm = QgsUnitTypes.LayoutMillimeters
+        frame = QgsLayoutItemMap(layout)
+        layout.addLayoutItem(frame)
+        frame.attemptMove(QgsLayoutPoint(10, 10, mm))
+        frame.attemptResize(QgsLayoutSize(100, 100, mm))
+        frame.setCrs(WGS84)
+        frame.setLayers([tract, raster])
+        frame.setExtent(QgsRectangle(0, 0, 10, 10))
+        label = QgsLayoutItemLabel(layout)
+        layout.addLayoutItem(label)
+        label.setText("Tract map")
+        label.attemptMove(QgsLayoutPoint(120, 10, mm))
+        label.attemptResize(QgsLayoutSize(60, 10, mm))
+        return layout
+
+    def _pdf(self, project, tmp_path, opacity, **options):
+        layout = self._layout(project, tmp_path, opacity)
+        out = tmp_path / f"tracts-{opacity}.pdf"
+        result = export_print_pdf(layout, PrintSettings(bleed="none", **options), out)
+        return out, result
+
+    def test_the_raster_shows_through_a_half_opaque_polygon(
+        self, project, tmp_path
+    ) -> None:
+        qt_pdf = pytest.importorskip("PyQt6.QtPdf", reason="no PDF renderer")
+        out, _ = self._pdf(project, tmp_path, 0.5)
+        document = qt_pdf.QPdfDocument(None)
+        document.load(str(out))
+        scale = 2
+        size = document.pagePointSize(0).toSize() * scale
+        image = document.render(0, size)
+
+        def pixel(x_mm, y_mm):
+            return image.pixelColor(
+                int(x_mm / 25.4 * 72 * scale), int(y_mm / 25.4 * 72 * scale)
+            )
+
+        inside = pixel(30, 60)  # in the tract, over the elevation ramp
+        assert min(inside.red(), inside.green(), inside.blue()) < 235
+
+    def test_a_transparent_layer_is_rasterised_and_the_text_stays_text(
+        self, project, tmp_path
+    ) -> None:
+        opaque, opaque_result = self._pdf(project, tmp_path, 1.0)
+        see_through, result = self._pdf(project, tmp_path, 0.5)
+        image = b"/Subtype /Image"
+        assert count_anywhere(see_through.read_bytes(), image) > count_anywhere(
+            opaque.read_bytes(), image
+        )
+        assert any("rasterised" in w for w in result.warnings)
+        assert not any("rasterised" in w for w in opaque_result.warnings)
+        assert count_anywhere(see_through.read_bytes(), b"/Type /Font") > 0
+
+    def test_a_plain_layout_keeps_its_text_and_lines_as_vectors(
+        self, survey, tmp_path
+    ) -> None:
+        out = tmp_path / "plain.pdf"
+        result = export_print_pdf(survey.layout, PrintSettings(bleed="none"), out)
+        assert not any("rasterised" in w for w in result.warnings)
+        assert count_anywhere(out.read_bytes(), b"/Type /Font") > 0

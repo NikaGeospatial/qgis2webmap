@@ -44,6 +44,7 @@ from qgis.core import (
     QgsLayout,
     QgsLayoutExporter,
     QgsLayoutItem,
+    QgsLayoutItemMap,
     QgsLayoutItemPage,
     QgsLayoutItemPolyline,
     QgsLayoutMeasurement,
@@ -52,9 +53,10 @@ from qgis.core import (
     QgsProject,
     QgsProjectStyleSettings,
     QgsUnitTypes,
+    QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QT_VERSION_STR, QPointF
-from qgis.PyQt.QtGui import QPolygonF
+from qgis.PyQt.QtGui import QPainter, QPolygonF
 
 from ..core.atomic_write import staged_beside
 from ..core.print_settings import (
@@ -153,8 +155,19 @@ def _export(
     export_settings.appendGeoreference = False
     export_settings.writeGeoPdf = False
     export_settings.exportMetadata = True
-    export_settings.forceVectorOutput = not settings.flatten
+    # Forcing vector output draws a semi-transparent or blended layer opaque,
+    # so it is only forced when nothing in the layout needs rasterising;
+    # otherwise QGIS rasterises just those items, at the saved dpi.
+    rasterised = _needs_rasterising(copy)
+    export_settings.forceVectorOutput = not settings.flatten and not rasterised
     export_settings.rasterizeWholeImage = settings.flatten
+    if rasterised and not settings.flatten:
+        warnings.append(
+            tr(
+                "Transparent or blended layers are rasterised in the PDF, "
+                "at {dpi} dpi; the rest stays vector."
+            ).format(dpi=settings.dpi)
+        )
     # No fonts embedded means text as outlines: the print still looks right
     # on a RIP that lacks the font, and nothing is embedded to license.
     export_settings.textRenderFormat = (
@@ -200,6 +213,34 @@ def _export(
             )
         ) from exc
     return PrintPdfResult(path=path, warnings=tuple(warnings))
+
+
+def _needs_rasterising(layout: QgsLayout) -> bool:
+    """True when some item or map layer draws with transparency, a blend
+    mode or an effect, which a PDF cannot hold as plain vectors."""
+    normal = QPainter.CompositionMode.CompositionMode_SourceOver
+    for item in layout.items():
+        if not isinstance(item, QgsLayoutItem):
+            continue
+        if (
+            item.requiresRasterization()
+            or item.containsAdvancedEffects()
+            or item.itemOpacity() < 1
+            or item.blendMode() != normal
+        ):
+            return True
+        if isinstance(item, QgsLayoutItemMap):
+            for layer in item.layersToRender():
+                if layer.opacity() < 1 or layer.blendMode() != normal:
+                    return True
+                if isinstance(layer, QgsVectorLayer):
+                    renderer = layer.renderer()
+                    effect = renderer.paintEffect() if renderer is not None else None
+                    if layer.featureBlendMode() != normal or (
+                        effect is not None and effect.enabled()
+                    ):
+                        return True
+    return False
 
 
 def build_print_layout(
