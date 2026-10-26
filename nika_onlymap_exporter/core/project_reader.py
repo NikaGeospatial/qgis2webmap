@@ -303,6 +303,7 @@ def read_project(
     canvas_extent: Extent | None = None,
     progress: Callable[[int, int, str], None] | None = None,
     layer_order: Sequence[str] | None = None,
+    report_map_title: bool = True,
 ) -> ExportProject:
     """Read a whole project into the normalized model, on the calling thread.
 
@@ -321,6 +322,7 @@ def read_project(
         layer_settings=layer_settings,
         canvas_extent=canvas_extent,
         layer_order=layer_order,
+        report_map_title=report_map_title,
     )
     return finish_project(pending, report, progress)
 
@@ -335,8 +337,13 @@ def prepare_project(
     layer_settings: Mapping[str, LayerSettings] | None = None,
     canvas_extent: Extent | None = None,
     layer_order: Sequence[str] | None = None,
+    report_map_title: bool = True,
 ) -> PendingProject:
     """Read a whole project up to its features. **GUI thread only.**
+
+    `report_map_title` is off for a cartograph's live frames: the title and
+    description rows advise on the web map's Map name field, which a frame
+    has no use for.
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
@@ -462,6 +469,7 @@ def prepare_project(
         project_title=(project.title() or "").strip(),
         abstract=project.metadata().abstract() or "",
         source_crs=project.crs().authid() if project.crs().isValid() else None,
+        report_map_title=report_map_title,
     )
 
 
@@ -494,6 +502,7 @@ class PendingProject:
     project_title: str
     abstract: str
     source_crs: str | None
+    report_map_title: bool = True
 
 
 def finish_project(
@@ -635,13 +644,14 @@ def finish_project(
                 + ". Turn relief off if the outlines matter more.",
             )
 
-    _report_project_metadata(
-        pending.project_title,
-        pending.abstract,
-        pending.title,
-        pending.title_override,
-        report,
-    )
+    if pending.report_map_title:
+        _report_project_metadata(
+            pending.project_title,
+            pending.abstract,
+            pending.title,
+            pending.title_override,
+            report,
+        )
 
     return ExportProject(
         title=pending.title,

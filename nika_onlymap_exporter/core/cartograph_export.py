@@ -440,6 +440,7 @@ def prepare_live_reads(
             canvas_extent=source.extent,
             layer_settings=layer_settings,
             settings=_LIVE_FRAME_SETTINGS,
+            report_map_title=False,
         )
         for source in prepared.live_frames
     )
@@ -603,6 +604,7 @@ def finish_cartograph_full(
                 canvas_extent=source.extent,
                 layer_settings=layer_settings,
                 settings=_LIVE_FRAME_SETTINGS,
+                report_map_title=False,
             )
         # A live frame never goes through the dependency scan, yet its tile
         # layers are fetched from their host each time the page is opened.
