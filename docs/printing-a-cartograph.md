@@ -32,11 +32,11 @@ print dialog for you. To get a PDF, choose **Save as PDF** as the printer.
 Text stays text in the PDF - selectable and searchable - and the legend, scale
 bar, north arrow and grid stay sharp vector shapes.
 
-**For a page with live frames, print with Export PDF, not Ctrl+P.** A live
+**For a page with interactive frames, print with Export PDF, not Ctrl+P.** An interactive
 map is drawn by the graphics card, and browsers print such a map blank or at
 screen resolution. Export PDF opens the cartograph with `?print=1` added to
 its address: the page waits until every map has finished drawing, swaps each
-live map for an image rendered at print resolution, and only then opens the
+interactive map for an image rendered at print resolution, and only then opens the
 print dialog. The browser's own **Ctrl+P** does none of that - the print
 dialog opens at once, before an image could be made.
 
@@ -44,13 +44,13 @@ Anyone can do the same without the plugin: add `?print=1` to the end of the
 cartograph's address in the browser (`…/Parcel-survey.html?print=1`) and
 press Enter.
 
-A page of only static frames prints the same either way.
+A page of only image frames prints the same either way.
 
 ## Export PNG
 
 **Share → Export PNG...** opens the cartograph, which renders the page as a
 PNG at the **saved resolution** (300 dpi unless Print settings say otherwise) and downloads it through your browser - into your Downloads
-folder, as with any download. Live frames are re-rendered at that resolution,
+folder, as with any download. Interactive frames are re-rendered at that resolution,
 not enlarged from the screen.
 
 For an atlas, see [exporting every page](cartograph-atlas.md#exporting-every-page).
@@ -73,9 +73,9 @@ of 300 dpi, a 3 mm bleed, crop marks and the safe-zone guide.
   (A5 to A0, Letter or Legal, portrait or landscape) or **Custom...** in
   millimetres. Items keep their positions measured from the top-left corner,
   so a page smaller than the layout cuts off whatever falls outside it.
-- **Resolution** - **150**, **300** or **600 dpi**: how finely live frames are
+- **Resolution** - **150**, **300** or **600 dpi**: how finely interactive frames are
   rendered when the page is printed, and the resolution of a PDF made by QGIS.
-  A static frame keeps the DPI set for it in Map frames.
+  An image frame keeps the DPI set for it in Map frames.
 - **Bleed** - **None**, **3 mm**, **5 mm** or **1/8 in**. The printed sheet
   grows by that much on every side, so a slightly-off cut shows no white edge:
   A3 with a 3 mm bleed prints on a 303 × 426 mm sheet. Items keep their
@@ -138,15 +138,20 @@ Both choices are **greyed out, with the reason in their tooltip**, when:
 - QGIS is older than 3.40, or **built on a Qt older than 6.8** - QGIS 3 LTR
   builds are Qt 5, and many QGIS installs are not yet on Qt 6.8. The tooltip
   names the version you have.
-- **Any frame is live.** QGIS draws the layout, not the browser, so it cannot
-  draw a live frame as the cartograph shows it. Set every frame to **Static**
+- **Any frame is Interactive.** QGIS draws the layout, not the browser, so it cannot
+  draw an interactive frame as the cartograph shows it. Set every frame to **Image**
   in Map frames, on the Layout tab.
 
 A saved CMYK choice that this QGIS cannot honour shows as RGB, with a line
 saying why - it is never swapped silently.
 
-Because QGIS prints the layout, the Page section's **Title** and **Theme**
-do not apply to a CMYK or ICC PDF; the layout's own text and colours do.
+Because QGIS prints the layout, the Browser appearance section's **Title** and
+**Theme** do not apply to a CMYK or ICC PDF; the layout's own text and colours
+do.
+
+In a PDF made by QGIS, text and shapes stay vector. Only a layer or item that
+uses transparency, a blend mode or an effect is rasterised, at the saved
+resolution, so it prints as it looks instead of opaque; the export says so.
 
 ## Printing an atlas
 
@@ -167,6 +172,6 @@ instead.
   [sharing a cartograph](share-qgis-print-layout-without-qgis.md).
 - Tell them to print from Chrome or Edge, or to pick the right paper size in
   Firefox and Safari.
-- If the page has live frames, consider making them static first: a static
-  page prints the same however it is printed, and needs no graphics support.
+- If the page has interactive frames, consider making them Image frames first: a page of Image frames
+  prints the same however it is printed, and needs no graphics support.
 - For a print shop, send the PDF from **Export PDF**, not the HTML.

@@ -1,25 +1,25 @@
 ---
-title: Live or static frames
-seo_title: Live or static map frames in a QGIS cartograph
+title: Interactive or image frames
+seo_title: Interactive or image map frames in a QGIS cartograph
 description: >-
   When a map in a cartograph stays interactive and when it is a pixel-exact
   image - what each costs in accuracy, file size, printing and privacy, and how
   to choose per map.
 lead_image:
   src: /images/cartograph-03-frames.png
-  alt: The Map frames section, with one map set to Static and another set to Live.
+  alt: The Map frames section, with one map set to Image and another set to Interactive.
 ---
 
-# Live or static frames
+# Interactive or image frames
 
 Every map item on your print layout becomes a **frame** in the cartograph, and
 each frame is one of two kinds. You choose per map, under **In the HTML** on
 the map's card in **Map frames** (on the cartograph's **Layout** tab).
 
-| | Live | Static |
+| | Interactive | Image |
 |---|---|---|
 | What the reader gets | A real map inside the page: pan, zoom, click a feature | A picture of the map, exactly as QGIS draws it |
-| Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-a-live-frame-draws-in) | The map's **own CRS**, untouched |
+| Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-an-interactive-frame-draws-in) | The map's **own CRS**, untouched |
 | Styling | Translated, with the web map's [fidelity](supported-features.md) - the Checks tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
 | Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default), or the saved export resolution when that is higher |
@@ -29,39 +29,41 @@ the map's card in **Map frames** (on the cartograph's **Layout** tab).
 
 ## The default
 
-The plugin starts a map **Live** whenever the browser can draw it where QGIS
-does, and **Static** otherwise. You can change either:
+The plugin starts a map **Interactive** whenever the browser can draw it where QGIS
+does, and **Image** otherwise. You can change either:
 
-- **EPSG:3857 or EPSG:4326** → **Live**. The live frame shows the map in the
+- **EPSG:3857 or EPSG:4326** → **Interactive**. The interactive frame shows the map in the
   projection it already uses (or close to it), so nothing is lost by making it
   interactive.
-- **A projected CRS** - UTM, a national grid, an equal-area map - → **Live**
+- **A projected CRS** - UTM, a national grid, an equal-area map - → **Interactive**
   when the frame can draw in that CRS (see
-  [Which CRS a live frame draws in](#which-crs-a-live-frame-draws-in)): the
+  [Which CRS an interactive frame draws in](#which-crs-an-interactive-frame-draws-in)): the
   map is not rotated and every layer is a vector layer or image tiles.
-- **Anything else** → **Static**: a rotated projected map, or one with a
-  raster file or non-image tiles. A static frame keeps every style and every
+- **A map the layout's atlas turns** → **Interactive**, whatever its CRS: only
+  an interactive frame can follow the atlas pages.
+- **Anything else** → **Image**: a rotated projected map, or one with a
+  raster file or non-image tiles. An image frame keeps every style and every
   layer exactly as QGIS draws it, and reads without WebGL.
 
-Switch a live map to Static when a style matters more than interaction - a
-static frame is a picture QGIS drew itself - or when the page must read
+Switch an interactive map to **Image** when a style matters more than interaction - an
+image frame is a picture QGIS drew itself - or when the page must read
 without a graphics card.
 
 The same rule is the **Automatic** choice of the
-[Processing algorithm](cartograph-dialog.md#processing), which also offers *All live* and
-*All static*.
+[Processing algorithm](cartograph-dialog.md#processing), which also offers *All interactive* and
+*All image*.
 
-## When to switch a map to Live
+## When to switch a map to Interactive
 
 - The reader should explore: zoom into a site, click a parcel for its
   attributes.
 - The map is in Web Mercator or WGS 84 already.
 - It is the map an [atlas](cartograph-atlas.md) turns - an atlas only pages
-  through a live frame.
+  through an interactive frame.
 
-### Which CRS a live frame draws in
+### Which CRS an interactive frame draws in
 
-A live frame draws in the map's own CRS, exactly where QGIS draws it, when the
+An interactive frame draws in the map's own CRS, exactly where QGIS draws it, when the
 map:
 
 - is in a **projected** CRS - UTM, a national grid, an equal-area or conic
@@ -71,7 +73,7 @@ map:
 - carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
   or `.webp` tiles).
 
-The Checks tab then marks the frame **Kept**. A live frame has no basemap in
+The Checks tab then marks the frame **Kept**. An interactive frame has no basemap in
 a projected CRS; add an XYZ layer to the map for one.
 
 Otherwise it is redrawn in Web Mercator, and the Checks tab marks it
@@ -82,61 +84,61 @@ differ slightly from the layout. That happens for
 - a map carrying an embedded **raster** or **vector tiles** - the row names
   the layer.
 
-## When to keep a map Static
+## When to keep a map as an Image
 
 - The projection matters - a survey plan, a cadastral sheet, anything measured.
-- The styling uses something the web map cannot draw. A static frame is drawn
+- The styling uses something the web map cannot draw. An image frame is drawn
   by QGIS, so it looks exactly as it does in the layout designer.
-- The features should not travel. A static frame carries a picture, not
+- The features should not travel. An image frame carries a picture, not
   features: nobody can open the file and read them. (To keep only some
-  attributes out of a live frame, the popup settings in the Layers section are enough.)
+  attributes out of an interactive frame, the popup settings in the Layers section are enough.)
 - The reader may have no WebGL - an old work laptop, a locked-down virtual
   desktop, a mail or chat preview. See below.
 
-## A page with only static frames
+## A page with only image frames
 
-When every frame is static, the cartograph does not carry the map runtime at
+When every frame is an image, the cartograph does not carry the map runtime at
 all. It is a page of images, text and shapes, so it is **small**, opens
 instantly and **needs no WebGL**. It also
 [sends nothing](privacy.md#cartographs) when it is opened.
 
 It even reads with JavaScript switched off - in a mail client's or file
 manager's preview, say - because its images, text and shapes are placed by
-the page's own layout rules. A cartograph with a live frame shows a short
+the page's own layout rules. A cartograph with an interactive frame shows a short
 note there instead, asking to be opened in a browser.
 
 It is also the only kind of cartograph QGIS can turn into a
 [CMYK or ICC-profiled PDF](printing-a-cartograph.md#cmyk-and-print-shop-profiles).
 
-## Resolution of a static frame
+## Resolution of an image frame
 
-The **DPI** column sets how finely a static frame's image is rendered: 150,
+The **DPI** column sets how finely an image frame's image is rendered: 150,
 200 (the default) or 300. 150 dpi is enough for a screen, 200 for an office
 printer; choose 300 for print-shop work. Each step up roughly doubles the
 image's share of the file.
 
-Printing does not re-render a static frame, so its DPI is the sharpest it will
+Printing does not re-render an image frame, so its DPI is the sharpest it will
 ever print. The page is rendered at the saved resolution (300 dpi unless Print
 settings say otherwise), and a picture below that would be enlarged and go soft,
-so a static frame is always drawn at least at the saved resolution: the DPI you
+so an image frame is always drawn at least at the saved resolution: the DPI you
 choose can only raise it. A frame too large to reach the saved resolution within
-what a browser can draw is drawn at the most that fits, and Checks says so. A live frame has no such ceiling: when the page is printed or
+what a browser can draw is drawn at the most that fits, and Checks says so. An interactive frame has no such ceiling: when the page is printed or
 exported it is re-rendered at the print resolution.
 
 ## Legends, scale bars and labels follow the frame
 
-- A legend on a **live** frame works its rows out from the map as it is drawn,
-  so it always agrees with it. A legend on a **static** frame has its rows
+- A legend on an **Interactive** frame works its rows out from the map as it is drawn,
+  so it always agrees with it. A legend on an **Image** frame has its rows
   written in once, from the layers' styles; the Checks tab marks it
   **Changed**.
 - A scale bar, north arrow and grid are worked out from the frame's
   georeference, whichever kind it is.
-- A label showing `[% @map_scale %]` stays live on a live frame and updates as
-  the reader zooms. On a static frame it is written in as text, because the
+- A label showing `[% @map_scale %]` stays live on an interactive frame and updates as
+  the reader zooms. On an image frame it is written in as text, because the
   picture never moves.
 
 ## The trade, briefly
 
-Make a frame live when the reader gains something from moving it. Leave it
-static when the page has to be exactly what you designed - which, for most
+Make a frame interactive when the reader gains something from moving it. Leave it
+an image when the page has to be exactly what you designed - which, for most
 print layouts, is most frames.

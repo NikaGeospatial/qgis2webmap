@@ -78,10 +78,10 @@ provider.
 A [cartograph](qgis-print-layout-to-html.md) follows the same policy, and
 sends even less:
 
-- **A cartograph whose frames are all static sends nothing at all.** It does
+- **A cartograph whose frames are all Image frames sends nothing at all.** It does
   not carry the map runtime, so there is nothing in it to report. Open it with
   the developer tools' Network tab showing and reload: no request.
-- **A cartograph with a live frame** sends the same one anonymous usage report
+- **A cartograph with an interactive frame** sends the same one anonymous usage report
   as an exported map, from the map runtime inside that frame, with
   `cartograph` among the features it counts. Same service, nothing new sent.
 - On the free plan, every cartograph carries a small credit at the foot of the
@@ -93,8 +93,8 @@ Opening a cartograph from the plugin's **Preview** or **Open in browser** serves
 it from a small server on your own machine (`127.0.0.1`), which nothing outside
 your computer can reach.
 
-What a cartograph **contains** differs by frame. A static frame holds an image
-of the map. A live frame holds the features it draws, with the attributes its
+What a cartograph **contains** differs by frame. An image frame holds an image
+of the map. An interactive frame holds the features it draws, with the attributes its
 popups show - the popup settings in the Layers list decide which -
 see [what travels in the file](share-qgis-print-layout-without-qgis.md#what-travels-in-the-file).
 

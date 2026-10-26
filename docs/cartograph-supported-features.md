@@ -23,13 +23,13 @@ The verdicts are the same ones the [web map](supported-features.md) uses:
 |---|---|
 | **Kept** | Comes across exactly as it is in the layout |
 | **Changed** | Comes across, but not identically - the row says how |
-| **Rasterised** | Drawn as a picture: every layer of a **static** frame, which QGIS paints into the frame's image, and, inside a live frame, a layer style the web cannot draw any other way - as on the web map |
+| **Rasterised** | Drawn as a picture: every layer of an **Image** frame, which QGIS paints into the frame's image, and, inside an interactive frame, a layer style the web cannot draw any other way - as on the web map |
 | **Not exported** | Left out. The rest of the page is still made |
-| **Blocked** | Cannot be made as asked - an atlas on a static map, or with no live map to turn its pages. The rest of the page is still saved, and the row says what to change |
+| **Blocked** | Cannot be made as asked - an atlas on an image map, or with no interactive map to turn its pages. The rest of the page is still saved, and the row says what to change |
 
-Layers drawn inside a **live** frame are translated exactly as for the web
+Layers drawn inside an **Interactive** frame are translated exactly as for the web
 map, and their rows appear in the same report, one group per layer - see
-[what gets exported](supported-features.md). A **static** frame is a picture
+[what gets exported](supported-features.md). An **Image** frame is a picture
 QGIS drew, so its layers come across as they look.
 
 ## The page
@@ -50,13 +50,13 @@ QGIS drew, so its layers come across as they look.
 
 | In the layout | In the cartograph |
 |---|---|
-| Map item, **static** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen in Map frames. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
-| Map item, **live** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or vector tiles ([which CRS a live frame draws in](live-or-static-frames.md#which-crs-a-live-frame-draws-in)) |
+| Map item, **Image** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen in Map frames. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
+| Map item, **Interactive** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or vector tiles ([which CRS an interactive frame draws in](live-or-static-frames.md#which-crs-an-interactive-frame-draws-in)) |
 | Map rotation | **Kept** |
-| A layer drawn in more than one live frame | **Kept** in each - its features are written into the file once |
-| A raster from a file on disk (GeoTIFF) in a live frame | **Kept** - carried inside the cartograph, as in a single-file web map, up to 100 MB of imagery per map; a raster in two maps is carried once. The map is drawn in Web Mercator |
+| A layer drawn in more than one interactive frame | **Kept** in each - its features are written into the file once |
+| A raster from a file on disk (GeoTIFF) in an interactive frame | **Kept** - carried inside the cartograph, as in a single-file web map, up to 100 MB of imagery per map; a raster in two maps is carried once. The map is drawn in Web Mercator |
 | Overview (locator inset showing another map's extent) | **Kept** |
-| Map that follows a map theme, or has locked layer styles | A **live** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Checks tab does not report it. A **static** frame keeps them exactly, so use one where a theme's styling matters |
+| Map that follows a map theme, or has locked layer styles | An **Interactive** frame draws the theme's layers, but in the layers' current styles: a theme's own style overrides are not read yet, and the Checks tab does not report it. An **Image** frame keeps them exactly, so use one where a theme's styling matters |
 
 ## Grids
 
@@ -73,8 +73,8 @@ QGIS drew, so its layers come across as they look.
 
 | In the layout | In the cartograph |
 |---|---|
-| Legend linked to a **live** map | **Kept** - its rows are worked out from the map as it is drawn, so they always agree with it |
-| Legend linked to a **static** map | **Changed** - its rows are written in once, from the layers' styles |
+| Legend linked to an **Interactive** map | **Kept** - its rows are worked out from the map as it is drawn, so they always agree with it |
+| Legend linked to an **Image** map | **Changed** - its rows are written in once, from the layers' styles |
 | Legend title and columns | **Kept** |
 | Legend not linked to a map | **Not exported** |
 | Groups, hidden layer titles, entries reordered or a symbol edited in the legend only | **Changed** - the legend follows the layers' own entries |
@@ -98,7 +98,7 @@ QGIS drew, so its layers come across as they look.
 | Picture (SVG, PNG, JPEG, ...) | **Kept** - embedded in the file |
 | Picture whose file cannot be read | **Not exported** |
 | Label text | **Kept** - size and colour too |
-| Label: `@map_scale` | **Kept** live on a live map; written in as text on a static map, whose picture never moves |
+| Label: `@map_scale` | **Kept** live on an interactive map; written in as text on an image map, whose picture never moves |
 | Label: `@map_crs`, `@project_title`, today's date in ISO form | **Kept** live |
 | Label: `@atlas_featurenumber`, `@atlas_totalfeatures`, the atlas feature's fields | **Kept** live, inside an [atlas](cartograph-atlas.md) |
 | Label: any other expression | **Changed** - worked out once when the cartograph is saved, and written in as text |

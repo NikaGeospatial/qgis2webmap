@@ -76,12 +76,13 @@ So the cartograph is one screen:
   *Layout preview — QGIS · A4 landscape* because it is QGIS's drawing, not the HTML;
   the two can differ, and saying so beats a preview that quietly disagrees
   with the file. A link beside the caption counts the differences and opens
-  Checks. A zoom bar says what the wheel and a drag already do.
-- **Right: the panel.** The layout list with an **Add...** menu (From
-  canvas, Import) at the top, where ArcGIS Pro keeps *New layout*. Then three
-  tabs, the split QGIS's layout designer and ArcGIS Pro make beside their
-  page: **Layout** (Page, Map frames and Layers as sections that open and
-  close), **Atlas**, and **Checks**, whose title carries the count. Map
+  Checks. The bar under it has Fit page, Add item and zoom; Space or the middle button pans.
+- **Right: the panel.** The layout list, with **Rename...** and a **New from
+  template...** button (its menu holds Import), at the top, where ArcGIS Pro
+  keeps *New layout*. Then four tabs, the split QGIS's layout designer and
+  ArcGIS Pro make beside their page: **Layout** (Browser appearance, Map frames
+  and Layers as sections that open and close), **Atlas**, **Checks**, whose
+  title carries the count, and **Edit**, for the item selected on the page. Map
   frames are cards rather than the old six-column table, which scrolled
   sideways a third of the dialog wide.
 - **The file at the foot of the panel**, name first and in bold, its folder

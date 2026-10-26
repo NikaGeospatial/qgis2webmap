@@ -3,11 +3,11 @@ title: The Cartograph dialog, tab by tab
 seo_title: The QGIS2WebMap cartograph dialog
 description: >-
   Every control of the Cartograph (Beta) output - the live page, the print
-  layout list, the Layout, Atlas and Checks tabs, where the file saves, the
+  layout list, the Layout, Atlas, Checks and Edit tabs, where the file saves, the
   header buttons and the Share menu - and what each one does to the file.
 lead_image:
   src: /images/cartograph-dialog.png
-  alt: The dialog on Cartograph (Beta) - the print layout drawn on the left, and on the right the Print layout list, the Layout, Atlas and Checks tabs, and the file name with its save status.
+  alt: The dialog on Cartograph (Beta) - the print layout drawn on the left, and on the right the Print layout list, the Layout, Atlas, Checks and Edit tabs, and the file name with its save status.
 ---
 
 # The Cartograph dialog, tab by tab
@@ -60,57 +60,56 @@ beside the caption, opens the layout in QGIS's own layout designer. The Page
 settings (title, attribution, theme) change the HTML, so they show in
 **Preview in browser**, not in this preview.
 
-Under the page, the zoom bar: **Fit page**, **−**, the zoom level and **+**.
-100% is the page at its real size on your screen. The mouse wheel zooms too.
+Under the page, the preview bar: **Fit page**, **Add item**, then **−**, the
+zoom level and **+**. 100% is the page at its real size on your screen. The
+mouse wheel zooms; hold **Space** and drag, or drag with the middle mouse
+button, to pan. There are no Select and Pan buttons: the page is always in
+selecting mode.
+
+**Add item** offers **Text**, **Legend**, **Scale bar** and **North arrow**.
+Choose one, then click the page to place it at its default size, or drag to
+draw its box. The new item is selected and the panel opens its **Edit** tab.
 
 Click an item on the page to select it, drag it to move it, or drag one of its
-corner or edge handles to resize it; each drag is one undo step. With a title,
-label or legend selected, the zoom bar also shows its text size: **A−** and
-**A+** change it one point at a time, also as undo steps.
-
-Left of them, **Select** and **Pan** (Select is on when the page opens). With
-**Select** you click an item to select it, drag it to move it, or drag a
-handle to resize it, with the same snapping and **Shift**/**Alt** keys as the
-layout designer; map frames move and resize like any other item, and a locked
-item stays where it is. Hold **Space** or drag with the middle button to pan
-while Select is on, or choose **Pan** to drag the page around without
-touching an item. Every move or resize is an undo step on the layout, so
+corner or edge handles to resize it, with the same snapping and
+**Shift**/**Alt** keys as the layout designer. A press that moves less than
+3 px counts as a click, not a drag. Map frames move and resize like any other
+item, and a locked item stays where it is. Double-click an item to open its
+**Edit** tab. Every move or resize is one undo step on the layout, so
 **Ctrl+Z** and **Ctrl+Shift+Z** work on the page, the cartograph saves itself
 after each edit, and the page stops fitting to the window once you have
 clicked on it (**Fit page** fits it again). The layout is the same one the
 layout designer shows, so an edit in either appears in both.
 
 With no print layout in the project, the page says so and offers
-**From canvas...** and **Import cartograph...** instead.
+**New from template...** and **Import cartograph...** instead.
 
 ---
 
 ## Print layout
 
-The top of the panel. The list holds the project's print layouts and follows
-the Layout Manager as you add, rename or remove them. **Add...** beside it
-makes another:
+The top of the panel. The list holds the project's existing print layouts
+and follows the Layout Manager as you add, rename or remove them; it never
+holds an action. Beside it:
 
-- **From canvas...** - opens the
-  [template picker](one-click-layout.md#choose-a-template), then builds a
-  layout named `carto: <project title>` from the map canvas in the template
-  you chose, adds it to the project and selects it. Greyed out when there is
-  no map canvas.
-- **Import cartograph...** - turns a cartograph HTML file back into a new QGIS
-  print layout, and selects it. Whatever QGIS cannot hold is listed when the
-  import finishes. See [one-click layouts](one-click-layout.md#importing-a-cartograph-back-into-qgis).
+- **Rename...** - renames the layout shown. The cartograph keeps following it.
+- **New from template...** - opens the
+  [template picker](one-click-layout.md#choose-a-template), which remembers
+  the design you chose last time, then builds a layout named
+  `<Design> · <project title>` from the map canvas, adds it to the project and
+  selects it. A layout made from a template says **Based on** and the
+  template's name under the button. Greyed out when there is no map canvas.
+- The arrow on the button's right opens a menu with **Import cartograph...** -
+  it turns a cartograph HTML file back into a new QGIS print layout, and
+  selects it. Whatever QGIS cannot hold is listed when the import finishes.
+  See [one-click layouts](one-click-layout.md#importing-a-cartograph-back-into-qgis).
 
-Both are also at the end of the list itself.
+![The panel's Print layout list, with the New from template... menu open on Import cartograph....](images/cartograph-import.png)
 
-![The panel's Print layout list, with the Add... menu open on From canvas... and Import cartograph....](images/cartograph-import.png)
+The layout shown is kept as it is; to change its text, move, resize or edit
+the items, use the layout preview and the **Edit** tab.
 
-**Browse templates...**, on its own line under the list, is the same
-as **From canvas...**: it opens the template picker, which remembers the design
-you chose last time, and builds another layout. The layout shown is kept as it
-is; to change its text, move, resize or edit the items in the layout preview. A layout made from a
-template says **Based on** and the template's name under the button. Greyed out when there is no map canvas.
-
-Below the list are three tabs - **Layout**, **Atlas** and **Checks** - and,
+Below the list are four tabs - **Layout**, **Atlas**, **Checks** and **Edit** - and,
 at the foot of the panel, [where the file saves](#where-it-saves).
 
 ---
@@ -118,9 +117,12 @@ at the foot of the panel, [where the file saves](#where-it-saves).
 ## Layout
 
 Three sections that open and close. A closed section shows a few words about
-what is in it, such as *Default theme* or *1 live, 1 static*.
+what is in it, such as *Default theme* or *1 interactive map, 1 image*.
 
-### Page
+### Browser appearance
+
+These settings change the web page only - the layout preview beside the panel
+never shows them; use **Preview in browser**.
 
 - **Title** - replaces the project title wherever the layout shows it
   (`[% @project_title %]`). Blank keeps the project title.
@@ -141,26 +143,31 @@ One card per map item on the layout:
   items on it the cartograph changes (**No changes**, or *2 changes*; Checks
   has the detail);
 - its CRS, or *Unknown CRS*;
-- **In the HTML** - **Live - pan and zoom**: an interactive map drawn in the
-  browser, in Web Mercator or in the map's own projected CRS
-  ([which one](live-or-static-frames.md#which-crs-a-live-frame-draws-in)).
-  **Static - an image**: a picture of the map as QGIS draws it, in its own
-  CRS;
-- the image resolution, for a static frame only: **150**, **200** (the
-  default) or **300 dpi**, never below the saved export resolution;
-- **Match QGIS canvas** - sets the map's extent to what the QGIS canvas
-  shows. It is an edit to your layout, so the layout designer's **Undo** takes
-  it back.
+- **Interactive** or **Image**, in the card's choice box: an Interactive map is
+  drawn in the browser, in Web Mercator or in the map's own projected CRS
+  ([which one](live-or-static-frames.md#which-crs-an-interactive-frame-draws-in));
+  an Image is a picture of the map as QGIS draws it, in its own CRS;
+- the image resolution, for an Image frame only: **150**, **200** (the
+  default) or **300 dpi**. An Image frame is always drawn at least at the
+  saved export resolution, so the choice can only raise it;
+- a **⋯** menu: **Use canvas extent** sets the map's extent to what the QGIS
+  canvas shows (an edit to your layout, so the layout designer's **Undo** takes
+  it back); **Locate on page** selects the map on the page; and, when the map
+  draws a continuous raster such as elevation, **Smooth when enlarged**
+  blends its pixels where the map draws them larger than they are. It changes
+  only this map, never the layer's style, and applies to an Image map and to
+  the PDF QGIS makes.
 
-![The Map frames section with two cards: Locator, EPSG:3857, Live, and Main map, EPSG:32648, Static at 200 dpi.](images/cartograph-03-frames.png)
+![The Map frames section with two cards: Locator, EPSG:3857, Interactive, and Main map, EPSG:32648, Image at 200 dpi.](images/cartograph-03-frames.png)
 
-A map starts **Live** when the browser can draw it where QGIS does - in
+A map starts **Interactive** when the browser can draw it where QGIS does - in
 EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers and
-image tiles - and **Static** otherwise. (The Main map in the picture was
-switched to Static by hand.)
-[Live or static frames](live-or-static-frames.md) is the whole story; the
-short version is that live costs some styling and file size, and static costs
-interactivity.
+image tiles - and **Image** otherwise. (The Main map in the picture was
+switched to Image by hand.) A map the layout's atlas turns also starts
+**Interactive**, whatever its CRS.
+[Interactive or image frames](live-or-static-frames.md) is the whole story; the
+short version is that Interactive costs some styling and file size, and Image
+costs interactivity.
 
 The cards follow the layout: add or delete a map in the layout designer and
 the list rebuilds.
@@ -169,13 +176,13 @@ the list rebuilds.
 
 The same list as the web map's Layers tab (search box included), with the same **Include**,
 **Popups** and **Labels** columns and **Set every field to**. For a
-cartograph it sets how the layers in **live** frames behave:
+cartograph it sets how the layers in **Interactive** frames behave:
 
 - **Popups** and the per-field popup settings apply. A layer with Popups
   unticked, or a field set to *Do not show this field*, has those values left
   out of the file - not merely hidden.
-- **Labels** applies: unticked, the layer's labels are not drawn in live
-  frames.
+- **Labels** applies: unticked, the layer's labels are not drawn in
+  Interactive frames.
 - **Include** chooses the layers of the map frame named at the top of the
   section (**Layers for:**, a choice of frame when the layout has several).
   Unticking a layer takes it off that map in the layout itself, so it
@@ -188,7 +195,7 @@ cartograph it sets how the layers in **live** frames behave:
   and the atlas buttons stay off until it is ticked again. The web map keeps
   its own Include choices, which switching output never touches.
 
-Static frames are pictures drawn by QGIS, so none of this changes them.
+Image frames are pictures drawn by QGIS, so none of this changes them.
 Changing anything here saves the cartograph again.
 
 ---
@@ -207,16 +214,42 @@ back. The tab reads **Atlas (on)** while the atlas is on.
 |---|---|
 | **Generate an atlas** | Turns the layout's atlas on or off. The rest of the tab is greyed out while it is off |
 | **Coverage layer** | One page per feature of this vector layer |
-| **Map that follows it** | The map that zooms to each feature in turn. It must be a **Live** frame. Choosing a map that did not follow the atlas before sets it to QGIS's own defaults: fit each feature, with a 10% margin |
+| **Map that follows it** | The map that zooms to each feature in turn. It must be an **Interactive** frame. Choosing a map that did not follow the atlas before sets it to QGIS's own defaults: fit each feature, with a 10% margin |
 | **Sort by** + **Descending** | The field pages are ordered by. Blank keeps the layer's order |
 | **Filter** | An expression: only features for which it is true get a page. Blank gives every feature a page |
 | **File names** | An expression naming each page's image when all pages are exported |
 | *N pages in QGIS* | How many pages QGIS's atlas has. The cartograph can have fewer, because it skips features the map does not draw |
-| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Live in Map frames* (Map frames, on the Layout tab) |
+| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Interactive in Map frames* (Map frames, on the Layout tab) |
 | **Export all pages (PNG, ZIP)...** | Opens the cartograph, which renders every page and downloads them as one ZIP |
 | **Print all pages...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF, each page at its true size in a Chromium-based browser |
 
 The two buttons stay greyed out until the saved cartograph has atlas pages.
+
+---
+
+## Edit
+
+The tab for the item selected on the page. Its heading says what is selected
+or, with nothing selected, how to select something. Double-click an item, or
+place one with **Add item**, and the panel switches here. Every edit is one
+undo step on the layout.
+
+- **Any item with text** - **A−** and **A+** change the lettering size one
+  point at a time. Resizing the item's box is separate: use its handles on the
+  page.
+- **Text** - the words, **bold**, alignment and colour.
+- **Map** - **Edit view** (**Edit inset view** on a locator inset) pans and
+  zooms what the map shows inside its frame by dragging on the page. **Context
+  layers...** chooses what a locator inset draws, **Fit context** fits the
+  inset to them, and **Remove inset** deletes it. **Use canvas extent** takes
+  the QGIS canvas's extent, a rotation box turns the map, and **Interactive**
+  or **Image** (with an Image's resolution) is the same choice as on the map's
+  card in Map frames.
+- **Legend** - the legend editor: which layers and classes it lists, their
+  labels, their order, **restore** for removed entries, columns, text size and
+  row spacing, and the map it is about.
+- **Scale bar** and **North arrow** - the map they are linked to.
+- **Delete** - removes the selected item (also the Delete key).
 
 ---
 
@@ -234,7 +267,7 @@ for example. **Filter** and the search box work as on the web map's
 [Fidelity tab](the-dialog.md#fidelity).
 
 Layout items are listed under **Whole map**, and the layers the frames draw
-get their own groups - a static frame's layers marked **Rasterised**, since
+get their own groups - an image frame's layers marked **Rasterised**, since
 they are part of its picture. The verdicts are explained in
 [what a cartograph keeps](cartograph-supported-features.md).
 
@@ -265,8 +298,8 @@ once. If a file of that name is already there, the new one gets a number:
 **Settings → Saving** in [the dialog, tab by tab](the-dialog.md#settings).
 
 A cartograph is always **one standalone HTML file**. There is no Share ZIP or
-Folder type as there is for the web map: the page, its static images and the
-data of its live maps are all inside it.
+Folder type as there is for the web map: the page, the pictures of its Image frames and the
+data of its interactive maps are all inside it.
 
 ---
 
@@ -288,7 +321,7 @@ Then the **Settings** and **Help** icons, as on the web map.
 
 The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
-live map from a file path. Nothing leaves your computer.
+interactive map from a file path. Nothing leaves your computer.
 
 ---
 
@@ -332,13 +365,13 @@ export as the dialog, once, with these parameters:
 | Parameter | What it is |
 |---|---|
 | **Print layout** | The layout to export |
-| **Frames** | **Automatic** (live where it matches QGIS, static otherwise - the dialog's default), **All live** or **All static** |
-| **Static frame resolution (dpi)** | 72 to 600; 200 by default, as in the dialog |
+| **Frames** | **Automatic** (interactive where it matches QGIS, image otherwise - the dialog's default), **All interactive** or **All image** |
+| **Image frame resolution (dpi)** | 72 to 600; 200 by default, as in the dialog |
 | **Title** | Replaces the project title; blank keeps it |
-| **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on a static map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |
+| **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on an image map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |
 | **Cartograph** | Where to write the `.html` |
 
-Every check is written to the log. Print settings, the Page fields, per-map
+Every check is written to the log. Print settings, the Browser appearance fields, per-map
 choices from Map frames and the Layers section's popup and label choices are
 not used: the algorithm takes only its own parameters.
 
@@ -352,7 +385,7 @@ cartograph or web map from the dialog first.
 
 - [Your first cartograph](cartograph-first-export.md) - the same ground as a
   walkthrough
-- [Live or static frames](live-or-static-frames.md)
+- [Interactive or image frames](live-or-static-frames.md)
 - [Printing a cartograph](printing-a-cartograph.md)
 - [What a cartograph keeps](cartograph-supported-features.md)
 - [Troubleshooting](troubleshooting.md#cartographs)

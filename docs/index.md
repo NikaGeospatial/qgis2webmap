@@ -135,7 +135,7 @@ sections:
   - title: Print layouts too (Beta)
     lede: >-
       The same plugin turns a QGIS print layout into a cartograph - one HTML
-      page that prints at its true size, with maps that can stay live.
+      page that prints at its true size, with maps that can stay interactive.
     cards:
       - title: QGIS print layout to HTML
         text: >-
@@ -147,7 +147,7 @@ sections:
           From a print layout - or the map canvas, in one click - to a file you
           can email and print.
         url: /cartograph-first-export.html
-      - title: Live or static frames
+      - title: Interactive or image frames
         text: >-
           When a map in the page stays interactive and when it is a
           pixel-exact image in the layout's own CRS.
@@ -196,7 +196,7 @@ the established plugin.
 Choose **Cartograph** from the title menu at the top of the dialog, or
 **Create cartograph...** from the same Web menu, and the plugin turns a QGIS print layout
 into a **cartograph**: one HTML page that opens by double-click, prints at the
-layout's page size, and keeps each map live or pixel-exact. See
+layout's page size, and keeps each map interactive or pixel-exact. See
 [QGIS print layout to HTML](qgis-print-layout-to-html.md).
 
 ## What you get

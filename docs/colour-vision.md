@@ -73,8 +73,8 @@ with the palette.
 It is the same check the cartograph's own validator runs, with the same
 numbers, so the dialog and the file never disagree.
 
-**Which classes are listed.** Every class of every layer drawn in a **live**
-frame, and the written-out rows of each legend on a **static** frame - what
+**Which classes are listed.** Every class of every layer drawn in an **Interactive**
+frame, and the written-out rows of each legend on an **Image** frame - what
 the saved cartograph's legends actually show. Each layer appears once, however
 many frames draw it. The table describes the last save, and refreshes after every
 save while the dialog is open; before the first save it is empty.

@@ -14,15 +14,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) opens the dialog straight on it.
   - **One screen**: the layout's page, live, on the left (*QGIS layout ·
     A4 landscape*, with a zoom bar and a link to the changes in the HTML), and a
-    panel on the right - the Print layout list with an **Add...** menu, then
-    the **Layout**, **Atlas** and **Checks** tabs, then the file and its save
-    status.
-  - Map items become **live frames** (pan, zoom, popups; in Web Mercator, or
-    in the map's own CRS - projected, or geographic such as EPSG:4326 - when
-    its layers allow) or **static frames** (a pixel-exact image in the
-    layout's own CRS). Maps in EPSG:3857/4326, and other maps that draw in
-    their own CRS, default to live, others to static; each map's card in
-    **Map frames** switches it and sets its DPI.
+    panel on the right - the Print layout list with **Rename...** and
+    **New from template...** (its menu holds **Import cartograph...**), then
+    the **Layout**, **Atlas**, **Checks** and **Edit** tabs, then the file and
+    its save status. The list holds existing print layouts only.
+  - Map items become **Interactive** frames (pan, zoom, popups; in Web
+    Mercator, or in the map's own CRS - projected, or geographic such as
+    EPSG:4326 - when its layers allow) or **Image** frames (a pixel-exact
+    image in the layout's own CRS, always drawn at least at the saved export
+    resolution). Maps in EPSG:3857/4326, and other maps that draw in their own
+    CRS, default to Interactive, others to Image, and a map the atlas turns is
+    always Interactive; each map's card in **Map frames** switches it and
+    sets its DPI. A **⋯** menu on the card has **Use canvas extent**, **Locate
+    on page** and **Smooth when enlarged** for a continuous raster.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
     pictures carry over, at the item opacity set in QGIS; the **Checks** tab
@@ -31,8 +35,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     dialog, the layout, a layer's style or the Layers list - by default to
     `Documents/QGIS2WebMap/Cartographs/<project>-<layout>.html`, even before
     the project is saved. Title, attribution and theme in the Layout tab's
-    Page section.
-  - **Add... → From canvas...** builds a `carto:` print layout from the map view in
+    Browser appearance section, which changes the web page only.
+  - **New from template...** builds a print layout, named
+    `<Design> · <project title>`, from the map view in
     one of fifteen **layout templates** - six quiet essentials (Daylight,
     Clearline, Bare Map, Caption, After Hours, Night Desk) and nine with more
     character (Fieldbook, Broadside, Near & Far, On the Map, Signal,
@@ -43,11 +48,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     its room. Each card says what that page includes for this project, and
     what else the design can show with more content (notes, key figures, a
     sheet number). Signal's key figures are typed in the picker and saved
-    with the project. Legend text never drops below a readable size (6.5 pt,
+    with the project. Legend text never drops below a readable size (8 pt,
     9 pt on Town Hall's large print): a legend that still cannot fit leaves
     its last entries out, and the card and the **Checks** tab say how many.
-    **Import cartograph** turns a
-    cartograph back into a QGIS layout.
+    **Framing: fill the frame / whole view** sets how the canvas view fits, a
+    card's **Preview** button (or **Space**) opens a large preview, and
+    **Import cartograph...** turns a cartograph back into a QGIS layout.
   - **Legends you can edit**: double-click a legend on the page to choose
     which layers and classes it lists, rename them in the legend only (the
     layer keeps its name), reorder them, put removed entries back, and set
@@ -56,6 +62,17 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     basemap), restorable from the same list, and heads an elevation ramp with
     its unit. A ramp whose range QGIS never computed is marked in the editor
     rather than restyled.
+  - **Edit on the page**: the preview bar has **Fit page**, **Add item**
+    (Text, Legend, Scale bar, North arrow - click to place, or drag to draw)
+    and zoom; pan with Space and drag or the middle mouse button (a press that
+    moves under 3 px is a click). The **Edit** tab holds the selected item's
+    controls - text words, bold, colour and alignment, **A−**/**A+** lettering
+    size, a map's **Edit view**, **Context layers...**, **Fit context**,
+    **Remove inset**, **Use canvas extent**, rotation and Interactive/Image,
+    the legend editor, a scale bar's or north arrow's map, and **Delete**.
+    Double-clicking an item or adding one switches to it.
+  - **Print PDF** (the PDF QGIS writes for CMYK and ICC) keeps text and
+    shapes as vectors and rasterises only the transparent or blended layers.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
     margin, fixed and predefined scales; every page as one PNG ZIP, or
     printed together into one multi-page PDF.

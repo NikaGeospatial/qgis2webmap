@@ -37,24 +37,24 @@ sheet for the next parcel, you are back in QGIS exporting again.
 - **Printing at true size** from Chrome or Edge. Firefox and Safari need the
   paper size picked in their print dialog - see
   [printing a cartograph](printing-a-cartograph.md).
-- **Live maps where you chose them** - pan, zoom, click a feature for its
+- **Interactive maps where you chose them** - pan, zoom, click a feature for its
   attributes - and pixel-exact pictures everywhere else. See
-  [live or static frames](live-or-static-frames.md).
+  [interactive or image frames](live-or-static-frames.md).
 - **Every page of an atlas** in the one file, turned with the arrow keys. See
   [atlas cartographs](cartograph-atlas.md).
 
 What they need: a web browser. Not QGIS, not an account, and - unless a live
-map draws an online tile layer - not an internet connection. A live map needs
+map draws an online tile layer - not an internet connection. An interactive map needs
 JavaScript and WebGL, which practically every current browser has. A page of
-only static frames needs neither: it reads even in a mail or file preview.
+only image frames needs neither: it reads even in a mail or file preview.
 
 ## What travels in the file
 
 Be deliberate about this before you send it:
 
-- A **static** frame carries an **image** of the map. Nobody can recover the
+- An **Image** frame carries an **image** of the map. Nobody can recover the
   features or their attributes from it.
-- A **live** frame carries the **features of the layers it draws** - their
+- An **Interactive** frame carries the **features of the layers it draws** - their
   shapes, and the attributes its popups show. Anyone with the file can open it
   in a text editor and read that data.
 
@@ -63,7 +63,7 @@ same list as the web map's Layers tab: untick
 **Popups** on a layer, or set a field to *Do not show this field*, and those
 values are not written into the file at all. A field the map draws with - the
 one a categorised style or a label reads - stays, since it is visible on the
-map anyway. To keep the features themselves out, set the frame to **Static**:
+map anyway. To keep the features themselves out, set the frame to **Image**:
 then the file holds only a picture. Database passwords and service
 credentials are never written into the file in either case.
 

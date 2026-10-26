@@ -25,7 +25,7 @@ On the cartograph's **Atlas** tab:
 4. Optionally, **Sort by** a field (tick **Descending** to reverse it), a
    **Filter** expression, and a **File names** expression for exported pages.
 5. In **Map frames**, on the **Layout** tab, make sure the map that follows the atlas is
-   **Live**. The coverage layer need not be drawn on it: leave it out of the
+   **Interactive** (a map the atlas drives starts that way). The coverage layer need not be drawn on it: leave it out of the
    map's layers (or tick **Hide coverage layer**) and the atlas still pages
    through it, hidden.
 
@@ -39,18 +39,18 @@ the cartograph will not page, a warning line saying why and what to change.
 
 The cartograph saves itself as usual. One file holds every page.
 
-## Why the map has to be live
+## Why the map has to be interactive
 
-A static frame is a picture, rendered once. It would show the same place on
-every page. The cartograph turns pages by moving a live map to each feature,
+An image frame is a picture, rendered once. It would show the same place on
+every page. The cartograph turns pages by moving an interactive map to each feature,
 and it finds the features in that map's own data - so the coverage layer
 travels with that map, hidden when the map does not draw it. It only has to
 still be in the project.
 
 When either is missing, nothing half-works: no atlas is written, and the
-Checks tab marks it **Blocked** with the fix - *Set the atlas map to Live in
+Checks tab marks it **Blocked** with the fix - *Set the atlas map to Interactive in
 Map frames*, or *Show the coverage layer
-... in a map that is Live*.
+... in a map that is Interactive*.
 
 ## Turning the pages
 
@@ -74,7 +74,7 @@ the scale bar is worked out again, and labels using the feature's fields,
 | Map scaling **Fixed scale** | Kept: every page at the map's scale, centred on its feature |
 | Map scaling **Predefined scale** | Kept: each page at the scale QGIS picks for that feature |
 | A **point** coverage layer | Kept: QGIS centres each point at the map's scale, in any scaling mode |
-| **Hide coverage layer** | Kept on live frames |
+| **Hide coverage layer** | Kept on interactive frames |
 | **Only show the current atlas feature** | Not kept - every feature of the layer is drawn. Marked **Changed** |
 | **Filter with** | Kept for any QGIS expression: QGIS itself works out which features get a page (so `NULL` is handled as QGIS handles it) and the cartograph pages exactly those. The filter in the file lists feature ids, not your expression; the expression itself is kept for "Import cartograph as QGIS layout" |
 | **Sort by** | Kept for any QGIS expression, with QGIS's own order (empty values first when ascending, text order as QGIS sorts it). Each feature carries its place in that order |
@@ -96,7 +96,7 @@ filter matches no feature.
 
 - **Export all pages (PNG, ZIP)...** opens the cartograph, which renders every
   page at the cartograph's saved resolution (Print settings, 300 dpi unless
-  changed), one after another through the same live map, and downloads
+  changed), one after another through the same interactive map, and downloads
   them as **one ZIP** (`<name>-atlas.zip`), each page named by the **File
   names** expression. One ZIP rather than one download per page, because
   browsers block a run of separate downloads.

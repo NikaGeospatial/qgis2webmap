@@ -66,10 +66,10 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
   even before the project is saved - and rewrites itself about 600 ms after
   any change, in the dialog, the layout or the layers. Its output is always
   one standalone HTML file - no Share ZIP or Folder type.
-- **Each map frame is live or static, per map.** Live: an interactive map,
-  always drawn in Web Mercator. Static: a pixel-exact image in the layout's own
-  CRS, at 150/200/300 dpi (200 by default). Default: live for EPSG:3857/4326, static otherwise.
-  A page with only static frames carries no map runtime, needs no WebGL, and
+- **Each map frame is Interactive or Image, per map.** Interactive: an interactive map,
+  drawn in Web Mercator or the map's own CRS. Image: a pixel-exact image in the layout's own
+  CRS, at 150/200/300 dpi (200 by default). Default: Interactive for EPSG:3857/4326, Image otherwise.
+  A page with only Image frames carries no map runtime, needs no WebGL, and
   sends no usage report.
 - **Printing happens in the browser**, at true page size via CSS `@page` in
   Chromium-based browsers. Firefox and Safari ignore `@page` size and print on
@@ -110,7 +110,7 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 - [QGIS print layout to HTML](https://qgis2webmap.nikaplanet.com/qgis-print-layout-to-html.html): what a cartograph is and how it compares with a PDF from QGIS.
 - [Your first cartograph](https://qgis2webmap.nikaplanet.com/cartograph-first-export.html): from a print layout to a printable HTML file.
 - [The Cartograph dialog](https://qgis2webmap.nikaplanet.com/cartograph-dialog.html): the live page, the Print layout list, the Layout, Atlas and Checks tabs, where the file saves, and the Share menu.
-- [Live or static frames](https://qgis2webmap.nikaplanet.com/live-or-static-frames.html): interactive Web Mercator map or pixel-exact image, per map.
+- [Interactive or image frames](https://qgis2webmap.nikaplanet.com/live-or-static-frames.html): interactive Web Mercator map or pixel-exact image, per map.
 - [Atlas cartographs](https://qgis2webmap.nikaplanet.com/cartograph-atlas.html): one page per feature in one file, and what an atlas needs.
 - [One-click layouts](https://qgis2webmap.nikaplanet.com/one-click-layout.html): a print layout from the map canvas, and importing a cartograph back into QGIS.
 - [Printing a cartograph](https://qgis2webmap.nikaplanet.com/printing-a-cartograph.html): true page size, PDF and PNG, bleed, crop marks, CMYK through QGIS.

@@ -48,7 +48,7 @@ guides:
         url: /cartograph-first-export.html
       - title: The Cartograph dialog
         url: /cartograph-dialog.html
-      - title: Live or static frames
+      - title: Interactive or image frames
         url: /live-or-static-frames.html
       - title: Atlas cartographs
         url: /cartograph-atlas.html

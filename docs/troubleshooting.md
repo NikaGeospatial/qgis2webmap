@@ -307,12 +307,12 @@ If it does not save, that line says why:
 ### The Print layout list is empty
 
 The project has no print layouts. Create one from **Project → Layouts → New
-Layout** and add a map to it, or press **Add... → From canvas...** to have
+Layout** and add a map to it, or press **New from template...** to have
 one built. See [one-click layouts](one-click-layout.md).
 
-### A live frame is blank in the browser
+### An interactive frame is blank in the browser
 
-A live frame is drawn by the graphics card through WebGL. When the browser has
+An interactive frame is drawn by the graphics card through WebGL. When the browser has
 WebGL switched off or unavailable - some virtual desktops, remote sessions,
 locked-down work machines, old graphics drivers - the frame shows a short
 message instead of a map, and the rest of the page draws normally: scale bars,
@@ -320,16 +320,16 @@ grids and scale text still use the map's real extent, the map's legend is left
 out, and the page still prints. Try another
 browser, or turn on hardware acceleration in the browser's settings.
 
-For a page that must work everywhere, set the frame to **Static** in **Map
-frames**, on the Layout tab. A page with only static frames needs no WebGL at all. See
-[live or static frames](live-or-static-frames.md).
+For a page that must work everywhere, set the frame to **Image** in **Map
+frames**, on the Layout tab. A page with only image frames needs no WebGL at all. See
+[interactive or image frames](live-or-static-frames.md).
 
 ### A preview pane shows "This cartograph needs JavaScript"
 
-A cartograph with a live frame needs JavaScript to draw its maps, and a mail
+A cartograph with an interactive frame needs JavaScript to draw its maps, and a mail
 client's, chat app's or file manager's preview does not run it - so it shows
 that note instead. Save the file and open it in a browser. A cartograph whose
-frames are all static reads in a preview too, without JavaScript.
+frames are all Image frames also reads in a preview, without JavaScript.
 
 ### It prints at the wrong size in Firefox or Safari
 
@@ -338,18 +338,18 @@ chosen in their print dialog, scaled to fit. Pick the matching paper there, or
 print from Chrome, Edge or another Chromium-based browser, which prints at the
 true size. See [printing a cartograph](printing-a-cartograph.md).
 
-### A live frame prints blank or blurry
+### An interactive frame prints blank or blurry
 
 Print with **Share → Export PDF...** from the plugin. It waits for the maps and
-swaps each live frame for a print-resolution image before the print dialog
-opens. Or set the frame to **Static**, which prints the same however it is
+swaps each interactive frame for a print-resolution image before the print dialog
+opens. Or set the frame to **Image**, which prints the same however it is
 printed.
 
-### The atlas is Blocked: the map is static
+### The atlas is Blocked: the map is an image
 
-The Checks tab says *This map follows the atlas, but it is a static frame*.
-A static frame is one picture, so it would show the same place on every page.
-In **Map frames**, on the Layout tab, set the map the atlas controls to **Live**. The coverage layer
+The Checks tab says *This map follows the atlas, but it is an image frame*.
+An image frame is one picture, so it would show the same place on every page.
+In **Map frames**, on the Layout tab, set the map the atlas controls to **Interactive**. The coverage layer
 does not have to be drawn on that map; it only has to still be in the project.
 See [atlas cartographs](cartograph-atlas.md).
 
@@ -360,9 +360,9 @@ Hover the choice to see why. Two causes:
 - **QGIS is built on Qt older than 6.8**, or is older than 3.40. QGIS 3 LTR is
   built on Qt 5, and colour-managed PDFs need Qt 6.8. Use a QGIS 4 build on Qt
   6.8 or newer, or send the print shop an RGB PDF and let them convert it.
-- **A frame is live.** CMYK and ICC PDFs are made by QGIS from the layout, and
-  QGIS cannot draw a live frame as the cartograph shows it. Set every frame to
-  **Static** in Map frames, on the Layout tab.
+- **A frame is Interactive.** CMYK and ICC PDFs are made by QGIS from the layout, and
+  QGIS cannot draw an interactive frame as the cartograph shows it. Set every frame to
+  **Image** in Map frames, on the Layout tab.
 
 See [CMYK and print-shop profiles](printing-a-cartograph.md#cmyk-and-print-shop-profiles).
 

@@ -7,7 +7,7 @@ description: >-
   cartograph back as a layout.
 lead_image:
   src: /images/cartograph-one-click.png
-  alt: The Cartograph screen after Add, From canvas - the new layout "carto: Parcel survey" is drawn on the left and selected in the Print layout list, and the bar at the foot says it was created from the canvas.
+  alt: The Cartograph screen after New from template - the new layout "Daylight · Parcel survey" is drawn on the left and selected in the Print layout list, and the bar at the foot says it was created from the canvas.
 ---
 
 # One-click layouts and the round trip
@@ -21,21 +21,21 @@ go the other way, back into QGIS as a layout.
 
 1. Set the canvas to the view you want on the page: the extent, the layers,
    even a rotation.
-2. On Cartograph, press **Add...** beside the **Print layout** list and
-   choose **From canvas...**. On the web map, **Share → Make a cartograph...**
+2. On Cartograph, press **New from template...** beside the **Print layout**
+   list. On the web map, **Share → Make a cartograph...**
    does the same and switches the dialog to Cartograph (Beta).
 3. Pick a [template](#choose-a-template), a page size and an orientation, and
    click **Create layout**.
 
-The plugin builds a print layout called **`carto: <project title>`**
-(`carto: map` for a project with no title, and `carto: map (2)` if the name
-is taken), adds it to the project, and selects it in the Print layout list.
+The plugin builds a print layout called **`<Design> · <project title>`**
+(for example `Daylight · Parcel survey`; a project with no title says
+*untitled*, and a number is added if the name is taken), adds it to the project, and selects it in the Print layout list.
 
-![The Cartograph screen after From canvas: the Print layout list shows "carto: Parcel survey", and the new layout is drawn on the left.](images/cartograph-one-click.png)
+![The Cartograph screen after New from template: the Print layout list shows the new layout, named after its design and the project, and the new layout is drawn on the left.](images/cartograph-one-click.png)
 
 ## Choose a template
 
-Ten starters: five quiet essentials and five specialised compositions, each
+Fifteen starters: six quiet essentials and nine specialised compositions, each
 made for a different kind of page. Each preview is the real page drawn
 with the map the canvas shows now, so what you pick is what you get.
 
@@ -78,6 +78,8 @@ layout preview, or pick the sizes here before creating it.
 - **After Hours** - a dark page with an uninterrupted map. Its heading,
   legend and scale have their own space, so a dense key never covers the
   terrain. The legend fits beside or below the map at a readable size. *Best for: dark-room screens and projected displays.*
+- **Night Desk** - a calm dark report sheet: the map inset with wide margins and
+  a quiet legend. *Best for: reports read on screen in low light.*
 
 **Characterful**
 
@@ -97,10 +99,17 @@ layout preview, or pick the sizes here before creating it.
   the project. With a substantial legend, Signal can arrange the figures in a
   row or give the key a full-height column to keep its entries readable. With
   no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
+- **Marginalia** - an editorial sheet: a large map with your notes in a narrow
+  margin. *Best for: editorial and explanatory maps with notes.*
+- **Atlas Ledger** - one sheet of a map series: locator, sheet number, legend
+  and source. The sheet number is blank until the layout's atlas is on.
+  *Best for: atlases and map series.*
+- **Town Hall** - large print: a big title and an easy-to-read legend, with
+  larger legend text. *Best for: public meetings and large-print handouts.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
-Legends stay readable: their text never goes below 8 pt. A crowded legend first gets more room, up to half the space the map
+Legends stay readable: their text never goes below 8 pt (Town Hall: larger). A crowded legend first gets more room, up to half the space the map
 and legend share; if it still cannot fit, it leaves its last entries out.
 The card then says *Legend: 3 entries do not fit at a readable size*, and
 the **Checks** tab of the new layout says the same until you put them back
@@ -122,15 +131,15 @@ can also select a design in the list and press **Space**. Only that page is
 rendered at the inspection size; closing it creates no layout and saves no
 settings.
 
-**Map framing** controls how the canvas view fits the template. **Fill frame
-(crop edges)** fills the main map frame and trims projected raster boundaries
+The **Framing** choice beside the design filter controls how the canvas view
+fits the template. **Framing: fill the frame** fills the main map frame and trims projected raster boundaries
 where possible. It crops the view, preserves its centre and projection, and
 never changes the source data. Daylight and Caption also expand their map
-frames to use the available space in this mode. Choose **Whole view** to keep the entire canvas
+frames to use the available space in this mode. Choose **Framing: whole view** to keep the entire canvas
 extent, with extra surroundings where the frame has a different shape. This
 choice is remembered when you create a layout; cancelling changes nothing.
 
-A locator inset is a static frame - a picture of its map, as QGIS draws it,
+A locator inset is an Image frame - a picture of its map, as QGIS draws it,
 and it works offline: it draws the area-wide layers of the project (rasters,
 polygons and lines, not the points that mark places on the main map), without
 labels, and outlines the main map's extent. How much it shows comes from those
@@ -170,9 +179,9 @@ Switching a layer on in the Layers panel afterwards does not add it to the
 page; unlock the layers in the map's item properties if you want the page to
 follow the canvas.
 
-Whether the map becomes a live or a static frame follows the usual
-[rule](live-or-static-frames.md#the-default): live when the browser can draw
-it where QGIS does, static otherwise.
+Whether the map becomes an Interactive or an Image frame follows the usual
+[rule](live-or-static-frames.md#the-default): Interactive when the browser can draw
+it where QGIS does, Image otherwise.
 
 ## Keep editing it in QGIS
 
@@ -183,20 +192,20 @@ again about half a second later.
 
 **The first save** happens as soon as the new layout is selected, saved
 project or not: its cartograph goes in **Documents/QGIS2WebMap/Cartographs**,
-named after the project and the layout - `parcels-carto-Parcel-survey.html`
+named after the project and the layout - `parcels-Daylight-Parcel-survey.html`
 for `parcels.qgz`. **Change...** at the foot of the panel puts it somewhere
 else.
 
 ## Importing a cartograph back into QGIS
 
-**Add... → Import cartograph...** on Cartograph reads a cartograph HTML file -
+**New from template ▾ → Import cartograph...** on Cartograph reads a cartograph HTML file -
 one this plugin made, one edited by hand, or one edited by an AI agent - and
 builds a new print layout from it:
 
 - named after the cartograph's title (or its file name), made unique;
 - every item keeps the ID the cartograph used, so the Items panel shows the
   same names;
-- static frames come back at their georeferenced extent and CRS; live frames at
+- Image frames come back at their georeferenced extent and CRS; Interactive frames at
   their camera's view, in the projected CRS the map was drawn in, or in Web
   Mercator when it was drawn in Web Mercator;
 - pictures embedded in the file are written to a `<name>.images` folder beside
@@ -210,13 +219,13 @@ builds a new print layout from it:
 The new layout is selected in the Print layout list, so the cartograph you
 see is now made from it.
 
-**The map data is not imported.** A live frame's features travel inside the
+**The map data is not imported.** An Interactive frame's features travel inside the
 cartograph, but a QGIS layout cannot hold data - its maps draw the project's
 own layers. Import into the project the cartograph came from, or one with the
 same layers.
 
 Whatever QGIS cannot hold is listed when the import finishes, under *Some parts
-could not be carried into QGIS*: a live frame's tilt, a legend's written-out
+could not be carried into QGIS*: an Interactive frame's tilt, a legend's written-out
 rows, page settings with no layout equivalent, a text token with no QGIS
 variable. Nothing is dropped without being named.
 

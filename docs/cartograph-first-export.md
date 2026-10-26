@@ -3,7 +3,7 @@ title: Your first cartograph
 seo_title: Export a QGIS print layout to a cartograph
 description: >-
   A walkthrough from a QGIS print layout to a single HTML cartograph you can
-  email and print - choosing the layout, where it saves, live or static
+  email and print - choosing the layout, where it saves, interactive or image
   frames, and reading the checks.
 
 # Opt-in HowTo markup, read by `_layouts/default.html`. Kept in front matter
@@ -30,7 +30,7 @@ howto:
       anchor: 3-choose-the-print-layout
       text: >-
         At the top of the panel, pick the layout from the Print layout list,
-        or choose Add, then From canvas, to have one built from the map
+        or press New from template to have one built from the map
         canvas.
     - name: Check where it saves
       anchor: 4-check-where-it-saves
@@ -40,12 +40,12 @@ howto:
         layout, and it saves at once, even in a project that was never saved.
         The file is rewritten about half a second after every change, and the
         line under its name says when it was last saved and how large it is.
-    - name: Choose live or static frames
-      anchor: 5-choose-live-or-static-frames
+    - name: Choose interactive or image frames
+      anchor: 5-choose-interactive-or-image-frames
       text: >-
-        In Map frames, on the Layout tab, each map on the layout is Live (an
+        In Map frames, on the Layout tab, each map on the layout is Interactive (an
         interactive map, in Web Mercator or the map's own projected CRS) or
-        Static (a pixel-exact image in the layout's own CRS, at the DPI you
+        Image (a pixel-exact image in the layout's own CRS, at the DPI you
         choose).
     - name: Preview it
       anchor: 6-preview-it
@@ -65,7 +65,7 @@ lead_image:
 # Your first cartograph
 
 A **cartograph** is a print layout as one HTML file: it opens by
-double-click, prints at the layout's page size, and its maps can stay live.
+double-click, prints at the layout's page size, and its maps can stay interactive.
 This page goes from a QGIS print layout to a file you can send. If you have not
 installed the plugin yet, start with [installation](installation.md).
 
@@ -86,7 +86,7 @@ Two limits worth knowing before you start:
   out and named. [What a cartograph keeps](cartograph-supported-features.md)
   has the full list.
 
-No layout at all? Skip to step 3 and choose **Add... → From canvas...**.
+No layout at all? Skip to step 3 and press **New from template...**.
 
 ## 2. Open the Cartograph output
 
@@ -101,7 +101,7 @@ Any of these opens the plugin on Cartograph (Beta):
   the title at the top left - **Web map ▾** - and choose
   **Cartograph**.
 
-![The title menu open at the top of the dialog: Web map, an interactive map to pan, zoom and click, and Cartograph (Beta), a print layout with live maps, to read or print.](images/cartograph-make-switch.png)
+![The title menu open at the top of the dialog: Web map, an interactive map to pan, zoom and click, and Cartograph (Beta), a print layout with interactive maps, to read or print.](images/cartograph-make-switch.png)
 
 The dialog remembers which of the two you used last, per project.
 
@@ -112,10 +112,10 @@ the top of the panel, under **Print layout**:
 
 - **Pick a layout from the list.** Every print layout in the project is
   there, and the list follows the Layout Manager: add, rename or delete a
-  layout and it updates.
-- **Or press Add... → From canvas...** - pick one of ten
+  layout and it updates. **Rename...** renames the one shown.
+- **Or press New from template...** - pick one of fifteen
   [templates](one-click-layout.md#choose-a-template), and a new layout called
-  `carto: <project title>` is built from what the map canvas shows, added to
+  `<Design> · <project title>` is built from what the map canvas shows, added to
   the project and selected.
 
 ![The Cartograph screen, with the Print layout list highlighted.](images/cartograph-01-source.png)
@@ -123,9 +123,9 @@ the top of the panel, under **Print layout**:
 The page on the left is now the layout, captioned with its size -
 *Layout preview — QGIS · A4 landscape*. It is QGIS's own drawing of the layout and
 follows every change you make. Zoom with the bar under it or the mouse wheel,
-and drag to pan.
+and hold Space (or the middle mouse button) and drag to pan.
 
-**Add... → Import cartograph...** goes the other way: it turns a cartograph
+**New from template ▾ → Import cartograph...** goes the other way: it turns a cartograph
 file back into a QGIS print layout.
 
 ## 4. Check where it saves
@@ -157,29 +157,29 @@ A save writes to a temporary file and swaps it in, so closing QGIS mid-save
 never leaves half a file behind. The first save on a computer may ask to
 download the OnlyMap runtime, the same one-off download the web map uses.
 
-## 5. Choose live or static frames
+## 5. Choose interactive or image frames
 
 On the **Layout** tab, open **Map frames**. Each map on the layout has a
 card:
 
 - its name, and how many items on it change in the cartograph;
 - its CRS;
-- **In the HTML** - **Live - pan and zoom** or **Static - an image**;
-- for a static frame, the image resolution: 150, 200 (the default) or
+- **In the HTML** - **Interactive** (pan and zoom) or **Image** (a picture of the map);
+- for an image frame, the image resolution: 150, 200 (the default) or
   300 dpi;
 - **Match QGIS canvas**, which sets this map's extent to what the QGIS canvas
   shows.
 
-![The Map frames section: the Locator card set to Live, and the Main map card set to Static at 200 dpi.](images/cartograph-03-frames.png)
+![The Map frames section: the Locator card set to Interactive, and the Main map card set to Image at 200 dpi.](images/cartograph-03-frames.png)
 
-A map starts **Live**, an interactive map in the page, when the browser can
+A map starts **Interactive**, an interactive map in the page, when the browser can
 draw it where QGIS does: in **EPSG:3857** or **EPSG:4326**, or in a projected
 CRS such as a UTM zone when the map is not rotated and holds only vector
 layers and image tiles. Anything else - a rotated map, a map with a raster
-file - starts **Static**: an image of the map exactly as QGIS draws it, in its
-own CRS. The survey in these pictures starts Live; its Main map was switched
-to Static to keep the parcel styling pixel-exact for print. [Live or static frames](live-or-static-frames.md) explains
-the trade, including why a page of only static frames is small and needs no
+file - starts **Image**: an image of the map exactly as QGIS draws it, in its
+own CRS. The survey in these pictures starts Interactive; its Main map was switched
+to Image to keep the parcel styling pixel-exact for print. [Interactive or image frames](live-or-static-frames.md) explains
+the trade, including why a page of only image frames is small and needs no
 graphics card.
 
 ## 6. Preview it
@@ -201,18 +201,18 @@ with one of the same verdicts the web map uses - **Kept**, **Changed**,
 its title carries the count - **Checks (5)**, say. The link beside the page's
 caption, such as **5 changes in the HTML**, opens it too.
 
-![The Checks tab for a cartograph, titled Checks (5): a static map frame, its legend, the north arrow and a title with a frozen expression are marked Changed.](images/cartograph-fidelity-tab.png)
+![The Checks tab for a cartograph, titled Checks (5): an image map frame, its legend, the north arrow and a title with a frozen expression are marked Changed.](images/cartograph-fidelity-tab.png)
 
 Typical rows for a first cartograph:
 
-- *Rendered as a static, pixel-exact raster rather than a live map* - a map you
-  left static.
+- *Rendered as a pixel-exact image rather than an interactive map* - a map you
+  left as an Image.
 - *Expression `round(@map_scale)` frozen at export time* - a label expression
   the page cannot work out by itself, written in as text.
 - *The QGIS north-arrow picture is replaced by the cartograph runtime's own
   north indicator glyph.*
-- *Drawn into this static frame's picture by QGIS* - **Rasterised**, for each
-  layer of a static frame: it looks exactly as in QGIS, but a reader cannot
+- *Drawn into this image frame's picture by QGIS* - **Rasterised**, for each
+  layer of an image frame: it looks exactly as in QGIS, but a reader cannot
   click it.
 
 Then send the file. The recipient needs a web browser and nothing else. See
