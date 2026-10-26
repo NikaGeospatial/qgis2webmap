@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from enum import Enum
 
 from qgis.core import (
+    Qgis,
     QgsLayout,
     QgsLayoutItem,
     QgsLayoutItemLabel,
@@ -32,6 +33,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QPointF, QRectF
 
 from ...core.layout_builder import _north_svg
+from ...core.legend_edit import apply_template_defaults
 from ..i18n import tr
 
 
@@ -128,6 +130,8 @@ def create_item(
         layout.addLayoutItem(item)
         if map_item is not None and kind in LINKED_KINDS:
             item.setLinkedMap(map_item)
+        if isinstance(item, QgsLayoutItemLegend) and map_item is not None:
+            _list_map_layers(item, map_item)
         if isinstance(item, QgsLayoutItemScaleBar):
             item.applyDefaultSize()
         if kind in (ItemKind.LEGEND, ItemKind.SCALE_BAR):
@@ -135,6 +139,21 @@ def create_item(
         else:
             item.attemptSetSceneRect(rect)
     return item
+
+
+def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
+    """Give a new legend what a template legend gets: the layers its map
+    draws, not every layer of the project, with the technical support
+    layers (hillshade, basemap) left out and units in colour-ramp headings."""
+    if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
+        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
+    else:  # QGIS 3: the same switch, deprecated in 4.0
+        legend.setAutoUpdateModel(False)
+    root = legend.model().rootGroup()
+    root.removeAllChildren()
+    for layer in map_item.layersToRender():
+        root.addLayer(layer)
+    apply_template_defaults(legend)
 
 
 def link_map(
