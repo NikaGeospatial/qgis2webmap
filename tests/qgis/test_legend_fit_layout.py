@@ -9,9 +9,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-
-qgis_core = pytest.importorskip("qgis.core")
-
 from legend_fit_fixtures import (
     FitWorld,
     add_label,
@@ -46,7 +43,7 @@ def _intersects(a, b) -> bool:
 class TestTheQgisLegendChangesWithThePage:
     def test_a_too_small_box_grows_upward_and_keeps_its_columns(self, world) -> None:
         before = rect_mm(world.legend)
-        html, report = export(world)
+        _html, report = export(world)
         x, y, w, h = rect_mm(world.legend)
         assert h > before[3] + 5
         assert y + h == pytest.approx(before[1] + before[3], abs=0.01)
@@ -164,7 +161,7 @@ class TestLimits:
 
     def test_more_columns_before_leaving_layers_out(self, qgis_app, project) -> None:
         world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=2)
-        label = add_label(world, 20, 60, 100, 10)  # 80 mm of room above
+        add_label(world, 20, 60, 100, 10)  # 80 mm of room above
         _html, report = export(world)
         assert world.legend.columnCount() == 3
         assert len(_listed(world.legend)) == 8

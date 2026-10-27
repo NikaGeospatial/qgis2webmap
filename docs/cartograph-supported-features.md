@@ -76,6 +76,7 @@ QGIS drew, so its layers come across as they look.
 | Legend linked to an **Interactive** map | **Kept** - its rows are worked out from the map as it is drawn, so they always agree with it |
 | Legend linked to an **Image** map | **Changed** - its rows are written in once, from the layers' styles |
 | Legend title and columns | **Kept** |
+| Legend taller on the web page than in QGIS (Interactive map) | **Changed** - the browser's legend adds an "other" row and a field line, so its box is made taller to hold it (away from the page edge it is anchored to, up to the page margin and any item it would newly overlap), then set in more columns, then left without whole layers from the end. The layout's own legend item is changed the same way, so the preview, the prints and the page agree; Checks says what happened. A legend that sizes itself to its contents stops doing so once fitted |
 | Legend not linked to a map | **Not exported** |
 | Groups, hidden layer titles, entries reordered or a symbol edited in the legend only | **Changed** - the legend follows the layers' own entries |
 
