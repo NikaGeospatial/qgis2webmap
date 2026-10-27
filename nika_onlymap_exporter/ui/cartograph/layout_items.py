@@ -30,6 +30,7 @@ from qgis.core import (
     QgsLayoutSize,
     QgsUnitTypes,
 )
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QPointF, QRectF
 
 from ...core.layout_builder import _north_svg
@@ -168,6 +169,7 @@ def link_map(
         item.setLinkedMap(map_item)
     finally:
         layout.undoStack().endCommand()
+        redraw(item)
     return True
 
 
@@ -198,6 +200,17 @@ def delete_items(layout: QgsLayout, items: list[QgsLayoutItem]) -> None:
                 layout.removeLayoutItem(item)
 
 
+def redraw(item: QgsLayoutItem) -> None:
+    """Make the layout view draw `item` again.
+
+    Setting a property (a label's alignment, text or text format) does not
+    repaint the item: QGIS's own widgets call `update()` after the change, and
+    the preview panel would otherwise keep drawing the old picture until
+    something else invalidated the item's cache."""
+    if not sip.isdeleted(item):
+        item.refresh()
+
+
 @contextlib.contextmanager
 def item_edit(layout: QgsLayout, item: QgsLayoutItem, text: str) -> Iterator[None]:
     """A change to one item as one undo step. A step that changed nothing is
@@ -207,3 +220,4 @@ def item_edit(layout: QgsLayout, item: QgsLayoutItem, text: str) -> Iterator[Non
         yield
     finally:
         layout.undoStack().endCommand()
+        redraw(item)

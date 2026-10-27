@@ -22,6 +22,7 @@ from qgis.core import (
 
 from ...core.layout_reader import _POINTS_PER_UNIT, chosen_style_property
 from ..i18n import tr
+from .layout_items import redraw
 
 #: What one press of the smaller / bigger button changes, in points.
 STEP_POINTS = 1.0
@@ -85,6 +86,7 @@ def set_text_size(layout: QgsLayout, item: QgsLayoutItem, points: float) -> bool
             _set_legend_size(item, target / current, target)
     finally:
         stack.endCommand()
+        redraw(item)
     return True
 
 
