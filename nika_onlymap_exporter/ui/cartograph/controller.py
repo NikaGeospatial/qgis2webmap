@@ -1751,6 +1751,22 @@ class CartographController:
             self._on_build_failed(str(exc), traceback.format_exc())
             return
 
+        # The web page's legend is taller than QGIS's: the legend boxes are
+        # fitted to it here, in the layout itself, so the preview and the
+        # page agree. Still the GUI thread, and not an edit of the user's:
+        # the fit is not written back as a change to save again.
+        self._exporting = True
+        try:
+            prepared = cartograph_export.fit_legends_to_layout(
+                layout, project, prepared, report
+            )
+        except Exception as exc:
+            self._on_build_failed(str(exc), traceback.format_exc())
+            return
+        finally:
+            self._exporting = False
+        self._pending_spec = prepared.spec
+
         # The dialog's own writer, so a licence key the user set reaches the
         # cartograph's live frames exactly as it reaches a web map.
         writer = self.dialog._writer()
