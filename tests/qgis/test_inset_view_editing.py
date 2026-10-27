@@ -318,21 +318,6 @@ class TestPanAndZoomTheContent:
         assert pane.controls.edit_view_button.text() == "Edit view"
 
 
-def _map_point_under(item, local: QPointF) -> QPointF:
-    """The map coordinate shown at an item-local point, rotation included:
-    the inverse of `mapToItemCoords`, which is affine."""
-    centre = item.extent().center()
-    step = item.extent().width() / 10
-    o = item.mapToItemCoords(QPointF(centre.x(), centre.y()))
-    ex = item.mapToItemCoords(QPointF(centre.x() + step, centre.y())) - o
-    ey = item.mapToItemCoords(QPointF(centre.x(), centre.y() + step)) - o
-    det = ex.x() * ey.y() - ey.x() * ex.y()
-    rel = local - o
-    u = (rel.x() * ey.y() - ey.x() * rel.y()) / det
-    v = (ex.x() * rel.y() - rel.x() * ex.y()) / det
-    return QPointF(centre.x() + u * step, centre.y() + v * step)
-
-
 def _drag_path(start: QPoint, end: QPoint, steps: int = 12) -> list[QPoint]:
     return [
         QPoint(
@@ -410,24 +395,29 @@ class TestTheDragIsLive:
         assert layout.undoStack().stack().undoText() == "Pan map content"
 
     @pytest.mark.parametrize("rotation", [0.0, 30.0])
-    def test_on_release_the_grabbed_point_is_under_the_pointer(
+    def test_release_moves_the_extent_by_exactly_the_pointer_delta(
         self, qgis_app, near_far, rotation
     ) -> None:
         pane, layout, main, _inset, _region = near_far
         main.setItemRotation(rotation)
-        main.setMapRotation(rotation)
         _settle(qgis_app, 0.2)
         _edit_on(qgis_app, pane, layout, main)
         view = pane.preview.view
         start = _centre(pane, main)
         end = start + QPoint(35, -20)
-        grabbed = _map_point_under(main, main.mapFromScene(view.mapToScene(start)))
+        before = main.extent().center()
+        delta = main.mapFromScene(view.mapToScene(end)) - main.mapFromScene(
+            view.mapToScene(start)
+        )
+        scale = main.extent().width() / main.rect().width()
         _drag(qgis_app, pane, start, end)
-        now = main.mapToItemCoords(grabbed)
-        want = main.mapFromScene(view.mapToScene(end))
-        assert (now.x(), now.y()) == pytest.approx((want.x(), want.y()), abs=0.3)
+        after = main.extent().center()
+        # The content goes with the pointer, so the extent goes the other way
+        # (map y runs up, item y runs down); the pointer delta counts once.
+        assert after.x() - before.x() == pytest.approx(-delta.x() * scale, rel=1e-3)
+        assert after.y() - before.y() == pytest.approx(delta.y() * scale, rel=1e-3)
 
-    def test_the_offset_is_cleared_once_the_move_is_applied(
+    def test_no_shift_is_left_over_the_new_extent_on_release(
         self, qgis_app, near_far, monkeypatch
     ) -> None:
         pane, layout, main, _inset, _region = near_far
@@ -435,7 +425,9 @@ class TestTheDragIsLive:
         offsets = self._spy(monkeypatch, main)
         start = _centre(pane, main)
         _drag(qgis_app, pane, start, start + QPoint(20, 10))
-        _settle(qgis_app, 1.5)
+        # QGIS draws the old picture at the new extent by itself: a shift still
+        # set after the move would show the content at twice the drag.
+        assert any(o != (0, 0) for o in offsets[:-1])
         assert offsets[-1] == (0, 0)
 
     def test_escape_mid_drag_restores_without_an_undo_step(

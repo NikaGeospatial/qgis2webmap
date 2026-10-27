@@ -22,7 +22,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import contextlib
 import time
 
 from qgis.core import QgsLayoutItemMap
@@ -36,7 +35,6 @@ from qgis.PyQt.QtCore import (
     QRect,
     QRectF,
     Qt,
-    QTimer,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
@@ -60,8 +58,6 @@ WHEEL_PIXELS_PER_NOTCH = 60.0
 #: A press this close outside the frame still counts as on it, so the
 #: select tool's resize handles round the frame cannot be reached in this mode.
 _HANDLE_REACH_PX = 10
-#: A shifted picture held over a render is dropped after this long regardless.
-_HOLD_PREVIEW_MS = 15000
 #: First merge id of the wheel bursts; QGIS's own item commands use small ids.
 _BURST_ID_BASE = 0x4E4B0000
 
@@ -120,7 +116,6 @@ class ContentEditor(QObject):
         self._map: QgsLayoutItemMap | None = None
         self._start_scene: QPointF | None = None
         self._offset = QPointF(0, 0)
-        self._held: QgsLayoutItemMap | None = None
         self._dragging = False
         self._burst_id = _BURST_ID_BASE
         self._burst_at = 0.0
@@ -250,7 +245,6 @@ class ContentEditor(QObject):
         item, layout = self._map, self._view.currentLayout()
         if item is None or layout is None:
             return
-        self._settle_preview()
         self._dragging = True
         self._start_scene = QPointF(self._view.mapToScene(at))
         self._offset = QPointF(0, 0)
@@ -279,41 +273,22 @@ class ContentEditor(QObject):
         self._dragging = False
         item, layout = self._map, self._view.currentLayout()
         offset, self._start_scene, self._offset = self._offset, None, QPointF(0, 0)
-        alive = item is not None and not sip.isdeleted(item)
-        if apply and alive and layout is not None and not offset.isNull():
-            assert item is not None
-            stack = layout.undoStack()
-            stack.beginCommand(item, tr("Pan map content"))
-            # The content follows the pointer: the extent moves the other way.
-            item.moveContent(-offset.x(), -offset.y())
-            stack.endCommand()
-            # The old picture stays shifted until the new one is drawn, so
-            # the content never snaps back for the length of a render.
-            self._hold_preview(item, offset)
-            self.edited.emit()
-        elif alive and item is not None:
+        if item is not None and not sip.isdeleted(item):
+            # As the layout designer's tool does: the preview shift goes first,
+            # then the one real move; QGIS draws the cached picture at the new
+            # extent itself, so a shift kept over the render would count twice.
             item.setMoveContentPreviewOffset(0, 0)
-            item.update()
+            if apply and layout is not None and not offset.isNull():
+                stack = layout.undoStack()
+                stack.beginCommand(item, tr("Pan map content"))
+                # The content follows the pointer: the extent moves the other way.
+                item.moveContent(-offset.x(), -offset.y())
+                stack.endCommand()
+                self.edited.emit()
+            else:
+                item.update()
         if self.active and not sip.isdeleted(self._view):
             self._view.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
-
-    def _hold_preview(self, item: QgsLayoutItemMap, offset: QPointF) -> None:
-        self._settle_preview()
-        item.setMoveContentPreviewOffset(offset.x(), offset.y())
-        item.update()
-        self._held = item
-        item.previewRefreshed.connect(self._settle_preview)
-        QTimer.singleShot(_HOLD_PREVIEW_MS, self._settle_preview)
-
-    def _settle_preview(self, *_args: object) -> None:
-        """Drop the shifted picture held over a render (the render is in)."""
-        item, self._held = self._held, None
-        if item is None or sip.isdeleted(item):
-            return
-        with contextlib.suppress(TypeError):
-            item.previewRefreshed.disconnect(self._settle_preview)
-        item.setMoveContentPreviewOffset(0, 0)
-        item.update()
 
     # ---- wheel -------------------------------------------------------------
 
@@ -325,7 +300,6 @@ class ContentEditor(QObject):
         steps = _wheel_steps(event)
         if steps == 0 or self._dragging:
             return True  # held still: the wheel never scrolls what is behind
-        self._settle_preview()
         factor = WHEEL_NOTCH_FACTOR**steps
         anchor = item.mapFromScene(QPointF(self._view.mapToScene(at)))
         stack = layout.undoStack()
