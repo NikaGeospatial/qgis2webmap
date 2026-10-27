@@ -584,12 +584,13 @@ def ask_print_settings(
 
 
 def ask_native_pdf_differences(
-    *, attribution: str, themed: bool, parent: QWidget | None = None
+    *, attribution: str, parent: QWidget | None = None
 ) -> str | None:
     """Before a CMYK/ICC export through QGIS: what the QGIS PDF will not carry
     from the cartograph page. `NATIVE_CONTINUE`, `NATIVE_BROWSER` or
     `NATIVE_ADD_ATTRIBUTION` (offered only when there is an attribution), or
-    None when cancelled. The page title is not listed: the QGIS PDF applies it."""
+    None when cancelled. The title and the theme are not listed: they are part
+    of the layout, so the QGIS PDF carries them."""
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Information)
     box.setWindowTitle(tr("Export PDF"))
@@ -602,8 +603,6 @@ def ask_native_pdf_differences(
                 "a label with it."
             )
         )
-    if themed:
-        lines.append("- " + tr("The page theme is not applied; the PDF is not themed."))
     box.setText("\n".join(lines))
     box.setInformativeText(
         tr(

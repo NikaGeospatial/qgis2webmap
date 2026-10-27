@@ -67,6 +67,19 @@ from ...core.fidelity_summary import (
 )
 from ...core.layout_identity import existing_key, layout_key
 from ...core.layout_templates import get_template
+from ...core.page_settings import (
+    adopt_theme,
+    apply_theme,
+    apply_theme_quietly,
+    attribution_in_layout,
+    attribution_state,
+    current_theme,
+    has_theme_record,
+    set_attribution,
+    set_title,
+    set_title_quietly,
+    title_state,
+)
 from ...core.portable_names import avoid_windows_reserved
 from ...core.print_settings import PrintSettings, apply_to_spec
 from ...core.save_folders import cartographs_folder, unused_path
@@ -90,6 +103,12 @@ from .callouts import migrate_project_figures
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
 from .layer_membership import LayerMembership
+from .layout_header import (
+    LayoutChooserDialog,
+    LayoutEntry,
+    LayoutHeader,
+    layout_metadata,
+)
 from .layout_page import (
     PagePane,
     RenameLayoutDialog,
@@ -97,16 +116,9 @@ from .layout_page import (
 )
 from .panel_section import PanelSection
 from .stacked_scroll import StackedScrolling
-from . import layout_thumbnails
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-from .layout_header import (
-    LayoutChooserDialog,
-    LayoutEntry,
-    LayoutHeader,
-    layout_metadata,
-)
     from collections.abc import Sequence
 
     # QtWidgets on Qt 5, QtGui on Qt 6.
@@ -127,6 +139,12 @@ from .layout_header import (
 AUTOSAVE_DEBOUNCE_MS = 600
 #: How long a restyle burst must rest before the preview is redrawn.
 REFRESH_DEBOUNCE_MS = 120
+
+# A layout settled on show is photographed for the chooser after this long,
+# and again this many times (as often) while a map on it is still drawing.
+THUMBNAIL_DELAY_MS = 1500
+THUMBNAIL_TRIES = 6
+
 STATUS_TICK_MS = 1000
 # How stale "Saved 3 min ago" may get. Every change to what the line says
 # (a save, an edit, an error) refreshes it at once; this only moves the age on.
@@ -139,12 +157,6 @@ DPI_CHOICES = (150, 200, 300)
 # the order the Theme box offers them.
 # The panel beside the page preview: wide enough for the layer list's four
 # columns and a path's tail, narrow enough that the page keeps most of the
-
-# A layout settled on show is photographed for the chooser after this long,
-# and again this many times (as often) while a map on it is still drawing.
-THUMBNAIL_DELAY_MS = 1500
-THUMBNAIL_TRIES = 6
-
 # screen. The user can drag it wider; never narrower than the minimum.
 PANEL_WIDTH = 380
 PANEL_MIN_WIDTH = 320
@@ -325,6 +337,14 @@ class CartographController:
         self._refresh_timer.setInterval(REFRESH_DEBOUNCE_MS)
         self._refresh_timer.timeout.connect(self._refresh_current_layout)
 
+        # The layout view's pixels, kept for the chooser once a layout has
+        # settled on show; retried while a map on it is still drawing.
+        self._thumbnail_timer = QTimer(dialog)
+        self._thumbnail_timer.setSingleShot(True)
+        self._thumbnail_timer.setInterval(THUMBNAIL_DELAY_MS)
+        self._thumbnail_timer.timeout.connect(self._thumbnail_tick)
+        self._thumbnail_tries = 0
+
         self._status_timer = QTimer(dialog)
         self._status_timer.setInterval(STATUS_TICK_MS)
         self._status_timer.timeout.connect(self._on_status_tick)
@@ -337,14 +357,6 @@ class CartographController:
     # ---- Lifecycle --------------------------------------------------------
 
     def showing(self) -> None:
-        # The layout view's pixels, kept for the chooser once a layout has
-        # settled on show; retried while a map on it is still drawing.
-        self._thumbnail_timer = QTimer(dialog)
-        self._thumbnail_timer.setSingleShot(True)
-        self._thumbnail_timer.setInterval(THUMBNAIL_DELAY_MS)
-        self._thumbnail_timer.timeout.connect(self._thumbnail_tick)
-        self._thumbnail_tries = 0
-
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
         self._status_age_timer.start()
@@ -374,6 +386,7 @@ class CartographController:
         from `MainDialog._shutdown`, alongside the web map's own teardown."""
         self._autosave_timer.stop()
         self._refresh_timer.stop()
+        self._thumbnail_timer.stop()
         self._status_timer.stop()
         self._status_age_timer.stop()
         # Same rule as the web map's job (`MainDialog._shutdown`): a build
@@ -386,7 +399,6 @@ class CartographController:
                 with contextlib.suppress(TypeError, RuntimeError):
                     signal.disconnect()
             job.cancel()
-        self._thumbnail_timer.stop()
             with contextlib.suppress(RuntimeError):
                 job.wait(SHUTDOWN_WAIT_MS)
         if self._preview_server is not None:
@@ -496,36 +508,24 @@ class CartographController:
         sections_column.setContentsMargins(0, 4, 6, 0)
         sections_column.setSpacing(2)
         self.page_section = PanelSection(
-            "page", tr("Browser appearance"), sections, open_by_default=True
+            "page", tr("Page settings"), sections, open_by_default=True
         )
         self.page_section.setToolTip(
             tr(
-                "Settings for the web page only. The layout itself is edited in "
-                "the preview and the layout editor."
+                "The page's title, attribution and colour theme. They are part "
+                "of this layout and show in the preview, the web page and the PDF."
             )
         )
-        # Next to the heading, before the fields: these are web-page-only
-        # settings, which the QGIS layout preview beside the panel never shows.
-        page_note = FittedLabel(
-            tr(
-                "Only the web page changes, not the layout preview here. "
-                "See these with Preview in browser."
-            ),
-            self.page_section.body,
-        )
-        page_note.setWordWrap(True)
-        page_note.setProperty("role", "hint")
-        self.page_page_note = page_note
-        self.page_section.body_layout.addWidget(page_note)
         page_form = QFormLayout()
         page_form.setContentsMargins(0, 0, 0, 0)
         page_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         page_form.setVerticalSpacing(4)
         self.title_edit = QLineEdit(self.page_section.body)
         self.title_edit.setPlaceholderText(tr("The project title"))
-        self.title_edit.setToolTip(
-            tr("Shown wherever the layout uses the project title. Blank keeps it.")
+        self._title_tip = tr(
+            "Shown wherever the layout uses the project title. Blank keeps it."
         )
+        self.title_edit.setToolTip(self._title_tip)
         self.title_edit.textEdited.connect(self._on_page_edited)
         page_form.addRow(tr("Title"), self.title_edit)
         self.attribution_edit = QLineEdit(self.page_section.body)
@@ -538,6 +538,12 @@ class CartographController:
         self.theme_combo.currentIndexChanged.connect(self._on_page_edited)
         page_form.addRow(tr("Theme"), self.theme_combo)
         self.page_section.body_layout.addLayout(page_form)
+        # Why a field cannot be edited here (the page text is an expression, or
+        # the layout has no such text); empty and hidden otherwise.
+        self.page_hint = FittedLabel("", self.page_section.body)
+        self.page_hint.setProperty("role", "hint")
+        self.page_hint.setVisible(False)
+        self.page_section.body_layout.addWidget(self.page_hint)
         self.frames_section = PanelSection("frames", tr("Map frames"), sections)
         self.frames_section.body_layout.addWidget(self.build_frames_tab())
         self.layers_section = PanelSection("layers", tr("Layers"), sections)
@@ -890,8 +896,9 @@ class CartographController:
 
     def _carry_in_page_fields(self, name: str, built: BuiltLayout) -> None:
         """The imported cartograph's title, attribution and theme become the
-        new layout's Browser appearance, so Preview and the next save keep
-        them. A field already filled in for that layout name is left alone."""
+        new layout's Page settings, so Preview and the next save keep them. A
+        field already filled in for that layout name is left alone. The layout
+        is already drawn in the theme, so it is recorded, not restyled."""
         from ...core.cartograph_ir import CARTOGRAPH_THEMES
 
         page = self.state.page_choice(name)
@@ -901,6 +908,7 @@ class CartographController:
             page.attribution = built.page_attribution.strip()
         if page.theme == "default" and built.page_theme in CARTOGRAPH_THEMES:
             page.theme = built.page_theme or "default"
+            adopt_theme(built.layout, page.theme)
 
     def on_rename_layout(self) -> None:
         """Rename layout...: the layout shown, through QGIS's layout manager.
@@ -937,14 +945,6 @@ class CartographController:
         if name and self.project.layoutManager().layoutByName(name) is not None:
             self._select_layout(name)
 
-    def _on_file_edited(self, text: str) -> None:
-        # Whatever the footer said about the old file ("Opened ...") is not
-        # about this one.
-        self._clear_footer()
-        if self.state.cartograph_layout:
-            self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
-        self._on_cartograph_setting_changed()
-        self._update_share_enabled()
     def on_switch_layout(self) -> None:
         """Switch layout...: the chooser over every layout of the project. It
         shows names, a line of metadata and the thumbnails already taken; it
@@ -993,27 +993,96 @@ class CartographController:
         self._thumbnail_tries = 0
         self._thumbnail_timer.start()
 
+    def _on_file_edited(self, text: str) -> None:
+        # Whatever the footer said about the old file ("Opened ...") is not
+        # about this one.
+        self._clear_footer()
+        if self.state.cartograph_layout:
+            self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
+        self._on_cartograph_setting_changed()
+        self._update_share_enabled()
         self.update_window_title()
 
     def _on_page_edited(self, *_args: object) -> None:
+        """A Page settings field was edited: the layout takes the change as an
+        undo step, so the preview, the web page and the PDF all show it."""
+        layout = self._current_layout
         if not self.state.cartograph_layout or self._loading_page:
             return
         page = self.state.page_choice(self.state.cartograph_layout)
-        page.title = self.title_edit.text().strip()
-        page.attribution = self.attribution_edit.text().strip()
-        page.theme = self.theme_combo.currentData() or "default"
+        title = self.title_edit.text().strip()
+        attribution = self.attribution_edit.text().strip()
+        theme = self.theme_combo.currentData() or "default"
+        if layout is not None and not sip.isdeleted(layout):
+            if title != page.title:
+                set_title(layout, title, tr("Edit page title"))
+            if attribution != page.attribution:
+                set_attribution(layout, attribution, tr("Edit page attribution"))
+            if theme != page.theme:
+                apply_theme(layout, theme, tr("Change page theme"))
+        page.title, page.attribution, page.theme = title, attribution, theme
         self._update_section_summaries()
         self._on_cartograph_setting_changed()
 
-    def _load_page_fields(self) -> None:
-        """Show the selected layout's page fields without counting as edits."""
+    def _load_page_fields(self, *, migrate: bool = True) -> None:
+        """Show the selected layout's page fields, read from the layout, without
+        counting as edits. A layout last saved before the fields lived in it
+        is brought up to what was recorded for it (`migrate`, when the layout is
+        selected - not after an undo, which must be able to blank a field)."""
+        layout = self._current_layout
         page = self.state.page_choice(self.state.cartograph_layout)
+        hint = ""
+        title_dynamic = attribution_dynamic = False
         self._loading_page = True
         try:
-            self.title_edit.setText(page.title)
-            self.attribution_edit.setText(page.attribution)
-            index = self.theme_combo.findData(page.theme)
-            self.theme_combo.setCurrentIndex(max(index, 0))
+            if layout is not None and not sip.isdeleted(layout):
+                title = title_state(layout)
+                if (
+                    migrate
+                    and title.mode == "variable"
+                    and not title.value
+                    and page.title
+                ):
+                    # Saved before the title lived in the layout.
+                    set_title_quietly(layout, page.title)
+                    title = title_state(layout)
+                if migrate and not has_theme_record(layout) and page.theme != "default":
+                    apply_theme_quietly(layout, page.theme)
+                attribution = attribution_state(layout)
+                title_dynamic, attribution_dynamic = title.dynamic, attribution.dynamic
+                page.title = title.value
+                if attribution.mode == "item":
+                    page.attribution = attribution.value
+                page.theme = current_theme(layout)
+                if title_dynamic:
+                    hint = tr(
+                        "The title on this page is an expression, which is kept. "
+                        "Edit it on the page; this field sets the project title "
+                        "the page reads."
+                    )
+                elif attribution_dynamic:
+                    hint = tr(
+                        "The attribution on this page is an expression, which is "
+                        "kept. Edit it on the page."
+                    )
+                elif attribution.mode == "none":
+                    hint = tr(
+                        "This layout has no attribution text, so the attribution "
+                        "is for the web page only."
+                    )
+            if self.title_edit.text() != page.title:
+                self.title_edit.setText(page.title)
+            if self.attribution_edit.text() != page.attribution:
+                self.attribution_edit.setText(page.attribution)
+            self.theme_combo.setCurrentIndex(
+                max(self.theme_combo.findData(page.theme), 0)
+            )
+            self.attribution_edit.setEnabled(not attribution_dynamic)
+            self.page_hint.setText(hint)
+            self.page_hint.setVisible(bool(hint))
+            self.title_edit.setToolTip(
+                f"{self._title_tip}\n{hint}" if title_dynamic else self._title_tip
+            )
         finally:
             self._loading_page = False
 
@@ -1431,6 +1500,8 @@ class CartographController:
         # The same layout again (the tab re-shown, the list refreshed) keeps
         # its last save's status and report; only another layout starts over.
         switching = name != self._selected_name
+        if switching:
+            self._remember_thumbnail()
         self._selected_name = name
         self._disconnect_current_layout()
         manager = self.project.layoutManager()
@@ -1495,8 +1566,6 @@ class CartographController:
         else:
             self._last_saved_at = self._last_saved_bytes = None
         self._last_error = ""
-        if switching:
-            self._remember_thumbnail()
         self._last_summary = None
         self._frame_issue_counts = {}
         # A page asked for the layout left behind; this one did not ask, and
@@ -1542,6 +1611,11 @@ class CartographController:
             } != self._frame_identities:
                 self._refresh_frame_identities(items)
             self.membership.layout_changed()
+        # An undo, a redo or an edit on the page may have changed the title,
+        # the attribution or the theme: the fields show the layout's own.
+        self._load_page_fields(migrate=False)
+        self._update_layout_header()
+        self._schedule_thumbnail()
         self.schedule_autosave()
 
     def _update_file_default(self) -> None:
@@ -1605,8 +1679,6 @@ class CartographController:
         if runtime is None:
             self._cancel_waiting_pages()
             self._check_requested = False
-        self._update_layout_header()
-        self._schedule_thumbnail()
             self._update_status_label()
             self._sync_report_display()
             return
@@ -2546,7 +2618,6 @@ class CartographController:
             PrintPdfError,
             attribution_warning,
             export_print_pdf,
-            theme_warning,
         )
 
         if self._current_layout is None:
@@ -2565,8 +2636,13 @@ class CartographController:
             return
         page = self.state.page_choice(self.state.cartograph_layout)
         accepted: list[str] = []
-        themed = page.theme not in ("", "default")
-        if page.attribution or themed:
+        # The theme and a plain attribution text are part of the layout, so
+        # the PDF carries them; only an attribution with no text item on the
+        # page (or an expression there) is left out.
+        leaves_out = page.attribution and not attribution_in_layout(
+            self._current_layout
+        )
+        if leaves_out:
             from .print_settings_dialog import (
                 NATIVE_ADD_ATTRIBUTION,
                 NATIVE_BROWSER,
@@ -2575,7 +2651,7 @@ class CartographController:
             )
 
             answer = ask_native_pdf_differences(
-                attribution=page.attribution, themed=themed, parent=self.dialog
+                attribution=page.attribution, parent=self.dialog
             )
             if answer == NATIVE_BROWSER:
                 self._open_saved(path, "print=1")
@@ -2586,7 +2662,7 @@ class CartographController:
                 return
             # Told already (or, for the attribution, now in the layout): the
             # post-export line leaves these two out.
-            accepted = [attribution_warning(), theme_warning()]
+            accepted = [attribution_warning()]
         chosen, _ = QFileDialog.getSaveFileName(
             self.dialog,
             tr("Export PDF"),

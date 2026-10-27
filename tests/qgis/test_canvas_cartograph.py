@@ -102,7 +102,7 @@ class TestCanvasLayout:
             ("field-map", "Fieldbook"),
         ):
             result = cartograph_from_canvas(canvas, project, template_id=template_id)
-            assert result.layout.name() == f"{design} \u00b7 Survey"
+            assert result.layout.name() == f"Survey \u2014 {design}"
 
     def test_untitled_project(self, project, parcels) -> None:
         project.setTitle("")

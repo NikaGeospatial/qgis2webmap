@@ -1620,7 +1620,6 @@ class TestPrintSettings:
                 path=path,
                 warnings=(
                     print_pdf.attribution_warning(),
-                    print_pdf.theme_warning(),
                     "Only page 1 is printed.",
                 ),
             )
@@ -1655,26 +1654,37 @@ class TestPrintSettings:
         finally:
             dialog.close()
 
-    @pytest.mark.parametrize(
-        "page", [{"attribution": "Data: X"}, {"theme": "dark"}], ids=["attr", "theme"]
-    )
-    def test_native_pdf_asks_when_attribution_or_theme_is_set(
-        self, qgis_app, project, tmp_path, monkeypatch, page
+    def test_native_pdf_asks_when_the_attribution_has_no_text_on_the_page(
+        self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
         dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, **page
+            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
         )
         try:
             answer_with("continue")
             cartograph.on_export_pdf()
             assert len(asked) == 1
-            assert bool(asked[0]["attribution"]) == ("attribution" in page)
-            assert asked[0]["themed"] == ("theme" in page)
+            assert asked[0]["attribution"] == "Data: X"
             assert len(exports) == 1
             # Told in the dialog, so the post-export line does not repeat it.
             text = dialog.status_label.text()
             assert "Only page 1 is printed." in text
-            assert "attribution" not in text and "theme" not in text
+            assert "attribution" not in text
+        finally:
+            dialog.close()
+
+    def test_native_pdf_does_not_ask_about_a_theme_the_layout_carries(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
+            qgis_app, project, tmp_path, monkeypatch, theme="dark"
+        )
+        try:
+            answer_with("cancel")
+            cartograph.on_export_pdf()
+            assert asked == []
+            assert len(exports) == 1
+            assert "theme" not in dialog.status_label.text()
         finally:
             dialog.close()
 
@@ -1762,13 +1772,11 @@ class TestPrintSettings:
             ("Cancel", None),
         ):
             shown["want"], shown["pick"] = want, lambda box: None
-            assert psd.ask_native_pdf_differences(attribution="x", themed=True) == (
-                expected
-            )
+            assert psd.ask_native_pdf_differences(attribution="x") == expected
         assert "title" not in shown["text"].lower()
-        assert "attribution" in shown["text"] and "theme" in shown["text"]
+        assert "attribution" in shown["text"] and "theme" not in shown["text"]
         shown["want"] = "Continue"
-        psd.ask_native_pdf_differences(attribution="", themed=True)
+        psd.ask_native_pdf_differences(attribution="")
         assert "Add attribution to the layout" not in shown["buttons"]
 
     def test_print_settings_row_needs_a_layout(self, qgis_app, project) -> None:
@@ -3910,25 +3918,22 @@ class TestPanel:
         finally:
             dialog.close()
 
-    def test_page_section_groups_the_browser_only_fields(
+    def test_page_settings_section_has_title_attribution_theme_and_no_caveat(
         self, qgis_app, project
     ) -> None:
+        from qgis.PyQt.QtWidgets import QLabel
+
         dialog = _dialog(project)
         try:
             cartograph = dialog._cartograph
             section = cartograph.page_section
-            assert section.header.text() == "Browser appearance"
-            note = cartograph.page_page_note
-            assert "web page" in note.text()
-            assert "not the layout preview" in note.text()
-            body = section.body_layout
-            positions = {
-                body.itemAt(i).widget() or body.itemAt(i).layout(): i
-                for i in range(body.count())
-            }
-            fields = [item for item in positions if not hasattr(item, "text")]
-            assert fields
-            assert positions[note] < min(positions[f] for f in fields)
+            assert section.header.text() == "Page settings"
+            assert not hasattr(cartograph, "page_page_note")
+            assert "browser" not in section.toolTip().lower()
+            body = section.body
+            texts = [label.text() for label in body.findChildren(QLabel)]
+            assert {"Title", "Attribution", "Theme"} <= set(texts)
+            assert not any("Only the web page changes" in t for t in texts)
             assert cartograph.cartograph_preview_button.text() == "Preview in browser"
         finally:
             dialog.close()

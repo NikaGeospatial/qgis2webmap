@@ -168,7 +168,7 @@ def _guarded(function: Any, *args: Any) -> None:
     QGIS, so it is reported instead."""
     try:
         function(*args)
-    except Exception:  # noqa: BLE001
+    except Exception:
         traceback.print_exc()
 
 

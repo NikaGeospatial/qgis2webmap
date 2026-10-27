@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 """Page settings as edits to the QGIS layout: Title, Attribution and Theme.
 
 Copyright (C) 2026 NIKA
@@ -18,6 +19,13 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt.QtGui import QColor
+from test_cartograph_dialog import (
+    TestCanvasAndImport,
+    _add_layout,
+    _choose_cartograph,
+    _click_new_from_template,
+    picked_template,  # noqa: F401 - autouse fixture the dialog tests rely on
+)
 
 from nika_onlymap_exporter.core.layout_reader import TEXT_KIND_PROPERTY
 from nika_onlymap_exporter.core.page_settings import (
@@ -271,3 +279,171 @@ class TestTheme:
         apply_theme(survey.layout, "dark", "Change page theme")
         maps = [i for i in survey.layout.items() if isinstance(i, QgsLayoutItemMap)]
         assert len(maps) == 2
+
+
+def _template_dialog(project, picked_template, template="classic"):
+    picked_template.choice = (template, "A4", "landscape")
+    dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+    _choose_cartograph(dialog)
+    _click_new_from_template(dialog)
+    cartograph = dialog._cartograph
+    cartograph._autosave_timer.stop()
+    return dialog, cartograph, cartograph._current_layout
+
+
+def _type(edit, text) -> None:
+    from qgis.PyQt.QtTest import QTest
+
+    edit.clear()
+    edit.textEdited.emit("")
+    QTest.keyClicks(edit, text)
+
+
+class TestPageSettingsInTheDialog:
+    def test_typing_a_title_changes_the_preview_text_and_undo_takes_it_back(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        _add_layout(project, "Other", [("Map", "EPSG:4326")])
+        dialog, cartograph, layout = _template_dialog(project, picked_template)
+        try:
+            title = title_item(layout)
+            assert "@project_title" in title.text()
+            stack = layout.undoStack().stack()
+            before = stack.count()
+            _type(cartograph.title_edit, "Park atlas")
+            assert title.currentText() == "Park atlas"
+            assert title.text().count("@project_title") == 1
+            assert stack.count() == before + 1
+            other = project.layoutManager().layoutByName("Other")
+            assert _variable(other) is None
+            assert project.title() == "Parks"
+            stack.undo()
+            assert cartograph.title_edit.text() == ""
+            assert title.currentText() == "Parks"
+            stack.redo()
+            assert cartograph.title_edit.text() == "Park atlas"
+            # Switching away and back keeps it, from the layout itself.
+            cartograph.show_layout_named("Other")
+            assert cartograph.title_edit.text() == ""
+            cartograph.show_layout_named(layout.name())
+            assert cartograph.title_edit.text() == "Park atlas"
+        finally:
+            dialog.close()
+
+    def test_choosing_a_theme_restyles_the_layout_and_the_preview(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = _template_dialog(project, picked_template)
+        try:
+            view = cartograph.page_preview.view
+            dialog.show()
+            qgis_app.processEvents()
+            before = view.viewport().grab().toImage()
+            combo = cartograph.theme_combo
+            combo.setCurrentIndex(combo.findData("dark"))
+            assert current_theme(layout) == "dark"
+            page = layout.pageCollection().page(0)
+            assert page.pageStyleSymbol().color().name() == THEMES["dark"].page
+            after = view.viewport().grab().toImage()
+            assert after != before
+            stack = layout.undoStack().stack()
+            stack.undo()
+            assert cartograph.theme_combo.currentData() == "default"
+            assert current_theme(layout) == "default"
+            stack.redo()
+            assert cartograph.theme_combo.currentData() == "dark"
+            for text in _texts(layout):
+                assert (
+                    surface_contrast(
+                        text.textFormat().color().name(), surface_of(layout, text)
+                    )
+                    >= MINIMUM_CONTRAST
+                )
+        finally:
+            dialog.close()
+
+    def test_the_section_and_its_caveat_are_gone(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, _layout = _template_dialog(project, picked_template)
+        try:
+            assert cartograph.page_section.header.text() == "Page settings"
+            assert not hasattr(cartograph, "page_page_note")
+        finally:
+            dialog.close()
+
+    def test_an_expression_title_is_explained_not_flattened(
+        self, qgis_app, project, picked_template
+    ) -> None:
+        dialog, cartograph, layout = _template_dialog(project, picked_template)
+        try:
+            title = title_item(layout)
+            title.setText("[% 'Sheet ' || @atlas_featurenumber %]")
+            cartograph._load_page_fields()
+            assert not cartograph.page_hint.isHidden()
+            assert "expression" in cartograph.page_hint.text()
+            _type(cartograph.title_edit, "Typed")
+            assert title.text() == "[% 'Sheet ' || @atlas_featurenumber %]"
+        finally:
+            dialog.close()
+
+    def test_a_layout_saved_before_gets_its_recorded_fields(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import save_state
+
+        layout = _add_layout(project, "Old", [("Map", "EPSG:4326")])
+        dialog = __import__("test_cartograph_dialog")._dialog(project)
+        try:
+            dialog.state.page_choice("Old").theme = "sepia"
+            save_state(project, dialog.state)
+            _choose_cartograph(dialog)
+            cartograph = dialog._cartograph
+            cartograph._autosave_timer.stop()
+            cartograph.show_layout_named("Old")
+            assert current_theme(layout) == "sepia"
+            assert cartograph.theme_combo.currentData() == "sepia"
+        finally:
+            dialog.close()
+
+
+class TestSameEverywhere:
+    def test_the_web_page_and_the_pdf_carry_the_same_title_and_theme(
+        self, survey, project
+    ) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            export_layout_to_cartograph,
+        )
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+        from nika_onlymap_exporter.exporters.print_pdf import build_print_layout
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        runtime = RuntimeBundle(
+            javascript=b"//",
+            css=b"/**/",
+            version="0.12.0",
+            sha256="0" * 64,
+            cartograph_javascript=b"//",
+            cartograph_css=b"/**/",
+        )
+        set_title(survey.layout, "Park atlas", "Edit page title")
+        apply_theme(survey.layout, "dark", "Change page theme")
+        # The dialog passes the page title as the document's title, as here.
+        html = export_layout_to_cartograph(
+            survey.layout,
+            project,
+            runtime,
+            FidelityReportBuilder(),
+            static_dpi=50,
+            title_override=title_state(survey.layout).value,
+        )
+        assert "Park atlas" in html
+        assert THEMES["dark"].page in html.lower()
+        copy = build_print_layout(survey.layout, PrintSettings(bleed="none"))
+        assert (
+            copy.pageCollection().page(0).pageStyleSymbol().color().name()
+            == THEMES["dark"].page
+        )
+        labels = [i for i in copy.items() if isinstance(i, QgsLayoutItemLabel)]
+        assert any(label.currentText() == "Park atlas" for label in labels)
