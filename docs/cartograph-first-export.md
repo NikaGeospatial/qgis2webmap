@@ -130,8 +130,9 @@ file back into a QGIS print layout.
 
 ## 4. Check where it saves
 
-The foot of the panel names the cartograph file: the file name in bold, its
-folder under it, and **Change...** and **Show in folder** beside them. By
+The bottom row of the window names the cartograph file: the file name in bold
+(hover it for the full path), then how the save went, then **Change...** and
+**Show in folder**, with **Close** at the far right. By
 default it is in **Documents/QGIS2WebMap/Cartographs**, named after the
 project and the layout - `parcel-survey-Parcel-survey.html` for a layout
 called *Parcel survey* in `parcel-survey.qgz`. If that name is taken, the new
@@ -143,7 +144,7 @@ that has never been saved. Press **Change...** to put the file somewhere else.
 There is **no Export button**, on purpose. The cartograph is a file that is
 always up to date: about half a second after any change - in the panel, in
 the layout itself, or to a layer's style or data in QGIS - the plugin
-rewrites it. The line under the file name says how it went:
+rewrites it. The line beside the file name says how it went:
 
 | It says | It means |
 |---|---|
@@ -151,7 +152,7 @@ rewrites it. The line under the file name says how it went:
 | *Saved just now · 3.3 MB* | The file on disk matches what you see |
 | A sentence starting *Could not...* | The save failed, and why. The previous file is left untouched |
 
-![The foot of the panel: the file name in bold, its folder, Change... and Show in folder, and the line "Saved 4 s ago · 3.3 MB" highlighted.](images/cartograph-02-saved.png)
+![The bottom row: the file name in bold, the line "Saved 4 s ago · 3.3 MB" highlighted, then Change... and Show in folder.](images/cartograph-02-saved.png)
 
 A save writes to a temporary file and swaps it in, so closing QGIS mid-save
 never leaves half a file behind. The first save on a computer may ask to
