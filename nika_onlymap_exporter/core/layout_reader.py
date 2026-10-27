@@ -2664,13 +2664,18 @@ def _read_label(
         report.preserved(label, "Label preserved.")
 
     style = _label_style(item, label, report)
+    kind = _text_kind(item)
+    # A regular weight is the runtime's default for plain text, so it is left
+    # out; a title's default is the theme's heavy one, so a regular title must
+    # say so or the page shows it bold while QGIS draws it regular.
+    weight = style.weight or (REGULAR_WEIGHT if kind == "title" else None)
     return TextSpec(
         id=_eid("label", item.uuid()),
         box=_box(item, converter),
         body=body,
-        kind=_text_kind(item),
+        kind=kind,
         font_size=style.font_size,
-        weight=style.weight,
+        weight=weight,
         align=style.align,
         font=style.font,
         color=style.color,
@@ -2831,6 +2836,10 @@ def _label_style(
         color=_css_color(text_format.color()),
         bg=bg,
     )
+
+
+#: The CSS weight written for a regular title (see the label's `TextSpec`).
+REGULAR_WEIGHT = "400"
 
 
 def _css_font_weight(font: QFont) -> str | None:

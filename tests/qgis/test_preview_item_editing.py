@@ -315,7 +315,7 @@ class TestTextControls:
         # A legend editor that has been opened once remains a child of its
         # stack. Its hidden page must not take room away from the map.
         editor = QWidget(controls.legend_page)
-        editor.setMinimumHeight(240)
+        editor.setMinimumHeight(600)
         controls.legend_slot.addWidget(editor)
         controls.pages.setCurrentWidget(controls.legend_page)
         _settle(qgis_app, 0.05)

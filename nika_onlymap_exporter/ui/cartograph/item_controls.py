@@ -37,6 +37,8 @@ from qgis.core import (
     QgsLayoutItemMap,
     QgsLayoutItemPicture,
     QgsLayoutItemScaleBar,
+    QgsReadWriteContext,
+    QgsTextFormat,
 )
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QEvent, QObject, QSettings, Qt, pyqtSignal
@@ -69,6 +71,7 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from qgis.PyQt.QtXml import QDomDocument
 
 from ...core.locator_context import (
     draw_quietly,
@@ -243,6 +246,34 @@ class _ColourButton(QToolButton):
         if chosen.isValid() and chosen != self._colour:
             self.set_colour(chosen)
             self.chosen.emit(chosen)
+
+
+def with_bold(text_format: QgsTextFormat, bold: bool) -> QgsTextFormat:
+    """`text_format` with its lettering bold or regular.
+
+    The weight lives in the font. `QgsTextFormat.setForcedBold` is never
+    called: whatever it is given, `forcedBold()` then reads True for good, so
+    "regular" could not be set again and the item stayed bold on reading
+    (which is why the B button took two clicks to turn off, and a regular
+    text still exported as bold). A format that already carries the flag is
+    rebuilt without it.
+    """
+    font = text_format.font()
+    font.setBold(bold)
+    text_format.setFont(font)
+    if not bold and getattr(text_format, "forcedBold", lambda: False)():
+        document = QDomDocument()
+        element = text_format.writeXml(document, QgsReadWriteContext())
+        style = (
+            element
+            if element.tagName() == "text-style"
+            else element.firstChildElement("text-style")
+        )
+        style.setAttribute("forcedBold", "0")
+        cleared = QgsTextFormat()
+        cleared.readXml(element, QgsReadWriteContext())
+        text_format = cleared
+    return text_format
 
 
 def is_bold(item: QgsLayoutItemLabel) -> bool:
@@ -1024,13 +1055,7 @@ class ContextControls(QFrame):
         ):
             return
         with item_edit(self._layout, item, tr("Change text weight")):
-            text_format = item.textFormat()
-            font = text_format.font()
-            font.setBold(bold)
-            text_format.setFont(font)
-            if hasattr(text_format, "setForcedBold"):
-                text_format.setForcedBold(bold)
-            item.setTextFormat(text_format)
+            item.setTextFormat(with_bold(item.textFormat(), bold))
         self.edited.emit()
 
     def _on_colour(self, colour: QColor) -> None:

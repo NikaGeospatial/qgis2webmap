@@ -147,6 +147,38 @@ class TestLabelStyle:
         text, _ = self._text(project, configure)
         assert text.weight == css
 
+    def test_a_regular_title_says_so_and_a_bold_one_says_bold(self, project) -> None:
+        """The runtime's theme draws a title heavy unless told otherwise."""
+
+        def regular(label):
+            label.setCustomProperty("carto/kind", "title")
+
+        def bold(label):
+            regular(label)
+            text_format = label.textFormat()
+            font = text_format.font()
+            font.setBold(True)
+            text_format.setFont(font)
+            label.setTextFormat(text_format)
+
+        from nika_onlymap_exporter.core.layout_reader import TEXT_KIND_PROPERTY
+
+        def titled(configure):
+            def apply(label):
+                configure(label)
+                label.setCustomProperty(TEXT_KIND_PROPERTY, "title")
+
+            return apply
+
+        text, _ = self._text(project, titled(lambda label: None))
+        assert (text.kind, text.weight) == ("title", "400")
+        text, _ = self._text(project, titled(bold))
+        assert (text.kind, text.weight) == ("title", "bold")
+
+    def test_a_regular_plain_text_leaves_the_weight_out(self, project) -> None:
+        text, _ = self._text(project, lambda label: None)
+        assert (text.kind, text.weight) == ("text", None)
+
     def test_millimetre_sizes_become_points(self, project) -> None:
         def configure(label):
             text_format = label.textFormat()
