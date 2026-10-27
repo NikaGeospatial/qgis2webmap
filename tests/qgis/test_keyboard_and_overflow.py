@@ -236,7 +236,7 @@ def test_the_cartograph_layers_tree_fits_its_panel(qgis_app, project, tmp_path) 
     try:
         _choose_cartograph(dialog)
         cartograph = dialog._cartograph
-        cartograph.layout_combo.setCurrentText(built.layout.name())
+        cartograph.show_layout_named(built.layout.name())
         dialog.show()
         cartograph.layers_section.set_open(True)
         tree = dialog.layer_tree

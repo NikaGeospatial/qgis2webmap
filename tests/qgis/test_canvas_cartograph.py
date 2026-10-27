@@ -83,9 +83,9 @@ class TestCanvasLayout:
         self, project, parcels
     ) -> None:
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
-        assert result.layout.name() == "Daylight \u00b7 Survey"
+        assert result.layout.name() == "Survey \u2014 Daylight"
         assert (
-            project.layoutManager().layoutByName("Daylight \u00b7 Survey")
+            project.layoutManager().layoutByName("Survey \u2014 Daylight")
             is result.layout
         )
 
@@ -93,7 +93,7 @@ class TestCanvasLayout:
         canvas = _utm_canvas(parcels)
         cartograph_from_canvas(canvas, project)
         second = cartograph_from_canvas(canvas, project)
-        assert second.layout.name() == "Daylight \u00b7 Survey (2)"
+        assert second.layout.name() == "Survey \u2014 Daylight (2)"
 
     def test_the_name_says_which_design_the_layout_is(self, project, parcels) -> None:
         canvas = _utm_canvas(parcels)
@@ -107,7 +107,7 @@ class TestCanvasLayout:
     def test_untitled_project(self, project, parcels) -> None:
         project.setTitle("")
         result = cartograph_from_canvas(_utm_canvas(parcels), project)
-        assert result.layout.name() == "Daylight \u00b7 Untitled map"
+        assert result.layout.name() == "Untitled map \u2014 Daylight"
         assert not any(item.id == "title" for item in result.plan.items)
 
     def test_map_item_shows_the_canvas_view(self, project, parcels) -> None:

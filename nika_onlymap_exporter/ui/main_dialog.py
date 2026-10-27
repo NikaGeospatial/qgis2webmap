@@ -3474,7 +3474,7 @@ class MainDialog(QDialog):
         """
         self.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
         if layout_name:
-            self._cartograph.layout_combo.setCurrentText(layout_name)
+            self._cartograph.show_layout_named(layout_name)
 
     def open_on_web_map(self) -> None:
         """Switch to Web map - the plugin's "Create web map" entry point."""

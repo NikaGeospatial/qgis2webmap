@@ -45,7 +45,6 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QTabWidget,
     QToolButton,
@@ -66,6 +65,7 @@ from ...core.fidelity_summary import (
     strip_message,
     summarise,
 )
+from ...core.layout_identity import existing_key, layout_key
 from ...core.layout_templates import get_template
 from ...core.portable_names import avoid_windows_reserved
 from ...core.print_settings import PrintSettings, apply_to_spec
@@ -91,17 +91,22 @@ from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
 from .layer_membership import LayerMembership
 from .layout_page import (
-    LayoutPicker,
     PagePane,
     RenameLayoutDialog,
     SaveLocation,
-    new_layout_button,
 )
 from .panel_section import PanelSection
 from .stacked_scroll import StackedScrolling
+from . import layout_thumbnails
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+from .layout_header import (
+    LayoutChooserDialog,
+    LayoutEntry,
+    LayoutHeader,
+    layout_metadata,
+)
     from collections.abc import Sequence
 
     # QtWidgets on Qt 5, QtGui on Qt 6.
@@ -134,6 +139,12 @@ DPI_CHOICES = (150, 200, 300)
 # the order the Theme box offers them.
 # The panel beside the page preview: wide enough for the layer list's four
 # columns and a path's tail, narrow enough that the page keeps most of the
+
+# A layout settled on show is photographed for the chooser after this long,
+# and again this many times (as often) while a map on it is still drawing.
+THUMBNAIL_DELAY_MS = 1500
+THUMBNAIL_TRIES = 6
+
 # screen. The user can drag it wider; never narrower than the minimum.
 PANEL_WIDTH = 380
 PANEL_MIN_WIDTH = 320
@@ -326,6 +337,14 @@ class CartographController:
     # ---- Lifecycle --------------------------------------------------------
 
     def showing(self) -> None:
+        # The layout view's pixels, kept for the chooser once a layout has
+        # settled on show; retried while a map on it is still drawing.
+        self._thumbnail_timer = QTimer(dialog)
+        self._thumbnail_timer.setSingleShot(True)
+        self._thumbnail_timer.setInterval(THUMBNAIL_DELAY_MS)
+        self._thumbnail_timer.timeout.connect(self._thumbnail_tick)
+        self._thumbnail_tries = 0
+
         """The dialog just switched into Cartograph. Catch up on the project."""
         self._status_timer.start()
         self._status_age_timer.start()
@@ -367,6 +386,7 @@ class CartographController:
                 with contextlib.suppress(TypeError, RuntimeError):
                     signal.disconnect()
             job.cancel()
+        self._thumbnail_timer.stop()
             with contextlib.suppress(RuntimeError):
                 job.wait(SHUTDOWN_WAIT_MS)
         if self._preview_server is not None:
@@ -426,39 +446,24 @@ class CartographController:
         layout_heading = QLabel(tr("Print layout"), panel)
         layout_heading.setProperty("role", "panelHeading")
         column.addWidget(layout_heading)
-        picker_row = QHBoxLayout()
-        picker_row.setSpacing(6)
-        self.layout_combo = LayoutPicker(panel)
-        self.layout_combo.currentTextChanged.connect(self._on_layout_combo_changed)
-        picker_row.addWidget(self.layout_combo, 1)
-        # Only existing layouts are listed above; this renames the one shown.
-        self.rename_layout_button = QToolButton(panel)
-        self.rename_layout_button.setText(tr("Rename..."))
-        self.rename_layout_button.setProperty("role", "secondary")
-        self.rename_layout_button.setProperty("hasMenu", False)
-        self.rename_layout_button.setAccessibleName(tr("Rename layout"))
-        self.rename_layout_button.setToolTip(tr("Rename the print layout shown"))
-        self.rename_layout_button.clicked.connect(self.on_rename_layout)
-        picker_row.addWidget(self.rename_layout_button)
-        column.addLayout(picker_row)
-        # The one way to make a layout, always in sight: it makes ANOTHER
-        # layout from the canvas in the design picked; the layout shown above
-        # is not changed. Its menu holds the import.
-        self.new_from_template_button, self.import_action = new_layout_button(
-            panel, "secondary"
-        )
+        # The layout shown, in a header; making another is "New from
+        # template..." (it leaves this one as it is) and the rest of the
+        # project's layouts are behind "Switch layout...".
+        self.layout_header = LayoutHeader(panel)
+        self.layout_header.rename_requested.connect(self.on_rename_layout)
+        self.layout_header.import_requested.connect(self.on_import_cartograph)
+        self.layout_header.new_from_template_requested.connect(self.create_from_canvas)
+        self.layout_header.switch_requested.connect(self.on_switch_layout)
+        self.new_from_template_button = self.layout_header.new_from_template_button
+        self.import_action = self.layout_header.import_action
+        self.rename_action = self.layout_header.rename_action
         self._new_from_template_tip = tr(
             "New layout from template: pick a design and build another print "
             "layout from what the map canvas shows. The layout shown here is "
             "kept as it is."
         )
         self.new_from_template_button.setToolTip(self._new_from_template_tip)
-        self.new_from_template_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self.new_from_template_button.clicked.connect(self.create_from_canvas)
-        self.import_action.triggered.connect(self.on_import_cartograph)
-        column.addWidget(self.new_from_template_button)
+        column.addWidget(self.layout_header)
         # Which design the selected layout came from, for a template-made one.
         self.based_on_label = FittedLabel("", panel)
         self.based_on_label.setProperty("role", "hint")
@@ -921,14 +926,15 @@ class CartographController:
         """Select a layout that was just added to the project."""
         self.state.cartograph_layout = name
         self.refresh_layouts()
-        self.layout_combo.setCurrentText(name)
         save_state(self.project, self.state)
 
-    def _on_layout_combo_changed(self, _text: str) -> None:
-        # An action row passes through the list on its way to running; it
-        # is never a layout to select.
-        name = self.layout_combo.current_layout()
-        if name:
+    def current_layout_name(self) -> str:
+        """The name of the layout shown, or "" with none."""
+        return self._selected_name or ""
+
+    def show_layout_named(self, name: str) -> None:
+        """Open the project's layout called `name`; another name is ignored."""
+        if name and self.project.layoutManager().layoutByName(name) is not None:
             self._select_layout(name)
 
     def _on_file_edited(self, text: str) -> None:
@@ -939,6 +945,54 @@ class CartographController:
             self.state.cartograph_files[self.state.cartograph_layout] = text.strip()
         self._on_cartograph_setting_changed()
         self._update_share_enabled()
+    def on_switch_layout(self) -> None:
+        """Switch layout...: the chooser over every layout of the project. It
+        shows names, a line of metadata and the thumbnails already taken; it
+        never renders a layout."""
+        self._remember_thumbnail()
+        entries = [
+            LayoutEntry(
+                name=layout.name(),
+                metadata=layout_metadata(layout),
+                thumbnail=layout_thumbnails.recall(existing_key(layout)),
+            )
+            for layout in self.project.layoutManager().printLayouts()
+        ]
+        dialog = LayoutChooserDialog(entries, self.current_layout_name(), self.dialog)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen_name:
+            self.show_layout_named(dialog.chosen_name)
+
+    def _update_layout_header(self) -> None:
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            self.layout_header.show_layout("", "", len(self._listed_layouts))
+            return
+        self.layout_header.show_layout(
+            layout.name(), layout_metadata(layout), len(self._listed_layouts)
+        )
+
+    def _remember_thumbnail(self) -> bool:
+        """Keep the page as the preview shows it now, for the chooser. False
+        when it could not be taken yet (a map on it is still drawing)."""
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout) or self._shut_down:
+            return True
+        image = layout_thumbnails.grab_page(self.page_preview.view, layout)
+        if image is None:
+            return False
+        layout_thumbnails.remember(layout_key(self.project, layout), image)
+        return True
+
+    def _thumbnail_tick(self) -> None:
+        if self._remember_thumbnail() or self._thumbnail_tries >= THUMBNAIL_TRIES:
+            return
+        self._thumbnail_tries += 1
+        self._thumbnail_timer.start()
+
+    def _schedule_thumbnail(self) -> None:
+        self._thumbnail_tries = 0
+        self._thumbnail_timer.start()
+
         self.update_window_title()
 
     def _on_page_edited(self, *_args: object) -> None:
@@ -1293,7 +1347,7 @@ class CartographController:
     # ---- Layout selection -------------------------------------------------
 
     def refresh_layouts(self) -> None:
-        """Repopulate the Source combo from the project's print layouts."""
+        """Follow the project's print layouts: the header, and which one is shown."""
         # Key figures an older version kept as project variables become the
         # layouts' own (no change to what they show).
         migrate_project_figures(self.project)
@@ -1311,9 +1365,6 @@ class CartographController:
         for name in names:
             self._renamed.pop(name, None)
 
-        self.layout_combo.blockSignals(True)
-        self.layout_combo.set_layouts(names)
-        self.layout_combo.blockSignals(False)
         self.layout_empty_note.setVisible(not names)
 
         target = (
@@ -1321,7 +1372,6 @@ class CartographController:
             if self.state.cartograph_layout in names
             else (names[0] if names else "")
         )
-        self.layout_combo.select_layout(target)
         self._select_layout(target)
 
     def _on_layouts_changed(self, *_args: object) -> None:
@@ -1388,7 +1438,8 @@ class CartographController:
         self._current_layout = layout
         self.state.cartograph_layout = name or ""
         self.page_pane.show_layout(layout)
-        self.rename_layout_button.setEnabled(layout is not None)
+        self._update_layout_header()
+        self._schedule_thumbnail()
         for widget in self._layout_only:
             widget.setVisible(layout is not None)
         self._panel_filler.setVisible(layout is None)
@@ -1444,6 +1495,8 @@ class CartographController:
         else:
             self._last_saved_at = self._last_saved_bytes = None
         self._last_error = ""
+        if switching:
+            self._remember_thumbnail()
         self._last_summary = None
         self._frame_issue_counts = {}
         # A page asked for the layout left behind; this one did not ask, and
@@ -1552,6 +1605,8 @@ class CartographController:
         if runtime is None:
             self._cancel_waiting_pages()
             self._check_requested = False
+        self._update_layout_header()
+        self._schedule_thumbnail()
             self._update_status_label()
             self._sync_report_display()
             return

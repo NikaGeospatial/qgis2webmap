@@ -442,7 +442,7 @@ class TestFramesTab:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            assert cartograph.layout_combo.currentText() == "Survey"
+            assert cartograph.current_layout_name() == "Survey"
             assert len(cartograph._frame_rows) == 2
 
             names = {
@@ -478,9 +478,9 @@ class TestFramesTab:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            combo = cartograph.layout_combo
-            assert combo.currentText() == ""
-            assert combo.count() == 0
+            assert cartograph.current_layout_name() == ""
+            assert cartograph.layout_header.name_label.isHidden()
+            assert cartograph.layout_header.switch_button.isHidden()
             template = cartograph.page_preview.template_button
             assert template.text() == "New from template..."
             assert template.isVisibleTo(cartograph.page_preview)
@@ -674,7 +674,7 @@ class TestBuildThreadsAndJobs:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             monkeypatch.setattr(cartograph, "_open_url", lambda url: None)
-            cartograph.layout_combo.setCurrentText("A")
+            cartograph.show_layout_named("A")
             a = tmp_path / "a.html"
             cartograph.file_edit.setText(str(a))
             cartograph._on_file_edited(str(a))
@@ -691,7 +691,7 @@ class TestBuildThreadsAndJobs:
             assert _wait_for(qgis_app, lambda: server.revision > before)
             assert server.published()[0] == a.resolve()
 
-            cartograph.layout_combo.setCurrentText("B")
+            cartograph.show_layout_named("B")
             b = cartograph._current_path()
             assert _wait_for(qgis_app, lambda: b.exists())
             assert _wait_for(qgis_app, lambda: server.published()[0] == b.resolve())
@@ -725,7 +725,7 @@ class TestBuildThreadsAndJobs:
             cartograph = dialog._cartograph
             opened = []
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
-            cartograph.layout_combo.setCurrentText("A")
+            cartograph.show_layout_named("A")
             a = tmp_path / "a.html"
             cartograph.file_edit.setText(str(a))
             cartograph._on_file_edited(str(a))
@@ -739,7 +739,7 @@ class TestBuildThreadsAndJobs:
             cartograph._run_autosave()
             assert cartograph._job is not None
             cartograph.on_export_png()  # waits for A's save, then is dropped
-            cartograph.layout_combo.setCurrentText("B")
+            cartograph.show_layout_named("B")
             b_path = cartograph._current_path()
             cartograph._autosave_timer.stop()  # B's own save is not the point
             gate.set()
@@ -1381,7 +1381,7 @@ class TestCartographShareMenu:
             cartograph._on_file_edited(str(tmp_path / "elsewhere.html"))
             assert dialog.status_label.text() == ""
             cartograph.on_reveal()
-            cartograph.layout_combo.setCurrentText("Other")
+            cartograph.show_layout_named("Other")
             assert dialog.status_label.text() == ""
         finally:
             dialog.close()
@@ -1425,7 +1425,7 @@ class TestRealAutosave:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layout_combo.setCurrentText(survey.layout.name())
+            cartograph.show_layout_named(survey.layout.name())
             target = tmp_path / "survey.html"
             cartograph.file_edit.setText(str(target))
             cartograph._on_file_edited(str(target))
@@ -1461,7 +1461,7 @@ class TestPrintSettings:
         dialog = _dialog(project)
         _choose_cartograph(dialog)
         cartograph = dialog._cartograph
-        cartograph.layout_combo.setCurrentText(survey.layout.name())
+        cartograph.show_layout_named(survey.layout.name())
         if static:
             for choice in dialog.state.frame_choices(survey.layout.name()).values():
                 choice.mode = "static"
@@ -1821,12 +1821,12 @@ class TestPageFieldsAndTitle:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layout_combo.setCurrentText("One")
+            cartograph.show_layout_named("One")
             cartograph.title_edit.setText("First")
             cartograph.title_edit.textEdited.emit("First")
-            cartograph.layout_combo.setCurrentText("Two")
+            cartograph.show_layout_named("Two")
             assert cartograph.title_edit.text() == ""
-            cartograph.layout_combo.setCurrentText("One")
+            cartograph.show_layout_named("One")
             assert cartograph.title_edit.text() == "First"
         finally:
             dialog.close()
@@ -1962,8 +1962,8 @@ class TestCanvasAndImport:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             _click_new_from_template(dialog)
-            name = cartograph.layout_combo.currentText()
-            assert name.startswith("Daylight \u00b7 ")
+            name = cartograph.current_layout_name()
+            assert name.endswith(" \u2014 Daylight")
             assert project.layoutManager().layoutByName(name) is not None
             assert dialog.state.cartograph_layout == name
             assert len(cartograph._frame_rows) == 1
@@ -1984,7 +1984,7 @@ class TestCanvasAndImport:
             preview = _drawn(qgis_app, preview)
             assert preview is not None and not preview.isNull()
             layout = project.layoutManager().layoutByName(
-                dialog._cartograph.layout_combo.currentText()
+                dialog._cartograph.current_layout_name()
             )
             page = layout.pageCollection().page(0).pageSize()
             assert (round(page.width()), round(page.height())) == (297, 420)
@@ -2157,9 +2157,7 @@ class TestCanvasAndImport:
         try:
             dialog.share_actions["cartograph"].trigger()
             assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
-            assert dialog._cartograph.layout_combo.currentText().startswith(
-                "Daylight \u00b7 "
-            )
+            assert dialog._cartograph.current_layout_name().endswith(" \u2014 Daylight")
         finally:
             dialog.close()
 
@@ -2193,7 +2191,7 @@ class TestCanvasAndImport:
             dialog._cartograph.on_import_cartograph()
             after = {layout.name() for layout in project.layoutManager().layouts()}
             (new_name,) = after - before
-            assert dialog._cartograph.layout_combo.currentText() == new_name
+            assert dialog._cartograph.current_layout_name() == new_name
             assert len(dialog._cartograph._frame_rows) == 2
             # The import's own commands are not the user's edits.
             imported = project.layoutManager().layoutByName(new_name)
@@ -2213,9 +2211,7 @@ class TestLayoutTextSizes:
         _choose_cartograph(dialog)
         _click_new_from_template(dialog)
         cartograph = dialog._cartograph
-        layout = project.layoutManager().layoutByName(
-            cartograph.layout_combo.currentText()
-        )
+        layout = project.layoutManager().layoutByName(cartograph.current_layout_name())
         return dialog, cartograph, layout
 
     def test_the_layout_tab_has_no_text_size_sliders(
@@ -2276,11 +2272,7 @@ class TestLayoutTemplateExport:
         dialog = _dialog(project)
         _choose_cartograph(dialog)
         dialog._cartograph.refresh_layouts()
-        combo = dialog._cartograph.layout_combo
-        index = combo.findText(layout_name)
-        assert index >= 0
-        combo.setCurrentIndex(index)
-        combo.activated.emit(index)
+        dialog._cartograph.show_layout_named(layout_name)
         assert dialog.state.cartograph_layout == layout_name
         return dialog
 
@@ -2476,11 +2468,9 @@ class TestSavesFollowTheProject:
             cartograph = dialog._cartograph
             assert cartograph._last_summary is not None
             other = (
-                "Survey"
-                if cartograph.layout_combo.currentText() == "Second"
-                else "Second"
+                "Survey" if cartograph.current_layout_name() == "Second" else "Second"
             )
-            cartograph.layout_combo.setCurrentText(other)
+            cartograph.show_layout_named(other)
             assert cartograph._last_summary is None
             assert cartograph.cartograph_status_label.text().startswith("Not saved")
         finally:
@@ -2496,7 +2486,7 @@ class TestAtlasTab:
         project.setFileName(str(tmp_path / "parcels.qgz"))
         dialog = _dialog(project)
         _choose_cartograph(dialog)
-        dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
+        dialog._cartograph.show_layout_named(built.layout.name())
         return dialog, built
 
     def test_the_tab_is_the_cartographs_alone(self, qgis_app, project) -> None:
@@ -2545,7 +2535,7 @@ class TestAtlasTab:
     def _open_on(self, project, built):
         dialog = _dialog(project)
         _choose_cartograph(dialog)
-        dialog._cartograph.layout_combo.setCurrentText(built.layout.name())
+        dialog._cartograph.show_layout_named(built.layout.name())
         return dialog
 
     def test_an_atlas_driven_frame_opens_interactive_and_exports_pages(
@@ -3115,10 +3105,10 @@ class TestCartographTab:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layout_combo.setCurrentText("Survey")
+            cartograph.show_layout_named("Survey")
             assert cartograph.page_preview.showing_page()
             assert cartograph.page_preview.view.currentLayout() is first
-            cartograph.layout_combo.setCurrentText("Parcels")
+            cartograph.show_layout_named("Parcels")
             assert cartograph.page_preview.view.currentLayout() is second
             assert not cartograph.file_edit.isHidden()
         finally:
@@ -3139,15 +3129,12 @@ class TestCartographTab:
     def test_import_is_on_the_new_from_template_menu(
         self, qgis_app, project, monkeypatch
     ) -> None:
-        """The list holds layouts only; Import is the secondary action on the
-        New from template button's menu."""
+        """Import is an action under the header's "Layout actions" menu."""
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            combo = cartograph.layout_combo
-            assert [combo.itemText(i) for i in range(combo.count())] == ["Survey"]
             calls: list[str] = []
             monkeypatch.setattr(
                 cartograph, "on_import_cartograph", lambda: calls.append("import")
@@ -3157,7 +3144,7 @@ class TestCartographTab:
             cartograph.import_action.triggered.connect(cartograph.on_import_cartograph)
             cartograph.import_action.trigger()
             assert calls == ["import"]
-            assert combo.currentText() == "Survey"
+            assert cartograph.current_layout_name() == "Survey"
             assert dialog.state.cartograph_layout == "Survey"
         finally:
             dialog.close()
@@ -3552,7 +3539,7 @@ class TestWorkspace:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layout_combo.setCurrentText("Survey")
+            cartograph.show_layout_named("Survey")
             dialog.show()
             bar = cartograph.panel_scroll.verticalScrollBar()
 
@@ -3981,7 +3968,7 @@ class TestPanel:
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
-            cartograph.layout_combo.setCurrentText("Survey")
+            cartograph.show_layout_named("Survey")
             dialog.show()
             rows = [
                 FidelityItem(f"Symbology {n}", FidelityStatus.APPROXIMATED, "x.", "r")
@@ -4063,7 +4050,7 @@ class TestPanel:
         )
         return calls
 
-    def test_the_button_has_a_menu_arrow_carrying_import(
+    def test_the_button_is_plain_and_import_is_under_layout_actions(
         self, qgis_app, project, monkeypatch
     ) -> None:
         from qgis.PyQt.QtWidgets import QToolButton
@@ -4075,10 +4062,17 @@ class TestPanel:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             button = cartograph.new_from_template_button
-            assert button.popupMode() == QToolButton.ToolButtonPopupMode.MenuButtonPopup
-            (action,) = button.menu().actions()
-            assert action.text() == "Import cartograph..."
-            assert action is cartograph.import_action
+            assert button.menu() is None
+            actions = cartograph.layout_header.actions_button
+            assert actions.accessibleName() == "Layout actions"
+            assert actions.toolTip() == "Layout actions"
+            assert actions.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+            assert [a.text() for a in actions.menu().actions()] == [
+                "Rename layout...",
+                "Import cartograph...",
+            ]
+            action = cartograph.import_action
+            assert action is actions.menu().actions()[1]
             # Import needs no canvas.
             assert not button.isEnabled() and action.isEnabled()
             action.trigger()
@@ -4488,7 +4482,7 @@ class TestRenamingALayout:
         dialog = _dialog(project)
         _choose_cartograph(dialog)
         cartograph = dialog._cartograph
-        cartograph.layout_combo.setCurrentText("Second")
+        cartograph.show_layout_named("Second")
         return dialog, cartograph, second
 
     def test_the_second_layout_keeps_its_settings_and_selection(
@@ -4510,7 +4504,7 @@ class TestRenamingALayout:
 
             second.setName("Renamed")
 
-            assert cartograph.layout_combo.current_layout() == "Renamed"
+            assert cartograph.current_layout_name() == "Renamed"
             assert state.cartograph_layout == "Renamed"
             assert cartograph.file_edit.text() == str(target)
             assert state.cartograph_files["Renamed"] == str(target)
@@ -4571,7 +4565,7 @@ class TestRenamingALayout:
             assert cartograph._last_saved_at is not None
             assert cartograph._edits_saved >= 1
             assert _wait_for(qgis_app, lambda: opened)
-            assert cartograph.layout_combo.current_layout() == "Renamed"
+            assert cartograph.current_layout_name() == "Renamed"
         finally:
             gate.set()
             dialog.close()
@@ -4785,25 +4779,64 @@ class TestLayerDisclosure:
 
 
 def _pick_layout(dialog, name: str) -> None:
-    """Choose `name` in the layout list as a user does: open the list and
-    click its row."""
-    from qgis.PyQt.QtCore import Qt
+    """Choose `name` as a user does: "Switch layout...", then double-click
+    its row in the chooser."""
+    from qgis.PyQt.QtCore import QPoint, Qt, QTimer
     from qgis.PyQt.QtTest import QTest
+    from qgis.PyQt.QtWidgets import QApplication
 
-    combo = dialog._cartograph.layout_combo
-    combo.showPopup()
-    view = combo.view()
-    row = combo.findText(name)
-    assert row >= 0
-    rect = view.visualRect(view.model().index(row, 0))
-    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
-    combo.hidePopup()
+    header = dialog._cartograph.layout_header
+
+    failures: list[BaseException] = []
+
+    def drive() -> None:
+        # An exception inside a Qt slot aborts the process: carry it out.
+        box = QApplication.activeModalWidget()
+        try:
+            row = next(
+                r
+                for r in range(box.list.count())
+                if box.list.item(r).data(Qt.ItemDataRole.UserRole) == name
+            )
+            rect = box.list.visualItemRect(box.list.item(row))
+            QTest.mouseDClick(
+                box.list.viewport(), Qt.MouseButton.LeftButton, pos=rect.center()
+            )
+        except BaseException as exc:
+            failures.append(exc)
+            box.reject()
+
+    QTimer.singleShot(0, drive)
+    QTest.mouseClick(
+        header.switch_button,
+        Qt.MouseButton.LeftButton,
+        pos=QPoint(4, header.switch_button.height() // 2),
+    )
+    if failures:
+        raise failures[0]
+
+
+def _chooser_names(cartograph) -> list[str]:
+    """The names the "Switch layout..." chooser lists, then closed again."""
+    from qgis.PyQt.QtCore import QTimer
+    from qgis.PyQt.QtWidgets import QApplication
+
+    seen: list[str] = []
+
+    def drive() -> None:
+        box = QApplication.activeModalWidget()
+        seen.extend(sorted(box.visible_names()))
+        box.reject()
+
+    QTimer.singleShot(0, drive)
+    cartograph.on_switch_layout()
+    return seen
 
 
 def _rename_through_dialog(dialog, typed: str, *, press_twice: bool = False):
     """Click "Rename...", type `typed` in the box and click OK. Returns the
     inline message the dialog showed (None if it accepted at once)."""
-    from qgis.PyQt.QtCore import QPoint, Qt, QTimer
+    from qgis.PyQt.QtCore import Qt, QTimer
     from qgis.PyQt.QtTest import QTest
     from qgis.PyQt.QtWidgets import QApplication, QDialogButtonBox
 
@@ -4822,16 +4855,13 @@ def _rename_through_dialog(dialog, typed: str, *, press_twice: bool = False):
             shown.append(None)
 
     QTimer.singleShot(0, drive)
-    button = dialog._cartograph.rename_layout_button
-    QTest.mouseClick(
-        button, Qt.MouseButton.LeftButton, pos=QPoint(8, button.height() // 2)
-    )
+    dialog._cartograph.rename_action.trigger()
     return shown[0]
 
 
 class TestLayoutSelectorAndTemplates:
-    """The layout list holds layouts; "New from template..." makes a new one,
-    named for its design and the project; Rename... renames the one shown."""
+    """The chooser lists layouts; "New from template..." makes a new one,
+    named for the project and its design; Rename renames the one shown."""
 
     def _dialog(self, project, picked_template, title="Grand Canyon"):
         dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
@@ -4839,26 +4869,25 @@ class TestLayoutSelectorAndTemplates:
         _choose_cartograph(dialog)
         return dialog
 
-    def test_the_list_holds_only_the_projects_layouts(
+    def test_the_chooser_holds_only_the_projects_layouts(
         self, qgis_app, project, picked_template
     ) -> None:
         _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         _add_layout(project, "Parcels", [("Map", "EPSG:4326")])
         dialog = self._dialog(project, picked_template)
         try:
-            combo = dialog._cartograph.layout_combo
+            cartograph = dialog._cartograph
             names = sorted(
                 layout.name() for layout in project.layoutManager().layouts()
             )
-            assert sorted(combo.itemText(i) for i in range(combo.count())) == names
-            assert all(combo.itemData(i) in (None, "") for i in range(combo.count()))
+            assert _chooser_names(cartograph) == names
             picked_template.choice = ("legend-below", "A4", "landscape")
             _click_new_from_template(dialog)
             names = sorted(
                 layout.name() for layout in project.layoutManager().layouts()
             )
-            assert sorted(combo.itemText(i) for i in range(combo.count())) == names
-            assert "Clearline · Grand Canyon" in names
+            assert _chooser_names(cartograph) == names
+            assert "Grand Canyon — Clearline" in names
         finally:
             dialog.close()
 
@@ -4870,17 +4899,17 @@ class TestLayoutSelectorAndTemplates:
         try:
             picked_template.choice = ("legend-below", "A4", "landscape")
             _click_new_from_template(dialog)
-            assert dialog._cartograph.layout_combo.currentText() == (
-                "Clearline · Grand Canyon"
+            assert dialog._cartograph.current_layout_name() == (
+                "Grand Canyon — Clearline"
             )
             _click_new_from_template(dialog)
-            assert dialog._cartograph.layout_combo.currentText() == (
-                "Clearline · Grand Canyon (2)"
+            assert dialog._cartograph.current_layout_name() == (
+                "Grand Canyon — Clearline (2)"
             )
             picked_template.choice = ("locator", "A4", "landscape")
             _click_new_from_template(dialog)
             names = {layout.name() for layout in project.layoutManager().layouts()}
-            assert "Near & Far · Grand Canyon" in names
+            assert "Grand Canyon — Near & Far" in names
             assert project.layoutManager().layoutByName("Survey") is original
         finally:
             dialog.close()
@@ -4922,8 +4951,8 @@ class TestLayoutSelectorAndTemplates:
         try:
             picked_template.choice = ("field-map", "A4", "landscape")
             _click_new_from_template(dialog)
-            assert dialog._cartograph.layout_combo.currentText() == (
-                "Fieldbook · Untitled map"
+            assert dialog._cartograph.current_layout_name() == (
+                "Untitled map — Fieldbook"
             )
         finally:
             dialog.close()
@@ -4939,7 +4968,7 @@ class TestLayoutSelectorAndTemplates:
         try:
             cartograph = dialog._cartograph
             _pick_layout(dialog, "First")
-            assert cartograph.layout_combo.currentText() == "First"
+            assert cartograph.current_layout_name() == "First"
             assert cartograph.state.cartograph_layout == "First"
             label = QgsLayoutItemLabel(first)
             label.setText("Edited in A")
@@ -4977,13 +5006,11 @@ class TestLayoutSelectorAndTemplates:
             cartograph = dialog._cartograph
             _pick_layout(dialog, "Second")
             cartograph._autosave_timer.stop()
-            button = cartograph.rename_layout_button
-            assert button.accessibleName() == "Rename layout"
             assert _rename_through_dialog(dialog, "Gorge sheet") is None
             assert second.name() == "Gorge sheet"
-            combo = cartograph.layout_combo
-            assert combo.currentText() == "Gorge sheet"
-            assert combo.findText("Second") < 0
+            header = cartograph.layout_header
+            assert header.name_label.full_text() == "Gorge sheet"
+            assert cartograph.current_layout_name() == "Gorge sheet"
             assert cartograph.state.cartograph_layout == "Gorge sheet"
             assert "Gorge sheet" in dialog.status_label.text()
         finally:
@@ -5002,16 +5029,16 @@ class TestLayoutSelectorAndTemplates:
             assert "needs a name" in _rename_through_dialog(dialog, "   ")
             assert "already exists" in _rename_through_dialog(dialog, "First")
             assert second.name() == "Second"
-            assert cartograph.layout_combo.currentText() == "Second"
+            assert cartograph.current_layout_name() == "Second"
         finally:
             dialog.close()
 
-    def test_the_rename_button_is_off_with_no_layout(
+    def test_rename_is_off_with_no_layout(
         self, qgis_app, project, picked_template
     ) -> None:
         dialog = self._dialog(project, picked_template)
         try:
-            assert not dialog._cartograph.rename_layout_button.isEnabled()
+            assert not dialog._cartograph.rename_action.isEnabled()
         finally:
             dialog.close()
 

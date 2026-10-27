@@ -25,8 +25,7 @@ from test_cartograph_dialog import (  # noqa: E402, F401
 
 def _open_rename(dialog, probe):
     """Click Rename..., run `probe(box)` while the dialog is open."""
-    from qgis.PyQt.QtCore import QPoint, Qt, QTimer
-    from qgis.PyQt.QtTest import QTest
+    from qgis.PyQt.QtCore import QTimer
     from qgis.PyQt.QtWidgets import QApplication
 
     seen = []
@@ -37,10 +36,7 @@ def _open_rename(dialog, probe):
         box.reject()
 
     QTimer.singleShot(0, drive)
-    button = dialog._cartograph.rename_layout_button
-    QTest.mouseClick(
-        button, Qt.MouseButton.LeftButton, pos=QPoint(8, button.height() // 2)
-    )
+    dialog._cartograph.rename_action.trigger()
     return seen[0]
 
 
@@ -230,7 +226,7 @@ class TestImportFillsBrowserAppearance:
         try:
             assert spec.title
             cartograph = dialog._cartograph
-            name = cartograph.layout_combo.currentText()
+            name = cartograph.current_layout_name()
             page = dialog.state.page_choice(name)
             assert page.title == spec.title
             assert page.attribution == spec.attribution

@@ -139,10 +139,12 @@ _LEGEND_SIDES = (
 def template_layout_name(
     design_name: str, title: str, untitled: str = _UNTITLED
 ) -> str:
-    """ "<design> · <project title>" - what a layout made from a template is
-    called, so the list says both which design and which map. A project
-    without a title says `untitled` instead."""
-    return f"{design_name} \u00b7 {title.strip() or untitled}"
+    """ "<project title> — <design>" - what a layout made from a template is
+    called, so the list says both which map and which design. A project
+    without a title says `untitled` instead. This is the layout's name in the
+    project, an organising label: the cartograph's own title is separate and a
+    later edit of it never renames the layout."""
+    return f"{title.strip() or untitled} \u2014 {design_name}"
 
 
 @dataclass(frozen=True)
