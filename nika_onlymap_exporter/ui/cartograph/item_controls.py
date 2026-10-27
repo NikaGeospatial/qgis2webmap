@@ -77,6 +77,7 @@ from ...core.locator_context import (
     omit_locator,
 )
 from ..i18n import tr
+from .callout_controls import CalloutControls
 from .frames_list import LIVE, STATIC, FramesList, _QuietCombo
 from .item_text_size import text_size_points
 from .layer_membership import drawn_layers, set_layer_included
@@ -290,6 +291,11 @@ class ContextControls(QFrame):
         self.pages.currentChanged.connect(lambda _index: self.pages.updateGeometry())
         body.addWidget(self.pages)
         column.addWidget(self.body)
+        # Statistic callouts of a layout that has them: shown with or without
+        # a selection, so a first one can be added to an empty page.
+        self.callout_controls = CalloutControls(self)
+        self.callout_controls.edited.connect(self.edited)
+        column.addWidget(self.callout_controls)
         column.addStretch(1)
         self._build_text_page()
         self._build_map_page()
@@ -574,6 +580,7 @@ class ContextControls(QFrame):
             self._apply_pending_text()
             self._text_dirty = False
         self._item = item
+        self.callout_controls.show_for(layout, item)
         if item is None or layout is None:
             self._show_nothing_selected()
             return
