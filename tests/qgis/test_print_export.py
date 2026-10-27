@@ -320,7 +320,8 @@ class TestPageFields:
         assert "SOURCE TITLE".encode("utf-16-be") not in data
         assert project.title() == "SOURCE TITLE"
         assert any("attribution" in warning for warning in result.warnings)
-        assert any("theme" in warning for warning in result.warnings)
+        # The theme is part of the layout, so there is nothing to warn about.
+        assert not any("theme" in warning for warning in result.warnings)
 
     def test_blank_page_fields_change_nothing(self, survey, project, tmp_path) -> None:
         project.setTitle("SOURCE TITLE")

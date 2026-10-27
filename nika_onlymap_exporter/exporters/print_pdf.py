@@ -59,6 +59,7 @@ from qgis.PyQt.QtCore import QT_VERSION_STR, QPointF
 from qgis.PyQt.QtGui import QPainter, QPolygonF
 
 from ..core.atomic_write import staged_beside
+from ..core.page_settings import attribution_in_layout
 from ..core.print_settings import (
     PROFILE_CMYK,
     PROFILE_ICC,
@@ -303,24 +304,19 @@ def attribution_warning() -> str:
     )
 
 
-def theme_warning() -> str:
-    return tr("The page theme is for the browser; the QGIS PDF is not themed.")
-
-
 def _apply_page_choice(
     copy: QgsLayout, page_choice: PageChoice, warnings: list[str]
 ) -> None:
     """The page title as the layout's `@project_title` (a layout variable
-    outranks the project's), and a warning for each page field QGIS cannot
-    show. The browser output applies all three."""
+    outranks the project's), and a warning when the attribution has no text
+    item in the layout to carry it. The theme and a plain attribution are part
+    of the layout itself, so the copy has them already."""
     if page_choice.title:
         QgsExpressionContextUtils.setLayoutVariable(
             copy, "project_title", page_choice.title
         )
-    if page_choice.attribution:
+    if page_choice.attribution and not attribution_in_layout(copy):
         warnings.append(attribution_warning())
-    if page_choice.theme not in ("", "default"):
-        warnings.append(theme_warning())
 
 
 def _movable_items(layout: QgsLayout) -> list[QgsLayoutItem]:
