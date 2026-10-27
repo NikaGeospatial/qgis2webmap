@@ -16,6 +16,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import gc
+
 import pytest
 
 
@@ -68,3 +70,36 @@ def project(qgis_app):
     instance.clear()
     yield instance
     instance.clear()
+
+
+@pytest.fixture(autouse=True)
+def release_widgets_made_by_the_test(request):
+    """Delete the top-level widgets a test left behind, as soon as it ends.
+
+    A dialog that is only closed (or dropped) keeps its C++ object, its
+    children and everything they cache until the process exits. The Cartograph
+    dialog tests build roughly a hundred and sixty `MainDialog`s, about 30 MB
+    each, so one process holding them passed 3.8 GB and had to be split into
+    batches. Deleting what the test created, before the next one starts, keeps
+    the whole suite in one process at under a gigabyte.
+
+    Only widgets that did not exist when the test began are touched, and only
+    when QGIS has been started for this test.
+    """
+    if "qgis_app" not in request.fixturenames:
+        yield
+        return
+    from qgis.PyQt.QtCore import QEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    before = {id(widget) for widget in QApplication.topLevelWidgets()}
+    yield
+    # Let what the test left pending run while its widgets still exist.
+    QApplication.processEvents()
+    for widget in QApplication.topLevelWidgets():
+        if id(widget) not in before:
+            widget.close()
+            widget.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    QApplication.processEvents()
+    gc.collect()
