@@ -28,3 +28,6 @@ COMMUNITY_URL = "https://discord.gg/2CmbKkp5yg"
 # feature: the form is the only thing behind it, and every label pointing here
 # has to make that clear rather than promising an upload that cannot happen yet.
 FEATURE_REQUEST_URL = "https://forms.gle/kHhZnHvGfCS3nDnH6"
+
+# A request for a new cartograph design, separate from the hosting waitlist.
+TEMPLATE_REQUEST_URL = "https://forms.gle/xaAijEHyJXJo6vhm7"

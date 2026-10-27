@@ -1,5 +1,5 @@
-"""Current canvas > choose a layout template: every design, each previewed
-with the map the canvas shows now.
+"""Current canvas > choose a layout template: immediate layout guides,
+with automatic current-map previews while rendering stays quick.
 
 The picker only chooses -- a template, a page size and an orientation -- and
 the controller builds the layout (`core/canvas_cartograph.py`). Each preview
@@ -23,6 +23,12 @@ page size is instant; given a `canvas_key`, they are kept for the next
 opening too, until the canvas or project changes. The last choice is
 remembered per user (`QSettings`).
 
+Each card starts with an inexpensive labelled diagram of its planned layout.
+A three-second render deadline and a five-second total automatic-render budget
+keep slow projects in on-demand mode. Preview opens the real map at a useful
+size and caches it for that canvas and those settings. The final grid card is
+a request-form link, never a design that can be selected or created.
+
 **What a card says it includes** is checked against the page this project
 gets (`core/template_cues.py`): "Includes" lists what the page shows, "Can
 also show" what the design would show with more content -- notes, key
@@ -35,6 +41,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import time
 from collections import OrderedDict
 from collections.abc import Iterable, Sequence
 from typing import Protocol
@@ -44,19 +51,24 @@ from qgis.PyQt.QtCore import (
     QEvent,
     QObject,
     QRect,
+    QRectF,
     QRegularExpression,
     QSettings,
     QSize,
     Qt,
     QTimer,
+    QUrl,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
     QColor,
+    QDesktopServices,
     QGuiApplication,
     QImage,
     QMouseEvent,
     QPainter,
+    QPalette,
+    QPen,
     QPixmap,
     QRegularExpressionValidator,
     QResizeEvent,
@@ -104,6 +116,7 @@ from ...core.layout_templates import (
     MIN_TEXT_PERCENT,
     PAGE_SIZE_ORDER,
     LayoutTemplate,
+    TemplateInput,
     TemplatePlan,
     TextSizes,
 )
@@ -116,12 +129,14 @@ from ...core.template_framing import (
 )
 from .. import theme
 from ..i18n import N_, plural, tr
+from ..links import TEMPLATE_REQUEST_URL
 
 #: Where the last choice is kept, under this plugin's own QSettings group.
 SETTINGS_KEY = "qgis2webmap/cartograph/template"
 
 #: The design a first-time user starts on (Daylight): the safest choice.
 DEFAULT_TEMPLATE = "classic"
+_DARK_TEMPLATES = frozenset(("dark", "night-desk"))
 
 #: The widest a page preview is shown, in logical pixels. Every page is drawn
 #: at this width (times the screen's pixel ratio) and scaled down to its box,
@@ -165,6 +180,10 @@ _NEAR_VIEW = 0.5
 #: drawn: a page takes the event loop for its whole drawing, so none
 #: starts while the user is still scrolling.
 _SCROLL_SETTLE_MS = 150
+# Fast local maps still fill the cards automatically. One stuck render, or
+# too much total rendering, switches this opening to on-demand previews.
+_CARD_RENDER_TIMEOUT_MS = 3000
+_AUTOMATIC_RENDER_BUDGET_SECONDS = 5.0
 
 _PAGE_LABELS = {
     "Letter": N_("Letter (ANSI A)"),
@@ -561,6 +580,13 @@ class _TemplateRow(QFrame):
         self._faces.setCurrentWidget(self.failure)
         self._refit()
 
+    def show_guide(self, image: QImage) -> None:
+        self.show_page(image)
+        self.drawn = False
+        self.page.setToolTip(
+            tr("Layout guide. Use Preview to see your current map in this design.")
+        )
+
     def _refit(self) -> None:
         box = self._box
         if self._image is not None:
@@ -898,6 +924,60 @@ class _TemplateList(QListWidget):
         super().keyPressEvent(event)
 
 
+class _RequestTemplateCard(QPushButton):
+    """An action in the card grid, separate from the template selection."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAutoDefault(False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(tr("Request a template"))
+        self.setAccessibleDescription(tr("Opens the template suggestion form."))
+        self.setToolTip(tr("Opens the template suggestion form."))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        column = QVBoxLayout(self)
+        column.setContentsMargins(16, 12, 16, 12)
+        column.setSpacing(4)
+        column.addStretch()
+        for text, size in (
+            ("+", 28),
+            (tr("Request a template"), 0),
+            (tr("Suggest a design you\u2019d like to use."), 0),
+        ):
+            label = QLabel(text, self)
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setWordWrap(True)
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            if size:
+                font = label.font()
+                font.setPointSize(size)
+                label.setFont(font)
+            column.addWidget(label)
+        column.addStretch()
+        self.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(TEMPLATE_REQUEST_URL))
+        )
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = self.palette()
+        active = self.hasFocus() or self.underMouse()
+        colour = palette.color(
+            QPalette.ColorRole.Highlight if active else QPalette.ColorRole.Mid
+        )
+        painter.setPen(QPen(colour, 1.5, Qt.PenStyle.DashLine))
+        painter.setBrush(palette.brush(QPalette.ColorRole.Base))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(2, 2, -2, -2), 6, 6)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.click()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class TemplatePicker(QDialog):
     """The modal template picker. After `exec()` accepts, `template_id`,
     `page_size` and `orientation` hold the choice.
@@ -943,17 +1023,27 @@ class TemplatePicker(QDialog):
         else:
             self._pages = _PageCache()
         self._failed: set[_PageKey] = set()
+        self._guides = _PageCache(limit=24, max_bytes=16 * 1024 * 1024)
+        self._automatic_previews = True
+        self._render_started = 0.0
+        self._render_seconds = 0.0
+        self._preview_deadline = QTimer(self)
+        self._preview_deadline.setSingleShot(True)
+        self._preview_deadline.setInterval(_CARD_RENDER_TIMEOUT_MS)
+        self._preview_deadline.timeout.connect(self._use_on_demand_previews)
         self._planner = planner
+        self._plans: OrderedDict[_PageKey, TemplatePlan] = OrderedDict()
         #: Each card's cues by page key, so a page setting seen before is
         #: not planned again.
         self._cues: dict[_PageKey, CardCues] = {}
         # Read once: the designs as the registry has them now.
-        # Essentials first, so "All" lists the safe choices before the rest.
+        # Essentials first, followed by characterful designs, then the two
+        # dark sheets together at the end.
         self._templates: dict[str, LayoutTemplate] = {
             t.id: t
             for t in sorted(
                 layout_templates.starter_templates(),
-                key=lambda t: t.category != ESSENTIAL,
+                key=lambda t: (t.id in _DARK_TEMPLATES, t.category != ESSENTIAL),
             )
         }
         #: The designs still to draw for the current settings, most useful
@@ -971,9 +1061,7 @@ class TemplatePicker(QDialog):
         self._scroll_rest.setSingleShot(True)
         self._scroll_rest.setInterval(_SCROLL_SETTLE_MS)
         self._scroll_rest.timeout.connect(self._reprioritise)
-        self._laid_out: tuple[int, int, int, bool] | None = None
-        #: Whether "Automatic" turned out tall pages for this map.
-        self._auto_tall = False
+        self._laid_out: tuple[int, int, int, tuple[bool, ...]] | None = None
         self._project = project
         #: The figures as the project had them, to write back only a change.
         self._saved_figures: Figures = (
@@ -995,7 +1083,9 @@ class TemplatePicker(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        intro = QLabel(tr("Each preview shows the map the canvas shows now."), self)
+        intro = QLabel(
+            tr("Choose a design. Preview shows it with your current map."), self
+        )
         intro.setProperty("role", "hint")
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -1135,6 +1225,13 @@ class TemplatePicker(QDialog):
             self.template_list.setItemWidget(item, row)
             self.rows[template.id] = row
             self._items[template.id] = item
+        self.request_item = QListWidgetItem(self.template_list)
+        self.request_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        self.request_item.setData(
+            Qt.ItemDataRole.AccessibleTextRole, tr("Request a template")
+        )
+        self.request_button = _RequestTemplateCard(self.template_list.viewport())
+        self.template_list.setItemWidget(self.request_item, self.request_button)
         # Under the list, for the design that is chosen: made here so that
         # the keyboard reaches it after the list and before the buttons.
         self.figures_group = _KeyFigures(self._saved_figures, self)
@@ -1143,7 +1240,9 @@ class TemplatePicker(QDialog):
         self.size_controls = TextSizeControls(self._saved_sizes, self)
         self.size_controls.changed.connect(self._restart_previews)
         self.template_list.currentItemChanged.connect(self._on_template)
-        self.template_list.itemDoubleClicked.connect(lambda _item: self.accept())
+        self.template_list.itemDoubleClicked.connect(
+            lambda item: self.accept() if item is not self.request_item else None
+        )
         bar = self.template_list.verticalScrollBar()
         bar.valueChanged.connect(self._reprioritise)
         # The user's own scrolling only -- wheel, drag, arrows -- not the
@@ -1187,7 +1286,7 @@ class TemplatePicker(QDialog):
     @property
     def template_id(self) -> str:
         item = self.template_list.currentItem()
-        if item is not None:
+        if item is not None and item is not self.request_item:
             return str(item.data(Qt.ItemDataRole.UserRole))
         return self._default_template()
 
@@ -1241,6 +1340,10 @@ class TemplatePicker(QDialog):
         self._cancel_inflight()
 
         def render(width: int):
+            large_key = (*key[:3], width, *key[4:])
+            cached = self._pages.get(large_key)
+            if cached is not None:
+                return cached
             with preview_framing(key[7]):
                 return self._render(
                     template_id, key[1], key[2], width, figures=key[5], sizes=key[6]
@@ -1259,12 +1362,20 @@ class TemplatePicker(QDialog):
             preview.start()
             preview.exec()
         finally:
+            image = preview.page.image
+            if image is not None and not image.isNull():
+                self._pages.put((*key[:3], image.width(), *key[4:]), image)
+                thumbnail = image.scaledToWidth(
+                    key[3], Qt.TransformationMode.SmoothTransformation
+                )
+                for name in image.textKeys():
+                    thumbnail.setText(name, image.text(name))
+                self._store_page(template_id, key, thumbnail)
             preview.deleteLater()
             self._reprioritise()
 
     def accept(self) -> None:
-        self._timer.stop()
-        self._cancel_inflight()
+        self._use_on_demand_previews()
         self._figures_timer.stop()
         self._save_choice()
         self._save_figures()
@@ -1275,8 +1386,7 @@ class TemplatePicker(QDialog):
         super().accept()
 
     def reject(self) -> None:
-        self._timer.stop()
-        self._cancel_inflight()
+        self._use_on_demand_previews()
         self._figures_timer.stop()
         self.size_controls.stop()
         super().reject()
@@ -1304,6 +1414,7 @@ class TemplatePicker(QDialog):
         self._relayout()
         for template_id in self.rows:
             self._show_state(template_id)
+        self._relayout()
         self._reprioritise()
 
     def _show_state(self, template_id: str) -> None:
@@ -1319,10 +1430,66 @@ class TemplatePicker(QDialog):
             row.show_failure()
             self._mark_failed_item(template_id)
         else:
-            row.show_page(None)
+            row.show_guide(self._guide(template_id, key))
             self._items[template_id].setToolTip(
                 card_tooltip(self._templates[template_id])
             )
+
+    def _guide(self, template_id: str, key: _PageKey) -> QImage:
+        from .template_guide import layout_guide
+
+        image = self._guides.get(key)
+        if image is not None:
+            return image
+        plan = None
+        with contextlib.suppress(Exception):
+            plan = self._plan(template_id, key)
+        if plan is None:
+            plan = layout_templates.plan_template(
+                template_id,
+                key[6].apply(
+                    TemplateInput(
+                        1000,
+                        700,
+                        False,
+                        page_size=key[1],
+                        orientation=key[2],
+                        title=tr("Title"),
+                        layer_names=("A", "B", "C"),
+                        credits=("Source",),
+                        notes=tr("Notes"),
+                        figures=key[5],
+                        fill_frame=key[7] == "fill",
+                    )
+                ),
+            )
+        image = layout_guide(plan, key[3])
+        self._guides.put(key, image)
+        return image
+
+    def _plan(self, template_id: str, key: _PageKey) -> TemplatePlan | None:
+        """Share the cheap plan between card cues and its layout guide."""
+        plan = self._plans.get(key)
+        if plan is not None:
+            self._plans.move_to_end(key)
+            return plan
+        if self._planner is None:
+            return None
+        with preview_framing(key[7]):
+            plan = self._planner(
+                template_id, key[1], key[2], figures=key[5], sizes=key[6]
+            )
+        self._plans[key] = plan
+        while len(self._plans) > _SHARED_CACHE_LIMIT:
+            self._plans.popitem(last=False)
+        return plan
+
+    def _use_on_demand_previews(self) -> None:
+        self._automatic_previews = False
+        self._timer.stop()
+        self._scroll_rest.stop()
+        self._queue.clear()
+        self._cancel_inflight()
 
     def _update_cues(self, template_ids: Iterable[str]) -> None:
         """Check the cards' cues against the pages this project gets with the
@@ -1335,14 +1502,15 @@ class TemplatePicker(QDialog):
             if cues is None:
                 template = self._templates[template_id]
                 try:
-                    with preview_framing(key[7]):
-                        plan = self._planner(
-                            template_id, key[1], key[2], figures=key[5], sizes=key[6]
-                        )
+                    plan = self._plan(template_id, key)
                 except Exception:  # a page the planner cannot lay out
                     cues = declared_cues(template)
                 else:
-                    cues = plan_cues(template, plan)
+                    cues = (
+                        plan_cues(template, plan)
+                        if plan is not None
+                        else declared_cues(template)
+                    )
                 self._cues[key] = cues
             if self.rows[template_id].set_cues(cues):
                 self._items[template_id].setData(
@@ -1355,12 +1523,17 @@ class TemplatePicker(QDialog):
         """Order what is left to draw: the selected design, then the cards in
         view, then the ones a short scroll away. A design filtered out or
         further down the list waits until it comes near the view."""
+        if not self._automatic_previews:
+            self._queue.clear()
+            return
         current = self.template_list.currentItem()
         chosen = (
             str(current.data(Qt.ItemDataRole.UserRole))
             if current is not None and not current.isHidden()
             else None
         )
+        if chosen not in self._templates:
+            chosen = None
         order = ([chosen] if chosen else []) + self.visible_ids() + self.near_ids()
         if self._inflight is not None:
             drawing, drawing_key, _pending = self._inflight
@@ -1409,11 +1582,15 @@ class TemplatePicker(QDialog):
     def _render_next(self) -> None:
         if self._scroll_rest.isActive() or self._inflight is not None:
             return
+        if self._render_seconds >= _AUTOMATIC_RENDER_BUDGET_SECONDS:
+            self._use_on_demand_previews()
+            return
         self._reprioritise()
         if not self._queue:
             return
         template_id = self._queue.pop(0)
         key = self._key(template_id)
+        self._render_started = time.monotonic()
         try:
             with preview_framing(key[7]):
                 result = self._render(
@@ -1427,8 +1604,14 @@ class TemplatePicker(QDialog):
             result.finished.connect(
                 lambda image, pending=result: self._on_pending_done(pending, image)
             )
+            remaining = min(
+                _CARD_RENDER_TIMEOUT_MS,
+                round((_AUTOMATIC_RENDER_BUDGET_SECONDS - self._render_seconds) * 1000),
+            ) - round((time.monotonic() - self._render_started) * 1000)
+            self._preview_deadline.start(max(0, remaining))
             self._show_state(template_id)
             return
+        self._record_render_time()
         self._store_page(template_id, key, result)
         if self._queue:
             self._timer.start()
@@ -1441,32 +1624,41 @@ class TemplatePicker(QDialog):
             self._pages.put(key, image)
             if self._templates[template_id].takes_figures:
                 self._pages.drop_variants(key)
-            if self.orientation == "auto":
-                # Fitted to the map: the pages show which way it went.
-                self._auto_tall = image.height() > image.width()
-                self._relayout()
         else:
             self._failed.add(key)
         self._show_state(template_id)
+        self._relayout()
 
     def _on_pending_done(self, pending: PendingPreview, image: QImage | None) -> None:
         if self._inflight is None or self._inflight[2] is not pending:
             return  # cancelled while it finished
         template_id, key, _pending = self._inflight
         self._inflight = None
+        self._preview_deadline.stop()
+        self._record_render_time()
         self._store_page(template_id, key, image)
         self._reprioritise()
 
     def _cancel_inflight(self) -> None:
         """Stop the page being drawn in the background, if any."""
+        self._preview_deadline.stop()
         if self._inflight is None:
             return
         _template_id, _key, pending = self._inflight
         self._inflight = None
+        self._record_render_time()
         pending.cancel()
+
+    def _record_render_time(self) -> None:
+        if self._render_started:
+            self._render_seconds += time.monotonic() - self._render_started
+            self._render_started = 0.0
 
     def retry(self, template_id: str) -> None:
         """Draw `template_id`'s page again, next."""
+        if not self._automatic_previews:
+            self.open_large_preview(template_id)
+            return
         self._failed.discard(self._key(template_id))
         self._show_state(template_id)
         self._reprioritise()
@@ -1587,10 +1779,16 @@ class TemplatePicker(QDialog):
         # card that would end within one spacing of the edge; two spare
         # pixels for rounding.
         card_w = max(1, (width - _LIST_SPACING * (2 * columns + 1)) // columns - 2)
-        tall = self.orientation == "portrait" or (
-            self.orientation == "auto" and self._auto_tall
+        turns = tuple(
+            self.orientation == "portrait"
+            or (
+                self.orientation == "auto"
+                and row._image is not None
+                and row._image.height() > row._image.width()
+            )
+            for row in self.rows.values()
         )
-        state = (card_w, height, columns, tall)
+        state = (card_w, height, columns, turns)
         if state == self._laid_out:
             return
         self._laid_out = state
@@ -1606,15 +1804,20 @@ class TemplatePicker(QDialog):
             )
         )
         self._keep_in_view = False
-        box = _preview_box(card_w, height, tall)
-        text_w = card_w - box.width() - 2 * _ROW_PADDING - 16
-        card_h = box.height() + 2 * _ROW_PADDING
-        for row in self.rows.values():
+        card_h = 1
+        for row, tall in zip(self.rows.values(), turns):
+            box = _preview_box(card_w, height, tall)
+            text_w = card_w - box.width() - 2 * _ROW_PADDING - 16
             row.set_box(box)
-            card_h = max(card_h, row.text_height(text_w) + 2 * _ROW_PADDING)
+            card_h = max(
+                card_h,
+                box.height() + 2 * _ROW_PADDING,
+                row.text_height(text_w) + 2 * _ROW_PADDING,
+            )
         hint = QSize(card_w, card_h)
         for item in self._items.values():
             item.setSizeHint(hint)
+        self.request_item.setSizeHint(hint)
         view.doItemsLayout()
         if anchored and current is not None:
             view.scrollToItem(current, QAbstractItemView.ScrollHint.EnsureVisible)
@@ -1623,7 +1826,20 @@ class TemplatePicker(QDialog):
     # ---- Helpers -------------------------------------------------------------
 
     def _on_template(self, current: QListWidgetItem | None, _previous: object) -> None:
+        if current is self.request_item:
+            # Qt can make a non-selectable item current through keyboard
+            # navigation. The request action never replaces the map choice.
+            previous = (
+                _previous
+                if isinstance(_previous, QListWidgetItem)
+                and _previous is not self.request_item
+                else self._items[self._default_template()]
+            )
+            self.template_list.setCurrentItem(previous)
+            return
         chosen = current.data(Qt.ItemDataRole.UserRole) if current else None
+        if self._inflight is not None and self._inflight[0] != chosen:
+            self._cancel_inflight()
         for template_id, row in self.rows.items():
             row.set_chosen(template_id == chosen)
         template = self._templates.get(str(chosen)) if chosen else None

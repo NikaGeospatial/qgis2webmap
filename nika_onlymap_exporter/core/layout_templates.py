@@ -374,7 +374,7 @@ def starter_templates() -> tuple[LayoutTemplate, ...]:
     The complete registry is also used by the template geometry and fidelity
     probes; the picker is deliberately a smaller, task-oriented collection.
     """
-    omitted = {"story-map", "night-desk", "marginalia", "atlas-ledger", "town-hall"}
+    omitted = {"story-map", "marginalia", "atlas-ledger", "town-hall"}
     return tuple(template for template in TEMPLATES if template.id not in omitted)
 
 

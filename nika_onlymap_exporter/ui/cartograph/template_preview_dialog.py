@@ -11,18 +11,21 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from qgis.PyQt.QtCore import QSize, Qt
+from qgis.PyQt.QtCore import QSize, Qt, QTimer
 from qgis.PyQt.QtGui import QGuiApplication, QImage, QPixmap
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from ..i18n import tr
+
+PREVIEW_TIMEOUT_MS = 30_000
 
 
 class _Page(QLabel):
@@ -74,6 +77,9 @@ class TemplatePreviewDialog(QDialog):
         self._render = render
         self._pending = None
         self._closed = False
+        self._deadline = QTimer(self)
+        self._deadline.setSingleShot(True)
+        self._deadline.timeout.connect(self._timed_out)
         column = QVBoxLayout(self)
         heading = QLabel(title, self)
         font = heading.font()
@@ -87,6 +93,11 @@ class TemplatePreviewDialog(QDialog):
         column.addWidget(details)
         self.page = _Page(self)
         column.addWidget(self.page, 1)
+        self.retry_button = QPushButton(tr("Retry preview"), self)
+        self.retry_button.setAutoDefault(False)
+        self.retry_button.hide()
+        self.retry_button.clicked.connect(self.start)
+        column.addWidget(self.retry_button, 0, Qt.AlignmentFlag.AlignHCenter)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         column.addWidget(buttons)
@@ -99,6 +110,16 @@ class TemplatePreviewDialog(QDialog):
 
     def start(self) -> None:
         """Draw once at the inspection size, including the screen pixel ratio."""
+        if self._closed:
+            return
+        self._deadline.stop()
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.cancel()
+        self.retry_button.hide()
+        self.page.image = None
+        self.page.setPixmap(QPixmap())
+        self.page.setText(tr("Drawing the preview\u2026"))
         width = round(
             min(1400, max(960, self.width())) * max(1.0, self.devicePixelRatioF())
         )
@@ -107,18 +128,39 @@ class TemplatePreviewDialog(QDialog):
         except Exception:
             result = None
         if result is None or isinstance(result, QImage):
-            self.page.show_image(result)
+            self._show_result(result)
         else:
             self._pending = result
-            result.finished.connect(self._finished)
+            result.finished.connect(
+                lambda image, pending=result: self._finished(pending, image)
+            )
+            self._deadline.start(PREVIEW_TIMEOUT_MS)
 
-    def _finished(self, image: QImage | None) -> None:
+    def _finished(self, pending: object, image: QImage | None) -> None:
+        if self._closed or self._pending is not pending:
+            return
         self._pending = None
-        if not self._closed:
-            self.page.show_image(image)
+        self._deadline.stop()
+        self._show_result(image)
+
+    def _show_result(self, image: QImage | None) -> None:
+        self.page.show_image(image)
+        self.retry_button.setVisible(image is None or image.isNull())
+
+    def _timed_out(self) -> None:
+        if self._closed:
+            return
+        pending, self._pending = self._pending, None
+        if pending is not None:
+            pending.cancel()
+        self._show_result(None)
+        self.page.setText(
+            tr("The preview took too long. Retry, or close to choose a template.")
+        )
 
     def done(self, result: int) -> None:
         self._closed = True
+        self._deadline.stop()
         pending, self._pending = self._pending, None
         if pending is not None:
             pending.cancel()

@@ -127,8 +127,11 @@ class _Renderer:
 
 
 def _listed(templates) -> list[str]:
-    """The ids in the order the picker lists them: essentials first."""
-    return sorted(templates, key=lambda t: templates[t].category != ESSENTIAL)
+    """Essentials, then characterful designs, then the two dark sheets."""
+    return sorted(
+        templates,
+        key=lambda t: (t in {"dark", "night-desk"}, templates[t].category != ESSENTIAL),
+    )
 
 
 def _settings(tmp_path) -> QSettings:
@@ -234,21 +237,19 @@ class TestTheFilter:
     def test_all_lists_the_essentials_first(self, qgis_app, tmp_path):
         picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
-            listed = [
-                picker.template_list.item(row).data(Qt.ItemDataRole.UserRole)
-                for row in range(picker.template_list.count())
-            ]
+            listed = list(picker.rows)
             assert listed == [
                 "classic",
                 "legend-below",
                 "map-only",
                 "report-figure",
-                "dark",
                 "field-map",
                 "poster",
                 "locator",
                 "dashboard",
                 "wayfinder",
+                "dark",
+                "night-desk",
             ]
         finally:
             picker.reject()
@@ -281,7 +282,7 @@ class TestTheCards:
         picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
             assert list(picker.rows) == _listed(fifteen)
-            assert picker.template_list.count() == 15
+            assert picker.template_list.count() == 16  # designs plus request action
             for template_id, item in picker._items.items():
                 t = fifteen[template_id]
                 spoken = item.data(Qt.ItemDataRole.AccessibleTextRole)
@@ -1604,7 +1605,7 @@ class TestKeyFigures:
             picker.template_list.setFocus(Qt.FocusReason.TabFocusReason)
             qgis_app.processEvents()
             seen = []
-            for _ in range(8):
+            for _ in range(9):
                 QTest.keyClick(picker.focusWidget(), Qt.Key.Key_Tab)
                 qgis_app.processEvents()
                 seen.append(picker.focusWidget())
@@ -1612,7 +1613,12 @@ class TestKeyFigures:
             fields = [edit for pair in zip(group.values, group.labels) for edit in pair]
             # The text sizes are closed: their header, not the sliders.
             toggle = picker.size_controls.toggle
-            assert seen == [*fields, toggle, picker.create_button]
+            assert seen == [
+                picker.request_button,
+                *fields,
+                toggle,
+                picker.create_button,
+            ]
             for edit in fields:
                 assert edit.accessibleName().startswith("Key figure ")
         finally:

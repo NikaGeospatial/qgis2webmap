@@ -25,6 +25,7 @@ def test_starters_have_distinct_jobs_without_cosmetic_variants():
         "locator",
         "dashboard",
         "dark",
+        "night-desk",
         "wayfinder",
     }
 
