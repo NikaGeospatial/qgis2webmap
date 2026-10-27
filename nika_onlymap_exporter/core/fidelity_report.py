@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from .export_ir import FidelityItem, FidelityStatus
@@ -157,6 +158,16 @@ class FidelityReportBuilder:
             item
             for item in self._items
             if not (item.subject == subject and item.layer_id == layer_id)
+        ]
+
+    def rewrite_detail(self, subject: str, containing: str, detail: str) -> None:
+        """Give the rows of `subject` whose detail contains `containing` a new
+        detail, once a later step changed what they say."""
+        self._items = [
+            dataclasses.replace(item, detail=detail)
+            if item.subject == subject and containing in item.detail
+            else item
+            for item in self._items
         ]
 
     def extend(self, items: tuple[FidelityItem, ...]) -> None:

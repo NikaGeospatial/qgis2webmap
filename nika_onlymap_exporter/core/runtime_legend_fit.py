@@ -29,7 +29,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 
 from .cartograph_ir import (
@@ -431,14 +431,20 @@ class LegendBoxChange:
     omitted_layer_ids: tuple[str, ...] = ()
 
 
-def _describe_fit(item: LegendSpec, fit: LegendFit, matched_layout: bool) -> str:
-    """What happened to a legend, for Checks."""
+def _describe_fit(
+    item: LegendSpec,
+    fit: LegendFit,
+    matched_layout: bool,
+    omitted_said_elsewhere: bool = False,
+) -> str | None:
+    """What happened to a legend, for Checks; `None` when there is nothing
+    left to say (the entries it left out are reported by the caller)."""
     done = []
     if fit.grown_mm > 0:
         done.append(f"made {fit.grown_mm:.1f} mm taller")
     if fit.columns != (item.columns or 1):
         done.append(f"set in {fit.columns} columns instead of {item.columns or 1}")
-    if fit.omitted_layers:
+    if fit.omitted_layers and not omitted_said_elsewhere:
         count = fit.omitted_entries
         done.append(
             f"left without {count} "
@@ -447,13 +453,15 @@ def _describe_fit(item: LegendSpec, fit: LegendFit, matched_layout: bool) -> str
             + ", ".join(fit.omitted_layers)
             + ")"
         )
+    if not done:
+        return None
     text = (
         "The web page's legend is taller than QGIS's, so this legend was "
         + (", ".join(done[:-1]) + " and " if len(done) > 1 else "")
         + done[-1]
         + " to fit it."
     )
-    if fit.omitted_layers:
+    if fit.omitted_layers and not omitted_said_elsewhere:
         text += " Make room around the legend on the layout to keep them."
     if matched_layout:
         text += " The layout's legend was changed to match."
@@ -468,6 +476,7 @@ def fit_frame_legend_boxes(
     *,
     grow_on_page_height: float | None = None,
     changes: list[LegendBoxChange] | None = None,
+    template_legends: Collection[str] = (),
 ) -> CartographSpec:
     """`spec` with every derived legend of `frame_id` fitted to its box, and
     in `report` what each legend needed (see `_describe_fit`).
@@ -475,7 +484,9 @@ def fit_frame_legend_boxes(
     With `grow_on_page_height` (the page's height in mm) a legend's box may
     grow (`legend_grow_room`); without it only columns and layers change, as
     nothing else would carry a taller box to the layout. `changes` collects
-    what changed per legend, for mirroring into the layout."""
+    what changed per legend, for mirroring into the layout. The legends in
+    `template_legends` (ids) already have a Checks row saying what they leave
+    out, which the caller rewrites; this adds no second one for it."""
     items = list(spec.items)
     for index, item in enumerate(items):
         if not (
@@ -501,8 +512,12 @@ def fit_frame_legend_boxes(
                     fit.omitted_layer_ids,
                 )
             )
-        report.approximated(
-            f"Legend '{item.id.removeprefix('legend_')}'",
-            _describe_fit(item, fit, grow_on_page_height is not None),
+        detail = _describe_fit(
+            item,
+            fit,
+            grow_on_page_height is not None,
+            item.id in template_legends,
         )
+        if detail is not None:
+            report.approximated(f"Legend '{item.id.removeprefix('legend_')}'", detail)
     return replace(spec, items=tuple(items))

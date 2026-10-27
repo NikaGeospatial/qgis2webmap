@@ -59,6 +59,7 @@ from pathlib import Path
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsMapLayer,
     QgsMapLayerStyle,
@@ -93,6 +94,7 @@ from .cartograph_ir import (
     FrameGeoreference,
     FrameSpec,
     LegendSpec,
+    element_id,
 )
 from .export_ir import (
     AssetDisposition,
@@ -110,11 +112,15 @@ from .fidelity_report import FidelityReportBuilder
 from .layer_reader import PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
+    LEGEND_LEFT_OUT_PROPERTY,
     AtlasRequirement,
     FrameMode,
     MapFrameReading,
     draws_in_own_plane,
+    layout_item_tokens,
     layout_state_restored,
+    left_out_detail,
+    legend_left_out,
     read_layout,
 )
 from .legend_box_sync import apply_legend_changes
@@ -458,6 +464,14 @@ def fit_legends_to_layout(
         return prepared
     spec = prepared.spec
     changes: list[LegendBoxChange] = []
+    # A template's legend that left entries out already has a Checks row.
+    tokens = layout_item_tokens(layout)
+    template_legends = {
+        element_id("legend", item.uuid(), tokens)
+        for item in layout.items()
+        if isinstance(item, QgsLayoutItemLegend)
+        and item.customProperty(LEGEND_LEFT_OUT_PROPERTY)
+    }
     qgis_layer_ids: dict[str, dict[str, str]] = {}
     for source, pending in zip(prepared.live_frames, prepared.live_reads, strict=True):
         base_layers = [
@@ -481,6 +495,7 @@ def fit_legends_to_layout(
             report,
             grow_on_page_height=spec.height,
             changes=found,
+            template_legends=template_legends,
         )
         spec = replace(
             spec,
@@ -497,7 +512,18 @@ def fit_legends_to_layout(
             ),
         )
         changes.extend(found)
-    apply_legend_changes(layout, project, changes, qgis_layer_ids)
+    changed = apply_legend_changes(layout, project, changes, qgis_layer_ids)
+    for change in changes:
+        legend = changed.get(change.legend_id)
+        linked = legend.linkedMap() if legend is not None else None
+        if change.omitted_layer_ids and change.legend_id in template_legends and linked:
+            # One row for the legend: its count now includes what the page
+            # needed left out as well.
+            report.rewrite_detail(
+                f"Legend '{change.legend_id.removeprefix('legend_')}'",
+                "The legend leaves out",
+                left_out_detail(legend_left_out(legend, linked)),
+            )
     return replace(prepared, spec=spec)
 
 

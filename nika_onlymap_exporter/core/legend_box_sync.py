@@ -57,19 +57,19 @@ def apply_legend_changes(
     project: QgsProject,
     changes: Sequence[LegendBoxChange],
     qgis_layer_ids: Mapping[str, Mapping[str, str]],
-) -> int:
+) -> dict[str, QgsLayoutItemLegend]:
     """Make each change in `layout`'s legend item. `qgis_layer_ids` gives, per
-    frame id, the QGIS layer id behind each `<om-layer id>`. Returns how many
-    legends were changed."""
+    frame id, the QGIS layer id behind each `<om-layer id>`. Returns the legend
+    items that were changed, by legend id."""
     if not changes:
-        return 0
+        return {}
     tokens = layout_item_tokens(layout)
     legends = {
         element_id("legend", item.uuid(), tokens): item
         for item in layout.items()
         if isinstance(item, QgsLayoutItemLegend)
     }
-    done = 0
+    done: dict[str, QgsLayoutItemLegend] = {}
     for change in changes:
         legend = legends.get(change.legend_id)
         if legend is None or sip.isdeleted(legend):
@@ -93,5 +93,5 @@ def apply_legend_changes(
         )
         legend.invalidateCache()
         legend.refresh()
-        done += 1
+        done[change.legend_id] = legend
     return done

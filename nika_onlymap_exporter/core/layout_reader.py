@@ -1907,14 +1907,7 @@ def _read_legend(
         )
     left_out = _legend_left_out(item, linked)
     if left_out:
-        report.approximated(
-            label,
-            f"The legend leaves out {left_out} "
-            + ("entry" if left_out == 1 else "entries")
-            + " that did not fit its box at a readable size. Use a larger "
-            "page, shorten the layer names, or make the legend bigger in the "
-            "layout designer and add them back in its item properties.",
-        )
+        report.approximated(label, left_out_detail(left_out))
 
     if not derived and not rows:
         # A static legend with nothing to show (e.g. every layer unreadable)
@@ -2037,6 +2030,22 @@ def _classed_legend_layers(
             )
         )
     return classed
+
+
+def left_out_detail(count: int) -> str:
+    """Checks wording for a template's legend that leaves out `count` entries."""
+    return (
+        f"The legend leaves out {count} "
+        + ("entry" if count == 1 else "entries")
+        + " that did not fit its box at a readable size. Use a larger "
+        "page, shorten the layer names, or make the legend bigger in the "
+        "layout designer and add them back in its item properties."
+    )
+
+
+def legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> int:
+    """`_legend_left_out`, for callers outside this module."""
+    return _legend_left_out(item, map_item)
 
 
 def _legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> int:
