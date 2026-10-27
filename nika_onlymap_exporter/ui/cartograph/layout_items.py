@@ -181,12 +181,21 @@ def default_rect(layout: QgsLayout, kind: ItemKind, top_left: QPointF) -> QRectF
 
 
 def delete_items(layout: QgsLayout, items: list[QgsLayoutItem]) -> None:
-    """Remove `items` as one undo step."""
+    """Remove `items` as one undo step. A statistic callout goes whole, the
+    others closing up (`callouts.remove_callout`), not one of its parts."""
     if not items:
         return
+    from .callouts import callout_index, remove_callout
+
+    callouts = sorted(
+        {i for item in items if (i := callout_index(item)) is not None}, reverse=True
+    )
     with one_step(layout, tr("Delete items")):
+        for index in callouts:
+            remove_callout(layout, index)
         for item in items:
-            layout.removeLayoutItem(item)
+            if callout_index(item) is None:
+                layout.removeLayoutItem(item)
 
 
 @contextlib.contextmanager
