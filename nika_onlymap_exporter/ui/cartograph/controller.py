@@ -749,6 +749,7 @@ class CartographController:
         from ...core.canvas_cartograph import (
             LayerRevisions,
             cartograph_from_canvas,
+            prepared_input,
             preview_state_key,
             template_layout_name,
             template_preview_async,
@@ -800,9 +801,7 @@ class CartographController:
                 raise ValueError("the canvas could not be read")
             return plan_template(
                 template_id,
-                dataclasses.replace(
-                    base_input, page_size=page_size, orientation=orientation
-                ),
+                prepared_input(base_input, self.project, page_size, orientation),
             )
 
         def render(template_id: str, page_size: str, orientation: str, width_px: int):
@@ -817,6 +816,7 @@ class CartographController:
                 page_size=page_size,
                 orientation=orientation,
                 placeholders=placeholders,
+                prepared=base_input,
             )
 
         # The picker saves the map framing chosen in it to the project as it

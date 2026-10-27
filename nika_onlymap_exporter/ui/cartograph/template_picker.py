@@ -1,5 +1,5 @@
 """Current canvas > choose a layout template: immediate layout guides,
-with automatic current-map previews while rendering stays quick.
+replaced card by card with the current map in each design.
 
 The picker only chooses -- a template, a page size and an orientation -- and
 the controller builds the layout (`core/canvas_cartograph.py`). Each preview
@@ -21,11 +21,20 @@ page size is instant; given a `canvas_key`, they are kept for the next
 opening too, until the canvas or project changes. The last choice is
 remembered per user (`QSettings`).
 
-Each card starts with an inexpensive labelled diagram of its planned layout.
-A three-second render deadline and a five-second total automatic-render budget
-keep slow projects in on-demand mode. Preview opens the real map at a useful
-size and caches it for that canvas and those settings. The final grid card is
-a request-form link, never a design that can be selected or created.
+Each card starts with an inexpensive diagram of its planned layout, labelled
+"Waiting to draw", then "Drawing your map..." while its turn comes, then the
+real page. There is no budget for the whole opening: a slow map still fills
+every card, one at a time, and a card that fails or takes too long (one
+timeout, `_CARD_RENDER_TIMEOUT_MS`) shows "Preview unavailable" with a Retry
+while the cards after it carry on. A page is drawn only as wide as its card
+shows it (`_render_pixels`). Preview opens the real map at a useful size,
+showing the card's page at once while the sharper one is drawn. The final
+grid card is a request-form link, never a design that can be selected or
+created.
+
+Closing the picker, or a setting making the page in flight obsolete, drops
+its result at once; QGIS winds the page down in the background and the next
+one waits (`canvas_cartograph.render_slot_busy`).
 
 **What a card says it includes** is checked against the page this project
 gets (`core/template_cues.py`): "Includes" lists what the page shows, "Can
@@ -39,7 +48,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
-import time
 from collections import OrderedDict
 from collections.abc import Iterable
 from typing import Protocol
@@ -96,6 +104,7 @@ from ...core.canvas_cartograph import (
     PREVIEW_LEGEND_LEFT_OUT_KEY,
     PREVIEW_LOCATOR_NO_CONTEXT_KEY,
     PendingPreview,
+    render_slot_busy,
 )
 from ...core.layout_templates import (
     CHARACTERFUL,
@@ -123,9 +132,8 @@ SETTINGS_KEY = "qgis2webmap/cartograph/template"
 DEFAULT_TEMPLATE = "classic"
 _DARK_TEMPLATES = frozenset(("dark", "night-desk"))
 
-#: The widest a page preview is shown, in logical pixels. Every page is drawn
-#: at this width (times the screen's pixel ratio) and scaled down to its box,
-#: so resizing the dialog never draws a page again.
+#: The widest a page preview is shown, in logical pixels. A page is drawn at
+#: the width its card shows it, up to this, times the screen's pixel ratio.
 RENDER_WIDTH = 360
 #: The narrowest preview box; below it a page is too small to judge.
 _MIN_BOX_WIDTH = 180
@@ -165,10 +173,15 @@ _NEAR_VIEW = 0.5
 #: drawn: a page takes the event loop for its whole drawing, so none
 #: starts while the user is still scrolling.
 _SCROLL_SETTLE_MS = 150
-# Fast local maps still fill the cards automatically. One stuck render, or
-# too much total rendering, switches this opening to on-demand previews.
-_CARD_RENDER_TIMEOUT_MS = 3000
-_AUTOMATIC_RENDER_BUDGET_SECONDS = 5.0
+#: One card that has not drawn in this long is given up on -- that card
+#: only: it shows "Preview unavailable" with a Retry, and the cards after it
+#: carry on. There is no budget for the opening as a whole: a slow map still
+#: fills every card, one at a time.
+_CARD_RENDER_TIMEOUT_MS = 45_000
+#: Pages are drawn at a multiple of this many pixels wide.
+_WIDTH_STEP = 40
+#: How soon to look again while a cancelled page still holds the render slot.
+_SLOT_RECHECK_MS = 100
 
 _PAGE_LABELS = {
     "Letter": N_("Letter (ANSI A)"),
@@ -220,6 +233,14 @@ class PreviewPlanner(Protocol):
 
 #: (template, page size, orientation, width, canvas, map framing).
 _PageKey = tuple[str, str, str, int, str, str]
+#: A `_PageKey` without the width: what a plan or a card's cues depend on.
+_PlanKey = tuple[str, str, str, str, str]
+
+
+def _plan_key(key: _PageKey) -> _PlanKey:
+    return (*key[:3], *key[4:])
+
+
 #: Where in a `_PageKey` the canvas state is.
 _CANVAS = 4
 
@@ -372,18 +393,30 @@ class _TemplateRow(QFrame):
         self.preview.setProperty("role", "templatePreview")
         faces = QStackedLayout(self.preview)
         faces.setContentsMargins(0, 0, 0, 0)
-        self.page = QLabel(tr("Drawing the preview\u2026"), self.preview)
+        self.page = QLabel("", self.preview)
         self.page.setProperty("role", "templatePage")
         self.page.setProperty("drawn", False)
         self.page.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.page.setWordWrap(True)
+        # What the page is doing while it is not drawn yet, over the layout
+        # guide: "Waiting to draw" or "Drawing your map...". Hidden once the
+        # real page shows. A label of its own, so the box never changes size.
+        over = QVBoxLayout(self.page)
+        over.setContentsMargins(4, 4, 4, 4)
+        over.addStretch(1)
+        self.status = QLabel("", self.page)
+        self.status.setProperty("role", "templateStatus")
+        self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status.setWordWrap(True)
+        self.status.setVisible(False)
+        over.addWidget(self.status, 0, Qt.AlignmentFlag.AlignHCenter)
         faces.addWidget(self.page)
         self.failure = QFrame(self.preview)
         self.failure.setProperty("role", "templateFailure")
         failure = QVBoxLayout(self.failure)
         failure.setContentsMargins(8, 8, 8, 8)
         failure.addStretch(1)
-        message = QLabel(tr("Preview could not be drawn"), self.failure)
+        message = QLabel(tr("Preview unavailable"), self.failure)
         message.setProperty("role", "templateFailureText")
         message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         message.setWordWrap(True)
@@ -521,7 +554,7 @@ class _TemplateRow(QFrame):
         self._faces.setCurrentWidget(self.page)
         if image is None:
             self.page.setPixmap(QPixmap())
-            self.page.setText(tr("Drawing the preview\u2026"))
+        self.status.setVisible(False)
         self.page.setProperty("drawn", self.drawn)
         _repolish(self.page)
         self._refit()
@@ -534,11 +567,17 @@ class _TemplateRow(QFrame):
         self._faces.setCurrentWidget(self.failure)
         self._refit()
 
-    def show_guide(self, image: QImage) -> None:
+    def show_guide(self, image: QImage, drawing: bool = False) -> None:
+        """The layout guide, with the page's state over it: waiting its turn
+        or being drawn now."""
         self.show_page(image)
         self.drawn = False
+        self.status.setText(
+            tr("Drawing your map\u2026") if drawing else tr("Waiting to draw")
+        )
+        self.status.setVisible(True)
         self.page.setToolTip(
-            tr("Layout guide. Use Preview to see your current map in this design.")
+            tr("Layout guide. Your current map replaces it as it is drawn.")
         )
 
     def _refit(self) -> None:
@@ -741,18 +780,20 @@ class TemplatePicker(QDialog):
             self._pages = _PageCache()
         self._failed: set[_PageKey] = set()
         self._guides = _PageCache(limit=24, max_bytes=16 * 1024 * 1024)
-        self._automatic_previews = True
-        self._render_started = 0.0
-        self._render_seconds = 0.0
+        #: Set once the picker is answered: nothing more is drawn or shown.
+        self._closed = False
+        #: How wide, in logical pixels, a wide page is shown on its card now;
+        #: pages are drawn for this, not more (`_render_pixels`).
+        self._thumb_width = RENDER_WIDTH
         self._preview_deadline = QTimer(self)
         self._preview_deadline.setSingleShot(True)
         self._preview_deadline.setInterval(_CARD_RENDER_TIMEOUT_MS)
-        self._preview_deadline.timeout.connect(self._use_on_demand_previews)
+        self._preview_deadline.timeout.connect(self._card_timed_out)
         self._planner = planner
-        self._plans: OrderedDict[_PageKey, TemplatePlan] = OrderedDict()
+        self._plans: OrderedDict[_PlanKey, TemplatePlan] = OrderedDict()
         #: Each card's cues by page key, so a page setting seen before is
         #: not planned again.
-        self._cues: dict[_PageKey, CardCues] = {}
+        self._cues: dict[_PlanKey, CardCues] = {}
         # Read once: the designs as the registry has them now.
         # Essentials first, followed by characterful designs, then the two
         # dark sheets together at the end.
@@ -1034,6 +1075,7 @@ class TemplatePicker(QDialog):
             f"{self.page_combo.currentText()} · {self.orientation_combo.currentText()}",
             render,
             self,
+            self._pages.get(key),
         )
         try:
             preview.show()
@@ -1053,25 +1095,31 @@ class TemplatePicker(QDialog):
             self._reprioritise()
 
     def accept(self) -> None:
-        self._use_on_demand_previews()
+        self._stop_drawing()
         self._save_choice()
         if self._project is not None:
             set_project_framing(self._project, self.framing_combo.currentData())
         super().accept()
 
     def reject(self) -> None:
-        self._use_on_demand_previews()
+        self._stop_drawing()
         super().reject()
 
     # ---- Previews ------------------------------------------------------------
 
-    def _key(self, template_id: str) -> _PageKey:
+    def _render_pixels(self) -> int:
+        """The width a page is drawn at: what its card can show (the box's
+        width times the screen's pixel ratio), rounded up to a step so a
+        window resized a little keeps the pages it has."""
         ratio = max(1.0, self.devicePixelRatioF())
+        return -(-round(self._thumb_width * ratio) // _WIDTH_STEP) * _WIDTH_STEP
+
+    def _key(self, template_id: str) -> _PageKey:
         return (
             template_id,
             self.page_size,
             self.orientation,
-            round(RENDER_WIDTH * ratio),
+            self._render_pixels(),
             self._canvas_key,
             str(self.framing_combo.currentData()),
         )
@@ -1100,7 +1148,12 @@ class TemplatePicker(QDialog):
             row.show_failure()
             self._mark_failed_item(template_id)
         else:
-            row.show_guide(self._guide(template_id, key))
+            drawing = (
+                self._inflight is not None
+                and self._inflight[0] == template_id
+                and self._inflight[1] == key
+            )
+            row.show_guide(self._guide(template_id, key), drawing)
             self._items[template_id].setToolTip(
                 card_tooltip(self._templates[template_id])
             )
@@ -1136,21 +1189,26 @@ class TemplatePicker(QDialog):
 
     def _plan(self, template_id: str, key: _PageKey) -> TemplatePlan | None:
         """Share the cheap plan between card cues and its layout guide."""
-        plan = self._plans.get(key)
+        # A plan does not depend on the pixels a page is drawn with.
+        plan_key = _plan_key(key)
+        plan = self._plans.get(plan_key)
         if plan is not None:
-            self._plans.move_to_end(key)
+            self._plans.move_to_end(plan_key)
             return plan
         if self._planner is None:
             return None
         with preview_framing(key[5]):
             plan = self._planner(template_id, key[1], key[2])
-        self._plans[key] = plan
+        self._plans[plan_key] = plan
         while len(self._plans) > _SHARED_CACHE_LIMIT:
             self._plans.popitem(last=False)
         return plan
 
-    def _use_on_demand_previews(self) -> None:
-        self._automatic_previews = False
+    def _stop_drawing(self) -> None:
+        """The picker is answered: obsolete callbacks are dropped at once
+        (a late page finds no page in flight) and the page being drawn is
+        handed back to QGIS to cancel."""
+        self._closed = True
         self._timer.stop()
         self._scroll_rest.stop()
         self._queue.clear()
@@ -1162,7 +1220,7 @@ class TemplatePicker(QDialog):
         if self._planner is None:
             return
         for template_id in template_ids:
-            key = self._key(template_id)
+            key = _plan_key(self._key(template_id))
             cues = self._cues.get(key)
             if cues is None:
                 template = self._templates[template_id]
@@ -1188,7 +1246,7 @@ class TemplatePicker(QDialog):
         """Order what is left to draw: the selected design, then the cards in
         view, then the ones a short scroll away. A design filtered out or
         further down the list waits until it comes near the view."""
-        if not self._automatic_previews:
+        if self._closed:
             self._queue.clear()
             return
         current = self.template_list.currentItem()
@@ -1245,17 +1303,18 @@ class TemplatePicker(QDialog):
         self._scroll_rest.start()
 
     def _render_next(self) -> None:
-        if self._scroll_rest.isActive() or self._inflight is not None:
+        if self._closed or self._scroll_rest.isActive() or self._inflight is not None:
             return
-        if self._render_seconds >= _AUTOMATIC_RENDER_BUDGET_SECONDS:
-            self._use_on_demand_previews()
+        if render_slot_busy():
+            # A cancelled page is still being wound down by QGIS: wait for
+            # it instead of drawing two pages at once.
+            self._timer.start(_SLOT_RECHECK_MS)
             return
         self._reprioritise()
         if not self._queue:
             return
         template_id = self._queue.pop(0)
         key = self._key(template_id)
-        self._render_started = time.monotonic()
         try:
             with preview_framing(key[5]):
                 result = self._render(template_id, key[1], key[2], key[3])
@@ -1267,14 +1326,9 @@ class TemplatePicker(QDialog):
             result.finished.connect(
                 lambda image, pending=result: self._on_pending_done(pending, image)
             )
-            remaining = min(
-                _CARD_RENDER_TIMEOUT_MS,
-                round((_AUTOMATIC_RENDER_BUDGET_SECONDS - self._render_seconds) * 1000),
-            ) - round((time.monotonic() - self._render_started) * 1000)
-            self._preview_deadline.start(max(0, remaining))
+            self._preview_deadline.start()
             self._show_state(template_id)
             return
-        self._record_render_time()
         self._store_page(template_id, key, result)
         if self._queue:
             self._timer.start()
@@ -1291,39 +1345,43 @@ class TemplatePicker(QDialog):
         self._relayout()
 
     def _on_pending_done(self, pending: PendingPreview, image: QImage | None) -> None:
-        if self._inflight is None or self._inflight[2] is not pending:
+        if self._closed or self._inflight is None or self._inflight[2] is not pending:
             return  # cancelled while it finished
         template_id, key, _pending = self._inflight
         self._inflight = None
         self._preview_deadline.stop()
-        self._record_render_time()
         self._store_page(template_id, key, image)
         self._reprioritise()
 
+    def _card_timed_out(self) -> None:
+        """The page being drawn took too long: that card fails, with a
+        Retry, and the queue goes on."""
+        if self._inflight is None:
+            return
+        template_id, key, _pending = self._inflight
+        self._cancel_inflight()
+        self._store_page(template_id, key, None)
+        self._reprioritise()
+
     def _cancel_inflight(self) -> None:
-        """Stop the page being drawn in the background, if any."""
+        """Stop the page being drawn in the background, if any. QGIS winds
+        it down without blocking this event; until it has, `render_slot_busy`
+        holds the next page back."""
         self._preview_deadline.stop()
         if self._inflight is None:
             return
         _template_id, _key, pending = self._inflight
         self._inflight = None
-        self._record_render_time()
         pending.cancel()
-
-    def _record_render_time(self) -> None:
-        if self._render_started:
-            self._render_seconds += time.monotonic() - self._render_started
-            self._render_started = 0.0
 
     def retry(self, template_id: str) -> None:
         """Draw `template_id`'s page again, next."""
-        if not self._automatic_previews:
-            self.open_large_preview(template_id)
+        if self._closed:
             return
         self._failed.discard(self._key(template_id))
         self._show_state(template_id)
         self._reprioritise()
-        if self._queue and self._queue[0] != template_id:
+        if template_id in self._queue and self._queue[0] != template_id:
             self._queue.remove(template_id)
             self._queue.insert(0, template_id)
 
@@ -1440,6 +1498,13 @@ class TemplatePicker(QDialog):
         # card that would end within one spacing of the edge; two spare
         # pixels for rounding.
         card_w = max(1, (width - _LIST_SPACING * (2 * columns + 1)) // columns - 2)
+        drawn_at = self._render_pixels()
+        self._thumb_width = _preview_box(card_w, height, False).width()
+        if self._render_pixels() != drawn_at:
+            # The pages to show are other ones (a different width): what is
+            # drawn for this width, or its guide, takes the cards.
+            for template_id in self.rows:
+                self._show_state(template_id)
         turns = tuple(
             self.orientation == "portrait"
             or (

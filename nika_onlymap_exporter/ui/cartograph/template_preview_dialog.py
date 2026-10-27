@@ -3,6 +3,9 @@
 The picker owns the choice; this dialog only inspects its current page.
 Closing it cancels an outstanding QGIS render and changes no project state.
 
+The card's thumbnail, when there is one, is shown at once while the larger
+page is drawn ("Refining preview..."), and stays if that fails, with a Retry.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -23,9 +26,12 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ...core.canvas_cartograph import render_slot_busy
 from ..i18n import tr
 
 PREVIEW_TIMEOUT_MS = 30_000
+#: How soon to look again while a cancelled page still holds the render slot.
+_SLOT_RECHECK_MS = 100
 
 
 class _Page(QLabel):
@@ -34,22 +40,40 @@ class _Page(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setMinimumSize(100, 100)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        #: The drawn larger page, once there is one; never the thumbnail.
         self.image: QImage | None = None
+        #: What is on show: the larger page, else the card's thumbnail.
+        self.shown: QImage | None = None
 
-    def show_image(self, image: QImage | None) -> None:
-        self.image = image
-        if image is None or image.isNull():
-            self.setPixmap(QPixmap())
-            self.setText(tr("Preview could not be drawn"))
+    def show_thumbnail(self, thumbnail: QImage | None) -> None:
+        """The card's page while the larger one is drawn."""
+        self.image = None
+        usable = thumbnail is not None and not thumbnail.isNull()
+        self.shown = thumbnail if usable else None
+        self.setPixmap(QPixmap())
+        if self.shown is None:
+            self.setText(tr("Drawing the preview\u2026"))
         else:
             self._refit()
 
+    def show_image(self, image: QImage | None) -> None:
+        if image is None or image.isNull():
+            # The thumbnail, if any, stays on show.
+            self.image = None
+            if self.shown is None:
+                self.setPixmap(QPixmap())
+                self.setText(tr("Preview could not be drawn"))
+            return
+        self.image = image
+        self.shown = image
+        self._refit()
+
     def _refit(self) -> None:
-        if self.image is None or self.image.isNull():
+        if self.shown is None or self.shown.isNull():
             return
         ratio = max(1.0, self.devicePixelRatioF())
         size = QSize(round(self.width() * ratio), round(self.height() * ratio))
-        pixmap = QPixmap.fromImage(self.image).scaled(
+        pixmap = QPixmap.fromImage(self.shown).scaled(
             size,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
@@ -70,8 +94,10 @@ class TemplatePreviewDialog(QDialog):
         page_label: str,
         render: Callable[[int], object],
         parent: QWidget,
+        thumbnail: QImage | None = None,
     ) -> None:
         super().__init__(parent)
+        self._thumbnail = thumbnail
         self.setWindowTitle(title)
         self.setModal(True)
         self._render = render
@@ -80,6 +106,9 @@ class TemplatePreviewDialog(QDialog):
         self._deadline = QTimer(self)
         self._deadline.setSingleShot(True)
         self._deadline.timeout.connect(self._timed_out)
+        self._slot_wait = QTimer(self)
+        self._slot_wait.setSingleShot(True)
+        self._slot_wait.timeout.connect(self._begin)
         column = QVBoxLayout(self)
         heading = QLabel(title, self)
         font = heading.font()
@@ -93,6 +122,13 @@ class TemplatePreviewDialog(QDialog):
         column.addWidget(details)
         self.page = _Page(self)
         column.addWidget(self.page, 1)
+        # Under the page: that a sharper version is being drawn, or why the
+        # thumbnail is all there is.
+        self.progress = QLabel("", self)
+        self.progress.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress.setProperty("role", "hint")
+        self.progress.setVisible(False)
+        column.addWidget(self.progress)
         self.retry_button = QPushButton(tr("Retry preview"), self)
         self.retry_button.setAutoDefault(False)
         self.retry_button.hide()
@@ -113,13 +149,27 @@ class TemplatePreviewDialog(QDialog):
         if self._closed:
             return
         self._deadline.stop()
+        self._slot_wait.stop()
         pending, self._pending = self._pending, None
         if pending is not None:
             pending.cancel()
         self.retry_button.hide()
-        self.page.image = None
-        self.page.setPixmap(QPixmap())
-        self.page.setText(tr("Drawing the preview\u2026"))
+        self.page.show_thumbnail(self._thumbnail)
+        if self._thumbnail is not None and not self._thumbnail.isNull():
+            self.progress.setText(tr("Refining preview\u2026"))
+            self.progress.setVisible(True)
+        else:
+            self.progress.setVisible(False)
+        self._begin()
+
+    def _begin(self) -> None:
+        """Draw the larger page -- once a page cancelled a moment ago has
+        let go of the render slot."""
+        if self._closed:
+            return
+        if render_slot_busy():
+            self._slot_wait.start(_SLOT_RECHECK_MS)
+            return
         width = round(
             min(1400, max(960, self.width())) * max(1.0, self.devicePixelRatioF())
         )
@@ -144,8 +194,12 @@ class TemplatePreviewDialog(QDialog):
         self._show_result(image)
 
     def _show_result(self, image: QImage | None) -> None:
+        failed = image is None or image.isNull()
         self.page.show_image(image)
-        self.retry_button.setVisible(image is None or image.isNull())
+        self.retry_button.setVisible(failed)
+        self.progress.setVisible(failed and self.page.shown is not None)
+        if failed:
+            self.progress.setText(tr("The sharper preview could not be drawn."))
 
     def _timed_out(self) -> None:
         if self._closed:
@@ -154,13 +208,16 @@ class TemplatePreviewDialog(QDialog):
         if pending is not None:
             pending.cancel()
         self._show_result(None)
-        self.page.setText(
-            tr("The preview took too long. Retry, or close to choose a template.")
-        )
+        message = tr("The preview took too long. Retry, or close to choose a template.")
+        if self.page.shown is None:
+            self.page.setText(message)
+        else:
+            self.progress.setText(message)
 
     def done(self, result: int) -> None:
         self._closed = True
         self._deadline.stop()
+        self._slot_wait.stop()
         pending, self._pending = self._pending, None
         if pending is not None:
             pending.cancel()

@@ -399,6 +399,72 @@ class TestPreview:
         assert not project.isDirty()
         assert list(project.layoutManager().layouts()) == layouts
 
+    def test_a_prepared_input_gives_the_same_page_without_reading_the_view_again(
+        self, qgis_app, parcels, project, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.core import canvas_cartograph
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            PREVIEW_LEGEND_LEFT_OUT_KEY,
+            view_input,
+        )
+
+        view = _view(parcels)
+        prepared = view_input(view, UTM, [parcels], project)
+        direct = template_preview(
+            view, UTM, [parcels], project, template_id="locator", width_px=240
+        )
+        reads: list[int] = []
+        real = canvas_cartograph.view_input
+        monkeypatch.setattr(
+            canvas_cartograph,
+            "view_input",
+            lambda *a, **k: reads.append(1) or real(*a, **k),
+        )
+        reused = template_preview(
+            view,
+            UTM,
+            [parcels],
+            project,
+            template_id="locator",
+            width_px=240,
+            prepared=prepared,
+        )
+        assert reads == []
+        assert reused == direct
+        assert reused.text(PREVIEW_LEGEND_LEFT_OUT_KEY) == direct.text(
+            PREVIEW_LEGEND_LEFT_OUT_KEY
+        )
+
+    def test_a_cancelled_page_still_drawing_holds_the_slot_until_it_reports(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from nika_onlymap_exporter.core import canvas_cartograph
+        from nika_onlymap_exporter.core.canvas_cartograph import (
+            render_slot_busy,
+            template_preview_async,
+        )
+
+        project.setDirty(False)
+        pending = template_preview_async(
+            _view(parcels), UTM, [parcels], project, template_id="poster", width_px=240
+        )
+        got: list = []
+        pending.finished.connect(got.append)
+        pending.cancel()
+        assert render_slot_busy()
+        assert pending in canvas_cartograph._RETIRING
+        import time
+
+        deadline = time.monotonic() + 30
+        while render_slot_busy() and time.monotonic() < deadline:
+            qgis_app.processEvents()
+        for _ in range(20):
+            qgis_app.processEvents()
+        assert not render_slot_busy()
+        assert canvas_cartograph._RETIRING == []
+        assert got == []
+        assert not project.isDirty()
+
     def test_a_cancelled_background_page_never_reports(
         self, qgis_app, parcels, project
     ) -> None:

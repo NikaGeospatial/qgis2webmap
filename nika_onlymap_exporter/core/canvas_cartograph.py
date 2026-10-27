@@ -34,6 +34,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -361,6 +362,7 @@ def template_preview(
     placeholders: Mapping[str, str] | None = None,
     figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
+    prepared: TemplateInput | None = None,
 ) -> QImage:
     """The page `template_id` would make of this view, drawn by QGIS
     `width_px` wide -- the template picker's thumbnail. The layout is built
@@ -385,6 +387,7 @@ def template_preview(
             add_to_project=False,
             figures=figures,
             text_sizes=text_sizes,
+            prepared=prepared,
         )
         height_px = max(1, round(width_px * plan.page_height / plan.page_width))
         no_context = "1" if locator_lacks_context(built.layout) else "0"
@@ -447,6 +450,7 @@ class PendingPreview(QObject):
             if isinstance(item, QgsLayoutItemMap)
         }
         self._done = False
+        self._retired_at = 0.0
         # The page is shown by the first paint, which starts the map jobs.
         for item in built.layout.items():
             if isinstance(item, QgsLayoutItemMap):
@@ -461,7 +465,7 @@ class PendingPreview(QObject):
 
     @property
     def active(self) -> bool:
-        return self._layout is not None
+        return self._layout is not None and not self._done
 
     def _paint(self) -> QImage:
         layout = self._layout
@@ -499,7 +503,17 @@ class PendingPreview(QObject):
         with self._project_kept():
             self._waiting.discard(key)
         if not self._waiting:
-            self._finish()
+            if self in _RETIRING:
+                # Cancelled and now idle: let go of it after this signal
+                # has returned, not inside the map item that sent it.
+                QTimer.singleShot(0, self._retired_idle)
+            else:
+                self._finish()
+
+    def _retired_idle(self) -> None:
+        if self in _RETIRING:
+            _RETIRING.remove(self)
+        self._release()
 
     def _finish(self) -> None:
         if self._done or self._layout is None:
@@ -512,15 +526,49 @@ class PendingPreview(QObject):
         self.finished.emit(image)
 
     def cancel(self) -> None:
-        """Stop drawing: the page is dropped, which ends its map jobs."""
+        """Stop wanting the page: no result is emitted from here on.
+
+        QGIS cannot be asked from Python to abandon a map's render job
+        without waiting for it: deleting a layout whose map is still
+        drawing blocks the GUI thread until the job has stopped, and
+        a slow layer only stops between two of its features. So a page that
+        is still drawing is not deleted here. It is kept (`_RETIRING`)
+        until its maps have reported, then dropped with nothing left to
+        wait for, and `render_slot_busy()` tells callers not to start
+        another heavy page meanwhile."""
         self._done = True
-        self._release()
+        if self._layout is not None and self._waiting:
+            self._retired_at = time.monotonic()
+            _RETIRING.append(self)
+        else:
+            self._release()
 
     def _release(self) -> None:
         layout, self._layout = self._layout, None
         if layout is not None:
             with self._project_kept():
                 pass
+
+
+#: Cancelled pages whose maps are still drawing: kept alive until they have
+#: reported (`PendingPreview.cancel`). Normally empty or one long, as only one
+#: page is drawn at a time and the next waits for this to be empty.
+_RETIRING: list[PendingPreview] = []
+#: A page that has not reported this long after being cancelled is given up
+#: on: dropped, whatever the wait for the GUI thread.
+_RETIRE_LIMIT_S = 120.0
+
+
+def render_slot_busy() -> bool:
+    """Whether a cancelled page is still drawing in the background, and so
+    holds the render slot: a new page waits, so abandoned work never piles up
+    behind the one the user wants."""
+    now = time.monotonic()
+    for pending in list(_RETIRING):
+        if now - pending._retired_at > _RETIRE_LIMIT_S:
+            _RETIRING.remove(pending)
+            pending._release()
+    return bool(_RETIRING)
 
 
 def template_preview_async(
@@ -537,6 +585,7 @@ def template_preview_async(
     placeholders: Mapping[str, str] | None = None,
     figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
+    prepared: TemplateInput | None = None,
 ) -> PendingPreview:
     """`template_preview`, drawn in the background: see `PendingPreview`.
     The arguments are the same; building the page can raise, as there."""
@@ -555,6 +604,7 @@ def template_preview_async(
             add_to_project=False,
             figures=figures,
             text_sizes=text_sizes,
+            prepared=prepared,
         )
     height_px = max(1, round(width_px * plan.page_height / plan.page_width))
     return PendingPreview(
@@ -606,6 +656,27 @@ def view_input(
     return sizes.apply(data)
 
 
+def prepared_input(
+    prepared: TemplateInput,
+    project: QgsProject,
+    page_size: str,
+    orientation: str,
+) -> TemplateInput:
+    """`view_input` for another page setting, from an input prepared once
+    for this view: the layers' legend labels, credits and text are read
+    once per picker, not once per page drawn. Only what a page setting
+    changes is replaced -- the size, the turn and the map framing, which the
+    picker varies while the view stays."""
+    from .template_framing import project_framing
+
+    return dataclasses.replace(
+        prepared,
+        page_size=page_size,
+        orientation=orientation,
+        fill_frame=project_framing(project) == "fill",
+    )
+
+
 _Built = tuple[TemplatePlan, CartographSpec, BuiltLayout, int]
 
 
@@ -624,6 +695,7 @@ def _build_from_view(
     figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
     layout_name: str | None = None,
+    prepared: TemplateInput | None = None,
 ) -> _Built:
     """Plan and build the page; the last value is how many legend entries
     the built legend leaves out (`_fit_legend`).
@@ -647,6 +719,7 @@ def _build_from_view(
             figures=figures,
             text_sizes=text_sizes,
             layout_name=layout_name,
+            prepared=prepared,
         )
 
     first = build(orientation, add_to_project)
@@ -677,6 +750,7 @@ def _build_once(
     figures: Sequence[tuple[str, str]] | None,
     text_sizes: TextSizes | None,
     layout_name: str | None = None,
+    prepared: TemplateInput | None = None,
 ) -> _Built:
     if not crs.isValid():
         raise ValueError("the canvas has no valid CRS")
@@ -686,7 +760,9 @@ def _build_once(
     title = project.title().strip()
     plan = plan_template(
         template_id,
-        view_input(
+        prepared_input(prepared, project, page_size, orientation)
+        if prepared is not None
+        else view_input(
             extent,
             crs,
             layers,

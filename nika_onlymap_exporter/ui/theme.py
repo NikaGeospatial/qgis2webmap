@@ -1552,6 +1552,13 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: transparent;
     padding: 0px;
 }}
+{d} QLabel[role="templateStatus"] {{
+    background: {p.field};
+    color: {p.ink};
+    border: 1px solid {p.rule};
+    border-radius: 4px;
+    padding: 2px 8px;
+}}
 {d} QFrame[role="templateFailure"] {{
     background: {p.field};
     border: 1px dashed {p.warn};

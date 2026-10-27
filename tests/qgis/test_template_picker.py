@@ -1449,14 +1449,18 @@ class _Pending(QObject):
 
 
 class _SlowRenderer:
-    def __init__(self, delay_ms: int = 150) -> None:
+    def __init__(self, delay_ms: int = 150, only_first: bool = False) -> None:
         self.delay_ms = delay_ms
+        #: Only the first page is slow; the rest draw at once.
+        self.only_first = only_first
         self.started: list[tuple[str, str]] = []
         self.pending: list[_Pending] = []
 
     def __call__(self, template_id, page_size, orientation, width_px):
         self.started.append((template_id, page_size))
-        pending = _Pending(width_px, self.delay_ms)
+        pending = _Pending(
+            width_px, 10 if self.only_first and self.pending else self.delay_ms
+        )
         self.pending.append(pending)
         return pending
 

@@ -10,39 +10,12 @@ from qgis.PyQt.QtWidgets import QApplication
 from test_template_picker import _Pending, _Renderer, _settings, _shown, _SlowRenderer
 
 from nika_onlymap_exporter.ui.cartograph import (
-    template_picker,
     template_preview_dialog,
 )
 from nika_onlymap_exporter.ui.cartograph.template_picker import TemplatePicker
 from nika_onlymap_exporter.ui.cartograph.template_preview_dialog import (
     TemplatePreviewDialog,
 )
-
-
-def test_stalled_card_falls_back_and_ignores_a_late_result(
-    qgis_app, tmp_path, monkeypatch
-):
-    monkeypatch.setattr(template_picker, "_CARD_RENDER_TIMEOUT_MS", 20)
-    renderer = _SlowRenderer(delay_ms=5000)
-    picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
-    try:
-        _shown(qgis_app, picker)
-        QTest.qWait(100)
-        assert len(renderer.pending) == 1
-        assert renderer.pending[0].cancelled
-        assert picker.isVisible()
-        assert not picker._automatic_previews
-        assert all(row._image is not None for row in picker.rows.values())
-        assert all(not row.drawn and not row.failed for row in picker.rows.values())
-        renderer.pending[0]._done()
-        assert not picker.rows["classic"].drawn
-        picker.page_combo.setCurrentIndex(picker.page_combo.findData("A3"))
-        picker.choose("locator")
-        QTest.qWait(50)
-        assert len(renderer.pending) == 1
-        assert picker.template_id == "locator"
-    finally:
-        picker.reject()
 
 
 def test_closing_during_a_scroll_does_not_restart_map_rendering(qgis_app, tmp_path):
@@ -58,7 +31,7 @@ def test_closing_during_a_scroll_does_not_restart_map_rendering(qgis_app, tmp_pa
 
 
 def test_automatic_orientation_is_kept_per_card(qgis_app, tmp_path, monkeypatch):
-    monkeypatch.setattr(template_picker, "_AUTOMATIC_RENDER_BUDGET_SECONDS", 0)
+    monkeypatch.setattr(TemplatePicker, "_render_next", lambda self: None)
     picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
     try:
         _shown(qgis_app, picker)
@@ -78,7 +51,7 @@ def test_automatic_orientation_is_kept_per_card(qgis_app, tmp_path, monkeypatch)
 def test_on_demand_preview_is_cached_without_starting_other_map_renders(
     qgis_app, tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(template_picker, "_AUTOMATIC_RENDER_BUDGET_SECONDS", 0)
+    monkeypatch.setattr(TemplatePicker, "_render_next", lambda self: None)
     renderer = _Renderer()
     picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
 
