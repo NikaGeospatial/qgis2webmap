@@ -318,6 +318,169 @@ class TestPanAndZoomTheContent:
         assert pane.controls.edit_view_button.text() == "Edit view"
 
 
+def _map_point_under(item, local: QPointF) -> QPointF:
+    """The map coordinate shown at an item-local point, rotation included:
+    the inverse of `mapToItemCoords`, which is affine."""
+    centre = item.extent().center()
+    step = item.extent().width() / 10
+    o = item.mapToItemCoords(QPointF(centre.x(), centre.y()))
+    ex = item.mapToItemCoords(QPointF(centre.x() + step, centre.y())) - o
+    ey = item.mapToItemCoords(QPointF(centre.x(), centre.y() + step)) - o
+    det = ex.x() * ey.y() - ey.x() * ex.y()
+    rel = local - o
+    u = (rel.x() * ey.y() - ey.x() * rel.y()) / det
+    v = (ex.x() * rel.y() - rel.x() * ex.y()) / det
+    return QPointF(centre.x() + u * step, centre.y() + v * step)
+
+
+def _drag_path(start: QPoint, end: QPoint, steps: int = 12) -> list[QPoint]:
+    return [
+        QPoint(
+            start.x() + (end.x() - start.x()) * step // steps,
+            start.y() + (end.y() - start.y()) * step // steps,
+        )
+        for step in range(1, steps + 1)
+    ]
+
+
+class TestTheDragIsLive:
+    """The content follows the pointer during a drag with no re-render, as the
+    layout designer's own Move item content tool does; the change is applied
+    once, on release."""
+
+    @staticmethod
+    def _spy(monkeypatch, item) -> list[tuple[float, float]]:
+        offsets: list[tuple[float, float]] = []
+        real = item.setMoveContentPreviewOffset
+
+        def record(dx: float, dy: float) -> None:
+            offsets.append((dx, dy))
+            real(dx, dy)
+
+        monkeypatch.setattr(item, "setMoveContentPreviewOffset", record)
+        return offsets
+
+    @staticmethod
+    def _press(pane, at: QPoint) -> None:
+        viewport = pane.preview.view.viewport()
+        QTest.mouseMove(viewport, at)
+        QTest.mousePress(
+            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, at
+        )
+
+    @pytest.mark.parametrize("rotation", [0.0, 30.0])
+    def test_the_offset_tracks_the_pointer_and_nothing_is_applied_mid_drag(
+        self, qgis_app, near_far, monkeypatch, rotation
+    ) -> None:
+        from test_cartograph_panel_widgets import _move_held
+
+        pane, layout, main, _inset, _region = near_far
+        main.setItemRotation(rotation)
+        _settle(qgis_app, 0.2)
+        _edit_on(qgis_app, pane, layout, main)
+        offsets = self._spy(monkeypatch, main)
+        extent = QgsRectangle(main.extent())
+        changed: list[int] = []
+        main.extentChanged.connect(lambda: changed.append(1))
+        index = _index(layout)
+        view = pane.preview.view
+        start = _centre(pane, main)
+        self._press(pane, start)
+        for point in _drag_path(start, start + QPoint(40, 22)):
+            _move_held(view.viewport(), point)
+            qgis_app.processEvents()
+            assert not main.isDrawing() or not changed
+            local = main.mapFromScene(view.mapToScene(point))
+            origin = main.mapFromScene(view.mapToScene(start))
+            assert offsets[-1] == pytest.approx(
+                (local.x() - origin.x(), local.y() - origin.y())
+            )
+        assert main.extent() == extent
+        assert changed == []
+        assert _index(layout) == index
+        QTest.mouseRelease(
+            view.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            start + QPoint(40, 22),
+        )
+        _settle(qgis_app, 0.2)
+        assert main.extent() != extent
+        assert _index(layout) == index + 1
+        assert layout.undoStack().stack().undoText() == "Pan map content"
+
+    @pytest.mark.parametrize("rotation", [0.0, 30.0])
+    def test_on_release_the_grabbed_point_is_under_the_pointer(
+        self, qgis_app, near_far, rotation
+    ) -> None:
+        pane, layout, main, _inset, _region = near_far
+        main.setItemRotation(rotation)
+        main.setMapRotation(rotation)
+        _settle(qgis_app, 0.2)
+        _edit_on(qgis_app, pane, layout, main)
+        view = pane.preview.view
+        start = _centre(pane, main)
+        end = start + QPoint(35, -20)
+        grabbed = _map_point_under(main, main.mapFromScene(view.mapToScene(start)))
+        _drag(qgis_app, pane, start, end)
+        now = main.mapToItemCoords(grabbed)
+        want = main.mapFromScene(view.mapToScene(end))
+        assert (now.x(), now.y()) == pytest.approx((want.x(), want.y()), abs=0.3)
+
+    def test_the_offset_is_cleared_once_the_move_is_applied(
+        self, qgis_app, near_far, monkeypatch
+    ) -> None:
+        pane, layout, main, _inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, main)
+        offsets = self._spy(monkeypatch, main)
+        start = _centre(pane, main)
+        _drag(qgis_app, pane, start, start + QPoint(20, 10))
+        _settle(qgis_app, 1.5)
+        assert offsets[-1] == (0, 0)
+
+    def test_escape_mid_drag_restores_without_an_undo_step(
+        self, qgis_app, near_far, monkeypatch
+    ) -> None:
+        from test_cartograph_panel_widgets import _move_held
+
+        pane, layout, main, _inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, main)
+        offsets = self._spy(monkeypatch, main)
+        extent = QgsRectangle(main.extent())
+        index = _index(layout)
+        view = pane.preview.view
+        start = _centre(pane, main)
+        self._press(pane, start)
+        for point in _drag_path(start, start + QPoint(30, 30), 6):
+            _move_held(view.viewport(), point)
+            qgis_app.processEvents()
+        _escape(pane)
+        QTest.mouseRelease(
+            view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+        )
+        _settle(qgis_app, 0.1)
+        assert not pane.preview.content_editor.active
+        assert main.extent() == extent
+        assert _index(layout) == index
+        assert offsets[-1] == (0, 0)
+
+    def test_a_wheel_burst_is_one_undo_step_with_the_right_zoom(
+        self, qgis_app, near_far
+    ) -> None:
+        pane, layout, main, _inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, main)
+        width = main.extent().width()
+        index = _index(layout)
+        at = _centre(pane, main) + QPoint(30, -10)
+        under = _map_point_at(pane, main, at)
+        for _ in range(4):
+            _wheel(qgis_app, pane, at, 1)
+        _settle(qgis_app, 0.1)
+        assert _index(layout) == index + 1
+        assert main.extent().width() == pytest.approx(width / 1.2**4, rel=1e-6)
+        assert _map_point_at(pane, main, at) == pytest.approx(under, abs=width * 0.002)
+
+
 class TestTheModeIsClear:
     def test_the_inset_names_its_button_and_the_banner_says_what_is_on(
         self, qgis_app, near_far
