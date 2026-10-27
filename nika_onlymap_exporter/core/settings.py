@@ -33,6 +33,7 @@ from .export_ir import (
     OverlayCorner,
     PopupFieldMode,
 )
+from .layout_identity import KEY_PREFIX, LayoutKeys
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsProject
@@ -746,7 +747,33 @@ def load_state(project: QgsProject) -> DialogState:
         except (ValueError, AttributeError):
             pass
 
+    _name_the_layout_keys(project, state)
     return state
+
+
+def _name_the_layout_keys(project: QgsProject, state: DialogState) -> None:
+    """Turn the persisted layout ids back into the layouts' current names.
+
+    Everything per layout is filed under the layout's id in the project (see
+    `core/layout_identity.py`), so a layout renamed since the last save still
+    finds its file, frames, print and page settings. A key that is not an id
+    is a layout NAME written by an earlier version and is kept as it is; when
+    both exist for one layout, the id's entry is the newer and wins.
+    """
+    keys = LayoutKeys(project)
+
+    def renamed(table: dict[str, Any]) -> dict[str, Any]:
+        named = {k: v for k, v in table.items() if not k.startswith(KEY_PREFIX)}
+        named.update(
+            {keys.name_for(k): v for k, v in table.items() if k.startswith(KEY_PREFIX)}
+        )
+        return named
+
+    state.cartograph_layout = keys.name_for(state.cartograph_layout)
+    state.cartograph_files = renamed(state.cartograph_files)
+    state.cartograph_frames = renamed(state.cartograph_frames)
+    state.cartograph_print = renamed(state.cartograph_print)
+    state.cartograph_page = renamed(state.cartograph_page)
 
 
 def save_state(project: QgsProject, state: DialogState) -> None:
@@ -793,16 +820,23 @@ def save_state(project: QgsProject, state: DialogState) -> None:
         json.dumps({k: v.to_dict() for k, v in state.layers.items()}),
     )
     project.writeEntry(SCOPE, KEY_OUTPUT, state.output.value)
-    project.writeEntry(SCOPE, KEY_CARTOGRAPH_LAYOUT, state.cartograph_layout)
+    # Per-layout entries are filed under the layout's id, not its name, so a
+    # rename (here or in QGIS) cannot detach them (`core/layout_identity.py`).
+    keys = LayoutKeys(project)
     project.writeEntry(
-        SCOPE, KEY_CARTOGRAPH_FILES, json.dumps(dict(state.cartograph_files))
+        SCOPE, KEY_CARTOGRAPH_LAYOUT, keys.key_for(state.cartograph_layout)
+    )
+    project.writeEntry(
+        SCOPE,
+        KEY_CARTOGRAPH_FILES,
+        json.dumps({keys.key_for(k): v for k, v in state.cartograph_files.items()}),
     )
     project.writeEntry(
         SCOPE,
         KEY_CARTOGRAPH_FRAMES,
         json.dumps(
             {
-                layout_name: {
+                keys.key_for(layout_name): {
                     item_id: choice.to_dict() for item_id, choice in items.items()
                 }
                 for layout_name, items in state.cartograph_frames.items()
@@ -810,12 +844,17 @@ def save_state(project: QgsProject, state: DialogState) -> None:
         ),
     )
     project.writeEntry(
-        SCOPE, KEY_CARTOGRAPH_PRINT, json.dumps(dict(state.cartograph_print))
+        SCOPE,
+        KEY_CARTOGRAPH_PRINT,
+        json.dumps({keys.key_for(k): v for k, v in state.cartograph_print.items()}),
     )
     project.writeEntry(
         SCOPE,
         KEY_CARTOGRAPH_PAGE,
         json.dumps(
-            {name: page.to_dict() for name, page in state.cartograph_page.items()}
+            {
+                keys.key_for(name): page.to_dict()
+                for name, page in state.cartograph_page.items()
+            }
         ),
     )
