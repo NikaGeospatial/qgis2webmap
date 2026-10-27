@@ -29,7 +29,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from .cartograph_ir import (
@@ -477,6 +477,7 @@ def fit_frame_legend_boxes(
     grow_on_page_height: float | None = None,
     changes: list[LegendBoxChange] | None = None,
     template_legends: Collection[str] = (),
+    subjects: Mapping[str, str] | None = None,
 ) -> CartographSpec:
     """`spec` with every derived legend of `frame_id` fitted to its box, and
     in `report` what each legend needed (see `_describe_fit`).
@@ -486,7 +487,9 @@ def fit_frame_legend_boxes(
     nothing else would carry a taller box to the layout. `changes` collects
     what changed per legend, for mirroring into the layout. The legends in
     `template_legends` (ids) already have a Checks row saying what they leave
-    out, which the caller rewrites; this adds no second one for it."""
+    out, which the caller rewrites; this adds no second one for it. `subjects`
+    gives the Checks subject of a legend by id (the layout reader's, so a
+    legend's rows sit together); without one it is named after its id."""
     items = list(spec.items)
     for index, item in enumerate(items):
         if not (
@@ -519,5 +522,9 @@ def fit_frame_legend_boxes(
             item.id in template_legends,
         )
         if detail is not None:
-            report.approximated(f"Legend '{item.id.removeprefix('legend_')}'", detail)
+            report.approximated(
+                (subjects or {}).get(item.id)
+                or f"Legend '{item.id.removeprefix('legend_')}'",
+                detail,
+            )
     return replace(spec, items=tuple(items))

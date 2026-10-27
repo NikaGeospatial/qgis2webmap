@@ -112,7 +112,6 @@ from .fidelity_report import FidelityReportBuilder
 from .layer_reader import PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
-    LEGEND_LEFT_OUT_PROPERTY,
     AtlasRequirement,
     FrameMode,
     MapFrameReading,
@@ -464,13 +463,22 @@ def fit_legends_to_layout(
         return prepared
     spec = prepared.spec
     changes: list[LegendBoxChange] = []
-    # A template's legend that left entries out already has a Checks row.
+    # The subject the layout reader gave each legend's rows, so a legend's
+    # Checks rows sit together; a template's legend that left entries out has
+    # a row saying so, which is rewritten below rather than doubled.
     tokens = layout_item_tokens(layout)
-    template_legends = {
-        element_id("legend", item.uuid(), tokens)
+    subjects = {
+        element_id("legend", item.uuid(), tokens): f"Legend '{item.displayName()}'"
         for item in layout.items()
         if isinstance(item, QgsLayoutItemLegend)
-        and item.customProperty(LEGEND_LEFT_OUT_PROPERTY)
+    }
+    template_legends = {
+        legend_id
+        for legend_id, subject in subjects.items()
+        if any(
+            row.subject == subject and "The legend leaves out" in row.detail
+            for row in report.items
+        )
     }
     qgis_layer_ids: dict[str, dict[str, str]] = {}
     for source, pending in zip(prepared.live_frames, prepared.live_reads, strict=True):
@@ -496,6 +504,7 @@ def fit_legends_to_layout(
             grow_on_page_height=spec.height,
             changes=found,
             template_legends=template_legends,
+            subjects=subjects,
         )
         spec = replace(
             spec,
@@ -520,7 +529,7 @@ def fit_legends_to_layout(
             # One row for the legend: its count now includes what the page
             # needed left out as well.
             report.rewrite_detail(
-                f"Legend '{change.legend_id.removeprefix('legend_')}'",
+                subjects[change.legend_id],
                 "The legend leaves out",
                 left_out_detail(legend_left_out(legend, linked)),
             )

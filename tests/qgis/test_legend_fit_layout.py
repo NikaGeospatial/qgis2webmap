@@ -192,3 +192,23 @@ class TestImageFramesAreUntouched:
         before = rect_mm(world.legend)
         export(world, frame_modes={world.map_item.uuid(): "static"})
         assert rect_mm(world.legend) == before
+
+
+class TestOneRowForATemplateLegend:
+    def test_a_template_legend_that_also_loses_layers_gets_one_left_out_row(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.core.layout_reader import LEGEND_LEFT_OUT_PROPERTY
+
+        world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=3)
+        add_label(world, 20, 140, 100, 5)  # no room above the legend
+        # As a template leaves it: two entries out of the QGIS legend.
+        world.legend.setCustomProperty(LEGEND_LEFT_OUT_PROPERTY, 2)
+        le.set_layer_listed(None, world.legend, project, world.layers[-1].id(), False)
+        _html, report = export(world)
+        left = [i.detail for i in report.items if "leaves out" in i.detail]
+        assert len(left) == 1
+        assert "larger page" in left[0]
+        shown = len(_listed(world.legend))
+        assert shown < 8
+        assert not any("left without" in d for d in legend_details(report))
