@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from nika_onlymap_exporter.core.cartograph_ir import (
     Box,
     CartographSpec,
@@ -477,3 +479,30 @@ class TestChangeApplied:
         hidden = {row.layer for row in applied.rows if row.hide}
         assert hidden == {"contours", "tribs"}
         assert len(applied.rows) == len(item.rows)  # their own rows, not new ones
+
+
+class TestGrowingTheOtherWayToo:
+    def test_the_room_on_both_sides_is_reported(self) -> None:
+        item = _legend(_demo_layers(), Box(10, 150, 190, 40))
+        above = _text(Box(20, 140, 100, 5))  # 5 mm above it, 5 mm margin below
+        room = legend_grow_room(item, [item, above], PAGE_H)
+        assert room.anchor_bottom
+        assert room.available_mm == 150 - 145
+        assert room.other_mm == PAGE_H - PAGE_MARGIN_MM - 190
+
+    def test_the_preferred_side_is_used_first_and_the_other_for_the_rest(self) -> None:
+        layers = _demo_layers()
+        item = _legend(layers, Box(10, 150, 190, 40))
+        fitted, fit = fit_legend_to_box(item, layers, GrowRoom(True, 5, 15))
+        assert fit.omitted_layers  # 20 mm is not enough for the demo legend
+        assert 45 < fitted.box.h <= 60
+        assert fitted.box.y == pytest.approx(145)  # all 5 mm up, the rest down
+        assert fitted.box.y + fitted.box.h > 190
+
+    def test_the_other_side_is_not_touched_when_the_preferred_one_is_enough(
+        self,
+    ) -> None:
+        layers = _demo_layers()
+        item = _legend(layers, Box(10, 150, 190, 40))
+        fitted, _fit = fit_legend_to_box(item, layers, GrowRoom(True, 100, 100))
+        assert fitted.box.y + fitted.box.h == 190

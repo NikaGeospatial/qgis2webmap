@@ -88,12 +88,18 @@ OVERLAP_TOLERANCE_MM = 0.01
 
 @dataclass(frozen=True)
 class GrowRoom:
-    """How a legend box may grow: away from the page edge it is anchored to
-    (`anchor_bottom`: it keeps its bottom edge and grows upward), by at most
-    `available_mm`."""
+    """How a legend box may grow: first away from the page edge it is anchored
+    to (`anchor_bottom`: it keeps its bottom edge and grows upward), by at most
+    `available_mm`, and only past that on the other side, by at most
+    `other_mm`."""
 
     anchor_bottom: bool = False
     available_mm: float = 0.0
+    other_mm: float = 0.0
+
+    @property
+    def total_mm(self) -> float:
+        return self.available_mm + self.other_mm
 
 
 @dataclass(frozen=True)
@@ -127,7 +133,8 @@ def legend_grow_room(
 
     - Direction: a legend whose centre is in the lower half of the page keeps
       its bottom edge and grows upward; any other keeps its top edge and
-      grows downward. Either way its left edge and width stay.
+      grows downward. Only when that side is used up does it also grow on the
+      other side. Its left edge and width stay.
     - It stops at the page margin (`PAGE_MARGIN_MM`), or where it stands if it
       is already past it.
     - It stops short of any visible item it does not overlap yet and would
@@ -139,8 +146,9 @@ def legend_grow_room(
     box = item.box
     anchor_bottom = box.y + box.h / 2 > page_height / 2
     if item.rotation:
-        return GrowRoom(anchor_bottom, 0.0)
-    limit = PAGE_MARGIN_MM if anchor_bottom else page_height - PAGE_MARGIN_MM
+        return GrowRoom(anchor_bottom)
+    up_limit = PAGE_MARGIN_MM
+    down_limit = page_height - PAGE_MARGIN_MM
     for other in others:
         other_box = getattr(other, "box", None)
         if (
@@ -158,19 +166,25 @@ def legend_grow_room(
         )
         if not beside:
             continue
-        if anchor_bottom and other_box.y + other_box.h <= box.y + OVERLAP_TOLERANCE_MM:
-            limit = max(limit, other_box.y + other_box.h)
-        elif not anchor_bottom and other_box.y >= box.y + box.h - OVERLAP_TOLERANCE_MM:
-            limit = min(limit, other_box.y)
-    room = box.y - limit if anchor_bottom else limit - (box.y + box.h)
-    return GrowRoom(anchor_bottom, max(0.0, room))
+        if other_box.y + other_box.h <= box.y + OVERLAP_TOLERANCE_MM:
+            up_limit = max(up_limit, other_box.y + other_box.h)
+        elif other_box.y >= box.y + box.h - OVERLAP_TOLERANCE_MM:
+            down_limit = min(down_limit, other_box.y)
+    up = max(0.0, box.y - up_limit)
+    down = max(0.0, down_limit - (box.y + box.h))
+    if anchor_bottom:
+        return GrowRoom(True, up, down)
+    return GrowRoom(False, down, up)
 
 
 def _grown(box: Box, height: float, room: GrowRoom) -> Box:
-    """`box` made `height` tall, away from the edge it is anchored to."""
-    if room.anchor_bottom:
-        return Box(box.x, box.y + box.h - height, box.w, height)
-    return Box(box.x, box.y, box.w, height)
+    """`box` made `height` tall: on the side it is anchored away from first,
+    on the other side for what that cannot give."""
+    extra = max(0.0, height - box.h)
+    preferred = min(extra, room.available_mm)
+    other = extra - preferred
+    top = box.y - (preferred if room.anchor_bottom else other)
+    return Box(box.x, top, box.w, height)
 
 
 @dataclass(frozen=True)
@@ -363,7 +377,7 @@ def fit_legend_to_box(
     room = room or GrowRoom()
     start = item.columns or 1
     height = item.box.h
-    reach = height + room.available_mm + OVERLAP_TOLERANCE_MM / 10
+    reach = height + room.total_mm + OVERLAP_TOLERANCE_MM / 10
 
     def widest_columns() -> int:
         usable = item.box.w - 2 * padding
