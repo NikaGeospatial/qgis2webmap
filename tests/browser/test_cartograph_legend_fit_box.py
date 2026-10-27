@@ -87,3 +87,37 @@ class TestFittedBoxMatchesQgis:
         assert measured["box"] == pytest.approx(qgis["box"], abs=0.01)
         assert measured["columns"] == qgis["columns"] == 3
         assert qgis["listed"] == 8
+
+
+_SWATCHES = """
+() => {
+  const legend = document.querySelector('om-legend');
+  const content = legend && legend.querySelector('[data-om-carto-legend-rows]');
+  if (!content || content.children.length < 1) return null;
+  const row = content.children[0];
+  const swatch = row.querySelector('span');
+  return { background: getComputedStyle(swatch).backgroundImage + ' ' +
+    getComputedStyle(swatch).backgroundColor, text: row.textContent };
+}
+"""
+
+
+def _hex_to_rgb(color: str) -> str:
+    value = color.lstrip("#")
+    r, g, b = (int(value[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgb({r}, {g}, {b})"
+
+
+class TestRasterSwatch:
+    def test_a_classified_raster_row_is_drawn_in_its_first_class_colour(
+        self, page, built: Path
+    ) -> None:
+        expected = json.loads((built / "raster.json").read_text())
+        page.goto((built / "raster.html").as_uri())
+        page.wait_for_selector("om-legend", timeout=30_000)
+        if not page.evaluate(_WEBGL2):
+            pytest.skip("no WebGL2 context in this browser/environment")
+        page.wait_for_function(f"({_SWATCHES})() !== null", timeout=60_000)
+        swatch = page.evaluate(_SWATCHES)
+        assert "Elevation bands" in swatch["text"]
+        assert _hex_to_rgb(expected["first_class_colour"]) in swatch["background"]
