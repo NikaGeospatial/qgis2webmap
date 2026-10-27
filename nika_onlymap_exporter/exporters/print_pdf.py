@@ -9,12 +9,13 @@ So this module:
 
 - copies the source layout (`QgsLayout.clone`) and works only on the copy;
   the user's layout is never touched, even on failure;
-- keeps page 1 only, like the cartograph itself (`core/layout_reader.py`
-  exports page 1), so the print matches the sheet the user saw;
-- grows the page by the bleed and moves every item by it, so items keep
+- keeps every physical page, in order (an atlas is a separate export:
+  `export_print_pdf(..., atlas=True)` writes one page per feature);
+- grows each page by the bleed and moves every item by it, so items keep
   their place from the trim corner -- the runtime's own rule for `bleed`;
-- draws the crop marks as eight `QgsLayoutItemPolyline` strokes in the
-  bleed, with the runtime's geometry (`core.print_settings.crop_mark_segments`);
+- draws the crop marks on each page as eight `QgsLayoutItemPolyline` strokes
+  in the bleed, with the runtime's geometry
+  (`core.print_settings.crop_mark_segments`);
 - applies the Cartograph tab's page title to the copy (labels reading
   `[% @project_title %]` and the PDF's own title), as the browser output does;
   the page attribution and theme have no QGIS equivalent and are reported;
@@ -47,6 +48,7 @@ from qgis.core import (
     QgsLayoutItemPage,
     QgsLayoutItemPolyline,
     QgsLayoutMeasurement,
+    QgsLayoutPoint,
     QgsLayoutSize,
     QgsLineSymbol,
     QgsProject,
@@ -112,12 +114,16 @@ def export_print_pdf(
     settings: PrintSettings,
     path: Path,
     page: PageChoice | None = None,
+    *,
+    atlas: bool = False,
 ) -> PrintPdfResult:
-    """Write `layout` page 1 as a print PDF at `path`. GUI thread only.
+    """Write every page of `layout` as a PDF at `path`, or, with `atlas`, the
+    layout's atlas (one run of pages per feature). GUI thread only.
 
-    An RGB `settings.profile` is accepted too (bleed and marks with no
-    colour management), which is what lets the geometry be tested on any
-    build. Raises `PrintPdfError` with a user-facing message on failure.
+    This is the cartograph's normal Save PDF: an RGB `settings.profile` is the
+    plain QGIS PDF (with the bleed and marks the settings ask for) and CMYK /
+    ICC need the colour-management build. Raises `PrintPdfError` with a
+    user-facing message on failure.
     """
     project = layout.project()
     if project is None:
@@ -127,7 +133,7 @@ def export_print_pdf(
     # do the colour settings; a print is not an edit, so the flag goes back.
     was_dirty = project.isDirty()
     try:
-        return _export(project, layout, settings, path, page)
+        return _export(project, layout, settings, path, page, atlas)
     finally:
         project.setDirty(was_dirty)
 
@@ -138,6 +144,7 @@ def _export(
     settings: PrintSettings,
     path: Path,
     page: PageChoice | None,
+    atlas: bool = False,
 ) -> PrintPdfResult:
     warnings: list[str] = []
     colour_space = None
@@ -149,6 +156,8 @@ def _export(
             colour_space = _load_icc(Path(settings.icc_path))
 
     copy = build_print_layout(layout, settings, warnings, page)
+    if atlas:
+        _require_atlas(copy)
 
     export_settings = QgsLayoutExporter.PdfExportSettings()
     export_settings.dpi = settings.dpi
@@ -195,11 +204,16 @@ def _export(
             staged_beside(path) as staged,
         ):
             exporter = QgsLayoutExporter(copy)
-            result = exporter.exportToPdf(str(staged), export_settings)
-            if result != QgsLayoutExporter.ExportResult.Success:
+            if atlas:
+                result, detail = QgsLayoutExporter.exportToPdf(
+                    copy.atlas(), str(staged), export_settings
+                )
+            else:
+                result = exporter.exportToPdf(str(staged), export_settings)
                 detail = (
                     exporter.errorMessage() if hasattr(exporter, "errorMessage") else ""
                 )
+            if result != QgsLayoutExporter.ExportResult.Success:
                 raise PrintPdfError(
                     tr("QGIS could not write {path}: {error}").format(
                         path=path, error=detail or _result_name(result)
@@ -243,16 +257,30 @@ def _needs_rasterising(layout: QgsLayout) -> bool:
     return False
 
 
+def _require_atlas(layout: QgsLayout) -> None:
+    """The atlas export needs an enabled atlas with a coverage layer and at
+    least one feature; say which is missing rather than write an empty PDF."""
+    atlas = layout.atlas() if hasattr(layout, "atlas") else None
+    if atlas is None or not atlas.enabled() or atlas.coverageLayer() is None:
+        raise PrintPdfError(
+            tr("The layout has no atlas. Turn on Generate an atlas in the Atlas tab.")
+        )
+    if not atlas.updateFeatures() or atlas.count() == 0:
+        raise PrintPdfError(
+            tr("No feature matches the atlas, so there are no pages to save.")
+        )
+
+
 def build_print_layout(
     layout: QgsLayout,
     settings: PrintSettings,
     warnings: list[str] | None = None,
     page_choice: PageChoice | None = None,
 ) -> QgsLayout:
-    """A throwaway copy of `layout` laid out for print: page 1 only, the
-    page grown by the bleed with every item moved in by it, crop marks in
-    the bleed. `layout` itself is not modified. `page_choice` is the
-    Cartograph tab's page fields, applied to the copy as far as QGIS can."""
+    """A throwaway copy of `layout` laid out for print: every page grown by
+    the bleed with every item moved in by it, crop marks in each page's
+    bleed. `layout` itself is not modified. `page_choice` is the Cartograph
+    tab's page fields, applied to the copy as far as QGIS can."""
     warnings = warnings if warnings is not None else []
     copy = layout.clone()
     if copy is None:
@@ -262,38 +290,54 @@ def build_print_layout(
     pages = copy.pageCollection()
     if pages.pageCount() == 0:
         raise PrintPdfError(tr("The layout has no pages."))
-    if pages.pageCount() > 1:
-        warnings.append(
-            tr(
-                "Only page 1 is printed, the page the cartograph shows; "
-                "{count} other pages were left out."
-            ).format(count=pages.pageCount() - 1)
-        )
-        # deletePage also removes the items on that page.
-        for index in range(pages.pageCount() - 1, 0, -1):
-            pages.deletePage(index)
 
-    page = pages.page(0)
+    mm = QgsUnitTypes.LayoutMillimeters
     converter = copy.renderContext().measurementConverter()
-    current = converter.convert(page.pageSize(), QgsUnitTypes.LayoutMillimeters)
-    trim_w, trim_h = settings.trim_size_mm((current.width(), current.height()))
-    sheet_w, sheet_h = settings.sheet_size_mm((current.width(), current.height()))
     bleed_mm = settings.bleed_mm
+    # Per page: the trim and the sheet, from the page's own size.
+    trims: list[tuple[float, float]] = []
+    sheets: list[tuple[float, float]] = []
+    resized = False
+    for index in range(pages.pageCount()):
+        current = converter.convert(pages.page(index).pageSize(), mm)
+        size = (current.width(), current.height())
+        trims.append(settings.trim_size_mm(size))
+        sheets.append(settings.sheet_size_mm(size))
+        resized = resized or sheets[-1] != size
+
+    # Where each item sits on its own page, before the pages change size and
+    # shift down the stack.
+    placed: list[tuple[QgsLayoutItem, int, float, float]] = []
+    if resized or bleed_mm > 0:
+        for item in _movable_items(copy):
+            number = max(0, pages.pageNumberForPoint(item.pos()))
+            origin = pages.page(number).pos()
+            placed.append(
+                (item, number, item.pos().x() - origin.x(), item.pos().y() - origin.y())
+            )
 
     pages.beginPageSizeChange()
-    page.setPageSize(QgsLayoutSize(sheet_w, sheet_h, QgsUnitTypes.LayoutMillimeters))
+    for index, (sheet_w, sheet_h) in enumerate(sheets):
+        pages.page(index).setPageSize(QgsLayoutSize(sheet_w, sheet_h, mm))
     pages.endPageSizeChange()
     pages.reflow()
 
-    if bleed_mm > 0:
-        offset = copy.convertToLayoutUnits(
-            QgsLayoutMeasurement(bleed_mm, QgsUnitTypes.LayoutMillimeters)
-        )
-        for item in _movable_items(copy):
-            item.attemptMoveBy(offset, offset)
+    if placed:
+        offset = copy.convertToLayoutUnits(QgsLayoutMeasurement(bleed_mm, mm))
+        for item, number, rel_x, rel_y in placed:
+            origin = pages.page(number).pos()
+            item.attemptMove(
+                QgsLayoutPoint(
+                    origin.x() + rel_x + offset,
+                    origin.y() + rel_y + offset,
+                    copy.units(),
+                ),
+                False,
+            )
 
     if settings.crop_marks_effective:
-        _add_crop_marks(copy, trim_w, trim_h, bleed_mm)
+        for index, (trim_w, trim_h) in enumerate(trims):
+            _add_crop_marks(copy, trim_w, trim_h, bleed_mm, pages.page(index).pos())
     return copy
 
 
@@ -327,16 +371,23 @@ def _movable_items(layout: QgsLayout) -> list[QgsLayoutItem]:
 
 
 def _add_crop_marks(
-    layout: QgsLayout, trim_w: float, trim_h: float, bleed_mm: float
+    layout: QgsLayout,
+    trim_w: float,
+    trim_h: float,
+    bleed_mm: float,
+    origin: QPointF,
 ) -> None:
+    """The marks of the page whose top-left corner is `origin`."""
     to_layout = layout.convertToLayoutUnits
     for x1, y1, x2, y2 in crop_mark_segments(trim_w, trim_h, bleed_mm):
         points = [
             QPointF(
-                to_layout(
+                origin.x()
+                + to_layout(
                     QgsLayoutMeasurement(x + bleed_mm, QgsUnitTypes.LayoutMillimeters)
                 ),
-                to_layout(
+                origin.y()
+                + to_layout(
                     QgsLayoutMeasurement(y + bleed_mm, QgsUnitTypes.LayoutMillimeters)
                 ),
             )

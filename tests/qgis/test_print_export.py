@@ -98,12 +98,14 @@ class TestPageGeometry:
 
         assert result.path == out
         boxes = media_boxes_mm(out.read_bytes())
-        assert len(boxes) == 1  # page 1 only, like the cartograph
-        width, height = boxes[0]
-        assert width == pytest.approx(303.0, abs=0.5)
-        assert height == pytest.approx(426.0, abs=0.5)
+        pages = survey.layout.pageCollection().pageCount()
+        assert pages > 1  # the survey is a multi-page layout
+        assert len(boxes) == pages  # every physical page, in order
+        for width, height in boxes:
+            assert width == pytest.approx(303.0, abs=0.5)
+            assert height == pytest.approx(426.0, abs=0.5)
         assert _snapshot(survey.layout) == before
-        assert any("page 1" in warning for warning in result.warnings)
+        assert not any("page 1" in warning for warning in result.warnings)
 
     def test_items_move_in_by_the_bleed(self, survey) -> None:
         settings = PrintSettings(bleed="5mm")
@@ -118,13 +120,16 @@ class TestPageGeometry:
         # From layout: A4 landscape (297 x 210) plus 5 mm each side.
         assert size.width() == pytest.approx(307.0)
         assert size.height() == pytest.approx(220.0)
-        assert copy.pageCollection().pageCount() == 1
+        assert (
+            copy.pageCollection().pageCount()
+            == survey.layout.pageCollection().pageCount()
+        )
 
         source_items = _placed_items(survey.layout)
         copied = _placed_items(copy)
-        page_one = {key for key, item in source_items.items() if item.page() == 0}
-        assert page_one and set(copied) == page_one
-        for key in page_one:
+        assert set(copied) == set(source_items)
+        for key in source_items:
+            assert copied[key].page() == source_items[key].page()
             source_pos = source_items[key].pagePos()
             copy_pos = copied[key].pagePos()
             assert copy_pos.x() - source_pos.x() == pytest.approx(5.0)
@@ -135,17 +140,22 @@ class TestPageGeometry:
         marks = [
             item for item in copy.items() if isinstance(item, QgsLayoutItemPolyline)
         ]
-        assert len(marks) == 8
-        trim = (3.0, 3.0, 300.0, 213.0)  # x0, y0, x1, y1 on the 303 x 216 sheet
+        pages = copy.pageCollection()
+        assert len(marks) == 8 * pages.pageCount()  # eight on every page
         for mark in marks:
-            rect = mark.sceneBoundingRect()
+            number = pages.pageNumberForPoint(mark.sceneBoundingRect().center())
+            assert number >= 0
+            origin = pages.page(number).pos()
+            rect = mark.sceneBoundingRect().translated(-origin.x(), -origin.y())
+            sheet = pages.page(number).pageSize()
+            trim = (3.0, 3.0, sheet.width() - 3.0, sheet.height() - 3.0)
             centre = rect.center()
             inside_trim = (
                 trim[0] < centre.x() < trim[2] and trim[1] < centre.y() < trim[3]
             )
             assert not inside_trim
-            assert rect.left() >= -0.5 and rect.right() <= 303.5
-            assert rect.top() >= -0.5 and rect.bottom() <= 216.5
+            assert rect.left() >= -0.5 and rect.right() <= sheet.width() + 0.5
+            assert rect.top() >= -0.5 and rect.bottom() <= sheet.height() + 0.5
 
     def test_no_bleed_means_no_marks_and_no_move(self, survey) -> None:
         settings = PrintSettings(bleed="none", crop_marks=True)
@@ -164,6 +174,77 @@ class TestPageGeometry:
         assert not [
             item for item in copy.items() if isinstance(item, QgsLayoutItemPolyline)
         ]
+
+
+class TestEveryPage:
+    """Save PDF writes all physical pages, and an atlas one run per feature,
+    from a copy that leaves the source layout as it was."""
+
+    def test_an_rgb_export_has_one_pdf_page_per_layout_page(
+        self, survey, tmp_path
+    ) -> None:
+        out = tmp_path / "all-pages.pdf"
+        before = _snapshot(survey.layout)
+        pages = survey.layout.pageCollection().pageCount()
+        assert pages > 1
+
+        export_print_pdf(survey.layout, PrintSettings(), out)
+
+        assert len(media_boxes_mm(out.read_bytes())) == pages
+        assert _snapshot(survey.layout) == before
+
+    def test_items_on_later_pages_keep_their_page_with_a_bleed(self, survey) -> None:
+        from qgis.core import QgsLayoutItemLabel, QgsLayoutPoint
+
+        label = QgsLayoutItemLabel(survey.layout)
+        label.setText("second page")
+        label.setId("on-page-two")
+        survey.layout.addLayoutItem(label)
+        label.attemptMove(
+            QgsLayoutPoint(20, 30, QgsUnitTypes.LayoutMillimeters), False, False, 1
+        )
+        assert label.page() == 1
+
+        copy = build_print_layout(survey.layout, PrintSettings(bleed="3mm"))
+
+        moved = _placed_items(copy)["on-page-two"]
+        assert moved.page() == 1
+        assert moved.pagePos().x() == pytest.approx(23.0)
+        assert moved.pagePos().y() == pytest.approx(33.0)
+        # The source label did not move.
+        assert label.pagePos().x() == pytest.approx(20.0)
+
+    def test_the_source_layout_keeps_its_undo_history(self, survey, tmp_path) -> None:
+        stack = survey.layout.undoStack().stack()
+        index, count = stack.index(), stack.count()
+        export_print_pdf(
+            survey.layout,
+            PrintSettings(bleed="3mm", crop_marks=True),
+            tmp_path / "a.pdf",
+        )
+        assert (stack.index(), stack.count()) == (index, count)
+
+    def test_an_atlas_export_has_one_page_per_feature(self, project, tmp_path) -> None:
+        from atlas_fixtures import build_atlas_layout
+
+        built = build_atlas_layout(project)
+        pages = built.layout.pageCollection().pageCount()
+        atlas = built.layout.atlas()
+        before = (atlas.currentFeatureNumber(), atlas.count())
+        out = tmp_path / "atlas.pdf"
+
+        export_print_pdf(built.layout, PrintSettings(), out, atlas=True)
+
+        assert len(media_boxes_mm(out.read_bytes())) == pages * 3
+        # The source atlas was never stepped.
+        assert (atlas.currentFeatureNumber(), atlas.count()) == before
+
+    def test_an_atlas_export_without_an_atlas_says_so(self, survey, tmp_path) -> None:
+        with pytest.raises(PrintPdfError, match="no atlas"):
+            export_print_pdf(
+                survey.layout, PrintSettings(), tmp_path / "x.pdf", atlas=True
+            )
+        assert not (tmp_path / "x.pdf").exists()
 
 
 class TestColour:
