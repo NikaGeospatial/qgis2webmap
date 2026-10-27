@@ -537,7 +537,7 @@ _RASTER_GATE = [
 ]
 
 
-#: Removes the loading notice once every map has settled, or swaps its text for
+#: Removes the loading notice once every frame is ready, or swaps its text for
 #: the slow-draw message after `LOADING_BUDGET_MS` of free time. The ticks
 #: count only stretches where the page was able to run (a tick that arrives
 #: late means the thread was blocked, or the tab was hidden), and a test may
@@ -563,11 +563,11 @@ _LOADING_WATCH = [
     "  }, TICK_MS);",
     "  const finish = () => { clearInterval(timer); loadingNote.remove(); };",
     "  const EVER = 2 ** 31 - 1;",
-    "  (async () => {",
-    "    await carto.whenPageReady(loadingSheet, EVER);",
-    "    await Promise.all([...loadingSheet.querySelectorAll('om-map')].map(",
-    "      (map) => map.whenSettled?.({ timeout: EVER })));",
-    "  })().then(finish, finish);",
+    # Frames' own `ready`, which the runtime resolves once it has settled
+    # the frame's map. Not `whenSettled`: its first call per map pays a
+    # warm-up of full composites and canvas readbacks that blocks the page,
+    # and the runtime already makes that call itself, once per live frame.
+    "  carto.whenPageReady(loadingSheet, EVER).then(finish, finish);",
     "}",
 ]
 

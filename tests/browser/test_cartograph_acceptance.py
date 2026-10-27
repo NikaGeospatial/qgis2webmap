@@ -1320,8 +1320,8 @@ class TestBrowserPreviewFollowsTheLayout:
 
 _LOADING = "[data-qgis2webmap-loading]"
 
-#: Makes the page's maps slow to settle: every `whenSettled` waits for
-#: `window.__releaseSettle()` first, and the page's patience is cut to 1.5 s.
+#: Makes the page's frames slow to become ready: every frame's `ready` waits
+#: for `window.__releaseSettle()` first, and the page's patience is cut to 1.5 s.
 _SLOW_SETTLE = """
 window.qgis2webmapLoadingBudgetMs = 1500;
 window.__holdSettle = new Promise((resolve) => {
@@ -1329,16 +1329,37 @@ window.__holdSettle = new Promise((resolve) => {
 });
 const defineElement = customElements.define.bind(customElements);
 customElements.define = (name, constructor, options) => {
+  const original = name === 'om-frame'
+    && Object.getOwnPropertyDescriptor(constructor.prototype, 'ready');
+  if (original && original.get) {
+    Object.defineProperty(constructor.prototype, 'ready', {
+      configurable: true,
+      get() {
+        return window.__holdSettle.then(() => original.get.call(this));
+      },
+    });
+  }
+  defineElement(name, constructor, options);
+};
+"""
+
+#: Counts every `whenSettled` call per map. Its first call pays a warm-up of
+#: full composites and canvas readbacks that blocks the page for seconds.
+_COUNT_SETTLES = """
+window.__settleCalls = new Map();
+const defineElement = customElements.define.bind(customElements);
+customElements.define = (name, constructor, options) => {
   if (name === 'om-map' && constructor.prototype.whenSettled) {
     const original = constructor.prototype.whenSettled;
-    constructor.prototype.whenSettled = async function (...args) {
-      await window.__holdSettle;
+    constructor.prototype.whenSettled = function (...args) {
+      window.__settleCalls.set(this, (window.__settleCalls.get(this) || 0) + 1);
       return original.apply(this, args);
     };
   }
   defineElement(name, constructor, options);
 };
 """
+_SETTLE_COUNTS = "() => [...window.__settleCalls.values()]"
 
 
 class TestLoadingNotice:
@@ -1416,3 +1437,25 @@ class TestLoadingNotice:
         page.goto((fixtures / "story-live.html").as_uri() + query)
         page.wait_for_selector("om-cartograph", state="attached", timeout=30_000)
         assert page.locator(_LOADING).count() == 0
+
+    def test_a_plain_view_adds_no_settle_call_of_its_own(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_COUNT_SETTLES)
+        _open(page, fixtures / "story-live.html")
+        page.wait_for_selector(_LOADING, state="detached", timeout=60_000)
+        counts = page.evaluate(_SETTLE_COUNTS)
+        # The runtime settles each live frame's map once as it mounts it; the
+        # page's own script must not call again (the first call per map pays
+        # a blocking warm-up, so every extra reader risks it).
+        assert counts and max(counts) == 1
+
+    def test_the_export_route_still_settles_its_maps(
+        self, page, fixtures: Path
+    ) -> None:
+        _needs_webgl(page)
+        page.add_init_script(_COUNT_SETTLES)
+        with page.expect_download(timeout=90_000):
+            page.goto((fixtures / "story-live.html").as_uri() + "?export=png&dpi=96")
+        assert page.evaluate(_SETTLE_COUNTS)
