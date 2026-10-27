@@ -354,6 +354,8 @@ class TestOutputSwitch:
             assert share.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
             assert "open_browser" in dialog._cartograph.cartograph_share_actions
             assert dialog._cartograph.accessibility_button.accessibleName()
+            # Colour vision, Save PDF…, Share, in that order; no browser button.
+            assert [b.text() for b in buttons] == ["", "Save PDF…", "Share"]
         finally:
             dialog.close()
 
@@ -785,54 +787,6 @@ class TestBuildThreadsAndJobs:
         finally:
             dialog.close()
 
-    def test_print_settings_export_waits_past_a_build_already_running(
-        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
-    ) -> None:
-        """The build in flight predates the new settings; only the save that
-        applies them may be printed."""
-        import threading
-
-        import nika_onlymap_exporter.core.cartograph_export as export_module
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
-
-        dialog = _saved_once(qgis_app, project, fake_cartograph_export, tmp_path)
-        gate = threading.Event()
-        finish = export_module.finish_cartograph_full
-
-        def gated(*args, **kwargs):
-            gate.wait(20)
-            return finish(*args, **kwargs)
-
-        monkeypatch.setattr(export_module, "finish_cartograph_full", gated)
-        try:
-            cartograph = dialog._cartograph
-            calls = fake_cartograph_export.calls
-            opened = []
-            monkeypatch.setattr(
-                cartograph,
-                "_open_url",
-                lambda url: opened.append((url.query(), len(calls))),
-            )
-            monkeypatch.setattr(
-                print_settings_dialog,
-                "ask_print_settings",
-                lambda *a, **k: (
-                    print_settings_dialog.ACTION_EXPORT,
-                    PrintSettings(bleed="5mm"),
-                ),
-            )
-            builds = len(calls)
-            cartograph._run_autosave()  # in flight, without the bleed
-            cartograph.on_print_settings()
-            gate.set()
-            assert _wait_for(qgis_app, lambda: opened)
-            # Opened by the second build, the one started after the settings.
-            assert opened == [("print=1", builds + 2)]
-        finally:
-            gate.set()
-            dialog.close()
-
     def test_a_failed_save_cancels_the_page_waiting_on_it(
         self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
     ) -> None:
@@ -843,7 +797,7 @@ class TestBuildThreadsAndJobs:
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
             fake_cartograph_export.should_fail["value"] = True
             cartograph.schedule_autosave()
-            cartograph.on_export_pdf()
+            cartograph.on_open_in_browser()
             assert _wait_for(
                 qgis_app,
                 lambda: (
@@ -1103,7 +1057,6 @@ class TestCartographShareMenu:
                 "copy_path",
                 "reveal",
                 "open_browser",
-                "export_pdf",
                 "export_png",
             ):
                 assert not actions[key].isEnabled(), key
@@ -1115,39 +1068,56 @@ class TestCartographShareMenu:
                 "copy_path",
                 "reveal",
                 "open_browser",
-                "export_pdf",
                 "export_png",
             ):
                 assert actions[key].isEnabled(), key
         finally:
             dialog.close()
 
-    def test_export_and_share_lists_outputs_before_file_actions(
+    def test_share_menu_has_an_export_and_an_html_section(
         self, qgis_app, project
     ) -> None:
+        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
             cartograph = dialog._cartograph
             assert cartograph.cartograph_share_button.text() == "Share"
             rows = [
-                a.text()
+                (a.text(), a.isSeparator())
                 for a in cartograph.cartograph_share_button.menu().actions()
-                if not a.isSeparator()
+                if a.isSeparator() or a.isVisible()
             ]
-            assert rows[:7] == [
-                "Export PDF...",
-                "Export PNG...",
-                "Export QGIS layout template (.qpt)...",
-                "Print settings...",
-                "Open in browser",
-                "Copy file path",
-                rows[6],
+            # No atlas configured, so no "Save atlas as PDF…" yet.
+            assert rows == [
+                ("Export", True),
+                ("Export PNG…", False),
+                ("Export QGIS layout template…", False),
+                ("PDF settings…", False),
+                ("HTML cartograph", True),
+                ("Preview in browser", False),
+                ("Copy HTML file path", False),
+                (rows[7][0], False),  # "Show HTML in folder"
+                ("NIKA hand-off", True),
+                ("Prepare enhancement prompt...", False),
+                ("Prepare critique prompt...", False),
             ]
-            assert rows[7:] == [
-                "Prepare enhancement prompt...",
-                "Prepare critique prompt...",
-            ]
+            assert rows[7][0] == "Show HTML in folder"
+            assert "export_pdf" not in cartograph.cartograph_share_actions
+        finally:
+            dialog.close()
+
+    def test_preview_in_browser_tooltip_when_the_file_exists(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, _target = self._ready_dialog(project, tmp_path)
+        try:
+            row = dialog._cartograph.cartograph_share_actions["open_browser"]
+            assert row.toolTip() == (
+                "Open the HTML cartograph to check interactive maps and "
+                "browser behaviour."
+            )
+            assert row.shortcut().toString() == "Ctrl+O"
         finally:
             dialog.close()
 
@@ -1223,10 +1193,8 @@ class TestCartographShareMenu:
                 lambda url: opened.append(url.toString()),
             )
             dialog._cartograph.on_open_in_browser()
-            dialog._cartograph.on_export_pdf()
             dialog._cartograph.on_export_png()
-            assert len(opened) == 3
-            assert any("print=1" in url for url in opened)
+            assert len(opened) == 2
             assert any("export=png" in url for url in opened)
         finally:
             dialog.close()
@@ -1301,16 +1269,14 @@ class TestCartographShareMenu:
             opened = []
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
             cartograph.on_open_in_browser()
-            cartograph.on_export_pdf()
             cartograph.on_export_png()
             cartograph._open_cvd_preview("deutan")
             cartograph._open_all_pages("zip")
             # Twice: a server that failed once is not reused unstarted.
             cartograph._open_all_pages("print")
-            assert [url.toLocalFile() for url in opened] == [str(target)] * 6
+            assert [url.toLocalFile() for url in opened] == [str(target)] * 5
             assert [url.query() for url in opened] == [
                 "",
-                "print=1",
                 "export=png",
                 "cvd=deutan",
                 "atlas=zip",
@@ -1337,31 +1303,6 @@ class TestCartographShareMenu:
             cartograph.on_reveal()
             assert opened == [str(tmp_path)]
             assert dialog.status_label.text() == f"Opened {tmp_path}"
-        finally:
-            dialog.close()
-
-    def test_the_pdf_tooltip_names_the_route_print_settings_chose(
-        self, qgis_app, project, tmp_path
-    ) -> None:
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-
-        dialog, _target = self._ready_dialog(project, tmp_path)
-        try:
-            cartograph = dialog._cartograph
-            row = cartograph.cartograph_share_actions["export_pdf"]
-            assert row.toolTip() == (
-                "Opens the cartograph and prints it at true page size"
-            )
-            layout = cartograph.state.cartograph_layout
-            cmyk = PrintSettings(profile="cmyk")
-            cartograph.state.cartograph_print[layout] = cmyk.to_json()
-            cartograph._update_share_enabled()
-            assert "CMYK or ICC PDF with QGIS" in row.toolTip()
-            cartograph.state.cartograph_print[layout] = PrintSettings().to_json()
-            cartograph._update_share_enabled()
-            assert row.toolTip() == (
-                "Opens the cartograph and prints it at true page size"
-            )
         finally:
             dialog.close()
 
@@ -1445,8 +1386,8 @@ class TestRealAutosave:
 
 
 class TestPrintSettings:
-    """Share > Print settings: kept per layout, applied on every save, and
-    deciding which way Export PDF goes."""
+    """Share > PDF settings: kept per layout, applied on every save and by
+    every Save PDF…."""
 
     def _real_dialog(self, qgis_app, project, tmp_path, *, static=False):
         import os
@@ -1498,286 +1439,6 @@ class TestPrintSettings:
             assert dialog.state.cartograph_print["survey-utm"] == chosen.to_json()
         finally:
             dialog.close()
-
-    def test_rgb_export_prints_once_the_settings_are_saved(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
-
-        dialog, target = self._real_dialog(qgis_app, project, tmp_path)
-        try:
-            opened = []
-            monkeypatch.setattr(
-                dialog._cartograph, "_open_url", lambda url: opened.append(url)
-            )
-            monkeypatch.setattr(
-                print_settings_dialog,
-                "ask_print_settings",
-                lambda *a, **k: (
-                    print_settings_dialog.ACTION_EXPORT,
-                    PrintSettings(bleed="5mm"),
-                ),
-            )
-            dialog._cartograph.on_print_settings()
-            assert opened == []  # not before the file has the new settings
-            assert _wait_for(qgis_app, lambda: opened, timeout=60)
-            assert opened[0].query() == "print=1"
-            assert 'bleed="5"' in target.read_text(encoding="utf-8")
-        finally:
-            dialog.close()
-
-    def test_print_after_save_keeps_its_query_without_the_server(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-        from nika_onlymap_exporter.ui.cartograph import (
-            controller,
-            print_settings_dialog,
-        )
-
-        def refuse(_self) -> str:
-            raise OSError("no port")
-
-        monkeypatch.setattr(controller.PreviewServer, "start", refuse)
-        dialog, target = self._real_dialog(qgis_app, project, tmp_path)
-        try:
-            opened = []
-            monkeypatch.setattr(dialog._cartograph, "_open_url", opened.append)
-            monkeypatch.setattr(
-                print_settings_dialog,
-                "ask_print_settings",
-                lambda *a, **k: (print_settings_dialog.ACTION_EXPORT, PrintSettings()),
-            )
-            dialog._cartograph.on_print_settings()
-            assert _wait_for(qgis_app, lambda: opened, timeout=60)
-            assert opened[0].toLocalFile() == str(target)
-            assert opened[0].query() == "print=1"
-        finally:
-            dialog.close()
-
-    def test_cmyk_export_goes_through_qgis(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        from qgis.PyQt.QtWidgets import QFileDialog
-
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-        from nika_onlymap_exporter.exporters import print_pdf
-
-        # QGIS's exporter prints only an all-static layout; the survey's maps
-        # would otherwise start live in their own CRS.
-        dialog, _target = self._real_dialog(qgis_app, project, tmp_path, static=True)
-        try:
-            cmyk = PrintSettings(profile="cmyk")
-            dialog.state.cartograph_print["survey-utm"] = cmyk.to_json()
-            pdf = tmp_path / "survey.pdf"
-            monkeypatch.setattr(
-                QFileDialog, "getSaveFileName", lambda *a, **k: (str(pdf), "")
-            )
-            calls = []
-            monkeypatch.setattr(
-                print_pdf,
-                "export_print_pdf",
-                lambda layout, settings, path, page=None: (
-                    calls.append((layout.name(), path))
-                    or print_pdf.PrintPdfResult(path=path, warnings=())
-                ),
-            )
-            opened = []
-            monkeypatch.setattr(
-                dialog._cartograph, "_open_url", lambda url: opened.append(url)
-            )
-            dialog._cartograph.on_export_pdf()
-            assert calls == [("survey-utm", pdf)]
-            assert opened == []
-        finally:
-            dialog.close()
-
-    def _native_pdf_setup(self, qgis_app, project, tmp_path, monkeypatch, **page):
-        from qgis.PyQt.QtWidgets import QFileDialog
-
-        from nika_onlymap_exporter.core.print_settings import PrintSettings
-        from nika_onlymap_exporter.exporters import print_pdf
-        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog
-
-        dialog, _target = self._real_dialog(qgis_app, project, tmp_path, static=True)
-        cartograph = dialog._cartograph
-        dialog.state.cartograph_print["survey-utm"] = PrintSettings(
-            profile="cmyk"
-        ).to_json()
-        choice = dialog.state.page_choice("survey-utm")
-        for key, value in page.items():
-            setattr(choice, key, value)
-        pdf = tmp_path / "survey.pdf"
-        monkeypatch.setattr(
-            QFileDialog, "getSaveFileName", lambda *a, **k: (str(pdf), "")
-        )
-        exports = []
-
-        def fake_export(layout, settings, path, page=None):
-            exports.append(path)
-            return print_pdf.PrintPdfResult(
-                path=path,
-                warnings=(
-                    print_pdf.attribution_warning(),
-                    "Only page 1 is printed.",
-                ),
-            )
-
-        monkeypatch.setattr(print_pdf, "export_print_pdf", fake_export)
-        opened = []
-        monkeypatch.setattr(cartograph, "_open_url", opened.append)
-        asked = []
-
-        def answer_with(answer):
-            def fake(**kwargs):
-                asked.append(kwargs)
-                return answer
-
-            monkeypatch.setattr(
-                print_settings_dialog, "ask_native_pdf_differences", fake
-            )
-
-        return dialog, cartograph, exports, opened, asked, answer_with
-
-    def test_native_pdf_without_attribution_or_theme_asks_nothing(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, title="A title"
-        )
-        try:
-            answer_with("cancel")
-            cartograph.on_export_pdf()
-            assert asked == []  # the title is applied by the exporter
-            assert len(exports) == 1
-        finally:
-            dialog.close()
-
-    def test_native_pdf_asks_when_the_attribution_has_no_text_on_the_page(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
-        )
-        try:
-            answer_with("continue")
-            cartograph.on_export_pdf()
-            assert len(asked) == 1
-            assert asked[0]["attribution"] == "Data: X"
-            assert len(exports) == 1
-            # Told in the dialog, so the post-export line does not repeat it.
-            text = dialog.status_label.text()
-            assert "Only page 1 is printed." in text
-            assert "attribution" not in text
-        finally:
-            dialog.close()
-
-    def test_native_pdf_does_not_ask_about_a_theme_the_layout_carries(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        dialog, cartograph, exports, _o, asked, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, theme="dark"
-        )
-        try:
-            answer_with("cancel")
-            cartograph.on_export_pdf()
-            assert asked == []
-            assert len(exports) == 1
-            assert "theme" not in dialog.status_label.text()
-        finally:
-            dialog.close()
-
-    def test_native_pdf_cancel_writes_nothing(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        dialog, cartograph, exports, opened, _a, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
-        )
-        try:
-            answer_with(None)
-            cartograph.on_export_pdf()
-            assert exports == [] and opened == []
-            assert not (tmp_path / "survey.pdf").exists()
-        finally:
-            dialog.close()
-
-    def test_native_pdf_browser_choice_opens_the_print_url(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        dialog, cartograph, exports, opened, _a, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, theme="dark"
-        )
-        try:
-            answer_with("browser")
-            cartograph.on_export_pdf()
-            assert exports == []
-            assert len(opened) == 1 and "print=1" in opened[0].toString()
-        finally:
-            dialog.close()
-
-    def test_native_pdf_add_attribution_is_one_undo_step_then_exports(
-        self, qgis_app, project, tmp_path, monkeypatch
-    ) -> None:
-        from qgis.core import QgsLayoutItemLabel
-
-        dialog, cartograph, exports, _o, _a, answer_with = self._native_pdf_setup(
-            qgis_app, project, tmp_path, monkeypatch, attribution="Data: X"
-        )
-        try:
-            layout = cartograph._current_layout
-
-            def labels():
-                return [
-                    i.text()
-                    for i in layout.items()
-                    if isinstance(i, QgsLayoutItemLabel)
-                ]
-
-            stack = layout.undoStack().stack()
-            before, count = labels(), stack.index()
-            answer_with("add-attribution")
-            cartograph.on_export_pdf()
-            assert labels().count("Data: X") == before.count("Data: X") + 1
-            assert stack.index() == count + 1
-            assert len(exports) == 1
-            assert "attribution" not in dialog.status_label.text()
-            stack.undo()
-            assert labels() == before
-        finally:
-            dialog.close()
-
-    def test_native_pdf_dialog_offers_each_choice_and_never_the_title(
-        self, qgis_app, monkeypatch
-    ) -> None:
-        from qgis.PyQt.QtWidgets import QMessageBox
-
-        from nika_onlymap_exporter.ui.cartograph import print_settings_dialog as psd
-
-        shown = {}
-
-        def fake_exec(box):
-            shown["text"] = box.text()
-            shown["buttons"] = {b.text(): b for b in box.buttons()}
-            shown["pick"](box)
-
-        monkeypatch.setattr(QMessageBox, "exec", fake_exec)
-        monkeypatch.setattr(
-            QMessageBox, "clickedButton", lambda box: shown["buttons"][shown["want"]]
-        )
-        for want, expected in (
-            ("Continue", psd.NATIVE_CONTINUE),
-            ("Use browser RGB export instead", psd.NATIVE_BROWSER),
-            ("Add attribution to the layout", psd.NATIVE_ADD_ATTRIBUTION),
-            ("Cancel", None),
-        ):
-            shown["want"], shown["pick"] = want, lambda box: None
-            assert psd.ask_native_pdf_differences(attribution="x") == expected
-        assert "title" not in shown["text"].lower()
-        assert "attribution" in shown["text"] and "theme" not in shown["text"]
-        shown["want"] = "Continue"
-        psd.ask_native_pdf_differences(attribution="")
-        assert "Add attribution to the layout" not in shown["buttons"]
 
     def test_print_settings_row_needs_a_layout(self, qgis_app, project) -> None:
         dialog = _dialog(project)
@@ -3807,14 +3468,14 @@ class TestPanel:
             texts = [text for _section, text in rows]
             assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
             assert ("NIKA hand-off", "Prepare critique prompt...") in rows
-            assert texts.index("Export PDF...") < texts.index(
+            assert texts.index("Export PNG…") < texts.index(
                 "Prepare enhancement prompt..."
             )
             assert texts[-1] == "Prepare critique prompt..."
             actions = cartograph.cartograph_share_actions
             # No layout yet: greyed, with what it needs.
-            assert not actions["export_pdf"].isEnabled()
-            assert "print layout" in actions["export_pdf"].toolTip()
+            assert not actions["export_png"].isEnabled()
+            assert "print layout" in actions["export_png"].toolTip()
             assert not actions["export_qpt"].isEnabled()
             assert actions["export_qpt"].toolTip() == "Choose a print layout first"
         finally:

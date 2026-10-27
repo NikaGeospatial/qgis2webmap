@@ -1,16 +1,16 @@
-"""Share > Print settings...: the cartograph's print dialog (issue #5 S1).
+"""Share > PDF settings...: the cartograph's PDF dialog (issue #5 S1).
 
 Edits a `core.print_settings.PrintSettings` and says what the user wants done
-with it: **Export PDF** (the default) or **Save** (keep the settings for the
+with it: **Save PDF…** (the default) or **Save** (keep the settings for the
 next autosave without exporting). Routing the export is the controller's job;
 this dialog only chooses.
 
-**Honest about colour.** A browser prints RGB only. CMYK and ICC go through
-QGIS (`exporters/print_pdf.py`), which needs QGIS on Qt 6.8+ and -- per the
-issue -- a cartograph with static frames only. When either is missing the two
-choices stay in the list, disabled, with the reason as their tooltip: never
-hidden and never silently swapped for RGB. A saved CMYK choice the current
-install cannot honour is shown as RGB with a line saying why.
+**Honest about colour.** Every PDF is written by QGIS (RGB by default).
+CMYK and ICC need QGIS built on Qt 6.8+ (`exporters/print_pdf.py`). When that
+is missing the two choices stay in the list, disabled, with the reason as
+their tooltip: never hidden and never silently swapped for RGB. A saved CMYK
+choice the current install cannot honour is shown as RGB with a line saying
+why.
 
 **Presets** are user-wide (`QSettings`, one JSON value under
 `PRESETS_KEY`), namespaced to this plugin; corrupt stored data reads as no
@@ -36,7 +36,6 @@ from qgis.PyQt.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -71,11 +70,6 @@ PRESETS_KEY = "qgis2webmap/cartograph_print_presets"
 ACTION_EXPORT = "export"
 ACTION_SAVE = "save"
 
-#: What the native-PDF differences dialog was closed with.
-NATIVE_CONTINUE = "continue"
-NATIVE_BROWSER = "browser"
-NATIVE_ADD_ATTRIBUTION = "add-attribution"
-
 BLEED_LABELS = {
     "none": N_("None"),
     "3mm": N_("3 mm"),
@@ -84,7 +78,7 @@ BLEED_LABELS = {
 }
 
 PROFILE_LABELS = {
-    PROFILE_RGB: N_("RGB (sRGB) — browser print"),
+    PROFILE_RGB: N_("RGB (sRGB)"),
     PROFILE_CMYK: N_("CMYK PDF/X-4 — via QGIS"),
     PROFILE_ICC: N_("Printer ICC profile..."),
 }
@@ -96,8 +90,8 @@ PROFILE_NOTES = {
         "printed from a PDF."
     ),
     PROFILE_CMYK: N_(
-        "Needs QGIS built on Qt 6.8 or newer and a cartograph with Image "
-        "frames only; the plugin runs the QGIS PDF/X-4 exporter."
+        "Needs QGIS built on Qt 6.8 or newer; the plugin runs the QGIS "
+        "PDF/X-4 exporter."
     ),
     PROFILE_ICC: N_(
         "Ask the print shop for their profile (FOGRA39 in Europe, GRACoL in "
@@ -142,8 +136,7 @@ class PrintSettingsDialog(QDialog):
     """The modal Print settings dialog.
 
     `layout_page_mm` is the source layout's page 1 size, for the "from
-    layout" entry. `has_live_frame` is whether the cartograph has any live
-    frame (which rules the QGIS path out). `colour_support` is
+    layout" entry. `colour_support` is
     `exporters.print_pdf.colour_management_support()`'s answer; it is a
     parameter so the controller asks once and tests can choose.
     `qsettings` defaults to the user's `QSettings()`.
@@ -154,21 +147,18 @@ class PrintSettingsDialog(QDialog):
         settings: PrintSettings,
         *,
         layout_page_mm: tuple[float, float],
-        has_live_frame: bool,
         colour_support: tuple[bool, str] | None = None,
         qsettings: QSettings | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Print settings"))
+        self.setWindowTitle(tr("PDF settings"))
         self.setModal(True)
         self.action = ""
         self._qsettings = qsettings if qsettings is not None else QSettings()
         self._icc_path = settings.icc_path
         self._layout_size_mm = layout_page_mm
-        self._profile_reasons = self._compute_profile_reasons(
-            has_live_frame, colour_support
-        )
+        self._profile_reasons = self._compute_profile_reasons(colour_support)
 
         layout = QVBoxLayout(self)
         layout.addLayout(self._build_preset_row())
@@ -182,23 +172,15 @@ class PrintSettingsDialog(QDialog):
     # ---- Building ----------------------------------------------------------
 
     def _compute_profile_reasons(
-        self, has_live_frame: bool, colour_support: tuple[bool, str] | None
+        self, colour_support: tuple[bool, str] | None
     ) -> dict[str, str]:
         """Profile -> why it is unavailable; absent when it is available."""
         if colour_support is None:
             from ...exporters.print_pdf import colour_management_support
 
             colour_support = colour_management_support()
-        supported, reason = colour_support
-        if not supported:
-            why = reason
-        elif has_live_frame:
-            why = tr(
-                "This cartograph has an Interactive frame. CMYK and ICC PDFs come from "
-                "QGIS, which can only print Image frames as the browser shows "
-                "them: set every frame to Image in Map frames."
-            )
-        else:
+        supported, why = colour_support
+        if supported:
             return {}
         return {PROFILE_CMYK: why, PROFILE_ICC: why}
 
@@ -320,8 +302,6 @@ class PrintSettingsDialog(QDialog):
         self.embed_fonts_check = QCheckBox(tr("Embed fonts"))
         box.addWidget(self.flatten_check)
         box.addWidget(self.embed_fonts_check)
-        self.embed_fonts_note = FittedLabel()
-        box.addWidget(self.embed_fonts_note)
         return group
 
     def _build_buttons(self) -> QDialogButtonBox:
@@ -334,7 +314,7 @@ class PrintSettingsDialog(QDialog):
             tr("Keep these settings for this layout without exporting")
         )
         self.export_button = buttons.addButton(
-            tr("Export PDF"), QDialogButtonBox.ButtonRole.AcceptRole
+            tr("Save PDF…"), QDialogButtonBox.ButtonRole.AcceptRole
         )
         self.export_button.setDefault(True)
         self.export_button.setAutoDefault(True)
@@ -446,26 +426,8 @@ class PrintSettingsDialog(QDialog):
         self.size_note_label.setVisible(bool(text))
 
     def _sync_embed_fonts(self, *_args: object) -> None:
-        """Embed fonts only reaches the QGIS PDF: a browser prints with its
-        own font handling. The saved preference is kept either way."""
-        native = str(self.profile_combo.currentData()) != PROFILE_RGB
-        self.embed_fonts_check.setEnabled(native)
-        if native:
-            self.embed_fonts_check.setToolTip(
-                tr("Off turns text into outlines in the QGIS PDF")
-            )
-            self.embed_fonts_note.setText("")
-        else:
-            self.embed_fonts_check.setToolTip(
-                tr("The browser decides how fonts are embedded when it prints")
-            )
-            self.embed_fonts_note.setText(
-                tr(
-                    "Embed fonts applies to CMYK and ICC PDFs from QGIS. In the "
-                    "browser the print dialog controls it; your choice is kept."
-                )
-            )
-        self.embed_fonts_note.setVisible(bool(self.embed_fonts_note.text()))
+        """Embed fonts applies to every PDF, since QGIS writes them all."""
+        self.embed_fonts_check.setToolTip(tr("Off turns text into outlines in the PDF"))
 
     def _sync_crop_marks(self, *_args: object) -> None:
         has_bleed = BLEED_MM.get(str(self.bleed_combo.currentData())) is not None
@@ -564,7 +526,6 @@ def ask_print_settings(
     settings: PrintSettings,
     *,
     layout_page_mm: tuple[float, float],
-    has_live_frame: bool,
     parent: QWidget | None = None,
 ) -> tuple[str, PrintSettings] | None:
     """Show the dialog; `(ACTION_EXPORT | ACTION_SAVE, settings)` or None
@@ -572,7 +533,6 @@ def ask_print_settings(
     dialog = PrintSettingsDialog(
         settings,
         layout_page_mm=layout_page_mm,
-        has_live_frame=has_live_frame,
         parent=parent,
     )
     try:
@@ -583,64 +543,11 @@ def ask_print_settings(
         dialog.deleteLater()
 
 
-def ask_native_pdf_differences(
-    *, attribution: str, parent: QWidget | None = None
-) -> str | None:
-    """Before a CMYK/ICC export through QGIS: what the QGIS PDF will not carry
-    from the cartograph page. `NATIVE_CONTINUE`, `NATIVE_BROWSER` or
-    `NATIVE_ADD_ATTRIBUTION` (offered only when there is an attribution), or
-    None when cancelled. The title and the theme are not listed: they are part
-    of the layout, so the QGIS PDF carries them."""
-    box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setWindowTitle(tr("Export PDF"))
-    lines = [tr("The QGIS PDF differs from the cartograph in the browser:")]
-    if attribution:
-        lines.append(
-            "- "
-            + tr(
-                "The page attribution is not in the PDF unless the layout has "
-                "a label with it."
-            )
-        )
-    box.setText("\n".join(lines))
-    box.setInformativeText(
-        tr(
-            "The browser export keeps them but is RGB only, with no CMYK or "
-            "ICC profile."
-        )
-    )
-    answers: dict[object, str | None] = {}
-    proceed = box.addButton(tr("Continue"), QMessageBox.ButtonRole.AcceptRole)
-    answers[proceed] = NATIVE_CONTINUE
-    if attribution:
-        add = box.addButton(
-            tr("Add attribution to the layout"), QMessageBox.ButtonRole.ActionRole
-        )
-        answers[add] = NATIVE_ADD_ATTRIBUTION
-    browser = box.addButton(
-        tr("Use browser RGB export instead"), QMessageBox.ButtonRole.ActionRole
-    )
-    answers[browser] = NATIVE_BROWSER
-    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
-    box.setDefaultButton(proceed)
-    box.setEscapeButton(cancel)
-    try:
-        box.exec()
-        return answers.get(box.clickedButton())
-    finally:
-        box.deleteLater()
-
-
 __all__ = [
     "ACTION_EXPORT",
     "ACTION_SAVE",
-    "NATIVE_ADD_ATTRIBUTION",
-    "NATIVE_BROWSER",
-    "NATIVE_CONTINUE",
     "PRESETS_KEY",
     "PrintSettingsDialog",
-    "ask_native_pdf_differences",
     "ask_print_settings",
     "load_presets",
     "save_presets",

@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
-from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import QDialog
 
 from nika_onlymap_exporter.core.print_settings import (
@@ -39,8 +39,7 @@ RGB_NOTE = (
     "from a PDF."
 )
 CMYK_NOTE = (
-    "Needs QGIS built on Qt 6.8 or newer and a cartograph with Image frames "
-    "only; the plugin runs the QGIS PDF/X-4 exporter."
+    "Needs QGIS built on Qt 6.8 or newer; the plugin runs the QGIS PDF/X-4 exporter."
 )
 ICC_NOTE = (
     "Ask the print shop for their profile (FOGRA39 in Europe, GRACoL in North "
@@ -60,14 +59,12 @@ def make_dialog(qgis_app, qsettings):
     def _make(
         settings=None,
         *,
-        has_live_frame=False,
         colour_support=(True, ""),
         page=(420, 297),
     ):
         dialog = PrintSettingsDialog(
             settings or PrintSettings(),
             layout_page_mm=page,
-            has_live_frame=has_live_frame,
             colour_support=colour_support,
             qsettings=qsettings,
         )
@@ -126,22 +123,14 @@ class TestLayout:
         assert dialog.settings().crop_marks is True
         assert dialog.settings().crop_marks_effective is False
 
-    def test_embed_fonts_is_off_and_explained_for_browser_printing(
-        self, make_dialog
-    ) -> None:
+    def test_embed_fonts_applies_to_every_profile(self, make_dialog) -> None:
         dialog = make_dialog(PrintSettings(embed_fonts=False))
         assert dialog.settings().profile == PROFILE_RGB
-        assert not dialog.embed_fonts_check.isEnabled()
-        assert not dialog.embed_fonts_note.isHidden()
-        assert "browser" in dialog.embed_fonts_note.text()
-        # The preference is kept for the native export.
+        assert dialog.embed_fonts_check.isEnabled()
         assert dialog.settings().embed_fonts is False
         _select(dialog.profile_combo, PROFILE_CMYK)
         assert dialog.embed_fonts_check.isEnabled()
-        assert dialog.embed_fonts_note.isHidden()
         assert dialog.settings().embed_fonts is False
-        _select(dialog.profile_combo, PROFILE_RGB)
-        assert not dialog.embed_fonts_check.isEnabled()
 
     def test_smaller_sheet_shows_the_clipping_consequence(self, make_dialog) -> None:
         dialog = make_dialog(PrintSettings(page=PAGE_FROM_LAYOUT), page=(420, 297))
@@ -161,7 +150,7 @@ class TestLayout:
     def test_export_is_the_default_button(self, make_dialog) -> None:
         dialog = make_dialog()
         assert dialog.export_button.isDefault()
-        assert dialog.export_button.text() == "Export PDF"
+        assert dialog.export_button.text() == "Save PDF…"
 
 
 class TestProfile:
@@ -187,22 +176,13 @@ class TestProfile:
         assert dialog.profile_combo.currentData() == PROFILE_CMYK
         assert dialog.settings().profile == PROFILE_CMYK
 
-    def test_live_frame_disables_cmyk_and_icc_with_a_reason(self, make_dialog) -> None:
-        dialog = make_dialog(has_live_frame=True)
-        model = dialog.profile_combo.model()
+    def test_an_interactive_frame_no_longer_rules_cmyk_out(self, make_dialog) -> None:
+        """Interactive frames are drawn static by QGIS in the PDF, so only the
+        QGIS build decides whether CMYK and ICC are offered."""
+        dialog = make_dialog()
         for profile in (PROFILE_CMYK, PROFILE_ICC):
-            index = dialog.profile_combo.findData(profile)
-            item = model.item(index)
-            assert not item.isEnabled()
-            assert "Interactive frame" in item.toolTip()
-            assert (
-                dialog.profile_combo.itemData(index, Qt.ItemDataRole.ToolTipRole)
-                == item.toolTip()
-            )
-            assert not dialog.profile_available(profile)
-            assert "Image" in dialog.profile_tooltip(profile)
-        assert dialog.profile_available(PROFILE_RGB)
-        assert model.item(dialog.profile_combo.findData(PROFILE_RGB)).isEnabled()
+            assert dialog.profile_available(profile)
+            assert dialog.profile_tooltip(profile) == ""
 
     def test_old_qt_disables_them_with_its_reason(self, make_dialog) -> None:
         reason = (
@@ -214,10 +194,13 @@ class TestProfile:
         assert dialog.profile_tooltip(PROFILE_ICC) == reason
 
     def test_unavailable_saved_choice_shows_rgb_and_says_why(self, make_dialog) -> None:
-        dialog = make_dialog(PrintSettings(profile=PROFILE_CMYK), has_live_frame=True)
+        reason = "CMYK and ICC PDFs need QGIS 3.40 or newer."
+        dialog = make_dialog(
+            PrintSettings(profile=PROFILE_CMYK), colour_support=(False, reason)
+        )
         assert dialog.profile_combo.currentData() == PROFILE_RGB
         assert not dialog.downgrade_label.isHidden()
-        assert "Interactive frame" in dialog.downgrade_label.text()
+        assert reason in dialog.downgrade_label.text()
         assert make_dialog(
             PrintSettings(profile=PROFILE_CMYK)
         ).downgrade_label.isHidden()

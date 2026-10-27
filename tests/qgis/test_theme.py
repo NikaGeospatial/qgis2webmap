@@ -483,7 +483,6 @@ class TestHostSurfaces:
         printing = PrintSettingsDialog(
             PrintSettings(page="custom"),
             layout_page_mm=(210, 297),
-            has_live_frame=False,
             parent=root,
             qsettings=qsettings,
         )

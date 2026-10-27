@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import dataclasses
+import html
 import re
 import sys
 import time
@@ -71,7 +72,6 @@ from ...core.page_settings import (
     adopt_theme,
     apply_theme,
     apply_theme_quietly,
-    attribution_in_layout,
     attribution_state,
     current_theme,
     has_theme_record,
@@ -176,6 +176,11 @@ _THEME_LABELS = (
     ("blueprint", N_("Blueprint")),
     ("minimal", N_("Minimal")),
 )
+
+
+#: Links in the status line after a PDF is saved.
+_PDF_OPEN_LINK = "open-pdf"
+_PDF_SHOW_LINK = "show-pdf"
 
 
 def _reveal_label() -> str:
@@ -305,6 +310,11 @@ class CartographController:
         self._shown_report_state: ReportState | None = None
         self._loading_page = False
         self._colour_vision: AccessibilityDialog | None = None
+        # True while a PDF is being written (the export is synchronous, but
+        # events run around it); a second request waits for the first.
+        self._pdf_running = False
+        self._last_pdf_path: Path | None = None
+        self._status_links_connected = False
         self._legend_entries: tuple[LegendEntry, ...] = ()
         self._pending_spec: CartographSpec | None = None
         # Map item uuid -> how many of its fidelity rows are not "Kept".
@@ -1212,6 +1222,7 @@ class CartographController:
 
         self.atlas_tab = AtlasTab(self._open_all_pages, self.dialog)
         self.atlas_tab.changed.connect(self.schedule_autosave)
+        self.atlas_tab.changed.connect(self._update_share_enabled)
         return self.atlas_tab
 
     def _open_all_pages(self, kind: str) -> None:
@@ -2115,11 +2126,11 @@ class CartographController:
     def build_corner(self) -> QWidget:
         """The cartograph's actions, styled as the web map's are.
 
-        Preview and Share in the same outlined buttons with the same line
-        icons. There is no filled button: the cartograph saves itself, so it
-        has no Export, and "Open in browser" did what Preview does - it lives
-        in Share's menu now, still on Ctrl+O. Accessibility is a tool rather
-        than an act, so it is an icon on its own ahead of them.
+        Save PDF and Share in the same outlined buttons with the same line
+        icons. There is no filled button: the cartograph saves itself.
+        "Preview in browser" lives in Share's menu, still on Ctrl+O.
+        Accessibility is a tool rather than an act, so it is an icon on its
+        own ahead of them.
         """
         if self._corner is not None:
             return self._corner
@@ -2153,13 +2164,11 @@ class CartographController:
         )
         self.accessibility_button.clicked.connect(self.on_accessibility)
 
-        # The page beside the panel is QGIS's drawing; this opens the
-        # cartograph itself, in the browser, as the web map's Preview does.
-        self.cartograph_preview_button = button(tr("Preview in browser"), "preview")
-        self.cartograph_preview_button.setToolTip(
-            tr("Open the cartograph in your browser.")
-        )
-        self.cartograph_preview_button.clicked.connect(self.preview)
+        # The page beside the panel is QGIS's drawing, so saving a PDF is a
+        # native QGIS export; the browser is a secondary HTML check in Share.
+        self.save_pdf_button = button(tr("Save PDF…"), "export")
+        self.save_pdf_button.setShortcut("Ctrl+P")
+        self.save_pdf_button.clicked.connect(self.on_save_pdf)
 
         self.cartograph_share_button = button(tr("Share"), "share")
         self.cartograph_share_button.setProperty("hasMenu", True)
@@ -2395,52 +2404,54 @@ class CartographController:
             self._cartograph_share_tips[key] = tip
             return action
 
-        # Outputs first, then the file's own actions, then NIKA.
+        # Outputs first, then the HTML file's own actions, then NIKA.
         menu.addSection(tr("Export"))
         add(
-            "export_pdf",
-            tr("Export PDF..."),
-            tr("Opens the cartograph and prints it at true page size"),
-            self.on_export_pdf,
-            "Ctrl+P",
+            "save_atlas_pdf",
+            tr("Save atlas as PDF…"),
+            tr("One run of pages per atlas feature, in a single PDF"),
+            self.on_save_atlas_pdf,
         )
         add(
             "export_png",
-            tr("Export PNG..."),
+            tr("Export PNG…"),
             tr("Image of the first page at the saved resolution"),
             self.on_export_png,
         )
         add(
             "export_qpt",
-            tr("Export QGIS layout template (.qpt)..."),
+            tr("Export QGIS layout template…"),
             tr("Round trip back into QGIS"),
             self.on_export_qpt,
         )
         add(
             "print_settings",
-            tr("Print settings..."),
-            tr("Page size, bleed, crop marks and colour profile for Export PDF"),
+            tr("PDF settings…"),
+            tr("Page size, bleed, crop marks and colour profile for Save PDF"),
             self.on_print_settings,
         )
 
-        menu.addSection(tr("File"))
+        menu.addSection(tr("HTML cartograph"))
         add(
             "open_browser",
-            tr("Open in browser"),
-            tr("Opens the cartograph in your browser"),
+            tr("Preview in browser"),
+            tr(
+                "Open the HTML cartograph to check interactive maps and "
+                "browser behaviour."
+            ),
             self.on_open_in_browser,
             "Ctrl+O",
         )
 
         add(
             "copy_path",
-            tr("Copy file path"),
+            tr("Copy HTML file path"),
             tr("Copies the cartograph's path"),
             self.on_copy_path,
         )
         add(
             "reveal",
-            _reveal_label(),
+            tr("Show HTML in folder"),
             tr("Shows the cartograph in your file manager"),
             self.on_reveal,
         )
@@ -2475,24 +2486,8 @@ class CartographController:
     def _update_share_enabled(self) -> None:
         if not hasattr(self, "cartograph_share_actions"):
             return
-        # Export PDF goes where the Print settings send it, and says so.
-        settings = self._print_settings()
-        self._cartograph_share_tips["export_pdf"] = (
-            tr(
-                "Makes a CMYK or ICC PDF with QGIS's own exporter from the "
-                "print layout, and asks where to save it"
-            )
-            if settings is not None and settings.uses_qgis_exporter
-            else tr("Opens the cartograph and prints it at true page size")
-        )
         exists = self._file_exists()
-        for key in (
-            "copy_path",
-            "reveal",
-            "open_browser",
-            "export_pdf",
-            "export_png",
-        ):
+        for key in ("copy_path", "reveal", "open_browser", "export_png"):
             self._set_share_row(
                 key,
                 exists,
@@ -2502,6 +2497,15 @@ class CartographController:
             self._set_share_row(
                 key, self._current_layout is not None, tr("Choose a print layout first")
             )
+        atlas_row = self.cartograph_share_actions.get("save_atlas_pdf")
+        if atlas_row is not None:
+            atlas_row.setVisible(self._atlas_configured())
+            self._set_share_row(
+                "save_atlas_pdf",
+                not self._pdf_running,
+                tr("Saving PDF…"),
+            )
+        self._sync_save_pdf_button()
         for key in ("enhance", "critique"):
             self._set_share_row(key, False, tr("Not available for cartographs yet"))
 
@@ -2558,23 +2562,6 @@ class CartographController:
         )
         HandoffDialog(context, self.dialog).exec()
 
-    def on_export_pdf(self) -> None:
-        """Share > Export PDF, by the route the Print settings choose.
-
-        RGB (the default) prints from the browser, which honours the page's
-        true size; the file already carries the print attributes, because
-        every save applies the settings. CMYK and ICC go through QGIS's own
-        PDF exporter on the source layout - the one thing a browser cannot do.
-        """
-        path = self._current_path()
-        if path is None or not path.exists():
-            return
-        settings = self._print_settings()
-        if settings is not None and settings.uses_qgis_exporter:
-            self._export_pdf_through_qgis(settings, path)
-            return
-        self._open_saved(path, "print=1")
-
     # ---- Print settings ----------------------------------------------------
 
     def _print_settings(self) -> PrintSettings | None:
@@ -2599,19 +2586,8 @@ class CartographController:
         )
         return (size.width(), size.height())
 
-    def _has_live_frame(self) -> bool:
-        if self._current_layout is None:
-            return False
-        choices = self.state.frame_choices(self.state.cartograph_layout)
-        for item in layout_map_items(self._current_layout):
-            choice = choices.get(item.item_id)
-            mode = choice.mode if choice else item.default_mode
-            if mode == "live":
-                return True
-        return False
-
     def on_print_settings(self) -> None:
-        """Share > Print settings: saved per layout, applied on every save."""
+        """Share > PDF settings: saved per layout, applied on every save."""
         from .print_settings_dialog import ACTION_EXPORT, ask_print_settings
 
         if self._current_layout is None:
@@ -2619,7 +2595,6 @@ class CartographController:
         answer = ask_print_settings(
             self._print_settings() or PrintSettings(),
             layout_page_mm=self._layout_page_mm(),
-            has_live_frame=self._has_live_frame(),
             parent=self.dialog,
         )
         if answer is None:
@@ -2628,122 +2603,129 @@ class CartographController:
         self.state.cartograph_print[self.state.cartograph_layout] = settings.to_json()
         save_state(self.project, self.state)
         self._update_share_enabled()
+        # The HTML carries the bleed and marks too, so it saves again.
+        self.schedule_autosave()
         if action == ACTION_EXPORT:
-            if settings.uses_qgis_exporter:
-                path = self._current_path()
-                if path is not None:
-                    self._export_pdf_through_qgis(settings, path)
-                self.schedule_autosave()
-            else:
-                # The browser must print the file with these settings in it,
-                # so print once the save that applies them has landed.
-                self.schedule_autosave()
-                path = self._current_path()
-                if path is not None:
-                    self._open_saved(path, "print=1")
-        else:
-            self.schedule_autosave()
+            self.on_save_pdf()
 
-    def _export_pdf_through_qgis(self, settings: PrintSettings, path: Path) -> None:
+    # ---- Save PDF ----------------------------------------------------------
+
+    def _atlas_configured(self) -> bool:
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            return False
+        atlas = layout.atlas()
+        return bool(atlas.enabled() and atlas.coverageLayer() is not None)
+
+    def _sync_save_pdf_button(self) -> None:
+        button = getattr(self, "save_pdf_button", None)
+        if button is None:
+            return
+        if self._current_layout is None:
+            button.setEnabled(False)
+            button.setToolTip(tr("Choose or create a layout first"))
+        else:
+            button.setEnabled(not self._pdf_running)
+            button.setToolTip(
+                tr("Saving PDF…")
+                if self._pdf_running
+                else tr("Save every page of this layout as a PDF (Ctrl+P)")
+            )
+
+    def on_save_pdf(self) -> None:
+        """Save PDF…: every page of the selected layout, by QGIS itself."""
+        self._save_pdf(atlas=False)
+
+    def on_save_atlas_pdf(self) -> None:
+        """Share > Save atlas as PDF…: one run of pages per atlas feature."""
+        self._save_pdf(atlas=True)
+
+    def _suggested_pdf_path(self, atlas: bool) -> Path:
+        name = _file_name_part(self.state.cartograph_layout or "") or "layout"
+        if atlas:
+            name += "-atlas"
+        html = self._current_path()
+        folder = (
+            html.parent
+            if html is not None
+            else Path(self.project.fileName() or str(Path.home())).parent
+        )
+        return folder / f"{name}.pdf"
+
+    def _save_pdf(self, *, atlas: bool) -> None:
         from qgis.PyQt.QtWidgets import QMessageBox
 
-        from ...exporters.print_pdf import (
-            PrintPdfError,
-            attribution_warning,
-            export_print_pdf,
-        )
+        from ...exporters.print_pdf import PrintPdfError, export_print_pdf
 
-        if self._current_layout is None:
+        layout = self._current_layout
+        if layout is None or self._pdf_running:
             return
-        if self._has_live_frame():
-            QMessageBox.information(
-                self.dialog,
-                tr("Export PDF"),
-                tr(
-                    "A CMYK or ICC PDF is made by QGIS from the print layout, "
-                    "which only works when every frame is an Image. Set the "
-                    "Interactive frames to Image in Map frames, or choose RGB in Print "
-                    "settings."
-                ),
-            )
+        if atlas and not self._atlas_configured():
             return
-        page = self.state.page_choice(self.state.cartograph_layout)
-        accepted: list[str] = []
-        # The theme and a plain attribution text are part of the layout, so
-        # the PDF carries them; only an attribution with no text item on the
-        # page (or an expression there) is left out.
-        leaves_out = page.attribution and not attribution_in_layout(
-            self._current_layout
-        )
-        if leaves_out:
-            from .print_settings_dialog import (
-                NATIVE_ADD_ATTRIBUTION,
-                NATIVE_BROWSER,
-                NATIVE_CONTINUE,
-                ask_native_pdf_differences,
-            )
-
-            answer = ask_native_pdf_differences(
-                attribution=page.attribution, parent=self.dialog
-            )
-            if answer == NATIVE_BROWSER:
-                self._open_saved(path, "print=1")
-                return
-            if answer == NATIVE_ADD_ATTRIBUTION:
-                self._add_attribution_label(page.attribution)
-            elif answer != NATIVE_CONTINUE:
-                return
-            # Told already (or, for the attribution, now in the layout): the
-            # post-export line leaves these two out.
-            accepted = [attribution_warning()]
+        title = tr("Save atlas as PDF") if atlas else tr("Save PDF")
         chosen, _ = QFileDialog.getSaveFileName(
             self.dialog,
-            tr("Export PDF"),
-            str(path.with_suffix(".pdf")),
+            title,
+            str(self._suggested_pdf_path(atlas)),
             tr("PDF (*.pdf)"),
         )
         if not chosen:
             return
+        target = Path(chosen)
+        if target.suffix.lower() != ".pdf":
+            target = target.with_name(target.name + ".pdf")
+        # Settings edited since the last look count as edits made, as for the
+        # HTML; the layout itself is read as it is right now, from a copy.
+        self.sync_layer_settings()
+        self._pdf_running = True
+        self.dialog.status_label.setText(tr("Saving PDF…"))
+        self._update_share_enabled()
+        QGuiApplication.processEvents()
         try:
             result = export_print_pdf(
-                self._current_layout,
-                settings,
-                Path(chosen),
-                page,
+                layout,
+                self._print_settings() or PrintSettings(),
+                target,
+                self.state.page_choice(self.state.cartograph_layout),
+                atlas=atlas,
             )
         except PrintPdfError as exc:
-            QMessageBox.warning(self.dialog, tr("Export PDF"), str(exc))
+            self.dialog.status_label.setText(
+                tr("Could not save the PDF: {error}").format(error=exc)
+            )
+            QMessageBox.warning(self.dialog, title, str(exc))
             return
-        message = tr("Saved {path}").format(path=result.path)
-        warnings = [w for w in result.warnings if w not in accepted]
+        finally:
+            self._pdf_running = False
+            self._update_share_enabled()
+        self._show_pdf_saved(result.path, result.warnings)
+
+    def _show_pdf_saved(self, path: Path, warnings: tuple[str, ...]) -> None:
+        """ "Saved PDF: name.pdf · Open PDF · Show in folder" in the status
+        area, with whatever the exporter noted after it."""
+        self._last_pdf_path = path
+        if not self._status_links_connected:
+            self.dialog.status_label.linkActivated.connect(self._on_status_link)
+            self._status_links_connected = True
+        parts = [
+            html.escape(tr("Saved PDF: {name}").format(name=path.name)),
+            f'<a href="{_PDF_OPEN_LINK}">{html.escape(tr("Open PDF"))}</a>',
+            f'<a href="{_PDF_SHOW_LINK}">{html.escape(tr("Show in folder"))}</a>',
+        ]
+        text = " · ".join(parts)
         if warnings:
-            message += " - " + " ".join(warnings)
-        self.dialog.status_label.setText(message)
+            text += " - " + html.escape(" ".join(warnings))
+        self.dialog.status_label.setText(text)
+        self.dialog.status_label.setToolTip(str(path))
 
-    def _add_attribution_label(self, text: str) -> None:
-        """A small label with `text` along the foot of page 1, as one step on
-        the layout's undo stack."""
-        from qgis.core import (
-            QgsLayoutItemLabel,
-            QgsLayoutPoint,
-            QgsLayoutSize,
-            QgsUnitTypes,
-        )
-
-        layout = self._current_layout
-        if layout is None:
+    def _on_status_link(self, link: str) -> None:
+        path = self._last_pdf_path
+        if path is None:
             return
-        width, height = self._layout_page_mm()
-        mm = QgsUnitTypes.LayoutMillimeters
-        label = QgsLayoutItemLabel(layout)
-        label.setText(text)
-        label.attemptResize(QgsLayoutSize(width - 10, 5, mm))
-        label.attemptMove(QgsLayoutPoint(5, height - 8, mm))
-        stack = layout.undoStack()
-        stack.beginMacro(tr("Add attribution"))
-        layout.addLayoutItem(label)
-        stack.endMacro()
-        self.schedule_autosave()
+        if link == _PDF_OPEN_LINK:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        elif link == _PDF_SHOW_LINK:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
     def on_export_png(self) -> None:
         path = self._current_path()
