@@ -59,6 +59,7 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -82,6 +83,7 @@ from ...core.locator_context import (
 )
 from ..i18n import tr
 from .callout_controls import CalloutControls
+from .flow_layout import flow_row
 from .frames_list import LIVE, STATIC, FramesList, _QuietCombo
 from .item_text_size import text_size_points
 from .layer_membership import drawn_layers, set_layer_included
@@ -292,12 +294,14 @@ class _MapChoice(QWidget):
 
     chosen = pyqtSignal(str)  # the map item's uuid
 
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, labels: list[QLabel] | None = None) -> None:
         super().__init__(parent)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
+        row.setSpacing(8)
         self.label = QLabel(tr("Map"), self)
+        if labels is not None:
+            labels.append(self.label)
         self.label.setProperty("role", "hint")
         row.addWidget(self.label)
         self.combo = _QuietCombo(self)
@@ -359,6 +363,7 @@ class ContextControls(QFrame):
         self._legend_factory: LegendEditorFactory | None = None
         self._legend_editor: QWidget | None = None
         self._text_dirty = False
+        self._field_labels: list[QLabel] = []
 
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 4, 0, 0)
@@ -377,6 +382,9 @@ class ContextControls(QFrame):
         )
         self.delete_button.setProperty("lineIcon", "trash")
         self.delete_button.clicked.connect(self.delete_selected)
+        self.delete_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
         head.addWidget(self.delete_button)
         column.addLayout(head)
 
@@ -507,8 +515,6 @@ class ContextControls(QFrame):
 
     def _build_map_page(self) -> None:
         self.map_page, column = self._page()
-        row = QHBoxLayout()
-        row.setSpacing(6)
         self.edit_view_button = QPushButton(tr("Edit view"), self.map_page)
         self.edit_view_button.setProperty("role", "secondary")
         self.edit_view_button.setCheckable(True)
@@ -521,7 +527,6 @@ class ContextControls(QFrame):
             )
         )
         self.edit_view_button.toggled.connect(self._on_edit_view)
-        row.addWidget(self.edit_view_button)
         self.canvas_button = QPushButton(tr("Use canvas extent"), self.map_page)
         self.canvas_button.setProperty("role", "secondary")
         self.canvas_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -529,15 +534,20 @@ class ContextControls(QFrame):
             tr("Set this map's extent to what the QGIS map canvas shows")
         )
         self.canvas_button.clicked.connect(self._on_canvas)
-        row.addWidget(self.canvas_button)
-        row.addStretch(1)
-        column.addLayout(row)
+        # The buttons wrap onto a second line in a narrow panel rather than
+        # widening it.
+        column.addWidget(
+            flow_row(self.map_page, [self.edit_view_button, self.canvas_button])
+        )
 
-        row = QHBoxLayout()
-        row.setSpacing(6)
-        rotation_label = QLabel(tr("Rotation"), self.map_page)
-        rotation_label.setProperty("role", "hint")
-        row.addWidget(rotation_label)
+        # Labels in one column, fields in the other: every field starts and
+        # ends at the same edges, however wide the panel.
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(6)
+        grid.setColumnStretch(1, 1)
+        rotation_label = self._field_label(tr("Rotation"), self.map_page)
         self.rotation_spin = _QuietDoubleSpin(self.map_page)
         self.rotation_spin.setRange(-360.0, 360.0)
         self.rotation_spin.setDecimals(1)
@@ -546,9 +556,11 @@ class ContextControls(QFrame):
         self.rotation_spin.setAccessibleName(tr("Map rotation"))
         rotation_label.setBuddy(self.rotation_spin)
         self.rotation_spin.editingFinished.connect(self._on_rotation)
-        row.addWidget(self.rotation_spin)
+        grid.addWidget(rotation_label, 0, 0)
+        grid.addWidget(self.rotation_spin, 0, 1)
+        mode_label = self._field_label(tr("Map type"), self.map_page)
         self.mode_combo = _QuietCombo(self.map_page)
-        self.mode_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self._fit_combo(self.mode_combo)
         self.mode_combo.addItem(tr("Interactive"), LIVE)
         self.mode_combo.addItem(tr("Image"), STATIC)
         self.mode_combo.setToolTip(
@@ -558,59 +570,84 @@ class ContextControls(QFrame):
             )
         )
         self.mode_combo.setAccessibleName(tr("Map type"))
+        mode_label.setBuddy(self.mode_combo)
         self.mode_combo.activated.connect(self._on_mode)
-        row.addWidget(self.mode_combo)
+        grid.addWidget(mode_label, 1, 0)
+        grid.addWidget(self.mode_combo, 1, 1)
+        self.dpi_label = self._field_label(tr("Image resolution"), self.map_page)
         self.dpi_combo = _QuietCombo(self.map_page)
-        self.dpi_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self._fit_combo(self.dpi_combo)
         self.dpi_combo.setToolTip(tr("Image resolution"))
         self.dpi_combo.setAccessibleName(tr("Image resolution"))
+        self.dpi_label.setBuddy(self.dpi_combo)
         self.dpi_combo.activated.connect(self._on_dpi)
-        row.addWidget(self.dpi_combo)
-        row.addStretch(1)
-        column.addLayout(row)
+        grid.addWidget(self.dpi_label, 2, 0)
+        grid.addWidget(self.dpi_combo, 2, 1)
+        column.addLayout(grid)
 
         # Only for an inset: what it draws and how much it shows.
-        self.inset_row = QWidget(self.map_page)
-        inset = QHBoxLayout(self.inset_row)
-        inset.setContentsMargins(0, 0, 0, 0)
-        inset.setSpacing(6)
-        self.context_button = QPushButton(tr("Context layers..."), self.inset_row)
+        self.context_button = QPushButton(tr("Context layers..."), self.map_page)
         self.context_button.setProperty("role", "secondary")
         self.context_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.context_button.setToolTip(tr("Choose which layers this inset draws"))
         self.context_menu = _StayOpenMenu(self.context_button)
         self.context_menu.aboutToShow.connect(self._fill_context_menu)
         self.context_button.setMenu(self.context_menu)
-        inset.addWidget(self.context_button)
-        self.fit_button = QPushButton(tr("Fit context"), self.inset_row)
+        self.fit_button = QPushButton(tr("Fit context"), self.map_page)
         self.fit_button.setProperty("role", "secondary")
         self.fit_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.fit_button.clicked.connect(self._on_fit_context)
-        inset.addWidget(self.fit_button)
-        self.remove_inset_button = QPushButton(tr("Remove inset"), self.inset_row)
+        self.remove_inset_button = QPushButton(tr("Remove inset"), self.map_page)
         self.remove_inset_button.setProperty("role", "secondary")
         self.remove_inset_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.remove_inset_button.setToolTip(tr("Take this inset off the page"))
         self.remove_inset_button.clicked.connect(self._on_remove_inset)
-        inset.addWidget(self.remove_inset_button)
-        inset.addStretch(1)
+        self.inset_row = flow_row(
+            self.map_page,
+            [self.context_button, self.fit_button, self.remove_inset_button],
+        )
         column.addWidget(self.inset_row)
         self.context_note = QLabel(self.map_page)
         self.context_note.setProperty("role", "hint")
         self.context_note.setWordWrap(True)
         column.addWidget(self.context_note)
 
+    def _field_label(self, text: str, parent: QWidget) -> QLabel:
+        """A label of the panel's label column: all share one width."""
+        label = QLabel(text, parent)
+        label.setProperty("role", "hint")
+        self._field_labels.append(label)
+        return label
+
+    @staticmethod
+    def _fit_combo(combo: QComboBox) -> None:
+        """A combo that fills its column and can shrink below its text."""
+        combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        combo.setMinimumContentsLength(6)
+        combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def _align_field_labels(self) -> None:
+        labels = [label for label in self._field_labels if not sip.isdeleted(label)]
+        for label in labels:
+            label.setMinimumWidth(0)
+        widest = max((label.sizeHint().width() for label in labels), default=0)
+        for label in labels:
+            label.setMinimumWidth(widest)
+
     def _build_legend_page(self) -> None:
         self.legend_page, column = self._page()
         self.legend_basics = QWidget(self.legend_page)
-        row = QHBoxLayout(self.legend_basics)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-        self.legend_map = _MapChoice(self.legend_page)
+        rows = QVBoxLayout(self.legend_basics)
+        rows.setContentsMargins(0, 0, 0, 0)
+        rows.setSpacing(6)
+        self.legend_map = _MapChoice(self.legend_page, self._field_labels)
         self.legend_map.chosen.connect(self._on_link)
-        row.addWidget(self.legend_map, 1)
-        columns_label = QLabel(tr("Columns"), self.legend_page)
-        columns_label.setProperty("role", "hint")
+        rows.addWidget(self.legend_map)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        columns_label = self._field_label(tr("Columns"), self.legend_page)
         row.addWidget(columns_label)
         self.columns_spin = _QuietSpin(self.legend_page)
         self.columns_spin.setRange(1, 6)
@@ -618,7 +655,8 @@ class ContextControls(QFrame):
         self.columns_spin.setAccessibleName(tr("Legend columns"))
         columns_label.setBuddy(self.columns_spin)
         self.columns_spin.editingFinished.connect(self._on_columns)
-        row.addWidget(self.columns_spin)
+        row.addWidget(self.columns_spin, 1)
+        rows.addLayout(row)
         column.addWidget(self.legend_basics)
         # Where the legend editor sits, when the host provides one.
         self.legend_slot = QVBoxLayout()
@@ -627,7 +665,7 @@ class ContextControls(QFrame):
 
     def _build_linked_page(self, name: str) -> None:
         page, column = self._page()
-        choice = _MapChoice(page)
+        choice = _MapChoice(page, self._field_labels)
         choice.chosen.connect(self._on_link)
         column.addWidget(choice)
         setattr(self, f"{name}_page", page)
@@ -751,6 +789,10 @@ class ContextControls(QFrame):
         window then scrolls the Edit tab instead of cutting the lettering."""
         for button in self.findChildren(QAbstractButton):
             button.setMinimumHeight(button.sizeHint().height())
+            # Whole words too: a narrow panel wraps or scrolls, it never cuts.
+            if button.text():
+                button.setMinimumWidth(button.sizeHint().width())
+        self._align_field_labels()
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802
         super().showEvent(event)
@@ -868,6 +910,7 @@ class ContextControls(QFrame):
             self.dpi_combo.clear()
             if card is None:
                 self.dpi_combo.setVisible(False)
+                self.dpi_label.setVisible(False)
                 return
             for index in range(card.dpi_combo.count()):
                 self.dpi_combo.addItem(
@@ -876,6 +919,7 @@ class ContextControls(QFrame):
             self.dpi_combo.setCurrentIndex(card.dpi_combo.currentIndex())
             self.mode_combo.setCurrentIndex(self.mode_combo.findData(card.mode()))
             self.dpi_combo.setVisible(card.mode() == STATIC)
+            self.dpi_label.setVisible(card.mode() == STATIC)
         finally:
             self._loading = was_loading
 
