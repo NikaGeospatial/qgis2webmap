@@ -32,6 +32,7 @@ from nika_onlymap_exporter.core.render_units import (
 from nika_onlymap_exporter.core.renderer_translator import (
     HAIRLINE_PIXELS,
     MM_TO_PIXELS,
+    class_symbols,
     reference_scale,
     translate_renderer,
     translate_symbol,
@@ -351,6 +352,105 @@ class TestUnsupportedRenderer:
         assert spec.unsupported_reason == "QgsRuleBasedRenderer"
         unsupported = report.by_status(FidelityStatus.UNSUPPORTED)
         assert any("QgsRuleBasedRenderer" in i.detail for i in unsupported)
+
+
+RULE_RED, RULE_GREEN, RULE_BLUE = "#ff0000", "#00ff00", "#0000ff"
+
+
+def _rule_layer(rules, field_type: str = "string", values=None):
+    """A layer on field `v` drawn by `rules`: (filter, colour, active, label)."""
+    values = values or ["Index", "Intermediate", "Other", None]
+
+    def renderer():
+        root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+        for number, (expression, colour, active, label) in enumerate(rules):
+            rule = qgis_core.QgsRuleBasedRenderer.Rule(
+                marker_symbol(colour, 2.0 + number), 0, 0, expression, label
+            )
+            rule.setActive(active)
+            root.appendChild(rule)
+        return qgis_core.QgsRuleBasedRenderer(root)
+
+    return _oracle_layer(field_type, values, renderer)
+
+
+CONTOURS = [
+    ("\"v\" = 'Index'", RULE_RED, True, "Index contour"),
+    ("\"v\" = 'Intermediate'", RULE_GREEN, True, "Intermediate contour"),
+]
+
+
+class TestRuleBasedAsCategories:
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            CONTOURS,
+            [*CONTOURS, ("ELSE", RULE_BLUE, True, "Rest")],
+            [("\"v\" IN ('Index', 'Other')", RULE_RED, True, "A"), CONTOURS[1]],
+            [CONTOURS[0], (CONTOURS[1][0], RULE_GREEN, False, "off")],
+        ],
+        ids=["two-rules", "else-rule", "in-list", "switched-off-rule"],
+    )
+    def test_every_feature_gets_the_colour_qgis_gives_it(self, project, rules) -> None:
+        layer = _rule_layer(rules)
+
+        assert _exported_colours(layer) == _qgis_colours(layer)
+
+    def test_it_is_a_categorized_spec_with_the_rule_labels(self, project) -> None:
+        spec = translate_renderer(_rule_layer(CONTOURS), FidelityReportBuilder())
+
+        assert spec.kind is RendererKind.CATEGORIZED
+        assert spec.field_name == "v"
+        assert [c.value for c in spec.categories] == ["Index", "Intermediate"]
+        assert [c.label for c in spec.categories] == [
+            "Index contour",
+            "Intermediate contour",
+        ]
+        assert spec.unmatched_hidden is True
+
+    def test_a_scale_range_is_reported_not_kept(self, project) -> None:
+        layer = _rule_layer(CONTOURS)
+        rule = layer.renderer().rootRule().children()[1]
+        rule.setMaximumScale(1.0)
+        rule.setMinimumScale(150000.0)
+        report = FidelityReportBuilder()
+        translate_renderer(layer, report)
+
+        assert any(
+            "scale range" in item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            [('"v" > 3', RULE_RED, True, "range")],
+            [('"v" = \'a\' AND "n" = 1', RULE_RED, True, "and")],
+            [
+                ("\"v\" = 'a'", RULE_RED, True, "a"),
+                ("\"n\" = 'b'", RULE_GREEN, True, "b"),
+            ],
+            [
+                ("\"v\" = 'a'", RULE_RED, True, "a"),
+                ("\"v\" = 'a'", RULE_GREEN, True, "again"),
+            ],
+            [("\"v\" = 'a'", RULE_RED, True, "a"), ("", RULE_GREEN, True, "all")],
+            [("\"nope\" = 'a'", RULE_RED, True, "no field")],
+        ],
+        ids=["range", "and", "two-fields", "same-value-twice", "no-filter", "no-field"],
+    )
+    def test_any_other_rules_stay_unsupported(self, project, rules) -> None:
+        report = FidelityReportBuilder()
+        spec = translate_renderer(_rule_layer(rules), report)
+
+        assert spec.kind is RendererKind.UNSUPPORTED
+        assert report.by_status(FidelityStatus.UNSUPPORTED)
+
+    def test_the_qgis_symbols_pair_with_the_classes(self, project) -> None:
+        layer = _rule_layer([*CONTOURS, ("\"v\" = 'x'", RULE_BLUE, False, "off")])
+        spec = translate_renderer(layer, FidelityReportBuilder())
+
+        assert len(class_symbols(layer.renderer())) == len(spec.categories) == 2
 
 
 class TestMarkerShape:
@@ -844,8 +944,13 @@ def _qgis_colours(layer) -> dict[int, str | None]:
     colours = {}
     for feature in layer.getFeatures():
         context.expressionContext().setFeature(feature)
+        # `willRenderFeature` first: a rule-based renderer matches its rules there.
+        will_render = renderer.willRenderFeature(feature, context)
         symbol = renderer.symbolForFeature(feature, context)
-        drawn = symbol is not None and renderer.willRenderFeature(feature, context)
+        if symbol is None and will_render:
+            symbols = renderer.symbolsForFeature(feature, context)
+            symbol = symbols[0] if symbols else None
+        drawn = symbol is not None and will_render
         colours[feature["n"]] = symbol.color().name() if drawn else None
     renderer.stopRender(context)
     return colours

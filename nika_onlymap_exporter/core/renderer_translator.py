@@ -23,12 +23,19 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
+    QgsExpression,
+    QgsExpressionNodeBinaryOperator,
+    QgsExpressionNodeColumnRef,
+    QgsExpressionNodeInOperator,
+    QgsExpressionNodeLiteral,
     QgsGraduatedSymbolRenderer,
+    QgsRuleBasedRenderer,
     QgsSingleSymbolRenderer,
     QgsSymbol,
 )
@@ -752,12 +759,19 @@ def translate_renderer(
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
         return _translate_graduated(renderer, report, subject, layer_id, scale, ground)
 
+    if isinstance(renderer, QgsRuleBasedRenderer):
+        translated = _translate_rule_based(
+            layer, renderer, report, subject, layer_id, scale, ground
+        )
+        if translated is not None:
+            return translated
+
     kind_name = type(renderer).__name__
     report.unsupported(
         subject,
         f"This renderer ({kind_name}) is not translated yet. Supported renderers "
-        "are single symbol, categorized and graduated. The layer will use a "
-        "default style.",
+        "are single symbol, categorized and graduated, and rule-based rules that "
+        "each pick one value of one field. The layer will use a default style.",
         layer_id,
     )
     return RendererSpec(kind=RendererKind.UNSUPPORTED, unsupported_reason=kind_name)
@@ -1204,6 +1218,159 @@ def _translate_categorized(
     )
 
 
+@dataclass(frozen=True)
+class _RuleClass:
+    """One rule of a rule-based renderer read as a categorized class: the
+    values of the field it picks (empty for an ELSE rule) and the rule."""
+
+    values: tuple[str | int | float, ...]
+    rule: Any
+
+
+def _binary_equals(node: Any) -> bool:
+    """Whether a binary operator node is `=`; the enum is scoped on QGIS 4."""
+    operators = getattr(
+        QgsExpressionNodeBinaryOperator,
+        "BinaryOperator",
+        QgsExpressionNodeBinaryOperator,
+    )
+    return bool(node.op() == operators.boEQ)
+
+
+def _rule_value_filter(
+    expression: str,
+) -> tuple[str, tuple[str | int | float, ...]] | None:
+    """The field and values a rule's filter picks, `None` for any other
+    filter: `"field" = 'a'` or `"field" IN ('a', 'b')`."""
+    parsed = QgsExpression(expression)
+    if parsed.hasParserError():
+        return None
+    root = parsed.rootNode()
+    if isinstance(root, QgsExpressionNodeBinaryOperator) and _binary_equals(root):
+        column, literals = root.opLeft(), [root.opRight()]
+    elif isinstance(root, QgsExpressionNodeInOperator) and not root.isNotIn():
+        column, literals = root.node(), list(root.list().list())
+    else:
+        return None
+    if not isinstance(column, QgsExpressionNodeColumnRef) or not all(
+        isinstance(literal, QgsExpressionNodeLiteral) for literal in literals
+    ):
+        return None
+    values = [_python_value(literal.value()) for literal in literals]
+    if not values or any(value in (None, "") for value in values):
+        return None
+    return str(column.name()), tuple(v for v in values if v is not None)
+
+
+def rule_classes(
+    renderer: QgsRuleBasedRenderer, field_names: Collection[str] | None = None
+) -> tuple[str, list[_RuleClass]] | None:
+    """The rules of `renderer` as classes of one field, `None` when they are
+    not all rules of that shape.
+
+    Every rule has to pick values of the same field of the layer, no value
+    twice (and, when `field_names` is given, a field the layer has), and sit
+    directly under the root: anything else draws a feature in ways one
+    expression cannot say. Rules that are switched off are left out,
+    as QGIS draws nothing for them.
+    """
+    field: str | None = None
+    seen: set[str] = set()
+    classes: list[_RuleClass] = []
+    for rule in renderer.rootRule().children():
+        if rule.children() or rule.symbol() is None:
+            return None
+        if not rule.active():
+            continue
+        if rule.isElse():
+            classes.append(_RuleClass((), rule))
+            continue
+        picked = _rule_value_filter(rule.filterExpression() or "")
+        if picked is None:
+            return None
+        rule_field, values = picked
+        keys = {category_key(value) for value in values}
+        if (field not in (None, rule_field)) or keys & seen:
+            return None
+        field = rule_field
+        seen |= keys
+        classes.append(_RuleClass(values, rule))
+    if field is None or (field_names is not None and field not in field_names):
+        return None
+    return field, classes
+
+
+def _translate_rule_based(
+    layer: QgsVectorLayer,
+    renderer: QgsRuleBasedRenderer,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+    scale: MapUnitScale | None,
+    ground: GroundUnits | None,
+) -> RendererSpec | None:
+    """A rule-based renderer whose rules each pick values of one field, as a
+    categorized one; `None` when it is anything else."""
+    read = rule_classes(renderer, layer.fields().names())
+    if read is None:
+        return None
+    field_name, classes = read
+    categories = []
+    for index, klass in enumerate(classes):
+        symbol = translate_symbol(
+            klass.rule.symbol(),
+            report,
+            f"{subject}, rule {index + 1}",
+            layer_id,
+            scale=scale,
+            ground=ground,
+        )
+        label = klass.rule.label() or (str(klass.values[0]) if klass.values else "")
+        categories.append(
+            CategorySpec(
+                value=klass.values[0] if klass.values else None,
+                label=label,
+                symbol=symbol,
+                extra_values=klass.values[1:],
+                is_default=not klass.values,
+            )
+        )
+        if klass.rule.dependsOnScale():
+            report.approximated(
+                f"{subject}, rule {index + 1}",
+                f"The rule '{label}' only draws within a scale range in QGIS; "
+                "the web map draws it at every zoom.",
+                layer_id,
+            )
+    categories = [
+        replace(category, symbol=symbol)
+        for category, symbol in zip(
+            categories,
+            harmonise_ground_sizes(
+                [c.symbol for c in categories], report, subject, layer_id
+            ),
+        )
+    ]
+    fallback = _unreferenceable_field(
+        field_name, [c.symbol for c in categories], report, subject, layer_id
+    )
+    if fallback is not None:
+        return fallback
+    report.approximated(
+        subject,
+        f"Rule-based on '{field_name}' with {len(categories)} rules, translated "
+        "as categories of that field. Features no rule picks are not drawn, as "
+        "in QGIS.",
+        layer_id,
+    )
+    return RendererSpec(
+        kind=RendererKind.CATEGORIZED,
+        field_name=field_name,
+        categories=tuple(categories),
+        unmatched_hidden=not any(category.is_default for category in categories),
+    )
+
+
 def _translate_graduated(
     renderer: QgsGraduatedSymbolRenderer,
     report: FidelityReportBuilder,
@@ -1349,6 +1516,10 @@ def class_symbols(renderer: QgsFeatureRenderer | None) -> list[QgsSymbol]:
             and category.renderState()
             and category.symbol() is not None
         ]
+
+    if isinstance(renderer, QgsRuleBasedRenderer):
+        read = rule_classes(renderer)
+        return [klass.rule.symbol().clone() for klass in read[1]] if read else []
 
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
         return [
