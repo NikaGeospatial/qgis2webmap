@@ -466,7 +466,7 @@ def _report_raster_swatches(
             else f"its {len(swatch.entries)} classes"
         )
         report.approximated(
-            f"Legend swatch '{layer.name}'",
+            f"Legend '{layer.name}'",
             f"QGIS's legend lists {listed}; the browser's legend cannot list "
             "a raster's colours, so it shows one swatch in "
             + ("the ramp's" if swatch.is_ramp else "the first class's")

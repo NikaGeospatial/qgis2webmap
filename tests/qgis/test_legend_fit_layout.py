@@ -162,6 +162,7 @@ class TestLimits:
     def test_more_columns_before_leaving_layers_out(self, qgis_app, project) -> None:
         world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=2)
         add_label(world, 20, 60, 100, 10)  # 80 mm of room above
+        add_label(world, 20, 192, 100, 5)  # 2 mm below
         _html, report = export(world)
         assert world.legend.columnCount() == 3
         assert len(_listed(world.legend)) == 8
