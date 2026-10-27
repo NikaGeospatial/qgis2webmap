@@ -11,6 +11,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from nika_onlymap_exporter.core.cartograph_ir import (
     Box,
     CartographSpec,
@@ -24,6 +26,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ExportLayer,
     GeometryKind,
     GraduatedClassSpec,
+    LabelingSpec,
     RendererKind,
     RendererSpec,
     SourceKind,
@@ -219,6 +222,25 @@ class TestFitLegendRows:
         rows = fit_legend_rows([row], [_flood()])
         assert rows[0] == row
         assert all(r.layer == "flood" for r in rows[1:])
+
+
+class TestLabelLayersStayOutOfTheLegend:
+    def _labelled(self, enabled: bool = True, field: str | None = "name"):
+        return replace(
+            _single("roads", GeometryKind.LINE),
+            labeling=LabelingSpec(enabled=enabled, field_name=field),
+        )
+
+    def test_a_labelled_layers_label_layer_is_hidden(self) -> None:
+        rows = fit_legend_rows(
+            [LegendRowSpec(layer="roads", order=0)], [self._labelled()]
+        )
+        assert LegendRowSpec(layer="roads-labels", hide=True) in rows
+
+    def test_an_unlabelled_layer_gets_no_extra_row(self) -> None:
+        for layer in (self._labelled(False), self._labelled(True, None)):
+            rows = fit_legend_rows([LegendRowSpec(layer="roads", order=0)], [layer])
+            assert all(row.layer == "roads" for row in rows)
 
 
 class TestFitFrameLegends:

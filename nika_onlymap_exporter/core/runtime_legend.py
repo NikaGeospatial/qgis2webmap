@@ -3,7 +3,7 @@
 The OnlyMap runtime never stores a cartograph legend: it derives the rows
 from the frame's own `<om-layer>`s at render time, and the reader only
 writes `<om-legend-row>` overrides on top. What it derives is not what QGIS
-draws, in three ways an override can correct:
+draws, in ways an override can correct:
 
 * **Class labels.** The runtime labels each class from the `get-fill-color`
   expression itself -- a category by its *value*, a graduated class by its
@@ -14,6 +14,9 @@ draws, in three ways an override can correct:
 * **The swatch's shape.** A `GeoJsonLayer` with both a fill and a line
   colour gets a square, so roads and rivers sat behind squares. A layer
   row's `shape` puts a line or a point there.
+* **A labelled layer's labels.** They are a layer of their own in the
+  runtime's map and would be listed as "<name> (labels)"; a hidden row for
+  each takes them off.
 * **A classed layer's heading.** QGIS heads a layer's classes with its name
   alone; the runtime puts a swatch of the first class's colour beside it.
   A transparent `line` swatch is the runtime's nearest to none.
@@ -151,7 +154,7 @@ def derive_runtime_legend(expression: str | None) -> RuntimeLegend | None:
     return RuntimeLegend("categories", tuple(labels))
 
 
-def _qgis_labels(layer: ExportLayer) -> tuple[str | None, ...]:
+def qgis_class_labels(layer: ExportLayer) -> tuple[str | None, ...]:
     """One label per row the runtime derives, in its order.
 
     The runtime lists a category once per value and has no row for the
@@ -197,6 +200,10 @@ def fit_legend_rows(
     for layer in layers:
         if layer.raster is not None or layer.tiles is not None:
             continue
+        if layer.labeling.enabled and layer.labeling.field_name:
+            # The layer's labels are a layer of their own in the map, which
+            # the runtime would list as "<name> (labels)". QGIS lists none.
+            fitted.append(LegendRowSpec(layer=f"{layer.layer_id}-labels", hide=True))
         runtime = derive_runtime_legend(
             fill_expression(layer.renderer, layer.geometry_kind)
         )
@@ -213,7 +220,7 @@ def fit_legend_rows(
                 for row in fitted
             ]
 
-        qgis_labels = _qgis_labels(layer)
+        qgis_labels = qgis_class_labels(layer)
         if runtime is None or len(runtime.labels) != len(qgis_labels):
             continue
         runtime_by_qgis = {
