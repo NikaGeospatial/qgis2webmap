@@ -360,7 +360,7 @@ def _two_live_frames_layout(project):
         legend = QgsLayoutItemLegend(layout)
         layout.addLayoutItem(legend)
         legend.setLinkedMap(map_item)
-        legend.attemptResize(QgsLayoutSize(30, 20, QgsUnitTypes.LayoutMillimeters))
+        legend.attemptResize(QgsLayoutSize(80, 60, QgsUnitTypes.LayoutMillimeters))
     label = QgsLayoutItemLabel(layout)
     layout.addLayoutItem(label)
     label.setText("1:[% @map_scale %]")

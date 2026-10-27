@@ -123,6 +123,7 @@ from .project_reader import (
 )
 from .report_facts import format_bytes
 from .runtime_legend import fit_frame_legends
+from .runtime_legend_fit import fit_frame_legend_boxes
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
@@ -664,6 +665,7 @@ def finish_cartograph_full(
         # overrides are put in the runtime's terms here, where the layers'
         # final symbology is known.
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
+        spec = fit_frame_legend_boxes(spec, source.frame_id, rendered.layers, report)
         live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
     _warn_when_inline_data_is_heavy(projects, report)
     requirement = prepared.atlas_requirement
