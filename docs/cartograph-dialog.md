@@ -15,7 +15,7 @@ lead_image:
 Choose **Cartograph** from the title menu at the top of the plugin's dialog
 (**Web map ▾**) and the dialog becomes one screen: the print layout's
 page on the left and a panel of settings on the right. The header holds
-**colour vision**, **Preview in browser** and **Share**, and there is no Export
+**colour vision**, **Save PDF…** and **Share**, and there is no Export
 button. The web map's tabs are described in
 [the dialog, tab by tab](the-dialog.md). The **Settings** and **Help** icons
 at the right of the header are shared and work the same way.
@@ -312,12 +312,18 @@ At the top right, reachable whatever the panel shows:
   on the canvas and in the browser, and check which legend classes become
   indistinguishable. Stays pressed while a simulation is on, and its tooltip
   names it.
-- **Preview in browser** - opens the saved cartograph in your default browser.
+- **Save PDF…** (**Ctrl+P**) - saves every page of the selected layout as a PDF,
+  written by QGIS itself from a copy of the layout, so edits you made a moment ago
+  are in it and nothing else changes. It asks where to save (suggesting the layout's
+  name), needs no saved HTML file and opens no browser. Interactive frames are drawn
+  as static maps of their current view. Greyed out, with "Choose or create a layout
+  first", until a layout is selected. While it runs the status line says "Saving
+  PDF…"; afterwards it offers **Open PDF** and **Show in folder**.
 - **Share** - opens the [Share menu](#the-share-menu).
 
 Then the **Settings** and **Help** icons, as on the web map.
 
-![The header on Cartograph: the colour vision icon, Preview in browser and Share, then the Settings and Help icons.](images/cartograph-corner.png)
+![The header on Cartograph: the colour vision icon, Save PDF… and Share, then the Settings and Help icons.](images/cartograph-corner.png)
 
 The browser opens the file through a small server on your own machine
 (`127.0.0.1`) rather than as `file://`, because some browsers refuse to run a
@@ -327,28 +333,29 @@ interactive map from a file path. Nothing leaves your computer.
 
 ## The Share menu
 
-The header's **Share** button. Outputs come first, then the file
-actions, then the greyed NIKA rows.
+The header's **Share** button. An **Export** section, an **HTML cartograph**
+section, then the greyed NIKA rows.
 
 | Row | What it does | Available |
 |---|---|---|
-| **Export PDF...** (**Ctrl+P**) | Opens the cartograph and its print dialog at true page size, with its background colours kept even when the browser's **Background graphics** is off - or, with a CMYK or ICC profile chosen in Print settings, has QGIS write the PDF | Once the file exists |
+| **Save atlas as PDF...** | One run of pages per atlas feature, in a single PDF, written by QGIS; never just the feature on screen | Only when an atlas is set up |
 | **Export PNG...** | Opens the cartograph, which renders an image of the page at the saved resolution and downloads it - page 1 of an atlas; the Atlas tab exports every page | Once the file exists |
 | **Export QGIS layout template (.qpt)...** | Saves the source layout as a `.qpt` template, to load into another project | Once a layout is selected |
-| **Print settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Export PDF | Once a layout is selected |
-| **Open in browser** (**Ctrl+O**) | Opens the cartograph in your browser, as Preview does | Once the file exists |
-| **Copy file path** | Puts the cartograph's path on the clipboard | Once the file exists |
-| **Reveal in Finder** / **Show in Explorer** / **Show in file manager** | Opens the folder the cartograph is in | Once the file exists |
+| **PDF settings...** | Page size, resolution, bleed, crop marks, safe zone and colour profile for Save PDF… | Once a layout is selected |
+| **Preview in browser** (**Ctrl+O**) | Opens the HTML cartograph, once the save holding your latest edits has landed, to check interactive maps and browser behaviour | Once the file exists |
+| **Copy HTML file path** | Puts the cartograph's path on the clipboard | Once the file exists |
+| **Show HTML in folder** | Opens the folder the HTML cartograph is in | Once the file exists |
 | **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
 
-**Ctrl+O** and **Ctrl+P** work from anywhere in the dialog, without opening
+**Ctrl+O** (Preview in browser) and **Ctrl+P** (Save PDF…) work from anywhere in the dialog, without opening
 the menu.
 
-Export PDF and Export PNG are **derived** from the cartograph rather than being
-the export: the browser makes them from the saved file. Both wait until every
+Export PNG is **derived** from the cartograph rather than being
+the export: the browser makes it from the saved file. It waits until every
 raster in the page has drawn - a note at the foot of the page says so - and if
-one cannot draw, they stop with a message rather than print or save a page
-without it. Rasters draw with no internet connection. Both are covered in
+one cannot draw, it stops with a message rather than save a page
+without it. Rasters draw with no internet connection. Save PDF… is different:
+QGIS writes it from the layout, not from the HTML. Both are covered in
 [printing a cartograph](printing-a-cartograph.md).
 
 There is deliberately no Share ZIP, no Folder, and no report row. A cartograph

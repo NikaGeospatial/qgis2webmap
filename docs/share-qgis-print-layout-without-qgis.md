@@ -84,8 +84,8 @@ credentials are never written into the file in either case.
 
 ## When to send a PDF instead
 
-- **A print shop.** Send the PDF from **Share → Export PDF...**, set up in
-  [Print settings](printing-a-cartograph.md#print-settings) with bleed, crop
+- **A print shop.** Send the PDF from **Save PDF…**, set up in
+  [PDF settings](printing-a-cartograph.md#print-settings) with bleed, crop
   marks and, where they ask for it, CMYK.
 - **A filing system that only takes PDFs.**
 - **A reader on a very locked-down machine** that blocks JavaScript in local

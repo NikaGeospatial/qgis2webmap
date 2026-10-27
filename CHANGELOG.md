@@ -81,9 +81,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
     margin, fixed and predefined scales; every page as one PNG ZIP, or
     printed together into one multi-page PDF.
-  - **Print settings**: page size, resolution, bleed, crop marks, safe-zone
-    guide, presets; CMYK and ICC PDFs through QGIS's own exporter where the
-    QGIS build supports them.
+  - **Save PDF…** is a native QGIS action in the header (**Ctrl+P**): it saves
+    every page of the selected layout, current edits included, from a copy of
+    the layout, with no HTML file, browser or print dialog. Interactive frames
+    are drawn as static maps of their current view in the PDF and stay
+    interactive in the HTML. **Share → Save atlas as PDF…** (when an atlas is
+    set up) saves one run of pages per feature. The header order is colour
+    vision, Save PDF…, Share, Settings, Help.
+  - **PDF settings** (Share): page size, resolution, bleed, crop marks,
+    safe-zone guide, presets; RGB by default, and CMYK and ICC PDFs where the
+    QGIS build supports them. The dialog's **Save PDF…** button saves with them.
+  - **Share** has an **Export** section and an **HTML cartograph** section
+    (**Preview in browser**, **Copy HTML file path**, **Show HTML in folder**);
+    the browser preview is for checking interactive maps and browser behaviour.
   - **Colour vision**: simulate protanopia, deuteranopia, tritanopia and
     achromatopsia on the QGIS canvas and the page, and list the legend
     classes that become indistinguishable.

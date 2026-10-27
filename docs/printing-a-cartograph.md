@@ -15,11 +15,25 @@ A cartograph knows its own page size. Open it in a browser, print, and an A3
 layout comes out as A3 - no QGIS, no re-export. This page covers printing it
 yourself, sending it to someone who will, and preparing it for a print shop.
 
+## Save PDF
+
+**Save PDF…** in the dialog's header (or **Ctrl+P** there) opens the system save
+dialog, suggesting the layout's name, and QGIS writes every page of the layout
+as it is right now, edits included. It needs no saved HTML and never opens a
+browser. Interactive frames are drawn static in the PDF; the HTML keeps them
+interactive. The PDF is made from a copy, so the layout, its frame choices, the
+selection, the atlas position and Undo are untouched. The result shows in the
+status line with **Open PDF** and **Show in folder**; a failure says why and
+keeps your layout. Page size, bleed, crop marks, resolution and colour profile
+come from [PDF settings](#print-settings).
+
 ## Print from the browser
 
-Open the cartograph and print with **Ctrl+P** (**Cmd+P** on macOS), or use
-**Share → Export PDF...** in the plugin, which opens the cartograph and its
-print dialog for you. To get a PDF, choose **Save as PDF** as the printer.
+For a PDF from the plugin, use **Save PDF…** (**Ctrl+P** in the dialog): QGIS
+writes it from the layout, with no browser involved - see
+[Save PDF](#save-pdf). To print the HTML cartograph itself, open it in a browser
+(**Share → Preview in browser**) and print with **Ctrl+P** (**Cmd+P** on
+macOS); to get a PDF that way, choose **Save as PDF** as the printer.
 
 - **Chrome, Edge, Brave, Opera and other Chromium-based browsers** print at
   the page's true size. Leave the margins at their default; the page sets its
@@ -32,10 +46,11 @@ print dialog for you. To get a PDF, choose **Save as PDF** as the printer.
 Text stays text in the PDF - selectable and searchable - and the legend, scale
 bar, north arrow and grid stay sharp vector shapes.
 
-**For a page with interactive frames, print with Export PDF, not Ctrl+P.** An interactive
+**For a page with interactive frames, print through `?print=1`, not Ctrl+P.** An interactive
 map is drawn by the graphics card, and browsers print such a map blank or at
-screen resolution. Export PDF opens the cartograph with `?print=1` added to
-its address: the page waits until every map has finished drawing, swaps each
+screen resolution. (The plugin's Save PDF… avoids this: QGIS draws every
+interactive frame as a static map of its current view.) `?print=1` added to the
+cartograph's address: the page waits until every map has finished drawing, swaps each
 interactive map for an image rendered at print resolution, and only then opens the
 print dialog. The browser's own **Ctrl+P** does none of that - the print
 dialog opens at once, before an image could be made.
@@ -57,7 +72,7 @@ For an atlas, see [exporting every page](cartograph-atlas.md#exporting-every-pag
 
 ## Print settings
 
-**Share → Print settings...** sets up the page for print. The settings are
+**Share → PDF settings...** sets up the page for print. The settings are
 stored **per layout**, with the project, and written into the cartograph on
 every save - so a cartograph you send someone prints with them too.
 
@@ -100,7 +115,7 @@ of 300 dpi, a 3 mm bleed, crop marks and the safe-zone guide.
 
 ### Buttons
 
-- **Export PDF** - saves the settings and exports straight away.
+- **Save PDF…** - saves the settings and saves the PDF straight away.
 - **Save** - keeps the settings for this layout without exporting.
 - **Save as preset...** - keeps them under a name, for every project. Pick a
   saved one from the list at the top.
@@ -108,24 +123,20 @@ of 300 dpi, a 3 mm bleed, crop marks and the safe-zone guide.
 ## CMYK and print-shop profiles
 
 A browser can only print RGB. A print shop that asks for **CMYK**, a
-**PDF/X-4** file or their **ICC profile** needs a PDF that QGIS makes, and the
-plugin has QGIS make it from the same Print settings:
+**PDF/X-4** file or their **ICC profile** needs the colour management QGIS adds to
+the same Save PDF…, from the same PDF settings:
 
 1. Choose **CMYK PDF/X-4 — via QGIS** or **Printer ICC profile...**.
-2. Press **Export PDF** and choose where to save.
+2. Press **Save PDF…** and choose where to save.
 
-QGIS prints a copy of your print layout - page 1, grown by the bleed, with the
+QGIS prints a copy of your print layout - every page, grown by the bleed, with the
 crop marks drawn in - using the chosen colour model, and puts your project's
 colour settings back afterwards. Your layout itself is never changed.
 
-The **Title** from the Cartograph tab is applied to that copy, so a label that
-reads the project title and the PDF's own title match the browser's. The page
-**attribution** and **theme** are browser features. When you have set either,
-Export PDF first explains that the QGIS PDF will not carry it and offers
-**Continue**, **Use browser RGB export instead** (RGB only), **Add attribution
-to the layout** (a small label along the foot of page 1, one Undo step in the
-layout designer) or **Cancel**. What you accepted is not repeated after the
-export.
+The **Title** and **Theme** in Page settings are part of the layout, so the PDF
+carries them. A page **attribution** with no text item on the page to carry it
+is left out of the PDF, and the status line says so after the export; add it to
+the layout as a label.
 
 With **CMYK**, the PDF is PDF/X-4 when the project has a CMYK profile set in
 **Project Properties → Styles**; without one you get CMYK colours but no output
@@ -155,8 +166,9 @@ resolution, so it prints as it looks instead of opaque; the export says so.
 
 ## Printing an atlas
 
-**Export PDF** and Ctrl+P print the page on screen - one page of the atlas.
-The pager at the foot of the sheet is never printed.
+**Save PDF…** saves the layout's own pages; for the atlas use **Share → Save atlas as
+PDF…**, which saves one run of pages per feature in one PDF (it never swaps in
+just the feature on screen). The pager at the foot of the sheet is never printed.
 
 For the whole series, use **Print all pages...** on the
 [Atlas tab](cartograph-atlas.md#exporting-and-printing-every-page): every page
@@ -174,4 +186,4 @@ instead.
   Firefox and Safari.
 - If the page has interactive frames, consider making them Image frames first: a page of Image frames
   prints the same however it is printed, and needs no graphics support.
-- For a print shop, send the PDF from **Export PDF**, not the HTML.
+- For a print shop, send the PDF from **Save PDF…**, not the HTML.

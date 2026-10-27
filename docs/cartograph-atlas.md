@@ -108,8 +108,8 @@ filter matches no feature.
   its true size. Each page is an
   image rendered at that same resolution, so text in that PDF is not selectable.
 
-**Export PNG...** and **Export PDF...** in the Share menu work on the page the
-cartograph opens on, page 1. For a single page, a cartograph opened with
+**Export PNG...** in the Share menu works on the page the
+cartograph opens on, page 1. **Save atlas as PDF...** saves every feature in one PDF written by QGIS. For a single page, a cartograph opened with
 `?export=png&page=3` added to its address downloads page 3.
 
 See also [printing a cartograph](printing-a-cartograph.md#printing-an-atlas).

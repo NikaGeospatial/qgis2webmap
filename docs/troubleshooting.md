@@ -340,9 +340,8 @@ true size. See [printing a cartograph](printing-a-cartograph.md).
 
 ### An interactive frame prints blank or blurry
 
-Print with **Share → Export PDF...** from the plugin. It waits for the maps and
-swaps each interactive frame for a print-resolution image before the print dialog
-opens. Or set the frame to **Image**, which prints the same however it is
+Use **Save PDF…** in the plugin: QGIS draws each interactive frame as a static
+map of its current view, with no browser. Or set the frame to **Image**, which prints the same however it is
 printed.
 
 ### The atlas is Blocked: the map is an image
