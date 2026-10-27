@@ -535,7 +535,7 @@ class TestPicker:
             assert {c[0] for c in calls} == self._in_reach(picker)
             assert len(calls) == len({c[0] for c in calls})
             assert all(picker.rows[t].drawn for t in self._in_reach(picker))
-            assert len(picker.rows) == picker.template_list.count()
+            assert len(picker.rows) == picker.template_list.count() - 1  # request card
         finally:
             picker.reject()
 
@@ -662,6 +662,8 @@ class TestPicker:
             assert picker.template_id == "poster"
             for r in range(picker.template_list.count()):
                 item = picker.template_list.item(r)
+                if item is picker.request_item:
+                    continue
                 shown = get_template(item.data(256)).category == own
                 assert item.isHidden() == (not shown)
             picker.filter_buttons["all"].click()
