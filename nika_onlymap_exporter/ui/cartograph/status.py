@@ -67,7 +67,7 @@ def status_text(
         return error
     if saved_at is None:
         if not has_path:
-            return translate("Not saved yet - choose where to save it above")
+            return translate("Not saved yet - choose where to save it")
         return translate("Not saved yet")
     elapsed = format_elapsed(now - saved_at)
     size = format_bytes(saved_bytes or 0)

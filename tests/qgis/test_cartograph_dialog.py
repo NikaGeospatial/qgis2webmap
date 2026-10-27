@@ -3552,8 +3552,13 @@ class TestWorkspace:
             bar = cartograph.panel_scroll.verticalScrollBar()
 
             def overlapping() -> bool:
-                tabs, footer = cartograph.panel_tabs, cartograph.file_edit
-                return tabs.geometry().intersects(footer.geometry())
+                bar = cartograph.save_bar
+                bar_box = bar.rect().translated(bar.mapTo(dialog, bar.rect().topLeft()))
+                scroll = cartograph.panel_scroll
+                box = scroll.rect().translated(
+                    scroll.mapTo(dialog, scroll.rect().topLeft())
+                )
+                return box.intersects(bar_box)
 
             dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
             # The panel re-measures itself in a zero-delay step.

@@ -515,29 +515,19 @@ def save_location(qgis_app):
 
 
 class TestSaveLocation:
-    def test_the_name_then_the_folder_from_home(self, qgis_app, save_location) -> None:
+    def test_the_name_with_the_full_path_as_its_tooltip(
+        self, qgis_app, save_location
+    ) -> None:
         folder = Path.home() / "Documents" / "QGIS2WebMap"
         path = folder / "parcels-Survey.html"
         save_location.setText(str(path))
         qgis_app.processEvents()
         assert save_location.label.text() == "parcels-Survey.html"
         assert save_location.label.toolTip() == str(path)
-        assert save_location.folder_label.text() == str(
-            Path("~") / "Documents" / "QGIS2WebMap"
-        )
-        assert save_location.folder_label.toolTip() == str(folder)
-        assert not save_location.folder_label.isHidden()
+        assert save_location.label.accessibleDescription() == str(path)
+        assert save_location.label.accessibleName()
         assert not save_location.reveal_button.isHidden()
         assert save_location.reveal_button.text() == "Show in folder"
-
-    def test_a_folder_outside_home_is_shown_whole(
-        self, qgis_app, save_location, tmp_path
-    ) -> None:
-        if tmp_path.is_relative_to(Path.home()):
-            pytest.skip("the temporary folder is under home on this machine")
-        save_location.setText(str(tmp_path / "a.html"))
-        qgis_app.processEvents()
-        assert save_location.folder_label.text() == str(tmp_path)
 
     def test_with_no_path_only_the_placeholder_shows(
         self, qgis_app, save_location
@@ -546,7 +536,6 @@ class TestSaveLocation:
         save_location.setText("")
         qgis_app.processEvents()
         assert save_location.label.text() == "Choose where the cartograph is saved"
-        assert save_location.folder_label.isHidden()
         assert save_location.reveal_button.isHidden()
         assert not save_location.change_button.isHidden()
 

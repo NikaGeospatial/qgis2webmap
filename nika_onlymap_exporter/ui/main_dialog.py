@@ -1097,7 +1097,12 @@ class MainDialog(QDialog):
         for area in self.findChildren(QScrollArea):
             area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        foot = (self.fidelity_strip, self.progress_row, self.close_button)
+        foot = (
+            self.fidelity_strip,
+            self.progress_row,
+            self._cartograph.save_bar,
+            self.close_button,
+        )
         header_actions = (self.settings_button, self.help_button)
 
         def region(widget: QWidget) -> tuple[int, int]:
@@ -3196,6 +3201,7 @@ class MainDialog(QDialog):
             # screen; check it now if its tab is the one open.
             self._on_tab_changed(self.tabs.currentIndex())
 
+        self._share_button_row()
         if hasattr(self, "close_button"):
             self._arrange_keyboard()
 
@@ -3684,14 +3690,29 @@ class MainDialog(QDialog):
         """
         row = QHBoxLayout()
 
+        # Cartograph only: the file it saves to, how the save stands, and
+        # Change... / Show in folder. It takes the row's room; the running
+        # commentary beside it keeps only what its text needs there.
+        row.addWidget(self._cartograph.save_bar)
         self.status_label = QLabel("", self)
         self.status_label.setWordWrap(True)
-        row.addWidget(self.status_label, 1)
+        row.addWidget(self.status_label)
+        self._button_row = row
+        self._share_button_row()
 
         close = self.close_button = QPushButton(tr("Close"), self)
         close.clicked.connect(self.reject)
         row.addWidget(close)
         return row
+
+    def _share_button_row(self) -> None:
+        """Whichever of the save block and the commentary the output shows
+        takes the row's spare room; the other keeps what its text needs."""
+        if not hasattr(self, "_button_row"):
+            return
+        web = self.state.output is DialogOutput.WEB_MAP
+        self._button_row.setStretchFactor(self.status_label, 1 if web else 0)
+        self._button_row.setStretchFactor(self._cartograph.save_bar, 0 if web else 1)
 
     # ---- Progress -------------------------------------------------------
 

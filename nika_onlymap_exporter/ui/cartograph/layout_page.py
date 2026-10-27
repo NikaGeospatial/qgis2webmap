@@ -10,9 +10,10 @@ layer or a new title shows at once - and the few settings sit beside it.
 - `LayoutPicker` is the layout list: existing print layouts only. Making one
   is `new_layout_button`'s job ("New from template..." and, on its menu,
   "Import cartograph..."), so a row of the list is never an action.
-- `SaveLocation` says where the file saves, in one line. The path was a text
-  box asked for before anything else; the file saves itself, so where it goes
-  is a detail to change, not a question to answer first.
+- `SaveLocation` says where the file saves, in one row for the dialog's bottom
+  bar. The path was a text box asked for before anything else; the file saves
+  itself, so where it goes is a detail to change, not a question to answer
+  first. `ElidedLabel` is the save status beside it.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -42,6 +43,8 @@ from qgis.PyQt.QtGui import (
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
+    QPainter,
+    QPaintEvent,
     QPalette,
     QResizeEvent,
     QShowEvent,
@@ -53,12 +56,12 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -1086,17 +1089,61 @@ def _page_name(layout) -> str:  # QgsPrintLayout
     return page_label(spec) or ""
 
 
+class ElidedLabel(QLabel):
+    """A one-line label that keeps its whole text in `text()` and draws it cut
+    with an ellipsis when it has less room than it needs.
+
+    Asks for the room the whole text takes but can shrink to a few words, so
+    in a row it gives way after the widgets that must never be cut. The whole
+    text is also its tooltip while it is cut.
+    """
+
+    _FLOOR_CHARS = 14
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt override
+        hint = super().sizeHint()
+        hint.setWidth(self.fontMetrics().horizontalAdvance(self.text()) + 2)
+        return hint
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt override
+        hint = super().minimumSizeHint()
+        floor = self.fontMetrics().horizontalAdvance("n" * self._FLOOR_CHARS)
+        hint.setWidth(min(self.sizeHint().width(), floor))
+        return hint
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt override
+        super().setText(text)
+        self.updateGeometry()
+
+    def paintEvent(self, event: QPaintEvent | None) -> None:  # noqa: N802
+        painter = QPainter(self)
+        shown = self.fontMetrics().elidedText(
+            self.text(), Qt.TextElideMode.ElideRight, self.width()
+        )
+        self.setToolTip(self.text() if shown != self.text() else "")
+        painter.setPen(self.palette().windowText().color())
+        painter.drawText(
+            self.rect(),
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            shown,
+        )
+        painter.end()
+
+
 class SaveLocation(QWidget):
-    """Where the cartograph saves: its file name, then the folder under it.
+    """Where the cartograph saves, as one row for the dialog's bottom bar:
 
-        parcels-Survey.html
-        ~/Documents/QGIS2WebMap/Cartographs
-        [Change...] [Show in folder]
+        parcels-Survey.html   Saved just now · 2.6 MB   [Change...] [Show in folder]
 
-    The name first and whole, because it is what someone sharing the file
-    looks for; the folder below, shortened in the middle if it must be, with
-    the full path as its tooltip. It was one line - "Saves to" and a path
-    cut in the middle - which hid the one part people check.
+    The file name first and whole while there is room, because it is what
+    someone sharing the file looks for; it is the part that gives way, cut
+    in the middle, as the window narrows. The full path is its tooltip and
+    its accessible description. The save status (`set_status_widget`) sits
+    between it and the buttons, which are never cut.
 
     Holds the path the way the text box it replaced did - `text()` and
     `setText()` - and emits `textEdited` only when the user picks a file, so
@@ -1109,41 +1156,39 @@ class SaveLocation(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        grid = QGridLayout(self)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(6)
-        grid.setVerticalSpacing(0)
+        self._row = QHBoxLayout(self)
+        self._row.setContentsMargins(0, 0, 0, 0)
+        self._row.setSpacing(8)
         self._path = ""
         self._placeholder = ""
         self.label = QLabel(self)
         self.label.setProperty("role", "saveName")
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.label.setMinimumWidth(1)
-        grid.addWidget(self.label, 0, 0)
-        self.folder_label = QLabel(self)
-        self.folder_label.setProperty("role", "saveLocation")
-        self.folder_label.setMinimumWidth(1)
-        grid.addWidget(self.folder_label, 1, 0)
-        # Their own row: beside the path they were squeezed to a cut-off
-        # "Change..." in the narrow panel. Whole-word buttons, side by side.
-        buttons = QHBoxLayout()
-        buttons.setContentsMargins(0, 4, 0, 0)
-        buttons.setSpacing(6)
+        self.label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self.label.setAccessibleName(tr("File to save to"))
+        self._row.addWidget(self.label, 1)
         self.change_button = QPushButton(tr("Change..."), self)
         self.change_button.setToolTip(tr("Choose another file to save to"))
         self.change_button.setAccessibleName(tr("Change the file to save to"))
         self.change_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.change_button.clicked.connect(self.change_requested)
-        buttons.addWidget(self.change_button)
+        self._row.addWidget(self.change_button)
         self.reveal_button = QPushButton(tr("Show in folder"), self)
         self.reveal_button.setToolTip(tr("Open the folder holding this file"))
         self.reveal_button.setAccessibleName(tr("Show the file in its folder"))
         self.reveal_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reveal_button.clicked.connect(self.reveal_requested)
-        buttons.addWidget(self.reveal_button)
-        buttons.addStretch(1)
-        grid.addLayout(buttons, 2, 0)
-        grid.setColumnStretch(0, 1)
+        self._row.addWidget(self.reveal_button)
+        for button in (self.change_button, self.reveal_button):
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+    def set_status_widget(self, widget: QWidget) -> None:
+        """Seat the save status between the name and the buttons."""
+        widget.setParent(self)
+        self._row.insertWidget(1, widget)
 
     def text(self) -> str:
         return self._path
@@ -1166,40 +1211,22 @@ class SaveLocation(QWidget):
 
     def _show(self) -> None:
         self.label.setToolTip(self._path)
-        self.folder_label.setToolTip(str(Path(self._path).parent) if self._path else "")
-        has_path = bool(self._path)
-        self.folder_label.setVisible(has_path)
-        self.reveal_button.setVisible(has_path)
+        self.label.setAccessibleDescription(self._path)
+        self.reveal_button.setVisible(bool(self._path))
         self._elide()
 
     def _elide(self) -> None:
         if not self._path:
             self.label.setText(self._placeholder)
             return
-        path = Path(self._path)
-        name_metrics = self.label.fontMetrics()
         self.label.setText(
-            name_metrics.elidedText(
-                path.name, Qt.TextElideMode.ElideMiddle, max(40, self.label.width())
-            )
-        )
-        folder = _home_relative(path.parent)
-        metrics = self.folder_label.fontMetrics()
-        self.folder_label.setText(
-            metrics.elidedText(
-                folder, Qt.TextElideMode.ElideMiddle, max(40, self.folder_label.width())
+            self.label.fontMetrics().elidedText(
+                Path(self._path).name,
+                Qt.TextElideMode.ElideMiddle,
+                max(40, self.label.width()),
             )
         )
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
         self._elide()
-
-
-def _home_relative(folder: Path) -> str:
-    """`~/Documents/...` rather than `/home/name/Documents/...`: shorter,
-    and the part of the path the user recognises."""
-    try:
-        return str(Path("~") / folder.relative_to(Path.home()))
-    except ValueError:
-        return str(folder)

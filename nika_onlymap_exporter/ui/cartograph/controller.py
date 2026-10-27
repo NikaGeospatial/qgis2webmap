@@ -111,6 +111,7 @@ from .layout_header import (
     layout_metadata,
 )
 from .layout_page import (
+    ElidedLabel,
     PagePane,
     RenameLayoutDialog,
     SaveLocation,
@@ -359,6 +360,7 @@ class CartographController:
 
     def showing(self) -> None:
         """The dialog just switched into Cartograph. Catch up on the project."""
+        self.save_bar.setVisible(True)
         self._status_timer.start()
         self._status_age_timer.start()
         self._update_status_label()
@@ -374,6 +376,7 @@ class CartographController:
 
     def hiding(self) -> None:
         """The dialog just switched back to the web map."""
+        self.save_bar.setVisible(False)
         self._status_timer.stop()
         self._status_age_timer.stop()
 
@@ -582,21 +585,28 @@ class CartographController:
         self._panel_filler.setVisible(False)
         column.addWidget(self._panel_filler, 1)
 
-        self.file_edit = SaveLocation(panel)
+        # Where it saves and whether it has: one row in the dialog's bottom
+        # bar (`MainDialog._build_button_row` seats `save_bar`), always in
+        # sight however short the window, and giving the panel its height.
+        # The bar is shown only while Cartograph is the output (`showing` /
+        # `hiding`); `file_edit` inside it follows the layout list as before.
+        self.save_bar = QWidget(self.dialog)
+        self.save_bar.setVisible(False)
+        save_bar_row = QHBoxLayout(self.save_bar)
+        save_bar_row.setContentsMargins(0, 0, 0, 0)
+        self.file_edit = SaveLocation(self.save_bar)
+        save_bar_row.addWidget(self.file_edit)
         self.file_edit.setPlaceholderText(tr("Choose where the cartograph is saved"))
         self.file_edit.textEdited.connect(self._on_file_edited)
         self.file_edit.change_requested.connect(self._on_choose_file)
         self.file_edit.reveal_requested.connect(self.on_reveal)
-        column.addWidget(self.file_edit)
-        # Beside the scrolling column, not in it: whether the work is saved
-        # is always in sight, however short the window.
         panel_side = QWidget(splitter)
         panel_side_column = QVBoxLayout(panel_side)
         panel_side_column.setContentsMargins(12, 0, 0, 0)
         panel_side_column.setSpacing(2)
-        self.cartograph_status_label = FittedLabel("", panel_side)
-        self.cartograph_status_label.setWordWrap(True)
+        self.cartograph_status_label = ElidedLabel("", self.file_edit)
         self.cartograph_status_label.setProperty("role", "hint")
+        self.file_edit.set_status_widget(self.cartograph_status_label)
         # Everything below the list belongs to a layout; with none there is
         # nothing to set, so it is hidden rather than left to type into.
         self._layout_only = (
@@ -617,7 +627,6 @@ class CartographController:
             lambda width: panel.heightForWidth(width),
         )
         panel_side_column.insertWidget(0, panel_scroll, 1)
-        panel_side_column.addWidget(self.cartograph_status_label)
         panel_side.setMinimumWidth(PANEL_MIN_WIDTH)
         splitter.addWidget(panel_side)
         splitter.setStretchFactor(0, 1)

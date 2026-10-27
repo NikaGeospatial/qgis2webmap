@@ -163,7 +163,7 @@ class TestSaveLocationButtons:
 
         widget = SaveLocation()
         widget.setText(path)
-        widget.resize(width, 120)
+        widget.resize(width, 40)
         widget.show()
         return widget
 
@@ -179,7 +179,7 @@ class TestSaveLocationButtons:
                 assert button.width() >= button.sizeHint().width()
                 assert widget.rect().contains(button.geometry())
                 assert button.toolTip() and button.accessibleName()
-            assert widget.change_button.y() > widget.folder_label.y()
+            assert widget.change_button.y() == widget.reveal_button.y()
             assert widget.change_button.geometry().right() < widget.reveal_button.x()
             assert widget.label.toolTip().endswith("terrain-2.html")
         finally:
