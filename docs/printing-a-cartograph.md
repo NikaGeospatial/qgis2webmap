@@ -145,9 +145,9 @@ Both choices are **greyed out, with the reason in their tooltip**, when:
 A saved CMYK choice that this QGIS cannot honour shows as RGB, with a line
 saying why - it is never swapped silently.
 
-Because QGIS prints the layout, the Browser appearance section's **Title** and
-**Theme** do not apply to a CMYK or ICC PDF; the layout's own text and colours
-do.
+The Page settings section's **Title**, **Attribution** and **Theme** are part
+of the layout, so a CMYK or ICC PDF carries them. Only an attribution that has
+no text item on the page is left out, and the export asks about it.
 
 In a PDF made by QGIS, text and shapes stay vector. Only a layer or item that
 uses transparency, a blend mode or an effect is rasterised, at the saved

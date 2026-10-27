@@ -14,10 +14,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   **Ctrl+Alt+C** (**Cmd+Alt+C** on macOS) opens the dialog straight on it.
   - **One screen**: the layout's page, live, on the left (*QGIS layout ·
     A4 landscape*, with a zoom bar and a link to the changes in the HTML), and a
-    panel on the right - the Print layout list with **Rename...** and
-    **New from template...** (its menu holds **Import cartograph...**), then
+    panel on the right - the current layout's header (name, paper,
+    pages; a **Layout actions** menu with **Rename layout...** and **Import
+    cartograph...**; **New from template...**; **Switch layout...**), then
     the **Layout**, **Atlas**, **Checks** and **Edit** tabs, then the file and
-    its save status. The list holds existing print layouts only.
+    its save status. **Page settings** (Title, Attribution, Theme) edit the layout itself, so the preview, the web page and the PDF agree. Per-layout choices are kept under a layout id, so a rename cannot detach them.
   - Map items become **Interactive** frames (pan, zoom, popups; in Web
     Mercator, or in the map's own CRS - projected, or geographic such as
     EPSG:4326 - when its layers allow) or **Image** frames (a pixel-exact

@@ -290,24 +290,36 @@ class TestColour:
         assert not (tmp_path / "x.pdf").exists()
 
 
+def project_title_untouched(survey) -> bool:
+    return survey.project.title() == "Survey UTM"
+
+
 class TestPageFields:
-    """The Cartograph tab's page fields reach the QGIS PDF like the browser's."""
+    """The Page settings live in the layout, so the QGIS PDF has them."""
+
+    @staticmethod
+    def _set_title(survey, text: str) -> None:
+        """The title as Page settings sets it: on the layout, the one source."""
+        from nika_onlymap_exporter.core.layout_reader import TEXT_KIND_PROPERTY
+        from nika_onlymap_exporter.core.page_settings import set_title
+
+        survey.title_label.setCustomProperty(TEXT_KIND_PROPERTY, "title")
+        set_title(survey.layout, text, "Edit page title")
 
     def test_the_page_title_is_the_copys_project_title(self, survey) -> None:
-        copy = build_print_layout(
-            survey.layout,
-            PrintSettings(bleed="none"),
-            page_choice=PageChoice(title="NEW TITLE"),
-        )
+        self._set_title(survey, "NEW TITLE")
+        copy = build_print_layout(survey.layout, PrintSettings(bleed="none"))
         texts = [i.currentText() for i in copy.items() if hasattr(i, "currentText")]
         assert any(text.startswith("NEW TITLE --") for text in texts)
         # The user's own layout keeps reading the project's title.
-        assert not survey.title_label.currentText().startswith("NEW TITLE")
+        assert survey.title_label.currentText().startswith("NEW TITLE")
+        assert project_title_untouched(survey)
 
     def test_the_pdf_title_follows_and_the_project_title_comes_back(
         self, survey, project, tmp_path
     ) -> None:
         project.setTitle("SOURCE TITLE")
+        self._set_title(survey, "NEW TITLE")
         out = tmp_path / "titled.pdf"
         result = export_print_pdf(
             survey.layout,

@@ -99,6 +99,7 @@ from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
 from ..runtime_setup import ensure_runtime
+from . import layout_thumbnails
 from .callouts import migrate_project_figures
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
@@ -1130,6 +1131,13 @@ class CartographController:
     def _apply_page_fields(self, spec: CartographSpec) -> CartographSpec:
         """The Cartograph tab's title, attribution and theme on the page root."""
         page = self.state.page_choice(self.state.cartograph_layout)
+        layout = self._current_layout
+        if layout is not None and not sip.isdeleted(layout):
+            # The layout is the one source: the web page says what the preview
+            # and the PDF say.
+            page = dataclasses.replace(
+                page, title=title_state(layout).value, theme=current_theme(layout)
+            )
         return dataclasses.replace(
             spec,
             theme=page.theme or None,

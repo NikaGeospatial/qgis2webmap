@@ -77,10 +77,12 @@ So the cartograph is one screen:
   the two can differ, and saying so beats a preview that quietly disagrees
   with the file. A link beside the caption counts the differences and opens
   Checks. The bar under it has Fit page, Add item and zoom; Space or the middle button pans.
-- **Right: the panel.** The layout list, with **Rename...** and a **New from
-  template...** button (its menu holds Import), at the top, where ArcGIS Pro
-  keeps *New layout*. Then four tabs, the split QGIS's layout designer and
-  ArcGIS Pro make beside their page: **Layout** (Browser appearance, Map frames
+- **Right: the panel.** The current layout in a header (its name on up to
+  two lines, then paper, orientation, pages and atlas), with a **Layout
+  actions** menu (Rename, Import cartograph), a **New from template...** button
+  and, with two or more layouts, **Switch layout...**, which opens a chooser with
+  search and thumbnails of the layouts already shown. Then four tabs, the split QGIS's layout designer and
+  ArcGIS Pro make beside their page: **Layout** (Page settings, Map frames
   and Layers as sections that open and close), **Atlas**, **Checks**, whose
   title carries the count, and **Edit**, for the item selected on the page. Map
   frames are cards rather than the old six-column table, which scrolled

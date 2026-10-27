@@ -40,7 +40,6 @@ from pathlib import Path
 
 from qgis.core import (
     Qgis,
-    QgsExpressionContextUtils,
     QgsLayout,
     QgsLayoutExporter,
     QgsLayoutItem,
@@ -307,14 +306,10 @@ def attribution_warning() -> str:
 def _apply_page_choice(
     copy: QgsLayout, page_choice: PageChoice, warnings: list[str]
 ) -> None:
-    """The page title as the layout's `@project_title` (a layout variable
-    outranks the project's), and a warning when the attribution has no text
-    item in the layout to carry it. The theme and a plain attribution are part
-    of the layout itself, so the copy has them already."""
-    if page_choice.title:
-        QgsExpressionContextUtils.setLayoutVariable(
-            copy, "project_title", page_choice.title
-        )
+    """A warning when the attribution has no text item in the layout to carry
+    it. The title, the theme and a plain attribution are part of the layout
+    itself (`core/page_settings.py`), so the copy has them already: nothing is
+    applied here that the preview and the web page would not show."""
     if page_choice.attribution and not attribution_in_layout(copy):
         warnings.append(attribution_warning())
 

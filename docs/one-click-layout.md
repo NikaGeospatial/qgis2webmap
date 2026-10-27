@@ -7,7 +7,7 @@ description: >-
   cartograph back as a layout.
 lead_image:
   src: /images/cartograph-one-click.png
-  alt: The Cartograph screen after New from template - the new layout "Daylight · Parcel survey" is drawn on the left and selected in the Print layout list, and the bar at the foot says it was created from the canvas.
+  alt: The Cartograph screen after New from template - the new layout "Parcel survey — Daylight" is drawn on the left and selected in the Print layout list, and the bar at the foot says it was created from the canvas.
 ---
 
 # One-click layouts and the round trip
@@ -27,8 +27,8 @@ go the other way, back into QGIS as a layout.
 3. Pick a [template](#choose-a-template), a page size and an orientation, and
    click **Create layout**.
 
-The plugin builds a print layout called **`<Design> · <project title>`**
-(for example `Daylight · Parcel survey`; a project with no title says
+The plugin builds a print layout called **`<project title> — <Design>`**
+(for example `Parcel survey — Daylight`; a project with no title says
 *untitled*, and a number is added if the name is taken), adds it to the project, and selects it in the Print layout list.
 
 ![The Cartograph screen after New from template: the Print layout list shows the new layout, named after its design and the project, and the new layout is drawn on the left.](images/cartograph-one-click.png)

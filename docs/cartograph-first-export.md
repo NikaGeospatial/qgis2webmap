@@ -29,7 +29,7 @@ howto:
     - name: Choose the print layout
       anchor: 3-choose-the-print-layout
       text: >-
-        At the top of the panel, pick the layout from the Print layout list,
+        At the top of the panel, see the current layout in the header (**Switch layout...** lists the others),
         or press New from template to have one built from the map
         canvas.
     - name: Check where it saves
