@@ -146,7 +146,7 @@ class TestAddMenu:
         assert pane.add_button.text() == "Add item"
         assert pane.add_button.toolTip()
         viewport = pane.preview.view.viewport()
-        spot = pane.add_button.mapTo(viewport, pane.add_button.rect().topLeft())
+        spot = pane.add_button.geometry().topLeft() - viewport.pos()
         assert spot.x() >= 0 and spot.x() + pane.add_button.width() <= viewport.width()
 
 

@@ -709,7 +709,7 @@ class TestSelectedTextSize:
         viewport = pane.preview.view.viewport()
         for button in (pane.fit_button, pane.add_button):
             assert button.toolTip().startswith(button.accessibleName())
-            spot = button.mapTo(viewport, button.rect().topLeft())
+            spot = button.geometry().topLeft() - viewport.pos()
             assert spot.x() >= 0 and spot.x() + button.width() <= viewport.width()
             assert spot.y() >= 0 and spot.y() + button.height() <= viewport.height()
         base = title.textFormat().size()
@@ -932,7 +932,7 @@ def _control_rects(pane):
     """Where Add item and Fit page are, in the page view's viewport."""
     viewport = pane.preview.view.viewport()
     return {
-        name: button.rect().translated(button.mapTo(viewport, button.rect().topLeft()))
+        name: button.rect().translated(button.geometry().topLeft() - viewport.pos())
         for name, button in (("add", pane.add_button), ("fit", pane.fit_button))
     }
 
@@ -1014,11 +1014,17 @@ class TestFloatingControls:
         _settle(qgis_app)
         view = pane.preview.view
         rect = _control_rects(pane)["fit"]
-        image = view.viewport().grab().toImage()
-        behind = image.pixelColor(rect.left() - 4, rect.top() - 4)
+        # The whole view as drawn, buttons included.
+        image = view.grab().toImage()
+        origin = view.viewport().pos()
+        behind = image.pixelColor(
+            origin.x() + rect.left() - 4, origin.y() + rect.top() - 4
+        )
         assert behind.name() == fill
-        # The button's top-left corner pixel inside its border.
-        inside = image.pixelColor(rect.left() + 3, rect.top() + rect.height() // 2)
+        # Just inside the button's border, at its left.
+        inside = image.pixelColor(
+            origin.x() + rect.left() + 3, origin.y() + rect.top() + rect.height() // 2
+        )
         assert inside.name() != fill
 
     @pytest.mark.parametrize("size", [(1280, 800), (480, 360)])
