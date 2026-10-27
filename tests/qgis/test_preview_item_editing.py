@@ -797,3 +797,75 @@ class TestWhatAddingMakesSurvives:
         assert _items_of(again, QgsLayoutItemLegend)
         bar = _items_of(again, QgsLayoutItemScaleBar)[0]
         assert bar.linkedMap() is not None
+
+
+class TestResizingAnAutoSizedLegend:
+    """A legend that sizes itself to its contents would snap back at its next
+    change; dragging its handles makes the size the user's."""
+
+    def _legend_and_corner(self, qgis_app, one_map):
+        from qgis.core import QgsLayoutItemLegend, QgsLayoutSize, QgsUnitTypes
+
+        pane, layout, _frames = one_map
+        _choose(pane, "Legend")
+        _click_page(qgis_app, pane, 200, 150)
+        (legend,) = _items_of(layout, QgsLayoutItemLegend)
+        assert legend.resizeToContents()
+        # Big enough on the page to take a handle at its corner.
+        legend.setResizeToContents(False)
+        legend.attemptResize(QgsLayoutSize(60, 40, QgsUnitTypes.LayoutMillimeters))
+        legend.setResizeToContents(True)
+        _click_page(qgis_app, pane, 230, 170)
+        assert layout.selectedLayoutItems() == [legend]
+        view = pane.preview.view
+        corner = view.mapFromScene(legend.mapToScene(legend.rect().bottomRight()))
+        return pane, layout, legend, corner
+
+    def test_a_dragged_size_stays_through_later_legend_changes(
+        self, qgis_app, one_map
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, _layout, legend, corner = self._legend_and_corner(qgis_app, one_map)
+        _drag(qgis_app, pane, corner, corner + QPoint(60, 40))
+        size = (legend.rect().width(), legend.rect().height())
+        assert size[0] > 0
+        assert not legend.resizeToContents()
+        legend.setColumnCount(2)
+        legend.adjustBoxSize()
+        legend.refresh()
+        assert (legend.rect().width(), legend.rect().height()) == size
+
+    def test_one_undo_restores_the_size_and_the_automatic_sizing(
+        self, qgis_app, one_map
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, layout, legend, corner = self._legend_and_corner(qgis_app, one_map)
+        stack = layout.undoStack().stack()
+        original = (legend.rect().width(), legend.rect().height())
+        steps = stack.count()
+        _drag(qgis_app, pane, corner, corner + QPoint(60, 40))
+        assert stack.count() == steps + 1
+        resized = (legend.rect().width(), legend.rect().height())
+        assert resized != original
+        stack.undo()
+        assert legend.resizeToContents()
+        assert (legend.rect().width(), legend.rect().height()) == pytest.approx(
+            original, abs=0.01
+        )
+        stack.redo()
+        assert not legend.resizeToContents()
+        assert (legend.rect().width(), legend.rect().height()) == pytest.approx(
+            resized, abs=0.01
+        )
+
+    def test_a_legend_that_is_only_moved_or_clicked_keeps_automatic_sizing(
+        self, qgis_app, one_map
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
+        pane, _layout, legend, _corner = self._legend_and_corner(qgis_app, one_map)
+        centre = pane.preview.view.mapFromScene(legend.sceneBoundingRect().center())
+        _drag(qgis_app, pane, centre, centre + QPoint(30, 20))
+        assert legend.resizeToContents()

@@ -20,6 +20,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -322,6 +323,7 @@ class LayoutPreview(QStackedWidget):
         self._space_down = False
         self._pan_from: QPoint | None = None
         self._press_at: QPoint | None = None
+        self._legend_sizes_at_press: dict[str, tuple[float, float]] = {}
         self.view.viewport().installEventFilter(self)
         # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, on the
         # layout's own stack as in the designer. A key filter rather than a
@@ -589,6 +591,12 @@ class LayoutPreview(QStackedWidget):
             and self._take_edge_reach(event)
         ):
             return True
+        if (
+            event is not None
+            and watched is self.view.viewport()
+            and isinstance(event, QMouseEvent)
+        ):
+            self._keep_dragged_legend_size(event)
         if event is not None and (
             event.type() == QEvent.Type.Wheel
             # Having selected or moved something, the page stays as the user
@@ -597,6 +605,59 @@ class LayoutPreview(QStackedWidget):
         ):
             self._user_zoomed = True
         return False
+
+    def _keep_dragged_legend_size(self, event: QMouseEvent) -> None:
+        """A legend that sizes itself to its contents snaps back to them at
+        its next change, which undoes a resize the user dragged. So the
+        first time a drag changes such a legend's size, it stops sizing
+        itself. The select tool applies a resize when the button is
+        released, inside its undo step, so each selected automatic legend is
+        watched from the press until just after the release; one Undo then brings
+        back both the size and the automatic sizing. Legends nobody resized
+        keep sizing themselves."""
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout) or not self.select_mode():
+            return
+        if event.type() == QEvent.Type.MouseButtonPress:
+            self._unwatch_legends()
+            for item in layout.items():
+                if (
+                    isinstance(item, QgsLayoutItemLegend)
+                    and item.resizeToContents()
+                    and item.isSelected()
+                ):
+                    self._legend_sizes_at_press[item.uuid()] = (
+                        item.rect().width(),
+                        item.rect().height(),
+                    )
+                    item.sizePositionChanged.connect(self._on_watched_legend_resized)
+        elif event.type() == QEvent.Type.MouseButtonRelease:
+            QTimer.singleShot(0, self._unwatch_legends)
+
+    def _on_watched_legend_resized(self) -> None:
+        item = self.sender()
+        if not isinstance(item, QgsLayoutItemLegend) or sip.isdeleted(item):
+            return
+        before = self._legend_sizes_at_press.get(item.uuid())
+        if before is None or not item.resizeToContents():
+            return
+        size = item.rect()
+        if abs(size.width() - before[0]) + abs(size.height() - before[1]) > 0.01:
+            item.setResizeToContents(False)
+
+    def _unwatch_legends(self) -> None:
+        layout = self.view.currentLayout()
+        if layout is not None and not sip.isdeleted(layout):
+            for item in layout.items():
+                if (
+                    isinstance(item, QgsLayoutItemLegend)
+                    and item.uuid() in self._legend_sizes_at_press
+                ):
+                    with contextlib.suppress(TypeError):  # already disconnected
+                        item.sizePositionChanged.disconnect(
+                            self._on_watched_legend_resized
+                        )
+        self._legend_sizes_at_press = {}
 
     def _legend_at(self, point: QPoint):  # QgsLayoutItemLegend | None
         layout = self.view.currentLayout()
