@@ -52,7 +52,7 @@ import math
 import os
 import re
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -92,6 +92,7 @@ from .cartograph_ir import (
     CartographSpec,
     FrameGeoreference,
     FrameSpec,
+    LegendSpec,
 )
 from .export_ir import (
     AssetDisposition,
@@ -106,6 +107,7 @@ from .export_ir import (
 from .export_resolution import frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
+from .layer_reader import PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -115,6 +117,7 @@ from .layout_reader import (
     layout_state_restored,
     read_layout,
 )
+from .legend_box_sync import apply_legend_changes
 from .project_reader import (
     PendingProject,
     finish_project,
@@ -123,7 +126,11 @@ from .project_reader import (
 )
 from .report_facts import format_bytes
 from .runtime_legend import fit_frame_legends
-from .runtime_legend_fit import fit_frame_legend_boxes
+from .runtime_legend_fit import (
+    LegendBoxChange,
+    fit_frame_legend_boxes,
+    with_change_applied,
+)
 from .settings import LayerSettings
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
@@ -424,9 +431,74 @@ def export_layout_to_cartograph(
     prepared = prepare_live_reads(
         prepared, project, report, layer_settings=layer_settings
     )
+    prepared = fit_legends_to_layout(layout, project, prepared, report)
     return finish_cartograph(
         prepared, project, report, writer=writer, layer_settings=layer_settings
     )
+
+
+def fit_legends_to_layout(
+    layout: QgsPrintLayout,
+    project: QgsProject,
+    prepared: PreparedCartograph,
+    report: FidelityReportBuilder,
+) -> PreparedCartograph:
+    """Fit each live frame's legends to the web page's legend, in the layout
+    itself and in `prepared`. **GUI thread only**, after `prepare_live_reads`.
+
+    The runtime's legend is taller than QGIS's, so a legend box that holds
+    QGIS's may clip the web page's. Each such box is made taller, then set in
+    more columns, then left without some layers (`runtime_legend_fit`), and
+    the layout's legend item is changed the same way (`legend_box_sync`), so
+    the layout preview, its prints and the page agree. `finish_cartograph`
+    then finds the legends fitting and has nothing to do. Nothing is changed
+    for a legend that fits, so a second call over the result changes nothing.
+    """
+    if not prepared.live_reads:
+        return prepared
+    spec = prepared.spec
+    changes: list[LegendBoxChange] = []
+    qgis_layer_ids: dict[str, dict[str, str]] = {}
+    for source, pending in zip(prepared.live_frames, prepared.live_reads, strict=True):
+        base_layers = [
+            entry.base if isinstance(entry, PendingLayer) else entry
+            for _name, entry in pending.entries
+            if entry is not None
+        ]
+        layers = _layers_in_frame(base_layers, source)
+        qgis_layer_ids[source.frame_id] = {
+            dom_id: layer_id for layer_id, dom_id in source.layer_dom_ids
+        }
+        # The legends' rows in the runtime's terms, as the export will have
+        # them, which is what the model reads; the changes are made to the
+        # spec's own legends.
+        keyed = fit_frame_legends(spec, source.frame_id, layers)
+        found: list[LegendBoxChange] = []
+        fit_frame_legend_boxes(
+            keyed,
+            source.frame_id,
+            layers,
+            report,
+            grow_on_page_height=spec.height,
+            changes=found,
+        )
+        spec = replace(
+            spec,
+            items=tuple(
+                next(
+                    (
+                        with_change_applied(item, change)
+                        for change in found
+                        if isinstance(item, LegendSpec) and change.legend_id == item.id
+                    ),
+                    item,
+                )
+                for item in spec.items
+            ),
+        )
+        changes.extend(found)
+    apply_legend_changes(layout, project, changes, qgis_layer_ids)
+    return replace(prepared, spec=spec)
 
 
 def prepare_live_reads(
@@ -933,22 +1005,28 @@ def _as_rendered_in_frame(
     export_project: ExportProject, source: LiveFrameSource
 ) -> ExportProject:
     """The frame's layers under their `<om-layer id>`s, hidden ones hidden."""
+    layers = _layers_in_frame(export_project.layers, source)
+    if all(new is old for new, old in zip(layers, export_project.layers, strict=True)):
+        return export_project
+    return replace(export_project, layers=layers)
+
+
+def _layers_in_frame(
+    layers: Sequence[ExportLayer], source: LiveFrameSource
+) -> tuple[ExportLayer, ...]:
+    """`layers` under the frame's `<om-layer id>`s, hidden ones hidden."""
     dom_ids = dict(source.layer_dom_ids)
     hidden = set(source.hidden_layer_ids)
-    if not hidden and all(
-        dom_ids.get(layer.layer_id, layer.layer_id) == layer.layer_id
-        for layer in export_project.layers
-    ):
-        return export_project
-    layers = tuple(
+    return tuple(
         replace(
             layer,
             layer_id=dom_ids.get(layer.layer_id, layer.layer_id),
             visible=layer.visible and layer.layer_id not in hidden,
         )
-        for layer in export_project.layers
+        if hidden or dom_ids.get(layer.layer_id, layer.layer_id) != layer.layer_id
+        else layer
+        for layer in layers
     )
-    return replace(export_project, layers=layers)
 
 
 def _atlas_layer_survived(

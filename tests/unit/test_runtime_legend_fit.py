@@ -39,6 +39,7 @@ from nika_onlymap_exporter.core.runtime_legend_fit import (
     fit_frame_legend_boxes,
     fit_legend_to_box,
     legend_grow_room,
+    with_change_applied,
 )
 
 SWATCH = SymbolSpec(fill_color=Color(r=8, g=81, b=156))
@@ -426,7 +427,7 @@ class TestFrameLegendGrowth:
             changes=changes,
         )
         legend = next(i for i in fitted.items if isinstance(i, LegendSpec))
-        assert changes == [LegendBoxChange("legend_main", legend.box, 3, ())]
+        assert changes == [LegendBoxChange("legend_main", "main", legend.box, 3, ())]
         assert legend.box.h > 50 and legend.box.y + legend.box.h == 200
         (detail,) = [i.detail for i in report.items if i.subject == "Legend 'main'"]
         assert "mm taller" in detail and "changed to match" in detail
@@ -462,3 +463,17 @@ class TestFrameLegendGrowth:
         )
         legend = next(i for i in fitted.items if isinstance(i, LegendSpec))
         assert legend.box.h == 50
+
+
+class TestChangeApplied:
+    def test_the_box_columns_and_hidden_layers_are_set(self) -> None:
+        layers = _demo_layers()
+        item = _legend(layers, TIGHT)
+        change = LegendBoxChange(
+            "legend_main", "main", Box(10, 100, 190, 110), 4, ("contours", "tribs")
+        )
+        applied = with_change_applied(item, change)
+        assert applied.box == change.box and applied.columns == 4
+        hidden = {row.layer for row in applied.rows if row.hide}
+        assert hidden == {"contours", "tribs"}
+        assert len(applied.rows) == len(item.rows)  # their own rows, not new ones

@@ -303,6 +303,37 @@ def _needed_mm(
     return _balanced_height(packed + elements, columns), elements
 
 
+def _with_layer_hidden(
+    rows: Sequence[LegendRowSpec], layer_id: str
+) -> tuple[LegendRowSpec, ...]:
+    """`rows` with the layer's row hidden. The runtime reads the first row
+    that names the layer alone, so the layer's own row (it carries the order)
+    is the one to hide."""
+    own = next(
+        (
+            position
+            for position, row in enumerate(rows)
+            if row.layer == layer_id and row.match is None
+        ),
+        None,
+    )
+    if own is None:
+        return (*rows, LegendRowSpec(layer=layer_id, hide=True))
+    return tuple(
+        replace(row, hide=True) if position == own else row
+        for position, row in enumerate(rows)
+    )
+
+
+def with_change_applied(item: LegendSpec, change: LegendBoxChange) -> LegendSpec:
+    """`item` with `change` made: the box and columns it was fitted to and
+    the layers left out."""
+    rows = tuple(item.rows)
+    for layer_id in change.omitted_layer_ids:
+        rows = _with_layer_hidden(rows, layer_id)
+    return replace(item, box=change.box, columns=change.columns, rows=rows)
+
+
 def _needed_box_height(
     item: LegendSpec, layers: Sequence[ExportLayer], columns: int, font_mm: float
 ) -> float:
@@ -368,20 +399,7 @@ def fit_legend_to_box(
     # Never the last layer: a legend left empty says less than a clipped one.
     for layer_id in reversed(layer_order[1:]):
         omitted.append(layer_id)
-        # The runtime reads the first row that names the layer alone, so the
-        # layer's own row (it carries the order) is the one to hide.
-        own = next(
-            (
-                position
-                for position, row in enumerate(rows)
-                if row.layer == layer_id and row.match is None
-            ),
-            None,
-        )
-        if own is None:
-            rows.append(LegendRowSpec(layer=layer_id, hide=True))
-        else:
-            rows[own] = replace(rows[own], hide=True)
+        rows = list(_with_layer_hidden(rows, layer_id))
         current = replace(tallest, rows=tuple(rows))
         if _needed_box_height(current, layers, columns, font_mm) <= reach:
             break
@@ -407,6 +425,7 @@ class LegendBoxChange:
     the layers left out."""
 
     legend_id: str
+    frame_id: str
     box: Box
     columns: int
     omitted_layer_ids: tuple[str, ...] = ()
@@ -475,7 +494,11 @@ def fit_frame_legend_boxes(
         if changes is not None:
             changes.append(
                 LegendBoxChange(
-                    item.id, fitted.box, fitted.columns or 1, fit.omitted_layer_ids
+                    item.id,
+                    frame_id,
+                    fitted.box,
+                    fitted.columns or 1,
+                    fit.omitted_layer_ids,
                 )
             )
         report.approximated(

@@ -302,6 +302,18 @@ class LayoutReading:
     bg: str | None = None
 
 
+def layout_item_tokens(layout: QgsPrintLayout) -> dict[str, str]:
+    """The name each of `layout`'s items gets in element ids (see
+    `item_id_tokens`), so a caller can find the item an element came from."""
+    return item_id_tokens(
+        [
+            (item.uuid(), item.id())
+            for item in layout.items()
+            if isinstance(item, QgsLayoutItem)
+        ]
+    )
+
+
 def read_layout(
     layout: QgsPrintLayout,
     report: FidelityReportBuilder,
@@ -314,14 +326,7 @@ def read_layout(
     (`core/cartograph_ir.item_id_tokens`); the names are worked out once for
     the whole layout, so two items called "Legend" stay distinct.
     """
-    tokens = item_id_tokens(
-        [
-            (item.uuid(), item.id())
-            for item in layout.items()
-            if isinstance(item, QgsLayoutItem)
-        ]
-    )
-    reset = _ITEM_TOKENS.set(tokens)
+    reset = _ITEM_TOKENS.set(layout_item_tokens(layout))
     try:
         return _read_layout(layout, report, frame_modes=frame_modes)
     finally:
