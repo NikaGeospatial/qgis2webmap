@@ -308,3 +308,66 @@ class TestOlderProjects:
         assert all(
             not isinstance(i, QgsLayoutItemMap) or i.id() for i in _items(layout)
         )
+
+
+class TestExportAndImport:
+    @pytest.fixture
+    def runtime(self):
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        return RuntimeBundle(
+            javascript=b"// core",
+            css=b"/* core */",
+            version="0.13.1",
+            sha256="0" * 64,
+            cartograph_javascript=b"// carto",
+            cartograph_css=b"/* carto */",
+        )
+
+    @staticmethod
+    def _html(layout, project, runtime) -> str:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            finish_cartograph,
+            prepare_cartograph,
+        )
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        report = FidelityReportBuilder()
+        return finish_cartograph(
+            prepare_cartograph(
+                layout, project, runtime, report, frame_modes={}, raster_cache=None
+            ),
+            project,
+            report,
+        )
+
+    def test_the_html_follows_the_edits(self, parcels, project, runtime) -> None:
+        layout = _signal(parcels, project, FIGURES[:1])
+        assert ">214<" in self._html(layout, project, runtime)
+        add_callout(layout, "77", "culverts")
+        change_callout(layout, 0, "215", "parcels surveyed")
+        html = self._html(layout, project, runtime)
+        assert ">215<" in html and ">77<" in html and ">culverts<" in html
+        assert ">214<" not in html
+        remove_callout(layout, 0)
+        html = self._html(layout, project, runtime)
+        assert ">215<" not in html and ">77<" in html
+
+    def test_an_imported_cartograph_keeps_its_callouts(
+        self, parcels, project, runtime, tmp_path
+    ) -> None:
+        from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
+
+        layout = _signal(parcels, project, FIGURES)
+        path = tmp_path / "signal.html"
+        path.write_text(self._html(layout, project, runtime))
+        built = import_cartograph_file(path, project)
+        assert _words(built.layout) == FIGURES
+        # It can be edited, though it is no longer a page to plan again.
+        assert supports_callouts(built.layout)
+        assert not can_add_callout(built.layout)
+        assert change_callout(built.layout, 0, "215", "parcels surveyed")
+        assert remove_callout(built.layout, 1)
+        assert _words(built.layout) == [("215", "parcels surveyed"), FIGURES[2]]
+        assert built.layout.itemById("label_figure_1").text() == "9"
+        assert built.layout.itemById("label_figure_2") is None

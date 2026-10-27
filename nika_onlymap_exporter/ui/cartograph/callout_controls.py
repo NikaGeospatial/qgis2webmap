@@ -36,6 +36,7 @@ from .callouts import (
     callout_index,
     can_add_callout,
     change_callout,
+    find_part,
     layout_callouts,
     remove_callout,
     supports_callouts,
@@ -189,7 +190,7 @@ class CalloutControls(QFrame):
         """Select the callout just added, so the lettering buttons are at
         hand for it."""
         last = layout_callouts(layout)[-1].index
-        item = layout.itemById(f"figure-{last}")
+        item = find_part(layout, last, False)
         if item is not None:
             layout.deselectAll()
             item.setSelected(True)
@@ -203,7 +204,7 @@ class CalloutControls(QFrame):
         ):
             self.edited.emit()
         else:
-            self.show_for(layout, layout.itemById(f"figure-{index}"))
+            self.show_for(layout, find_part(layout, index, False))
 
     def _on_remove(self) -> None:
         layout, index = self._layout, self._index

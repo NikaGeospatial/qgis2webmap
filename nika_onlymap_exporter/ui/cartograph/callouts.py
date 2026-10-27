@@ -62,7 +62,11 @@ CALLOUT_LIMIT = 3
 VALUE_MAX_LENGTH = 24
 LABEL_MAX_LENGTH = 80
 
-_ITEM_ID = re.compile(r"^(?:rule-)?figure-(\d+)(?:-label)?$")
+#: A callout's item ids: `figure-N` and `figure-N-label` as a template makes
+#: them, `label_figure_N` and so on as an imported cartograph names them.
+_ITEM_ID = re.compile(
+    r"^(?:(?:rule|shape_rule|label)[-_])?figure[-_](\d+)(?:[-_]label)?$"
+)
 #: Positions and sizes closer than this, in millimetres, are the same place.
 _SAME_PLACE_MM = 0.05
 
@@ -83,6 +87,23 @@ def _layout_items(layout: QgsLayout) -> list[QgsLayoutItem]:
     return [item for item in layout.items() if isinstance(item, QgsLayoutItem)]
 
 
+def _is_line(item: QgsLayoutItem) -> bool:
+    """Whether `item` is a callout's line (what it counts), not its value."""
+    return item.id().endswith(("-label", "_label"))
+
+
+def find_part(layout: QgsLayout, index: int, line: bool) -> QgsLayoutItemLabel | None:
+    """Callout `index`'s value (or, with `line`, its line of words)."""
+    for item in _layout_items(layout):
+        if (
+            isinstance(item, QgsLayoutItemLabel)
+            and callout_index(item) == index
+            and _is_line(item) == line
+        ):
+            return item
+    return None
+
+
 def callout_index(item: QgsLayoutItem) -> int | None:
     """Which callout `item` belongs to, from its id; `None` for any other
     item."""
@@ -99,7 +120,7 @@ def layout_callouts(layout: QgsLayout) -> tuple[Callout, ...]:
         if index is None or not isinstance(item, QgsLayoutItemLabel):
             continue
         slot = found.setdefault(index, ["", ""])
-        slot[1 if item.id().endswith("-label") else 0] = item.text().strip()
+        slot[1 if _is_line(item) else 0] = item.text().strip()
     return tuple(
         Callout(index, value, label)
         for index, (value, label) in sorted(found.items())
@@ -190,9 +211,9 @@ def remove_callout(layout: QgsLayout, index: int) -> bool:
 def _set_words(layout: QgsLayout, index: int, value: str, label: str) -> bool:
     changed = False
     with one_step(layout, tr("Change callout")):
-        for suffix, text in (("", value), ("-label", label)):
-            item = layout.itemById(f"figure-{index}{suffix}")
-            if not isinstance(item, QgsLayoutItemLabel) or item.text() == text:
+        for line, text in ((False, value), (True, label)):
+            item = find_part(layout, index, line)
+            if item is None or item.text() == text:
                 continue
             with item_edit(layout, item, tr("Change callout")):
                 item.setText(text)
@@ -283,7 +304,7 @@ def _renumber(layout: QgsLayout) -> None:
             continue
         for item in list(_layout_items(layout)):
             if callout_index(item) == old:
-                _rename(layout, item, item.id().replace(f"-{old}", f"-{new}", 1))
+                _rename(layout, item, re.sub(r"(\d+)", str(new), item.id(), count=1))
 
 
 def _remove_items(layout: QgsLayout, index: int, *, renumber: bool) -> bool:
