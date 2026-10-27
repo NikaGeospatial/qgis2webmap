@@ -40,16 +40,36 @@ def _intersects(a, b) -> bool:
     )
 
 
+def _is_settled(world: FitWorld) -> bool:
+    """Whether the legend, as it now is, needs nothing more: a further export
+    changes neither its box, its columns nor its layers, and says nothing
+    about the legend. That is what "its contents fit its box" comes to, as the
+    fit works from the same model of the web page's legend."""
+    before = (rect_mm(world.legend), world.legend.columnCount(), _listed(world.legend))
+    _html, report = export(world)
+    after = (rect_mm(world.legend), world.legend.columnCount(), _listed(world.legend))
+    return before == after and legend_details(report) == []
+
+
+def _inside_page(box) -> bool:
+    return (
+        box[0] >= 0
+        and box[1] >= 0
+        and box[0] + box[2] <= 297
+        and box[1] + box[3] <= 210
+    )
+
+
 class TestTheQgisLegendChangesWithThePage:
-    def test_a_too_small_box_grows_upward_and_keeps_its_columns(self, world) -> None:
+    def test_a_too_small_box_is_made_to_hold_every_layer(self, world) -> None:
         before = rect_mm(world.legend)
-        _html, report = export(world)
-        x, y, w, h = rect_mm(world.legend)
-        assert h > before[3] + 5
-        assert y + h == pytest.approx(before[1] + before[3], abs=0.01)
-        assert (x, w) == (before[0], before[2])
-        assert world.legend.columnCount() == 3
-        assert any("mm taller" in d for d in legend_details(report))
+        original = _listed(world.legend)
+        export(world)
+        box = rect_mm(world.legend)
+        assert _listed(world.legend) == original
+        assert box[3] > before[3]
+        assert _inside_page(box)
+        assert _is_settled(world)
 
     def test_the_page_draws_the_very_box_the_layout_has(self, world) -> None:
         html, _report = export(world)
@@ -159,20 +179,41 @@ class TestLimits:
         export(world)
         assert rect_mm(world.legend)[1] >= 5 - 0.01
 
-    def test_more_columns_before_leaving_layers_out(self, qgis_app, project) -> None:
-        world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=2)
-        add_label(world, 20, 60, 100, 10)  # 80 mm of room above
-        add_label(world, 20, 192, 100, 5)  # 2 mm below
-        _html, report = export(world)
-        assert world.legend.columnCount() == 3
-        assert len(_listed(world.legend)) == 8
-        assert any("columns" in d for d in legend_details(report))
+    def test_columns_are_added_before_any_layer_is_left_out(
+        self, qgis_app, project
+    ) -> None:
+        # Two layers in one column are far taller than the box, and there is
+        # no room to grow: items touch it above and below. Two columns hold
+        # them with plenty to spare.
+        world = build_fit_world(
+            project, layer_count=2, legend_rect=(10, 150, 190, 45), columns=1
+        )
+        add_label(world, 20, 140, 100, 10)
+        add_label(world, 20, 195, 100, 5)
+        original = _listed(world.legend)
+        export(world)
+        assert world.legend.columnCount() > 1
+        assert _listed(world.legend) == original
+        assert _is_settled(world)
+
+    def test_a_layer_is_left_out_only_with_the_columns_already_added(
+        self, qgis_app, project
+    ) -> None:
+        world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=1)
+        add_label(world, 20, 140, 100, 10)
+        add_label(world, 20, 190, 100, 5)
+        original = _listed(world.legend)
+        export(world)
+        assert len(_listed(world.legend)) < len(original)
+        assert world.legend.columnCount() > 1
+        assert _is_settled(world)
 
     def test_left_out_layers_leave_the_qgis_legend_and_can_be_brought_back(
         self, qgis_app, project
     ) -> None:
         world = build_fit_world(project, legend_rect=(10, 150, 190, 40), columns=3)
-        add_label(world, 20, 140, 100, 5)  # no room at all above the legend
+        add_label(world, 20, 140, 100, 10)  # touching the legend above
+        add_label(world, 20, 190, 100, 5)  # and below: no room at all
         original = _listed(world.legend)
         _html, report = export(world)
         listed = _listed(world.legend)
