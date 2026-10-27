@@ -411,7 +411,7 @@ class AccessibilityDialog(QDialog):
     def _summary(self, condition: Condition | None) -> str:
         if not self._entries:
             return tr(
-                "No legend classes to check yet. Save the cartograph with a "
+                "No legend classes to check yet. Save the cartograph with an "
                 "Interactive map frame first."
             )
         if condition:
