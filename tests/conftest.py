@@ -100,6 +100,6 @@ def release_widgets_made_by_the_test(request):
         if id(widget) not in before:
             widget.close()
             widget.deleteLater()
-    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    QApplication.sendPostedEvents(None, int(QEvent.Type.DeferredDelete))
     QApplication.processEvents()
     gc.collect()
