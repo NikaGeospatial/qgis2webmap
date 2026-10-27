@@ -903,3 +903,37 @@ class TestSelectingDoesNotDisturbThePage:
         assert stack.count() == count, [
             stack.text(i) for i in range(count, stack.count())
         ]
+
+    @pytest.mark.parametrize("name", ["map", "legend", "title"])
+    @pytest.mark.parametrize("jitter", [0, 1])
+    def test_a_press_nothing_hovered_into_adds_no_undo_step(
+        self, qgis_app, page, name, jitter
+    ) -> None:
+        """A tap, a pen, or a click where the pointer already rests arrives
+        with no hover before it. QTest.mouseMove sends none either when the
+        cursor is already there, which made the other tests depend on where
+        an earlier test left it."""
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        pane, layout, items = page
+        layout.deselectAll()
+        _settle(qgis_app, 0.1)
+        item = items[name]
+        stack = layout.undoStack().stack()
+        count, before = stack.count(), item.sceneBoundingRect()
+        viewport = pane.preview.view.viewport()
+        centre = pane.preview.view.mapFromScene(item.sceneBoundingRect().center())
+        button, none = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+        QTest.mousePress(viewport, button, none, centre)
+        qgis_app.processEvents()
+        if jitter:
+            _move_held(viewport, centre + QPoint(jitter, 0))
+            qgis_app.processEvents()
+        QTest.mouseRelease(viewport, button, none, centre + QPoint(jitter, 0))
+        _settle(qgis_app, 0.05)
+        assert item.isSelected()
+        assert item.sceneBoundingRect() == before
+        assert stack.count() == count, [
+            stack.text(i) for i in range(count, stack.count())
+        ]

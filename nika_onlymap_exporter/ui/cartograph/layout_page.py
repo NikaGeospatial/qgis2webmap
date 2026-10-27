@@ -323,6 +323,7 @@ class LayoutPreview(QStackedWidget):
         self._space_down = False
         self._pan_from: QPoint | None = None
         self._press_at: QPoint | None = None
+        self._pointer_at: QPoint | None = None
         self._legend_sizes_at_press: dict[str, tuple[float, float]] = {}
         self.view.viewport().installEventFilter(self)
         # Ctrl+Z / Ctrl+Shift+Z in the page undo and redo its edits, on the
@@ -514,6 +515,35 @@ class LayoutPreview(QStackedWidget):
         if not sip.isdeleted(self.view):
             self.view.viewport().unsetCursor()
 
+    def _hover_before_press(self, event: QEvent) -> None:
+        """The select tool treats a press it was not hovered into as the start
+        of a move, so a plain click then leaves an empty "Move Items" step.
+        A mouse always hovers first; a tap, a pen or a click arriving where
+        the pointer already rests does not, so the hover is sent first."""
+        if not isinstance(event, QMouseEvent):
+            return
+        kind = event.type()
+        at = _local_point(event)
+        if (
+            kind == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+            and self.select_mode()
+            and not self._reaching
+            and self._pointer_at != at
+        ):
+            self._pointer_at = at  # before sending: the hover passes this filter
+            hover = QMouseEvent(
+                QEvent.Type.MouseMove,
+                QPointF(at),
+                _global_point(event),
+                Qt.MouseButton.NoButton,
+                Qt.MouseButton.NoButton,
+                event.modifiers(),
+            )
+            QApplication.sendEvent(self.view.viewport(), hover)
+        elif kind in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress):
+            self._pointer_at = at
+
     def _within_click_jitter(self, event: QEvent) -> bool:
         """A left-button move that has not yet left the press's neighbourhood
         is held back from the select tool: it is still a click."""
@@ -544,6 +574,8 @@ class LayoutPreview(QStackedWidget):
             panned = self._space_pan(watched, event)
             if panned is not None:
                 return panned
+        if event is not None and watched is self.view.viewport():
+            self._hover_before_press(event)
         if (
             event is not None
             and watched is self.view.viewport()
