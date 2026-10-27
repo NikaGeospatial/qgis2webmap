@@ -2192,6 +2192,7 @@ class CartographController:
             dialog = AccessibilityDialog(
                 lambda: self._legend_entries,
                 canvas=self._map_canvas(),
+                preview_view=self.page_pane.preview.view,
                 open_preview=self._open_cvd_preview,
                 # The hand-off is not ready for cartographs: greyed out here
                 # too, as on the Share menu.
@@ -2212,7 +2213,7 @@ class CartographController:
         # A checkable button toggles itself before this runs; the dialog's own
         # mode is what it should show.
         self.accessibility_button.setChecked(
-            bool(self._colour_vision.current_condition())
+            bool(self._colour_vision.applied_condition())
         )
         self._colour_vision.refresh()
         self._colour_vision.show()

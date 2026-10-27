@@ -1,21 +1,24 @@
 """The Colour vision dialog behind the corner's Accessibility button (issue #4 §1).
 
 One non-modal tool window does simulate *and* check: pick a condition and the
-QGIS canvas switches to that preview mode, the browser preview reopens with
-the same simulation, and the table shows every legend class with its
-simulated colour and the classes it collapses into.
+embedded layout preview shows it at once, with the table of every legend class
+and its simulated colour and the classes it collapses into. Apply then puts the
+same simulation on the QGIS canvas, and, if asked, reopens the browser preview
+with it. Closing the dialog discards what was not applied.
 
-The two halves use different models, and that is deliberate. The canvas is
-filtered by QGIS's own `QgsPreviewEffect`, the only way to filter a live
-canvas; the table and the browser preview use the cartograph runtime's
+The preview, the canvas and the browser use different models, and that is
+deliberate. The preview and the canvas are filtered by QGIS's own
+`QgsPreviewEffect` (a display effect: symbology and exports keep their
+colours); the table and the browser preview use the cartograph runtime's
 matrices (`core.cvd`), because those are what the printed page and its own
-validator will be judged by. The canvas is a look; the table is the verdict.
+validator will be judged by. The views are a look; the table is the verdict.
 
 Everything outside the dialog arrives as a callable, so the controller owns
 the wiring and the tests drive the real widgets: `entries_provider` returns
 the legend classes of the last saved cartograph, `open_preview` reopens the
 browser preview with a runtime `cvd` value (or `None` for normal vision), and
-`ask_nika` receives the findings text for the hand-off dialog.
+`ask_nika` receives the findings text for the hand-off dialog. `preview_view`
+is the embedded layout view the simulation shows in first.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -26,8 +29,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
+from qgis.PyQt.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -56,7 +60,7 @@ from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from qgis.gui import QgsMapCanvas
+    from qgis.gui import QgsLayoutView, QgsMapCanvas
 
 # What each condition is called on screen, in the combo's order. Grayscale
 # leads its own label because that is QGIS's word for the same preview, and
@@ -157,10 +161,14 @@ def findings_text(lint: LegendLint) -> str:
 class AccessibilityDialog(QDialog):
     """Simulate a colour-vision condition and check the legend against it.
 
-    `mode_changed` carries the active condition, or `""` for normal vision,
+    Choosing a condition changes the embedded layout preview and the table,
+    nothing else. `Apply` makes it the QGIS canvas's display simulation (and
+    reopens the browser preview if asked) and keeps the dialog open; closing
+    it, by Close, Escape or the window, goes back to the last applied state.
+
+    `mode_changed` carries the applied condition, or `""` for normal vision,
     so the corner button can stay checked with a tooltip while a simulation
-    is on. Closing the dialog leaves the canvas as the user set it; the plugin
-    calls `reset_canvas()` on unload.
+    is on. The plugin calls `reset_canvas()` on unload.
     """
 
     mode_changed = pyqtSignal(str)
@@ -170,6 +178,7 @@ class AccessibilityDialog(QDialog):
         entries_provider: Callable[[], Sequence[LegendEntry]],
         *,
         canvas: QgsMapCanvas | None = None,
+        preview_view: QgsLayoutView | None = None,
         open_preview: Callable[[str | None], None] | None = None,
         ask_nika: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
@@ -177,14 +186,18 @@ class AccessibilityDialog(QDialog):
         super().__init__(parent)
         self._entries_provider = entries_provider
         self._canvas = canvas
+        self._preview_view = preview_view
         self._open_preview = open_preview
         self._ask_nika = ask_nika
         self._entries: tuple[LegendEntry, ...] = ()
         self._lint = LegendLint()
-        # Whether WE put the canvas into a preview mode. A user who chose one
-        # from View > Preview Mode before opening this dialog keeps it: only a
-        # mode this dialog set is ever undone by it.
-        self._canvas_driven = False
+        # The simulation last applied (None: normal vision): what the preview
+        # and the canvas show, and what closing the dialog goes back to.
+        self._applied: Condition | None = None
+        # The canvas's own preview mode before this dialog first changed it
+        # (enabled, mode), so a user who chose one from View > Preview Mode
+        # keeps it, and gets it back when the simulation is cleared.
+        self._canvas_original: tuple[bool, object] | None = None
 
         self.setWindowTitle(tr("Colour vision"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Tool)
@@ -208,33 +221,15 @@ class AccessibilityDialog(QDialog):
         row.addWidget(self.mode_combo, stretch=1)
         layout.addLayout(row)
 
-        targets = QHBoxLayout()
-        self.canvas_check = QCheckBox(tr("QGIS canvas"))
-        self.canvas_check.setChecked(True)
-        self.browser_check = QCheckBox(tr("Browser preview"))
-        self.browser_check.setChecked(True)
-        if canvas is None:
-            self.canvas_check.setChecked(False)
-            self.canvas_check.setEnabled(False)
-            self.canvas_check.setToolTip(tr("The QGIS map canvas is not available."))
-        else:
-            self.canvas_check.setToolTip(
-                tr("Filter the QGIS map canvas, as View > Preview Mode does.")
+        self.explanation_label = QLabel(
+            tr(
+                "Changes appear in the layout preview.\n"
+                "Apply also updates the main QGIS canvas."
             )
-        if open_preview is None:
-            self.browser_check.setChecked(False)
-            self.browser_check.setEnabled(False)
-            self.browser_check.setToolTip(
-                tr("There is no cartograph to preview in the browser.")
-            )
-        else:
-            self.browser_check.setToolTip(
-                tr("Reopen the cartograph in your browser with the same simulation.")
-            )
-        targets.addWidget(self.canvas_check)
-        targets.addWidget(self.browser_check)
-        targets.addStretch(1)
-        layout.addLayout(targets)
+        )
+        self.explanation_label.setWordWrap(True)
+        self.explanation_label.setProperty("role", "hint")
+        layout.addWidget(self.explanation_label)
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
@@ -255,30 +250,55 @@ class AccessibilityDialog(QDialog):
         header.setSectionResizeMode(COLUMN_NOTE, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table, stretch=1)
 
+        # Unchecked every time the dialog opens: a browser tab appears only
+        # when the user asks for it, on Apply.
+        self.browser_check = QCheckBox(tr("Also open browser preview when applying"))
+        self.browser_check.setChecked(False)
+        if open_preview is None:
+            self.browser_check.setEnabled(False)
+            self.browser_check.setToolTip(
+                tr("There is no cartograph to preview in the browser.")
+            )
+        else:
+            self.browser_check.setToolTip(
+                tr("Reopen the cartograph in your browser with the same simulation.")
+            )
+        layout.addWidget(self.browser_check)
+
         self.summary_label = FittedLabel()
         layout.addWidget(self.summary_label)
 
         buttons = QHBoxLayout()
         self.ask_button = QPushButton(tr("Ask NIKA to fix ↗"))
         self.close_button = QPushButton(tr("Close"))
+        self.apply_button = QPushButton(tr("Apply"))
+        self.apply_button.setToolTip(
+            tr("Show this simulation on the QGIS canvas as well.")
+        )
         buttons.addWidget(self.ask_button)
         buttons.addStretch(1)
         buttons.addWidget(self.close_button)
+        buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-        self.canvas_check.toggled.connect(self._on_canvas_toggled)
-        self.browser_check.toggled.connect(self._on_browser_toggled)
         self.ask_button.clicked.connect(self._on_ask_nika)
         self.close_button.clicked.connect(self.close)
+        self.apply_button.clicked.connect(self.apply)
 
         self.refresh()
+        self._update_apply_button()
 
     # ---- State -------------------------------------------------------------
 
     def current_condition(self) -> Condition | None:
+        """The condition selected now, applied or not."""
         value = self.mode_combo.currentData()
         return value if value else None
+
+    def applied_condition(self) -> Condition | None:
+        """The condition last applied (None: normal vision)."""
+        return self._applied
 
     def set_condition(self, condition: Condition | None) -> None:
         """Select `condition` (None for normal vision), as the combo would."""
@@ -297,44 +317,82 @@ class AccessibilityDialog(QDialog):
         self._lint = lint_legend_colours(self._entries)
         self._fill_table()
 
-    # ---- Targets -----------------------------------------------------------
+    # ---- Preview, Apply, discard -------------------------------------------
 
     def _on_mode_changed(self, _index: int) -> None:
-        condition = self.current_condition()
-        if self.canvas_check.isChecked():
-            self._apply_canvas(condition)
-        if self.browser_check.isChecked() and self._open_preview is not None:
-            self._open_preview(condition)
+        self._show_in_preview(self.current_condition())
         self._fill_table()
-        self.mode_changed.emit(condition or "")
+        self._update_apply_button()
 
-    def _on_canvas_toggled(self, checked: bool) -> None:
-        # Unticking stops filtering the canvas now; leaving a filter the user
-        # just switched off would be the dialog contradicting its own control.
-        self._apply_canvas(self.current_condition() if checked else None)
+    def _update_apply_button(self) -> None:
+        self.apply_button.setEnabled(self.current_condition() != self._applied)
 
-    def _on_browser_toggled(self, checked: bool) -> None:
-        # Ticking it shows the current simulation straight away. Unticking
-        # opens nothing: a tab appearing because a box was cleared is noise.
-        if checked and self._open_preview is not None and self.current_condition():
-            self._open_preview(self.current_condition())
-
-    def _apply_canvas(self, condition: Condition | None) -> None:
-        if self._canvas is None:
+    def _show_in_preview(self, condition: Condition | None) -> None:
+        """The embedded layout preview, filtered as a reader would see it."""
+        view = self._preview_view
+        if view is None or sip.isdeleted(view):
             return
         if condition is None:
-            if self._canvas_driven:
-                self._canvas.setPreviewModeEnabled(False)
-                self._canvas_driven = False
+            view.setPreviewModeEnabled(False)
             return
-        self._canvas.setPreviewModeEnabled(True)
-        self._canvas.setPreviewMode(preview_mode_for(condition))
-        self._canvas_driven = True
+        view.setPreviewModeEnabled(True)
+        view.setPreviewMode(preview_mode_for(condition))
+
+    def apply(self) -> None:
+        """Make the selected simulation the applied one: the canvas follows,
+        and the browser preview opens if the box is ticked. The dialog stays."""
+        condition = self.current_condition()
+        self._applied = condition
+        self._apply_canvas(condition)
+        self._update_apply_button()
+        if self.browser_check.isChecked() and self._open_preview is not None:
+            self._open_preview(condition)
+        self.mode_changed.emit(condition or "")
+
+    def _discard_unapplied(self) -> None:
+        """Back to the last applied simulation (normal vision if none)."""
+        self.set_condition(self._applied)
+
+    def closeEvent(self, event: QCloseEvent | None) -> None:  # noqa: N802 - Qt override
+        self._discard_unapplied()
+        super().closeEvent(event)
+
+    def reject(self) -> None:
+        self._discard_unapplied()
+        super().reject()
+
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        if event is not None and not event.spontaneous():
+            self.browser_check.setChecked(False)
+
+    # ---- Canvas ------------------------------------------------------------
+
+    def _apply_canvas(self, condition: Condition | None) -> None:
+        canvas = self._canvas
+        if canvas is None or sip.isdeleted(canvas):
+            return
+        if condition is None:
+            if self._canvas_original is not None:
+                enabled, mode = self._canvas_original
+                canvas.setPreviewModeEnabled(enabled)
+                if enabled:
+                    canvas.setPreviewMode(mode)
+                self._canvas_original = None
+            return
+        if self._canvas_original is None:
+            self._canvas_original = (
+                canvas.previewModeEnabled(),
+                canvas.previewMode(),
+            )
+        canvas.setPreviewModeEnabled(True)
+        canvas.setPreviewMode(preview_mode_for(condition))
 
     def reset_canvas(self) -> None:
-        """Turn off a canvas preview this dialog switched on. The plugin calls
-        this on unload; closing the dialog deliberately does not."""
+        """Give the canvas back the preview mode it had before this dialog
+        changed it. The plugin calls this on unload."""
         self._apply_canvas(None)
+        self._show_in_preview(None)
 
     # ---- Table -------------------------------------------------------------
 

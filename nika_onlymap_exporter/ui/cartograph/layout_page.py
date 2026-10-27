@@ -86,6 +86,11 @@ from .legend_editor import LegendEditor
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
 
+#: The floating Add item / Fit page buttons: their distance from the page
+#: view's bottom and right edges, and from each other.
+FLOAT_MARGIN = 12
+FLOAT_GAP = 8
+
 
 class LayoutPicker(QComboBox):
     """The project's print layouts, and nothing else.
@@ -283,6 +288,7 @@ class LayoutPreview(QStackedWidget):
         self._select: QgsLayoutViewToolSelect | None = None
         self.view.setTool(self._pan)
         self.addWidget(self.view)
+        self._make_floating_controls()
 
         empty = QFrame(self)
         empty.setProperty("role", "layoutEmpty")
@@ -350,6 +356,116 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.setSingleShot(True)
         self._fit_timer.setInterval(0)
         self._fit_timer.timeout.connect(self._fit)
+
+    def _make_floating_controls(self) -> None:
+        """Add item and Fit page, floating over the page's bottom-right corner.
+
+        Children of the view (not of its viewport, and never scene items), so
+        they sit still while the page zooms and pans, are not drawn into an
+        export, a thumbnail or the colour-vision preview's filter, and still
+        take clicks and Tab. Placed by `_place_floating_controls` whenever the
+        viewport is resized.
+        """
+        self.add_button = self._floating_button(
+            tr("Add item"),
+            tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
+        )
+        self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.add_menu = QMenu(self.add_button)
+        self.add_button.setMenu(self.add_menu)
+        # Marked while the page waits for the click that places the item.
+        self.add_button.setCheckable(True)
+        self.fit_button = self._floating_button(
+            tr("Fit page"), tr("Fit the whole page"), tr(_PAN_HINT)
+        )
+        self.fit_button.clicked.connect(self.fit_page)
+        # Same height whatever the label or font.
+        height = max(b.sizeHint().height() for b in self.floating_buttons())
+        for button in self.floating_buttons():
+            button.setFixedHeight(height)
+            # A style or font change resizes a button from its left edge:
+            # put its right edge back at the corner.
+            button.installEventFilter(self)
+        self._placing = False
+
+    def _floating_button(self, text: str, name: str, hint: str = "") -> QToolButton:
+        button = QToolButton(self.view)
+        button.setText(text)
+        button.setToolTip(f"{name}. {hint}" if hint else name)
+        button.setAccessibleName(name)
+        button.setProperty("role", "secondary")
+        button.setProperty("hasMenu", False)
+        button.setProperty("zoom", True)
+        button.setProperty("floating", True)
+        button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        return button
+
+    def floating_buttons(self) -> tuple[QToolButton, QToolButton]:
+        """Left to right, as they sit."""
+        return (self.add_button, self.fit_button)
+
+    def _floating_reserve(self) -> int:
+        """The strip along the viewport's bottom the controls occupy: the
+        page is fitted above it."""
+        return self.fit_button.height() + FLOAT_MARGIN + FLOAT_GAP
+
+    def _place_floating_controls(self) -> None:
+        if self._placing:
+            return
+        self._placing = True
+        try:
+            self._move_floating_controls()
+        finally:
+            self._placing = False
+        # Again once the view has finished laying out its scroll bars.
+        QTimer.singleShot(0, self._move_floating_controls_if_alive)
+
+    def _move_floating_controls_if_alive(self) -> None:
+        if not sip.isdeleted(self) and not self._placing:
+            self._move_floating_controls()
+
+    def _move_floating_controls(self) -> None:
+        viewport = self.view.viewport()
+        rect = viewport.geometry()
+        for button in self.floating_buttons():
+            button.adjustSize()
+        right = rect.right() + 1 - FLOAT_MARGIN
+        bottom = rect.bottom() + 1 - FLOAT_MARGIN
+        for button in reversed(self.floating_buttons()):
+            button.move(right - button.width(), bottom - button.height())
+            button.raise_()
+            right -= button.width() + FLOAT_GAP
+
+    def _clear_of_floating_controls(self) -> None:
+        """After a fit: if the controls cover part of a page, fit smaller.
+
+        The fitted page is centred, so shrinking it by the controls' height
+        and margin on both sides keeps it centred and clear of them.
+        """
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return
+        pages = [p.sceneBoundingRect() for p in layout.pageCollection().pages()]
+        if not pages:
+            return
+        bounds = pages[0]
+        for page in pages[1:]:
+            bounds = bounds.united(page)
+        shown = self.view.mapFromScene(bounds).boundingRect()
+        zone = self.add_button.geometry().united(self.fit_button.geometry())
+        zone = zone.translated(
+            -self.view.viewport().x(), -self.view.viewport().y()
+        ).adjusted(-FLOAT_GAP, -FLOAT_GAP, FLOAT_MARGIN, FLOAT_MARGIN)
+        if not shown.intersects(zone):
+            return
+        room = self.view.viewport().height() - 2 * self._floating_reserve()
+        if room <= 0 or bounds.height() <= 0:
+            return
+        scale = min(self.view.transform().m11(), room / bounds.height())
+        self.view.resetTransform()
+        self.view.scale(scale, scale)
+        self.view.centerOn(bounds.center())
+        self.view.emitZoomLevelChanged()
 
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         if layout is None:
@@ -460,7 +576,9 @@ class LayoutPreview(QStackedWidget):
     def _fit(self) -> None:
         if not (self.isVisible() and self.showing_page()) or self._user_zoomed:
             return
+        self._place_floating_controls()
         self.view.zoomFull()
+        self._clear_of_floating_controls()
 
     def _space_pan(self, watched: QObject | None, event: QEvent) -> bool | None:
         """Hold Space and drag to pan the page; None when `event` is not
@@ -573,6 +691,19 @@ class LayoutPreview(QStackedWidget):
         return True
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if (
+            event is not None
+            and event.type() == QEvent.Type.Resize
+            and (watched is self.view or watched in self.floating_buttons())
+        ):
+            self._place_floating_controls()
+        if (
+            event is not None
+            and watched is self.view.viewport()
+            and event.type() in (QEvent.Type.Resize, QEvent.Type.Show)
+        ):
+            # A scroll bar appearing or the dialog resizing moves the corner.
+            self._place_floating_controls()
         if event is not None:
             panned = self._space_pan(watched, event)
             if panned is not None:
@@ -791,6 +922,7 @@ class LayoutPreview(QStackedWidget):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
+        self._place_floating_controls()
         self._fit_timer.start()
 
 
@@ -799,14 +931,14 @@ _PAN_HINT = "Pan: hold Space or the middle mouse button and drag. Zoom: the whee
 
 
 class PagePane(QWidget):
-    """The preview with what it is said above it and how to move it below.
+    """The preview with what it is said above it.
 
     Above: "Layout preview — QGIS · A4 landscape". The page is QGIS's drawing of the
     layout, and the cartograph can differ from it - a north arrow the
     runtime draws its own way, the Page settings applied on export - so it
-    is named for what it is; Preview in browser shows the HTML itself. Below: Fit page,
-    Add item, zoom out, the zoom level and zoom in, which the wheel and a drag
-    also do but nothing on screen said so.
+    is named for what it is; Preview in browser shows the HTML itself. Over
+    the page's bottom-right corner float Add item and Fit page; the wheel,
+    a drag and the keyboard zoom and pan it.
 
     What can be changed on the selected item is `controls`, which the host
     seats in the panel's Edit tab; `edit_requested` asks it to bring that tab
@@ -824,7 +956,6 @@ class PagePane(QWidget):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
         self._change_count = 0
-        self._fitting_bar = False
         self.caption = QLabel(self)
         self.caption.setProperty("role", "pageCaption")
         # The caption may clip in a narrow window rather than widen the page
@@ -861,58 +992,16 @@ class PagePane(QWidget):
         self.preview = LayoutPreview(self)
         column.addWidget(self.preview, 1)
 
-        self.zoom_bar = QWidget(self)
-        bar = QHBoxLayout(self.zoom_bar)
-        bar.setContentsMargins(0, 0, 0, 0)
-        bar.setSpacing(4)
-        self.fit_button = self._bar_button(
-            tr("Fit page"), tr("Fit the whole page"), tr(_PAN_HINT)
-        )
-        self.fit_button.clicked.connect(self.preview.fit_page)
-        bar.addWidget(self.fit_button)
-        # Text, a legend, a scale bar or a north arrow: choosing one waits for
-        # the click on the page that places it.
-        self.add_button = self._bar_button(
-            tr("Add item"),
-            tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
-        )
-        self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.add_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.add_menu = QMenu(self.add_button)
+        # Add item and Fit page float over the page itself (LayoutPreview).
+        self.fit_button = self.preview.fit_button
+        self.add_button = self.preview.add_button
+        self.add_menu = self.preview.add_menu
         self.add_menu.aboutToShow.connect(self._fill_add_menu)
-        self.add_button.setMenu(self.add_menu)
-        # Marked while the page waits for the click that places the item.
-        self.add_button.setCheckable(True)
-        bar.addWidget(self.add_button)
-        bar.addStretch(1)
-        self.zoom_out_button = self._bar_button(
-            "\N{MINUS SIGN}", tr("Zoom out"), tr(_PAN_HINT)
-        )
-        self.zoom_out_button.clicked.connect(self.preview.zoom_out)
-        bar.addWidget(self.zoom_out_button)
-        self.zoom_label = QLabel(self.zoom_bar)
-        self.zoom_label.setProperty("role", "hint")
-        self.zoom_label.setMinimumWidth(44)
-        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bar.addWidget(self.zoom_label)
-        self.zoom_in_button = self._bar_button("+", tr("Zoom in"), tr(_PAN_HINT))
-        self.zoom_in_button.clicked.connect(self.preview.zoom_in)
-        bar.addWidget(self.zoom_in_button)
-        column.addWidget(self.zoom_bar)
         # What can be changed on the selected item: seated by the host in
         # the panel's Edit tab, not in this column.
         self.controls = ContextControls()
         self.destroyed.connect(self.controls.deleteLater)
 
-        # Named in words while there is room, in pictures (the words stay as
-        # tooltips) when the bar would cut them short.
-        self._word_buttons = (self.fit_button, self.add_button)
-        for button, icon in zip(self._word_buttons, ("fit", "add"), strict=True):
-            button.setProperty("lineIcon", icon)
-            button.setIconSize(QSize(15, 15))
-        self._icons_only = False
-
-        self.preview.view.zoomLevelChanged.connect(self._show_zoom)
         self.preview.selection_changed.connect(self._refresh_controls)
         self.preview.item_placed.connect(self._on_item_placed)
         self.controls.edit_view_toggled.connect(self._on_edit_view_toggled)
@@ -938,16 +1027,6 @@ class PagePane(QWidget):
             plural(count, "{n} change in the HTML", "{n} changes in the HTML")
         )
         self._show_page_parts()
-
-    def _bar_button(self, text: str, name: str, hint: str = "") -> QToolButton:
-        button = QToolButton(self.zoom_bar)
-        button.setText(text)
-        button.setToolTip(f"{name}. {hint}" if hint else name)
-        button.setAccessibleName(name)
-        button.setProperty("role", "secondary")
-        button.setProperty("hasMenu", False)
-        button.setProperty("zoom", True)
-        return button
 
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
@@ -1016,57 +1095,9 @@ class PagePane(QWidget):
         self.caption.setVisible(showing)
         self.changes_link.setVisible(showing and self._change_count > 0)
         self.editor_link.setVisible(showing)
-        self.zoom_bar.setVisible(showing)
-        self._show_zoom()
-
-    def _fit_bar(self) -> None:
-        """Words on Fit page and Add item while the bar has room for them;
-        pictures with the same words as tooltips when it has not."""
-        if not hasattr(self, "_word_buttons") or self._fitting_bar:
-            return
-        self._fitting_bar = True
-        try:
-            self._set_icons_only(False)
-            self.zoom_bar.layout().activate()
-            short = self.zoom_bar.layout().sizeHint().width() > self.width()
-            if short:
-                self._set_icons_only(True)
-        finally:
-            self._fitting_bar = False
-
-    def _set_icons_only(self, icons_only: bool) -> None:
-        self._icons_only = icons_only
-        style = (
-            Qt.ToolButtonStyle.ToolButtonIconOnly
-            if icons_only
-            else Qt.ToolButtonStyle.ToolButtonTextOnly
-        )
-        for button in self._word_buttons:
-            button.setToolButtonStyle(style)
-            button.setProperty("tight", icons_only)
-            button.style().unpolish(button)
-            button.style().polish(button)
-
-    def _show_zoom(self, *_args: object) -> None:
-        # 100% is the page at its real size on this screen, as QGIS's own
-        # layout designer counts it.
-        view = self.preview.view
-        per_mm = view.physicalDpiX() / 25.4
-        level = view.transform().m11() / per_mm if per_mm else 0.0
-        self.zoom_label.setText(f"{round(level * 100)}%")
-
-    def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
-        super().resizeEvent(event)
-        self._fit_bar()
-
-    def changeEvent(self, event: QEvent | None) -> None:  # noqa: N802 - Qt override
-        super().changeEvent(event)
-        if event is not None and event.type() == QEvent.Type.FontChange:
-            self._fit_bar()
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
-        self._fit_bar()
         self.shown.emit()
 
 

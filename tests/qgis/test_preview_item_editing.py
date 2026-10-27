@@ -133,22 +133,21 @@ class TestAddMenu:
         text = next(a for a in pane.add_menu.actions() if a.text() == "Text")
         assert text.menu() is None
 
-    def test_the_bar_keeps_the_add_button_when_narrow(self, qgis_app, one_map) -> None:
+    def test_the_add_button_stays_in_the_preview_when_narrow(
+        self, qgis_app, one_map
+    ) -> None:
         from nika_onlymap_exporter.ui import theme
 
         pane, _layout, _frames = one_map
         pane.setObjectName("PagePaneUnderTest")
         theme.apply(pane)
-        pane.resize(600, 500)
-        _settle(qgis_app, 0.1)
-        assert not pane.add_button.property("tight")
-        assert pane.add_button.text() == "Add item"
         pane.resize(300, 500)
         _settle(qgis_app, 0.1)
-        assert pane.add_button.property("tight") is True
+        assert pane.add_button.text() == "Add item"
         assert pane.add_button.toolTip()
-        spot = pane.add_button.mapTo(pane, pane.add_button.rect().topLeft())
-        assert spot.x() >= 0 and spot.x() + pane.add_button.width() <= pane.width()
+        viewport = pane.preview.view.viewport()
+        spot = pane.add_button.mapTo(viewport, pane.add_button.rect().topLeft())
+        assert spot.x() >= 0 and spot.x() + pane.add_button.width() <= viewport.width()
 
 
 KINDS = [

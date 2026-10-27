@@ -57,26 +57,45 @@ def _scale(pane) -> float:
     return pane.preview.view.transform().m11()
 
 
-def _percent(pane) -> int:
-    text = pane.zoom_label.text()
-    assert text.endswith("%"), text
-    return int(text[:-1])
+def _wheel_zoom(pane, delta: int) -> None:
+    """A turn of the mouse wheel over the middle of the page."""
+    from qgis.PyQt.QtCore import QPoint, QPointF, Qt
+    from qgis.PyQt.QtGui import QWheelEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    viewport = pane.preview.view.viewport()
+    centre = QPointF(viewport.width() / 2, viewport.height() / 2)
+    QApplication.sendEvent(
+        viewport,
+        QWheelEvent(
+            centre,
+            QPointF(viewport.mapToGlobal(centre.toPoint())),
+            QPoint(0, 0),
+            QPoint(0, delta),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        ),
+    )
 
 
 class TestPagePane:
     def test_the_caption_names_the_layout_and_its_page(self, pane) -> None:
         assert pane.caption.text() == "Layout preview — QGIS · A4 landscape"
         assert not pane.caption.isHidden()
-        assert not pane.zoom_bar.isHidden()
+        assert not pane.add_button.isHidden()
+        assert not pane.fit_button.isHidden()
 
-    def test_without_a_layout_the_caption_and_zoom_bar_hide(
+    def test_without_a_layout_the_caption_and_floating_controls_hide(
         self, qgis_app, pane
     ) -> None:
         pane.show_layout(None)
         _settle(qgis_app)
         assert not pane.preview.showing_page()
         assert pane.caption.isHidden()
-        assert pane.zoom_bar.isHidden()
+        assert not pane.add_button.isVisible()
+        assert not pane.fit_button.isVisible()
 
     def test_the_page_is_not_the_first_tab_stop(self, pane) -> None:
         """A click still focuses the page; Tab goes to the zoom bar."""
@@ -84,28 +103,25 @@ class TestPagePane:
 
         assert pane.preview.view.focusPolicy() == Qt.FocusPolicy.ClickFocus
 
-    def test_the_zoom_buttons_change_the_level_shown(self, qgis_app, pane) -> None:
-        fitted = _percent(pane)
-        assert fitted > 0
-        pane.zoom_in_button.click()
+    def test_the_wheel_zooms_the_page_in_and_out(self, qgis_app, pane) -> None:
+        fitted = _scale(pane)
+        _wheel_zoom(pane, 120)
         _settle(qgis_app)
-        zoomed_in = _percent(pane)
+        zoomed_in = _scale(pane)
         assert zoomed_in > fitted
-        pane.zoom_out_button.click()
-        pane.zoom_out_button.click()
+        _wheel_zoom(pane, -120)
+        _wheel_zoom(pane, -120)
         _settle(qgis_app)
-        assert _percent(pane) < zoomed_in
-        assert _percent(pane) < fitted
+        assert _scale(pane) < zoomed_in
+        assert _scale(pane) < fitted
 
     def test_fit_page_refits_after_the_user_zoomed(self, qgis_app, pane) -> None:
         fitted = _scale(pane)
-        pane.zoom_in_button.click()
+        _wheel_zoom(pane, 120)
         _settle(qgis_app)
-        assert pane.preview._user_zoomed
         assert _scale(pane) > fitted * 1.05
         pane.fit_button.click()
         _settle(qgis_app)
-        assert not pane.preview._user_zoomed
         # The same fit as before the zoom: refitted once the zoomed page's
         # scroll bars have gone, which took 2.4% off the first fit.
         assert _scale(pane) == pytest.approx(fitted, rel=0.002)
@@ -116,7 +132,6 @@ class TestPagePane:
         small = _scale(pane)
         pane.resize(1000, 800)
         _settle(qgis_app)
-        assert not pane.preview._user_zoomed
         assert _scale(pane) > small * 1.2
 
     def test_the_wheel_is_a_user_zoom_that_stays(self, qgis_app, pane) -> None:
@@ -137,7 +152,6 @@ class TestPagePane:
             False,
         )
         QApplication.sendEvent(viewport, wheel)
-        assert pane.preview._user_zoomed
         # Their zoom stays through a resize.
         kept = _scale(pane)
         pane.resize(1000, 800)
@@ -298,7 +312,6 @@ class TestEditingThePage:
         pane, _layout, frame = editing
         centre = self._centre(pane, frame)
         _drag(qgis_app, pane, centre, centre)
-        assert pane.preview._user_zoomed
         kept = _scale(pane)
         pane.resize(1000, 800)
         _settle(qgis_app)
@@ -680,41 +693,28 @@ class TestSelectedTextSize:
             pytest.approx(rows_before)
         )
 
-    def test_a_narrow_bar_uses_pictures_with_tooltips_and_still_works(
+    def test_a_narrow_pane_keeps_the_floating_controls_in_view_and_working(
         self, qgis_app, page
     ) -> None:
-        from qgis.PyQt.QtWidgets import QToolButton
-
         from nika_onlymap_exporter.ui import theme
 
         pane, layout, items = page
         title = items["title"]
-        # Themed, as in the dialog: its buttons may shrink to their contents.
+        # Themed, as in the dialog.
         pane.setObjectName("PagePaneUnderTest")
         theme.apply(pane)
-        pane.resize(800, 500)
         self._select(qgis_app, layout, title)
-        words = (pane.fit_button, pane.add_button)
-        assert not any(b.property("tight") for b in words)
-        assert pane.fit_button.text() == "Fit page"
         pane.resize(300, 500)
         _settle(qgis_app, 0.1)
-        for button in words:
-            assert button.property("tight") is True
-            assert button.toolButtonStyle() == (
-                button.toolButtonStyle().__class__.ToolButtonIconOnly
-            )
+        viewport = pane.preview.view.viewport()
+        for button in (pane.fit_button, pane.add_button):
             assert button.toolTip().startswith(button.accessibleName())
-        for button in pane.zoom_bar.findChildren(QToolButton):
-            if button.isVisibleTo(pane):
-                spot = button.mapTo(pane, button.rect().topLeft())
-                assert spot.x() >= 0 and spot.x() + button.width() <= pane.width()
+            spot = button.mapTo(viewport, button.rect().topLeft())
+            assert spot.x() >= 0 and spot.x() + button.width() <= viewport.width()
+            assert spot.y() >= 0 and spot.y() + button.height() <= viewport.height()
         base = title.textFormat().size()
         pane.controls.text_bigger_button.click()
         assert title.textFormat().size() == pytest.approx(base + 1)
-        pane.resize(800, 500)
-        _settle(qgis_app, 0.1)
-        assert not any(b.property("tight") for b in words)
 
     def test_the_size_has_limits(self, qgis_app, page) -> None:
         pane, layout, items = page
@@ -769,8 +769,8 @@ class TestThePageIsAlwaysInSelectMode:
 
     @staticmethod
     def _zoomed(qgis_app, pane) -> None:
-        pane.zoom_in_button.click()
-        pane.zoom_in_button.click()
+        _wheel_zoom(pane, 120)
+        _wheel_zoom(pane, 120)
         _settle(qgis_app)
 
     @staticmethod
@@ -784,7 +784,7 @@ class TestThePageIsAlwaysInSelectMode:
         assert not hasattr(pane, "pan_button")
         assert pane.preview.select_mode()
         # The way to pan is said where the zoom is.
-        for button in (pane.fit_button, pane.zoom_in_button, pane.zoom_out_button):
+        for button in (pane.fit_button,):
             assert "Space" in button.toolTip()
             assert "middle mouse button" in button.toolTip()
 
@@ -926,3 +926,133 @@ class TestSelectingDoesNotDisturbThePage:
         assert stack.count() == count, [
             stack.text(i) for i in range(count, stack.count())
         ]
+
+
+def _control_rects(pane):
+    """Where Add item and Fit page are, in the page view's viewport."""
+    viewport = pane.preview.view.viewport()
+    return {
+        name: button.rect().translated(button.mapTo(viewport, button.rect().topLeft()))
+        for name, button in (("add", pane.add_button), ("fit", pane.fit_button))
+    }
+
+
+def _from_corner(pane) -> dict[str, tuple[int, int]]:
+    """Each control's distance from the view's bottom-right corner."""
+    viewport = pane.preview.view.viewport()
+    return {
+        name: (
+            viewport.width() - rect.right() - 1,
+            viewport.height() - rect.bottom() - 1,
+        )
+        for name, rect in _control_rects(pane).items()
+    }
+
+
+class TestFloatingControls:
+    @pytest.mark.parametrize("size", [(1000, 700), (480, 360)])
+    def test_they_sit_in_the_bottom_right_corner_of_the_page_view(
+        self, qgis_app, pane, size
+    ) -> None:
+        pane.resize(*size)
+        _settle(qgis_app)
+        viewport = pane.preview.view.viewport()
+        rects = _control_rects(pane)
+        assert rects["fit"].right() + 1 == viewport.width() - 12
+        assert rects["fit"].bottom() + 1 == viewport.height() - 12
+        assert rects["add"].right() + 1 == rects["fit"].left() - 8
+        assert rects["add"].height() == rects["fit"].height()
+        assert rects["add"].bottom() == rects["fit"].bottom()
+        assert rects["add"].left() >= 0
+
+    def test_the_removed_zoom_row_gave_its_height_to_the_preview(self, pane) -> None:
+        preview = pane.preview
+        assert preview.geometry().bottom() + 1 == pane.height()
+
+    def test_they_stay_put_when_the_page_zooms_and_scrolls(
+        self, qgis_app, pane
+    ) -> None:
+        before = _from_corner(pane)
+        for _ in range(3):
+            _wheel_zoom(pane, 120)
+        _settle(qgis_app)
+        view = pane.preview.view
+        view.horizontalScrollBar().setValue(view.horizontalScrollBar().maximum())
+        view.verticalScrollBar().setValue(view.verticalScrollBar().maximum())
+        _settle(qgis_app)
+        assert _from_corner(pane) == before
+
+    @pytest.mark.parametrize("fill", ["#000000", "#ffffff"])
+    def test_the_controls_are_opaque_over_a_dark_or_light_map(
+        self, qgis_app, pane, fill
+    ) -> None:
+        """Whatever the map behind them, their label background is theirs."""
+        from qgis.core import (
+            QgsFillSymbol,
+            QgsLayoutItemShape,
+            QgsLayoutPoint,
+            QgsLayoutSize,
+            QgsUnitTypes,
+        )
+
+        from nika_onlymap_exporter.ui import theme
+
+        pane.setObjectName("PagePaneUnderTest")
+        theme.apply(pane)
+        layout = pane.preview.view.currentLayout()
+        shape = QgsLayoutItemShape(layout)
+        shape.setShapeType(QgsLayoutItemShape.Shape.Rectangle)
+        mm = QgsUnitTypes.LayoutMillimeters
+        shape.attemptMove(QgsLayoutPoint(-20, -20, mm))
+        shape.attemptResize(QgsLayoutSize(400, 300, mm))
+        shape.setSymbol(
+            QgsFillSymbol.createSimple({"color": fill, "outline_style": "no"})
+        )
+        layout.addLayoutItem(shape)
+        for _ in range(3):  # zoomed in: the map fills the view behind them
+            _wheel_zoom(pane, 120)
+        _settle(qgis_app)
+        view = pane.preview.view
+        rect = _control_rects(pane)["fit"]
+        image = view.viewport().grab().toImage()
+        behind = image.pixelColor(rect.left() - 4, rect.top() - 4)
+        assert behind.name() == fill
+        # The button's top-left corner pixel inside its border.
+        inside = image.pixelColor(rect.left() + 3, rect.top() + rect.height() // 2)
+        assert inside.name() != fill
+
+    @pytest.mark.parametrize("size", [(1280, 800), (480, 360)])
+    def test_fit_page_shows_the_whole_page_clear_of_the_controls(
+        self, qgis_app, pane, size
+    ) -> None:
+        pane.resize(*size)
+        _settle(qgis_app)
+        _wheel_zoom(pane, 120)
+        pane.fit_button.click()
+        _settle(qgis_app)
+        view = pane.preview.view
+        layout = view.currentLayout()
+        page = view.mapFromScene(
+            layout.pageCollection().page(0).sceneBoundingRect()
+        ).boundingRect()
+        assert view.viewport().rect().contains(page)
+        for rect in _control_rects(pane).values():
+            assert not page.intersects(rect)
+
+    def test_the_controls_are_not_in_an_export(self, qgis_app, pane, tmp_path) -> None:
+        from qgis.core import QgsLayoutExporter
+        from qgis.PyQt.QtGui import QImage
+
+        layout = pane.preview.view.currentLayout()
+        settings = QgsLayoutExporter.ImageExportSettings()
+        settings.dpi = 30
+        target = tmp_path / "page.png"
+        exported = QgsLayoutExporter(layout).exportToImage(str(target), settings)
+        assert exported == QgsLayoutExporter.ExportResult.Success
+        image = QImage(str(target))
+        colours = {
+            image.pixelColor(x, y).name()
+            for x in range(0, image.width(), 7)
+            for y in range(0, image.height(), 7)
+        }
+        assert colours == {"#ffffff"}  # an empty page, nothing drawn on it

@@ -1363,12 +1363,15 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:focus {{
     padding: 1px 9px;
 }}
-/* The bar short of room: pictures with tooltips instead of cut-off words. */
-{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"][tight="true"] {{
-    padding: 2px 7px;
+/* Add item and Fit page float over the page: opaque, so they stay legible
+   over a light or a dark map. */
+{d} QToolButton[role="secondary"][floating="true"] {{
+    background: {p.paper};
+    border: 1px solid {p.muted};
 }}
-{d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"][tight="true"]:focus {{
-    padding: 1px 6px;
+{d} QToolButton[role="secondary"][floating="true"]:hover {{
+    background: {p.hover};
+    border-color: {p.ink};
 }}
 /* The zoom bar's Select / Pan switch: the mode in use is the filled one. */
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:checked {{
