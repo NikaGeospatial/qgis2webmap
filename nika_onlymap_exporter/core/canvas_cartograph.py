@@ -1271,7 +1271,7 @@ def preview_state_key(
     extent, CRS and rotation; each layer in order -- its id, name, source,
     whole style (symbology, labels, opacity, blend), credit, filter,
     feature count and data `revisions`; the project's title, abstract,
-    author and key figure variables; today's date (two designs print it);
+    author, key figure and text size variables; today's date (two designs print it);
     and the set of designs. Any of them changing changes the key, so a
     page drawn before is never shown after."""
     parts = [
@@ -1290,6 +1290,7 @@ def preview_state_key(
         project.metadata().abstract(),
         project.metadata().author(),
         repr(sorted(project_figure_rows(project))),
+        repr(project_text_sizes(project)),
         date.today().isoformat(),
         repr(tuple(template.id for template in layout_templates.TEMPLATES)),
     ]

@@ -2984,6 +2984,7 @@ TITLE_LINE_HEIGHT = 1.2
 TEXT_LINE_HEIGHT = 1.4
 
 
+@functools.lru_cache(maxsize=4096)
 def _char_em(ch: str) -> float:
     if ch in _WIDE_CHARS:
         return _WIDE_EM
@@ -2994,6 +2995,7 @@ def _char_em(ch: str) -> float:
     return _LOWER_EM
 
 
+@functools.lru_cache(maxsize=32768)
 def text_lines(text: str, width: float, font_pt: float, *, bold: bool = False) -> int:
     """How many lines `text` wraps to in a box `width` mm wide at `font_pt`:
     a greedy word wrap over estimated character widths, a word longer than a

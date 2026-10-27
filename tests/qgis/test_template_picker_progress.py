@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 
-from qgis.PyQt.QtCore import QEventLoop, QSize
+from qgis.PyQt.QtCore import QEventLoop, QSize, QTimer
 from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
 from test_template_picker import (
@@ -85,6 +85,10 @@ def test_a_card_walks_waiting_drawing_ready(qgis_app, tmp_path):
     renderer = _SlowRenderer(delay_ms=150)
     picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
     try:
+        # Landscape, as the stand-in renderer's pages are.
+        picker.orientation_combo.setCurrentIndex(
+            picker.orientation_combo.findData("landscape")
+        )
         _shown(qgis_app, picker, _TALL)
         qgis_app.processEvents()
         chosen = picker.rows[picker.template_id]
@@ -259,3 +263,104 @@ def test_the_large_preview_waits_for_a_cancelled_page_to_let_go(
         assert len(drawn) == 1
     finally:
         _close(window, parent)
+
+
+def _slow_layer(project):
+    """Two features of a million vertices, buffered while drawn: the draw
+    takes seconds, and one buffer cannot be interrupted part way."""
+    from qgis.core import (
+        QgsCircle,
+        QgsCoordinateReferenceSystem,
+        QgsFeature,
+        QgsFillSymbol,
+        QgsGeometry,
+        QgsGeometryGeneratorSymbolLayer,
+        QgsPoint,
+        QgsRectangle,
+        QgsSingleSymbolRenderer,
+        QgsVectorLayer,
+    )
+
+    crs = QgsCoordinateReferenceSystem("EPSG:3857")
+    layer = QgsVectorLayer("Polygon?crs=EPSG:3857&field=n:integer", "Slow", "memory")
+    features = []
+    for index in range(2):
+        feature = QgsFeature(layer.fields())
+        circle = QgsCircle(QgsPoint(25000 + index * 50000, 35000), 20000)
+        feature.setGeometry(QgsGeometry(circle.toPolygon(1_000_000)))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    generator = QgsGeometryGeneratorSymbolLayer.create(
+        {"geometryModifier": "buffer($geometry, 40, 8)", "SymbolType": "Fill"}
+    )
+    generator.setSubSymbol(QgsFillSymbol.createSimple({"color": "#4f9d6a"}))
+    layer.setRenderer(QgsSingleSymbolRenderer(QgsFillSymbol([generator])))
+    project.addMapLayer(layer)
+    return layer, crs, QgsRectangle(0, 0, 100000, 70000)
+
+
+def test_closing_during_a_slow_render_stays_responsive_and_frees_the_slot(
+    qgis_app, tmp_path, project
+):
+    from nika_onlymap_exporter.core.canvas_cartograph import (
+        render_slot_busy,
+        template_preview_async,
+    )
+
+    layer, crs, extent = _slow_layer(project)
+    started: list[str] = []
+
+    def render(template_id, page_size, orientation, width_px):
+        started.append(template_id)
+        return template_preview_async(
+            extent,
+            crs,
+            [layer],
+            project,
+            template_id=template_id,
+            width_px=width_px,
+            page_size=page_size,
+            orientation=orientation,
+        )
+
+    gaps: list[float] = []
+    last = [time.monotonic()]
+
+    def beat() -> None:
+        now = time.monotonic()
+        gaps.append(now - last[0])
+        last[0] = now
+
+    heartbeat = QTimer()
+    heartbeat.timeout.connect(beat)
+    heartbeat.start(10)
+    first = TemplatePicker(render, qsettings=_settings(tmp_path))
+    second = None
+    try:
+        _shown(qgis_app, first)
+        chosen = first.rows[first.template_id]
+        assert _until(qgis_app, lambda: bool(started))
+        QTest.qWait(400)  # the page is part way through its drawing
+        assert chosen.status.text() == "Drawing your map…"
+        gaps.clear()
+        closing = time.monotonic()
+        first.reject()
+        assert time.monotonic() - closing < 0.15
+        QTest.qWait(50)
+        assert max(gaps) < 0.15
+        # The abandoned page still draws in the background: the next picker
+        # starts no second page beside it, and draws once it has finished.
+        assert render_slot_busy()
+        started.clear()
+        second = TemplatePicker(render, qsettings=_settings(tmp_path))
+        _shown(qgis_app, second)
+        QTest.qWait(500)
+        assert started == []
+        assert _until(qgis_app, lambda: bool(started), 40.0)
+        assert not render_slot_busy()
+    finally:
+        heartbeat.stop()
+        if second is not None:
+            second.reject()
+        assert _until(qgis_app, lambda: not render_slot_busy(), 40.0)
+        project.removeMapLayer(layer)

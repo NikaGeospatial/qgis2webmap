@@ -166,6 +166,7 @@ _LARGE_SHARE_H = 0.8
 #: on a couple of page settings.
 _SHARED_CACHE_LIMIT = 48
 _SHARED_CACHE_BYTES = 64 * 1024 * 1024
+_SHARED_PLAN_LIMIT = 96
 #: Cards this close to the view, as a share of its height, count as in
 #: view: drawn before they are scrolled to, not just after.
 _NEAR_VIEW = 0.5
@@ -300,6 +301,11 @@ class _PageCache:
 
 #: Shared by every picker opened with the same `canvas_key`.
 _SHARED_PAGES = _PageCache(_SHARED_CACHE_LIMIT, _SHARED_CACHE_BYTES)
+#: Plans (the layout each design makes of the canvas, for the cards' cues and
+#: guides) kept between openings under the same `canvas_key`: planning all
+#: the designs is the time a picker takes to open, and a plan is a function of
+#: the canvas state and the page settings alone.
+_SHARED_PLANS: OrderedDict[tuple[str, _PlanKey], TemplatePlan] = OrderedDict()
 
 
 def dialog_sizes(available: QSize, text_scale: float = 1.0) -> tuple[QSize, QSize]:
@@ -776,6 +782,8 @@ class TemplatePicker(QDialog):
         if canvas_key:
             self._pages = _SHARED_PAGES
             self._pages.keep_only(canvas_key)
+            for stale in [k for k in _SHARED_PLANS if k[0] != canvas_key]:
+                del _SHARED_PLANS[stale]
         else:
             self._pages = _PageCache()
         self._failed: set[_PageKey] = set()
@@ -1197,8 +1205,15 @@ class TemplatePicker(QDialog):
             return plan
         if self._planner is None:
             return None
-        with preview_framing(key[5]):
-            plan = self._planner(template_id, key[1], key[2])
+        shared_key = (self._canvas_key, plan_key)
+        plan = _SHARED_PLANS.get(shared_key) if self._canvas_key else None
+        if plan is None:
+            with preview_framing(key[5]):
+                plan = self._planner(template_id, key[1], key[2])
+            if self._canvas_key:
+                _SHARED_PLANS[shared_key] = plan
+                while len(_SHARED_PLANS) > _SHARED_PLAN_LIMIT:
+                    _SHARED_PLANS.popitem(last=False)
         self._plans[plan_key] = plan
         while len(self._plans) > _SHARED_CACHE_LIMIT:
             self._plans.popitem(last=False)
@@ -1220,8 +1235,8 @@ class TemplatePicker(QDialog):
         if self._planner is None:
             return
         for template_id in template_ids:
-            key = _plan_key(self._key(template_id))
-            cues = self._cues.get(key)
+            key = self._key(template_id)
+            cues = self._cues.get(_plan_key(key))
             if cues is None:
                 template = self._templates[template_id]
                 try:
@@ -1234,7 +1249,7 @@ class TemplatePicker(QDialog):
                         if plan is not None
                         else declared_cues(template)
                     )
-                self._cues[key] = cues
+                self._cues[_plan_key(key)] = cues
             if self.rows[template_id].set_cues(cues):
                 self._items[template_id].setData(
                     Qt.ItemDataRole.AccessibleDescriptionRole, cue_description(cues)
