@@ -1251,6 +1251,8 @@ class TestCartographShareMenu:
     ) -> None:
         import urllib.request
 
+        from nika_onlymap_exporter.ui.live_server import PAGE_PATH
+
         dialog, _target = self._ready_dialog(project, tmp_path)
         try:
             cartograph = dialog._cartograph
@@ -1267,13 +1269,20 @@ class TestCartographShareMenu:
                 "export=png",
                 "atlas=zip",
             ]
+            # Every action uses the one stable preview address whatever the
+            # file is called; the export routes get the file untouched, the
+            # plain view only gains the reload hook.
             for url in opened:
                 assert url.scheme() == "http"
-                assert url.path() == f"/{name}"
+                assert url.path() == PAGE_PATH
                 assert not url.hasFragment()
                 encoded = bytes(url.toEncoded()).decode("ascii")
                 with urllib.request.urlopen(encoded, timeout=10) as response:
-                    assert response.read() == b"<html>plan</html>"
+                    body = response.read()
+                if url.query():
+                    assert body == b"<html>plan</html>"
+                else:
+                    assert body.startswith(b"<html>plan")
         finally:
             dialog.close()
 
