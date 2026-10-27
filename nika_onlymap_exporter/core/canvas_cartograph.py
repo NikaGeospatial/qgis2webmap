@@ -1082,7 +1082,8 @@ def clear_project_figures(project: QgsProject) -> None:
     """Remove `FIGURE_VARIABLES` from the project: once a layout has taken
     them as its own callouts, no other layout is to inherit them."""
     variables = dict(project.customVariables())
-    if any(variables.pop(name, None) is not None for name in FIGURE_VARIABLES):
+    taken = [variables.pop(name, None) for name in FIGURE_VARIABLES]
+    if any(value is not None for value in taken):
         project.setCustomVariables(variables)
 
 
