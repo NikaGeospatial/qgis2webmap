@@ -13,11 +13,10 @@ from nika_onlymap_exporter.core.canvas_cartograph import (
     FRAME_ID,
     cartograph_from_canvas,
     cartograph_from_view,
+    clear_project_figures,
     project_figure_rows,
     project_figures,
     project_text_sizes,
-    set_project_figures,
-    set_project_text_sizes,
     view_input,
 )
 from nika_onlymap_exporter.core.cartograph_export import prepare_cartograph
@@ -213,8 +212,8 @@ class TestCanvasLayout:
 
 
 class TestKeyFigureVariables:
-    """The key figures kept as project variables: what the picker's rows
-    show, and how they are written back."""
+    """The key figures older versions kept as project variables, now only
+    read (a layout keeps its own callouts: `test_callouts.py`)."""
 
     def test_rows_keep_every_slot_and_the_figures_only_real_ones(self, project) -> None:
         project.setCustomVariables(
@@ -234,51 +233,24 @@ class TestKeyFigureVariables:
             ("12 km", ""),
         )
 
-    def test_written_rows_read_back_the_same(self, project) -> None:
-        project.setCustomVariables({"other": "kept"})
-        rows = (("214", "parcels surveyed"), ("", "a label alone"), ("12 km", ""))
-        set_project_figures(project, rows)
-        variables = project.customVariables()
-        assert variables["nika_figure_1"] == "214 | parcels surveyed"
-        assert variables["nika_figure_2"] == "| a label alone"
-        # A value alone is written without the bar.
-        assert variables["nika_figure_3"] == "12 km"
-        assert variables["other"] == "kept"
-        assert project_figure_rows(project) == rows
-
-    def test_a_blank_row_removes_its_variable(self, project) -> None:
+    def test_taking_them_for_a_layout_removes_the_variables(self, project) -> None:
         project.setCustomVariables(
-            {"nika_figure_1": "1 | one", "nika_figure_2": "2 | two"}
+            {"nika_figure_1": "1 | one", "nika_figure_2": "2 | two", "other": "kept"}
         )
-        set_project_figures(project, (("", " "), ("2", "two")))
-        variables = project.customVariables()
-        assert "nika_figure_1" not in variables
-        assert variables["nika_figure_2"] == "2 | two"
-        assert "nika_figure_3" not in variables
-
-    def test_a_bar_in_a_value_is_refused(self, project) -> None:
-        project.setCustomVariables({})
-        with pytest.raises(ValueError):
-            set_project_figures(project, (("1|2", "split"),))
-        assert project.customVariables() == {}
+        clear_project_figures(project)
+        assert project.customVariables() == {"other": "kept"}
+        clear_project_figures(project)
+        assert project.customVariables() == {"other": "kept"}
 
 
 class TestTextSizeVariables:
     """The title, legend and notes sizes (percent) kept as project variables."""
 
-    def test_written_percents_read_back_and_standard_leaves_no_variable(
-        self, project
-    ) -> None:
+    def test_no_variable_is_standard_and_percents_read_back(self, project) -> None:
         project.setCustomVariables({"other": "kept"})
         assert project_text_sizes(project) == TextSizes()
-        set_project_text_sizes(project, TextSizes(80, 100, 130))
-        variables = project.customVariables()
-        assert variables["nika_size_title"] == "80"
-        assert "nika_size_legend" not in variables
-        assert variables["other"] == "kept"
+        project.setCustomVariables({"nika_size_title": "80", "nika_size_notes": "130"})
         assert project_text_sizes(project) == TextSizes(80, 100, 130)
-        set_project_text_sizes(project, TextSizes())
-        assert project.customVariables() == {"other": "kept"}
 
     def test_a_project_saved_with_step_ids_reads_as_their_percent(
         self, project
@@ -291,8 +263,6 @@ class TestTextSizeVariables:
             }
         )
         assert project_text_sizes(project) == TextSizes(80, 115, 100)
-        set_project_text_sizes(project, project_text_sizes(project))
-        assert project.customVariables()["nika_size_legend"] == "115"
         project.setCustomVariables({"nika_size_title": "400"})
         assert project_text_sizes(project).title == 130
         project.setCustomVariables({})
@@ -301,7 +271,7 @@ class TestTextSizeVariables:
         self, project, parcels
     ) -> None:
         extent = parcels.extent()
-        set_project_text_sizes(project, TextSizes(90, 115, 100))
+        project.setCustomVariables({"nika_size_title": "90", "nika_size_legend": "115"})
         saved = view_input(extent, UTM, [parcels], project)
         assert (saved.title_scale, saved.legend_scale, saved.notes_scale) == (
             0.9,

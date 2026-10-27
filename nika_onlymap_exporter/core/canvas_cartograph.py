@@ -80,7 +80,6 @@ from .layout_reader import (
 )
 from .layout_templates import (
     MAIN_FRAME_ID,
-    STANDARD_PERCENT,
     FrameSlot,
     TemplateInput,
     TemplatePlan,
@@ -179,6 +178,7 @@ def cartograph_from_canvas(
     orientation: str = "auto",
     template_id: str = "classic",
     placeholders: Mapping[str, str] | None = None,
+    figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
     layout_name: str | None = None,
 ) -> CanvasCartograph:
@@ -196,6 +196,7 @@ def cartograph_from_canvas(
         orientation=orientation,
         template_id=template_id,
         placeholders=placeholders,
+        figures=figures,
         text_sizes=text_sizes,
         layout_name=layout_name,
     )
@@ -212,6 +213,7 @@ def cartograph_from_view(
     orientation: str = "auto",
     template_id: str = "classic",
     placeholders: Mapping[str, str] | None = None,
+    figures: Sequence[tuple[str, str]] | None = None,
     text_sizes: TextSizes | None = None,
     layout_name: str | None = None,
 ) -> CanvasCartograph:
@@ -223,6 +225,10 @@ def cartograph_from_view(
     Raises `ValueError` for an empty or non-finite extent, an invalid CRS or
     an unknown template, page size or orientation.
     """
+    # A design with callouts and none given starts from the older shared
+    # figures a project may still hold, once: they become this layout's own.
+    takes_legacy = figures is None and get_template(template_id).takes_figures
+    drawn = tuple(project_figures(project)) if takes_legacy else tuple(figures or ())
     plan, spec, built, left_out = _build_from_view(
         extent,
         crs,
@@ -234,9 +240,12 @@ def cartograph_from_view(
         template_id=template_id,
         placeholders=placeholders,
         add_to_project=True,
+        figures=drawn,
         text_sizes=text_sizes,
         layout_name=layout_name,
     )
+    if takes_legacy:
+        clear_project_figures(project)
     _record_template(
         built.layout,
         TemplateRecord(
@@ -253,7 +262,7 @@ def cartograph_from_view(
             layer_ids=tuple(layer.id() for layer in layers),
             rotation=rotation,
             placeholders=dict(placeholders or {}),
-            figures=tuple(project_figures(project)),
+            figures=drawn,
         ),
     )
     map_item = built.items_by_id[FRAME_ID]
@@ -1042,8 +1051,10 @@ def _view_around_focus(
     return QgsRectangle(cx - half_w, cy - half_h, cx + half_w, cy + half_h)
 
 
-#: The project variables a design's key figures come from, in order: each
-#: "value | what it is" -- the user's own numbers, never computed here.
+#: The project variables older versions kept the key figures in, in order:
+#: each "value | what it is" -- the user's own numbers, never computed here.
+#: A layout now keeps its own callouts (`ui/cartograph/callouts.py`); these
+#: are only read, to give a layout the figures a project already had.
 FIGURE_VARIABLES = ("nika_figure_1", "nika_figure_2", "nika_figure_3")
 
 
@@ -1055,8 +1066,8 @@ def project_figures(project: QgsProject) -> tuple[tuple[str, str], ...]:
 
 def project_figure_rows(project: QgsProject) -> tuple[tuple[str, str], ...]:
     """Every one of `FIGURE_VARIABLES` as a (value, label) pair, in order,
-    ("", "") where it is unset -- what the picker's rows show. A label with
-    no value is kept here, for the user to finish; `project_figures` and the
+    ("", "") where it is unset. A label with
+    no value is kept here; `project_figures` and the
     page leave it out."""
     variables = project.customVariables()
     rows = []
@@ -1067,26 +1078,12 @@ def project_figure_rows(project: QgsProject) -> tuple[tuple[str, str], ...]:
     return tuple(rows)
 
 
-def set_project_figures(project: QgsProject, rows: Sequence[tuple[str, str]]) -> None:
-    """Write `rows` -- (value, label) pairs, in order -- to
-    `FIGURE_VARIABLES` in the "value | label" form `project_figure_rows`
-    reads, so they are saved with the project. A blank row, or one past the
-    end of `rows`, removes its variable; a value alone is written without
-    the bar.
-
-    Raises `ValueError` for a value with a "|" in it: it would read back
-    split at the bar."""
+def clear_project_figures(project: QgsProject) -> None:
+    """Remove `FIGURE_VARIABLES` from the project: once a layout has taken
+    them as its own callouts, no other layout is to inherit them."""
     variables = dict(project.customVariables())
-    for index, name in enumerate(FIGURE_VARIABLES):
-        value, label = rows[index] if index < len(rows) else ("", "")
-        value, label = value.strip(), label.strip()
-        if "|" in value:
-            raise ValueError(f"a key figure's value cannot contain '|': {value!r}")
-        if not (value or label):
-            variables.pop(name, None)
-        else:
-            variables[name] = f"{value} | {label}".strip() if label else value
-    project.setCustomVariables(variables)
+    if any(variables.pop(name, None) is not None for name in FIGURE_VARIABLES):
+        project.setCustomVariables(variables)
 
 
 #: The project variables the title, legend and notes size steps are kept in
@@ -1102,20 +1099,6 @@ def project_text_sizes(project: QgsProject) -> TextSizes:
         text_percent(variables.get(name)) for name in TEXT_SIZE_VARIABLES
     )
     return TextSizes(title, legend, notes)
-
-
-def set_project_text_sizes(project: QgsProject, sizes: TextSizes) -> None:
-    """Save `sizes` to `TEXT_SIZE_VARIABLES`; 100 removes its variable,
-    so a project that never changed a size carries none."""
-    variables = dict(project.customVariables())
-    for name, percent in zip(
-        TEXT_SIZE_VARIABLES, (sizes.title, sizes.legend, sizes.notes), strict=True
-    ):
-        if percent == STANDARD_PERCENT:
-            variables.pop(name, None)
-        else:
-            variables[name] = str(percent)
-    project.setCustomVariables(variables)
 
 
 def _credits(layers: Sequence[QgsMapLayer]) -> list[str]:
