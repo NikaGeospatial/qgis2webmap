@@ -38,9 +38,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     Browser appearance section, which changes the web page only.
   - **New from template...** builds a print layout, named
     `<Design> · <project title>`, from the map view in
-    one of ten **layout templates** - five quiet essentials (Daylight,
-    Clearline, Bare Map, Caption, After Hours) and five with more
-    character (Fieldbook, Broadside, Near & Far, Signal, Wayfinder) - each shown as a large
+    one of eleven **layout templates** - six quiet essentials (Daylight,
+    Clearline, Bare Map, Caption, After Hours, Night Desk) and five with more
+    character (Fieldbook, Broadside, Near & Far, Signal, Wayfinder), with the
+    two dark designs last, plus a **Request a template** card that opens a
+    suggestion form - each shown as a large
     preview of the current map with a one-line description of what it is for,
     on A4, A3, Letter, Tabloid and more. Templates never put stand-in text on
     the page: a panel with nothing real to show is left out and the map takes

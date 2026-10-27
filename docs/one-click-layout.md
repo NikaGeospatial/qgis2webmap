@@ -35,8 +35,10 @@ The plugin builds a print layout called **`<Design> · <project title>`**
 
 ## Choose a template
 
-Ten starters: five quiet essentials and five specialised compositions, each
-made for a different kind of page. Each preview is the real page drawn
+Eleven starters: six quiet essentials and five specialised compositions, each
+made for a different kind of page. The two dark designs, After Hours and Night
+Desk, come last, followed by a **Request a template** card that opens a form to
+suggest a design you would like to use. Each preview is the real page drawn
 with the map the canvas shows now, so what you pick is what you get.
 
 The picker shows **All**, **Essentials** and **Characterful** at the top to
@@ -78,6 +80,8 @@ layout preview, or pick the sizes here before creating it.
 - **After Hours** - a dark page with an uninterrupted map. Its heading,
   legend and scale have their own space, so a dense key never covers the
   terrain. The legend fits beside or below the map at a readable size. *Best for: dark-room screens and projected displays.*
+- **Night Desk** - a calm dark report sheet: the map inset with wide margins and
+  a quiet legend, scale bar, source line and date. *Best for: reports read on screen in low light.*
 
 **Characterful**
 
