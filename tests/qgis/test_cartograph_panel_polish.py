@@ -16,6 +16,7 @@ from test_cartograph_dialog import (  # noqa: E402, F401
     _choose_cartograph,
     _choose_web,
     _dialog,
+    _modal_watchdog,
     _rename_through_dialog,
     _wait_for,
     fake_cartograph_export,
@@ -29,6 +30,7 @@ def _open_rename(dialog, probe):
     from qgis.PyQt.QtWidgets import QApplication
 
     seen = []
+    failures: list[BaseException] = []
 
     def drive() -> None:
         box = QApplication.activeModalWidget()
@@ -36,7 +38,11 @@ def _open_rename(dialog, probe):
         box.reject()
 
     QTimer.singleShot(0, drive)
+    watchdog = _modal_watchdog(failures)
     dialog._cartograph.rename_action.trigger()
+    watchdog.stop()
+    if failures:
+        raise failures[0]
     return seen[0]
 
 

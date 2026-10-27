@@ -4788,9 +4788,33 @@ class TestLayerDisclosure:
             dialog.close()
 
 
+def _modal_watchdog(failures: list, milliseconds: int = 8000):
+    """A timer that closes whatever modal dialog is still open after
+    `milliseconds` and records a failure, so a helper that drives a modal
+    `exec()` fails the test instead of hanging the run. Stop it when done."""
+    from qgis.PyQt.QtCore import QTimer
+    from qgis.PyQt.QtWidgets import QApplication
+
+    def expire() -> None:
+        box = QApplication.activeModalWidget()
+        if box is not None:
+            failures.append(
+                AssertionError(
+                    f"{type(box).__name__} was still open after {milliseconds} ms"
+                )
+            )
+            box.reject()
+
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(expire)
+    timer.start(milliseconds)
+    return timer
+
+
 def _pick_layout(dialog, name: str) -> None:
-    """Choose `name` as a user does: "Switch layout...", then double-click
-    its row in the chooser."""
+    """Choose `name` as a user does: "Switch layout...", pick its row in the
+    chooser and confirm. Fails after a few seconds rather than hanging."""
     from qgis.PyQt.QtCore import QPoint, Qt, QTimer
     from qgis.PyQt.QtTest import QTest
     from qgis.PyQt.QtWidgets import QApplication
@@ -4803,25 +4827,36 @@ def _pick_layout(dialog, name: str) -> None:
         # An exception inside a Qt slot aborts the process: carry it out.
         box = QApplication.activeModalWidget()
         try:
+            # Laid out first (the rows are sized when the chooser shows), and
+            # the row scrolled into view: a click outside the viewport is lost.
+            QApplication.processEvents()
             row = next(
                 r
                 for r in range(box.list.count())
                 if box.list.item(r).data(Qt.ItemDataRole.UserRole) == name
             )
-            rect = box.list.visualItemRect(box.list.item(row))
-            QTest.mouseDClick(
-                box.list.viewport(), Qt.MouseButton.LeftButton, pos=rect.center()
+            item = box.list.item(row)
+            box.list.scrollToItem(item)
+            # Pick the row, then confirm: what matters is the layout shown.
+            QTest.mouseClick(
+                box.list.viewport(),
+                Qt.MouseButton.LeftButton,
+                pos=box.list.visualItemRect(item).center(),
             )
+            box.list.setCurrentItem(item)
+            QTest.mouseClick(box.open_button, Qt.MouseButton.LeftButton)
         except BaseException as exc:
             failures.append(exc)
             box.reject()
 
     QTimer.singleShot(0, drive)
+    watchdog = _modal_watchdog(failures)
     QTest.mouseClick(
         header.switch_button,
         Qt.MouseButton.LeftButton,
         pos=QPoint(4, header.switch_button.height() // 2),
     )
+    watchdog.stop()
     if failures:
         raise failures[0]
 
@@ -4832,6 +4867,7 @@ def _chooser_names(cartograph) -> list[str]:
     from qgis.PyQt.QtWidgets import QApplication
 
     seen: list[str] = []
+    failures: list[BaseException] = []
 
     def drive() -> None:
         box = QApplication.activeModalWidget()
@@ -4839,7 +4875,11 @@ def _chooser_names(cartograph) -> list[str]:
         box.reject()
 
     QTimer.singleShot(0, drive)
+    watchdog = _modal_watchdog(failures)
     cartograph.on_switch_layout()
+    watchdog.stop()
+    if failures:
+        raise failures[0]
     return seen
 
 
@@ -4851,6 +4891,7 @@ def _rename_through_dialog(dialog, typed: str, *, press_twice: bool = False):
     from qgis.PyQt.QtWidgets import QApplication, QDialogButtonBox
 
     shown: list[str | None] = []
+    failures: list[BaseException] = []
 
     def drive() -> None:
         box = QApplication.activeModalWidget()
@@ -4865,7 +4906,11 @@ def _rename_through_dialog(dialog, typed: str, *, press_twice: bool = False):
             shown.append(None)
 
     QTimer.singleShot(0, drive)
+    watchdog = _modal_watchdog(failures)
     dialog._cartograph.rename_action.trigger()
+    watchdog.stop()
+    if failures:
+        raise failures[0]
     return shown[0]
 
 

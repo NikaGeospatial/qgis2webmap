@@ -18,6 +18,7 @@ from test_cartograph_dialog import (
     _choose_cartograph,
     _click_new_from_template,
     _dialog,
+    _modal_watchdog,
     picked_template,  # noqa: F401 - autouse fixture the dialog tests rely on
 )
 
@@ -56,10 +57,12 @@ def _with_chooser(cartograph, drive):
             box.reject()
 
     QTimer.singleShot(0, run)
+    watchdog = _modal_watchdog(failures)
     button = cartograph.layout_header.switch_button
     QTest.mouseClick(
         button, Qt.MouseButton.LeftButton, pos=QPoint(4, button.height() // 2)
     )
+    watchdog.stop()
     if failures:
         raise failures[0]
     return out[0]

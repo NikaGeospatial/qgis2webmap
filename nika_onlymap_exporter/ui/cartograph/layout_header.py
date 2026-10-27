@@ -282,6 +282,9 @@ class LayoutChooserDialog(QDialog):
         self.list.setUniformItemSizes(False)
         self.list.setSpacing(2)
         self.list.itemActivated.connect(self._open_item)
+        # A double-click opens on every platform style, whatever it calls an
+        # "activation".
+        self.list.itemDoubleClicked.connect(self._open_item)
         self.list.currentItemChanged.connect(self._sync_open)
         column.addWidget(self.list, 1)
 
