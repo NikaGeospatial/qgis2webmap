@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import threading
-from pathlib import Path
+import urllib.request
 
 import pytest
 
@@ -113,28 +113,24 @@ def _live_layout(project, layer):
     return layout
 
 
-class _OpenedLog(list):
-    """The opened pages, plus the folders whose files they were served from."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.paths: list[Path] = []
-
-
 @pytest.fixture
 def opened(monkeypatch):
     """What the browser was asked to open: (url, file text at that moment)."""
+    from qgis.PyQt.QtCore import QUrl
+
     import nika_onlymap_exporter.ui.cartograph.controller as controller_module
 
-    seen = _OpenedLog()
+    seen: list[tuple[str, str]] = []
 
     def record(url) -> None:
-        text = ""
-        name = url.path().lstrip("/")
-        for folder in {p.parent for p in seen.paths}:
-            candidate = folder / name
-            if candidate.exists():
-                text = candidate.read_text(encoding="utf-8")
+        # Every preview is served at one stable address whatever the file is
+        # called, so ask the server for what it publishes right now. The
+        # print route hands the file over untouched, without the reload hook.
+        page = QUrl(url)
+        page.setQuery("print")
+        encoded = bytes(page.toEncoded()).decode("ascii")
+        with urllib.request.urlopen(encoded, timeout=10) as response:
+            text = response.read().decode("utf-8")
         seen.append((url.toString(), text))
 
     monkeypatch.setattr(
@@ -159,7 +155,6 @@ class TestImmediateOpenAfterAnEdit:
         _choose_cartograph(dialog)
         cartograph = dialog._cartograph
         target = tmp_path / "sites.html"
-        opened.paths.append(target)
         cartograph.file_edit.setText(str(target))
         cartograph._on_file_edited(str(target))
         assert _wait_for(qgis_app, lambda: target.exists(), timeout=90)
@@ -253,7 +248,6 @@ def fake_dialog(qgis_app, project, tmp_path, slow_export, opened):
     _choose_cartograph(dialog)
     cartograph = dialog._cartograph
     target = tmp_path / "sites.html"
-    opened.paths.append(target)
     cartograph.file_edit.setText(str(target))
     cartograph._on_file_edited(str(target))
     assert _wait_for(qgis_app, lambda: target.exists())
