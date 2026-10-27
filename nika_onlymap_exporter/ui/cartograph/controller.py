@@ -633,7 +633,11 @@ class CartographController:
         """The panel's first width, from the window's: narrower on a small
         window so the page keeps room, wider on a large one so the longer
         controls breathe. Once only - after that the width is the user's."""
-        if self._panel_sized or not self.workspace.isVisible():
+        if (
+            self._panel_sized
+            or sip.isdeleted(self.workspace)
+            or not self.workspace.isVisible()
+        ):
             return
         total = self.workspace.width()
         if total <= 0:
@@ -658,7 +662,13 @@ class CartographController:
         section = self.sections[key]
         section.set_open(True)
         scroll = self.layout_scroll
-        QTimer.singleShot(0, lambda: scroll.ensureWidgetVisible(section, 0, 0))
+
+        def reveal() -> None:
+            # Runs a tick later: the panel may have been closed meanwhile.
+            if not sip.isdeleted(scroll) and not sip.isdeleted(section):
+                scroll.ensureWidgetVisible(section, 0, 0)
+
+        QTimer.singleShot(0, reveal)
 
     def _update_checks_summary(self) -> None:
         """The Checks tab's title carries the count, as a badge would."""
