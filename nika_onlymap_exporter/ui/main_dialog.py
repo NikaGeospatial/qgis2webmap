@@ -4857,6 +4857,11 @@ class MainDialog(QDialog):
         # capped so a wedged provider cannot hang the close.
         job, self._job = self._job, None
         if job is not None:
+            # Its result is for widgets that are about to go: a result queued
+            # by the finished thread would otherwise reach a deleted dialog.
+            for signal in (job.succeeded, job.failed, job.cancelled):
+                with contextlib.suppress(TypeError, RuntimeError):
+                    signal.disconnect()
             job.cancel()
             with contextlib.suppress(Exception):
                 job.wait(SHUTDOWN_WAIT_MS)
