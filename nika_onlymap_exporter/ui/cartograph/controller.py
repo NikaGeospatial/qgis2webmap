@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, cast
 
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication
+from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette
 from qgis.PyQt.QtWidgets import (
     QAction,
     QComboBox,
@@ -2707,10 +2707,20 @@ class CartographController:
         if not self._status_links_connected:
             self.dialog.status_label.linkActivated.connect(self._on_status_link)
             self._status_links_connected = True
+        # The theme's link colour, stated outright: the label's own style
+        # sheet otherwise leaves a dark theme with the default dark blue.
+        colour = self.dialog.palette().color(QPalette.ColorRole.Link).name()
+
+        def link(target: str, text: str) -> str:
+            return (
+                f'<a href="{target}"><span style="color:{colour}">'
+                f"{html.escape(text)}</span></a>"
+            )
+
         parts = [
             html.escape(tr("Saved PDF: {name}").format(name=path.name)),
-            f'<a href="{_PDF_OPEN_LINK}">{html.escape(tr("Open PDF"))}</a>',
-            f'<a href="{_PDF_SHOW_LINK}">{html.escape(tr("Show in folder"))}</a>',
+            link(_PDF_OPEN_LINK, tr("Open PDF")),
+            link(_PDF_SHOW_LINK, tr("Show in folder")),
         ]
         text = " · ".join(parts)
         if warnings:
