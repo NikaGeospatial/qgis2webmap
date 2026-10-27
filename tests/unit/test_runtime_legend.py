@@ -298,3 +298,41 @@ class TestDescribeRuntimeLegendChanges:
         )
         assert len(changes) == 1
         assert "field" in changes[0]
+
+
+class TestRasterRows:
+    def _raster(self, layer_id: str, renderer: str) -> ExportLayer:
+        from nika_onlymap_exporter.core.export_ir import RasterSpec
+
+        return ExportLayer(
+            layer_id=layer_id,
+            name=layer_id,
+            geometry_kind=GeometryKind.POLYGON,
+            source_kind=SourceKind.FILE,
+            raster=RasterSpec(
+                path="x.tif",
+                style_qml=f"<qgis><pipe>{renderer}</pipe></qgis>",
+            ),
+        )
+
+    def test_a_classified_raster_row_takes_its_first_class_colour(self) -> None:
+        layer = self._raster(
+            "bands",
+            '<rasterrenderer type="paletted"><colorPalette>'
+            '<paletteEntry value="1" color="#00ff00" label="a"/>'
+            "</colorPalette></rasterrenderer>",
+        )
+        rows = fit_legend_rows((LegendRowSpec(layer="bands", order=0),), [layer])
+        assert (rows[0].color, rows[0].shape) == ("#00ff00", "polygon")
+
+    def test_a_grey_raster_row_is_a_grey_ramp(self) -> None:
+        layer = self._raster("shade", '<rasterrenderer type="singlebandgray"/>')
+        rows = fit_legend_rows((LegendRowSpec(layer="shade", order=0),), [layer])
+        assert (rows[0].color, rows[0].shape) == ("#808080", "ramp")
+
+    def test_a_colour_the_user_chose_is_kept(self) -> None:
+        layer = self._raster("shade", '<rasterrenderer type="singlebandgray"/>')
+        rows = fit_legend_rows(
+            (LegendRowSpec(layer="shade", order=0, color="#123456"),), [layer]
+        )
+        assert rows[0].color == "#123456"

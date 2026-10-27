@@ -129,6 +129,7 @@ from .project_reader import (
     prepare_project,
     read_project,
 )
+from .raster_swatch import raster_swatch
 from .report_facts import format_bytes
 from .runtime_legend import fit_frame_legends
 from .runtime_legend_fit import (
@@ -440,6 +441,37 @@ def export_layout_to_cartograph(
     return finish_cartograph(
         prepared, project, report, writer=writer, layer_settings=layer_settings
     )
+
+
+def _report_raster_swatches(
+    spec: CartographSpec,
+    frame_id: str,
+    layers: Sequence[ExportLayer],
+    report: FidelityReportBuilder,
+) -> None:
+    """Say, for each styled raster a derived legend lists, that the browser's
+    legend shows it as one swatch where QGIS's lists its classes or ramp."""
+    if not any(
+        isinstance(item, LegendSpec) and item.derived and item.for_ == frame_id
+        for item in spec.items
+    ):
+        return
+    for layer in layers:
+        swatch = raster_swatch(layer.raster.style_qml) if layer.raster else None
+        if swatch is None or not layer.visible:
+            continue
+        listed = (
+            "its colour ramp"
+            if swatch.is_ramp
+            else f"its {len(swatch.entries)} classes"
+        )
+        report.approximated(
+            f"Legend swatch '{layer.name}'",
+            f"QGIS's legend lists {listed}; the browser's legend cannot list "
+            "a raster's colours, so it shows one swatch in "
+            + ("the ramp's" if swatch.is_ramp else "the first class's")
+            + " colour.",
+        )
 
 
 def fit_legends_to_layout(
@@ -772,6 +804,7 @@ def finish_cartograph_full(
         # overrides are put in the runtime's terms here, where the layers'
         # final symbology is known.
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
+        _report_raster_swatches(spec, source.frame_id, rendered.layers, report)
         spec = fit_frame_legend_boxes(spec, source.frame_id, rendered.layers, report)
         live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
     _warn_when_inline_data_is_heavy(projects, report)

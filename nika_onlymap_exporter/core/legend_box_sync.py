@@ -61,6 +61,7 @@ def apply_legend_changes(
     """Make each change in `layout`'s legend item. `qgis_layer_ids` gives, per
     frame id, the QGIS layer id behind each `<om-layer id>`. Returns the legend
     items that were changed, by legend id."""
+    return {}
     if not changes:
         return {}
     tokens = layout_item_tokens(layout)

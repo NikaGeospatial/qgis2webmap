@@ -43,6 +43,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from .cartograph_ir import CartographSpec, LegendRowSpec, LegendSpec
 from .export_ir import ExportLayer, GeometryKind, RendererKind
 from .manifest_builder import fill_expression
+from .raster_swatch import raster_swatch
 
 #: A swatch the reader cannot see: the colour a classed layer's heading row
 #: gets so it reads as a heading, as in QGIS.
@@ -198,6 +199,21 @@ def fit_legend_rows(
     its `<om-layer id>`), plus the rows that make it read like QGIS."""
     fitted = list(rows)
     for layer in layers:
+        if layer.raster is not None and (
+            swatch := raster_swatch(layer.raster.style_qml)
+        ):
+            # The runtime has no legend for a raster it did not colour from
+            # a named colormap: one swatch, the style's own colour.
+            fitted = [
+                replace(
+                    row,
+                    color=row.color or swatch.color,
+                    shape=row.shape or swatch.shape,
+                )
+                if row.layer == layer.layer_id and row.match is None and not row.hide
+                else row
+                for row in fitted
+            ]
         if layer.raster is not None or layer.tiles is not None:
             continue
         if layer.labeling.enabled and layer.labeling.field_name:
