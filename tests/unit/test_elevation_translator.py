@@ -3,7 +3,7 @@
 Runs in the unit tier, not the QGIS one, because `elevation_translator` imports
 no PyQGIS - it duck-types every read so a QGIS built without 3D support cannot
 break the plugin on import. Doubles here therefore exercise the real code path,
-not a mock of it; `tests/qgis/test_elevation_translator.py` then checks the same
+not a mock of it; `tests/qgis/test_elevation_translator_qgis.py` then checks the same
 functions against live QGIS objects, which is what catches an API that moved.
 
 Copyright (C) 2026 NIKA
