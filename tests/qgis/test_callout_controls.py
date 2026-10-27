@@ -239,9 +239,10 @@ class TestWhereItShows:
             QgsLayoutItemMap,
         )
 
-        from nika_onlymap_exporter.ui.cartograph.callouts import callout_index
-
-        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
+        from nika_onlymap_exporter.ui.cartograph.callouts import (
+            add_callout,
+            callout_index,
+        )
 
         layout = _layout(parcels, project)
         assert add_callout(layout, "12 km", "of road")

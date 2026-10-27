@@ -63,10 +63,9 @@ def _item_of(layout, kind):
 def shown_controls(layout, kind, width):
     """The Edit tab in a scroll area of the dialog's own kind, `width` wide,
     with an item of `kind` selected."""
+    from nika_onlymap_exporter.ui import theme
     from nika_onlymap_exporter.ui.cartograph.controller import _panel_scroll
     from nika_onlymap_exporter.ui.cartograph.item_controls import ContextControls
-
-    from nika_onlymap_exporter.ui import theme
 
     controls = ContextControls()
     scroll = _panel_scroll(controls)
