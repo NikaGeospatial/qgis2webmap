@@ -18,7 +18,12 @@ from __future__ import annotations
 import string
 from typing import TYPE_CHECKING, Any
 
-from qgis.core import QgsFeatureRequest, QgsRuleBasedLabeling
+from qgis.core import (
+    QgsExpression,
+    QgsExpressionNodeColumnRef,
+    QgsFeatureRequest,
+    QgsRuleBasedLabeling,
+)
 
 from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
 from .fidelity_report import FidelityReportBuilder
@@ -76,6 +81,23 @@ def collect_character_set(
         return None
     # Sorted so the attribute is byte-stable across runs.
     return "".join(sorted(characters))
+
+
+def _expression_field(expression: str, layer: QgsVectorLayer) -> str | None:
+    """The field an expression is nothing but, `None` for anything else.
+
+    Layers labelled from the expression box often hold only `"name"`, which
+    labels exactly as the field does. A function, a condition or a constant
+    needs a value per feature that the web map has no way to compute.
+    """
+    parsed = QgsExpression(expression)
+    if parsed.hasParserError():
+        return None
+    root = parsed.rootNode()
+    if not isinstance(root, QgsExpressionNodeColumnRef):
+        return None
+    name = str(root.name())
+    return name if name in layer.fields().names() else None
 
 
 def _single_rule_settings(
@@ -174,7 +196,17 @@ def translate_labeling(
         )
         return LabelingSpec(enabled=False)
 
-    if settings.isExpression:
+    field_name = settings.fieldName or None
+    if settings.isExpression and field_name:
+        field_name = _expression_field(field_name, layer)
+        if field_name is not None:
+            report.preserved(
+                subject,
+                f"The label expression is just the field '{field_name}', "
+                "translated as that field.",
+                layer_id,
+            )
+    if settings.isExpression and field_name is None:
         report.unsupported(
             subject,
             "Labels come from an expression rather than a single field. The "
@@ -184,7 +216,6 @@ def translate_labeling(
         )
         return LabelingSpec(enabled=False)
 
-    field_name = settings.fieldName or None
     if not field_name:
         return LabelingSpec(enabled=False)
 

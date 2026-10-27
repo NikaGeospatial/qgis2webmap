@@ -157,6 +157,44 @@ def _with_format(size: float, unit, buffer_size: float = 0.0, buffer_unit=None):
     return layer
 
 
+class TestFieldExpressions:
+    """A label typed into the expression box as just a field is that field."""
+
+    def _expression_layer(self, expression: str):
+        return labelled_layer(fieldName=expression, isExpression=True)
+
+    def test_a_quoted_field_label_is_translated_as_the_field(self, qgis_app) -> None:
+        report = FidelityReportBuilder()
+        spec = translate_labeling(self._expression_layer('"name"'), report)
+        assert spec.enabled is True
+        assert spec.field_name == "name"
+        assert not any(
+            item.status is FidelityStatus.UNSUPPORTED for item in report.items
+        )
+
+    def test_a_field_with_surrounding_space_is_still_the_field(self, qgis_app) -> None:
+        spec = translate_labeling(
+            self._expression_layer('  "name"  '), FidelityReportBuilder()
+        )
+        assert spec.field_name == "name"
+
+    @pytest.mark.parametrize(
+        "expression",
+        [
+            "'Colorado River'",
+            "\"name\" || ' (' || \"name\" || ')'",
+            'CASE WHEN "name" = \'x\' THEN "name" END',
+            'upper("name")',
+            '"no_such_field"',
+        ],
+    )
+    def test_anything_else_stays_unsupported(self, qgis_app, expression) -> None:
+        report = FidelityReportBuilder()
+        spec = translate_labeling(self._expression_layer(expression), report)
+        assert spec.enabled is False
+        assert any(item.status is FidelityStatus.UNSUPPORTED for item in report.items)
+
+
 class TestSizeUnits:
     """QGIS sizes text in points by default; the web map sizes it in pixels.
 
