@@ -103,3 +103,56 @@ def release_widgets_made_by_the_test(request):
     QApplication.sendPostedEvents(None, int(QEvent.Type.DeferredDelete))
     QApplication.processEvents()
     gc.collect()
+
+
+# How long a modal dialog may wait for input before the test is failed.
+MODAL_LIMIT_S = 20
+
+
+@pytest.fixture(autouse=True)
+def fail_a_dialog_left_waiting(request):
+    """Close a modal dialog nobody answers, and fail the test that opened it.
+
+    A test that opens a real dialog - a file chooser it forgot to stub, or a
+    chooser whose simulated click missed - waits in `exec()` for input that
+    never comes. Offscreen, that is a silent hang which holds the shared test
+    slot until someone kills the run. A timer still fires inside `exec()`'s
+    event loop, so it can reject the dialog: the test then fails within
+    seconds, naming the dialog, and the rest of the run carries on.
+    """
+    if "qgis_app" not in request.fixturenames:
+        yield
+        return
+    import time
+
+    from qgis.PyQt.QtCore import QTimer
+    from qgis.PyQt.QtWidgets import QApplication, QDialog
+
+    seen: dict[int, float] = {}
+    left_waiting: list[str] = []
+
+    def check() -> None:
+        dialog = QApplication.activeModalWidget()
+        if dialog is None:
+            return
+        first = seen.setdefault(id(dialog), time.monotonic())
+        if time.monotonic() - first < MODAL_LIMIT_S:
+            return
+        left_waiting.append(f"{type(dialog).__name__} {dialog.windowTitle()!r}")
+        if isinstance(dialog, QDialog):
+            dialog.reject()
+        else:
+            dialog.close()
+
+    timer = QTimer()
+    timer.setInterval(1000)
+    timer.timeout.connect(check)
+    timer.start()
+    yield
+    timer.stop()
+    if left_waiting:
+        pytest.fail(
+            f"a modal dialog waited over {MODAL_LIMIT_S} s for input and was "
+            f"closed: {', '.join(left_waiting)}",
+            pytrace=False,
+        )
