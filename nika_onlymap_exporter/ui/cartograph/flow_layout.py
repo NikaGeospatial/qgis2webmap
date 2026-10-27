@@ -82,7 +82,9 @@ class FlowLayout(QLayout):
 def flow_row(parent: QWidget, widgets: list[QWidget], spacing: int = 6) -> QWidget:
     """`widgets` in a wrapping row, seated in a plain widget of their own."""
     row = QWidget(parent)
-    row.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+    # Fixed in height (its width-dependent height still applies): spare room
+    # in the page goes below the rows, not into a gap inside one.
+    row.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
     layout = FlowLayout(row, spacing)
     for widget in widgets:
         widget.setParent(row)

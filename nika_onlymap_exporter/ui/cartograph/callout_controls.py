@@ -145,7 +145,9 @@ class CalloutControls(QFrame):
         finally:
             self._loading = False
         self._shown_a_callout = self._index is not None
-        self.setVisible(True)
+        # Only where it applies: with nothing selected (to add the next one) or
+        # with one of its callouts selected. Another item has its own controls.
+        self.setVisible(item is None or self._index is not None)
         self._sync_buttons()
 
     def _sync_buttons(self, *_args: object) -> None:

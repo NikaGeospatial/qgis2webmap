@@ -611,6 +611,7 @@ class ContextControls(QFrame):
         self.context_note.setProperty("role", "hint")
         self.context_note.setWordWrap(True)
         column.addWidget(self.context_note)
+        column.addStretch(1)
 
     def _field_label(self, text: str, parent: QWidget) -> QLabel:
         """A label of the panel's label column: all share one width."""

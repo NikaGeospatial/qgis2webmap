@@ -66,8 +66,12 @@ def shown_controls(layout, kind, width):
     from nika_onlymap_exporter.ui.cartograph.controller import _panel_scroll
     from nika_onlymap_exporter.ui.cartograph.item_controls import ContextControls
 
+    from nika_onlymap_exporter.ui import theme
+
     controls = ContextControls()
     scroll = _panel_scroll(controls)
+    # The dialog's own look: its font and button padding are what take room.
+    theme.apply(scroll)
     scroll.resize(width, 700)
     scroll.show()
     controls.set_layout(layout)
@@ -75,6 +79,12 @@ def shown_controls(layout, kind, width):
     layout.deselectAll()
     item.setSelected(True)
     controls.refresh()
+    if kind == "map":
+        # An Image map also offers its resolution: the widest the tab gets.
+        controls.dpi_combo.addItem("200 dpi")
+        controls.dpi_combo.setVisible(True)
+        if hasattr(controls, "dpi_label"):
+            controls.dpi_label.setVisible(True)
     return scroll, controls
 
 
@@ -127,3 +137,20 @@ class TestEditTabFits:
                 assert button.width() >= need, (button.text(), button.width(), need)
         finally:
             scroll.close()
+
+
+@pytest.mark.parametrize("width", WIDTHS)
+def test_a_map_has_no_gap_between_its_button_row_and_rotation(
+    qgis_app, signal_layout, width
+) -> None:
+    """Spare room in the panel goes below the rows, not into a gap inside."""
+    scroll, controls = shown_controls(signal_layout, "map", width)
+    try:
+        _settle(qgis_app, 0.2)
+        buttons = controls.canvas_button
+        rotation = controls.rotation_spin
+        bottom = buttons.mapTo(controls, buttons.rect().bottomLeft()).y()
+        top = rotation.mapTo(controls, rotation.rect().topLeft()).y()
+        assert 0 <= top - bottom <= 16, (bottom, top)
+    finally:
+        scroll.close()

@@ -227,3 +227,48 @@ class TestSelectedOnThePage:
             assert controls.colour_button.isVisibleTo(controls)
         finally:
             controls.close()
+
+
+class TestWhereItShows:
+    def test_only_with_nothing_or_a_callout_selected(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from qgis.core import (
+            QgsLayoutItemLabel,
+            QgsLayoutItemLegend,
+            QgsLayoutItemMap,
+        )
+
+        from nika_onlymap_exporter.ui.cartograph.callouts import callout_index
+
+        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
+
+        layout = _layout(parcels, project)
+        assert add_callout(layout, "12 km", "of road")
+        controls = _controls(layout)
+        try:
+            panel = controls.callout_controls
+            layout.deselectAll()
+            controls.refresh()
+            assert panel.isVisibleTo(controls)
+            _select(layout, controls, "figure-0")
+            assert panel.isVisibleTo(controls)
+            plain_label = next(
+                i
+                for i in layout.items()
+                if isinstance(i, QgsLayoutItemLabel) and callout_index(i) is None
+            )
+            others = [
+                plain_label,
+                next(i for i in layout.items() if isinstance(i, QgsLayoutItemMap)),
+            ]
+            legend = QgsLayoutItemLegend(layout)
+            layout.addLayoutItem(legend)
+            others.append(legend)
+            for item in others:
+                layout.deselectAll()
+                item.setSelected(True)
+                controls.refresh()
+                assert not panel.isVisibleTo(controls), type(item).__name__
+        finally:
+            controls.close()
