@@ -2020,9 +2020,13 @@ class TestAccessibility:
             cartograph = dialog._cartograph
             cartograph.accessibility_button.click()
             cartograph._colour_vision.set_condition("deuteranopia")
+            # Chosen, not applied: the button has nothing to show yet.
+            assert not cartograph.accessibility_button.isChecked()
+            cartograph._colour_vision.apply_button.click()
             assert cartograph.accessibility_button.isChecked()
             assert "deuteranopia" in cartograph.accessibility_button.toolTip().lower()
             cartograph._colour_vision.set_condition(None)
+            cartograph._colour_vision.apply_button.click()
             assert not cartograph.accessibility_button.isChecked()
         finally:
             dialog.close()
