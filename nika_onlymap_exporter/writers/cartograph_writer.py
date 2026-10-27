@@ -860,7 +860,7 @@ def _attr(name: str, value: object) -> str:
     return f' {name}="{html.escape(str(value), quote=True)}"'
 
 
-def _style(box: Box, opacity: float = 1.0) -> str:
+def _style(box: Box, opacity: float = 1.0, extra: str = "") -> str:
     style = (
         f"left:{_format_mm(box.x)}mm;"
         f"top:{_format_mm(box.y)}mm;"
@@ -870,6 +870,8 @@ def _style(box: Box, opacity: float = 1.0) -> str:
     # Only a translucent item names it, so an opaque item's markup is unchanged.
     if opacity < 1.0:
         style += f";opacity:{_format_num(opacity)}"
+    if extra:
+        style += f";{extra}"
     return style
 
 
@@ -882,11 +884,12 @@ def _placement_attrs(
     locked: bool = False,
     hidden: bool = False,
     opacity: float = 1.0,
+    extra_style: str = "",
 ) -> str:
     """The attributes every placed element shares: `id x y w h` plus the
     optional `rotation z locked hidden`, and the matching inline `style`.
     `opacity` has no attribute in the runtime's vocabulary; it travels in the
-    `style` only, as CSS the runtime leaves alone."""
+    `style` only, as CSS the runtime leaves alone, and so does `extra_style`."""
     parts = [
         _attr("id", item_id),
         _attr("x", _format_mm(box.x)),
@@ -902,7 +905,7 @@ def _placement_attrs(
         parts.append(_attr("locked", True))
     if hidden:
         parts.append(_attr("hidden", True))
-    parts.append(_attr("style", _style(box, opacity)))
+    parts.append(_attr("style", _style(box, opacity, extra_style)))
     return "".join(parts)
 
 
@@ -1260,6 +1263,10 @@ def _render_text(item: TextSpec) -> str:
             locked=item.locked,
             hidden=item.hidden,
             opacity=item.opacity,
+            # The runtime sets no `white-space` on `<om-text>`, so the browser
+            # folds a QGIS label's line breaks into one run-on paragraph. Only
+            # a body with a break names it, so other markup is unchanged.
+            extra_style="white-space:pre-line" if "\n" in item.body else "",
         ),
         _attr("kind", item.kind),
     ]

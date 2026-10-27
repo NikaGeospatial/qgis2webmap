@@ -493,6 +493,30 @@ class TestTextAndTokens:
         assert "{{frame.main.crs}}" in credit.text
 
 
+class TestTextLineBreaks:
+    def _page(self, body: str) -> str:
+        text = TextSpec(id="stats", box=Box(10, 10, 80, 20), body=body)
+        spec = CartographSpec(
+            cartograph_id="cg", size="A4", items=(_static_spec().items[0], text)
+        )
+        return write_cartograph_html(spec, _runtime())
+
+    def test_a_label_with_line_breaks_keeps_them_in_the_browser(self) -> None:
+        """The runtime sets no `white-space` on `<om-text>`, so the browser
+        would fold QGIS's four lines into one paragraph."""
+        root = _parse_sheet(self._page("Roads: 94.5 km\nTrails: 372.1 km"))
+        text = root.find(".//om-text[@id='stats']")
+        assert text is not None
+        assert "white-space:pre-line" in (text.get("style") or "")
+        assert text.text == "Roads: 94.5 km\nTrails: 372.1 km"
+
+    def test_a_one_line_label_keeps_its_markup(self) -> None:
+        root = _parse_sheet(self._page("Roads: 94.5 km"))
+        text = root.find(".//om-text[@id='stats']")
+        assert text is not None
+        assert "white-space" not in (text.get("style") or "")
+
+
 class TestShape:
     def test_default_kind_omitted(self) -> None:
         shape = ShapeSpec(id="box", box=Box(0, 0, 10, 10))
