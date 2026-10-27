@@ -14,10 +14,11 @@ entries, the gaps CSS leaves between them. The browser balances the legend's
 CSS columns itself, which is packed here the way it does: whole elements
 (`break-inside: avoid`) into the shortest column height that holds them all.
 
-When the legend does not fit as laid out, more columns are tried while each
-stays wide enough to read; when even they do not hold it, layers are left out
-from the end of the legend, whole, and the count is reported, as the templates
-do for a dense legend.
+When the legend does not fit as laid out, its box is made taller first (see
+`legend_grow_room` for how far it may grow); when that is not enough, more
+columns are tried while each stays wide enough to read; when even they do not
+hold it, layers are left out from the end of the legend, whole, and the count
+is reported, as the templates do for a dense legend.
 
 Pure Python, exercised in the unit tier.
 
@@ -31,7 +32,14 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from .cartograph_ir import CartographSpec, LegendRowSpec, LegendSpec
+from .cartograph_ir import (
+    Box,
+    CartographItem,
+    CartographSpec,
+    GraticuleSpec,
+    LegendRowSpec,
+    LegendSpec,
+)
 from .export_ir import ExportLayer
 from .fidelity_report import FidelityReportBuilder
 from .manifest_builder import fill_expression
@@ -68,15 +76,101 @@ MAX_EXTRA_COLUMNS = 1
 SAFETY_MM = 1.0
 
 
+#: A grown box never reaches closer to the page's edge than this.
+PAGE_MARGIN_MM = 5.0
+#: A grown height is rounded up to this, so the height read back from the
+#: layout is never a hair under what the model asked for (which would make the
+#: next pass grow it again).
+HEIGHT_STEP_MM = 0.1
+#: Boxes closer than this overlap by nothing visible.
+OVERLAP_TOLERANCE_MM = 0.01
+
+
+@dataclass(frozen=True)
+class GrowRoom:
+    """How a legend box may grow: away from the page edge it is anchored to
+    (`anchor_bottom`: it keeps its bottom edge and grows upward), by at most
+    `available_mm`."""
+
+    anchor_bottom: bool = False
+    available_mm: float = 0.0
+
+
 @dataclass(frozen=True)
 class LegendFit:
-    """What fitting one legend changed: its columns, and the layers and
-    entries it left out (`omitted_layers` names them, `omitted_entries`
-    counts a layer's row and each of its classes, as QGIS's own count does)."""
+    """What fitting one legend changed: its columns, how much taller its box
+    became (`grown_mm`), and the layers and entries it left out
+    (`omitted_layers` names them, `omitted_layer_ids` gives their
+    `<om-layer id>`s, `omitted_entries` counts a layer's row and each of its
+    classes, as QGIS's own count does)."""
 
     columns: int
     omitted_layers: tuple[str, ...] = ()
     omitted_entries: int = 0
+    omitted_layer_ids: tuple[str, ...] = ()
+    grown_mm: float = 0.0
+
+
+def _overlaps(first: Box, second: Box) -> bool:
+    return (
+        min(first.x + first.w, second.x + second.w) - max(first.x, second.x)
+        > OVERLAP_TOLERANCE_MM
+        and min(first.y + first.h, second.y + second.h) - max(first.y, second.y)
+        > OVERLAP_TOLERANCE_MM
+    )
+
+
+def legend_grow_room(
+    item: LegendSpec, others: Sequence[CartographItem], page_height: float
+) -> GrowRoom:
+    """How far `item`'s box may grow, and which way.
+
+    - Direction: a legend whose centre is in the lower half of the page keeps
+      its bottom edge and grows upward; any other keeps its top edge and
+      grows downward. Either way its left edge and width stay.
+    - It stops at the page margin (`PAGE_MARGIN_MM`), or where it stands if it
+      is already past it.
+    - It stops short of any visible item it does not overlap yet and would
+      newly overlap (a title, text, a scale bar, another legend, an inset, a
+      picture). It may grow over the map frame it legends, and over anything
+      it already overlaps: it sits on those.
+    - A rotated legend does not grow; its box is not what the page shows.
+    """
+    box = item.box
+    anchor_bottom = box.y + box.h / 2 > page_height / 2
+    if item.rotation:
+        return GrowRoom(anchor_bottom, 0.0)
+    limit = PAGE_MARGIN_MM if anchor_bottom else page_height - PAGE_MARGIN_MM
+    for other in others:
+        other_box = getattr(other, "box", None)
+        if (
+            other_box is None
+            or other is item
+            or getattr(other, "hidden", False)
+            or isinstance(other, GraticuleSpec)
+            or getattr(other, "id", None) == item.for_
+            or _overlaps(box, other_box)
+        ):
+            continue
+        beside = (
+            min(box.x + box.w, other_box.x + other_box.w) - max(box.x, other_box.x)
+            > OVERLAP_TOLERANCE_MM
+        )
+        if not beside:
+            continue
+        if anchor_bottom and other_box.y + other_box.h <= box.y + OVERLAP_TOLERANCE_MM:
+            limit = max(limit, other_box.y + other_box.h)
+        elif not anchor_bottom and other_box.y >= box.y + box.h - OVERLAP_TOLERANCE_MM:
+            limit = min(limit, other_box.y)
+    room = box.y - limit if anchor_bottom else limit - (box.y + box.h)
+    return GrowRoom(anchor_bottom, max(0.0, room))
+
+
+def _grown(box: Box, height: float, room: GrowRoom) -> Box:
+    """`box` made `height` tall, away from the edge it is anchored to."""
+    if room.anchor_bottom:
+        return Box(box.x, box.y + box.h - height, box.w, height)
+    return Box(box.x, box.y, box.w, height)
 
 
 @dataclass(frozen=True)
@@ -209,31 +303,58 @@ def _needed_mm(
     return _balanced_height(packed + elements, columns), elements
 
 
+def _needed_box_height(
+    item: LegendSpec, layers: Sequence[ExportLayer], columns: int, font_mm: float
+) -> float:
+    """The box height the browser's legend needs in `columns` columns, rounded
+    up to `HEIGHT_STEP_MM`."""
+    padding = DEFAULT_PADDING_MM if item.padding is None else item.padding
+    needed, _elements_used = _needed_mm(item, layers, columns, font_mm)
+    total = needed + 2 * padding + SAFETY_MM
+    return math.ceil(total / HEIGHT_STEP_MM - 1e-9) * HEIGHT_STEP_MM
+
+
 def fit_legend_to_box(
-    item: LegendSpec, layers: Sequence[ExportLayer]
+    item: LegendSpec,
+    layers: Sequence[ExportLayer],
+    room: GrowRoom | None = None,
 ) -> tuple[LegendSpec, LegendFit]:
     """`item` set to fit its box in the browser, and what that took.
 
-    Unchanged (and `columns` as it was) when it already fits.
+    In this order: the box is made taller, up to `room` (none when `room` is
+    omitted), keeping the columns it has; then more columns are tried, the
+    box made as tall as each needs; then layers are left out from the end,
+    whole. A box is never made shorter. Unchanged (and `columns` as it was)
+    when it already fits.
     """
     font_mm = (item.font_size * 25.4 / 72) if item.font_size else DEFAULT_FONT_MM
     padding = DEFAULT_PADDING_MM if item.padding is None else item.padding
-    available = item.box.h - 2 * padding - SAFETY_MM
+    room = room or GrowRoom()
     start = item.columns or 1
+    height = item.box.h
+    reach = height + room.available_mm + OVERLAP_TOLERANCE_MM / 10
 
     def widest_columns() -> int:
         usable = item.box.w - 2 * padding
         most = int((usable + COLUMN_GAP_MM) // (MIN_COLUMN_MM + COLUMN_GAP_MM))
         return max(start, min(start + MAX_EXTRA_COLUMNS, most))
 
+    def with_height(candidate: LegendSpec, new_height: float) -> LegendSpec:
+        if new_height <= height + OVERLAP_TOLERANCE_MM / 10:
+            return candidate
+        return replace(candidate, box=_grown(item.box, new_height, room))
+
     for columns in range(start, widest_columns() + 1):
-        needed, _elements_used = _needed_mm(item, layers, columns, font_mm)
-        if needed <= available:
+        needed_height = _needed_box_height(item, layers, columns, font_mm)
+        if needed_height <= reach:
             changed = item if columns == start else replace(item, columns=columns)
-            return changed, LegendFit(columns)
+            fitted = with_height(changed, needed_height)
+            return fitted, LegendFit(columns, grown_mm=fitted.box.h - height)
 
     columns = widest_columns()
-    _needed, elements = _needed_mm(item, layers, columns, font_mm)
+    # As tall as it may get; the layers left out below only have to fit this.
+    tallest = with_height(replace(item, columns=columns), reach)
+    _needed, elements = _needed_mm(tallest, layers, columns, font_mm)
     ordered = [e.layer_id for e in elements if e.layer_id is not None]
     layer_order = list(dict.fromkeys(ordered))
     names = {layer.layer_id: layer.name for layer in layers}
@@ -243,7 +364,7 @@ def fit_legend_to_box(
     }
     omitted: list[str] = []
     rows = list(item.rows)
-    current = replace(item, columns=columns)
+    current = tallest
     # Never the last layer: a legend left empty says less than a clipped one.
     for layer_id in reversed(layer_order[1:]):
         omitted.append(layer_id)
@@ -261,15 +382,63 @@ def fit_legend_to_box(
             rows.append(LegendRowSpec(layer=layer_id, hide=True))
         else:
             rows[own] = replace(rows[own], hide=True)
-        current = replace(item, columns=columns, rows=tuple(rows))
-        needed, _elements_used = _needed_mm(current, layers, columns, font_mm)
-        if needed <= available:
+        current = replace(tallest, rows=tuple(rows))
+        if _needed_box_height(current, layers, columns, font_mm) <= reach:
             break
+    # Only as tall as what is left needs, and never shorter than it was.
+    final_height = min(
+        reach, max(height, _needed_box_height(current, layers, columns, font_mm))
+    )
+    current = replace(current, box=item.box)
+    current = with_height(current, final_height)
     return current, LegendFit(
         columns,
         tuple(names[layer_id] for layer_id in reversed(omitted)),
         sum(entries_of[layer_id] for layer_id in omitted),
+        tuple(reversed(omitted)),
+        current.box.h - height,
     )
+
+
+@dataclass(frozen=True)
+class LegendBoxChange:
+    """What fitting one legend changed, in the terms the layout is changed in:
+    the box it now has (page mm), its columns, and the `<om-layer id>`s of
+    the layers left out."""
+
+    legend_id: str
+    box: Box
+    columns: int
+    omitted_layer_ids: tuple[str, ...] = ()
+
+
+def _describe_fit(item: LegendSpec, fit: LegendFit, matched_layout: bool) -> str:
+    """What happened to a legend, for Checks."""
+    done = []
+    if fit.grown_mm > 0:
+        done.append(f"made {fit.grown_mm:.1f} mm taller")
+    if fit.columns != (item.columns or 1):
+        done.append(f"set in {fit.columns} columns instead of {item.columns or 1}")
+    if fit.omitted_layers:
+        count = fit.omitted_entries
+        done.append(
+            f"left without {count} "
+            + ("entry" if count == 1 else "entries")
+            + " ("
+            + ", ".join(fit.omitted_layers)
+            + ")"
+        )
+    text = (
+        "The web page's legend is taller than QGIS's, so this legend was "
+        + (", ".join(done[:-1]) + " and " if len(done) > 1 else "")
+        + done[-1]
+        + " to fit it."
+    )
+    if fit.omitted_layers:
+        text += " Make room around the legend on the layout to keep them."
+    if matched_layout:
+        text += " The layout's legend was changed to match."
+    return text
 
 
 def fit_frame_legend_boxes(
@@ -277,35 +446,40 @@ def fit_frame_legend_boxes(
     frame_id: str,
     layers: Sequence[ExportLayer],
     report: FidelityReportBuilder,
+    *,
+    grow_on_page_height: float | None = None,
+    changes: list[LegendBoxChange] | None = None,
 ) -> CartographSpec:
     """`spec` with every derived legend of `frame_id` fitted to its box, and
-    in `report` each legend that needed more columns or left layers out."""
-    items = []
-    for item in spec.items:
+    in `report` what each legend needed (see `_describe_fit`).
+
+    With `grow_on_page_height` (the page's height in mm) a legend's box may
+    grow (`legend_grow_room`); without it only columns and layers change, as
+    nothing else would carry a taller box to the layout. `changes` collects
+    what changed per legend, for mirroring into the layout."""
+    items = list(spec.items)
+    for index, item in enumerate(items):
         if not (
             isinstance(item, LegendSpec) and item.derived and item.for_ == frame_id
         ):
-            items.append(item)
             continue
-        fitted, fit = fit_legend_to_box(item, layers)
-        items.append(fitted)
-        subject = f"Legend '{item.id.removeprefix('legend_')}'"
-        if fit.omitted_layers:
-            report.approximated(
-                subject,
-                f"The browser's legend is taller than QGIS's, and did not fit "
-                f"its box even in {fit.columns} columns, so it leaves out "
-                f"{fit.omitted_entries} "
-                + ("entry" if fit.omitted_entries == 1 else "entries")
-                + " ("
-                + ", ".join(fit.omitted_layers)
-                + "). Make the legend box taller on the layout to keep them.",
+        room = (
+            legend_grow_room(item, items, grow_on_page_height)
+            if grow_on_page_height is not None
+            else None
+        )
+        fitted, fit = fit_legend_to_box(item, layers, room)
+        if fitted == item:
+            continue
+        items[index] = fitted
+        if changes is not None:
+            changes.append(
+                LegendBoxChange(
+                    item.id, fitted.box, fitted.columns or 1, fit.omitted_layer_ids
+                )
             )
-        elif fit.columns != (item.columns or 1):
-            report.approximated(
-                subject,
-                f"The browser's legend is taller than QGIS's, so it is set in "
-                f"{fit.columns} columns instead of {item.columns or 1} to fit "
-                "its box.",
-            )
+        report.approximated(
+            f"Legend '{item.id.removeprefix('legend_')}'",
+            _describe_fit(item, fit, grow_on_page_height is not None),
+        )
     return replace(spec, items=tuple(items))
