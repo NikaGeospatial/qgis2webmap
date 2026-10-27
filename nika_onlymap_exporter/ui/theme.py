@@ -1387,6 +1387,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     font-weight: 600;
 }}
 
+/* The bar under the Edit tab's text box that drags its height. */
+{d} QFrame[role="heightGrip"] {{
+    background: {p.rule};
+    border: none;
+    border-radius: 3px;
+    margin: 1px 120px;
+}}
+{d} QFrame[role="heightGrip"]:hover {{
+    background: {p.muted};
+}}
+
 /* Checks as lines, in the cartograph's narrow panel. */
 {d} QWidget[role="checksList"] {{
     background: {p.paper};

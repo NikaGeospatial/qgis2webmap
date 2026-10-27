@@ -26,6 +26,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from qgis.core import (
@@ -38,7 +39,7 @@ from qgis.core import (
     QgsLayoutItemScaleBar,
 )
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QEvent, QObject, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, QSettings, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QColor,
     QFont,
@@ -123,6 +124,74 @@ class _QuietSpin(QSpinBox):
 
 
 class _QuietDoubleSpin(QDoubleSpinBox):
+    def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
+        if event is not None:
+            event.ignore()
+
+
+#: The Edit tab's text box: its default, floor and ceiling, in lines of the
+#: panel font, and where the user's own height is remembered (as lines, so a
+#: different font or scaling keeps the same number of lines).
+TEXT_BOX_LINES_DEFAULT = 9
+TEXT_BOX_LINES_MIN = 3
+TEXT_BOX_LINES_MAX = 40
+TEXT_BOX_LINES_SETTING = "qgis2webmap/cartographTextBoxLines"
+
+
+def stored_text_box_lines() -> float:
+    """The remembered height of the text box, in lines; the default when
+    nothing (or nothing usable) is stored."""
+    try:
+        lines = float(
+            QSettings().value(
+                TEXT_BOX_LINES_SETTING, TEXT_BOX_LINES_DEFAULT, type=float
+            )
+        )
+    except (TypeError, ValueError):
+        return float(TEXT_BOX_LINES_DEFAULT)
+    return min(max(lines, TEXT_BOX_LINES_MIN), TEXT_BOX_LINES_MAX)
+
+
+class _HeightGrip(QFrame):
+    """A bar under a box that drags its height, and only its height.
+
+    Emits `dragged(delta)` in pixels while the mouse moves with the button
+    down, and `finished()` once at the release - the caller applies the height
+    live and remembers it once per gesture. Never takes focus or the wheel
+    (the wheel scrolls the panel behind it).
+    """
+
+    grabbed = pyqtSignal()
+    dragged = pyqtSignal(int)
+    finished = pyqtSignal()
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "heightGrip")
+        self.setFixedHeight(8)
+        self.setCursor(Qt.CursorShape.SizeVerCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setToolTip(tr("Drag to change the height of the text box"))
+        self.setAccessibleName(tr("Resize the text box"))
+        self._press_y: int | None = None
+
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
+        if event is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._press_y = int(event.globalPosition().y())
+            self.grabbed.emit()
+            event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
+        if event is not None and self._press_y is not None:
+            self.dragged.emit(int(event.globalPosition().y()) - self._press_y)
+            event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
+        if event is not None and self._press_y is not None:
+            self._press_y = None
+            self.finished.emit()
+            event.accept()
+
     def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
         if event is not None:
             event.ignore()
@@ -358,11 +427,17 @@ class ContextControls(QFrame):
             tr("The words. Press Enter to apply, Shift+Enter for a new line.")
         )
         self.text_edit.setTabChangesFocus(True)
-        self.text_edit.setMinimumHeight(34)
-        self.text_edit.setMaximumHeight(56)
         self.text_edit.textChanged.connect(self._on_text_typed)
         self.text_edit.installEventFilter(self)
         column.addWidget(self.text_edit)
+        self.text_grip = _HeightGrip(self.text_page)
+        self.text_grip.grabbed.connect(self._on_text_grip_grabbed)
+        self.text_grip.dragged.connect(self._on_text_grip_dragged)
+        self.text_grip.finished.connect(self._remember_text_lines)
+        column.addWidget(self.text_grip)
+        self._text_lines = stored_text_box_lines()
+        self._drag_start_lines = self._text_lines
+        self._apply_text_lines()
 
         row = QHBoxLayout()
         row.setSpacing(4)
@@ -615,6 +690,31 @@ class ContextControls(QFrame):
         self._sync_button_styles()
         self._keep_buttons_readable()
 
+    def _text_line_metrics(self) -> tuple[int, int]:
+        """The height of one line of the box, and of its frame and margins."""
+        edit = self.text_edit
+        chrome = 2 * edit.frameWidth() + int(2 * edit.document().documentMargin())
+        return max(1, edit.fontMetrics().lineSpacing()), chrome
+
+    def _apply_text_lines(self) -> None:
+        line, chrome = self._text_line_metrics()
+        self.text_edit.setFixedHeight(round(self._text_lines * line) + chrome)
+
+    def _on_text_grip_grabbed(self) -> None:
+        self._drag_start_lines = self._text_lines
+
+    def _on_text_grip_dragged(self, delta: int) -> None:
+        """The grip moved `delta` px from where the press began."""
+        line, _chrome = self._text_line_metrics()
+        lines = self._drag_start_lines + delta / line
+        self._text_lines = min(max(lines, TEXT_BOX_LINES_MIN), TEXT_BOX_LINES_MAX)
+        self._apply_text_lines()
+
+    def _remember_text_lines(self) -> None:
+        # A height not remembered is no reason to fail a drag.
+        with contextlib.suppress(Exception):
+            QSettings().setValue(TEXT_BOX_LINES_SETTING, self._text_lines)
+
     def _keep_buttons_readable(self) -> None:
         """No button is squeezed below the height its text needs: a short
         window then scrolls the Edit tab instead of cutting the lettering."""
@@ -624,6 +724,7 @@ class ContextControls(QFrame):
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802
         super().showEvent(event)
         # Hints are only right once the theme has polished the buttons.
+        self._apply_text_lines()
         self._keep_buttons_readable()
 
     def _show_nothing_selected(self) -> None:
