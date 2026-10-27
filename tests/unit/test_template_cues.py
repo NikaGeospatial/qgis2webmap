@@ -119,7 +119,7 @@ _ON_PAGE: dict[str, Callable[[TemplatePlan, TemplateInput], bool]] = {
         _shows(plan, "title", plan.title_text) or _shows(plan, "notes", plan.notes_text)
     ),
     "headline": lambda plan, data: _shows(plan, "title", plan.title_text),
-    "key figures": lambda plan, data: any(
+    "statistic callouts": lambda plan, data: any(
         value.strip() and any(t.body == value.strip() for t in _texts(plan))
         for value, _label in data.figures
     ),
@@ -211,12 +211,15 @@ class TestTheReviewedCases:
         assert "Abstract" in hint
         assert "notes" in self._cues("marginalia", VARIANTS["everything"]).includes
 
-    def test_signal_includes_key_figures_only_once_one_is_typed(self):
-        assert "key figures" in self._cues("dashboard", VARIANTS["nothing"]).can_show
-        assert "key figures" in (
+    def test_signal_includes_callouts_only_once_the_page_has_one(self):
+        assert (
+            "statistic callouts"
+            in self._cues("dashboard", VARIANTS["nothing"]).can_show
+        )
+        assert "statistic callouts" in (
             self._cues("dashboard", VARIANTS["blank figures"]).can_show
         )
-        assert "key figures" in (
+        assert "statistic callouts" in (
             self._cues("dashboard", VARIANTS["figures only"]).includes
         )
 

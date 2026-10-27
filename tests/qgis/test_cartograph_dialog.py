@@ -2137,7 +2137,7 @@ class TestCanvasAndImport:
         try:
             _choose_cartograph(dialog)
             dialog._cartograph.create_from_canvas()
-            plan = picked_template.planners[-1]("marginalia", "A4", "auto", figures=())
+            plan = picked_template.planners[-1]("marginalia", "A4", "auto")
             cues = plan_cues(get_template("marginalia"), plan)
             assert plan.title_text == "Parks"
             assert "notes" in cues.can_show
@@ -2145,7 +2145,7 @@ class TestCanvasAndImport:
             metadata.setAbstract("Parks of the west.")
             project.setMetadata(metadata)
             dialog._cartograph.create_from_canvas()
-            plan = picked_template.planners[-1]("marginalia", "A4", "auto", figures=())
+            plan = picked_template.planners[-1]("marginalia", "A4", "auto")
             assert "notes" in plan_cues(get_template("marginalia"), plan).includes
         finally:
             dialog.close()
@@ -2223,14 +2223,9 @@ class TestLayoutTextSizes:
     ) -> None:
         from qgis.PyQt.QtWidgets import QSlider
 
-        from nika_onlymap_exporter.ui.cartograph.template_picker import (
-            TextSizeControls,
-        )
-
         dialog, cartograph, _layout = self._template_dialog(project, picked_template)
         try:
             assert not hasattr(cartograph, "size_controls")
-            assert cartograph.page_section.body.findChildren(TextSizeControls) == []
             assert cartograph.page_section.body.findChildren(QSlider) == []
         finally:
             dialog.close()

@@ -46,21 +46,15 @@ narrow the list, with **Page size** and **Orientation** beside them. Below is
 a scrolling list of the designs: a large preview of each, its name, one line
 on what it is for, and what that page includes for this project. A second,
 quieter line, **Can also show**, lists what the design would add with more
-content - notes from the project's abstract or Signal's key figures; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
+content - notes from the project's abstract or Signal's statistic callouts; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
 for (also listed below). **Create layout** builds the one selected.
 
-The **Text sizes** button beside the buttons opens three sliders, **Title**,
-**Legend** and **Notes**, each a smooth slider from 80% to 130% of the design's
-text size in steps of 1%; the label shows the percent as you drag, and the page
-is redrawn when you let go. The mouse wheel never moves them (it scrolls the
-panel), and a click does not leave one focused; Tab reaches them and the arrow
-keys move them. They apply to every design (the notes size also sets Signal's key
-figures), so a smaller size gives the map more of the page and a larger one
-takes it back. The text never goes under the readable minimum for the page, so
-a smaller size does nothing once that is reached. 100% is the default, and
-the choice is saved with the project. The Layout tab has no such sliders: once a
-layout exists, change its text by selecting, moving or resizing the items in the
-layout preview, or pick the sizes here before creating it.
+The picker only chooses: a design, a page size, an orientation and the map
+framing. What goes on the page is edited on the layout once it exists. Select
+a title, a note or the legend on the page and change its lettering with **A-**
+and **A+**, **B**, alignment and colour in the **Edit** tab; each change is one
+undo step. A project that earlier versions gave Title, Legend or Notes sizes
+keeps showing them on the pages it makes.
 
 ![The template picker: the All, Essentials and Characterful buttons, page size and orientation at the top, and the designs as large previews of the current map, each with its name, a one-line description and what it includes.](images/cartograph-templates.png)
 
@@ -95,12 +89,15 @@ layout preview, or pick the sizes here before creating it.
   page, or for a wide view. *Best for: posters and wall displays.*
 - **Near & Far** - the map with a locator inset that outlines where it is,
   beside the map or below it, whichever shows your view larger. *Best for: maps of a small area that need locating.*
-- **Signal** - a data-led page: the map with up to three key figures you
-  supply. Type them under the list when Signal is selected - a value such as
-  *214* and what it counts, such as *parcels surveyed*. They are saved with
-  the project. With a substantial legend, Signal can arrange the figures in a
-  row or give the key a full-height column to keep its entries readable. With
-  no figures the page becomes the map and its notes. *Best for: data summaries and briefings with key figures.*
+- **Signal** - a data-led page: the map, with up to three optional statistic
+  callouts. A callout is a value such as *214* over what it counts, such as
+  *parcels surveyed*. A new Signal page has none and is the map with its notes
+  and legend; select the layout and use **Edit > Statistic callouts** to add,
+  change or remove them (or select one on the page). Their lettering is the
+  Edit tab's text buttons. Each layout keeps its own callouts, so editing one
+  never changes another. With a substantial legend, Signal arranges the
+  callouts in a row or gives the key a full-height column to keep its entries
+  readable. *Best for: data summaries and briefings with key statistics.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 

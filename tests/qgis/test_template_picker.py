@@ -30,15 +30,19 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QAbstractItemView, QDialog, QWidget
+from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QLineEdit,
+    QSlider,
+    QToolButton,
+    QWidget,
+)
 
 from nika_onlymap_exporter.core import layout_templates
 from nika_onlymap_exporter.core.canvas_cartograph import PREVIEW_LEGEND_LEFT_OUT_KEY
-from nika_onlymap_exporter.core.layout_templates import (
-    CHARACTERFUL,
-    ESSENTIAL,
-    TextSizes,
-)
+from nika_onlymap_exporter.core.layout_templates import CHARACTERFUL, ESSENTIAL
 from nika_onlymap_exporter.ui.cartograph import template_picker
 from nika_onlymap_exporter.ui.cartograph.template_picker import (
     TemplatePicker,
@@ -91,25 +95,18 @@ def fifteen(monkeypatch):
 
 
 class _Renderer:
-    """Flat pages, recording every call; ids in `fail` raise. `figures`
-    holds the key figures each design was last drawn with."""
+    """Flat pages, recording every call; ids in `fail` raise."""
 
     def __init__(self, fail=(), tall=False, left_out=None) -> None:
         self.calls: list[tuple[str, str, str, int]] = []
-        self.figures: dict[str, tuple] = {}
-        self.sizes: dict[str, object] = {}
         self.fail = set(fail)
         self.tall = tall
         #: Legend entries each design's page leaves out, as the real
         #: `template_preview` records them on the image.
         self.left_out: dict[str, int] = dict(left_out or {})
 
-    def __call__(
-        self, template_id, page_size, orientation, width_px, figures=(), sizes=None
-    ):
+    def __call__(self, template_id, page_size, orientation, width_px):
         self.calls.append((template_id, page_size, orientation, width_px))
-        self.figures[template_id] = figures
-        self.sizes[template_id] = sizes
         if template_id in self.fail:
             raise RuntimeError("no")
         tall = orientation == "portrait" or (self.tall and orientation == "auto")
@@ -889,608 +886,109 @@ class TestDirectionAndLength:
             picker.reject()
 
 
-_BLANK = (("", ""), ("", ""), ("", ""))
+class TestTheContentControlsAreGone:
+    """The picker chooses a design, a page size, an orientation and framing.
+    What goes on the page -- text sizes, a Signal page's statistic callouts --
+    is edited on the layout afterwards, so none of it is asked here."""
 
-
-def _typed(qgis_app, picker) -> None:
-    """Let the pause after typing pass, and the pages it asks for draw."""
-    QTest.qWait(template_picker._FIGURES_DELAY_MS + 50)
-    _drain(qgis_app, picker)
-
-
-def _type(picker, row: int, value: str | None = None, label: str | None = None):
-    """Replace a figure's value and/or label as a user would: select all,
-    then type (an empty string is a cleared field)."""
-    group = picker.figures_group
-    for edit, text in ((group.values[row], value), (group.labels[row], label)):
-        if text is None:
-            continue
-        edit.setFocus()
-        edit.selectAll()
-        QTest.keyClick(edit, Qt.Key.Key_Delete)
-        if text:
-            QTest.keyClicks(edit, text)
-
-
-@pytest.fixture
-def figures_project(project):
-    project.setCustomVariables({})
-    yield project
-    project.setCustomVariables({})
-
-
-def _slide(qgis_app, picker, element: str, percent: int) -> None:
-    """Move a size slider to `percent` as the keyboard would, and let the pause
-    after it pass and the pages it asks for draw."""
-    slider = picker.size_controls.sliders[element]
-    slider.setValue(percent)
-    QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
-    _drain(qgis_app, picker)
-
-
-def _wheel(widget, delta: int = -120):
-    """Send `widget` a mouse wheel turn; returns the event, to read whether
-    anything accepted it."""
-    from qgis.PyQt.QtCore import QPoint, QPointF
-    from qgis.PyQt.QtGui import QWheelEvent
-    from qgis.PyQt.QtWidgets import QApplication
-
-    centre = QPointF(widget.width() / 2, widget.height() / 2)
-    event = QWheelEvent(
-        centre,
-        centre,
-        QPoint(0, 0),
-        QPoint(0, delta),
-        Qt.MouseButton.NoButton,
-        Qt.KeyboardModifier.NoModifier,
-        Qt.ScrollPhase.NoScrollPhase,
-        False,
-    )
-    event.setAccepted(True)
-    QApplication.sendEvent(widget, event)
-    return event
-
-
-class TestTextSizeControls:
-    def test_three_keyboard_reachable_percent_sliders(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
+    def test_no_key_figures_or_text_size_widgets(self, qgis_app, tmp_path, fifteen):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
+            _select(picker, "dashboard")
             _shown(qgis_app, picker)
-            controls = picker.size_controls
-            assert not controls.isVisibleTo(picker)
-            controls.toggle.click()
-            assert controls.isVisibleTo(picker)
-            assert list(controls.sliders) == ["title", "legend", "notes"]
-            for name, slider in controls.sliders.items():
-                assert slider.accessibleName() == name.capitalize()
-                assert slider.focusPolicy() == Qt.FocusPolicy.TabFocus
-                assert (slider.minimum(), slider.maximum()) == (80, 130)
-                assert slider.singleStep() == 1
-                assert slider.value() == 100
-                assert slider.accessibleDescription() == "100%"
-                assert controls._captions[name].text() == f"{name.capitalize()}: 100%"
-            assert picker.text_sizes == TextSizes()
+            assert not hasattr(picker, "figures_group")
+            assert not hasattr(picker, "size_controls")
+            assert picker.findChildren(QSlider) == []
+            assert picker.findChildren(QLineEdit) == []
+            named = [
+                w.accessibleName()
+                for w in picker.findChildren(QWidget)
+                if w.accessibleName()
+            ]
+            assert not [n for n in named if n.startswith(("Key figure", "Text size"))]
+            texts = [b.text() for b in picker.findChildren(QToolButton)]
+            assert not [t for t in texts if t.startswith("Text sizes")]
         finally:
             picker.reject()
 
-    def test_keys_step_the_slider_and_the_label_shows_the_percent(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
+    def test_the_footer_is_create_and_cancel(self, qgis_app, tmp_path, fifteen):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
             _shown(qgis_app, picker)
-            picker.size_controls.toggle.click()
-            slider = picker.size_controls.sliders["legend"]
-            slider.setFocus()
-            QTest.keyClick(slider, Qt.Key.Key_Left)
-            assert picker.size_controls._captions["legend"].text() == "Legend: 99%"
-            QTest.keyClick(slider, Qt.Key.Key_Home)
-            assert picker.size_controls._captions["legend"].text() == "Legend: 80%"
-            QTest.keyClick(slider, Qt.Key.Key_PageUp)
-            assert slider.value() == 85
-            assert "85%" in slider.toolTip()
-            assert picker.size_controls.toggle.text() == "Text sizes (changed)"
-            slider.setValue(100)
-            assert picker.size_controls.toggle.text() == "Text sizes"
+            buttons = picker.findChildren(QDialogButtonBox)
+            assert len(buttons) == 1
+            assert [b.text() for b in buttons[0].buttons()] == [
+                "Create layout",
+                "Cancel",
+            ]
+            foot = picker.create_button.parentWidget().geometry()
+            # Only the choice in words shares the line with the two buttons.
+            beside = [
+                w
+                for w in picker.findChildren(QWidget)
+                if w.isVisibleTo(picker)
+                and w.parentWidget() is picker
+                and abs(w.geometry().center().y() - foot.center().y()) < foot.height()
+                and w is not buttons[0]
+            ]
+            assert beside == [picker.selected_label]
         finally:
             picker.reject()
 
-    def test_a_wheel_turn_over_a_slider_changes_nothing_and_is_not_taken(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            picker.size_controls.toggle.click()
-            for slider in picker.size_controls.sliders.values():
-                for delta in (-120, 120):
-                    event = _wheel(slider, delta)
-                    assert slider.value() == 100
-                    # Not accepted: it goes on to scroll the panel behind.
-                    assert not event.isAccepted()
-            assert not picker.size_controls._timer.isActive()
-        finally:
-            picker.reject()
-
-    def test_a_click_does_not_leave_the_slider_focused(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            picker.size_controls.toggle.click()
-            slider = picker.size_controls.sliders["title"]
-            QTest.mouseClick(slider, Qt.MouseButton.LeftButton)
-            assert not slider.hasFocus()
-            assert slider.focusPolicy() == Qt.FocusPolicy.TabFocus
-        finally:
-            picker.reject()
-
-    def test_a_drag_updates_the_label_live_and_applies_once_on_release(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            controls = picker.size_controls
-            controls.toggle.click()
-            applied: list[TextSizes] = []
-            controls.changed.connect(lambda: applied.append(controls.sizes()))
-            slider = controls.sliders["notes"]
-            slider.setSliderDown(True)
-            for value in (95, 107, 120, 107):
-                slider.setValue(value)
-                assert controls._captions["notes"].text() == f"Notes: {value}%"
-            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
-            assert applied == []
-            slider.setSliderDown(False)
-            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
-            assert applied == [TextSizes(notes=107)]
-        finally:
-            picker.reject()
-
-    def test_a_change_makes_a_new_page_key_and_redraws_once_after_the_pause(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
+    def test_the_renderer_is_asked_only_for_the_page(self, qgis_app, tmp_path, fifteen):
+        """No figures or sizes reach the preview: the stand-in renderer takes
+        four arguments, so any extra would raise and fail the card."""
         renderer = _Renderer()
-        picker = TemplatePicker(
-            renderer, qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            _drain(qgis_app, picker)
-            before = picker._key("classic")
-            drawn = len(renderer.calls)
-            slider = picker.size_controls.sliders["legend"]
-            # Moving through the values changes nothing until it rests.
-            for value in (107, 130):
-                slider.setValue(value)
-            assert picker._key("classic") == before
-            assert len(renderer.calls) == drawn
-            QTest.qWait(template_picker._SIZES_DELAY_MS + 50)
-            _drain(qgis_app, picker)
-            after = picker._key("classic")
-            assert after != before
-            assert after[6] == TextSizes(legend=130)
-            assert len(renderer.calls) > drawn
-            assert renderer.sizes["classic"] == TextSizes(legend=130)
-        finally:
-            picker.reject()
-
-    def test_an_intermediate_percent_is_drawn_and_scales_the_page(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        renderer = _Renderer()
-        picker = TemplatePicker(
-            renderer, qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            _drain(qgis_app, picker)
-            _slide(qgis_app, picker, "title", 107)
-            assert renderer.sizes["classic"] == TextSizes(title=107)
-            assert TextSizes(title=107).apply(_PROJECT).title_scale == 1.07
-        finally:
-            picker.reject()
-
-    def test_accept_saves_to_the_project_and_a_new_picker_reads_it_back(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            # Accepted straight after the move, before the pause has passed.
-            picker.size_controls.sliders["title"].setValue(90)
-            picker.size_controls.sliders["notes"].setValue(130)
-            picker.accept()
-        finally:
-            picker.reject()
-        variables = figures_project.customVariables()
-        assert variables["nika_size_title"] == "90"
-        assert variables["nika_size_notes"] == "130"
-        assert "nika_size_legend" not in variables
-        reopened = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            assert reopened.text_sizes == TextSizes(90, 100, 130)
-            assert reopened.size_controls.sliders["notes"].value() == 130
-        finally:
-            reopened.reject()
-
-    def test_a_project_saved_with_step_ids_opens_at_their_percent(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        figures_project.setCustomVariables(
-            {"nika_size_title": "small", "nika_size_notes": "larger"}
-        )
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            assert picker.text_sizes == TextSizes(90, 100, 130)
-            assert picker.size_controls.sliders["title"].value() == 90
-            assert picker.size_controls.sliders["notes"].value() == 130
-        finally:
-            picker.reject()
-
-    def test_cancel_saves_no_size(self, qgis_app, tmp_path, fifteen, figures_project):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            picker.size_controls.sliders["title"].setValue(130)
-            picker.cancel_button.click()
-        finally:
-            picker.reject()
-        assert "nika_size_title" not in figures_project.customVariables()
-
-
-class TestKeyFigures:
-    def test_only_a_design_that_takes_figures_shows_them(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            assert picker.template_id == "classic"
-            assert picker.figures_group.isHidden()
-            _select(picker, "dashboard")
-            assert not picker.figures_group.isHidden()
-            assert picker.figures_group.isVisible()
-            _select(picker, "poster")
-            assert picker.figures_group.isHidden()
-        finally:
-            picker.reject()
-
-    def test_the_design_says_so_not_its_id(
-        self, qgis_app, tmp_path, fifteen, figures_project, monkeypatch
-    ):
-        """A declared property, not the id string: another design that
-        takes figures shows them, Signal without the property does not."""
-        designs = tuple(
-            dataclasses.replace(t, takes_figures=t.id == "poster")
-            for t in layout_templates.TEMPLATES
-        )
-        monkeypatch.setattr(layout_templates, "TEMPLATES", designs)
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _shown(qgis_app, picker)
-            _select(picker, "poster")
-            assert not picker.figures_group.isHidden()
-            _select(picker, "dashboard")
-            assert picker.figures_group.isHidden()
-        finally:
-            picker.reject()
-
-    def test_signal_is_the_registry_design_that_takes_figures(self):
-        takes = [t.id for t in layout_templates.TEMPLATES if t.takes_figures]
-        assert takes == ["dashboard"]
-
-    def test_the_fields_start_from_the_project(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        figures_project.setCustomVariables(
-            {"nika_figure_1": "214 | parcels surveyed", "nika_figure_3": "12 km"}
-        )
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            group = picker.figures_group
-            assert [e.text() for e in group.values] == ["214", "", "12 km"]
-            assert [e.text() for e in group.labels] == ["parcels surveyed", "", ""]
-            assert picker.figures == (
-                ("214", "parcels surveyed"),
-                ("", ""),
-                ("12 km", ""),
-            )
-        finally:
-            picker.reject()
-
-    def test_typing_redraws_signal_after_a_pause_and_nothing_else(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        renderer = _Renderer()
-        picker = TemplatePicker(
-            renderer, qsettings=_settings(tmp_path), project=figures_project
-        )
+        picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
         try:
             _select(picker, "dashboard")
             _shown(qgis_app, picker)
             _drain(qgis_app, picker)
-            assert renderer.figures["dashboard"] == _BLANK
-            # A design without figures is drawn without them.
-            others = [t for t in renderer.figures if t != "dashboard"]
-            assert others
-            assert all(renderer.figures[t] == () for t in others)
-            renderer.calls.clear()
-            _type(picker, 0, "214", "parcels surveyed")
-            # Not drawn per keystroke...
-            qgis_app.processEvents()
-            assert renderer.calls == []
-            # ...but once typing pauses, only Signal, with what was typed.
-            _typed(qgis_app, picker)
-            assert renderer.ids == ["dashboard"]
-            assert renderer.figures["dashboard"] == (
-                ("214", "parcels surveyed"),
-                ("", ""),
-                ("", ""),
-            )
-            assert picker.rows["dashboard"].drawn
-            # One page per design and page setting, not one per pause.
-            _type(picker, 1, "3")
-            _typed(qgis_app, picker)
-            signal_pages = [k for k in picker._pages._pages if k[0] == "dashboard"]
-            assert len(signal_pages) == 1
-            assert signal_pages[0][5][1] == ("3", "")
+            assert "dashboard" in renderer.ids
+            assert picker._failed == set()
         finally:
             picker.reject()
 
-    def test_typed_figures_reach_the_planned_page(
-        self, qgis_app, tmp_path, fifteen, figures_project, monkeypatch
+    def test_older_project_values_are_left_as_they_were(
+        self, qgis_app, tmp_path, fifteen, project
     ):
-        """End to end through the real preview: what is typed is what the
-        Signal page's `TemplateInput.figures` gets, and what it draws."""
-        from cartograph_fixtures import UTM, build_parcels_layer
-
-        from nika_onlymap_exporter.core import canvas_cartograph
-
-        layer = build_parcels_layer()
-        figures_project.addMapLayer(layer)
-        view = layer.extent()
-        planned: list[tuple] = []
-        plan = canvas_cartograph.plan_template
-
-        def recording(template_id, data):
-            result = plan(template_id, data)
-            if template_id == "dashboard":
-                texts = {
-                    i.id: i.body
-                    for i in result.items
-                    if getattr(i, "id", "").startswith("figure-")
-                }
-                planned.append((tuple(data.figures), texts))
-            return result
-
-        monkeypatch.setattr(canvas_cartograph, "plan_template", recording)
-        flat = _Renderer()
-
-        def render(
-            template_id, page_size, orientation, width_px, figures=(), sizes=None
-        ):
-            if template_id != "dashboard":
-                return flat(template_id, page_size, orientation, width_px)
-            return canvas_cartograph.template_preview(
-                view,
-                UTM,
-                [layer],
-                figures_project,
-                template_id=template_id,
-                width_px=width_px,
-                page_size=page_size,
-                orientation=orientation,
-                figures=figures,
-            )
-
+        before = {
+            "nika_figure_1": "214 | parcels",
+            "nika_size_title": "90",
+            "nika_size_notes": "130",
+        }
+        project.setCustomVariables(dict(before))
         picker = TemplatePicker(
-            render, qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _drain(qgis_app, picker)
-            _type(picker, 0, "214", "parcels surveyed")
-            _type(picker, 1, "", "a label alone")
-            _type(picker, 2, "12 km")
-            _typed(qgis_app, picker)
-            figures, texts = planned[-1]
-            assert figures == (
-                ("214", "parcels surveyed"),
-                ("", "a label alone"),
-                ("12 km", ""),
-            )
-            # The value alone is drawn; the label alone is left out.
-            assert texts == {
-                "figure-0": "214",
-                "figure-0-label": "parcels surveyed",
-                "figure-1": "12 km",
-            }
-            assert picker.rows["dashboard"].drawn
-        finally:
-            picker.reject()
-
-    def test_creating_saves_them_to_the_project(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        from nika_onlymap_exporter.core.canvas_cartograph import project_figures
-
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _type(picker, 0, "214", "parcels surveyed")
-            _type(picker, 2, "12 km")
-            picker.create_button.click()
-            assert picker.result() == 1
-            variables = figures_project.customVariables()
-            assert variables["nika_figure_1"] == "214 | parcels surveyed"
-            assert "nika_figure_2" not in variables
-            assert variables["nika_figure_3"] == "12 km"
-            assert project_figures(figures_project) == (
-                ("214", "parcels surveyed"),
-                ("12 km", ""),
-            )
-        finally:
-            picker.reject()
-
-    def test_a_cleared_row_removes_its_variable(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        figures_project.setCustomVariables(
-            {"nika_figure_1": "214 | parcels surveyed", "nika_figure_2": "9 | wells"}
-        )
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _type(picker, 0, "", "")
-            picker.accept()
-            variables = figures_project.customVariables()
-            assert "nika_figure_1" not in variables
-            assert variables["nika_figure_2"] == "9 | wells"
-        finally:
-            picker.reject()
-
-    def test_a_value_alone_is_kept_a_label_alone_is_not_drawn(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        """A value without a label is a figure; a label without a value is
-        kept for the user to finish, but never reaches the page."""
-        from nika_onlymap_exporter.core.canvas_cartograph import project_figures
-        from nika_onlymap_exporter.core.layout_templates import (
-            TemplateInput,
-            plan_template,
-        )
-
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _type(picker, 0, "12 km")
-            _type(picker, 1, "", "a label alone")
-            figures = picker.figures
-            picker.accept()
-            variables = figures_project.customVariables()
-            assert variables["nika_figure_1"] == "12 km"
-            assert variables["nika_figure_2"] == "| a label alone"
-            assert project_figures(figures_project) == (("12 km", ""),)
-            plan = plan_template(
-                "dashboard",
-                TemplateInput(
-                    extent_width=1000.0,
-                    extent_height=700.0,
-                    crs_is_geographic=False,
-                    figures=figures,
-                ),
-            )
-            texts = {
-                i.id: i.body
-                for i in plan.items
-                if getattr(i, "id", "").startswith("figure-")
-            }
-            assert texts == {"figure-0": "12 km"}
-        finally:
-            picker.reject()
-
-    def test_cancel_saves_nothing(self, qgis_app, tmp_path, fifteen, figures_project):
-        figures_project.setCustomVariables({"nika_figure_1": "214 | parcels"})
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _type(picker, 0, "999", "")
-            picker.cancel_button.click()
-            assert figures_project.customVariables() == {
-                "nika_figure_1": "214 | parcels"
-            }
-        finally:
-            picker.reject()
-
-    def test_unchanged_figures_leave_the_project_untouched(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        """Nothing typed, nothing written: not even a variable stored in a
-        looser form than ours is rewritten."""
-        variables = {"nika_figure_1": "214|parcels", "nika_template_framing": "fill"}
-        figures_project.setCustomVariables(variables)
-        figures_project.setDirty(False)
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
+            _Renderer(), qsettings=_settings(tmp_path), project=project
         )
         try:
             _select(picker, "dashboard")
             picker.accept()
-            assert not figures_project.isDirty()
-            assert figures_project.customVariables() == variables
         finally:
             picker.reject()
+        variables = project.customVariables()
+        assert {k: variables[k] for k in before} == before
+        project.setCustomVariables({})
 
-    def test_the_chosen_card_stays_in_view_as_the_fields_appear(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
+    def test_signal_says_what_its_callouts_are(self, qgis_app, tmp_path):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
-            _shown(qgis_app, picker, QSize(860, 560))
-            _drain(qgis_app, picker)
-            item = picker._items["dashboard"]
-            view = picker.template_list
-            view.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtBottom)
-            qgis_app.processEvents()
-            assert view.viewport().rect().contains(view.visualItemRect(item))
-            _select(picker, "dashboard")
-            for _ in range(3):
-                qgis_app.processEvents()
-            assert not picker.figures_group.isHidden()
-            assert view.viewport().rect().contains(view.visualItemRect(item))
+            signal = picker.rows["dashboard"]
+            text = " ".join(
+                label.text() for label in signal.findChildren(QLabel) if label.text()
+            )
+            assert "optional statistic callouts" in text
+            assert "Edit tab" in text
+            assert "statistic callouts" in signal.supports.text()
         finally:
             picker.reject()
 
     def test_opening_on_signal_in_a_small_dialog_shows_its_card(
-        self, qgis_app, tmp_path, fifteen, figures_project
+        self, qgis_app, tmp_path, fifteen
     ):
         settings = _settings(tmp_path)
         settings.setValue(template_picker.SETTINGS_KEY, "dashboard|A4|auto")
-        picker = TemplatePicker(
-            _Renderer(), qsettings=settings, project=figures_project
-        )
+        picker = TemplatePicker(_Renderer(), qsettings=settings)
         try:
             _shown(qgis_app, picker, QSize(640, 480))
             _drain(qgis_app, picker)
@@ -1500,18 +998,8 @@ class TestKeyFigures:
         finally:
             picker.reject()
 
-    @pytest.mark.parametrize(
-        "font_scale",
-        [1.0, 1.25],
-    )
-    def test_big_fonts_keep_the_cards(
-        self,
-        qgis_app,
-        tmp_path,
-        fifteen,
-        figures_project,
-        font_scale,
-    ):
+    @pytest.mark.parametrize("font_scale", [1.0, 1.25])
+    def test_big_fonts_keep_the_cards(self, qgis_app, tmp_path, fifteen, font_scale):
         """Larger text widens the controls; the page keeps its share of the
         card and a card still fits the list."""
         original = qgis_app.font()
@@ -1525,9 +1013,7 @@ class TestKeyFigures:
         try:
             settings = _settings(tmp_path)
             settings.setValue(template_picker.SETTINGS_KEY, "dashboard|A4|auto")
-            small = TemplatePicker(
-                _Renderer(), qsettings=settings, project=figures_project
-            )
+            small = TemplatePicker(_Renderer(), qsettings=settings)
             try:
                 _shown(qgis_app, small, QSize(640, 480))
                 _drain(qgis_app, small)
@@ -1549,55 +1035,8 @@ class TestKeyFigures:
         finally:
             qgis_app.setFont(original)
 
-    def test_they_come_back_when_the_picker_opens_again(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        first = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(first, "dashboard")
-            _shown(qgis_app, first)
-            _type(first, 0, "214", "parcels surveyed")
-            _type(first, 1, "3")
-            first.accept()
-        finally:
-            first.reject()
-        again = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            # The remembered design is Signal, and its fields are filled.
-            assert again.template_id == "dashboard"
-            assert not again.figures_group.isHidden()
-            assert again.figures == (
-                ("214", "parcels surveyed"),
-                ("3", ""),
-                ("", ""),
-            )
-        finally:
-            again.reject()
-
-    def test_a_bar_cannot_be_typed_into_a_value(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            _type(picker, 0, "1|2", "a | b")
-            assert picker.figures[0] == ("12", "a | b")
-        finally:
-            picker.reject()
-
-    def test_tab_runs_list_figures_sizes_buttons(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
+    def test_tab_runs_list_request_card_buttons(self, qgis_app, tmp_path, fifteen):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
             _select(picker, "dashboard")
             _shown(qgis_app, picker)
@@ -1605,81 +1044,28 @@ class TestKeyFigures:
             picker.template_list.setFocus(Qt.FocusReason.TabFocusReason)
             qgis_app.processEvents()
             seen = []
-            for _ in range(9):
+            for _ in range(2):
                 QTest.keyClick(picker.focusWidget(), Qt.Key.Key_Tab)
                 qgis_app.processEvents()
                 seen.append(picker.focusWidget())
-            group = picker.figures_group
-            fields = [edit for pair in zip(group.values, group.labels) for edit in pair]
-            # The text sizes are closed: their header, not the sliders.
-            toggle = picker.size_controls.toggle
-            assert seen == [
-                picker.request_button,
-                *fields,
-                toggle,
-                picker.create_button,
-            ]
-            for edit in fields:
-                assert edit.accessibleName().startswith("Key figure ")
+            assert seen == [picker.request_button, picker.create_button]
         finally:
             picker.reject()
 
     @pytest.mark.parametrize("screen", [(860, 560), (640, 480)])
-    def test_signal_with_its_figures_fits_a_small_dialog(
-        self, qgis_app, tmp_path, fifteen, figures_project, screen
-    ):
-        """With the fields showing, the dialog still fits, the list keeps
-        room for a card, and every field is wide enough to type in."""
-        picker = TemplatePicker(
-            _Renderer(), qsettings=_settings(tmp_path), project=figures_project
-        )
+    def test_signal_fits_a_small_dialog(self, qgis_app, tmp_path, fifteen, screen):
+        picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
             _select(picker, "dashboard")
             _shown(qgis_app, picker, QSize(*screen))
             needed = picker.minimumSizeHint()
             assert needed.width() <= screen[0]
             assert needed.height() <= screen[1]
-            group = picker.figures_group
-            assert (
-                group.geometry().bottom()
-                < picker.create_button.mapTo(
-                    picker, picker.create_button.rect().topLeft()
-                ).y()
-            )
             assert picker.template_list.height() >= 140
-            for edit in [*group.values, *group.labels]:
-                assert edit.width() >= 48
-                assert edit.mapTo(group, edit.rect().topRight()).x() < group.width()
-            note = group.note
-            assert note.height() >= note.heightForWidth(note.width())
-            # The chosen card is in the list's view.
             card = picker.template_list.visualItemRect(picker._items["dashboard"])
             assert card.intersects(picker.template_list.viewport().rect())
         finally:
             picker.reject()
-
-    def test_right_to_left_mirrors_the_fields(
-        self, qgis_app, tmp_path, fifteen, figures_project
-    ):
-        host = QWidget()
-        host.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        picker = TemplatePicker(
-            _Renderer(),
-            qsettings=_settings(tmp_path),
-            project=figures_project,
-            parent=host,
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            group = picker.figures_group
-            assert group.isRightToLeft()
-            # The first figure starts on the right, its value before its label.
-            assert group.values[0].x() > group.labels[0].x()
-            assert group.labels[0].x() > group.values[1].x()
-        finally:
-            picker.reject()
-            host.deleteLater()
 
 
 # ---- What a card says it includes ------------------------------------------
@@ -1697,19 +1083,12 @@ _PROJECT = layout_templates.TemplateInput(
 def _planner(data, calls: list | None = None):
     """The controller's planner for a project described by `data`."""
 
-    def plan(template_id, page_size, orientation, *, figures, sizes=None):
+    def plan(template_id, page_size, orientation):
         if calls is not None:
-            calls.append((template_id, page_size, orientation, figures))
+            calls.append((template_id, page_size, orientation))
         return layout_templates.plan_template(
             template_id,
-            (sizes or TextSizes()).apply(
-                dataclasses.replace(
-                    data,
-                    page_size=page_size,
-                    orientation=orientation,
-                    figures=tuple(figures),
-                )
-            ),
+            dataclasses.replace(data, page_size=page_size, orientation=orientation),
         )
 
     return plan
@@ -1746,8 +1125,8 @@ class TestTheCues:
             assert "sheet number" not in ledger.includes.text()
             assert "atlas" in ledger.supports.toolTip()
             signal = picker.rows["dashboard"]
-            assert "key figures" in signal.supports.text()
-            assert "Key figures fields" in signal.supports.toolTip()
+            assert "statistic callouts" in signal.supports.text()
+            assert "Edit tab" in signal.supports.toolTip()
             # Always on the page: never offered.
             assert (
                 picker.rows["locator"].includes.text().startswith("Includes: locator")
@@ -1775,35 +1154,6 @@ class TestTheCues:
         finally:
             picker.reject()
 
-    def test_typed_figures_move_key_figures_into_includes(
-        self, qgis_app, tmp_path, figures_project
-    ):
-        picker = TemplatePicker(
-            _Renderer(),
-            qsettings=_settings(tmp_path),
-            project=figures_project,
-            planner=_planner(_PROJECT),
-        )
-        try:
-            _select(picker, "dashboard")
-            _shown(qgis_app, picker)
-            signal = picker.rows["dashboard"]
-            assert "key figures" not in signal.includes.text()
-            _type(picker, 0, "214", "parcels surveyed")
-            _typed(qgis_app, picker)
-            assert signal.includes.text().startswith("Includes: key figures")
-            assert "key figures" not in signal.supports.text()
-            spoken = picker._items["dashboard"].data(
-                Qt.ItemDataRole.AccessibleDescriptionRole
-            )
-            assert spoken.startswith("Includes: key figures")
-            # A label alone is no figure: offered again.
-            _type(picker, 0, "", "parcels surveyed")
-            _typed(qgis_app, picker)
-            assert "key figures" in signal.supports.text()
-        finally:
-            picker.reject()
-
     def test_each_page_setting_is_planned_once(self, qgis_app, tmp_path):
         calls: list = []
         picker = TemplatePicker(
@@ -1825,7 +1175,7 @@ class TestTheCues:
     def test_a_page_the_planner_cannot_lay_out_keeps_the_safe_cues(
         self, qgis_app, tmp_path
     ):
-        def failing(template_id, page_size, orientation, *, figures, sizes=None):
+        def failing(template_id, page_size, orientation):
             raise ValueError("no")
 
         picker = TemplatePicker(
@@ -2044,9 +1394,7 @@ class TestOpeningLeavesTheProject:
         project.setDirty(False)
         layouts = list(project.layoutManager().layouts())
 
-        def render(
-            template_id, page_size, orientation, width_px, figures=(), sizes=None
-        ):
+        def render(template_id, page_size, orientation, width_px):
             return canvas_cartograph.template_preview(
                 layer.extent(),
                 UTM,
@@ -2056,7 +1404,6 @@ class TestOpeningLeavesTheProject:
                 width_px=width_px,
                 page_size=page_size,
                 orientation=orientation,
-                figures=figures,
             )
 
         picker = TemplatePicker(render, qsettings=_settings(tmp_path), project=project)
@@ -2107,9 +1454,7 @@ class _SlowRenderer:
         self.started: list[tuple[str, str]] = []
         self.pending: list[_Pending] = []
 
-    def __call__(
-        self, template_id, page_size, orientation, width_px, figures=(), sizes=None
-    ):
+    def __call__(self, template_id, page_size, orientation, width_px):
         self.started.append((template_id, page_size))
         pending = _Pending(width_px, self.delay_ms)
         self.pending.append(pending)

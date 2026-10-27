@@ -66,7 +66,7 @@ from ...core.fidelity_summary import (
     strip_message,
     summarise,
 )
-from ...core.layout_templates import TextSizes, get_template
+from ...core.layout_templates import get_template
 from ...core.portable_names import avoid_windows_reserved
 from ...core.print_settings import PrintSettings, apply_to_spec
 from ...core.save_folders import cartographs_folder, unused_path
@@ -754,36 +754,17 @@ class CartographController:
         except Exception:  # the cards then say only what every page has
             base_input = None
 
-        def plan(
-            template_id: str,
-            page_size: str,
-            orientation: str,
-            *,
-            figures: Sequence[tuple[str, str]],
-            sizes: TextSizes | None = None,
-        ):
+        def plan(template_id: str, page_size: str, orientation: str):
             if base_input is None:
                 raise ValueError("the canvas could not be read")
             return plan_template(
                 template_id,
-                (sizes or TextSizes()).apply(
-                    dataclasses.replace(
-                        base_input,
-                        page_size=page_size,
-                        orientation=orientation,
-                        figures=tuple(figures),
-                    )
+                dataclasses.replace(
+                    base_input, page_size=page_size, orientation=orientation
                 ),
             )
 
-        def render(
-            template_id: str,
-            page_size: str,
-            orientation: str,
-            width_px: int,
-            figures: Sequence[tuple[str, str]] | None = None,
-            sizes: TextSizes | None = None,
-        ):
+        def render(template_id: str, page_size: str, orientation: str, width_px: int):
             return template_preview_async(
                 settings.extent(),
                 settings.destinationCrs(),
@@ -795,12 +776,10 @@ class CartographController:
                 page_size=page_size,
                 orientation=orientation,
                 placeholders=placeholders,
-                figures=figures,
-                text_sizes=sizes,
             )
 
-        # The picker saves the key figures and text sizes chosen in it to the project
-        # as it accepts, so the layout built next reads them from there.
+        # The picker saves the map framing chosen in it to the project as it
+        # accepts, so the layout built next reads it from there.
         choice = ask_template(
             render,
             parent=self.dialog,

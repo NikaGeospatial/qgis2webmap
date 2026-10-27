@@ -1546,24 +1546,6 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QLabel[role="templateFailureText"] {{
     color: {p.ink};
 }}
-/* The chosen design's key figures, under the list: a card like the rows. */
-{d} QFrame[role="keyFigures"] {{
-    background: {p.paper};
-    border: 1px solid {p.rule};
-    border-radius: 8px;
-}}
-
-/* The text size sliders: a transparent 2 px border that the keyboard's
-   focus ring colours, so nothing moves when focus arrives. */
-{d} QSlider {{
-    border: 2px solid transparent;
-    border-radius: 4px;
-    min-height: 22px;
-}}
-{d} QSlider:focus {{
-    border-color: {p.link};
-}}
-
 /* A one-line notice across the top: the language offer. */
 {d} QFrame[role="notice"] {{
     background: {p.accent_soft};

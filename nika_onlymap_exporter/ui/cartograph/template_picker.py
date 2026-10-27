@@ -4,11 +4,9 @@ with automatic current-map previews while rendering stays quick.
 The picker only chooses -- a template, a page size and an orientation -- and
 the controller builds the layout (`core/canvas_cartograph.py`). Each preview
 is the real page QGIS would build, drawn by QGIS (`template_preview`), so
-what the thumbnail shows is what the layout will be. The one thing it also
-writes is a design's key figures, typed under the list and saved to the
-project's variables as it accepts, where the layout then reads them. The
-other is the Title, Legend and Notes sizes in percent (`TextSizes`), kept the same
-way.
+what the thumbnail shows is what the layout will be. What goes on the page --
+the text, its sizes, a Signal page's statistic callouts -- is edited on the
+layout afterwards, in the dialog's Edit tab, not here.
 
 **Previews draw one at a time** on a zero-length timer: a heavy project can
 take a moment per page, and drawing them all before the dialog appears would
@@ -31,8 +29,8 @@ a request-form link, never a design that can be selected or created.
 
 **What a card says it includes** is checked against the page this project
 gets (`core/template_cues.py`): "Includes" lists what the page shows, "Can
-also show" what the design would show with more content -- notes, key
-figures, a source line -- with a tooltip saying where it comes from.
+also show" what the design would show with more content -- notes, a source
+line -- with a tooltip saying where it comes from.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -43,7 +41,7 @@ from __future__ import annotations
 import contextlib
 import time
 from collections import OrderedDict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import Protocol
 
 from qgis.core import QgsProject
@@ -52,7 +50,6 @@ from qgis.PyQt.QtCore import (
     QObject,
     QRect,
     QRectF,
-    QRegularExpression,
     QSettings,
     QSize,
     Qt,
@@ -70,10 +67,8 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QPen,
     QPixmap,
-    QRegularExpressionValidator,
     QResizeEvent,
     QShowEvent,
-    QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
@@ -85,12 +80,10 @@ from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListView,
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QSlider,
     QStackedLayout,
     QStyle,
     QToolButton,
@@ -100,25 +93,17 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import layout_templates
 from ...core.canvas_cartograph import (
-    FIGURE_VARIABLES,
     PREVIEW_LEGEND_LEFT_OUT_KEY,
     PREVIEW_LOCATOR_NO_CONTEXT_KEY,
     PendingPreview,
-    project_figure_rows,
-    project_text_sizes,
-    set_project_figures,
-    set_project_text_sizes,
 )
 from ...core.layout_templates import (
     CHARACTERFUL,
     ESSENTIAL,
-    MAX_TEXT_PERCENT,
-    MIN_TEXT_PERCENT,
     PAGE_SIZE_ORDER,
     LayoutTemplate,
     TemplateInput,
     TemplatePlan,
-    TextSizes,
 )
 from ...core.template_cues import CardCues, declared_cues, plan_cues
 from ...core.template_framing import (
@@ -203,30 +188,13 @@ _FILTERS = (
     (CHARACTERFUL, N_("Characterful")),
 )
 
-#: Key figures as the picker's rows hold them: one (value, label) pair per
-#: `FIGURE_VARIABLES` slot, blank ones included.
-Figures = tuple[tuple[str, str], ...]
-_NO_FIGURES: Figures = (("", ""),) * len(FIGURE_VARIABLES)
-#: How long typing in a figure pauses before the page is drawn again.
-_FIGURES_DELAY_MS = 350
-#: Long enough for any real figure; longer would no longer fit its block.
-_FIGURE_VALUE_MAX = 24
-_FIGURE_LABEL_MAX = 80
-#: How long a size slider rests before the pages are drawn again.
-_SIZES_DELAY_MS = 250
-#: The widest a value's field grows, in logical pixels.
-_FIGURE_VALUE_WIDTH = 160
-
 
 class PreviewRenderer(Protocol):
-    """`render(template_id, page_size, orientation, width_px, figures=...,
-    sizes=...)`
+    """`render(template_id, page_size, orientation, width_px)`
     -> the preview, or `None` when it cannot be drawn; or a pending preview
     (`canvas_cartograph.PendingPreview`: a `finished` signal carrying the
     image or `None`, and `cancel()`), drawn in the background while the
-    picker stays usable. `figures` are the key figure rows as typed for a
-    design that takes them, `()` for the rest; `sizes` the title, legend and
-    notes steps chosen."""
+    picker stays usable."""
 
     def __call__(
         self,
@@ -234,14 +202,11 @@ class PreviewRenderer(Protocol):
         page_size: str,
         orientation: str,
         width_px: int,
-        *,
-        figures: Figures,
-        sizes: TextSizes,
     ) -> QImage | PendingPreview | None: ...
 
 
 class PreviewPlanner(Protocol):
-    """`plan(template_id, page_size, orientation, figures=..., sizes=...)` -> the page
+    """`plan(template_id, page_size, orientation)` -> the page
     `template_id` makes of this project, as the planner lays it out (what
     the preview draws), for the card's cues. Cheap next to drawing it."""
 
@@ -250,15 +215,11 @@ class PreviewPlanner(Protocol):
         template_id: str,
         page_size: str,
         orientation: str,
-        *,
-        figures: Figures,
-        sizes: TextSizes,
     ) -> TemplatePlan: ...
 
 
-#: (template, page size, orientation, width, canvas, figures drawn, text
-#: sizes).
-_PageKey = tuple[str, str, str, int, str, Figures, TextSizes, str]
+#: (template, page size, orientation, width, canvas, map framing).
+_PageKey = tuple[str, str, str, int, str, str]
 #: Where in a `_PageKey` the canvas state is.
 _CANVAS = 4
 
@@ -314,13 +275,6 @@ class _PageCache:
 
     def __contains__(self, key: object) -> bool:
         return key in self._pages
-
-    def drop_variants(self, key: _PageKey) -> None:
-        """Forget the pages that differ from `key` only in their figures: a
-        design's page is kept for the figures typed now, not for every one
-        typed on the way there."""
-        for other in [k for k in self._pages if k[:5] == key[:5] and k != key]:
-            self._drop(other)
 
 
 #: Shared by every picker opened with the same `canvas_key`.
@@ -666,240 +620,6 @@ def cue_description(cues: CardCues) -> str:
     return "\n".join(part for part in (*cue_lines(cues), cue_hints(cues)) if part)
 
 
-class _KeyFigures(QFrame):
-    """The "Key figures" fields under the list, for a design that draws key
-    figures: three figures side by side, each a value and what it counts,
-    and a line saying they are optional and saved with the project.
-
-    `edited` fires on every keystroke; the picker waits for a pause before
-    it draws the page again."""
-
-    edited = pyqtSignal()
-
-    def __init__(self, rows: Figures, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setProperty("role", "keyFigures")
-        self.setAccessibleName(tr("Key figures"))
-        box = QVBoxLayout(self)
-        box.setContentsMargins(12, 8, 12, 8)
-        box.setSpacing(4)
-        heading = QLabel(tr("Key figures"), self)
-        heading.setProperty("role", "panelHeading")
-        heading.setWordWrap(True)
-        box.addWidget(heading)
-        fields = QHBoxLayout()
-        fields.setSpacing(6)
-        # A bar would split the value when it is read back ("value | label").
-        no_bar = QRegularExpression("[^|]*")
-        self.values: list[QLineEdit] = []
-        self.labels: list[QLineEdit] = []
-        for index in range(len(FIGURE_VARIABLES)):
-            if index:
-                fields.addSpacing(10)
-            value = QLineEdit(self)
-            value.setPlaceholderText(tr("Value"))
-            value.setToolTip(tr("The figure itself, such as 214"))
-            value.setAccessibleName(tr("Key figure {n}: value").format(n=index + 1))
-            value.setValidator(QRegularExpressionValidator(no_bar, value))
-            value.setMaxLength(_FIGURE_VALUE_MAX)
-            label = QLineEdit(self)
-            label.setPlaceholderText(tr("Label"))
-            label.setToolTip(tr("What it counts, such as parcels surveyed"))
-            label.setAccessibleName(tr("Key figure {n}: label").format(n=index + 1))
-            label.setMaxLength(_FIGURE_LABEL_MAX)
-            for edit in (value, label):
-                # Narrow enough for the smallest dialog; the stretch shares
-                # the rest, a label getting more room than its value.
-                edit.setMinimumWidth(48)
-                edit.textEdited.connect(self.edited)
-            # A value is short; past this its field only adds blank room.
-            value.setMaximumWidth(_FIGURE_VALUE_WIDTH)
-            fields.addWidget(value, 1)
-            fields.addWidget(label, 2)
-            self.values.append(value)
-            self.labels.append(label)
-        box.addLayout(fields)
-        self.note = QLabel(
-            tr(
-                "Optional. A label without a value is left out. Figures are "
-                "saved with the project."
-            ),
-            self,
-        )
-        self.note.setProperty("role", "hint")
-        self.note.setWordWrap(True)
-        box.addWidget(self.note)
-        self.set_rows(rows)
-
-    def rows(self) -> Figures:
-        """The figures as typed, (value, label) per slot, trimmed."""
-        return tuple(
-            (value.text().strip(), label.text().strip())
-            for value, label in zip(self.values, self.labels)
-        )
-
-    def set_rows(self, rows: Sequence[tuple[str, str]]) -> None:
-        for index, (value, label) in enumerate(zip(self.values, self.labels)):
-            text = rows[index] if index < len(rows) else ("", "")
-            value.setText(text[0])
-            label.setText(text[1])
-            # Show where the text starts, not where the cursor was left.
-            value.setCursorPosition(0)
-            label.setCursorPosition(0)
-
-
-class _SizeSlider(QSlider):
-    """A slider that never answers the mouse wheel and takes focus from the
-    keyboard only: a wheel turn over it scrolls the panel behind it, and a
-    click leaves no focus ring that holds on to the next keys."""
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(Qt.Orientation.Horizontal, parent)
-        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-
-    def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
-        if event is not None:
-            event.ignore()
-
-
-class TextSizeControls(QFrame):
-    """The Title, Legend and Notes sizes (`TextSizes`), three labelled
-    sliders in a row under the list, each from `MIN_TEXT_PERCENT` to
-    `MAX_TEXT_PERCENT` percent in steps of one: the design's text made
-    smaller gives the map room, larger takes it. They apply to every design.
-    Each label shows the current percent as the handle moves.
-
-    `changed` fires once per gesture: when a drag ends, or a pause follows a
-    click or key press. `sizes()` is the percents as last committed,
-    `live_sizes()` as the handles stand."""
-
-    changed = pyqtSignal()
-
-    def __init__(
-        self, sizes: TextSizes, parent: QWidget, *, stacked: bool = False
-    ) -> None:
-        super().__init__(parent)
-        self.setProperty("role", "keyFigures")
-        self.setAccessibleName(tr("Text sizes"))
-        # Closed, only the header shows, in the picker's foot (`toggle`):
-        # the dialog's smallest size has no room to spare for more rows.
-        self.toggle = QToolButton(parent)
-        self.toggle.setProperty("role", "sectionHeader")
-        self.toggle.setCheckable(True)
-        self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.toggle.toggled.connect(self._on_toggled)
-        # Stacked: one slider to a row, for a column as narrow as the
-        # Layout tab's; the picker's foot has the width for one row.
-        row = QVBoxLayout(self) if stacked else QHBoxLayout(self)
-        row.setContentsMargins(12, 2, 12, 2)
-        row.setSpacing(6)
-        self.sliders: dict[str, QSlider] = {}
-        self._captions: dict[str, QLabel] = {}
-        self._names = {
-            "title": tr("Title"),
-            "legend": tr("Legend"),
-            "notes": tr("Notes"),
-        }
-        tips = {
-            "title": tr("Size of the title"),
-            "legend": tr("Size of the legend"),
-            "notes": tr("Size of the notes and key figures"),
-        }
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.setInterval(_SIZES_DELAY_MS)
-        self._timer.timeout.connect(self._commit_and_emit)
-        for index, element in enumerate(self._names):
-            if index and not stacked:
-                row.addSpacing(10)
-            column = QHBoxLayout()
-            column.setSpacing(6)
-            caption = QLabel(self)
-            caption.setProperty("role", "hint")
-            slider = _SizeSlider(self)
-            slider.setRange(MIN_TEXT_PERCENT, MAX_TEXT_PERCENT)
-            slider.setSingleStep(1)
-            slider.setPageStep(5)
-            slider.setFixedHeight(24)
-            slider.setAccessibleName(self._names[element])
-            slider.setProperty("tip", tips[element])
-            slider.setValue(getattr(sizes, element))
-            slider.valueChanged.connect(lambda _v, e=element: self._on_value(e))
-            # The drag ends: apply once, not for every percent it passed.
-            slider.sliderReleased.connect(self._timer.start)
-            column.addWidget(caption)
-            column.addWidget(slider)
-            row.addLayout(column, 1)
-            self.sliders[element] = slider
-            self._captions[element] = caption
-            self._describe(element)
-        self._committed = self.live_sizes()
-        self.toggle.setChecked(self._committed != TextSizes())
-        self._on_toggled(self.toggle.isChecked())
-
-    def _on_toggled(self, opened: bool) -> None:
-        self.setVisible(opened)
-        self.toggle.setArrowType(
-            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
-        )
-        self._label_toggle()
-
-    def _label_toggle(self) -> None:
-        changed = self.live_sizes() != TextSizes()
-        self.toggle.setText(tr("Text sizes (changed)") if changed else tr("Text sizes"))
-
-    def _describe(self, element: str) -> None:
-        slider = self.sliders[element]
-        step = f"{slider.value()}%"
-        label = f"{self._names[element]}: {step}"
-        self._captions[element].setText(label)
-        self._label_toggle()
-        slider.setToolTip(
-            f"{slider.property('tip')}: {step}. "
-            + tr("Smaller text gives the map more room.")
-        )
-        slider.setAccessibleDescription(step)
-
-    def _on_value(self, element: str) -> None:
-        self._describe(element)
-        if not self.sliders[element].isSliderDown():
-            # A click on the groove or a key press: wait out a run of them.
-            self._timer.start()
-
-    def live_sizes(self) -> TextSizes:
-        return TextSizes(
-            **{element: slider.value() for element, slider in self.sliders.items()}
-        )
-
-    def sizes(self) -> TextSizes:
-        return self._committed
-
-    def set_sizes(self, sizes: TextSizes) -> None:
-        """Show `sizes` as the committed percents, without a `changed`."""
-        self._timer.stop()
-        for element, slider in self.sliders.items():
-            slider.blockSignals(True)
-            slider.setValue(getattr(sizes, element))
-            slider.blockSignals(False)
-            self._describe(element)
-        self._committed = self.live_sizes()
-
-    def commit(self) -> bool:
-        """Take the handles as they stand; whether that changed anything."""
-        self._timer.stop()
-        live = self.live_sizes()
-        changed = live != self._committed
-        self._committed = live
-        return changed
-
-    def stop(self) -> None:
-        self._timer.stop()
-
-    def _commit_and_emit(self) -> None:
-        if self.commit():
-            self.changed.emit()
-
-
 class _ViewportWatcher(QObject):
     """Tells the picker when the list's visible area changes size."""
 
@@ -992,10 +712,7 @@ class TemplatePicker(QDialog):
     say what this project's page includes (`core/template_cues.py`); without
     it a card lists what every page of the design has, and offers the rest.
 
-    `project` is where the key figures are kept (`FIGURE_VARIABLES`): the
-    "Key figures" fields, shown while a design that takes them is chosen,
-    start from it, and accepting writes them back. Its page previews the
-    figures as they are typed, before anything is saved."""
+    `project` is where the map framing is kept; accepting writes it back."""
 
     def __init__(
         self,
@@ -1063,22 +780,6 @@ class TemplatePicker(QDialog):
         self._scroll_rest.timeout.connect(self._reprioritise)
         self._laid_out: tuple[int, int, int, tuple[bool, ...]] | None = None
         self._project = project
-        #: The figures as the project had them, to write back only a change.
-        self._saved_figures: Figures = (
-            project_figure_rows(project) if project is not None else _NO_FIGURES
-        )
-        #: The size steps as the project had them, to write back only a change.
-        self._saved_sizes = (
-            project_text_sizes(project) if project is not None else TextSizes()
-        )
-        self._figures_timer = QTimer(self)
-        self._figures_timer.setSingleShot(True)
-        self._figures_timer.setInterval(_FIGURES_DELAY_MS)
-        self._figures_timer.timeout.connect(self._on_figures)
-        #: Set when the key figures appear or go: the list changes height,
-        #: and the next layout keeps the chosen card in view (`_relayout`).
-        self._keep_in_view = False
-
         saved = self._load_choice()
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -1232,13 +933,6 @@ class TemplatePicker(QDialog):
         )
         self.request_button = _RequestTemplateCard(self.template_list.viewport())
         self.template_list.setItemWidget(self.request_item, self.request_button)
-        # Under the list, for the design that is chosen: made here so that
-        # the keyboard reaches it after the list and before the buttons.
-        self.figures_group = _KeyFigures(self._saved_figures, self)
-        self.figures_group.setVisible(False)
-        self.figures_group.edited.connect(self._figures_timer.start)
-        self.size_controls = TextSizeControls(self._saved_sizes, self)
-        self.size_controls.changed.connect(self._restart_previews)
         self.template_list.currentItemChanged.connect(self._on_template)
         self.template_list.itemDoubleClicked.connect(
             lambda item: self.accept() if item is not self.request_item else None
@@ -1251,8 +945,6 @@ class TemplatePicker(QDialog):
         self._viewport_watcher = _ViewportWatcher(self)
         self.template_list.viewport().installEventFilter(self._viewport_watcher)
         layout.addWidget(self.template_list, 1)
-        layout.addWidget(self.figures_group)
-        layout.addWidget(self.size_controls)
 
         # The choice in words beside the buttons, for anyone not looking at
         # the ringed card; a long translated name wraps rather than clips.
@@ -1261,7 +953,6 @@ class TemplatePicker(QDialog):
         self.selected_label = QLabel("", self)
         self.selected_label.setProperty("role", "hint")
         self.selected_label.setWordWrap(True)
-        foot.addWidget(self.size_controls.toggle)
         foot.addWidget(self.selected_label, 1)
         buttons = QDialogButtonBox(self)
         self.create_button = buttons.addButton(
@@ -1299,17 +990,6 @@ class TemplatePicker(QDialog):
         return str(self.orientation_combo.currentData())
 
     @property
-    def figures(self) -> Figures:
-        """The key figures as typed: (value, label) per slot, blank ones
-        included."""
-        return self.figures_group.rows()
-
-    @property
-    def text_sizes(self) -> TextSizes:
-        """The title, legend and notes steps as chosen."""
-        return self.size_controls.sizes()
-
-    @property
     def category_filter(self) -> str:
         for key, button in self.filter_buttons.items():
             if button.isChecked():
@@ -1344,10 +1024,8 @@ class TemplatePicker(QDialog):
             cached = self._pages.get(large_key)
             if cached is not None:
                 return cached
-            with preview_framing(key[7]):
-                return self._render(
-                    template_id, key[1], key[2], width, figures=key[5], sizes=key[6]
-                )
+            with preview_framing(key[5]):
+                return self._render(template_id, key[1], key[2], width)
 
         template = self._templates[template_id]
         preview = TemplatePreviewDialog(
@@ -1376,19 +1054,13 @@ class TemplatePicker(QDialog):
 
     def accept(self) -> None:
         self._use_on_demand_previews()
-        self._figures_timer.stop()
         self._save_choice()
-        self._save_figures()
-        self.size_controls.commit()
-        self._save_sizes()
         if self._project is not None:
             set_project_framing(self._project, self.framing_combo.currentData())
         super().accept()
 
     def reject(self) -> None:
         self._use_on_demand_previews()
-        self._figures_timer.stop()
-        self.size_controls.stop()
         super().reject()
 
     # ---- Previews ------------------------------------------------------------
@@ -1401,8 +1073,6 @@ class TemplatePicker(QDialog):
             self.orientation,
             round(RENDER_WIDTH * ratio),
             self._canvas_key,
-            self.figures if self._templates[template_id].takes_figures else (),
-            self.text_sizes,
             str(self.framing_combo.currentData()),
         )
 
@@ -1447,20 +1117,17 @@ class TemplatePicker(QDialog):
         if plan is None:
             plan = layout_templates.plan_template(
                 template_id,
-                key[6].apply(
-                    TemplateInput(
-                        1000,
-                        700,
-                        False,
-                        page_size=key[1],
-                        orientation=key[2],
-                        title=tr("Title"),
-                        layer_names=("A", "B", "C"),
-                        credits=("Source",),
-                        notes=tr("Notes"),
-                        figures=key[5],
-                        fill_frame=key[7] == "fill",
-                    )
+                TemplateInput(
+                    1000,
+                    700,
+                    False,
+                    page_size=key[1],
+                    orientation=key[2],
+                    title=tr("Title"),
+                    layer_names=("A", "B", "C"),
+                    credits=("Source",),
+                    notes=tr("Notes"),
+                    fill_frame=key[5] == "fill",
                 ),
             )
         image = layout_guide(plan, key[3])
@@ -1475,10 +1142,8 @@ class TemplatePicker(QDialog):
             return plan
         if self._planner is None:
             return None
-        with preview_framing(key[7]):
-            plan = self._planner(
-                template_id, key[1], key[2], figures=key[5], sizes=key[6]
-            )
+        with preview_framing(key[5]):
+            plan = self._planner(template_id, key[1], key[2])
         self._plans[key] = plan
         while len(self._plans) > _SHARED_CACHE_LIMIT:
             self._plans.popitem(last=False)
@@ -1493,7 +1158,7 @@ class TemplatePicker(QDialog):
 
     def _update_cues(self, template_ids: Iterable[str]) -> None:
         """Check the cards' cues against the pages this project gets with the
-        current page settings (and typed figures): planned, not drawn."""
+        current page settings: planned, not drawn."""
         if self._planner is None:
             return
         for template_id in template_ids:
@@ -1592,10 +1257,8 @@ class TemplatePicker(QDialog):
         key = self._key(template_id)
         self._render_started = time.monotonic()
         try:
-            with preview_framing(key[7]):
-                result = self._render(
-                    template_id, key[1], key[2], key[3], figures=key[5], sizes=key[6]
-                )
+            with preview_framing(key[5]):
+                result = self._render(template_id, key[1], key[2], key[3])
         except Exception:  # a preview must never break the picker
             result = None
         if result is not None and not isinstance(result, QImage):
@@ -1622,8 +1285,6 @@ class TemplatePicker(QDialog):
         """Keep a drawn page for its card, or mark the card failed."""
         if image is not None and not image.isNull():
             self._pages.put(key, image)
-            if self._templates[template_id].takes_figures:
-                self._pages.drop_variants(key)
         else:
             self._failed.add(key)
         self._show_state(template_id)
@@ -1798,12 +1459,8 @@ class TemplatePicker(QDialog):
         anchored = (
             current is not None
             and not current.isHidden()
-            and (
-                self._keep_in_view
-                or view.visualItemRect(current).intersects(view.viewport().rect())
-            )
+            and view.visualItemRect(current).intersects(view.viewport().rect())
         )
-        self._keep_in_view = False
         card_h = 1
         for row, tall in zip(self.rows.values(), turns):
             box = _preview_box(card_w, height, tall)
@@ -1845,47 +1502,7 @@ class TemplatePicker(QDialog):
         template = self._templates.get(str(chosen)) if chosen else None
         name = tr(template.name) if template else ""
         self.selected_label.setText(tr("Selected: {name}").format(name=name))
-        takes_figures = template is not None and template.takes_figures
-        if self.figures_group.isVisibleTo(self) != takes_figures:
-            self.figures_group.setVisible(takes_figures)
-            self._keep_in_view = True
         self._reprioritise()
-
-    def _on_figures(self) -> None:
-        """Typing paused: draw the pages that show the figures again, and
-        say whether they now include them. Until a page is drawn, the one
-        before stays rather than a blank box."""
-        self._update_cues(
-            [t for t, template in self._templates.items() if template.takes_figures]
-        )
-        self._relayout()
-        for template_id, template in self._templates.items():
-            if not template.takes_figures:
-                continue
-            key = self._key(template_id)
-            if (
-                key in self._pages
-                or key in self._failed
-                or self.rows[template_id].failed
-            ):
-                self._show_state(template_id)
-        self._reprioritise()
-
-    def _save_figures(self) -> None:
-        """Write the figures to the project, when they changed: a cleared
-        row removes its variable (`set_project_figures`)."""
-        if self._project is None or self.figures == self._saved_figures:
-            return
-        set_project_figures(self._project, self.figures)
-        self._saved_figures = self.figures
-
-    def _save_sizes(self) -> None:
-        """Write the size steps to the project, when they changed
-        (`set_project_text_sizes`)."""
-        if self._project is None or self.text_sizes == self._saved_sizes:
-            return
-        set_project_text_sizes(self._project, self.text_sizes)
-        self._saved_sizes = self.text_sizes
 
     def _on_filter(self, _button: object, checked: bool) -> None:
         if not checked:
@@ -1949,8 +1566,8 @@ def ask_template(
     planner: PreviewPlanner | None = None,
 ) -> tuple[str, str, str] | None:
     """Show the picker; `(template_id, page_size, orientation)`, or `None`
-    when the user cancels. Accepted, the key figures typed in it and
-    the text size steps chosen are saved to `project`."""
+    when the user cancels. Accepted, the map framing is saved to
+    `project`."""
     picker = TemplatePicker(
         render,
         canvas_key=canvas_key,

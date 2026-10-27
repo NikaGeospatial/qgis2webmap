@@ -4,7 +4,7 @@ page actually planned for this project.
 A design lists short cues for its card (`LayoutTemplate.includes`: "legend",
 "scale bar", "notes", ...). Some are on every page the design makes; others
 depend on what the project supplies -- a notes panel needs the project's
-abstract, Signal's key figures need figures typed in, a source line needs a
+abstract, Signal's statistic callouts are added in the Edit tab, a source line needs a
 layer's attribution, Atlas Ledger's sheet number needs the layout's atlas.
 A card promising notes on a page that has none would be a false claim.
 
@@ -78,8 +78,9 @@ CUE_RULES: Mapping[str, CueRule] = {
     "headline": CueRule(
         ("title",), hint=N_("From the project title: Project > Properties > General.")
     ),
-    "key figures": CueRule(
-        ("figure-0",), hint=N_("Type up to three in the Key figures fields below.")
+    "statistic callouts": CueRule(
+        ("figure-0",),
+        hint=N_("Optional. Add up to three in the Edit tab once the layout is made."),
     ),
     "sheet number": CueRule(
         (), hint=N_("Numbered on each page once the layout's atlas is turned on.")
