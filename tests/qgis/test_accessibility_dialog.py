@@ -75,19 +75,6 @@ def make_dialog(qgis_app, canvas):
             dialog.deleteLater()
 
 
-def gone(window) -> bool:
-    """Whether a window is closed for good: destroyed, or at least not a
-    hidden window left alive among the top-level widgets."""
-    from qgis.PyQt import sip
-    from qgis.PyQt.QtCore import QCoreApplication, QEvent
-    from qgis.PyQt.QtWidgets import QApplication
-
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    if sip.isdeleted(window):
-        return True
-    return not window.isVisible() and window not in QApplication.topLevelWidgets()
-
-
 def table_rows(dialog):
     """Each row's cells as text. The swatch columns show only a painted icon,
     so their hex is read from the tooltip, which is also their accessible
@@ -264,11 +251,11 @@ class TestPreviewBeforeApply:
         else:
             dialog.close()
         settle(qgis_app, 0.05)
-        assert gone(dialog)
+        assert not dialog.isVisible()
         assert preview_colour(pane) == simulated
         assert canvas.previewModeEnabled()
-        dialog = make_dialog_with_preview()  # closing destroys the window
-        dialog.show()
+        dialog.present()  # the same window comes back, at what was applied
+        assert dialog.isVisible()
         assert dialog.current_condition() == "deuteranopia"
 
     def test_leaving_without_applying_restores_normal_vision(
@@ -598,17 +585,17 @@ class TestInputIsNeverLeftBlocked:
             host.close()
 
 
-class TestNothingIsLeftBehind:
-    """Whatever hides the window, it ends up closed - never a hidden window
-    that is still alive (on Wayland its surface can keep eating clicks)."""
+class TestLeavingKeepsTheOneWindow:
+    """Whatever hides the window, what was not applied goes with it, nothing
+    is left grabbing input, and the same window shows again."""
 
     @pytest.mark.parametrize("how", ["close", "close_button", "escape", "stray_hide"])
-    def test_a_window_that_goes_is_gone_and_the_next_one_opens(
+    def test_a_window_that_goes_drops_the_choice_and_shows_again(
         self, qgis_app, make_dialog, how
     ) -> None:
         from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtTest import QTest
-        from qgis.PyQt.QtWidgets import QWidget
+        from qgis.PyQt.QtWidgets import QApplication, QWidget
 
         host = QWidget()
         host.show()
@@ -626,7 +613,34 @@ class TestNothingIsLeftBehind:
             dialog.hide()
         settle(qgis_app, 0.1)
         try:
-            assert gone(dialog)
+            assert not dialog.isVisible()
+            assert dialog.current_condition() is None
+            assert QWidget.mouseGrabber() is None
+            assert QWidget.keyboardGrabber() is None
+            assert QApplication.activeModalWidget() is None
+            dialog.present()
+            assert dialog.isVisible()
+            assert dialog.current_condition() is None
+        finally:
+            host.close()
+
+    def test_presenting_an_open_window_keeps_it_and_its_pending_choice(
+        self, qgis_app, make_dialog
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QWidget
+
+        host = QWidget()
+        host.show()
+        dialog = make_dialog(parent=host)
+        dialog.show()
+        dialog.set_condition("tritanopia")  # chosen, not applied
+        try:
+            for _press in range(3):
+                dialog.present()
+                settle(qgis_app, 0.05)
+                assert dialog.isVisible()
+                assert dialog.current_condition() == "tritanopia"
+            assert dialog.applied_condition() is None
         finally:
             host.close()
 

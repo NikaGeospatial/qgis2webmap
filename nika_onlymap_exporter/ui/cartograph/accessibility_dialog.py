@@ -203,14 +203,13 @@ class AccessibilityDialog(QDialog):
         self._canvas_original: tuple[bool, object] | None = None
 
         self.setWindowTitle(tr("Colour vision"))
-        # An ordinary dialog window over its parent, not a Tool window: Tool
-        # windows hide themselves when the application is deactivated, and on
-        # Wayland a surface hidden that way can be left over the parent,
-        # swallowing its clicks. This one is only ever shown or closed (and
-        # destroyed on close), never hidden-but-alive.
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        # An ordinary modeless dialog window over its parent, not a Tool window
+        # (those hide themselves when the application is deactivated). It is
+        # one owned instance: Close, Escape and the window's own close hide it
+        # and drop what was not applied, and the corner button shows it again.
         self.setModal(False)
-        self._closing = False
+        # True only while `present` unmaps and re-maps the window.
+        self._remapping = False
         self.setMinimumWidth(360)
         self.resize(520, 520)
 
@@ -392,30 +391,47 @@ class AccessibilityDialog(QDialog):
         self.set_condition(self._applied)
         self.canvas_check.setChecked(self._applied_canvas)
 
+    def present(self) -> None:
+        """Show the window and put it in front of its parent.
+
+        On Wayland an application cannot raise or activate its own window
+        (`raise_` and `activateWindow` ask the compositor and are ignored), so
+        a window left behind its parent could never be brought back. Hiding
+        and showing the same window maps it afresh, in front; what was chosen
+        and not yet applied stays as it is.
+        """
+        if self.isVisible():
+            self._remapping = True
+            try:
+                self.hide()
+                self.show()
+            finally:
+                self._remapping = False
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+
     def closeEvent(self, event: QCloseEvent | None) -> None:  # noqa: N802 - Qt override
-        self._closing = True
         self._discard_unapplied()
         super().closeEvent(event)
 
     def reject(self) -> None:
-        # Escape and the window's own close both end up here; either way the
-        # window is destroyed, not left hidden.
-        self._closing = True
+        # Escape and the Close button end up here.
         self._discard_unapplied()
         super().reject()
-        self.deleteLater()
 
     def hideEvent(self, event: QHideEvent | None) -> None:  # noqa: N802 - Qt override
         super().hideEvent(event)
         # Hidden by anything but the window system minimising it (its parent
-        # going away, a stray hide()): that is Close, never a hidden window
-        # left behind.
-        if event is not None and not event.spontaneous() and not self._closing:
-            self.close()
+        # going away, a stray hide()): that is leaving, so what was not applied
+        # goes. `present` hides and shows in one go and keeps it.
+        if event is not None and not event.spontaneous() and not self._remapping:
+            self._discard_unapplied()
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
-        if event is not None and not event.spontaneous():
+        if event is not None and not event.spontaneous() and not self._remapping:
             self.browser_check.setChecked(False)
 
     # ---- Canvas ------------------------------------------------------------
