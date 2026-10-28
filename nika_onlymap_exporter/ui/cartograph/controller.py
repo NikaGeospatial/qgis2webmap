@@ -102,7 +102,6 @@ from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
 from ..runtime_setup import ensure_runtime
 from . import layout_thumbnails
-from .callouts import migrate_project_figures
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
 from .layer_membership import LayerMembership
@@ -1492,9 +1491,6 @@ class CartographController:
 
     def refresh_layouts(self) -> None:
         """Follow the project's print layouts: the header, and which one is shown."""
-        # Key figures an older version kept as project variables become the
-        # layouts' own (no change to what they show).
-        migrate_project_figures(self.project)
         manager = self.project.layoutManager()
         if not self._manager_connected:
             manager.layoutAdded.connect(self._on_layouts_changed)

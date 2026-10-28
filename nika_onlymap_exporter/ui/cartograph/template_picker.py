@@ -5,7 +5,7 @@ The picker only chooses -- a template, a page size and an orientation -- and
 the controller builds the layout (`core/canvas_cartograph.py`). Each preview
 is the real page QGIS would build, drawn by QGIS (`template_preview`), so
 what the thumbnail shows is what the layout will be. What goes on the page --
-the text, its sizes, a Signal page's statistic callouts -- is edited on the
+the text and its sizes -- is edited on the
 layout afterwards, in the dialog's Edit tab, not here.
 
 **Previews draw one at a time** on a zero-length timer: a heavy project can

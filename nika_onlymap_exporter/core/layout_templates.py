@@ -115,7 +115,7 @@ class TemplateInput:
     #: north arrow in every design, one that is needs none in most.
     rotation: float = 0.0
     #: Up to three key figures the user supplied, as (value, what it is):
-    #: the Signal design's callouts. Never computed or made up here.
+    #: the Signal design's figures. Never computed or made up here.
     figures: Sequence[tuple[str, str]] = ()
     #: The canvas extent's centre in map units, when known: how long a grid
     #: label's coordinates run, for a design that labels its grid.
@@ -350,7 +350,7 @@ class LayoutTemplate:
     #: A short English "Best for: ..." line naming the jobs the design suits,
     #: shown in the card's tooltip; translated by the UI.
     best_for: str = ""
-    #: Whether the design draws `TemplateInput.figures` (statistic callouts):
+    #: Whether the design draws `TemplateInput.figures` (its key figures):
     #: the Edit tab offers to add them to a page made from a design that does.
     takes_figures: bool = False
     #: The design's readable floor for legend rows on a page, in points
@@ -1604,14 +1604,11 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
     LayoutTemplate(
         "dashboard",
         N_("Signal"),
-        N_(
-            "A data-led page: the map, with up to three optional statistic "
-            "callouts you add in the Edit tab."
-        ),
+        N_("A data-led page: the map, with its notes, legend and scale bar."),
         _dashboard,
         category=CHARACTERFUL,
         best_for=N_("Best for: data summaries and briefings with key statistics."),
-        includes=(N_("statistic callouts"), N_("notes"), N_("legend"), N_("scale bar")),
+        includes=(N_("notes"), N_("legend"), N_("scale bar")),
         takes_figures=True,
     ),
     LayoutTemplate(

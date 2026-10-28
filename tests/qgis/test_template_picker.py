@@ -888,8 +888,8 @@ class TestDirectionAndLength:
 
 class TestTheContentControlsAreGone:
     """The picker chooses a design, a page size, an orientation and framing.
-    What goes on the page -- text sizes, a Signal page's statistic callouts --
-    is edited on the layout afterwards, so none of it is asked here."""
+    What goes on the page -- text and its sizes -- is edited on the layout
+    afterwards, so none of it is asked here."""
 
     def test_no_key_figures_or_text_size_widgets(self, qgis_app, tmp_path, fifteen):
         picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
@@ -970,16 +970,16 @@ class TestTheContentControlsAreGone:
         assert {k: variables[k] for k in before} == before
         project.setCustomVariables({})
 
-    def test_signal_says_what_its_callouts_are(self, qgis_app, tmp_path):
+    def test_signal_card_does_not_promise_callouts(self, qgis_app, tmp_path):
         picker = TemplatePicker(_Renderer(), qsettings=_settings(tmp_path))
         try:
             signal = picker.rows["dashboard"]
             text = " ".join(
                 label.text() for label in signal.findChildren(QLabel) if label.text()
             )
-            assert "optional statistic callouts" in text
-            assert "Edit tab" in text
-            assert "statistic callouts" in signal.supports.text()
+            assert text
+            assert "callout" not in text.lower()
+            assert "callout" not in signal.supports.text().lower()
         finally:
             picker.reject()
 
@@ -1124,9 +1124,6 @@ class TestTheCues:
             assert "sheet number" in ledger.supports.text()
             assert "sheet number" not in ledger.includes.text()
             assert "atlas" in ledger.supports.toolTip()
-            signal = picker.rows["dashboard"]
-            assert "statistic callouts" in signal.supports.text()
-            assert "Edit tab" in signal.supports.toolTip()
             # Always on the page: never offered.
             assert (
                 picker.rows["locator"].includes.text().startswith("Includes: locator")

@@ -46,7 +46,7 @@ narrow the list, with **Page size** and **Orientation** beside them. Below is
 a scrolling list of the designs: a large preview of each, its name, one line
 on what it is for, and what that page includes for this project. A second,
 quieter line, **Can also show**, lists what the design would add with more
-content - notes from the project's abstract or Signal's statistic callouts; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
+content - notes from the project's abstract; point at it to see where each comes from. Point at a card to see, in its tooltip, what the design is best
 for (also listed below). **Create layout** builds the one selected.
 
 The picker only chooses: a design, a page size, an orientation and the map
@@ -89,14 +89,11 @@ keeps showing them on the pages it makes.
   page, or for a wide view. *Best for: posters and wall displays.*
 - **Near & Far** - the map with a locator inset that outlines where it is,
   beside the map or below it, whichever shows your view larger. *Best for: maps of a small area that need locating.*
-- **Signal** - a data-led page: the map, with up to three optional statistic
-  callouts. A callout is a value such as *214* over what it counts, such as
-  *parcels surveyed*. A new Signal page has none and is the map with its notes
-  and legend; select the layout and use **Edit > Statistic callouts** to add,
-  change or remove them (or select one on the page). Their lettering is the
-  Edit tab's text buttons. Each layout keeps its own callouts, so editing one
-  never changes another. With a substantial legend, Signal arranges the
-  callouts in a row or gives the key a full-height column to keep its entries
+- **Signal** - a data-led page: the map with its notes, legend and scale bar.
+  Where a project holds key figures (a value such as *214* over what it
+  counts), Signal draws them as ordinary text, which you select and edit like
+  any other text on the page. With a substantial legend, Signal arranges the
+  figures in a row or gives the key a full-height column to keep its entries
   readable. *Best for: data summaries and briefings with key statistics.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*

@@ -213,7 +213,7 @@ class TestCanvasLayout:
 
 class TestKeyFigureVariables:
     """The key figures older versions kept as project variables, now only
-    read (a layout keeps its own callouts: `test_callouts.py`)."""
+    read (they become ordinary text items: `test_signal_figures.py`)."""
 
     def test_rows_keep_every_slot_and_the_figures_only_real_ones(self, project) -> None:
         project.setCustomVariables(

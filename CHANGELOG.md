@@ -49,10 +49,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     the page: a panel with nothing real to show is left out and the map takes
     its room. Each card says what that page includes for this project, and
     what else the design can show with more content (notes, a source line, a
-    sheet number). Signal's statistic callouts (up to three, each a value over
-    what it counts) are optional: add, change and remove them in the **Edit**
-    tab once the layout exists. They belong to that layout alone, and a
-    project that held key figures as variables keeps what its layouts show.
+    sheet number). Signal's key figures, where a project holds them as variables,
+    are drawn as ordinary text items you edit like any other text.
     The picker only chooses a design, page size, orientation and framing;
     change text sizes with **A-** / **A+** in the **Edit** tab. Legend text never drops below a readable size (8 pt): a legend that still cannot fit leaves
     its last entries out, and the card and the **Checks** tab say how many.

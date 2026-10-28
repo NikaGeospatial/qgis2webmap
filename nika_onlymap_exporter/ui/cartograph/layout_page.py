@@ -1327,10 +1327,6 @@ class PagePane(QWidget):
         menu.addAction(tr("Detail map"), self._add_detail_map).setToolTip(
             tr("Show a closer view of an area.")
         )
-        menu.addAction(
-            kind_title(ItemKind.CALLOUT),
-            lambda: self.preview.add_item(ItemKind.CALLOUT, None),
-        )
 
     def _add_detail_map(self) -> None:
         """Add > Detail map; with no map on the page, say what it needs."""

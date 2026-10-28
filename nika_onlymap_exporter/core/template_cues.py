@@ -4,8 +4,8 @@ page actually planned for this project.
 A design lists short cues for its card (`LayoutTemplate.includes`: "legend",
 "scale bar", "notes", ...). Some are on every page the design makes; others
 depend on what the project supplies -- a notes panel needs the project's
-abstract, Signal's statistic callouts are added in the Edit tab, a source line needs a
-layer's attribution, Atlas Ledger's sheet number needs the layout's atlas.
+abstract, a source line needs a layer's attribution, Atlas Ledger's sheet
+number needs the layout's atlas.
 A card promising notes on a page that has none would be a false claim.
 
 So each cue names the plan items that show it (`CUE_RULES`, one declarative
@@ -77,10 +77,6 @@ CUE_RULES: Mapping[str, CueRule] = {
     ),
     "headline": CueRule(
         ("title",), hint=N_("From the project title: Project > Properties > General.")
-    ),
-    "statistic callouts": CueRule(
-        ("figure-0",),
-        hint=N_("Optional. Add up to three in the Edit tab once the layout is made."),
     ),
     "sheet number": CueRule(
         (), hint=N_("Numbered on each page once the layout's atlas is turned on.")

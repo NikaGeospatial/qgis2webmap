@@ -1,8 +1,9 @@
-"""The Edit tab's empty state, the statistic callout entry in the Add item
-menu, and the selected item's header and map controls.
+"""The Edit tab's empty state, the Add item menu, Signal's figures as
+ordinary text, and the selected item's header and map controls.
 
-Real widgets, judged by what is visible: what shows with nothing selected, how
-a callout is created, where the header and the buttons sit.
+Real widgets, judged by what is visible: what shows with nothing selected,
+what the Add item menu offers, how a Signal figure is edited and deleted, where
+the header and the buttons sit.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -12,7 +13,6 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from qgis.PyQt.QtCore import QRectF
 from test_cartograph_panel_widgets import _settle
 from test_edit_tab_fit import _item_of
 
@@ -69,12 +69,6 @@ def _menu_action(pane, title):
     return next((a for a in pane.add_menu.actions() if a.text() == title), None)
 
 
-def _callout_words(layout):
-    from nika_onlymap_exporter.ui.cartograph.callouts import layout_callouts
-
-    return [(c.value, c.label) for c in layout_callouts(layout)]
-
-
 class TestNothingSelected:
     def test_only_the_hint_is_visible(self, pane) -> None:
         pane, _ = pane
@@ -85,96 +79,156 @@ class TestNothingSelected:
             controls.delete_button,
             controls.body,
             controls.text_size_row,
-            controls.callout_controls,
-            controls.callout_controls.value_edit,
         ):
             assert not _visible(controls, hidden), hidden
 
-    def test_existing_callouts_do_not_bring_the_form_back(self, qgis_app, pane) -> None:
-        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
 
-        pane, layout = pane
-        assert add_callout(layout, QRectF(20, 20, 50, 30), "12 km", "of road")
-        layout.deselectAll()
-        pane.controls.refresh()
-        assert not _visible(pane.controls, pane.controls.callout_controls)
-        assert pane.controls.heading.text() == NO_ITEM_TEXT
-
-
-class TestStatisticCalloutMenuEntry:
-    def test_offered_on_every_layout(self, qgis_app, parcels, project, pane) -> None:
+class TestAddItemMenu:
+    def test_it_has_no_statistic_callout_on_any_layout(
+        self, qgis_app, parcels, project, pane
+    ) -> None:
         from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
 
         pane, _ = pane
-        action = _menu_action(pane, "Statistic callout")
-        assert action is not None and action.isEnabled()
+        pane._fill_add_menu()
+        titles = [a.text() for a in pane.add_menu.actions()]
+        assert titles and not any("callout" in t.lower() for t in titles)
         classic = PagePane()
         try:
             classic.show()
             classic.show_layout(_layout(parcels, project, "classic"))
-            other = _menu_action(classic, "Statistic callout")
-            assert other is not None and other.isEnabled()
+            classic._fill_add_menu()
+            assert not any(
+                "callout" in a.text().lower() for a in classic.add_menu.actions()
+            )
         finally:
             classic.close()
 
-    def test_a_click_on_the_page_places_it_and_selects_it(self, qgis_app, pane) -> None:
-        from test_preview_item_editing import _click_page
 
-        pane, layout = pane
+@pytest.fixture
+def figure_pane(qgis_app, parcels, project):
+    """A Signal layout that carries two figures, shown in a page pane."""
+    from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
+    from nika_onlymap_exporter.ui import theme
+    from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+    extent = parcels.extent()
+    extent.grow(200)
+    layout = cartograph_from_view(
+        extent,
+        UTM,
+        [parcels],
+        project,
+        template_id="dashboard",
+        layout_name="figures",
+        figures=[("214", "parcels surveyed"), ("12 km", "of road")],
+    ).layout
+    pane = PagePane()
+    theme.apply(pane)
+    pane.resize(900, 650)
+    pane.show()
+    pane.show_layout(layout)
+    pane.controls.resize(340, 640)
+    pane.controls.show()
+    layout.deselectAll()
+    pane.controls.refresh()
+    _settle(qgis_app, 0.1)
+    yield pane, layout
+    pane.close()
+    pane.deleteLater()
+
+
+class TestSignalFiguresAreOrdinaryText:
+    """A layout that already holds Signal figures treats each as an ordinary
+    item: text you can select, edit and delete one by one."""
+
+    def test_a_figure_value_is_edited_with_the_text_controls(
+        self, qgis_app, figure_pane
+    ) -> None:
+        pane, layout = figure_pane
         controls = pane.controls
-        _menu_action(pane, "Statistic callout").trigger()
-        assert layout.selectedLayoutItems() == []
-        _click_page(qgis_app, pane, 60.0, 150.0)
-        assert len(_callout_words(layout)) == 1
-        selected = layout.selectedLayoutItems()
-        assert len(selected) == 1
-        form = controls.callout_controls
-        assert _visible(controls, form)
-        assert _visible(controls, form.remove_button)
-        assert _visible(controls, controls.body)
-        assert _visible(controls, controls.delete_button)
+        value = layout.itemById("figure-0")
+        value.setSelected(True)
+        controls.refresh()
+        _settle(qgis_app, 0.05)
+        assert controls.selected_item() is value
+        assert _visible(controls, controls.text_edit)
+        assert controls.text_edit.toPlainText() == "214"
+        controls.text_edit.setPlainText("215")
+        controls._apply_pending_text()
+        assert value.text() == "215"
+        assert layout.itemById("figure-0-label").text() == "parcels surveyed"
+        assert controls.selected_item() is value
 
-    def test_selecting_an_existing_callout_shows_its_fields(self, pane) -> None:
-        from nika_onlymap_exporter.ui.cartograph.callouts import (
-            add_callout,
-            find_part,
+    def test_the_line_and_the_rule_are_selectable_and_nothing_crashes(
+        self, qgis_app, figure_pane
+    ) -> None:
+        pane, layout = figure_pane
+        controls = pane.controls
+        for item_id in ("figure-0-label", "rule-figure-0", "figure-1"):
+            layout.deselectAll()
+            layout.itemById(item_id).setSelected(True)
+            controls.refresh()
+            _settle(qgis_app, 0.02)
+            assert controls.heading.text()
+
+    def test_delete_removes_only_the_selected_item(self, qgis_app, figure_pane) -> None:
+        pane, layout = figure_pane
+        controls = pane.controls
+        layout.itemById("figure-0").setSelected(True)
+        controls.refresh()
+        controls.delete_button.click()
+        _settle(qgis_app, 0.05)
+        assert layout.itemById("figure-0") is None
+        for kept in ("figure-0-label", "rule-figure-0", "figure-1", "figure-1-label"):
+            assert layout.itemById(kept) is not None, kept
+        layout.deselectAll()
+        layout.itemById("rule-figure-1").setSelected(True)
+        controls.refresh()
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+
+        QTest.keyClick(pane.preview.view, Qt.Key.Key_Delete)
+        _settle(qgis_app, 0.05)
+        assert layout.itemById("rule-figure-1") is None
+        assert layout.itemById("figure-1") is not None
+        assert layout.itemById("figure-1-label") is not None
+
+    def test_a_deleted_figure_is_gone_from_the_exported_page(self, figure_pane) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            finish_cartograph,
+            prepare_cartograph,
+        )
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        _pane, layout = figure_pane
+        runtime = RuntimeBundle(
+            javascript=b"// core",
+            css=b"/* core */",
+            version="0.13.1",
+            sha256="0" * 64,
+            cartograph_javascript=b"// carto",
+            cartograph_css=b"/* carto */",
         )
 
-        pane, layout = pane
-        assert add_callout(layout, QRectF(20, 20, 50, 30), "12 km", "of road")
-        layout.deselectAll()
-        find_part(layout, 0, False).setSelected(True)
-        controls = pane.controls
-        controls.refresh()
-        form = controls.callout_controls
-        assert _visible(controls, form)
-        assert form.value_edit.text() == "12 km"
-        assert form.label_edit.text() == "of road"
-        assert _visible(controls, controls.text_size_row)
-        assert _visible(controls, controls.bold_button)
+        def export() -> str:
+            report = FidelityReportBuilder()
+            project = layout.project()
+            return finish_cartograph(
+                prepare_cartograph(
+                    layout, project, runtime, report, frame_modes={}, raster_cache=None
+                ),
+                project,
+                report,
+            )
 
-    def test_the_entry_stays_enabled_with_many_callouts(self, pane) -> None:
-        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
-
-        pane, layout = pane
-        for n in range(5):
-            assert add_callout(layout, QRectF(20, 20 + 20 * n, 50, 30), str(n), "")
-        action = _menu_action(pane, "Statistic callout")
-        assert action is not None and action.isEnabled()
-
-    def test_picking_something_else_hides_the_form(self, pane) -> None:
-        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
-
-        pane, layout = pane
-        assert add_callout(layout, QRectF(20, 20, 50, 30), "5", "")
-        controls = pane.controls
-        item = _item_of(layout, "map")
-        item.setSelected(True)
-        controls.refresh()
-        assert not _visible(controls, controls.callout_controls)
-        layout.deselectAll()
-        controls.refresh()
-        assert not _visible(controls, controls.callout_controls)
+        html = export()
+        assert ">214<" in html and ">12 km<" in html
+        layout.itemById("figure-0").setText("215")
+        layout.removeLayoutItem(layout.itemById("figure-1"))
+        html = export()
+        assert ">215<" in html and ">214<" not in html and ">12 km<" not in html
 
 
 @pytest.fixture

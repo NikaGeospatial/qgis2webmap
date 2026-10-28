@@ -228,7 +228,7 @@ def cartograph_from_view(
     Raises `ValueError` for an empty or non-finite extent, an invalid CRS or
     an unknown template, page size or orientation.
     """
-    # A design with callouts and none given starts from the older shared
+    # A design with figures and none given starts from the older shared
     # figures a project may still hold, once: they become this layout's own.
     takes_legacy = figures is None and get_template(template_id).takes_figures
     drawn = tuple(project_figures(project)) if takes_legacy else tuple(figures or ())
@@ -1131,8 +1131,8 @@ def _view_around_focus(
 
 #: The project variables older versions kept the key figures in, in order:
 #: each "value | what it is" -- the user's own numbers, never computed here.
-#: A layout now keeps its own callouts (`ui/cartograph/callouts.py`); these
-#: are only read, to give a layout the figures a project already had.
+#: These are only read, to give a new Signal layout the figures a project
+#: already had; they become ordinary text items on that layout.
 FIGURE_VARIABLES = ("nika_figure_1", "nika_figure_2", "nika_figure_3")
 
 
@@ -1158,7 +1158,7 @@ def project_figure_rows(project: QgsProject) -> tuple[tuple[str, str], ...]:
 
 def clear_project_figures(project: QgsProject) -> None:
     """Remove `FIGURE_VARIABLES` from the project: once a layout has taken
-    them as its own callouts, no other layout is to inherit them."""
+    them as its own text items, no other layout is to inherit them."""
     variables = dict(project.customVariables())
     taken = [variables.pop(name, None) for name in FIGURE_VARIABLES]
     if any(value is not None for value in taken):

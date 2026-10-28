@@ -52,7 +52,6 @@ class ItemKind(Enum):
     LEGEND = "legend"
     SCALE_BAR = "scale_bar"
     NORTH_ARROW = "north_arrow"
-    CALLOUT = "callout"
 
 
 #: Items that draw something about a map and so need to be linked to one.
@@ -65,7 +64,6 @@ DEFAULT_SIZE_MM = {
     ItemKind.LEGEND: (50.0, 40.0),
     ItemKind.SCALE_BAR: (50.0, 12.0),
     ItemKind.NORTH_ARROW: (15.0, 15.0),
-    ItemKind.CALLOUT: (50.0, 30.0),
 }
 
 _DEFAULT_TEXT_POINTS = 12.0
@@ -77,7 +75,6 @@ def kind_title(kind: ItemKind) -> str:
         ItemKind.LEGEND: tr("Legend"),
         ItemKind.SCALE_BAR: tr("Scale bar"),
         ItemKind.NORTH_ARROW: tr("North arrow"),
-        ItemKind.CALLOUT: tr("Statistic callout"),
     }[kind]
 
 
@@ -119,8 +116,6 @@ def create_item(
     size their contents need, from the box's corner.
     """
     title = kind_title(kind)
-    if kind is ItemKind.CALLOUT:
-        return _create_callout(layout, rect)
     with one_step(layout, tr("Add {item}").format(item=title.lower())):
         item: QgsLayoutItem
         if kind is ItemKind.TEXT:
@@ -154,18 +149,6 @@ def create_item(
         else:
             item.attemptSetSceneRect(rect)
     return item
-
-
-def _create_callout(layout: QgsLayout, rect: QRectF) -> QgsLayoutItem:
-    """A statistic callout at `rect`'s corner: its value is the item returned
-    (the one selected, with its line and rule beside it)."""
-    from .callouts import add_callout, default_words, find_part, layout_callouts
-
-    value, label = default_words()
-    before = {c.index for c in layout_callouts(layout)}
-    add_callout(layout, rect, value, label)
-    index = next(c.index for c in layout_callouts(layout) if c.index not in before)
-    return find_part(layout, index, False)  # type: ignore[return-value]
 
 
 def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
@@ -209,21 +192,12 @@ def default_rect(layout: QgsLayout, kind: ItemKind, top_left: QPointF) -> QRectF
 
 
 def delete_items(layout: QgsLayout, items: list[QgsLayoutItem]) -> None:
-    """Remove `items` as one undo step. A statistic callout goes whole, the
-    others closing up (`callouts.remove_callout`), not one of its parts."""
+    """Remove `items` as one undo step."""
     if not items:
         return
-    from .callouts import callout_index, remove_callout
-
-    callouts = sorted(
-        {i for item in items if (i := callout_index(item)) is not None}, reverse=True
-    )
     with one_step(layout, tr("Delete items")):
-        for index in callouts:
-            remove_callout(layout, index)
         for item in items:
-            if callout_index(item) is None:
-                layout.removeLayoutItem(item)
+            layout.removeLayoutItem(item)
 
 
 def redraw(item: QgsLayoutItem) -> None:

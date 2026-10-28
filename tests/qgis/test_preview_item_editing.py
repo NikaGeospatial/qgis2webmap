@@ -93,7 +93,7 @@ def _items_of(layout, cls):
 
 
 class TestAddMenu:
-    def test_the_menu_offers_the_four_items(self, one_map) -> None:
+    def test_the_menu_offers_the_four_items_and_a_detail_map(self, one_map) -> None:
         pane, _layout, _frames = one_map
         pane._fill_add_menu()
         assert [a.text() for a in pane.add_menu.actions()] == [
@@ -102,7 +102,6 @@ class TestAddMenu:
             "Scale bar",
             "North arrow",
             "Detail map",
-            "Statistic callout",
         ]
         assert pane.add_button.toolTip()
         assert pane.add_button.accessibleName() == pane.add_button.toolTip()
@@ -122,7 +121,6 @@ class TestAddMenu:
             "Scale bar": False,
             "North arrow": False,
             "Detail map": True,
-            "Statistic callout": True,
         }
         pane.close()
 
