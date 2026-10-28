@@ -85,6 +85,7 @@ from ...core.locator_context import (
     omit_locator,
 )
 from ..i18n import tr
+from ..theme import PANEL_PANE_GAP
 from .flow_layout import flow_row
 from .frames_list import LIVE, STATIC, FramesList, _QuietCombo
 from .item_text_size import text_size_points
@@ -159,7 +160,9 @@ def parse_degrees(text: str) -> float | None:
 
 #: The Edit tab's layout: content inset from the panel's sides, the gap between
 #: neighbouring controls, and the clearance between the tab underline and the
-#: selected-item header (the same for every kind of item).
+#: selected-item header (the same for every kind of item). The panel's pane
+#: gives the first `PANEL_PANE_GAP` of it, so the controls' own top margin
+#: is the rest.
 PANEL_INSET = 12
 PANEL_SPACING = 8
 SELECTED_HEADER_CLEARANCE = 16
@@ -398,7 +401,7 @@ class ContextControls(QFrame):
 
         column = QVBoxLayout(self)
         column.setContentsMargins(
-            PANEL_INSET, SELECTED_HEADER_CLEARANCE, PANEL_INSET, 0
+            PANEL_INSET, SELECTED_HEADER_CLEARANCE - PANEL_PANE_GAP, PANEL_INSET, 0
         )
         column.setSpacing(PANEL_SPACING)
 
