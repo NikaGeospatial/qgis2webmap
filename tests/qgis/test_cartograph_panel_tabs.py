@@ -106,3 +106,43 @@ def test_nothing_but_the_rule_is_drawn_in_the_gap_above_the_tabs(
             assert len(colours) == 1, f"row {y} has stray ink"
     finally:
         dialog.close()
+
+
+def _scrolled_panel(cartograph, qgis_app, index: int, by: int):
+    """The panel's grab with tab `index` scrolled `by` px, and the gap's rows.
+
+    Returns (image, first gap row, row where the page's viewport starts).
+    """
+    tabs = cartograph.panel_tabs
+    tabs.setCurrentIndex(index)
+    scroll = tabs.currentWidget()
+    # Taller than the pane, so there is something to scroll under the top edge.
+    scroll.widget().setMinimumHeight(scroll.viewport().height() + 600)
+    qgis_app.processEvents()
+    scroll.verticalScrollBar().setValue(by)
+    qgis_app.processEvents()
+    panel = cartograph.panel_rule.parentWidget()
+    bar = tabs.tabBar()
+    gap_top = bar.mapTo(panel, QPoint(0, bar.height())).y()
+    page_top = scroll.viewport().mapTo(panel, QPoint(0, 0)).y()
+    return panel.grab().toImage(), gap_top, page_top
+
+
+@pytest.mark.parametrize("index", [0, 1, 3], ids=["layout", "atlas", "edit"])
+def test_scrolled_content_never_shows_in_the_gap_under_the_tabs(
+    qgis_app, project, index
+) -> None:
+    """Content scrolled under the top edge must be clipped crisply: between the
+    tab underline and the page there is only the panel's background."""
+    dialog, cartograph = _open(project, "One")
+    try:
+        for by in (0, 12, 31):
+            image, gap_top, page_top = _scrolled_panel(cartograph, qgis_app, index, by)
+            assert page_top - gap_top >= 8, "no band between the tabs and the page"
+            panel_width = image.width()
+            background = image.pixelColor(2, gap_top + 1)
+            for y in range(gap_top, page_top):
+                for x in range(0, panel_width - 20):
+                    assert image.pixelColor(x, y) == background, (by, x, y)
+    finally:
+        dialog.close()
