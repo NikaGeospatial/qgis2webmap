@@ -2820,6 +2820,41 @@ class TestAtlasTab:
             dialog.close()
             project.setFileName("")
 
+    @staticmethod
+    def _choose_in_print_dialog(qgis_app, key: str, failures: list[str]) -> None:
+        """Answer the Print series chooser like a user: pick `key`, press Print.
+        A bounded fallback closes it and records why, so the run never hangs."""
+        from qgis.PyQt.QtCore import QTimer
+        from qgis.PyQt.QtWidgets import QApplication
+
+        from nika_onlymap_exporter.ui.cartograph.series_print_dialog import (
+            SeriesPrintDialog,
+        )
+
+        deadline = time.monotonic() + 20
+
+        def drive() -> None:
+            dialog = QApplication.activeModalWidget()
+            if not isinstance(dialog, SeriesPrintDialog):
+                if time.monotonic() > deadline:
+                    failures.append("the Print series dialog never appeared")
+                    return
+                QTimer.singleShot(50, drive)
+                return
+            row = next(r for r in dialog.rows if r.key == key)
+            if not row.radio.isEnabled():
+                failures.append(f"the {key!r} way is not offered in the dialog")
+                dialog.reject()
+                return
+            row.radio.click()
+            if dialog.chosen_way() != key or not dialog.print_button.isEnabled():
+                failures.append("Print is not available after choosing the way")
+                dialog.reject()
+                return
+            dialog.print_button.click()
+
+        QTimer.singleShot(0, drive)
+
     def test_print_and_image_export_open_the_atlas_triggers(
         self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
@@ -2834,7 +2869,10 @@ class TestAtlasTab:
             assert _wait_for(qgis_app, lambda: tab.print_button.isEnabled(), timeout=60)
             opened = []
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
+            failures: list[str] = []
+            self._choose_in_print_dialog(qgis_app, "web", failures)
             tab.print_button.click()
+            assert not failures, failures
             tab._host.open_pages("zip")
             # Both, in order, even when a save is still landing.
             assert _wait_for(qgis_app, lambda: len(opened) == 2, timeout=60)

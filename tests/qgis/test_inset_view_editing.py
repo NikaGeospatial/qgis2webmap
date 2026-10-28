@@ -1029,10 +1029,12 @@ def _wait_for_rendered_map(qgis_app, pane, item, seconds: float = 40.0) -> None:
 
 
 def _richest_patch(image, box: QRect, size: int = 24) -> QRect:
-    """The size x size square inside `box` with the most distinct colours."""
+    """The size x size square inside `box` with the most distinct colours,
+    kept clear of the frame's edge, where the selection handles and rotate
+    icons are drawn: they stay put in a drag, so they are not a landmark."""
     best, best_rect = -1, QRect()
-    for y in range(box.top() + 10, box.bottom() - size - 110, 12):
-        for x in range(box.left() + 10, box.right() - size - 100, 12):
+    for y in range(box.top() + 40, box.bottom() - size - 110, 12):
+        for x in range(box.left() + 40, box.right() - size - 100, 12):
             colours = {
                 image.pixel(x + i, y + j)
                 for i in range(0, size, 3)

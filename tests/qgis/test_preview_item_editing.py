@@ -140,6 +140,8 @@ class TestAddMenu:
     def test_the_add_button_stays_in_the_preview_when_narrow(
         self, qgis_app, one_map
     ) -> None:
+        from qgis.PyQt.QtCore import QPoint, QRect
+
         from nika_onlymap_exporter.ui import theme
 
         pane, _layout, _frames = one_map
@@ -149,13 +151,20 @@ class TestAddMenu:
         _settle(qgis_app, 0.1)
         assert pane.add_button.text() == "Add item"
         assert pane.add_button.toolTip()
-        viewport = pane.preview.view.viewport()
-        # Where it is seen: the button's box in the viewport's own coordinates.
+        # Where it is seen: the button's box in the preview's own coordinates.
+        # It is whole inside the preview, shown, and clear of the page view
+        # (it sits in the strip below it, never over the page).
+        preview = pane.preview
         box = pane.add_button.rect()
-        top_left = viewport.mapFromGlobal(pane.add_button.mapToGlobal(box.topLeft()))
-        assert top_left.x() >= 0 and top_left.y() >= 0
-        assert top_left.x() + box.width() <= viewport.width()
-        assert top_left.y() + box.height() <= viewport.height()
+        top_left = preview.mapFromGlobal(pane.add_button.mapToGlobal(box.topLeft()))
+        seen = QRect(top_left, box.size())
+        assert pane.add_button.isVisibleTo(preview)
+        assert preview.rect().contains(seen), (seen, preview.rect())
+        view_box = QRect(
+            preview.mapFromGlobal(preview.view.mapToGlobal(QPoint(0, 0))),
+            preview.view.size(),
+        )
+        assert not view_box.intersects(seen), (seen, view_box)
 
 
 KINDS = [
