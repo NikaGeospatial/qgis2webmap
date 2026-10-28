@@ -1368,6 +1368,10 @@ class SaveLocation(QWidget):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self.label.setAccessibleName(tr("File to save to"))
+        # The name is cut to the label's own width, which changes when the
+        # name and the status stack or sit side by side, not only when this
+        # row is resized.
+        self.label.installEventFilter(self)
         self._info_row.addWidget(self.label, 1)
         self._row.addWidget(self._info, 1)
         self.change_button = QPushButton(tr("Change save location…"), self)
@@ -1400,6 +1404,12 @@ class SaveLocation(QWidget):
         self._wrap_if_needed()
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if (
+            watched is self.label
+            and event is not None
+            and event.type() == QEvent.Type.Resize
+        ):
+            self._elide()
         if (
             watched is self._status
             and event is not None

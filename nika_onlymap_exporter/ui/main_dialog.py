@@ -987,7 +987,9 @@ class MainDialog(QDialog):
 
         self._header = self._build_header()
         layout.addWidget(self._header)
-        layout.addWidget(self.views)
+        # The screen takes every spare pixel of height; the rows below it keep
+        # only what they need, however tall the window is tiled.
+        layout.addWidget(self.views, 1)
         # Puts Map/Appearance or Cartograph/Frames on screen to match what was
         # last saved, without marking a project that only opened the dialog as
         # changed - see `_apply_output`'s `persist` argument.

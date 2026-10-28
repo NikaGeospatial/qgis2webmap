@@ -333,3 +333,76 @@ class TestSaveLocationWrapsBeforeClipping:
             )
         finally:
             dialog.close()
+
+
+class TestWorkspaceFillsTheWindowHeight:
+    """However the window is tiled, the page and its panel run down to the
+    bottom row and the bottom row sits on the status line: spare height never
+    ends up as an empty band between them."""
+
+    #: Normal spacing between rows, with room for a margin and a border.
+    MAX_GAP = 24
+
+    def _shown(self, qgis_app, project, size):
+        # A long layout name makes a long file name, which is what wraps the
+        # bottom row and used to make it ask for half the window.
+        _add_layout(
+            project,
+            "03 - Three-sheet reference atlas for the whole canyon corridor - A4",
+            [("Overview", "EPSG:4326")],
+        )
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        dialog.resize(*size)
+        dialog.show()
+        _settle(qgis_app, 1.0)
+        return dialog
+
+    @staticmethod
+    def _vertical(widget, dialog) -> tuple[int, int]:
+        from qgis.PyQt.QtCore import QPoint
+
+        top = widget.mapTo(dialog, QPoint(0, 0)).y()
+        return top, top + widget.height()
+
+    @pytest.mark.parametrize("size", [(760, 1020), (1280, 800)])
+    def test_no_empty_band_between_workspace_bottom_row_and_status_line(
+        self, qgis_app, project, size
+    ) -> None:
+        dialog = self._shown(qgis_app, project, size)
+        try:
+            cartograph = dialog._cartograph
+            preview_top, preview_bottom = self._vertical(cartograph.page_pane, dialog)
+            panel_top, panel_bottom = self._vertical(cartograph.panel_scroll, dialog)
+            row_top, row_bottom = self._vertical(cartograph.save_bar, dialog)
+            status_top, status_bottom = self._vertical(dialog.status_label, dialog)
+            assert preview_bottom <= row_top
+            assert panel_bottom <= row_top
+            assert row_top - preview_bottom <= self.MAX_GAP
+            assert row_top - panel_bottom <= self.MAX_GAP
+            # The row and the status line share the bottom of the window.
+            assert dialog.height() - max(row_bottom, status_bottom) <= self.MAX_GAP
+            assert abs(status_top - row_top) <= self.MAX_GAP
+            # The workspace is most of the window, not half of it.
+            assert preview_bottom - preview_top >= dialog.height() * 0.7
+            assert panel_bottom - panel_top >= dialog.height() * 0.7
+        finally:
+            dialog.close()
+
+    def test_the_preview_refits_to_the_taller_viewport(self, qgis_app, project) -> None:
+        dialog = self._shown(qgis_app, project, (760, 600))
+        try:
+            pane = dialog._cartograph.page_pane
+            viewport = pane.preview.view.viewport()
+            short = viewport.height()
+            dialog.resize(760, 1020)
+            _settle(qgis_app, 1.0)
+            assert viewport.height() >= short + 300
+            page = pane.preview.view.mapFromScene(
+                pane.preview._current_page_rect()
+            ).boundingRect()
+            assert viewport.rect().contains(page)
+            # Centred in the taller viewport, not left at the old height.
+            assert page.center().y() == pytest.approx(viewport.height() / 2, abs=40)
+        finally:
+            dialog.close()
