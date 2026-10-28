@@ -34,6 +34,16 @@ features and assembling the HTML - so the dialog runs it off the GUI thread
 without handing the worker the project. `export_layout_to_cartograph` runs all
 three, for callers already on one thread.
 
+**Static frames are drawn off the GUI thread.** A static frame's picture is
+the slowest part of a build, and drawing it with the layout's own exporter
+holds the GUI thread for the whole render. With `pending_static`,
+`prepare_cartograph` instead starts QGIS's own render job for each frame
+(`exporters/frame_raster.AsyncFrameRender`, which draws the picture the
+exporter would, pixel for pixel) and returns; the caller finishes the pictures
+with `with_static_images` when the jobs are done, and `remember_static_frames`
+hands them to the cache. A frame the job cannot reproduce exactly is drawn
+the synchronous way.
+
 **Static rasters are cached.** Autosave rebuilds the whole cartograph after
 every edit, and a static frame's region render is by far its slowest part.
 `StaticFrameCache` keeps each frame's last render and reuses it while
