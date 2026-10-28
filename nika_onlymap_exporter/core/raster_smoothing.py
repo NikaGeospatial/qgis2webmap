@@ -190,7 +190,7 @@ def own_layers(map_item: QgsLayoutItemMap) -> None:
                 if layer.id() in overrides
             }
         )
-        set_frame_layers(map_item, drawn, project)
+        set_frame_layers(map_item, drawn)
     elif not map_item.keepLayerSet():
         set_frame_layers(map_item, rendered_layers(map_item))
 

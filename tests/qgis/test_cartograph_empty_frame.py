@@ -43,7 +43,11 @@ from test_cartograph_layer_membership import (  # noqa: F401 - fixtures
 from nika_onlymap_exporter.core import live_count as lc
 from nika_onlymap_exporter.core.cartograph_export import export_layout_to_cartograph
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
-from nika_onlymap_exporter.core.frame_layers import is_blank_layer, rendered_layers
+from nika_onlymap_exporter.core.frame_layers import (
+    is_deliberately_empty,
+    rendered_layers,
+    set_frame_layers,
+)
 from nika_onlymap_exporter.ui.cartograph.layer_membership import set_layer_included
 
 ALL = (PEAKS, TRAILS, PARCELS)
@@ -54,7 +58,7 @@ def _drawn_names(map_item) -> list[str]:
 
 
 def _raw_qgis_layers(map_item) -> list[str]:
-    """What QGIS itself renders for the frame, blank placeholder included."""
+    """What QGIS itself renders for the frame."""
     return [layer.name() for layer in map_item.layersToRender()]
 
 
@@ -102,8 +106,9 @@ class TestRemovingTheLastLayer:
 
         # QGIS itself, as the preview and a PDF/PNG ask it.
         assert _drawn_names(world.main) == []
-        # ...and QGIS draws no project layer for it, only the empty placeholder.
-        assert all(is_blank_layer(layer) for layer in world.main.layersToRender())
+        # ...and QGIS itself draws no project layer for it.
+        assert world.main.layersToRender() == []
+        assert is_deliberately_empty(world.main)
         assert _paint(world.layout, world.main) == {"red": 0, "blue": 0, "green": 0}
         # The inclusion list.
         assert not any(_ticked(dialog, name) for name in ALL)
@@ -191,17 +196,43 @@ class TestRemovingTheLastLayer:
         assert _drawn_names(world.main) == []
         assert sorted(_raw_qgis_layers(inset)) == sorted(ALL)
 
-    def test_the_blank_layer_stays_out_of_the_layers_panel(self, world, dialog) -> None:
+    def test_the_project_gains_no_layer(self, world, dialog) -> None:
+        before = set(world.project.mapLayers())
         _empty_the_frame(dialog)
-        root = world.project.layerTreeRoot()
-        blanks = [
-            layer
-            for layer in world.project.mapLayers().values()
-            if is_blank_layer(layer)
-        ]
-        assert len(blanks) == 1
-        assert root.findLayer(blanks[0].id()) is None
-        assert {node.name() for node in root.findLayers()} == set(ALL)
+        assert set(world.project.mapLayers()) == before
+
+    def test_a_users_own_layers_expression_survives_add_back(
+        self, world, dialog
+    ) -> None:
+        """Only the empty marker we set is removed when a layer comes back."""
+        from qgis.core import QgsLayoutObject, QgsProperty
+
+        inset = _add_map(world.layout, "inset", QRectF(10, 170, 50, 30))
+        mine = QgsProperty.fromExpression("'Trails'")
+        inset.dataDefinedProperties().setProperty(
+            QgsLayoutObject.DataDefinedProperty.MapLayers, mine
+        )
+        assert not is_deliberately_empty(inset)
+        assert _drawn_names(inset) == [TRAILS]
+        set_frame_layers(inset, [])
+        assert _drawn_names(inset) == []
+        set_frame_layers(inset, [world.layers[PEAKS]])
+        prop = inset.dataDefinedProperties().property(
+            QgsLayoutObject.DataDefinedProperty.MapLayers
+        )
+        assert not is_deliberately_empty(inset)
+        assert not prop.isActive()
+
+    def test_a_users_layers_expression_is_what_rendered_layers_reports(
+        self, world
+    ) -> None:
+        from qgis.core import QgsLayoutObject, QgsProperty
+
+        world.main.dataDefinedProperties().setProperty(
+            QgsLayoutObject.DataDefinedProperty.MapLayers,
+            QgsProperty.fromExpression("'Trails'"),
+        )
+        assert _drawn_names(world.main) == [TRAILS]
 
     def test_the_legend_lists_nothing(self, world, dialog) -> None:
         _empty_the_frame(dialog)

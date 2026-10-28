@@ -596,7 +596,7 @@ class _Builder:
 
         layers = self.frame_layers.get(frame.id)
         if layers is not None:
-            set_frame_layers(map_item, layers, self.project)
+            set_frame_layers(map_item, layers)
 
         if frame.mode == "static":
             crs, extent, rotation = self._static_extent(frame, subject)

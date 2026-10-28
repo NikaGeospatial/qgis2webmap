@@ -183,7 +183,7 @@ def _apply_to_map(
         map_item.setKeepLayerStyles(map_item.keepLayerStyles() or bool(active))
         map_item.setLayerStyleOverrides(active)
         _save_inactive_overrides(map_item, stash)
-    set_frame_layers(map_item, layers, project)
+    set_frame_layers(map_item, layers)
     map_item.invalidateCache()
 
 
