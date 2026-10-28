@@ -1365,13 +1365,30 @@ class PagePane(QWidget):
         )
         self.legend_warning.setVisible(bool(count))
 
+    def _schedule_legend_refresh(self, *_args: object) -> None:
+        if not sip.isdeleted(self._legend_refresh):
+            self._legend_refresh.start()
+
     def _watch_for_legend_changes(self, layout) -> None:  # QgsPrintLayout | None
-        if layout is None or layout is self._watched_layout:
+        if layout is self._watched_layout:
             return
+        # Bound to this page (not a lambda) so Qt drops the connections when
+        # the page goes; a layout outliving the page must not call into it.
+        previous = self._watched_layout
+        if previous is not None and not sip.isdeleted(previous):
+            for signal in (
+                previous.undoStack().stack().indexChanged,
+                previous.changed,
+            ):
+                try:
+                    signal.disconnect(self._schedule_legend_refresh)
+                except (TypeError, RuntimeError):
+                    pass
         self._watched_layout = layout
-        schedule = self._legend_refresh.start
-        layout.undoStack().stack().indexChanged.connect(lambda _i: schedule())
-        layout.changed.connect(schedule)
+        if layout is None:
+            return
+        layout.undoStack().stack().indexChanged.connect(self._schedule_legend_refresh)
+        layout.changed.connect(self._schedule_legend_refresh)
 
     def _adjust_legend(self) -> None:
         """Select the legend that leaves entries out and open its editor."""
