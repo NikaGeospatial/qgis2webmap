@@ -27,10 +27,11 @@ import re
 import sys
 import time
 import traceback
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from qgis.core import QgsLayoutItemMap
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette
@@ -89,6 +90,7 @@ from ...core.settings import (
     FrameChoice,
     save_state,
 )
+from ...exporters.frame_raster import encode_png
 from ...packaging.runtime_manager import (
     RuntimeBundle,
     RuntimeNotAcceptedError,
@@ -124,7 +126,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
 
     # QtWidgets on Qt 5, QtGui on Qt 6.
-    from qgis.core import QgsPrintLayout
+    from qgis.core import QgsPrintLayout, QgsProject
     from qgis.PyQt.QtGui import QUndoStack
 
     from ...core.canvas_cartograph import LayerRevisions
@@ -139,6 +141,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # if this tab had one - collapses into one rebuild, the same ~600 ms the plan
 # settles on for the document model.
 AUTOSAVE_DEBOUNCE_MS = 600
+# How long an autosave may keep waiting for a drag to end or the preview map to
+# finish drawing before it runs anyway.
+AUTOSAVE_DEFER_LIMIT_S = 4.0
 #: How long a restyle burst must rest before the preview is redrawn.
 REFRESH_DEBOUNCE_MS = 120
 
@@ -264,6 +269,24 @@ def _forget_build_commands(layout: QgsPrintLayout) -> None:
     layout.undoStack().stack().clear()
 
 
+class _StaticRenders:
+    """The build phase in which QGIS draws the static frames' pictures off the
+    GUI thread. It stands in `CartographController._job` so that everything
+    asking whether a build is in flight - Preview and Share waiting for the
+    latest edits, the status line, the web-map job - sees this phase too."""
+
+    def __init__(self, pending: list[cartograph_export.PendingStaticFrame]) -> None:
+        self.pending = pending
+
+    @property
+    def all_done(self) -> bool:
+        return all(frame.render.done for frame in self.pending)
+
+    def cancel(self) -> None:
+        for frame in self.pending:
+            frame.render.cancel()
+
+
 class CartographController:
     """Owns the Cartograph output's widgets, state and autosave job."""
 
@@ -287,7 +310,12 @@ class CartographController:
         # Which layers the layout's map frame draws, edited from the Layers list.
         self.membership = LayerMembership(self)
 
-        self._job: BackgroundJob | None = None
+        # The build in flight: first the static frames being drawn
+        # (`_StaticRenders`), then the worker reading the project.
+        self._job: BackgroundJob | _StaticRenders | None = None
+        # When the autosave was first put off for the preview still drawing
+        # or the user still dragging (None when it is not being put off).
+        self._deferred_since: float | None = None
         self._last_saved_at: float | None = None
         self._last_saved_bytes: int | None = None
         self._last_error = ""
@@ -411,7 +439,9 @@ class CartographController:
         # thread still running when its dialog is destroyed takes QGIS down.
         self._shut_down = True
         job, self._job = self._job, None
-        if job is not None:
+        if isinstance(job, _StaticRenders):
+            job.cancel()
+        elif job is not None:
             # Its result is for widgets that are about to go: never deliver it.
             for signal in (job.succeeded, job.failed):
                 with contextlib.suppress(TypeError, RuntimeError):
@@ -1693,15 +1723,46 @@ class CartographController:
         self._update_status_label()
         self._sync_report_display()
 
-    def _run_autosave(self) -> None:
+    def _run_autosave(self, urgent: bool = False) -> None:
         """The debounce timer's slot. Never lets an exception escape: from a
         timer it would surface as a Python error dialog in QGIS, and the
-        status line exists to say why a save did not happen."""
+        status line exists to say why a save did not happen.
+
+        A save that nobody is waiting on (`urgent` is for a Check or a page
+        opened from it) lets the user finish first: while a mouse button is
+        held on the page (a drag) or the preview map is still drawing, it
+        tries again after another debounce - for at most
+        `AUTOSAVE_DEFER_LIMIT_S`, so a map that never finishes drawing cannot
+        hold the file back."""
         try:
+            if not urgent and self._defer_for_preview():
+                return
+            self._deferred_since = None
             self._start_build()
         except Exception as exc:
-            self._job = None
+            self._cancel_static_renders()
             self._on_build_failed(str(exc), traceback.format_exc())
+
+    def _defer_for_preview(self) -> bool:
+        """Whether this autosave should wait: the user is mid-gesture, or the
+        preview is still drawing what they just changed."""
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            return False
+        busy = QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton or any(
+            item.isDrawing()
+            for item in layout.items()
+            if isinstance(item, QgsLayoutItemMap)
+        )
+        if not busy:
+            return False
+        now = time.monotonic()
+        if self._deferred_since is None:
+            self._deferred_since = now
+        if now - self._deferred_since >= AUTOSAVE_DEFER_LIMIT_S:
+            return False
+        self._autosave_timer.start()
+        return True
 
     def _start_build(self) -> None:
         if self._current_layout is None or sip.isdeleted(self._current_layout):
@@ -1744,9 +1805,19 @@ class CartographController:
         # drawn at least that sharp, whatever its own choice.
         export_dpi = print_settings.dpi if print_settings else DEFAULT_EXPORT_DPI
 
+        # The edits this build carries: those made before it took its
+        # snapshot of the layout, whatever is made while it runs.
+        edits = self._edits_made
+        self._job_edits = edits
+        built_for = self.state.cartograph_layout
+
         # The layout half here, on the GUI thread: it hides and renders the
         # layout's own items, and the layout may be open in its designer.
-        # Only the layer-reading half goes to the worker.
+        # Only the layer-reading half goes to the worker. A static frame's
+        # picture is the slow part, so it is drawn by QGIS's own render job:
+        # started here, finished by `_continue_build` once the job is done,
+        # with the event loop running in between.
+        pending: list[cartograph_export.PendingStaticFrame] = []
         self._exporting = True
         try:
             prepared = cartograph_export.prepare_cartograph(
@@ -1758,8 +1829,11 @@ class CartographController:
                 frame_dpis=frame_dpis,
                 static_dpi=DEFAULT_STATIC_DPI,
                 export_dpi=export_dpi,
+                pending_static=pending,
             )
         except Exception as exc:
+            for frame in pending:
+                frame.render.cancel()
             self._on_build_failed(str(exc), traceback.format_exc())
             return
         finally:
@@ -1773,6 +1847,63 @@ class CartographController:
             )
         self._last_page_label = page_label(prepared.spec)
         self._pending_spec = prepared.spec
+
+        def carry_on() -> None:
+            self._continue_build(
+                path, layout, project, report, prepared, pending, built_for, edits
+            )
+
+        if not pending:
+            carry_on()
+            return
+        phase = _StaticRenders(pending)
+        self._job = phase
+        self._update_status_label()
+        for frame in pending:
+            frame.render.finished.connect(
+                lambda: self._static_render_finished(phase, carry_on)
+            )
+        self._static_render_finished(phase, carry_on)
+
+    def _static_render_finished(
+        self, phase: _StaticRenders, carry_on: Callable[[], None]
+    ) -> None:
+        """One static frame's picture is drawn; go on once all of them are."""
+        if self._job is not phase or self._shut_down or not phase.all_done:
+            return
+        self._job = None
+        try:
+            carry_on()
+        except Exception as exc:
+            self._on_build_failed(str(exc), traceback.format_exc())
+
+    def _cancel_static_renders(self) -> None:
+        """Abandon the static frames being drawn, if a build is in that phase
+        (a build that failed before they finished)."""
+        phase = self._job
+        if isinstance(phase, _StaticRenders):
+            self._job = None
+            phase.cancel()
+
+    def _continue_build(
+        self,
+        path: Path,
+        layout: QgsPrintLayout,
+        project: QgsProject,
+        report: FidelityReportBuilder,
+        prepared: cartograph_export.PreparedCartograph,
+        pending: list[cartograph_export.PendingStaticFrame],
+        built_for: str | None,
+        edits: int,
+    ) -> None:
+        """The rest of a build, once every static frame's picture is drawn:
+        the live frames' layer reads, the legends, then the worker."""
+        if sip.isdeleted(layout):
+            # Destroyed while its frames were drawn; `layoutRemoved` picks
+            # another layout once it is gone.
+            self._cancel_waiting_pages()
+            self._update_status_label()
+            return
 
         # The Layers tab's popup and label choices, copied: the worker must
         # not read state the GUI thread may be editing.
@@ -1807,24 +1938,34 @@ class CartographController:
         # The dialog's own writer, so a licence key the user set reaches the
         # cartograph's live frames exactly as it reaches a web map.
         writer = self.dialog._writer()
+        pictures: dict[str, bytes] = {}
 
         def work(_progress: object) -> cartograph_export.FinishedCartograph:
+            # The static frames' pictures are encoded here, off the GUI thread
+            # (a 300 dpi map is several megabytes of PNG).
+            for frame in pending:
+                pictures[frame.frame_id] = encode_png(frame.render.take_image())
             return cartograph_export.finish_cartograph_full(
-                prepared, None, report, writer=writer, layer_settings=layers
+                cartograph_export.with_static_images(prepared, pictures),
+                None,
+                report,
+                writer=writer,
+                layer_settings=layers,
             )
 
         job = BackgroundJob(work, self.dialog)
         self._job = job
-        built_for = self.state.cartograph_layout
         self._builds_started += 1
         build_number = self._builds_started
-        edits = self._edits_made
-        self._job_edits = edits
-        job.succeeded.connect(
-            lambda finished: self._on_build_succeeded(
+
+        def succeeded(finished: cartograph_export.FinishedCartograph) -> None:
+            # The cache listens to layers, which only the GUI thread may do.
+            cartograph_export.remember_static_frames(pending, pictures)
+            self._on_build_succeeded(
                 path, finished, report, built_for, build_number, edits
             )
-        )
+
+        job.succeeded.connect(succeeded)
         job.failed.connect(
             lambda message, details: self._on_build_failed(message, details, built_for)
         )
@@ -2130,7 +2271,7 @@ class CartographController:
         self._check_requested = True
         self.schedule_autosave()
         self._autosave_timer.stop()
-        self._run_autosave()
+        self._run_autosave(urgent=True)
         self._sync_report_display()
 
     @property
