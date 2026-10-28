@@ -47,6 +47,7 @@ from qgis.PyQt.QtGui import (
     QMouseEvent,
     QPainter,
     QPaintEvent,
+    QRegion,
     QResizeEvent,
     QShowEvent,
 )
@@ -385,12 +386,12 @@ class LayoutPreview(QStackedWidget):
         they sit still while the page zooms and pans, are not drawn into an
         export, a thumbnail or the colour-vision preview's filter, and still
         take clicks and Tab. They share a container exactly as big as the
-        stack, which lets mouse events through (so even the gap between the
-        buttons is the view's). Placed by `_place_floating_controls` whenever
-        the page or the viewport moves.
+        stack, masked to the two buttons (so even the gap between them is the
+        view's; "transparent for mouse events" would also pass clicks through
+        the buttons themselves, children included). Placed by
+        `_place_floating_controls` whenever the page or the viewport moves.
         """
         self._overlay = QWidget(self.view)
-        self._overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.add_button = self._floating_button(
             tr("Add item"),
@@ -482,6 +483,11 @@ class LayoutPreview(QStackedWidget):
             button.move(0, top)
             top += height + FLOAT_GAP
         self._overlay.resize(width, top - FLOAT_GAP)
+        self._overlay.setMask(
+            QRegion(QRect(0, 0, width, height)).united(
+                QRegion(QRect(0, height + FLOAT_GAP, width, height))
+            )
+        )
         viewport = self.view.viewport()
         rect = viewport.geometry()
         x = rect.right() + 1 - FLOAT_MARGIN - self._overlay.width()

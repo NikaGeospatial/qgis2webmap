@@ -234,17 +234,48 @@ class TestOverlay:
         assert view.currentLayout().selectedLayoutItems() == []
         assert (_scale(pane), view.mapToScene(QPoint(0, 0))) == before
 
-    def test_the_overlay_does_not_block_the_page_around_the_buttons(self, pane) -> None:
-        """Only the buttons take the mouse: a point in the overlay's gap is
-        the view's."""
-        from qgis.PyQt.QtCore import Qt
+    def test_a_real_click_lands_on_each_button_and_not_on_the_gap(
+        self, qgis_app, pane
+    ) -> None:
+        """Hit-testing as the compositor's mouse does: the widget under the
+        pointer is the button itself over a button, the page's viewport in the
+        gap between them and just beside them."""
+        from qgis.PyQt.QtCore import QPoint
+        from qgis.PyQt.QtWidgets import QApplication
 
-        assert pane.preview._overlay.testAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        viewport = pane.preview.view.viewport()
+
+        def under(point: QPoint):
+            return QApplication.widgetAt(viewport.mapToGlobal(point))
+
+        for button in (pane.add_button, pane.fit_button):
+            x, y, w, h = _button_box(pane, button)
+            assert under(QPoint(x + w // 2, y + h // 2)) is button
+        add = _button_box(pane, pane.add_button)
+        fit = _button_box(pane, pane.fit_button)
+        gap_y = (add[1] + add[3] + fit[1]) // 2
+        assert under(QPoint(add[0] + add[2] // 2, gap_y)) is viewport
+        assert under(QPoint(add[0] - 6, add[1] + add[3] // 2)) is viewport
+
+    def test_clicking_the_real_fit_button_refits(self, qgis_app, pane) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QApplication
+
+        _wheel_zoom(pane, 120)
+        _settle(qgis_app)
+        viewport = pane.preview.view.viewport()
+        x, y, w, h = _button_box(pane, pane.fit_button)
+        at = viewport.mapToGlobal(QPoint(x + w // 2, y + h // 2))
+        target = QApplication.widgetAt(at)
+        QTest.mouseClick(
+            target,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            target.mapFromGlobal(at),
         )
-        assert not pane.add_button.testAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents
-        )
+        _settle(qgis_app)
+        _assert_fitted(pane)
 
     def test_the_buttons_are_not_in_a_page_render(self, pane) -> None:
         """A grab of the viewport shows them; the export's own render of the
