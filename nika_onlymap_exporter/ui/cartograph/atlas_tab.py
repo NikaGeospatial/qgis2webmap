@@ -1,14 +1,21 @@
-"""The Cartograph output's Atlas tab: one page per feature.
+"""The Cartograph output's Atlas tab: "Create a map series", one page per feature.
 
-The atlas is the print layout's own (`QgsLayoutAtlas`), so this tab edits the
-layout - the same settings QGIS's Atlas panel shows - and every change goes on
-the layout's undo stack, where the layout designer's Undo takes it back. The
+The series is the print layout's own atlas (`QgsLayoutAtlas`), so this tab edits
+the layout - the same settings QGIS's Atlas panel shows - and every change goes
+on the layout's undo stack, where the layout designer's Undo takes it back. The
 cartograph follows on the next autosave like any other layout edit.
 
-What the tab adds that QGIS's panel cannot know is whether the cartograph
-will actually page: the runtime pages only a LIVE frame that draws the
-coverage layer (`core/layout_reader.py` records a Blocked row with the remedy
-when it cannot), so the tab shows those rows' words next to the settings.
+The tab is a short path: choose what receives a page, preview the series in the
+page beside the panel, export or print it. Nothing in that path asks for an
+expression or for knowledge of QGIS's atlas panel; the rest of QGIS's atlas
+settings sit in two closed sections underneath, and open by themselves when one
+of them is set or wrong.
+
+The preview is the page itself: moving through the series seeks QGIS's atlas
+(`core/atlas_preview.py`), so the maps, labels and scale bars of the main
+renderer change. It runs only while this tab is on screen and puts the layout
+back when it is not. Readiness is decided per output (`core/atlas_series.py`):
+the saved cartograph's page count gates nothing here.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -18,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from qgis.core import (
@@ -28,21 +36,34 @@ from qgis.core import (
 )
 from qgis.gui import QgsFieldExpressionWidget, QgsMapLayerComboBox
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtCore import QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QHideEvent, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ...core.layout_reader import atlas_page_count, expression_error
+from ...core.atlas_preview import AtlasPreview
+from ...core.atlas_series import (
+    Operation,
+    SeriesState,
+    SeriesStatus,
+    driven_maps,
+    feature_summary,
+    layer_problem,
+    layout_maps,
+    map_ref,
+    series_status,
+)
+from ...core.layout_reader import expression_error
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
-from .frames import layout_map_items
 from .panel_section import PanelSection
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -53,18 +74,38 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: own default in the Item Properties panel.
 DEFAULT_ATLAS_MARGIN = 0.1
 
+#: The ways a map frames each page, in the order the tab lists them.
+_FRAMING = (
+    (QgsLayoutItemMap.AtlasScalingMode.Auto, "Fit area with margin"),
+    (QgsLayoutItemMap.AtlasScalingMode.Fixed, "Fixed scale"),
+    (QgsLayoutItemMap.AtlasScalingMode.Predefined, "Predefined scales"),
+)
+
+
+@dataclass
+class AtlasHost:
+    """What the tab asks of the Cartograph controller."""
+
+    # The map's "live" / "static" choice from the Map frames list.
+    frame_mode: Callable[[str], str]
+    # Switch these maps to Interactive, as one undoable step.
+    switch_to_interactive: Callable[[Sequence[str]], None]
+    # Save the series as one PDF through QGIS itself.
+    export_pdf: Callable[[], None]
+    # Open the saved cartograph on its pages: "zip", "print" or "html".
+    open_pages: Callable[[str], None]
+    # The existing layout-template route, for a layout with no map.
+    browse_templates: Callable[[], None]
+
 
 class AtlasTab(QWidget):
-    """Mirrors and edits one layout's atlas. `changed` fires after an edit."""
+    """Mirrors and edits one layout's series. `changed` fires after an edit."""
 
     changed = pyqtSignal()
 
-    def __init__(
-        self,
-        open_all_pages: Callable[[str], None],
-        parent: QWidget | None = None,
-    ) -> None:
+    def __init__(self, host: AtlasHost, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._host = host
         self._layout: QgsPrintLayout | None = None
         self._loading = False
         # True while this tab pushes its own undo command, so only an Undo or
@@ -74,247 +115,627 @@ class AtlasTab(QWidget):
         # The atlas as last shown or edited here; an undo-stack move that
         # leaves it alone (another tab's own command) is not an atlas change.
         self._shown: tuple[object, ...] = ()
-        # `open_all_pages("zip" | "print")`: the controller opens the saved
-        # cartograph with this plugin's `?atlas=` trigger.
-        self._open_all_pages = open_all_pages
+        self._status = SeriesStatus(SeriesState.OFF)
+        # Problems the last save reported for the atlas (cartograph outputs).
+        self._saved_problems: tuple[str, ...] = ()
+        self._filter_error: str | None = None
+        self._sort_error: str | None = None
+        # A coverage layer taken out of the project under an enabled series.
+        self._layer_removed = False
+        # The coverage layer the series was last seen on.
+        self._coverage_id = ""
+        self._preview: AtlasPreview | None = None
+        self._page_index = 0
+        self._page_count = 0
+        self._page_feature: int | None = None
+        # Counts every change of setup, so a result prepared for an older one
+        # is dropped instead of shown over the newer.
+        self._generation = 0
+        self._prepare_timer = QTimer(self)
+        self._prepare_timer.setSingleShot(True)
+        self._prepare_timer.setInterval(0)
+        self._prepare_timer.timeout.connect(self._run_prepare)
 
         page = QVBoxLayout(self)
-        intro = FittedLabel(tr("One page per feature of a coverage layer."), self)
-        intro.setToolTip(
-            tr(
-                "One page per feature of a coverage layer, like QGIS's own "
-                "atlas: the map that follows the atlas zooms to each feature "
-                "in turn, and text can show the feature's fields."
-            )
+        heading = QLabel(tr("Create a map series"), self)
+        heading.setProperty("role", "panelHeading")
+        page.addWidget(heading)
+        self.intro_label = FittedLabel(
+            tr("Use this layout to make a separate map for each area or location."),
+            self,
         )
-        intro.setWordWrap(True)
-        page.addWidget(intro)
+        page.addWidget(self.intro_label)
 
-        self.enabled_check = QCheckBox(tr("Generate an atlas"), self)
+        self.enabled_check = QCheckBox(tr("Create a map series"), self)
         self.enabled_check.toggled.connect(self._on_enabled)
         page.addWidget(self.enabled_check)
 
-        # No box: it sits in the panel's Atlas tab, under that name already,
-        # and an untitled box kept an empty title's gap above its fields.
+        # No box: it sits in the panel's Atlas tab, under that name already.
         settings = QWidget(self)
-        settings_column = QVBoxLayout(settings)
-        settings_column.setContentsMargins(0, 0, 0, 0)
+        column = QVBoxLayout(settings)
+        column.setContentsMargins(0, 4, 0, 0)
+        self.settings_box = settings
+        page.addWidget(settings)
+
+        self._build_source(column, settings)
+        self._build_map(column, settings)
+        self._build_preview(column, settings)
+        self._build_actions(column, settings)
+        self._build_framing(column, settings)
+        self._build_advanced(column, settings)
+        page.addStretch(1)
+
+        self.show_layout(None)
+
+    # ---- Building ----------------------------------------------------------
+
+    def _build_source(self, column: QVBoxLayout, parent: QWidget) -> None:
+        self.source_label = FittedLabel(tr("Make one page for each feature in"), parent)
+        column.addWidget(self.source_label)
+        self.coverage_combo = QgsMapLayerComboBox(parent)
+        self.coverage_combo.setFilters(
+            QgsMapLayerProxyModel.Filter.PointLayer
+            | QgsMapLayerProxyModel.Filter.LineLayer
+            | QgsMapLayerProxyModel.Filter.PolygonLayer
+        )
+        self.coverage_combo.setAllowEmptyLayer(True, tr("Choose a layer…"))
+        self.coverage_combo.setAccessibleName(tr("Layer that receives a page"))
+        self.coverage_combo.layerChanged.connect(self._on_coverage)
+        column.addWidget(self.coverage_combo)
+        self.source_help = FittedLabel(
+            tr("Each area or location in this layer becomes a page."), parent
+        )
+        self.source_help.setProperty("role", "hint")
+        column.addWidget(self.source_help)
+        # How many features the layer gives, or why it cannot be used.
+        self.source_note = FittedLabel("", parent)
+        column.addWidget(self.source_note)
+
+    def _build_map(self, column: QVBoxLayout, parent: QWidget) -> None:
+        # One map: a quiet line naming it.
+        self.map_summary = FittedLabel("", parent)
+        column.addWidget(self.map_summary)
+        # Several maps: which one the pages update.
+        self.map_chooser = QWidget(parent)
+        chooser = QVBoxLayout(self.map_chooser)
+        chooser.setContentsMargins(0, 0, 0, 0)
+        chooser.setSpacing(4)
+        chooser.addWidget(FittedLabel(tr("Map to update on each page"), parent))
+        self.map_combo = QComboBox(self.map_chooser)
+        self.map_combo.setPlaceholderText(tr("Choose a map…"))
+        self.map_combo.setAccessibleName(tr("Map to update on each page"))
+        self.map_combo.currentIndexChanged.connect(self._on_map)
+        chooser.addWidget(self.map_combo)
+        other = FittedLabel(tr("Other maps keep their current view."), parent)
+        other.setProperty("role", "hint")
+        chooser.addWidget(other)
+        column.addWidget(self.map_chooser)
+        # No map at all: say so and offer the way to get one.
+        self.no_map = QWidget(parent)
+        none = QVBoxLayout(self.no_map)
+        none.setContentsMargins(0, 0, 0, 0)
+        none.setSpacing(4)
+        self.no_map_label = FittedLabel(
+            tr("This layout needs a map to update on each page."), self.no_map
+        )
+        none.addWidget(self.no_map_label)
+        self.templates_button = QPushButton(tr("Browse templates…"), self.no_map)
+        self.templates_button.clicked.connect(lambda: self._host.browse_templates())
+        none.addWidget(self.templates_button)
+        column.addWidget(self.no_map)
+
+    def _build_preview(self, column: QVBoxLayout, parent: QWidget) -> None:
+        self.status_label = FittedLabel("", parent)
+        self.status_label.setProperty("role", "panelHeading")
+        column.addWidget(self.status_label)
+        self.navigator = QWidget(parent)
+        row = QHBoxLayout(self.navigator)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.previous_button = QPushButton(tr("Previous"), self.navigator)
+        self.previous_button.clicked.connect(
+            lambda: self.go_to_page(self._page_index - 1)
+        )
+        row.addWidget(self.previous_button)
+        self.position_label = FittedLabel("", self.navigator)
+        row.addWidget(self.position_label, 1)
+        self.next_button = QPushButton(tr("Next"), self.navigator)
+        self.next_button.clicked.connect(lambda: self.go_to_page(self._page_index + 1))
+        row.addWidget(self.next_button)
+        column.addWidget(self.navigator)
+
+    def _build_actions(self, column: QVBoxLayout, parent: QWidget) -> None:
+        self.scope_label = FittedLabel("", parent)
+        column.addWidget(self.scope_label)
+        buttons = QVBoxLayout()
+        self.export_button = QPushButton(tr("Export series…"), parent)
+        self.export_button.clicked.connect(self._on_export)
+        buttons.addWidget(self.export_button)
+        self.print_button = QPushButton(tr("Print series…"), parent)
+        self.print_button.clicked.connect(self._on_print)
+        buttons.addWidget(self.print_button)
+        column.addLayout(buttons)
+        # Why printing is out of reach while exporting is not, with the fix.
+        self.actions_note = FittedLabel("", parent)
+        self._tone(self.actions_note)
+        column.addWidget(self.actions_note)
+        self.switch_button = QPushButton(tr("Switch to Interactive"), parent)
+        self.switch_button.clicked.connect(self._on_switch_to_interactive)
+        column.addWidget(self.switch_button)
+
+    def _build_framing(self, column: QVBoxLayout, parent: QWidget) -> None:
+        self.framing_section = PanelSection("atlas-framing", tr("Page framing"), parent)
+        column.addWidget(self.framing_section)
+        self.framing_combo = QComboBox(parent)
+        for mode, label in _FRAMING:
+            self.framing_combo.addItem(tr(label), int(mode))
+        self.framing_combo.setAccessibleName(tr("Page framing"))
+        self.framing_combo.currentIndexChanged.connect(self._on_framing)
+        self.framing_section.body_layout.addWidget(self.framing_combo)
+
+    def _build_advanced(self, column: QVBoxLayout, parent: QWidget) -> None:
+        # What most series never touch; it opens by itself when something in
+        # it is set or wrong.
+        self.advanced_section = PanelSection(
+            "atlas-advanced", tr("Advanced settings"), parent
+        )
+        column.addWidget(self.advanced_section)
         form = QFormLayout()
-        form.setContentsMargins(0, 4, 0, 4)
+        form.setContentsMargins(0, 0, 0, 0)
         # Labels above their fields: the tab is a side panel a third of the
         # dialog wide, where label and field side by side ran off its edge.
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        settings_column.addLayout(form)
-        self.coverage_combo = QgsMapLayerComboBox(settings)
-        self.coverage_combo.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)
-        self.coverage_combo.setAllowEmptyLayer(True)
-        self.coverage_combo.layerChanged.connect(self._on_coverage)
-        form.addRow(tr("Coverage layer"), self.coverage_combo)
+        self.advanced_section.body_layout.addLayout(form)
 
-        self.map_combo = QComboBox(settings)
-        self.map_combo.setToolTip(
-            tr("The map that zooms to each feature. It must be an Interactive frame.")
-        )
-        self.map_combo.currentIndexChanged.connect(self._on_map)
-        form.addRow(tr("Map that follows it"), self.map_combo)
-
-        # What most atlases never touch sits under the choices every atlas
-        # needs; it opens by itself when something in it is set or wrong.
-        self.advanced_section = PanelSection(
-            "atlas-advanced", tr("Sorting, filtering and file names"), settings
-        )
-        settings_column.addWidget(self.advanced_section)
-        advanced = QFormLayout()
-        advanced.setContentsMargins(0, 0, 0, 0)
-        advanced.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        self.advanced_section.body_layout.addLayout(advanced)
-
-        sort_row = QHBoxLayout()
-        self.sort_edit = _typed_expression_widget(settings)
-        self.sort_edit.setAllowEmptyFieldName(True)
-        self.sort_edit.fieldChanged.connect(self._on_sort_expression)
-        sort_row.addWidget(self.sort_edit, 1)
-        self.descending_check = QCheckBox(tr("Descending"), settings)
-        self.descending_check.toggled.connect(self._on_sort_direction)
-        sort_row.addWidget(self.descending_check)
-        sort_column = QVBoxLayout()
-        sort_column.setContentsMargins(0, 0, 0, 0)
-        sort_column.addLayout(sort_row)
-        self.sort_error_label = self._error_label(settings)
-        sort_column.addWidget(self.sort_error_label)
-        advanced.addRow(tr("Sort by"), sort_column)
-
-        self.filter_edit = _typed_expression_widget(settings)
+        self.filter_edit = _typed_expression_widget(parent)
         self.filter_edit.setToolTip(
             tr("Only features for which this is true get a page. Blank: all.")
         )
         self.filter_edit.fieldChanged.connect(self._on_filter)
-        filter_column = QVBoxLayout()
-        filter_column.setContentsMargins(0, 0, 0, 0)
-        filter_column.addWidget(self.filter_edit)
-        self.filter_error_label = self._error_label(settings)
-        filter_column.addWidget(self.filter_error_label)
-        advanced.addRow(tr("Filter"), filter_column)
+        self.filter_error_label = self._error_label(parent)
+        form.addRow(
+            tr("Include pages"),
+            self._with_error(self.filter_edit, self.filter_error_label),
+        )
 
-        self.filename_edit = _typed_expression_widget(settings)
+        self.sort_edit = _typed_expression_widget(parent)
+        self.sort_edit.setAllowEmptyFieldName(True)
+        self.sort_edit.fieldChanged.connect(self._on_sort_expression)
+        self.direction_combo = QComboBox(parent)
+        self.direction_combo.addItem(tr("Ascending (A to Z, 1 to 9)"), True)
+        self.direction_combo.addItem(tr("Descending (Z to A, 9 to 1)"), False)
+        self.direction_combo.setAccessibleName(tr("Direction of the page order"))
+        self.direction_combo.currentIndexChanged.connect(self._on_sort_direction)
+        self.sort_error_label = self._error_label(parent)
+        order = QWidget(parent)
+        order_column = QVBoxLayout(order)
+        order_column.setContentsMargins(0, 0, 0, 0)
+        order_column.addWidget(self.sort_edit)
+        order_column.addWidget(self.direction_combo)
+        order_column.addWidget(self.sort_error_label)
+        form.addRow(tr("Page order"), order)
+
+        self.page_name_edit = _typed_expression_widget(parent)
+        self.page_name_edit.fieldChanged.connect(self._on_page_name)
+        self.page_name_error_label = self._error_label(parent)
+        form.addRow(
+            tr("Page names"),
+            self._with_error(self.page_name_edit, self.page_name_error_label),
+        )
+
+        self.filename_edit = _typed_expression_widget(parent)
         self.filename_edit.setToolTip(
             tr("How each page's image is named when all pages are exported.")
         )
         self.filename_edit.fieldChanged.connect(self._on_filename)
-        advanced.addRow(tr("File names"), self.filename_edit)
-        page.addWidget(settings)
-        self.settings_box = settings
+        self.filename_error_label = self._error_label(parent)
+        form.addRow(
+            tr("Export filenames"),
+            self._with_error(self.filename_edit, self.filename_error_label),
+        )
+        self._expression_widgets = (
+            self.sort_edit,
+            self.filter_edit,
+            self.page_name_edit,
+            self.filename_edit,
+        )
 
-        self.count_label = FittedLabel("", self)
-        page.addWidget(self.count_label)
-        # What the saved cartograph pages, as opposed to what QGIS pages.
-        self.saved_label = FittedLabel("", self)
-        self.saved_label.setWordWrap(True)
-        page.addWidget(self.saved_label)
-        self.problem_label = FittedLabel("", self)
-        self.problem_label.setWordWrap(True)
+    @staticmethod
+    def _with_error(widget: QWidget, label: QLabel) -> QWidget:
+        holder = QWidget()
+        box = QVBoxLayout(holder)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addWidget(widget)
+        box.addWidget(label)
+        return holder
+
+    @staticmethod
+    def _tone(label: FittedLabel) -> None:
         # The Checks panel's own warning colour; nothing else styles a label.
-        self.problem_label.setProperty("role", "checkVerdict")
-        self.problem_label.setProperty("tone", "warning")
-        page.addWidget(self.problem_label)
-
-        # One above the other, for the same narrow panel.
-        buttons = QVBoxLayout()
-        self.zip_button = QPushButton(tr("Export all pages (PNG, ZIP)..."), self)
-        self.zip_button.clicked.connect(lambda: self._open_all_pages("zip"))
-        buttons.addWidget(self.zip_button)
-        self.print_button = QPushButton(tr("Print all pages..."), self)
-        self.print_button.clicked.connect(lambda: self._open_all_pages("print"))
-        # What each button says once there are pages; `show_outcome` swaps in
-        # why it is greyed out, and back.
-        self._ready_tips = {
-            self.zip_button: tr(
-                "Opens the cartograph and downloads every page as one ZIP"
-            ),
-            self.print_button: tr(
-                "Opens the cartograph with every page ready to print - choose "
-                "Save as PDF for one multi-page PDF"
-            ),
-        }
-        buttons.addWidget(self.print_button)
-        page.addLayout(buttons)
-        page.addStretch(1)
-
-        # Pages in the saved cartograph's atlas; `None` when it has none.
-        self._saved_pages: int | None = None
-        self._filter_error: str | None = None
-        self._sort_error: str | None = None
-        self.show_layout(None)
-        self.show_outcome(problems=(), pages=None)
+        label.setProperty("role", "checkVerdict")
+        label.setProperty("tone", "warning")
+        label.setVisible(False)
 
     @staticmethod
     def _error_label(parent: QWidget) -> FittedLabel:
         label = FittedLabel("", parent)
-        label.setWordWrap(True)
-        label.setProperty("role", "checkVerdict")
-        label.setProperty("tone", "warning")
-        label.setVisible(False)
+        AtlasTab._tone(label)
         return label
 
-    # ---- Showing ---------------------------------------------------------
+    # ---- Showing -----------------------------------------------------------
 
     def show_layout(self, layout: QgsPrintLayout | None) -> None:
-        """Show `layout`'s atlas, without the display counting as an edit."""
+        """Show `layout`'s series, without the display counting as an edit."""
+        self._release_preview()
         self._layout = layout
+        self._layer_removed = False
+        self._page_index = 0
+        self._page_feature = None
         self._watch_undo(layout)
+        self._load()
+        self._shown = _atlas_state(layout)
+        self.refresh_now()
+
+    def _load(self) -> None:
+        """Put the layout's atlas settings into the controls."""
+        layout = self._layout
         self._loading = True
         try:
-            has_layout = layout is not None
-            self.enabled_check.setEnabled(has_layout)
             atlas = layout.atlas() if layout is not None else None
-            self.enabled_check.setChecked(bool(atlas and atlas.enabled()))
-            self.settings_box.setEnabled(self.enabled_check.isChecked())
+            self.enabled_check.setEnabled(layout is not None)
+            self.enabled_check.setChecked(
+                bool(atlas and (atlas.enabled() or self._layer_removed))
+            )
             coverage = atlas.coverageLayer() if atlas is not None else None
             self.coverage_combo.setLayer(coverage)
-            for widget in (self.sort_edit, self.filter_edit, self.filename_edit):
+            for widget in self._expression_widgets:
                 widget.setLayer(coverage)
             if atlas is not None:
                 self.sort_edit.setExpression(
                     atlas.sortExpression() if atlas.sortFeatures() else ""
                 )
                 # The stored direction, sorted or not, as QGIS shows it - and
-                # only editable while there is a sort for it to apply to.
-                self.descending_check.setChecked(not atlas.sortAscending())
-                self.descending_check.setEnabled(atlas.sortFeatures())
+                # only editable while there is an order for it to apply to.
+                self.direction_combo.setCurrentIndex(0 if atlas.sortAscending() else 1)
+                self.direction_combo.setEnabled(atlas.sortFeatures())
                 self.filter_edit.setExpression(
                     atlas.filterExpression() if atlas.filterFeatures() else ""
                 )
+                self.page_name_edit.setExpression(atlas.pageNameExpression())
                 self.filename_edit.setExpression(atlas.filenameExpression())
             self._fill_maps()
+            self._load_framing()
         finally:
             self._loading = False
-        self._shown = _atlas_state(layout)
-        self._update_count()
+
+    def _fill_maps(self) -> None:
+        self.map_combo.blockSignals(True)
+        self.map_combo.clear()
+        if self._layout is not None:
+            driven = {map_ref(item).item_id for item in driven_maps(self._layout)}
+            chosen = -1
+            # Named and ordered as the Map frames list names them.
+            for index, ref in enumerate(layout_maps(self._layout)):
+                self.map_combo.addItem(ref.name, ref.item_id)
+                if ref.item_id in driven and chosen < 0:
+                    chosen = index
+            self.map_combo.setCurrentIndex(chosen)
+        self.map_combo.blockSignals(False)
+
+    def _load_framing(self) -> None:
+        layout = self._layout
+        maps = driven_maps(layout) if layout is not None else []
+        self.framing_combo.setEnabled(bool(maps))
+        self.framing_combo.blockSignals(True)
+        if maps:
+            index = self.framing_combo.findData(int(maps[0].atlasScalingMode()))
+            self.framing_combo.setCurrentIndex(max(index, 0))
+        self.framing_combo.blockSignals(False)
+
+    def rename_maps(self) -> None:
+        """Show the maps' current names without rebuilding the list, so the
+        choice (kept by item uuid) and the combo's focus stay as they are."""
+        if self._layout is None:
+            return
+        names = {ref.item_id: ref.name for ref in layout_maps(self._layout)}
+        for index in range(self.map_combo.count()):
+            name = names.get(self.map_combo.itemData(index))
+            if name is not None and name != self.map_combo.itemText(index):
+                self.map_combo.setItemText(index, name)
+        self._request_refresh()
 
     def show_outcome(self, problems: tuple[str, ...], pages: int | None) -> None:
-        """What the last save made of the atlas: why it does not page, if it
-        does not, and how many pages the saved atlas has (`None`: no atlas at
-        all; 0: an atlas whose filter matches nothing). The all-pages buttons
-        are enabled by that count alone, and only while the atlas settings
-        are valid."""
-        self.problem_label.setText("\n".join(problems))
-        self.problem_label.setVisible(bool(problems))
-        self._saved_pages = pages
-        self._refresh_saved_state()
+        """What the last save made of the atlas for the cartograph's own
+        outputs: why it does not page, if it does not. The native PDF and the
+        preview do not depend on it, and neither does the saved page count
+        (`pages`), which gates nothing."""
+        del pages
+        self._saved_problems = problems
+        self._update_actions()
 
-    def _refresh_saved_state(self) -> None:
-        pages = self._saved_pages
-        invalid = self._filter_error is not None or self._sort_error is not None
-        if pages is None:
-            saved = ""
-        elif pages == 0:
-            saved = tr("The saved cartograph has no pages: no feature matches.")
+    def refresh_now(self) -> None:
+        """Bring every part of the tab up to date with the layout, now."""
+        self._prepare_timer.stop()
+        self._generation += 1
+        self._refresh()
+
+    def _request_refresh(self) -> None:
+        """Show "Preparing preview…" and refresh on the next event-loop turn."""
+        self._generation += 1
+        if self.enabled_check.isChecked():
+            self.status_label.setText(tr("Preparing preview…"))
+            self.status_label.setVisible(True)
+            self.navigator.setVisible(False)
+        self._prepare_timer.start()
+
+    def _run_prepare(self) -> None:
+        self._refresh()
+
+    # ---- Refreshing --------------------------------------------------------
+
+    def _refresh(self) -> None:
+        layout = self._layout
+        if layout is not None and sip.isdeleted(layout):
+            self._layout = layout = None
+        generation = self._generation
+        self._validate_expressions()
+        status = series_status(
+            layout, self._host.frame_mode, layer_was_removed=self._layer_removed
+        )
+        if self._sort_error is not None or self._filter_error is not None:
+            status = _invalid(status)
+        if generation != self._generation:
+            return  # a newer setup began while this one was prepared
+        self._status = status
+        coverage = layout.atlas().coverageLayer() if layout is not None else None
+        if coverage is not None:
+            self._coverage_id = coverage.id()
+        self.settings_box.setVisible(self.enabled_check.isChecked())
+        self._update_source(status)
+        self._update_map(status)
+        self._load_framing()
+        self._sync_preview(status)
+        self._update_status_text(status)
+        self._update_actions()
+
+    def _update_source(self, status: SeriesStatus) -> None:
+        layer = self.coverage_combo.currentLayer()
+        note = ""
+        if status.state is SeriesState.LAYER_MISSING:
+            note = status.message
+        elif layer is not None:
+            note = layer_problem(layer) or feature_summary(layer)
+        self.source_note.setText(note)
+        self.source_note.setVisible(bool(note))
+        warn = status.state in (SeriesState.LAYER_MISSING, SeriesState.LAYER_UNUSABLE)
+        self.source_note.setProperty("role", "checkVerdict" if warn else "")
+        self.source_note.setProperty("tone", "warning" if warn else "")
+        style = self.source_note.style()
+        style.unpolish(self.source_note)
+        style.polish(self.source_note)
+
+    def _update_map(self, status: SeriesStatus) -> None:
+        count = len(status.maps)
+        self.map_chooser.setVisible(count > 1)
+        self.no_map.setVisible(count == 0)
+        summary = ""
+        if count == 1:
+            summary = tr("Updating map: {name}").format(name=status.maps[0].name)
+        self.map_summary.setText(summary)
+        self.map_summary.setVisible(bool(summary))
+
+    def _update_status_text(self, status: SeriesStatus) -> None:
+        if status.state is SeriesState.READY:
+            if status.sheets_per_page > 1:
+                text = plural(
+                    status.pages,
+                    "{n} page ready ({sheets} sheets each)",
+                    "{n} pages ready ({sheets} sheets each)",
+                    sheets=status.sheets_per_page,
+                )
+            else:
+                text = plural(status.pages, "{n} page ready", "{n} pages ready")
+        elif status.state in (
+            SeriesState.OFF,
+            SeriesState.NO_MAP,  # the map area already says it
+            SeriesState.LAYER_MISSING,  # said beside the layer
+            SeriesState.LAYER_UNUSABLE,
+        ):
+            text = ""
         else:
-            saved = plural(
-                pages,
-                "{n} page saved in the cartograph",
-                "{n} pages saved in the cartograph",
+            text = status.message
+        self.status_label.setText(text)
+        self.status_label.setVisible(bool(text))
+
+    def _update_actions(self) -> None:
+        status = self._status
+        ready = status.state is SeriesState.READY
+        scope = ""
+        if ready and status.sheets_per_page > 1:
+            scope = plural(
+                status.sheets, "Exports all {n} sheet.", "Exports all {n} sheets."
             )
-        self.saved_label.setText(saved)
-        self.saved_label.setVisible(bool(saved) and not invalid)
-        usable = bool(pages) and not invalid
-        if invalid:
-            reason = tr("Correct the atlas filter or sort first")
-        elif pages == 0:
-            reason = tr("No feature matches the atlas, so there are no pages")
-        else:
-            reason = tr("The saved cartograph has no atlas pages yet")
-        for button, ready_tip in self._ready_tips.items():
-            button.setEnabled(usable)
-            button.setToolTip(ready_tip if usable else reason)
+        elif ready:
+            scope = plural(
+                status.pages, "Exports all {n} page.", "Exports all {n} pages."
+            )
+        self.scope_label.setText(scope)
+        self.scope_label.setVisible(bool(scope))
+        self.export_button.setEnabled(ready)
+        self.print_button.setEnabled(ready and status.print.ok)
+        needs = status.print.needs_interactive if ready else ()
+        note = ""
+        if ready and not status.print.ok:
+            note = (
+                tr('Printing needs the map "{name}" to be Interactive.').format(
+                    name=", ".join(ref.name for ref in needs)
+                )
+                + " "
+                + tr("Switching changes how the map behaves in the exported HTML.")
+            )
+        elif ready and self._saved_problems:
+            note = " ".join(self._saved_problems)
+        self.actions_note.setText(note)
+        self.actions_note.setVisible(bool(note))
+        self.switch_button.setVisible(bool(needs))
+        self.navigator.setVisible(ready)
 
     def _validate_expressions(self) -> None:
-        """Show beside the Sort and Filter fields why QGIS cannot use what
-        is typed there; an atlas with such a field is not exported."""
+        """Show beside each advanced field why QGIS cannot use what is typed
+        there; a series with an invalid sort or filter is not exported."""
         coverage = self.coverage_combo.currentLayer()
         atlas = self._layout.atlas() if self._layout is not None else None
         sorting = bool(atlas and atlas.sortFeatures())
         filtering = bool(atlas and atlas.filterFeatures())
-        for kind, edit, label, active in (
+        fields = (
             ("sort", self.sort_edit, self.sort_error_label, sorting),
             ("filter", self.filter_edit, self.filter_error_label, filtering),
-        ):
+            ("page", self.page_name_edit, self.page_name_error_label, True),
+            ("file", self.filename_edit, self.filename_error_label, True),
+        )
+        for kind, edit, label, active in fields:
             text = edit.expression().strip()
             error = (
                 expression_error(text, coverage)
                 if text and active and coverage is not None
                 else None
             )
-            setattr(self, f"_{kind}_error", error)
+            if kind == "sort":
+                self._sort_error = error
+            elif kind == "filter":
+                self._filter_error = error
             label.setText(
                 tr("Not a valid expression: {error}").format(error=error)
                 if error
                 else ""
             )
             label.setVisible(error is not None)
-            if error is not None or (text and active):
+            if error is not None or (text and active and kind in ("sort", "filter")):
                 self.advanced_section.set_open(True)
-        self._refresh_saved_state()
+
+    # ---- Preview -----------------------------------------------------------
+
+    def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        if self._layout is not None:
+            self._sync_preview(self._status)
+
+    def hideEvent(self, event: QHideEvent | None) -> None:  # noqa: N802 - Qt override
+        super().hideEvent(event)
+        self._release_preview()
+
+    def _sync_preview(self, status: SeriesStatus) -> None:
+        """Keep the layout showing the series' current page - only while this
+        tab is on screen and the series is ready; otherwise put it back."""
+        layout = self._layout
+        if (
+            layout is None
+            or sip.isdeleted(layout)
+            or status.state is not SeriesState.READY
+            or not self.isVisible()
+        ):
+            self._release_preview()
+            return
+        if self._preview is None or not self._preview.active:
+            self._preview = AtlasPreview(layout)
+            self._preview.begin()
+        preview = self._preview
+        count = preview.prepare()
+        self._page_count = count
+        target: int | None = None
+        if self._page_feature is not None:
+            target = preview.find_page(self._page_feature, count, self._page_index)
+        # A page that no longer exists starts the series over, predictably.
+        self._show_page(preview, 0 if target is None else target)
+
+    def _show_page(self, preview: AtlasPreview, index: int) -> None:
+        index = max(0, min(index, self._page_count - 1))
+        if not preview.go_to(index):
+            return
+        self._page_index = index
+        self._page_feature = preview.current_feature_id()
+        name = preview.page_name(index) or tr("Page {n}").format(n=index + 1)
+        self.position_label.setText(
+            tr("{page} of {total} · {name}").format(
+                page=index + 1, total=self._page_count, name=name
+            )
+        )
+        self.previous_button.setEnabled(index > 0)
+        self.next_button.setEnabled(index < self._page_count - 1)
+
+    def go_to_page(self, index: int) -> None:
+        """Show page `index` (0-based) of the series in the main renderer."""
+        preview = self._preview
+        if preview is None or not preview.active or self._layout is None:
+            return
+        self._show_page(preview, index)
+
+    def _release_preview(self) -> None:
+        preview = self._preview
+        self._preview = None
+        if preview is None or not preview.active:
+            return
+        moved = preview.moved
+        preview.release()
+        if moved:
+            # The layout was autosaved while it showed a page; save it as it is.
+            with contextlib.suppress(RuntimeError):
+                self.changed.emit()
+
+    def _release_preview_quietly(self) -> None:
+        """Put the layout back before an edit, which announces itself."""
+        preview = self._preview
+        self._preview = None
+        if preview is not None and preview.active:
+            preview.release()
+
+    def preview_page(self) -> int | None:
+        """The 0-based page the main renderer shows; `None` when not previewing."""
+        preview = self._preview
+        return self._page_index if preview is not None and preview.active else None
+
+    def status(self) -> SeriesStatus:
+        return self._status
+
+    # ---- Actions -----------------------------------------------------------
+
+    def _on_export(self) -> None:
+        from .series_export_dialog import SeriesExportDialog
+
+        self.refresh_now()
+        if self._status.state is not SeriesState.READY:
+            return
+        dialog = SeriesExportDialog(
+            self._current_status, self._switch_maps, lambda: self._saved_problems, self
+        )
+        if not dialog.exec():
+            return
+        chosen = dialog.chosen_format()
+        if chosen == "pdf":
+            self._host.export_pdf()
+        elif chosen == "images":
+            self._host.open_pages("zip")
+        elif chosen == "html":
+            self._host.open_pages("html")
+
+    def _on_print(self) -> None:
+        self.refresh_now()
+        if self._status.state is SeriesState.READY and self._status.print.ok:
+            self._host.open_pages("print")
+
+    def _on_switch_to_interactive(self) -> None:
+        self._switch_maps(
+            tuple(ref.item_id for ref in self._status.print.needs_interactive)
+        )
+
+    def _switch_maps(self, item_ids: Sequence[str]) -> None:
+        self._host.switch_to_interactive(item_ids)
+        self.refresh_now()
+
+    def _current_status(self) -> SeriesStatus:
+        self.refresh_now()
+        return self._status
+
+    # ---- Undo ---------------------------------------------------------------
 
     def _watch_undo(self, layout: QgsPrintLayout | None) -> None:
         """Follow `layout`'s undo stack, so an Undo or Redo of an atlas edit
@@ -336,46 +757,11 @@ class AtlasTab(QWidget):
             return
         if _atlas_state(layout) == self._shown:
             return
-        self.show_layout(layout)
+        self._release_preview_quietly()
+        self._load()
+        self._shown = _atlas_state(layout)
+        self.refresh_now()
         self.changed.emit()
-
-    def _fill_maps(self) -> None:
-        self.map_combo.clear()
-        self.map_combo.addItem(tr("(none)"), "")
-        if self._layout is None:
-            return
-        chosen = 0
-        driven = {
-            item.uuid()
-            for item in self._layout.items()
-            if isinstance(item, QgsLayoutItemMap) and item.atlasDriven()
-        }
-        # Named and ordered as the Frames tab lists them.
-        for frame in layout_map_items(self._layout):
-            self.map_combo.addItem(frame.name, frame.item_id)
-            if frame.item_id in driven and not chosen:
-                chosen = self.map_combo.count() - 1
-        self.map_combo.setCurrentIndex(chosen)
-
-    def rename_maps(self) -> None:
-        """Show the maps' current names without rebuilding the list, so the
-        choice (kept by item uuid) and the combo's focus stay as they are."""
-        if self._layout is None:
-            return
-        names = {frame.item_id: frame.name for frame in layout_map_items(self._layout)}
-        for index in range(self.map_combo.count()):
-            name = names.get(self.map_combo.itemData(index))
-            if name is not None and name != self.map_combo.itemText(index):
-                self.map_combo.setItemText(index, name)
-
-    def _update_count(self) -> None:
-        self._validate_expressions()
-        count = atlas_page_count(self._layout) if self._layout is not None else None
-        self.count_label.setText(
-            ""
-            if count is None
-            else plural(count, "{n} page in QGIS", "{n} pages in QGIS")
-        )
 
     # ---- Editing -----------------------------------------------------------
 
@@ -389,7 +775,9 @@ class AtlasTab(QWidget):
         """One undoable change to the layout's atlas, then `changed`.
 
         `touches` names the layout objects `apply` changes when that is not
-        the atlas; their before-states are what Undo restores, in one step.
+        the atlas alone; their before-states are what Undo restores, in one
+        step. The preview is put back first (the maps' authored views are what
+        an edit and its undo are about) and shown again after.
         """
         layout = self._layout
         if self._loading or layout is None:
@@ -399,6 +787,7 @@ class AtlasTab(QWidget):
             # boxes emit); there is no layout left to edit.
             self._layout = None
             return
+        self._release_preview_quietly()
         stack = layout.undoStack()
         objects = [layout.atlas()] if touches is None else touches(layout)
         # A macro only when it groups: an empty one would still be an Undo step.
@@ -417,26 +806,67 @@ class AtlasTab(QWidget):
         finally:
             self._editing = False
         self._shown = _atlas_state(layout)
-        self._update_count()
+        self._request_refresh()
         self.changed.emit()
 
-    def _on_enabled(self, enabled: bool) -> None:
-        self.settings_box.setEnabled(enabled)
-        self._edit(
-            tr("Toggle Atlas"), lambda layout: layout.atlas().setEnabled(enabled)
-        )
+    @staticmethod
+    def _association_targets(layout: QgsPrintLayout) -> list[QgsLayoutItemMap]:
+        """The map a series should start updating, when none does yet and the
+        choice is not ambiguous: the layout's only map, else the one map the
+        user has selected. Never an arbitrary one."""
+        if driven_maps(layout):
+            return []
+        maps = [i for i in layout.items() if isinstance(i, QgsLayoutItemMap)]
+        if len(maps) == 1:
+            return maps
+        selected = [
+            i for i in layout.selectedLayoutItems() if isinstance(i, QgsLayoutItemMap)
+        ]
+        return selected if len(selected) == 1 else []
 
-    def _on_coverage(self, layer) -> None:
-        for widget in (self.sort_edit, self.filter_edit, self.filename_edit):
-            widget.setLayer(layer)
+    def _associate(self, layout: QgsPrintLayout) -> None:
+        for item in self._association_targets(layout):
+            item.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Auto)
+            item.setAtlasMargin(DEFAULT_ATLAS_MARGIN)
+            item.setAtlasDriven(True)
+
+    def _atlas_and_new_map(
+        self, layout: QgsPrintLayout
+    ) -> list[QgsLayoutUndoObjectInterface]:
+        return [layout.atlas(), *self._association_targets(layout)]
+
+    def _on_enabled(self, enabled: bool) -> None:
+        self.settings_box.setVisible(enabled)
+        if self._loading:
+            return
 
         def apply(layout: QgsPrintLayout) -> None:
-            # By id: sip may hand back a new wrapper for the same layer.
-            current = layout.atlas().coverageLayer()
-            if (current.id() if current else None) != (layer.id() if layer else None):
-                layout.atlas().setCoverageLayer(layer)
+            layout.atlas().setEnabled(enabled)
+            if enabled and layout.atlas().coverageLayer() is not None:
+                self._associate(layout)
 
-        self._edit(tr("Change Atlas Coverage"), apply)
+        self._layer_removed = False
+        self._edit(tr("Toggle Atlas"), apply, touches=self._atlas_and_new_map)
+
+    def _on_coverage(self, layer) -> None:
+        for widget in self._expression_widgets:
+            widget.setLayer(layer)
+        if self._loading:
+            return
+
+        def apply(layout: QgsPrintLayout) -> None:
+            atlas = layout.atlas()
+            # By id: sip may hand back a new wrapper for the same layer.
+            current = atlas.coverageLayer()
+            if (current.id() if current else None) != (layer.id() if layer else None):
+                atlas.setCoverageLayer(layer)
+            if layer is not None:
+                if not atlas.enabled():
+                    atlas.setEnabled(True)
+                self._associate(layout)
+
+        self._layer_removed = False
+        self._edit(tr("Change Atlas Coverage"), apply, touches=self._atlas_and_new_map)
 
     def _on_map(self, _index: int) -> None:
         chosen = self.map_combo.currentData()
@@ -459,6 +889,18 @@ class AtlasTab(QWidget):
 
         self._edit(tr("Change Atlas Map"), apply, touches=switching)
 
+    def _on_framing(self, _index: int) -> None:
+        mode = QgsLayoutItemMap.AtlasScalingMode(self.framing_combo.currentData())
+
+        def changing(layout: QgsPrintLayout) -> list[QgsLayoutItemMap]:
+            return [i for i in driven_maps(layout) if i.atlasScalingMode() != mode]
+
+        def apply(layout: QgsPrintLayout) -> None:
+            for item in changing(layout):
+                item.setAtlasScalingMode(mode)
+
+        self._edit(tr("Change Atlas Framing"), apply, touches=changing)
+
     # Expression and direction are separate edits, as in QGIS: flipping the
     # direction never rewrites the expression, whatever the picker holds.
     def _on_sort_expression(self, *_args: object) -> None:
@@ -472,12 +914,13 @@ class AtlasTab(QWidget):
 
         self._edit(tr("Change Atlas Sort"), apply)
         if not self._loading:
-            self.descending_check.setEnabled(bool(expression))
+            self.direction_combo.setEnabled(bool(expression))
 
-    def _on_sort_direction(self, descending: bool) -> None:
+    def _on_sort_direction(self, _index: int) -> None:
+        ascending = bool(self.direction_combo.currentData())
         self._edit(
             tr("Change Atlas Sort"),
-            lambda layout: layout.atlas().setSortAscending(not descending),
+            lambda layout: layout.atlas().setSortAscending(ascending),
         )
 
     def _on_filter(self, *_args: object) -> None:
@@ -490,12 +933,79 @@ class AtlasTab(QWidget):
 
         self._edit(tr("Change Atlas Filter"), apply)
 
+    def _on_page_name(self, *_args: object) -> None:
+        expression = self.page_name_edit.expression().strip()
+        self._edit(
+            tr("Change Atlas Page Names"),
+            lambda layout: layout.atlas().setPageNameExpression(expression),
+        )
+
     def _on_filename(self, *_args: object) -> None:
         expression = self.filename_edit.expression().strip()
         self._edit(
             tr("Change Atlas Filename"),
             lambda layout: layout.atlas().setFilenameExpression(expression),
         )
+
+    # ---- Project changes ---------------------------------------------------
+
+    def layer_will_be_removed(self, removed: object) -> None:
+        """The project is about to take a layer away. When it is the coverage
+        layer, QGIS turns the atlas off and forgets the layer; the series stays
+        on screen, saying so, until another layer is chosen."""
+        layout = self._layout
+        if (
+            layout is None
+            or sip.isdeleted(layout)
+            or not self.enabled_check.isChecked()
+        ):
+            return
+        # Either overload of `QgsProject.layerWillBeRemoved`: the id or the layer.
+        layer_id = removed if isinstance(removed, str) else removed.id()  # type: ignore[attr-defined]
+        # The atlas may already have dropped the layer (it listens too).
+        if layer_id != self._coverage_id:
+            return
+        self._layer_removed = True
+        self._release_preview()
+        # Once the layer is really gone.
+        QTimer.singleShot(0, self._after_layer_removed)
+
+    def _after_layer_removed(self) -> None:
+        if self._layout is None or sip.isdeleted(self._layout):
+            return
+        self._loading = True
+        try:
+            self.coverage_combo.setLayer(None)
+            self.enabled_check.setChecked(True)
+        finally:
+            self._loading = False
+        self.refresh_now()
+
+
+def _invalid(status: SeriesStatus) -> SeriesStatus:
+    """`status` as the series cannot be prepared: a sort or filter QGIS cannot
+    evaluate blocks every output."""
+    if status.state in (
+        SeriesState.OFF,
+        SeriesState.CHOOSE_LAYER,
+        SeriesState.LAYER_MISSING,
+        SeriesState.LAYER_UNUSABLE,
+        SeriesState.NO_MAP,
+        SeriesState.CHOOSE_MAP,
+    ):
+        return status
+    message = tr("Couldn't prepare the series. Check the highlighted setting.")
+    none = Operation(False, message)
+    return replace(
+        status,
+        state=SeriesState.INVALID,
+        message=message,
+        pages=0,
+        pdf=none,
+        images=none,
+        html=none,
+        print=none,
+    )
 
 
 def _typed_expression_widget(parent: QWidget) -> QgsFieldExpressionWidget:
@@ -526,8 +1036,9 @@ def _atlas_state(layout: QgsPrintLayout | None) -> tuple[object, ...]:
         atlas.filterFeatures(),
         atlas.filterExpression(),
         atlas.filenameExpression(),
+        atlas.pageNameExpression(),
         tuple(
-            item.uuid()
+            (item.uuid(), int(item.atlasScalingMode()))
             for item in layout.items()
             if isinstance(item, QgsLayoutItemMap) and item.atlasDriven()
         ),

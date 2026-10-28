@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, cast
 from qgis.core import QgsLayoutItemMap
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette
+from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette, QUndoCommand
 from qgis.PyQt.QtWidgets import (
     QAction,
     QComboBox,
@@ -216,6 +216,37 @@ def default_cartograph_path(
     safe = _file_name_part(layout_name) or "cartograph"
     project = _file_name_part(Path(project_file_name).stem)
     return base_dir / (f"{project}-{safe}.html" if project else f"{safe}.html")
+
+
+def _guarded(function: Callable[..., None], *args: object) -> None:
+    """Run an undo or redo body; an exception inside a Qt virtual would abort
+    QGIS, so it is reported instead."""
+    try:
+        function(*args)
+    except Exception:
+        traceback.print_exc()
+
+
+class _FrameModeCommand(QUndoCommand):
+    """Switching maps to Interactive as one step on the layout's undo stack:
+    redo sets each to Interactive, undo gives each back its earlier choice."""
+
+    def __init__(
+        self, controller: CartographController, previous: dict[str, str], text: str
+    ) -> None:
+        super().__init__(text)
+        self._controller = controller
+        self._previous = previous
+
+    def redo(self) -> None:
+        _guarded(self._apply, {item_id: "live" for item_id in self._previous})
+
+    def undo(self) -> None:
+        _guarded(self._apply, self._previous)
+
+    def _apply(self, modes: dict[str, str]) -> None:
+        for item_id, mode in modes.items():
+            self._controller._set_frame_mode(item_id, mode)
 
 
 def _file_name_part(name: str) -> str:
@@ -1267,20 +1298,75 @@ class CartographController:
     # ---- Atlas tab -------------------------------------------------------
 
     def build_atlas_tab(self) -> QWidget:
-        from .atlas_tab import AtlasTab
+        from .atlas_tab import AtlasHost, AtlasTab
 
-        self.atlas_tab = AtlasTab(self._open_all_pages, self.dialog)
+        self.atlas_tab = AtlasTab(
+            AtlasHost(
+                frame_mode=self._frame_mode,
+                switch_to_interactive=self._switch_frames_to_interactive,
+                export_pdf=self.on_save_atlas_pdf,
+                open_pages=self._open_series_pages,
+                browse_templates=self.create_from_canvas,
+            ),
+            self.dialog,
+        )
         self.atlas_tab.changed.connect(self.schedule_autosave)
         self.atlas_tab.changed.connect(self._update_share_enabled)
+        self.project.layerWillBeRemoved.connect(self.atlas_tab.layer_will_be_removed)
         return self.atlas_tab
 
-    def _open_all_pages(self, kind: str) -> None:
-        """Atlas > Export all pages / Print all pages: the saved cartograph,
-        opened with this plugin's `?atlas=` trigger (see the writer)."""
+    def _open_series_pages(self, kind: str) -> None:
+        """Atlas > Export series / Print series: the saved cartograph, opened
+        on its pages ("zip", "print") or plainly ("html"). `_open_saved` waits
+        for the save that carries the latest edits."""
         path = self._current_path()
-        if path is None or not path.exists():
+        if path is None:
             return
-        self._open_saved(path, f"atlas={kind}")
+        if not path.exists():
+            # Never saved yet: save, and `_open_saved` opens it when that lands.
+            self.schedule_autosave()
+        self._open_saved(path, "" if kind == "html" else f"atlas={kind}")
+
+    def _open_all_pages(self, kind: str) -> None:
+        self._open_series_pages(kind)
+
+    def _frame_mode(self, item_id: str) -> str:
+        """The map's Interactive ("live") or Image ("static") choice."""
+        choice = self.state.frame_choices(self.state.cartograph_layout).get(item_id)
+        if choice is not None:
+            return choice.mode
+        for frame in layout_map_items(self._current_layout):
+            if frame.item_id == item_id:
+                return frame.default_mode
+        return "live"
+
+    def _set_frame_mode(self, item_id: str, mode: str) -> None:
+        """Set a map's Interactive/Image choice as the Map frames list would."""
+        row = self._frame_rows.get(item_id)
+        if row is None:
+            return
+        combo = row["mode"]
+        index = combo.findData(mode)
+        if index >= 0 and combo.currentIndex() != index:
+            combo.setCurrentIndex(index)
+        self.atlas_tab.refresh_now()
+
+    def _switch_frames_to_interactive(self, item_ids: Sequence[str]) -> None:
+        """Switch to Interactive: one explicit step on the layout's undo stack,
+        which Undo takes back (the maps return to what they were)."""
+        layout = self._current_layout
+        if layout is None or sip.isdeleted(layout):
+            return
+        previous = {
+            item_id: self._frame_mode(item_id)
+            for item_id in item_ids
+            if self._frame_mode(item_id) != "live"
+        }
+        if not previous:
+            return
+        layout.undoStack().stack().push(
+            _FrameModeCommand(self, previous, tr("Switch to Interactive"))
+        )
 
     def _show_atlas_outcome(
         self, report: FidelityReportBuilder, atlas_pages: tuple[int, ...] | None
