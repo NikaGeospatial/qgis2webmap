@@ -515,6 +515,7 @@ class CartographController:
         self.page_preview.import_requested.connect(self.on_import_cartograph)
         self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
         self.page_pane.open_editor_requested.connect(self.on_open_layout_editor)
+        self.page_pane.new_layout_requested.connect(self.create_from_canvas)
         self.page_pane.controls.canvas_extent_requested.connect(self._match_canvas)
         # A Live count's number is part of the page: a new one is a change.
         self.page_pane.live_counts.content_changed.connect(self.schedule_autosave)

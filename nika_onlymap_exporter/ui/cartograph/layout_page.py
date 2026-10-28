@@ -77,6 +77,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import live_count as lc
+from ...core.layout_reader import legend_left_out
 from ..i18n import plural, tr
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
@@ -1193,6 +1194,20 @@ class LayoutPreview(QStackedWidget):
 _PAN_HINT = "Pan: hold Space or the middle mouse button and drag. Zoom: the wheel"
 
 
+def legend_entries_left_out(layout) -> int:  # QgsPrintLayout | None
+    """How many legend entries the layout's template legends still leave out
+    for want of room, counted afresh (entries the user put back are not)."""
+    if layout is None or sip.isdeleted(layout):
+        return 0
+    total = 0
+    for item in layout.items():
+        if isinstance(item, QgsLayoutItemLegend) and not sip.isdeleted(item):
+            linked = item.linkedMap()
+            if linked is not None:
+                total += legend_left_out(item, linked)
+    return total
+
+
 class PagePane(QWidget):
     """The preview with what it is said above it.
 
@@ -1212,6 +1227,8 @@ class PagePane(QWidget):
     edit_requested = pyqtSignal()
     changes_requested = pyqtSignal()
     open_editor_requested = pyqtSignal()
+    # The legend warning's "New from template...".
+    new_layout_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1252,6 +1269,39 @@ class PagePane(QWidget):
         self.editor_link.setEnabled(False)
         caption_row.addWidget(self.editor_link)
         column.addLayout(caption_row)
+        # Entries a template's legend had no room for: said here, where the
+        # page is, with the ways out that already exist.
+        self.legend_warning = QFrame(self)
+        self.legend_warning.setProperty("role", "legendWarning")
+        warning_row = QHBoxLayout(self.legend_warning)
+        warning_row.setContentsMargins(8, 4, 8, 4)
+        warning_row.setSpacing(12)
+        self.legend_warning_label = QLabel(self.legend_warning)
+        self.legend_warning_label.setWordWrap(True)
+        warning_row.addWidget(self.legend_warning_label, 1)
+        self.adjust_legend_button = QPushButton(
+            tr("Adjust legend"), self.legend_warning
+        )
+        self.adjust_legend_button.setProperty("role", "link")
+        self.adjust_legend_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.adjust_legend_button.clicked.connect(self._adjust_legend)
+        warning_row.addWidget(self.adjust_legend_button)
+        self.other_layout_button = QPushButton(
+            tr("New from template..."), self.legend_warning
+        )
+        self.other_layout_button.setProperty("role", "link")
+        self.other_layout_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.other_layout_button.setToolTip(
+            tr("Choose another layout, page size or orientation")
+        )
+        self.other_layout_button.clicked.connect(self.new_layout_requested)
+        warning_row.addWidget(self.other_layout_button)
+        self.legend_warning.setVisible(False)
+        column.addWidget(self.legend_warning)
+        self._legend_refresh = QTimer(self)
+        self._legend_refresh.setSingleShot(True)
+        self._legend_refresh.setInterval(150)
+        self._legend_refresh.timeout.connect(self.refresh_legend_warning)
         self.preview = LayoutPreview(self)
         column.addWidget(self.preview, 1)
 
@@ -1285,6 +1335,7 @@ class PagePane(QWidget):
         )
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
+        self._watched_layout = None
 
     def set_change_count(self, count: int) -> None:
         """How many things the HTML changes from this page; none hides it."""
@@ -1294,9 +1345,52 @@ class PagePane(QWidget):
         )
         self._show_page_parts()
 
+    def refresh_legend_warning(self) -> None:
+        """Count the legend entries left out again (after any change to the
+        layout) and show or clear the warning."""
+        if sip.isdeleted(self):
+            return
+        count = legend_entries_left_out(self.preview.view.currentLayout())
+        self.legend_warning_label.setText(
+            plural(
+                count,
+                "{n} legend entry does not fit.",
+                "{n} legend entries do not fit.",
+            )
+            if count
+            else ""
+        )
+        self.legend_warning.setVisible(bool(count))
+
+    def _watch_for_legend_changes(self, layout) -> None:  # QgsPrintLayout | None
+        if layout is None or layout is self._watched_layout:
+            return
+        self._watched_layout = layout
+        schedule = self._legend_refresh.start
+        layout.undoStack().stack().indexChanged.connect(lambda _i: schedule())
+        layout.changed.connect(schedule)
+
+    def _adjust_legend(self) -> None:
+        """Select the legend that leaves entries out and open its editor."""
+        layout = self.preview.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return
+        for item in layout.items():
+            if (
+                isinstance(item, QgsLayoutItemLegend)
+                and item.linkedMap() is not None
+                and legend_left_out(item, item.linkedMap())
+            ):
+                layout.deselectAll()
+                item.setSelected(True)
+                self.edit_requested.emit()
+                return
+
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
         self.controls.set_layout(layout)
+        self._watch_for_legend_changes(layout)
+        self.refresh_legend_warning()
         self.live_counts.set_layout(layout)
         self.caption.setText(
             tr("Layout preview — QGIS · {page}").format(page=_page_name(layout))
