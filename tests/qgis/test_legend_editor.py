@@ -301,3 +301,25 @@ class TestPreviewHook:
             or pane.controls._legend_editor.isHidden()
         )
         pane.close()
+
+
+class TestQuickTicks:
+    def test_two_ticks_before_the_list_settles_both_count(
+        self, world, legend, editor
+    ) -> None:
+        """Hide then show a layer with no event-loop turn in between: the
+        legend ends listing it, as two undo steps."""
+        summits = world.layers["summits"]
+        before = _stack(world).index()
+        item = editor.item_for(summits.id())
+        rect = editor.tree.visualItemRect(item)
+        for _ in range(2):
+            QTest.mouseClick(
+                editor.tree.viewport(),
+                Qt.MouseButton.LeftButton,
+                pos=QPoint(rect.left() + 9, rect.center().y()),
+            )
+        _pump()
+        assert summits.id() in _listed(legend)
+        assert _stack(world).index() == before + 2
+        assert editor.item_for(summits.id()).checkState(0) == Qt.CheckState.Checked

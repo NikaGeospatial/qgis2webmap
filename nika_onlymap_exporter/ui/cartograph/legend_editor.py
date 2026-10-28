@@ -97,6 +97,13 @@ class LegendEditor(QWidget):
         super().__init__(parent)
         self._legend: QgsLayoutItemLegend | None = None
         self._busy = False
+        # True while the tree is announcing a change (inside `itemChanged`,
+        # i.e. inside the delegate's `editorEvent`): the tree and its items
+        # must stay as they are until Qt is out of that call.
+        self._in_item_event = False
+        self._refresh_wanted = False
+        # Ticks and label edits made in the tree, applied after its event.
+        self._pending_edits: list[tuple[LegendEntry, bool, str]] = []
 
         column = QVBoxLayout(self)
         column.setContentsMargins(8, 8, 8, 8)
@@ -201,6 +208,10 @@ class LegendEditor(QWidget):
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.setInterval(0)
         self._refresh_timer.timeout.connect(self.refresh)
+        self._edit_timer = QTimer(self)
+        self._edit_timer.setSingleShot(True)
+        self._edit_timer.setInterval(0)
+        self._edit_timer.timeout.connect(self._apply_pending_edits)
         self.setMinimumWidth(280)
 
     # ---- Wiring ----------------------------------------------------------
@@ -250,6 +261,13 @@ class LegendEditor(QWidget):
         legend, project = self.legend(), self._project()
         if self._busy:
             return
+        if self._in_item_event:
+            # Emptying the tree under the click that is still inside Qt's
+            # `editorEvent` frees the item Qt is about to use: re-list after.
+            self._refresh_wanted = True
+            self._refresh_timer.start()
+            return
+        self._refresh_wanted = False
         self._busy = True
         try:
             scroll = self.tree.verticalScrollBar().value()
@@ -417,16 +435,43 @@ class LegendEditor(QWidget):
         self.edited.emit()
 
     def _on_item_changed(self, item: QTreeWidgetItem, _column: int) -> None:
-        legend, project, layout = self.legend(), self._project(), self._layout()
+        """Only note what the user did. Qt is still inside the delegate's
+        `editorEvent` for this item, so nothing here may change the legend
+        (its undo stack refreshes the Edit tab) or touch the tree's items; the
+        edit itself runs on the next turn of the event loop."""
         entry = item.data(0, _ENTRY)
-        if (
-            self._busy
-            or legend is None
-            or project is None
-            or not isinstance(entry, LegendEntry)
-        ):
+        if self._busy or not isinstance(entry, LegendEntry):
             return
-        ticked = item.checkState(0) == Qt.CheckState.Checked
+        self._in_item_event = True
+        try:
+            ticked = item.checkState(0) == Qt.CheckState.Checked
+            self._pending_edits.append((entry, ticked, item.text(0)))
+        finally:
+            self._in_item_event = False
+        self._edit_timer.start()
+
+    def _apply_pending_edits(self) -> None:
+        if sip.isdeleted(self):
+            return
+        pending, self._pending_edits = self._pending_edits, []
+        for entry, ticked, text in pending:
+            self._apply_edit(entry, ticked, text)
+        QTimer.singleShot(0, self._done)
+
+    def _apply_edit(self, entry: LegendEntry, ticked: bool, text: str) -> None:
+        legend, project, layout = self.legend(), self._project(), self._layout()
+        if legend is None or project is None:
+            return
+        # The row may have been ticked more than once before this ran: judge
+        # against what the legend lists now, not what the row listed then.
+        entry = next(
+            (
+                e
+                for e in edit.entries(legend, project)
+                if (e.layer_id, e.index) == (entry.layer_id, entry.index)
+            ),
+            entry,
+        )
         try:
             if ticked != entry.included:
                 if entry.kind is EntryKind.LAYER:
@@ -458,12 +503,11 @@ class LegendEditor(QWidget):
                     legend,
                     project,
                     entry,
-                    item.text(0),
+                    text,
                     tr("Change a legend label"),
                 )
         except Exception:  # a slot must never raise into Qt
             pass
-        QTimer.singleShot(0, self._done)
 
     def _move(self, step: int) -> None:
         entry = self._selected_entry()
