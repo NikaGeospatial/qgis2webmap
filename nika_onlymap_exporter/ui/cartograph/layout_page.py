@@ -25,7 +25,12 @@ import contextlib
 from pathlib import Path
 from types import SimpleNamespace
 
-from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap
+from qgis.core import (
+    QgsLayoutItem,
+    QgsLayoutItemLegend,
+    QgsLayoutItemMap,
+    QgsLayoutItemPage,
+)
 from qgis.gui import QgsLayoutView, QgsLayoutViewToolPan, QgsLayoutViewToolSelect
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
@@ -59,6 +64,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFrame,
+    QGraphicsItem,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -273,6 +279,9 @@ class LayoutPreview(QStackedWidget):
     temporary pan tool: a left press on a selected item still reached that
     item's handles and moved it on release), as do the middle button
     (QgsLayoutView's own) and the scroll bars.
+    A left-button drag that starts on empty space (bare paper or the
+    workspace round it) pans too; one that starts on an item, or on the
+    selection's handles, is the select tool's.
     """
 
     new_from_template_requested = pyqtSignal()
@@ -351,6 +360,10 @@ class LayoutPreview(QStackedWidget):
         self._reaching = False
         self._space_down = False
         self._pan_from: QPoint | None = None
+        # A left press on bare page or workspace: where it began, and whether
+        # the pointer has since travelled far enough for it to be a pan.
+        self._empty_press_at: QPoint | None = None
+        self._empty_panning = False
         self._press_at: QPoint | None = None
         self._pointer_at: QPoint | None = None
         self._legend_sizes_at_press: dict[str, tuple[float, float]] = {}
@@ -764,18 +777,100 @@ class LayoutPreview(QStackedWidget):
         if self._pan_from is None:
             return None
         if kind == QEvent.Type.MouseMove:
-            at = _local_point(event)
-            horizontal, vertical = (
-                self.view.horizontalScrollBar(),
-                self.view.verticalScrollBar(),
-            )
-            horizontal.setValue(horizontal.value() - (at.x() - self._pan_from.x()))
-            vertical.setValue(vertical.value() - (at.y() - self._pan_from.y()))
-            self._pan_from = at
+            self._pan_to(_local_point(event))
             return True
         if kind == QEvent.Type.MouseButtonRelease:
             self._pan_from = None
             viewport.setCursor(Qt.CursorShape.OpenHandCursor)
+            return True
+        return None
+
+    def _pan_to(self, at: QPoint) -> None:
+        """Scroll the view by the pointer's travel since the last call."""
+        if self._pan_from is None:
+            return
+        horizontal, vertical = (
+            self.view.horizontalScrollBar(),
+            self.view.verticalScrollBar(),
+        )
+        horizontal.setValue(horizontal.value() - (at.x() - self._pan_from.x()))
+        vertical.setValue(vertical.value() - (at.y() - self._pan_from.y()))
+        self._pan_from = at
+
+    def _is_empty_space(self, at: QPoint) -> bool:
+        """No layout item to select, move or resize under `at`: bare page
+        paper or the workspace round it. The page itself and items that
+        cannot be selected do not count; the selection's box, handles and
+        their reach do."""
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return False
+        box = self._selection_view_rect()
+        reach = _EDGE_REACH + 1
+        if box is not None and box.adjusted(-reach, -reach, reach, reach).contains(at):
+            return False
+        for item in self.view.scene().items(QPointF(self.view.mapToScene(at))):
+            if (
+                isinstance(item, QgsLayoutItem)
+                and not isinstance(item, QgsLayoutItemPage)
+                and item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+            ):
+                return False
+        return True
+
+    def _drag_empty_space(self, event: QEvent) -> bool | None:
+        """A left-button drag that starts on empty space pans the view, as
+        Space-drag does; a click there (no travel past the jitter) clears the
+        selection, as the select tool would. None when `event` is not part
+        of such a gesture."""
+        if not isinstance(event, QMouseEvent) or not self.select_mode():
+            return None
+        if self.placer.active or self.content_editor.active or self._reaching:
+            return None
+        kind = event.type()
+        viewport = self.view.viewport()
+        at = _local_point(event)
+        if kind == QEvent.Type.MouseButtonPress:
+            if (
+                event.button() != Qt.MouseButton.LeftButton
+                or event.modifiers() != Qt.KeyboardModifier.NoModifier
+                or not self._is_empty_space(at)
+            ):
+                return None
+            self._empty_press_at = at
+            self._empty_panning = False
+            self._pan_from = at
+            # The press is not passed on, so the page takes the focus here.
+            self.view.setFocus(Qt.FocusReason.MouseFocusReason)
+            return True
+        if self._empty_press_at is None:
+            return None
+        if kind == QEvent.Type.MouseMove:
+            if not event.buttons() & Qt.MouseButton.LeftButton:
+                return None
+            if not self._empty_panning:
+                away = at - self._empty_press_at
+                if abs(away.x()) + abs(away.y()) <= _DRAG_THRESHOLD_PX:
+                    return True
+                self._empty_panning = True
+                self._user_zoomed = True
+                viewport.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._pan_to(at)
+            return True
+        if kind == QEvent.Type.MouseButtonRelease:
+            clicked = not self._empty_panning
+            self._empty_press_at = None
+            self._empty_panning = False
+            self._pan_from = None
+            if self._space_down:
+                viewport.setCursor(Qt.CursorShape.OpenHandCursor)
+            else:
+                viewport.unsetCursor()
+            if clicked:
+                layout = self.view.currentLayout()
+                if layout is not None and not sip.isdeleted(layout):
+                    layout.deselectAll()
+                self._report_selection_if_moved()
             return True
         return None
 
@@ -867,6 +962,9 @@ class LayoutPreview(QStackedWidget):
         ):
             QTimer.singleShot(0, self._report_selection_if_moved)
         if event is not None and watched is self.view.viewport():
+            dragged = self._drag_empty_space(event)
+            if dragged is not None:
+                return dragged
             self._hover_before_press(event)
         if (
             event is not None
