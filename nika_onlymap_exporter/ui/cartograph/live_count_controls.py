@@ -33,6 +33,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import live_count as lc
 from ..i18n import tr
+from ..theme import align_embedded_edits
 from .frames_list import _QuietCombo
 from .layout_items import item_edit, map_frames, map_label, one_step
 from .live_counts import LiveCounts
@@ -267,6 +268,8 @@ class LiveCountSetup(QWidget):
             else None
         )
         combo.setEditable(kind != "bool")
+        # A new editable box has a new line edit, which needs aligning again.
+        align_embedded_edits(combo)
         combo.setEnabled(kind is not None)
         line = combo.lineEdit()
         if kind is None:

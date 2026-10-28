@@ -24,6 +24,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import functools
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
@@ -33,6 +34,7 @@ from qgis.core import (
     QgsLayoutUndoObjectInterface,
     QgsMapLayerProxyModel,
     QgsPrintLayout,
+    QgsProject,
 )
 from qgis.gui import QgsFieldComboBox, QgsFieldExpressionWidget, QgsMapLayerComboBox
 from qgis.PyQt import sip
@@ -1354,7 +1356,8 @@ class AtlasTab(QWidget):
             atlas is not None and bool(atlas.pageNameExpression().strip())
         )
         self.filename_clear.setVisible(
-            atlas is not None and bool(atlas.filenameExpression().strip())
+            atlas is not None
+            and atlas.filenameExpression().strip() != default_filename_expression()
         )
 
     def _on_clear_sort(self) -> None:
@@ -1386,13 +1389,16 @@ class AtlasTab(QWidget):
         )
 
     def _on_clear_filenames(self) -> None:
-        """Back to file names QGIS makes itself."""
+        """Back to file names QGIS makes itself: its default expression (an
+        empty one would name every page the same, so each would overwrite
+        the last)."""
+        default = default_filename_expression()
         self.filename_edit.blockSignals(True)
-        self.filename_edit.setExpression("")
+        self.filename_edit.setExpression(default)
         self.filename_edit.blockSignals(False)
         self._edit(
             tr("Change Atlas Filename"),
-            lambda layout: layout.atlas().setFilenameExpression(""),
+            lambda layout: layout.atlas().setFilenameExpression(default),
         )
 
     def _on_page_name(self, *_args: object) -> None:
@@ -1468,6 +1474,14 @@ def _invalid(status: SeriesStatus) -> SeriesStatus:
         html=none,
         print=none,
     )
+
+
+@functools.cache
+def default_filename_expression() -> str:
+    """The file name expression a new QGIS atlas starts with."""
+    # The layout is not added to the project, so nothing is left behind.
+    layout = QgsPrintLayout(QgsProject.instance())
+    return str(layout.atlas().filenameExpression()).strip()
 
 
 def _typed_expression_widget(parent: QWidget) -> QgsFieldExpressionWidget:
