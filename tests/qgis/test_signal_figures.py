@@ -129,9 +129,7 @@ class TestOlderProjects:
         ).layout
         assert _words(layout) == []
         # They are not taken, changed or removed either.
-        assert project.customVariables() == {
-            "nika_figure_1": "214 | parcels surveyed"
-        }
+        assert project.customVariables() == {"nika_figure_1": "214 | parcels surveyed"}
 
     def test_a_new_project_shows_no_statistics(self, parcels, project) -> None:
         layout = cartograph_from_view(

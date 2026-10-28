@@ -463,7 +463,7 @@ class TestLongCounts:
         seen: list[str] = []
         # Ask for one view, and while its count is under way, another.
         page.frame.zoomToExtent(QgsRectangle(0, 0, 4, 4))
-        _wait_for(qgis_app, lambda: pane.live_counts.busy(), "the count to start")
+        _wait_for(qgis_app, lambda: pane.live_counts.running(), "the count to start")
         page.frame.zoomToExtent(QgsRectangle(10, 10, 14, 14))
         final = page.frame.extent()
         expected = sum(

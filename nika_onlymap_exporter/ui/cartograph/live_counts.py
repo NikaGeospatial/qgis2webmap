@@ -221,6 +221,10 @@ class LiveCounts(QObject):
         """The latest outcome of a counter, if one has been calculated."""
         return self._outcomes.get(number.uuid())
 
+    def running(self) -> bool:
+        """Whether a calculation is under way (not merely waiting to start)."""
+        return bool(self._jobs)
+
     def busy(self) -> bool:
         return bool(self._jobs) or self._debounce.isActive()
 
