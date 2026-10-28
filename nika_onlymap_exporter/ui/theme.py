@@ -197,6 +197,9 @@ PLUM_DARK = Palette(
 
 
 # Settings > Appearance: "auto" follows QGIS, or "light" / "dark" on purpose.
+#: The band of plain background between the Cartograph panel's tab underline
+#: and the top of its scrolling pages, in px.
+PANEL_PANE_GAP = 8
 THEME_KEY = "qgis2webmap/theme"
 THEME_CHOICES = ("auto", "light", "dark")
 
@@ -633,10 +636,14 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     top: -1px;
 }}
 /* The Cartograph panel draws its rule above the tabs as a widget of its own
-   (panelRule), so the pane has no border to overlap the tabs and no offset. */
+   (panelRule), so the pane has no border to overlap the tabs and no offset.
+   Its top padding is a band the scrolling tab pages never reach: content
+   scrolled up ends in a crisp edge below the band, not in partial glyphs
+   directly under the tab underline. */
 {d} QTabWidget[role="panelTabs"]::pane {{
     border: none;
     top: 0;
+    padding-top: {PANEL_PANE_GAP}px;
 }}
 {d} QFrame[role="panelRule"] {{
     background: transparent;

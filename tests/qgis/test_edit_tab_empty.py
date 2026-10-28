@@ -16,6 +16,8 @@ from cartograph_fixtures import UTM, build_parcels_layer
 from test_cartograph_panel_widgets import _settle
 from test_edit_tab_fit import _item_of
 
+from nika_onlymap_exporter.ui.theme import PANEL_PANE_GAP
+
 pytest.importorskip("qgis.core")
 
 NO_ITEM_TEXT = "Select an item on the page to edit its properties."
@@ -259,7 +261,8 @@ class TestSelectedItemHeader:
         scroll, controls = shown_controls(_layout(parcels, project), kind, 340)
         try:
             _settle(qgis_app, 0.2)
-            assert _top_in(scroll, controls.head_row) == 16
+            # The panel's pane adds its own band above the scrolling page.
+            assert _top_in(scroll, controls.head_row) + PANEL_PANE_GAP == 16
         finally:
             scroll.close()
 
