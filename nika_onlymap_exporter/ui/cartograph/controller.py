@@ -2220,11 +2220,8 @@ class CartographController:
         self._colour_vision.raise_()
 
     def _open_cvd_preview(self, condition: str | None) -> None:
-        path = self._current_path()
-        if path is None or not path.exists():
-            return
-        query = f"cvd={condition}" if condition else ""
-        self._open_saved(path, query)
+        """Share's Preview in browser, with the applied simulation."""
+        self._open_preview_in_browser(f"cvd={condition}" if condition else "")
 
     def release_canvas_effects(self) -> None:
         """Undo a colour-vision preview this plugin put on the QGIS canvas.
@@ -2275,6 +2272,9 @@ class CartographController:
         self.on_open_in_browser()
 
     def on_open_in_browser(self) -> None:
+        self._open_preview_in_browser()
+
+    def _open_preview_in_browser(self, query: str = "") -> None:
         path = self._current_path()
         if path is None or not path.exists():
             self.dialog.status_label.setText(
@@ -2284,7 +2284,7 @@ class CartographController:
                 )
             )
             return
-        self._open_saved(path)
+        self._open_saved(path, query)
 
     def _clear_footer(self) -> None:
         """Empty the dialog's footer message. Not there yet while the dialog
