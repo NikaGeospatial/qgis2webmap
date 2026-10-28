@@ -76,6 +76,7 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
+from ...core import live_count
 from ...core.locator_context import (
     draw_quietly,
     fit_locator_to_context,
@@ -99,6 +100,8 @@ from .layout_items import (
     one_step,
     recentre_map,
 )
+from .live_count_controls import LiveCountSetup
+from .live_counts import LiveCounts
 
 #: What opens a legend editor: called with the tab body as parent, it returns a
 #: widget that has `set_legend(QgsLayoutItemLegend | None)`.
@@ -488,6 +491,11 @@ class ContextControls(QFrame):
 
     def _build_text_page(self) -> None:
         self.text_page, column = self._page()
+        # A Live count's setup, in place of the words (its number is
+        # calculated, not typed); shown only for one.
+        self.live_setup = LiveCountSetup(self.text_page, self._field_labels)
+        self.live_setup.edited.connect(self.edited)
+        column.addWidget(self.live_setup)
         self.text_edit = QPlainTextEdit(self.text_page)
         self.text_edit.setAccessibleName(tr("Text of the selected item"))
         self.text_edit.setToolTip(
@@ -770,6 +778,21 @@ class ContextControls(QFrame):
         self._item = None
         self.refresh()
 
+    def set_live_counts(self, counts: LiveCounts | None) -> None:
+        """The Live counts of the layout on show: the setup of the selected
+        one shows why it cannot count, when it cannot."""
+        self.live_setup.set_service(counts)
+        if counts is not None:
+            counts.outcome_changed.connect(self._on_count_outcome)
+
+    def _on_count_outcome(self, uuid: str) -> None:
+        item = self._item
+        if item is None or sip.isdeleted(item) or not self.live_setup.isVisible():
+            return
+        number = self.live_setup.number()
+        if number is not None and not sip.isdeleted(number) and number.uuid() == uuid:
+            self.live_setup.refresh()
+
     def selected_item(self) -> QgsLayoutItem | None:
         """The one selected item the tab is showing, if any."""
         return self._item
@@ -782,6 +805,9 @@ class ContextControls(QFrame):
             and self._item is not None
             and self.pages.currentWidget() is self.text_page
         ):
+            if self.live_setup.isVisible():
+                self.live_setup.focus_first_choice()
+                return
             self.text_edit.setFocus()
             self.text_edit.selectAll()
 
@@ -807,7 +833,13 @@ class ContextControls(QFrame):
         try:
             kind = self._kind(item)
             self.heading.setText(
-                self._title("detail_map" if is_detail_map(item) else kind)
+                self._title(
+                    "live_count"
+                    if live_count.is_count_part(item)
+                    else "detail_map"
+                    if is_detail_map(item)
+                    else kind
+                )
             )
             self.heading.setProperty("role", "")
             self.heading.style().unpolish(self.heading)
@@ -932,6 +964,7 @@ class ContextControls(QFrame):
             "text": tr("Text"),
             "map": tr("Map"),
             "detail_map": tr("Detail map"),
+            "live_count": tr("Live count"),
             "legend": tr("Legend"),
             "scale_bar": tr("Scale bar"),
             "north_arrow": tr("North arrow"),
@@ -940,7 +973,16 @@ class ContextControls(QFrame):
 
     def _show_text(self, item: QgsLayoutItemLabel) -> None:
         self.pages.setCurrentWidget(self.text_page)
-        if not (self.text_edit.hasFocus() and self._text_dirty):
+        counter = (
+            self._layout is not None
+            and live_count.is_count_part(item)
+            and self.live_setup.show_for(self._layout, item)
+        )
+        if not counter:
+            self.live_setup.setVisible(False)
+        self.text_edit.setVisible(not counter)
+        self.text_grip.setVisible(not counter)
+        if not counter and not (self.text_edit.hasFocus() and self._text_dirty):
             if self.text_edit.toPlainText() != item.text():
                 self.text_edit.setPlainText(item.text())
             self._text_dirty = False

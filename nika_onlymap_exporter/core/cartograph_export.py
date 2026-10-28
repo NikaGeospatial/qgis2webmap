@@ -134,6 +134,7 @@ from .layout_reader import (
     read_layout,
 )
 from .legend_box_sync import apply_legend_changes
+from .live_count import refresh_live_counts
 from .project_reader import (
     PendingProject,
     finish_project,
@@ -692,8 +693,13 @@ def prepare_cartograph(
     title_override: str | None = None,
     raster_cache: StaticFrameCache | None = _DEFAULT_CACHE,
     pending_static: list[PendingStaticFrame] | None = None,
+    refresh_counts: bool = True,
 ) -> PreparedCartograph:
     """Everything that touches `layout`. GUI thread only.
+
+    `refresh_counts` brings the layout's Live counts up to date first
+    (`core/live_count.py`), so the page carries the numbers of the view that
+    leaves; the dialog, which keeps them current itself, passes False.
 
     `frame_modes` and `frame_dpis` are keyed by map item uuid; a static frame
     missing from `frame_dpis` renders at `static_dpi`. `export_dpi` is the
@@ -724,6 +730,8 @@ def prepare_cartograph(
         )
     frame_dpis = frame_dpis or {}
 
+    if refresh_counts:
+        refresh_live_counts(layout)
     reading = read_layout(layout, report, frame_modes=frame_modes)
 
     items: list[CartographItem] = list(reading.furniture)

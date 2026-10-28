@@ -30,6 +30,7 @@ from qgis.core import (
     QgsLayoutItemMap,
     QgsLayoutItemPicture,
     QgsLayoutItemScaleBar,
+    QgsLayoutItemShape,
     QgsLayoutMeasurement,
     QgsLayoutPoint,
     QgsLayoutSize,
@@ -38,12 +39,14 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QPointF, QRectF
+from qgis.PyQt.QtCore import QPointF, QRectF, Qt
 from qgis.PyQt.QtGui import QColor
 
+from ...core import live_count
 from ...core.layout_builder import _north_svg
 from ...core.legend_edit import apply_template_defaults
 from ...core.locator_context import is_locator
+from ...core.page_style import DAYLIGHT
 from ..i18n import tr
 
 
@@ -52,6 +55,7 @@ class ItemKind(Enum):
     LEGEND = "legend"
     SCALE_BAR = "scale_bar"
     NORTH_ARROW = "north_arrow"
+    LIVE_COUNT = "live_count"
 
 
 #: Items that draw something about a map and so need to be linked to one.
@@ -64,6 +68,7 @@ DEFAULT_SIZE_MM = {
     ItemKind.LEGEND: (50.0, 40.0),
     ItemKind.SCALE_BAR: (50.0, 12.0),
     ItemKind.NORTH_ARROW: (15.0, 15.0),
+    ItemKind.LIVE_COUNT: (40.0, 24.0),
 }
 
 _DEFAULT_TEXT_POINTS = 12.0
@@ -75,6 +80,7 @@ def kind_title(kind: ItemKind) -> str:
         ItemKind.LEGEND: tr("Legend"),
         ItemKind.SCALE_BAR: tr("Scale bar"),
         ItemKind.NORTH_ARROW: tr("North arrow"),
+        ItemKind.LIVE_COUNT: tr("Live count"),
     }[kind]
 
 
@@ -131,6 +137,8 @@ def create_item(
             item = legend
         elif kind is ItemKind.SCALE_BAR:
             item = QgsLayoutItemScaleBar(layout)
+        elif kind is ItemKind.LIVE_COUNT:
+            return _create_live_count(layout, rect, map_item)
         else:
             picture = QgsLayoutItemPicture(layout)
             picture.setResizeMode(QgsLayoutItemPicture.Zoom)
@@ -149,6 +157,105 @@ def create_item(
         else:
             item.attemptSetSceneRect(rect)
     return item
+
+
+#: A Live count's look (Signal's figures): a short accent rule, the number
+#: large and bold, its caption smaller and muted under it. In millimetres and
+#: points.
+_COUNT_MIN_WIDTH_MM = 30.0
+_COUNT_RULE_MM = 0.8
+_COUNT_NUMBER_MM = 12.0
+_COUNT_CAPTION_MM = 8.0
+_COUNT_NUMBER_PT = 28.0
+_COUNT_CAPTION_PT = 11.0
+
+
+def _count_label(
+    layout: QgsLayout,
+    item_id: str,
+    text: str,
+    rect: QRectF,
+    points: float,
+    bold: bool,
+    colour: str,
+) -> QgsLayoutItemLabel:
+    label = QgsLayoutItemLabel(layout)
+    label.setId(item_id)
+    label.setText(text)
+    text_format = label.textFormat()
+    text_format.setSize(points)
+    text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+    text_format.setColor(QColor(colour))
+    font = text_format.font()
+    font.setBold(bold)
+    text_format.setFont(font)
+    label.setTextFormat(text_format)
+    layout.addLayoutItem(label)
+    label.attemptSetSceneRect(rect)
+    return label
+
+
+def _unique_count_name(layout: QgsLayout) -> str:
+    """ "Live count", then "Live count 2" ...: a name no item has."""
+    taken = {item.id() for item in layout.items() if isinstance(item, QgsLayoutItem)}
+    base = tr("Live count")
+    name, number = base, 2
+    while name in taken:
+        name = f"{base} {number}"
+        number += 1
+    return name
+
+
+def _create_live_count(
+    layout: QgsLayout, rect: QRectF, map_item: QgsLayoutItemMap | None
+) -> QgsLayoutItemLabel:
+    """A Live count at `rect`'s corner: the number (which holds the setup),
+    its caption and the accent rule, following `map_item`. The caller's undo
+    step is open."""
+    scale = layout.convertToLayoutUnits(
+        QgsLayoutSize(1, 0, QgsUnitTypes.LayoutMillimeters)
+    ).width()
+    width = max(rect.width(), _COUNT_MIN_WIDTH_MM * scale)
+    x, y = rect.x(), rect.y()
+    name = _unique_count_name(layout)
+    rule = QgsLayoutItemShape(layout)
+    rule.setShapeType(QgsLayoutItemShape.Rectangle)
+    rule.setId(f"{name} rule")
+    layout.addLayoutItem(rule)
+    rule.attemptSetSceneRect(
+        QRectF(x, y, min(8 * scale, width), _COUNT_RULE_MM * scale)
+    )
+    symbol = rule.symbol().clone()
+    symbol.setColor(QColor(DAYLIGHT.accent))
+    symbol.symbolLayer(0).setStrokeStyle(Qt.PenStyle.NoPen)
+    rule.setSymbol(symbol)
+    y += (_COUNT_RULE_MM + 1.5) * scale
+    number = _count_label(
+        layout,
+        name,
+        live_count.NO_COUNT_TEXT,
+        QRectF(x, y, width, _COUNT_NUMBER_MM * scale),
+        _COUNT_NUMBER_PT,
+        True,
+        DAYLIGHT.ink,
+    )
+    y += _COUNT_NUMBER_MM * scale
+    caption = _count_label(
+        layout,
+        f"{name} caption",
+        "",
+        QRectF(x, y, width, _COUNT_CAPTION_MM * scale),
+        _COUNT_CAPTION_PT,
+        False,
+        DAYLIGHT.muted,
+    )
+    live_count.write_spec(
+        number,
+        live_count.CountSpec(map_uuid=map_item.uuid() if map_item is not None else ""),
+    )
+    for part in (caption, rule):
+        part.setCustomProperty(live_count.PART_OF_PROPERTY, number.uuid())
+    return number
 
 
 def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
@@ -195,8 +302,10 @@ def delete_items(layout: QgsLayout, items: list[QgsLayoutItem]) -> None:
     """Remove `items` as one undo step."""
     if not items:
         return
+    # A Live count is one thing to the user: taking its number off the page
+    # takes its caption and rule too.
     with one_step(layout, tr("Delete items")):
-        for item in items:
+        for item in live_count.with_count_parts(layout, items):
             layout.removeLayoutItem(item)
 
 

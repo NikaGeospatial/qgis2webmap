@@ -60,6 +60,7 @@ from qgis.PyQt.QtCore import QT_VERSION_STR, QPointF
 from qgis.PyQt.QtGui import QPainter, QPolygonF
 
 from ..core.atomic_write import staged_beside
+from ..core.live_count import refresh_live_counts
 from ..core.page_settings import attribution_in_layout
 from ..core.print_settings import (
     PROFILE_CMYK,
@@ -116,6 +117,7 @@ def export_print_pdf(
     page: PageChoice | None = None,
     *,
     atlas: bool = False,
+    refresh_counts: bool = True,
 ) -> PrintPdfResult:
     """Write every page of `layout` as a PDF at `path`, or, with `atlas`, the
     layout's atlas (one run of pages per feature). GUI thread only.
@@ -128,6 +130,9 @@ def export_print_pdf(
     project = layout.project()
     if project is None:
         raise PrintPdfError(tr("The layout does not belong to a project."))
+    if refresh_counts:
+        # The numbers of the view that is printed (a no-op without counters).
+        refresh_live_counts(layout)
 
     # Copying and exporting a layout both mark the project modified, and so
     # do the colour settings; a print is not an edit, so the flag goes back.

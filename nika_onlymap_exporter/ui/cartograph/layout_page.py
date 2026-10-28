@@ -93,6 +93,7 @@ from .layout_items import (
     map_label,
 )
 from .legend_editor import LegendEditor
+from .live_counts import LiveCounts
 
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
@@ -409,7 +410,10 @@ class LayoutPreview(QStackedWidget):
         self._overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.add_button = self._floating_button(
             tr("Add item"),
-            tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
+            tr(
+                "Add text, a legend, a scale bar, a north arrow or a live count, "
+                "then click the page"
+            ),
         )
         self.add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.add_menu = QMenu(self.add_button)
@@ -1259,6 +1263,9 @@ class PagePane(QWidget):
         # the panel's Edit tab, not in this column.
         self.controls = ContextControls()
         self.destroyed.connect(self.controls.deleteLater)
+        # The Live counts follow the maps of the layout on show.
+        self.live_counts = LiveCounts(self)
+        self.controls.set_live_counts(self.live_counts)
 
         self.preview.selection_changed.connect(self._refresh_controls)
         self.preview.item_placed.connect(self._on_item_placed)
@@ -1289,6 +1296,7 @@ class PagePane(QWidget):
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
         self.controls.set_layout(layout)
+        self.live_counts.set_layout(layout)
         self.caption.setText(
             tr("Layout preview — QGIS · {page}").format(page=_page_name(layout))
             if layout is not None
@@ -1324,9 +1332,41 @@ class PagePane(QWidget):
                         map_label(map_item),
                         lambda kind=kind, m=map_item: self.preview.add_item(kind, m),
                     )
+        self._fill_live_count_entry(menu, layout, maps)
         menu.addAction(tr("Detail map"), self._add_detail_map).setToolTip(
             tr("Show a closer view of an area.")
         )
+
+    def _fill_live_count_entry(self, menu, layout, maps) -> None:  # type: ignore[no-untyped-def]
+        """Live count: follows the one map, else the selected map frame, else
+        a choice of which (never an arbitrary one)."""
+        title = kind_title(ItemKind.LIVE_COUNT)
+        tip = tr("Count what's currently shown on the map.")
+        chosen = (
+            [i for i in layout.selectedLayoutItems() if isinstance(i, QgsLayoutItemMap)]
+            if layout is not None and not sip.isdeleted(layout)
+            else []
+        )
+        selected_only = len(chosen) == 1 and len(layout.selectedLayoutItems()) == 1
+        if not maps:
+            action = menu.addAction(title)
+            action.setEnabled(False)
+            action.setToolTip(tr("Needs a map on the page"))
+        elif len(maps) == 1 or selected_only:
+            target = maps[0] if len(maps) == 1 else chosen[0]
+            action = menu.addAction(
+                title,
+                lambda m=target: self.preview.add_item(ItemKind.LIVE_COUNT, m),
+            )
+            action.setToolTip(tip)
+        else:
+            sub = menu.addMenu(title)
+            sub.menuAction().setToolTip(tip)
+            for map_item in maps:
+                sub.addAction(
+                    tr("Follow {map}").format(map=map_label(map_item)),
+                    lambda m=map_item: self.preview.add_item(ItemKind.LIVE_COUNT, m),
+                )
 
     def _add_detail_map(self) -> None:
         """Add > Detail map; with no map on the page, say what it needs."""

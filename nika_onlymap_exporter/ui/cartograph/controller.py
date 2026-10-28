@@ -453,6 +453,7 @@ class CartographController:
             self._preview_server = None
         self._disconnect_layout_manager()
         self._disconnect_current_layout()
+        self.page_pane.live_counts.close()
         with contextlib.suppress(TypeError, RuntimeError):
             self.project.cleared.disconnect(cartograph_export.clear_static_frame_cache)
 
@@ -481,6 +482,8 @@ class CartographController:
         self.page_pane.changes_requested.connect(lambda: self.open_section("checks"))
         self.page_pane.open_editor_requested.connect(self.on_open_layout_editor)
         self.page_pane.controls.canvas_extent_requested.connect(self._match_canvas)
+        # A Live count's number is part of the page: a new one is a change.
+        self.page_pane.live_counts.content_changed.connect(self.schedule_autosave)
         self.page_pane.shown.connect(
             lambda: QTimer.singleShot(0, self.fit_panel_to_window)
         )
@@ -1814,6 +1817,9 @@ class CartographController:
         # started here, finished by `_continue_build` once the job is done,
         # with the event loop running in between.
         pending: list[cartograph_export.PendingStaticFrame] = []
+        # A Live count still being calculated is finished first, so the file
+        # carries the numbers of the view it is saved from.
+        self.page_pane.live_counts.settle()
         self._exporting = True
         try:
             prepared = cartograph_export.prepare_cartograph(
@@ -1826,6 +1832,7 @@ class CartographController:
                 static_dpi=DEFAULT_STATIC_DPI,
                 export_dpi=export_dpi,
                 pending_static=pending,
+                refresh_counts=False,
             )
         except Exception as exc:
             for frame in pending:
@@ -2836,6 +2843,7 @@ class CartographController:
         # Settings edited since the last look count as edits made, as for the
         # HTML; the layout itself is read as it is right now, from a copy.
         self.sync_layer_settings()
+        self.page_pane.live_counts.settle()
         self._pdf_running = True
         self.dialog.status_label.setText(tr("Saving PDF…"))
         self._update_share_enabled()
@@ -2847,6 +2855,7 @@ class CartographController:
                 target,
                 self.state.page_choice(self.state.cartograph_layout),
                 atlas=atlas,
+                refresh_counts=False,
             )
         except PrintPdfError as exc:
             self.dialog.status_label.setText(
