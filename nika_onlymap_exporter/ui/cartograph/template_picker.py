@@ -1360,8 +1360,6 @@ class TemplatePicker(QDialog):
             self._plan_queue.clear()
             return
         self._plan_queue = self._plan_order()
-        if self._plan_queue and not self._plan_timer.isActive():
-            self._plan_timer.start()
         current = self.template_list.currentItem()
         chosen = (
             str(current.data(Qt.ItemDataRole.UserRole))
@@ -1389,6 +1387,10 @@ class TemplatePicker(QDialog):
         self._queue = queue
         if queue and not self._timer.isActive() and not self._scroll_rest.isActive():
             self._timer.start()
+        # After the page's turn is queued: the first real page comes before
+        # the other cards' guides.
+        if self._plan_queue and not self._plan_timer.isActive():
+            self._plan_timer.start()
 
     def visible_ids(self) -> list[str]:
         """The designs whose cards are at least partly in view, in order."""
