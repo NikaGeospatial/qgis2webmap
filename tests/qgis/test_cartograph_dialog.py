@@ -364,8 +364,8 @@ class TestOutputSwitch:
             assert share.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
             assert "open_browser" in dialog._cartograph.cartograph_share_actions
             assert dialog._cartograph.accessibility_button.accessibleName()
-            # Colour vision, Save PDF…, Share, in that order; no browser button.
-            assert [b.text() for b in buttons] == ["", "Save PDF…", "Share"]
+            # Colour vision, Share, in that order; no browser or PDF button.
+            assert [b.text() for b in buttons] == ["", "Share"]
         finally:
             dialog.close()
 
@@ -492,7 +492,7 @@ class TestFramesTab:
             cartograph = dialog._cartograph
             assert cartograph.current_layout_name() == ""
             assert cartograph.layout_header.name_label.isHidden()
-            assert cartograph.layout_header.switch_button.isHidden()
+            assert not cartograph.layout_header.switch_action.isVisible()
             template = cartograph.page_preview.template_button
             assert template.text() == "New from template..."
             assert template.isVisibleTo(cartograph.page_preview)
@@ -4661,7 +4661,7 @@ def _modal_watchdog(failures: list, milliseconds: int = 8000):
 def _pick_layout(dialog, name: str) -> None:
     """Choose `name` as a user does: "Switch layout...", pick its row in the
     chooser and confirm. Fails after a few seconds rather than hanging."""
-    from qgis.PyQt.QtCore import QPoint, Qt, QTimer
+    from qgis.PyQt.QtCore import Qt, QTimer
     from qgis.PyQt.QtTest import QTest
     from qgis.PyQt.QtWidgets import QApplication
 
@@ -4697,11 +4697,7 @@ def _pick_layout(dialog, name: str) -> None:
 
     QTimer.singleShot(0, drive)
     watchdog = _modal_watchdog(failures)
-    QTest.mouseClick(
-        header.switch_button,
-        Qt.MouseButton.LeftButton,
-        pos=QPoint(4, header.switch_button.height() // 2),
-    )
+    header.switch_action.trigger()
     watchdog.stop()
     if failures:
         raise failures[0]

@@ -169,6 +169,10 @@ PANEL_WIDTH_LARGE = 430
 PANEL_WIDE_WINDOW = 1200
 PANEL_TABS_MIN_HEIGHT = 180
 
+#: The rule above the panel tabs: its 1 px line and 2 px of the 8 px gap below
+#: it (the column's 6 px spacing is the rest).
+PANEL_RULE_HEIGHT = 3
+
 _THEME_LABELS = (
     ("default", N_("Default")),
     ("dark", N_("Dark")),
@@ -509,9 +513,21 @@ class CartographController:
         column.addWidget(self.layout_empty_note)
         column.addSpacing(4)
 
+        # One continuous line above the tabs. It is a widget of its own, not
+        # the tab pane's border, so no tab (selected, hovered or focused) can
+        # overlap or erase it. Its height is the 1 px line plus the part of
+        # the 8 px gap the column's own 6 px spacing does not give.
+        self.panel_rule = QFrame(panel)
+        self.panel_rule.setProperty("role", "panelRule")
+        self.panel_rule.setFixedHeight(PANEL_RULE_HEIGHT)
+        column.addWidget(self.panel_rule)
+
         self.panel_tabs = QTabWidget(panel)
         self.panel_tabs.setProperty("role", "panelTabs")
         self.panel_tabs.setDocumentMode(True)
+        # The style's own line along the bar would sit in the 8 px gap, a
+        # second rule beside ours (the pane's border used to hide it).
+        self.panel_tabs.tabBar().setDrawBase(False)
         # Never squeezed to nothing by a short window: the save lines below
         # are fixed, so the tabs keep room for a few rows of their own.
         self.panel_tabs.setMinimumHeight(PANEL_TABS_MIN_HEIGHT)
@@ -620,6 +636,7 @@ class CartographController:
         # Everything below the list belongs to a layout; with none there is
         # nothing to set, so it is hidden rather than left to type into.
         self._layout_only = (
+            self.panel_rule,
             self.panel_tabs,
             self.file_edit,
             self.cartograph_status_label,
@@ -2126,8 +2143,8 @@ class CartographController:
     def build_corner(self) -> QWidget:
         """The cartograph's actions, styled as the web map's are.
 
-        Save PDF and Share in the same outlined buttons with the same line
-        icons. There is no filled button: the cartograph saves itself.
+        Share in the same outlined button style with a line icon. There is no
+        filled button: the cartograph saves itself.
         "Preview in browser" lives in Share's menu, still on Ctrl+O.
         Accessibility is a tool rather than an act, so it is an icon on its
         own ahead of them.
@@ -2163,12 +2180,6 @@ class CartographController:
             tr("Colour vision: simulate it and check the legend's colours")
         )
         self.accessibility_button.clicked.connect(self.on_accessibility)
-
-        # The page beside the panel is QGIS's drawing, so saving a PDF is a
-        # native QGIS export; the browser is a secondary HTML check in Share.
-        self.save_pdf_button = button(tr("Save PDF…"), "export")
-        self.save_pdf_button.setShortcut("Ctrl+P")
-        self.save_pdf_button.clicked.connect(self.on_save_pdf)
 
         self.cartograph_share_button = button(tr("Share"), "share")
         self.cartograph_share_button.setProperty("hasMenu", True)
@@ -2429,8 +2440,17 @@ class CartographController:
             self._cartograph_share_tips[key] = tip
             return action
 
-        # Outputs first, then the HTML file's own actions, then NIKA.
+        # Outputs first, then the HTML file's own actions, then NIKA. The page
+        # beside the panel is QGIS's drawing, so saving a PDF is a native QGIS
+        # export; the browser is a secondary HTML check below.
         menu.addSection(tr("Export"))
+        add(
+            "save_pdf",
+            tr("Save PDF…"),
+            tr("Save every page of this layout as a PDF (Ctrl+P)"),
+            self.on_save_pdf,
+            "Ctrl+P",
+        )
         add(
             "save_atlas_pdf",
             tr("Save atlas as PDF…"),
@@ -2522,6 +2542,13 @@ class CartographController:
             self._set_share_row(
                 key, self._current_layout is not None, tr("Choose a print layout first")
             )
+        self._set_share_row(
+            "save_pdf",
+            self._current_layout is not None and not self._pdf_running,
+            tr("Saving PDF…")
+            if self._pdf_running
+            else tr("Choose or create a layout first"),
+        )
         atlas_row = self.cartograph_share_actions.get("save_atlas_pdf")
         if atlas_row is not None:
             atlas_row.setVisible(self._atlas_configured())
@@ -2530,7 +2557,6 @@ class CartographController:
                 not self._pdf_running,
                 tr("Saving PDF…"),
             )
-        self._sync_save_pdf_button()
         for key in ("enhance", "critique"):
             self._set_share_row(key, False, tr("Not available for cartographs yet"))
 
@@ -2641,21 +2667,6 @@ class CartographController:
             return False
         atlas = layout.atlas()
         return bool(atlas.enabled() and atlas.coverageLayer() is not None)
-
-    def _sync_save_pdf_button(self) -> None:
-        button = getattr(self, "save_pdf_button", None)
-        if button is None:
-            return
-        if self._current_layout is None:
-            button.setEnabled(False)
-            button.setToolTip(tr("Choose or create a layout first"))
-        else:
-            button.setEnabled(not self._pdf_running)
-            button.setToolTip(
-                tr("Saving PDF…")
-                if self._pdf_running
-                else tr("Save every page of this layout as a PDF (Ctrl+P)")
-            )
 
     def on_save_pdf(self) -> None:
         """Save PDF…: every page of the selected layout, by QGIS itself."""

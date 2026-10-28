@@ -145,7 +145,7 @@ class TestSavePdf:
         assert pages > 1
         assert not list(chosen_pdf.target.parent.glob("*.html"))
 
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
 
         assert _pdf_pages(chosen_pdf.target) == pages
         assert chosen_pdf.opened == []  # no browser, viewer or print dialog
@@ -155,7 +155,7 @@ class TestSavePdf:
         self, survey_dialog, chosen_pdf
     ) -> None:
         dialog, layout = survey_dialog
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
         assert chosen_pdf.asked[0][2].endswith(f"{layout.name()}.pdf")
 
     def test_the_source_layout_is_left_as_it_was(
@@ -171,7 +171,7 @@ class TestSavePdf:
         ).to_json()
         before = _state_of(dialog, layout)
 
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
 
         assert chosen_pdf.target.exists()
         assert _state_of(dialog, layout) == before
@@ -182,7 +182,7 @@ class TestSavePdf:
     ) -> None:
         dialog, _layout = survey_dialog
         autosave_line = dialog._cartograph.cartograph_status_label.text()
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
         label = dialog.status_label
         assert "Saved PDF: chosen.pdf" in label.text()
         assert "Open PDF" in label.text() and "Show in folder" in label.text()
@@ -201,9 +201,12 @@ class TestSavePdf:
         dialog = _dialog(project)
         try:
             _choose_cartograph(dialog)
-            button = _button(dialog, "Save PDF…")
-            assert not button.isEnabled()
-            assert button.toolTip() == "Choose or create a layout first"
+            action = _share_action(dialog, "Save PDF…")
+            assert not action.isEnabled()
+            assert action.toolTip() == "Choose or create a layout first"
+            assert not any(
+                b.text() == "Save PDF…" for b in dialog.findChildren(QToolButton)
+            )
         finally:
             dialog.close()
 
@@ -211,29 +214,29 @@ class TestSavePdf:
         self, survey_dialog, chosen_pdf, qgis_app
     ) -> None:
         dialog, _layout = survey_dialog
-        button = _button(dialog, "Save PDF…")
+        action = _share_action(dialog, "Save PDF…")
         seen: dict[str, object] = {}
 
         def duplicate() -> None:
             # An exception in a Qt slot aborts the process: keep it for the test.
             try:
                 seen["status"] = dialog.status_label.text()
-                seen["enabled"] = button.isEnabled()
-                _click(button)
+                seen["enabled"] = action.isEnabled()
+                action.trigger()
                 _share_action(dialog, "Save atlas as PDF…").trigger()
             except Exception as exc:
                 seen["error"] = repr(exc)
 
         # Fires while the first save is under way (its event processing).
         QTimer.singleShot(0, duplicate)
-        _click(button)
+        action.trigger()
 
         assert "error" not in seen, seen
         assert seen["status"] == "Saving PDF…"
         assert seen["enabled"] is False
         assert len(chosen_pdf.asked) == 1  # one save dialog, one PDF
         assert "Saved PDF: chosen.pdf" in dialog.status_label.text()
-        assert button.isEnabled()
+        assert action.isEnabled()
 
     def test_a_cancelled_dialog_changes_nothing(
         self, survey_dialog, monkeypatch
@@ -241,9 +244,9 @@ class TestSavePdf:
         dialog, _layout = survey_dialog
         monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
         dialog.status_label.setText("earlier message")
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
         assert dialog.status_label.text() == "earlier message"
-        assert _button(dialog, "Save PDF…").isEnabled()
+        assert _share_action(dialog, "Save PDF…").isEnabled()
 
     def test_a_failure_is_explained_and_the_layout_kept(
         self, survey_dialog, chosen_pdf, monkeypatch, tmp_path
@@ -261,13 +264,13 @@ class TestSavePdf:
         )
         before = _state_of(dialog, layout)
 
-        _click(_button(dialog, "Save PDF…"))
+        _share_action(dialog, "Save PDF…").trigger()
 
         assert len(shown) == 1 and "blocked.pdf" in shown[0]
         assert dialog.status_label.text().startswith("Could not save the PDF")
         assert "Saved PDF" not in dialog.status_label.text()
         assert _state_of(dialog, layout) == before
-        assert _button(dialog, "Save PDF…").isEnabled()
+        assert _share_action(dialog, "Save PDF…").isEnabled()
 
     def test_ctrl_p_saves_the_pdf(self, survey_dialog, chosen_pdf, qgis_app) -> None:
         dialog, layout = survey_dialog
@@ -277,6 +280,7 @@ class TestSavePdf:
         QTest.keyClick(dialog, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier)
         assert _wait_for(qgis_app, chosen_pdf.target.exists)
         assert _pdf_pages(chosen_pdf.target) == layout.pageCollection().pageCount()
+        assert chosen_pdf.opened == []  # no browser opened
 
     def test_the_pdf_settings_button_saves_a_pdf_with_those_settings(
         self, survey_dialog, chosen_pdf, monkeypatch
@@ -306,13 +310,14 @@ class TestShareMenuAndToolbar:
             if b.property("role") == "corner" and b.isVisibleTo(header)
         ]
         names = [b.text() or b.accessibleName() for b in shown]
-        assert names == ["Accessibility", "Save PDF…", "Share", "Settings", "Help"]
+        assert names == ["Accessibility", "Share", "Settings", "Help"]
         assert not any(b.text() == "Preview in browser" for b in shown)
 
     def test_share_sections_without_an_atlas(self, survey_dialog) -> None:
         dialog, _layout = survey_dialog
-        assert _share_texts(dialog)[:8] == [
+        assert _share_texts(dialog)[:9] == [
             "Export",
+            "Save PDF…",
             "Export PNG…",
             "Export QGIS layout template…",
             "PDF settings…",
@@ -336,10 +341,13 @@ class TestAtlasPdf:
 
     def test_the_row_leads_the_export_section(self, atlas_dialog) -> None:
         dialog, _built = atlas_dialog
-        assert _share_texts(dialog)[:3] == [
+        assert _share_texts(dialog)[:6] == [
             "Export",
+            "Save PDF…",
             "Save atlas as PDF…",
             "Export PNG…",
+            "Export QGIS layout template…",
+            "PDF settings…",
         ]
 
     def test_saves_one_run_of_pages_per_feature_not_the_current_one(

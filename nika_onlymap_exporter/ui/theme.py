@@ -632,6 +632,17 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     border-bottom: 1px solid {p.rule};
     top: -1px;
 }}
+/* The Cartograph panel draws its rule above the tabs as a widget of its own
+   (panelRule), so the pane has no border to overlap the tabs and no offset. */
+{d} QTabWidget[role="panelTabs"]::pane {{
+    border: none;
+    top: 0;
+}}
+{d} QFrame[role="panelRule"] {{
+    background: transparent;
+    border: none;
+    border-top: 1px solid {p.rule};
+}}
 {d} QTabBar {{
     background: transparent;
 }}
@@ -1471,6 +1482,19 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     image: none;
     width: 0;
 }}
+/* Layout actions: a compact square holding only the dots. The 1 px padding is
+   what the keyboard-focus ring trades its extra width against. */
+{d} QToolButton[role="secondary"][hasMenu="false"][layoutActions="true"] {{
+    padding: 1px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+}}
+{d} QToolButton[layoutActions="true"]::menu-indicator {{
+    image: none;
+    width: 0;
+}}
 {d} QToolButton[role="frameIssues"] {{
     background: transparent;
     border: none;
@@ -1763,6 +1787,12 @@ _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     ('QToolButton[role="chip"][hasMenu="true"]', (4, 26, 4, 12), 1, False),
     ('QToolButton[role="secondary"]', (3, 30, 3, 14), 1, False),
     ('QToolButton[role="secondary"][hasMenu="false"]', (3, 16, 3, 16), 1, False),
+    (
+        'QToolButton[role="secondary"][hasMenu="false"][layoutActions="true"]',
+        (1, 1, 1, 1),
+        1,
+        False,
+    ),
     ('QToolButton[role="primary"]', (3, 30, 3, 14), 1, True),
     ('QToolButton[role="primary"][hasMenu="false"]', (3, 16, 3, 16), 1, True),
     ('QToolButton[role="corner"]', (3, 11, 3, 9), 1, False),
