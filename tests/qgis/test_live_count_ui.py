@@ -724,3 +724,46 @@ class TestExistingFiguresAreUntouched:
         assert pane.controls.text_edit.toPlainText() == "214"
         pane.live_counts.close()
         pane.close()
+
+
+class TestDrawnOnTop:
+    """A new counter is seen, whatever the page already holds."""
+
+    def test_a_counter_is_not_hidden_by_something_already_on_the_page(
+        self, qgis_app, ui
+    ) -> None:
+        from qgis.core import QgsLayoutExporter
+        from qgis.PyQt.QtCore import QRect, QSize
+        from qgis.PyQt.QtGui import QColor
+
+        page, pane = ui
+        # A template's legend or notes box: opaque, and above what a new item
+        # is put on by default.
+        cover = QgsLayoutItemLabel(page.layout)
+        cover.setText("")
+        page.layout.addLayoutItem(cover)
+        cover.attemptSetSceneRect(QRectF(150.0, 10.0, 80.0, 120.0))
+        cover.setBackgroundEnabled(True)
+        cover.setBackgroundColor(QColor("#ff00ff"))
+        cover.setZValue(100.0)
+        number = _add(qgis_app, pane, page, at=(170.0, 30.0))
+        _pick(_setup(pane).layer_combo, page.sites.id())
+        _number_shows(qgis_app, number, "30")
+        page.layout.deselectAll()
+        scale = 4
+        image = QgsLayoutExporter(page.layout).renderPageToImage(
+            0, QSize(297 * scale, 210 * scale)
+        )
+        box = number.sceneBoundingRect()
+        area = QRect(
+            int(box.x() * scale),
+            int(box.y() * scale),
+            int(box.width() * scale),
+            int(box.height() * scale),
+        )
+        seen = {
+            image.pixelColor(x, y).name()
+            for x in range(area.left(), area.right(), 2)
+            for y in range(area.top(), area.bottom(), 2)
+        }
+        assert seen - {"#ff00ff"}, "the number is hidden behind the other item"

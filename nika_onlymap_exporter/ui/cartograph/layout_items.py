@@ -255,6 +255,12 @@ def _create_live_count(
     )
     for part in (caption, rule):
         part.setCustomProperty(live_count.PART_OF_PROPERTY, number.uuid())
+    # Drawn above everything already on the page: a template's legend or
+    # notes box has a background and a higher stacking position than a new
+    # item gets, and would hide the number and the rule.
+    for part in (rule, number, caption):
+        while layout.raiseItem(part):
+            pass
     return number
 
 
