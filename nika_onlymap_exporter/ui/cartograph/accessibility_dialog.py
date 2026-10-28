@@ -17,14 +17,8 @@ validator will be judged by. The views are a look; the table is the verdict.
 Everything outside the dialog arrives as a callable, so the controller owns
 the wiring and the tests drive the real widgets: `entries_provider` returns
 the legend classes of the last saved cartograph, `open_preview` reopens the
-browser preview with a runtime `cvd` value (or `None` for normal vision), and
-`ask_nika` receives the findings text for the hand-off dialog. `preview_view`
-is the embedded layout view the simulation shows in first.
-
-The conditions are a plain list of radio buttons, not a drop-down: a combo
-box's list is a grabbing pop-up window, and this window is a transient tool
-window over the Cartograph dialog. Nothing here opens a pop-up, so there is no
-grab that can outlive a click outside this window.
+browser preview with a runtime `cvd` value (or `None` for normal vision).
+`preview_view` is the embedded layout view the simulation shows in first.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -40,14 +34,13 @@ from qgis.PyQt.QtCore import QSettings, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
-    QButtonGroup,
     QCheckBox,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
-    QRadioButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -158,39 +151,6 @@ def swatch_icon(colour: str) -> QIcon:
     return QIcon(pixmap)
 
 
-def _display_colour(entry: LegendEntry) -> str:
-    rgb = parse_colour(entry.color)
-    return hex_colour(rgb) if rgb is not None else entry.color
-
-
-def findings_text(lint: LegendLint) -> str:
-    """The findings, as a plain list for the NIKA hand-off prompt.
-
-    One line per collapsing pair, naming every condition it collapses under
-    and the closest distance, so the agent can tell a near miss from a pair
-    that has become one colour - and knows the fix must clear 10.
-    """
-    lines = []
-    for pair in lint.pairs():
-        conditions = ", ".join(tr(CONDITION_WORDS[c]) for c in pair.conditions)
-        lines.append(
-            tr(
-                "- Layer '{layer}': '{first}' ({first_colour}) and '{second}' "
-                "({second_colour}) collapse under {conditions} "
-                "(CIEDE2000 {distance:.1f}, below 10)."
-            ).format(
-                layer=pair.a.display_layer,
-                first=pair.a.label,
-                first_colour=_display_colour(pair.a),
-                second=pair.b.label,
-                second_colour=_display_colour(pair.b),
-                conditions=conditions,
-                distance=pair.distance,
-            )
-        )
-    return "\n".join(lines)
-
-
 class AccessibilityDialog(QDialog):
     """Simulate a colour-vision condition and check the legend against it.
 
@@ -215,7 +175,6 @@ class AccessibilityDialog(QDialog):
         canvas: QgsMapCanvas | None = None,
         preview_view: QgsLayoutView | None = None,
         open_preview: Callable[[str | None], None] | None = None,
-        ask_nika: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -223,7 +182,6 @@ class AccessibilityDialog(QDialog):
         self._canvas = canvas
         self._preview_view = preview_view
         self._open_preview = open_preview
-        self._ask_nika = ask_nika
         self._entries: tuple[LegendEntry, ...] = ()
         self._lint = LegendLint()
         # The simulation last applied (None: normal vision), and whether it
@@ -244,33 +202,19 @@ class AccessibilityDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
+        row = QHBoxLayout()
         simulate_label = QLabel(tr("&Simulate"))
-        simulate_label.setToolTip(
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem(tr("Normal vision"), "")
+        for condition, name in CONDITION_NAMES.items():
+            self.mode_combo.addItem(tr(name), condition)
+        self.mode_combo.setToolTip(
             tr("How a reader with this colour-vision condition sees the map.")
         )
-        layout.addWidget(simulate_label)
-        self.mode_group = QButtonGroup(self)
-        self.mode_buttons: dict[str, QRadioButton] = {}
-        names: list[tuple[str, str]] = [("", N_("Normal vision"))]
-        names.extend(CONDITION_NAMES.items())
-        for value, name in names:
-            button = QRadioButton(tr(name))
-            # Keyboard focus only, so a click leaves no focus ring behind.
-            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-            self.mode_group.addButton(button)
-            self.mode_buttons[value] = button
-            layout.addWidget(button)
-        simulate_label.setBuddy(self.mode_buttons[""])
-
-        self.explanation_label = QLabel(
-            tr(
-                "Changes appear in the layout preview.\n"
-                "Apply keeps them on in the plugin's previews."
-            )
-        )
-        self.explanation_label.setWordWrap(True)
-        self.explanation_label.setProperty("role", "hint")
-        layout.addWidget(self.explanation_label)
+        simulate_label.setBuddy(self.mode_combo)
+        row.addWidget(simulate_label)
+        row.addWidget(self.mode_combo, stretch=1)
+        layout.addLayout(row)
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
@@ -324,22 +268,18 @@ class AccessibilityDialog(QDialog):
         layout.addWidget(self.canvas_check)
 
         buttons = QHBoxLayout()
-        self.ask_button = QPushButton(tr("Ask NIKA to fix ↗"))
         self.close_button = QPushButton(tr("Close"))
         self.apply_button = QPushButton(tr("Apply"))
         self.apply_button.setToolTip(
             tr("Keep this simulation on in the plugin's previews.")
         )
-        buttons.addWidget(self.ask_button)
         buttons.addStretch(1)
         buttons.addWidget(self.close_button)
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
-        for button in self.mode_buttons.values():
-            button.toggled.connect(self._on_mode_toggled)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.canvas_check.toggled.connect(self._update_apply_button)
-        self.ask_button.clicked.connect(self._on_ask_nika)
         self.close_button.clicked.connect(self.close)
         self.apply_button.clicked.connect(self.apply)
 
@@ -356,10 +296,8 @@ class AccessibilityDialog(QDialog):
 
     def current_condition(self) -> Condition | None:
         """The condition selected now, applied or not."""
-        for value, button in self.mode_buttons.items():
-            if button.isChecked():
-                return cast("Condition", value) if value else None
-        return None
+        value = self.mode_combo.currentData()
+        return cast("Condition", value) if value else None
 
     def applied_condition(self) -> Condition | None:
         """The condition last applied (None: normal vision)."""
@@ -371,9 +309,9 @@ class AccessibilityDialog(QDialog):
 
     def set_condition(self, condition: Condition | None) -> None:
         """Select `condition` (None for normal vision), as the combo would."""
-        button = self.mode_buttons.get(condition or "")
-        if button is not None:
-            button.setChecked(True)
+        index = self.mode_combo.findData(condition or "")
+        if index >= 0:
+            self.mode_combo.setCurrentIndex(index)
 
     @property
     def lint(self) -> LegendLint:
@@ -388,9 +326,7 @@ class AccessibilityDialog(QDialog):
 
     # ---- Preview, Apply, discard -------------------------------------------
 
-    def _on_mode_toggled(self, checked: bool) -> None:
-        if not checked:  # the button being left; the one chosen reports next
-            return
+    def _on_mode_changed(self, _index: int) -> None:
         self._show_in_preview(self.current_condition())
         self._fill_table()
         self._update_apply_button()
@@ -561,7 +497,6 @@ class AccessibilityDialog(QDialog):
             )
 
         self.empty_label.setVisible(not self._entries)
-        self._update_ask_button()
 
     @staticmethod
     def _swatch_item(colour: str, paint: bool) -> QTableWidgetItem:
@@ -576,22 +511,3 @@ class AccessibilityDialog(QDialog):
         item.setToolTip(colour)
         item.setData(Qt.ItemDataRole.AccessibleTextRole, colour)
         return item
-
-    # ---- NIKA --------------------------------------------------------------
-
-    def _update_ask_button(self) -> None:
-        if self._ask_nika is None:
-            self.ask_button.setEnabled(False)
-            self.ask_button.setToolTip(tr("Not available for cartographs yet"))
-        elif not self._lint.collapses:
-            self.ask_button.setEnabled(False)
-            self.ask_button.setToolTip(tr("Nothing to fix: no classes collapse."))
-        else:
-            self.ask_button.setEnabled(True)
-            self.ask_button.setToolTip(
-                tr("Hand these findings to NIKA and ask for a safer palette.")
-            )
-
-    def _on_ask_nika(self) -> None:
-        if self._ask_nika is not None and self._lint.collapses:
-            self._ask_nika(findings_text(self._lint))

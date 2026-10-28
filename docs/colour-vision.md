@@ -85,14 +85,6 @@ the saved cartograph's legends actually show. Each layer appears once, however
 many frames draw it. The table describes the last save, and refreshes after every
 save while the dialog is open; before the first save it is empty.
 
-## Ask NIKA to fix
-
-**Ask NIKA to fix ↗** is shown greyed out for now: the
-[hand-off to NIKA](enhance-with-ai.md#hand-off-to-nika) is not available for
-cartographs yet. The findings above name each pair, the conditions it
-collapses under and how close it comes, which is what the advice below works
-from.
-
 ## Fixing a palette yourself
 
 - Vary **lightness**, not only hue. Two colours that differ in lightness stay

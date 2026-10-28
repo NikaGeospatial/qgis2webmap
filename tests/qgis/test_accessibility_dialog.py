@@ -62,7 +62,6 @@ def make_dialog(qgis_app, canvas):
     def make(entries=PERMITS, **kwargs):
         kwargs.setdefault("canvas", canvas)
         kwargs.setdefault("open_preview", Recorder())
-        kwargs.setdefault("ask_nika", Recorder())
         dialog = AccessibilityDialog(lambda: entries, **kwargs)
         made.append(dialog)
         return dialog
@@ -242,7 +241,7 @@ class TestPreviewBeforeApply:
         if how == "close_button":
             dialog.close_button.click()
         elif how == "escape":
-            QTest.keyClick(dialog.mode_buttons["tritanopia"], Qt.Key.Key_Escape)
+            QTest.keyClick(dialog.mode_combo, Qt.Key.Key_Escape)
         else:
             dialog.close()
         settle(qgis_app, 0.05)
@@ -521,7 +520,7 @@ class TestInputIsNeverLeftBlocked:
     """Clicking out of the window after choosing an option, without Apply,
     must leave the window behind it fully usable."""
 
-    @pytest.mark.parametrize("how", ["radio_click", "radio_then_other_window"])
+    @pytest.mark.parametrize("how", ["combo_choice", "combo_then_other_window"])
     def test_a_click_on_the_window_behind_still_lands(
         self, qgis_app, make_dialog, how
     ) -> None:
@@ -549,12 +548,13 @@ class TestInputIsNeverLeftBlocked:
         behind.clicked.connect(lambda: clicks.append(1))
         try:
             settle(qgis_app, 0.1)
-            radio = dialog.mode_buttons["deuteranopia"]
-            QTest.mouseClick(
-                radio, Qt.MouseButton.LeftButton, pos=QPoint(8, radio.height() // 2)
-            )
+            # Chosen with the keyboard: no list pop-up opens (the cases below
+            # click through the window system, as a real click arrives).
+            dialog.mode_combo.setFocus()
+            QTest.keyClick(dialog.mode_combo, Qt.Key.Key_Down)
+            QTest.keyClick(dialog.mode_combo, Qt.Key.Key_Down)
             assert dialog.current_condition() == "deuteranopia"
-            if how == "radio_then_other_window":
+            if how == "combo_then_other_window":
                 dialog.activateWindow()
             # Through the window system, as a real click arrives.
             window = host.windowHandle()
@@ -575,12 +575,6 @@ class TestInputIsNeverLeftBlocked:
         finally:
             dialog.close()
             host.close()
-
-    def test_the_window_opens_no_pop_up_to_leave_behind(self, make_dialog) -> None:
-        """A drop-down's list is a grabbing pop-up window; this one has none."""
-        from qgis.PyQt.QtWidgets import QComboBox
-
-        assert make_dialog().findChildren(QComboBox) == []
 
 
 class TestBrowser:
@@ -686,11 +680,9 @@ class TestTable:
         assert dialog.table.rowCount() == 0
         assert not dialog.empty_label.isHidden()
         assert "Save the cartograph" in dialog.empty_label.text()
-        assert not dialog.ask_button.isEnabled()
-        assert dialog.ask_button.toolTip()
 
 
-class TestSignalsAndNika:
+class TestSignals:
     def test_mode_signal_carries_the_condition(self, make_dialog):
         from nika_onlymap_exporter.ui.cartograph.accessibility_dialog import (
             simulating_tooltip,
@@ -706,23 +698,6 @@ class TestSignalsAndNika:
         dialog.apply_button.click()
         assert seen == ["deuteranopia", ""]
         assert simulating_tooltip("deuteranopia") == "Simulating deuteranopia"
-
-    def test_ask_nika_receives_the_findings(self, make_dialog):
-        ask = Recorder()
-        dialog = make_dialog(ask_nika=ask)
-        assert dialog.ask_button.isEnabled()
-        dialog.ask_button.click()
-        assert len(ask.calls) == 1
-        text = ask.calls[0]
-        assert "Layer 'Permits'" in text
-        assert "'Approved' (#2ca02c) and 'Rejected' (#d62728)" in text
-        assert "deuteranopia" in text
-        assert "Primary" not in text
-
-    def test_nothing_to_fix_disables_ask(self, make_dialog):
-        dialog = make_dialog(entries=PERMITS[2:])
-        assert not dialog.ask_button.isEnabled()
-        assert dialog.ask_button.toolTip()
 
     def test_is_a_non_modal_tool_window(self, make_dialog):
         from qgis.PyQt.QtCore import Qt

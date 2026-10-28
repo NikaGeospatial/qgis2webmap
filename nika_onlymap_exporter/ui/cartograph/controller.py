@@ -2197,9 +2197,6 @@ class CartographController:
             canvas=self._map_canvas(),
             preview_view=self.page_pane.preview.view,
             open_preview=self._open_cvd_preview,
-            # The hand-off is not ready for cartographs: greyed out here
-            # too, as on the Share menu.
-            ask_nika=None,
             parent=self.dialog,
         )
 
