@@ -279,6 +279,17 @@ class TestMaps:
         assert not s.tab.export_button.isEnabled()
 
 
+class TestEnableFollowsTheLayout:
+    def test_choosing_a_layer_on_a_series_that_is_off_shows_it_on(self, series) -> None:
+        s = series(maps=2)
+        assert not s.tab.enabled_check.isChecked()
+        s.choose_layer(s.built.parcels)
+        assert s.atlas.enabled()
+        assert s.tab.enabled_check.isChecked()
+        assert s.tab.settings_box.isVisibleTo(s.tab)
+        assert s.tab.map_chooser.isVisibleTo(s.tab)
+
+
 class TestFraming:
     def test_new_series_fits_areas_with_the_default_margin(self, series) -> None:
         s = series()

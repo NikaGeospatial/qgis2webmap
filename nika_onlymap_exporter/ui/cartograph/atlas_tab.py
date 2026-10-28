@@ -36,7 +36,7 @@ from qgis.core import (
 )
 from qgis.gui import QgsFieldExpressionWidget, QgsMapLayerComboBox
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QTimer, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QHideEvent, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
@@ -261,6 +261,15 @@ class AtlasTab(QWidget):
         self.switch_button = QPushButton(tr("Switch to Interactive"), parent)
         self.switch_button.clicked.connect(self._on_switch_to_interactive)
         column.addWidget(self.switch_button)
+        # A click gives no lingering focus ring; Tab still reaches them.
+        for button in (
+            self.previous_button,
+            self.next_button,
+            self.export_button,
+            self.print_button,
+            self.switch_button,
+        ):
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
     def _build_framing(self, column: QVBoxLayout, parent: QWidget) -> None:
         self.framing_section = PanelSection("atlas-framing", tr("Page framing"), parent)
@@ -486,6 +495,14 @@ class AtlasTab(QWidget):
         if generation != self._generation:
             return  # a newer setup began while this one was prepared
         self._status = status
+        if layout is not None:
+            shown = layout.atlas().enabled() or self._layer_removed
+            if self.enabled_check.isChecked() != shown:
+                self._loading = True
+                try:
+                    self.enabled_check.setChecked(shown)
+                finally:
+                    self._loading = False
         coverage = layout.atlas().coverageLayer() if layout is not None else None
         if coverage is not None:
             self._coverage_id = coverage.id()
@@ -518,7 +535,7 @@ class AtlasTab(QWidget):
         self.map_chooser.setVisible(count > 1)
         self.no_map.setVisible(count == 0)
         summary = ""
-        if count == 1:
+        if count == 1 and status.updated:
             summary = tr("Updating map: {name}").format(name=status.maps[0].name)
         self.map_summary.setText(summary)
         self.map_summary.setVisible(bool(summary))

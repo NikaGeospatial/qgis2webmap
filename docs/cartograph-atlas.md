@@ -16,26 +16,37 @@ map, the scale bar and every page-dependent label update as they go.
 
 ## Setting it up
 
-On the cartograph's **Atlas** tab:
+On the cartograph's **Atlas** tab, which reads **Create a map series**:
 
-1. Tick **Generate an atlas**.
-2. Choose the **Coverage layer** - one page per feature of it.
-3. Choose the **Map that follows it**. A map that did not follow the atlas
-   before gets QGIS's defaults: it fits each feature, with a 10% margin.
-4. Optionally, **Sort by** a field (tick **Descending** to reverse it), a
-   **Filter** expression, and a **File names** expression for exported pages.
-5. In **Map frames**, on the **Layout** tab, make sure the map that follows the atlas is
-   **Interactive** (a map the atlas drives starts that way). The coverage layer need not be drawn on it: leave it out of the
-   map's layers (or tick **Hide coverage layer**) and the atlas still pages
-   through it, hidden.
+1. Tick **Create a map series**.
+2. Under **Make one page for each feature in**, choose a layer. Each area or
+   location in it becomes a page, and the tab says how many ("3 areas",
+   "12 locations"). Nothing is chosen for you.
+3. With one map on the layout, that is all: the tab says **Updating map: Main
+   map**, and a map that did not follow the atlas before gets QGIS's defaults
+   (it fits each feature, with a 10% margin). With several maps, choose **Map
+   to update on each page**; the other maps keep their current view.
 
-![The Atlas tab, with the atlas on, a coverage layer and its map chosen, and the page count.](images/cartograph-atlas-tab.png)
+The tab then shows **3 pages ready** with **Previous** and **Next**. Moving
+through the pages changes the page beside the panel (the map, the labels that
+use the feature's fields and the scale bar), so what you see is what is
+exported. Leaving the tab puts the layout back as you authored it, and moving
+between pages is not an edit: it adds nothing to Undo.
+
+**Export series...** and **Print series...** come right after the preview, with
+a line such as *Exports all 3 pages.* Underneath, two closed sections hold the
+rest of QGIS's atlas settings:
+
+- **Page framing**: **Fit area with margin**, **Fixed scale** or **Predefined
+  scales**.
+- **Advanced settings**: **Include pages** (a filter; blank means all),
+  **Page order** (a field, ascending or descending), **Page names** and
+  **Export filenames**. A section opens by itself when something in it is set
+  or wrong, and a setting QGIS cannot use is explained beside its field.
 
 These are the layout's own atlas settings - the same ones as the layout
 designer's Atlas panel, which works just as well - so every change is on the
-layout's undo stack. While the atlas is on, the tab reads **Atlas (on)**. It
-shows how many pages QGIS's atlas has, and, when
-the cartograph will not page, a warning line saying why and what to change.
+layout's undo stack. While the series is on, the tab reads **Atlas (on)**.
 
 The cartograph saves itself as usual. One file holds every page.
 
@@ -88,25 +99,38 @@ example - so it never prints a sheet for a feature nobody can see.
 
 ## Exporting and printing every page
 
-Two buttons at the foot of the Atlas tab work on the saved cartograph. They
-stay greyed out until the saved cartograph has atlas pages: while the Filter
-or Sort is not a valid QGIS expression (the reason is shown beside the field,
-and no atlas is saved rather than one that pages every feature), and while the
-filter matches no feature.
+Each output is checked on its own, so one that cannot be made never blocks
+another.
 
-- **Export all pages (PNG, ZIP)...** opens the cartograph, which renders every
-  page at the cartograph's saved resolution (Print settings, 300 dpi unless
-  changed), one after another through the same interactive map, and downloads
-  them as **one ZIP** (`<name>-atlas.zip`), each page named by the **File
-  names** expression. One ZIP rather than one download per page, because
-  browsers block a run of separate downloads.
-- **Print all pages...** opens the cartograph with every page rendered and
-  laid out for one print job. While the pages are made the page shows
-  *Preparing page n of N* with a **Cancel** button; if a page cannot be made,
-  nothing is printed and the page says which one failed. Choose **Save as
-  PDF** for one multi-page PDF; in a Chromium-based browser every page is at
-  its true size. Each page is an
-  image rendered at that same resolution, so text in that PDF is not selectable.
+**Export series...** asks for a format:
+
+- **PDF document** (the default): every page in one PDF, written by QGIS
+  itself. It works whatever the map's type is, Interactive or Image.
+- **Images (ZIP)**: opens the cartograph, which renders every page at the
+  cartograph's saved resolution (Print settings, 300 dpi unless changed), one
+  after another through the same interactive map, and downloads them as **one
+  ZIP** (`<name>-atlas.zip`), each page named by the **Export filenames**
+  expression. One ZIP rather than one download per page, because browsers block
+  a run of separate downloads.
+- **Web page (HTML)**: opens the cartograph, an interactive page you can step
+  through page by page.
+
+**Print series...** opens the cartograph with every page rendered and laid out
+for one print job. While the pages are made the page shows *Preparing page n of
+N* with a **Cancel** button; if a page cannot be made, nothing is printed and
+the page says which one failed. Choose **Save as PDF** for one multi-page PDF;
+in a Chromium-based browser every page is at its true size. Each page is an
+image rendered at that same resolution, so text in that PDF is not selectable.
+
+The ZIP, the web page and printing run through the cartograph, which turns
+pages with an Interactive map. When the map the series updates is an Image
+frame, the tab says so beside them ("Printing needs the map "Main map" to be
+Interactive.") and **Switch to Interactive** changes it in one undoable step;
+that changes how the map behaves in the exported HTML. The PDF is not affected.
+Nothing ever changes a map's type on its own.
+
+A layout with several sheets (pages) per feature says so: *3 pages ready (2
+sheets each)* and *Exports all 6 sheets.*
 
 **Export PNG...** in the Share menu works on the page the
 cartograph opens on, page 1. **Save atlas as PDF...** saves every feature in one PDF written by QGIS. For a single page, a cartograph opened with
