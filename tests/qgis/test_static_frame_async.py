@@ -327,11 +327,14 @@ class TestAutosaveOfAHeavyStaticFrame:
         assert saved == expected
 
     def test_preview_right_after_a_drag_opens_the_dragged_picture(
-        self, qgis_app, heavy, opened
+        self,
+        qgis_app,
+        heavy,
+        opened,  # noqa: F811
     ) -> None:
         """Preview waits for the save carrying the latest edit, even while the
         frame is still being drawn."""
-        dialog, layout, map_item, target = heavy
+        dialog, layout, map_item, _target = heavy
         self._drag_the_content(layout, map_item)
         dialog._cartograph.preview()
         assert _wait_for(qgis_app, lambda: opened, timeout=240)
@@ -359,7 +362,12 @@ class TestAutosaveWaitsForTheUser:
         return dialog, cartograph
 
     def test_no_build_starts_while_a_mouse_button_is_held(
-        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+        self,
+        qgis_app,
+        project,
+        fake_cartograph_export,
+        tmp_path,
+        monkeypatch,  # noqa: F811
     ) -> None:
         """Mechanism: a build is not begun mid-drag, and is begun after."""
         from qgis.PyQt.QtCore import Qt
@@ -391,7 +399,12 @@ class TestAutosaveWaitsForTheUser:
             dialog.close()
 
     def test_a_save_is_never_held_back_longer_than_the_limit(
-        self, qgis_app, project, fake_cartograph_export, tmp_path, monkeypatch
+        self,
+        qgis_app,
+        project,
+        fake_cartograph_export,
+        tmp_path,
+        monkeypatch,  # noqa: F811
     ) -> None:
         """Mechanism: a button that is never released cannot stop the file
         being written."""
