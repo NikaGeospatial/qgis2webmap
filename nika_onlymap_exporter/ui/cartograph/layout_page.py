@@ -363,6 +363,9 @@ class LayoutPreview(QStackedWidget):
         self.content_editor = ContentEditor(self.view)
         self.content_editor.active_changed.connect(self._on_content_edit_changed)
         self.content_editor.edited.connect(self.selection_changed)
+        # The items last reported selected: QGIS clears the selection on a
+        # click on bare page or Esc without always emitting selectionChanged.
+        self._reported_selection: tuple[str, ...] = ()
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.setInterval(0)
@@ -516,13 +519,29 @@ class LayoutPreview(QStackedWidget):
             layout.undoStack().stack().indexChanged.connect(self._on_selection_changed)
             self.view.setTool(self._select)
             self._user_zoomed = False
+            self._reported_selection = self._selection_key()
         self.setCurrentWidget(self.view)
         self._fit_timer.start()
 
     def _on_selection_changed(self, *_args: object) -> None:
         # Only the layout on show matters; one left behind may still emit.
         if not sip.isdeleted(self):
+            self._reported_selection = self._selection_key()
             self.selection_changed.emit()
+
+    def _selection_key(self) -> tuple[str, ...]:
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return ()
+        return tuple(sorted(item.uuid() for item in layout.selectedLayoutItems()))
+
+    def _report_selection_if_moved(self) -> None:
+        """Tell the Edit tab when the selection differs from what it was last
+        told, whatever the layout did or did not emit."""
+        if sip.isdeleted(self):
+            return
+        if self._selection_key() != self._reported_selection:
+            self._on_selection_changed()
 
     def text_item(self):  # QgsLayoutItem | None
         """The one selected item whose text size can be stepped, if any."""
@@ -765,6 +784,15 @@ class LayoutPreview(QStackedWidget):
             panned = self._space_pan(watched, event)
             if panned is not None:
                 return panned
+        if event is not None and (
+            (
+                watched is self.view.viewport()
+                and event.type()
+                in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease)
+            )
+            or (watched is self.view and event.type() == QEvent.Type.KeyRelease)
+        ):
+            QTimer.singleShot(0, self._report_selection_if_moved)
         if event is not None and watched is self.view.viewport():
             self._hover_before_press(event)
         if (

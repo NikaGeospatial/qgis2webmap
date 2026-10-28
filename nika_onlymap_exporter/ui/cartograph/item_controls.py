@@ -547,9 +547,13 @@ class ContextControls(QFrame):
             tr("Set this map's extent to what the QGIS map canvas shows")
         )
         self.canvas_button.clicked.connect(self._on_canvas)
-        # Each button takes a full row of the panel.
-        column.addWidget(self.edit_view_button)
-        column.addWidget(self.canvas_button)
+        # Two distinct buttons share one row, half the width each.
+        view_row = QHBoxLayout()
+        view_row.setContentsMargins(0, 0, 0, 0)
+        view_row.setSpacing(PANEL_SPACING)
+        view_row.addWidget(self.canvas_button, 1)
+        view_row.addWidget(self.edit_view_button, 1)
+        column.addLayout(view_row)
 
         # Labels in one column, fields in the other: every field starts and
         # ends at the same edges, however wide the panel.
@@ -830,12 +834,7 @@ class ContextControls(QFrame):
         self._keep_buttons_readable()
 
     def _show_nothing_selected(self) -> None:
-        self.heading.setText(
-            tr(
-                "Select an item on the page to edit it. "
-                "Use Add item to add something new."
-            )
-        )
+        self.heading.setText(tr("Select an item on the page to edit its properties."))
         self.heading.setProperty("role", "hint")
         self.heading.style().unpolish(self.heading)
         self.heading.style().polish(self.heading)

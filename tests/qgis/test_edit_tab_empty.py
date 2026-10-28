@@ -17,9 +17,7 @@ from test_edit_tab_fit import _item_of
 
 pytest.importorskip("qgis.core")
 
-NO_ITEM_TEXT = (
-    "Select an item on the page to edit it. Use Add item to add something new."
-)
+NO_ITEM_TEXT = "Select an item on the page to edit its properties."
 THREE = "This layout already has three callouts. Select one to edit or remove it."
 
 
@@ -258,8 +256,8 @@ class TestSelectedItemHeader:
 
     def test_content_is_inset_twelve_pixels(self, qgis_app, map_tab) -> None:
         scroll, controls = map_tab
-        left = controls.edit_view_button.mapTo(
-            scroll.viewport(), controls.edit_view_button.rect().topLeft()
+        left = controls.canvas_button.mapTo(
+            scroll.viewport(), controls.canvas_button.rect().topLeft()
         ).x()
         right = controls.edit_view_button.mapTo(
             scroll.viewport(), controls.edit_view_button.rect().topRight()
@@ -269,11 +267,36 @@ class TestSelectedItemHeader:
 
 
 class TestMapControls:
-    def test_the_two_buttons_are_full_width_rows(self, qgis_app, map_tab) -> None:
-        scroll, controls = map_tab
-        first, second = controls.edit_view_button, controls.canvas_button
-        assert first.width() == second.width() == controls.width() - 24
-        assert _top_in(scroll, second) > _top_in(scroll, first) + first.height()
+    @pytest.mark.parametrize("width", [300, 340, 560])
+    def test_the_two_buttons_share_one_row_half_and_half(
+        self, qgis_app, parcels, project, width
+    ) -> None:
+        from test_edit_tab_fit import shown_controls
+
+        scroll, controls = shown_controls(_layout(parcels, project), "map", width)
+        try:
+            _settle(qgis_app, 0.2)
+            for editing in (False, True):
+                controls.set_editing(editing)
+                _settle(qgis_app, 0.1)
+                first, second = controls.canvas_button, controls.edit_view_button
+                assert first is not second
+                assert first.height() == second.height()
+                assert _top_in(scroll, first) == _top_in(scroll, second)
+                assert abs(first.width() - second.width()) <= 1
+                left = first.mapTo(scroll.viewport(), first.rect().topLeft()).x()
+                right = second.mapTo(scroll.viewport(), second.rect().topRight()).x()
+                assert (
+                    left < second.mapTo(scroll.viewport(), second.rect().topLeft()).x()
+                )
+                assert right <= scroll.viewport().width()
+                assert not scroll.horizontalScrollBar().isVisible()
+                for button in (first, second):
+                    assert button.width() >= button.fontMetrics().horizontalAdvance(
+                        button.text()
+                    )
+        finally:
+            scroll.close()
 
     def test_the_form_fields_line_up_and_expand(self, qgis_app, map_tab) -> None:
         _scroll, controls = map_tab
@@ -344,3 +367,63 @@ class TestMapControls:
         assert button.text() == "Done editing view"
         controls.set_editing(False)
         assert button.text() == "Edit view"
+
+
+class TestInspectorFollowsSelection:
+    """The Edit tab shows the item that is selected on the page, and nothing
+    when none is: through real clicks, whatever QGIS does or does not emit."""
+
+    @staticmethod
+    def _click(qgis_app, pane, point) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        viewport = pane.preview.view.viewport()
+        QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=QPoint(*point))
+        _settle(qgis_app, 0.15)
+
+    def test_a_click_on_bare_page_empties_the_tab(self, qgis_app, pane) -> None:
+        pane, layout = pane
+        controls = pane.controls
+        item = _item_of(layout, "map")
+        centre = pane.preview.view.mapFromScene(item.sceneBoundingRect().center())
+        self._click(qgis_app, pane, (centre.x(), centre.y()))
+        assert [i.uuid() for i in layout.selectedLayoutItems()] == [item.uuid()]
+        assert controls.selected_item() is item
+        self._click(qgis_app, pane, (8, 8))
+        assert layout.selectedLayoutItems() == []
+        assert controls.selected_item() is None
+        assert controls.heading.text() == NO_ITEM_TEXT
+        assert not _visible(controls, controls.body)
+
+    def test_a_layout_built_from_a_template_has_nothing_selected(
+        self, qgis_app, parcels, project
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+        for template in ("dashboard", "classic", "legend-below"):
+            layout = _layout(parcels, project, template)
+            assert layout.selectedLayoutItems() == []
+            pane = PagePane()
+            try:
+                pane.show()
+                pane.show_layout(layout)
+                _settle(qgis_app, 0.1)
+                assert layout.selectedLayoutItems() == []
+                assert pane.controls.selected_item() is None
+                assert pane.controls.heading.text() == NO_ITEM_TEXT
+            finally:
+                pane.close()
+
+    def test_switching_layout_leaves_no_stale_controls(
+        self, qgis_app, parcels, project, pane
+    ) -> None:
+        pane, layout = pane
+        item = _item_of(layout, "text")
+        item.setSelected(True)
+        _settle(qgis_app, 0.1)
+        assert pane.controls.selected_item() is item
+        pane.show_layout(_layout(parcels, project, "classic"))
+        _settle(qgis_app, 0.1)
+        assert pane.controls.selected_item() is None
+        assert pane.controls.heading.text() == NO_ITEM_TEXT

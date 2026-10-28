@@ -5052,7 +5052,10 @@ class TestEditTab:
             controls = cartograph.page_pane.controls
             layout.deselectAll()
             qgis_app.processEvents()
-            assert "Select an item on the page to edit it." in controls.heading.text()
+            assert (
+                "Select an item on the page to edit its properties."
+                in controls.heading.text()
+            )
             assert controls.body.isHidden() and controls.delete_button.isHidden()
             items["legend"].setSelected(True)
             qgis_app.processEvents()
