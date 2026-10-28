@@ -819,8 +819,12 @@ class ContextControls(QFrame):
         item = None
         if layout is not None and not sip.isdeleted(layout):
             chosen = layout.selectedLayoutItems()
-            if len(chosen) == 1 and self._kind(chosen[0]) is not None:
-                item = chosen[0]
+            if len(chosen) == 1:
+                # A Live count is selected as its group; its number is what
+                # the Edit tab edits.
+                chosen_item = live_count.count_in_group(chosen[0]) or chosen[0]
+                if self._kind(chosen_item) is not None:
+                    item = chosen_item
         if item is not self._item:
             self._apply_pending_text()
             self._text_dirty = False

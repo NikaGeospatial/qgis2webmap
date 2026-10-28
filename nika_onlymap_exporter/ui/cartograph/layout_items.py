@@ -25,6 +25,7 @@ from qgis.core import (
     QgsCoordinateTransformContext,
     QgsLayout,
     QgsLayoutItem,
+    QgsLayoutItemGroup,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
@@ -108,6 +109,22 @@ def one_step(layout: QgsLayout, text: str) -> Iterator[None]:
         stack.endMacro()
 
 
+def bring_to_front(layout: QgsLayout, item: QgsLayoutItem) -> None:
+    """Stack `item` above everything already on the page. QGIS stacks a new
+    item by the number of items, which a template's legend or notes box (with
+    a background and a higher position) is above, so the new item would be
+    hidden under it. A group only moves its members: each member is raised
+    first, in their stacking order, then the group."""
+    members = (
+        sorted(item.items(), key=lambda member: member.zValue())
+        if isinstance(item, QgsLayoutItemGroup)
+        else []
+    )
+    for part in (*members, item):
+        while layout.raiseItem(part):
+            pass
+
+
 def create_item(
     layout: QgsLayout,
     kind: ItemKind,
@@ -138,7 +155,9 @@ def create_item(
         elif kind is ItemKind.SCALE_BAR:
             item = QgsLayoutItemScaleBar(layout)
         elif kind is ItemKind.LIVE_COUNT:
-            return _create_live_count(layout, rect, map_item)
+            group = _create_live_count(layout, rect, map_item)
+            bring_to_front(layout, group)
+            return group
         else:
             picture = QgsLayoutItemPicture(layout)
             picture.setResizeMode(QgsLayoutItemPicture.Zoom)
@@ -156,6 +175,7 @@ def create_item(
             item.attemptMove(QgsLayoutPoint(rect.x(), rect.y(), layout.units()))
         else:
             item.attemptSetSceneRect(rect)
+        bring_to_front(layout, item)
     return item
 
 
@@ -208,10 +228,11 @@ def _unique_count_name(layout: QgsLayout) -> str:
 
 def _create_live_count(
     layout: QgsLayout, rect: QRectF, map_item: QgsLayoutItemMap | None
-) -> QgsLayoutItemLabel:
+) -> QgsLayoutItemGroup:
     """A Live count at `rect`'s corner: the number (which holds the setup),
-    its caption and the accent rule, following `map_item`. The caller's undo
-    step is open."""
+    its caption and the accent rule, following `map_item`, as one group (the
+    item the user moves, selects and deletes). The caller's undo step is
+    open."""
     scale = layout.convertToLayoutUnits(
         QgsLayoutSize(1, 0, QgsUnitTypes.LayoutMillimeters)
     ).width()
@@ -255,7 +276,8 @@ def _create_live_count(
     )
     for part in (caption, rule):
         part.setCustomProperty(live_count.PART_OF_PROPERTY, number.uuid())
-    return number
+    # One item on the page: it moves, selects and deletes as a whole.
+    return layout.groupItems([rule, number, caption])
 
 
 def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
@@ -465,6 +487,7 @@ def create_detail_map(layout: QgsLayout, source: QgsLayoutItemMap) -> QgsLayoutI
         item.setBackgroundEnabled(True)
         item.setBackgroundColor(QColor("#ffffff"))
         item.refresh()
+        bring_to_front(layout, item)
     return item
 
 

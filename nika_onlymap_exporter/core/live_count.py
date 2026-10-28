@@ -51,6 +51,7 @@ from qgis.core import (
     QgsGeometry,
     QgsLayout,
     QgsLayoutItem,
+    QgsLayoutItemGroup,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
     QgsMapLayerStyle,
@@ -158,8 +159,22 @@ def is_count_number(item: object) -> bool:
     )
 
 
+def count_in_group(item: object) -> QgsLayoutItemLabel | None:
+    """The number of the Live count a group holds: the group is how the
+    counter's parts move, select and delete as one item."""
+    if not isinstance(item, QgsLayoutItemGroup) or sip.isdeleted(item):
+        return None
+    for member in item.items():
+        if is_count_number(member):
+            return member  # type: ignore[no-any-return]
+    return None
+
+
 def is_count_part(item: object) -> bool:
-    """A counter's number or caption (the lettering of a Live count)."""
+    """A counter's number or caption (the lettering of a Live count), or the
+    group that holds them."""
+    if count_in_group(item) is not None:
+        return True
     if not isinstance(item, QgsLayoutItemLabel) or sip.isdeleted(item):
         return False
     return bool(
@@ -177,6 +192,9 @@ def owner_of(layout: QgsLayout, item: QgsLayoutItem) -> QgsLayoutItemLabel | Non
     """The number label of the counter `item` belongs to."""
     if is_count_number(item):
         return item  # type: ignore[return-value]
+    grouped = count_in_group(item)
+    if grouped is not None:
+        return grouped
     uuid = item.customProperty(PART_OF_PROPERTY)
     if not uuid:
         return None
@@ -205,9 +223,17 @@ def with_count_parts(
     layout: QgsLayout, items: Iterable[QgsLayoutItem]
 ) -> list[QgsLayoutItem]:
     """`items` plus, for each counter's number among them, its caption and
-    rule: taking a counter off the page takes all of it."""
-    wanted = list(items)
-    seen = {item.uuid() for item in wanted}
+    rule: taking a counter off the page takes all of it. A counter's group
+    goes as one (its members with it)."""
+    wanted: list[QgsLayoutItem] = []
+    seen: set[str] = set()
+    for item in items:
+        group = item.parentGroup()
+        if group is not None and count_in_group(group) is not None:
+            item = group  # the whole counter, not one member of it
+        if item.uuid() not in seen:
+            seen.add(item.uuid())
+            wanted.append(item)
     for item in list(wanted):
         if is_count_number(item):
             for part in parts_of(layout, item):

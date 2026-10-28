@@ -77,6 +77,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ...core import live_count as lc
 from ..i18n import plural, tr
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
@@ -603,9 +604,10 @@ class LayoutPreview(QStackedWidget):
         if layout is None or sip.isdeleted(layout):
             return None
         chosen = layout.selectedLayoutItems()
-        if len(chosen) != 1 or text_size_points(chosen[0]) is None:
+        if len(chosen) != 1:
             return None
-        return chosen[0]
+        item = lc.count_in_group(chosen[0]) or chosen[0]
+        return item if text_size_points(item) is not None else None
 
     def step_text_size(self, bigger: bool) -> bool:
         """The selected item's text one step bigger or smaller, as an undo

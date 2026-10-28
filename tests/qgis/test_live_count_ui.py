@@ -26,8 +26,10 @@ pytest.importorskip("qgis.core")
 from qgis.core import (
     QgsFeature,
     QgsGeometry,
+    QgsLayoutItem,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
+    QgsLayoutPoint,
     QgsPointXY,
     QgsProject,
     QgsRectangle,
@@ -178,7 +180,8 @@ class TestCreating:
     ) -> None:
         page, pane = ui
         number = _add(qgis_app, pane, page)
-        assert page.layout.selectedLayoutItems() == [number]
+        # The counter is selected as one item (the group of its parts).
+        assert page.layout.selectedLayoutItems() == [number.parentGroup()]
         assert pane.controls.selected_item() is number
         setup = _setup(pane)
         assert setup.isVisibleTo(pane.controls)
@@ -204,12 +207,16 @@ class TestCreating:
 
     def test_deleting_the_number_takes_the_whole_counter(self, qgis_app, ui) -> None:
         page, pane = ui
-        _add(qgis_app, pane, page)
-        count_before = len(page.layout.items())
+        number = _add(qgis_app, pane, page)
+        counter = {number.uuid(), number.parentGroup().uuid()} | {
+            part.uuid() for part in lc.parts_of(page.layout, number)
+        }
+        before = {i.uuid() for i in _items_of(page.layout, QgsLayoutItem)}
         pane.controls.delete_selected()
         _settle(qgis_app, 0.1)
         assert _numbers(page.layout) == []
-        assert len(page.layout.items()) == count_before - 3
+        after = {i.uuid() for i in _items_of(page.layout, QgsLayoutItem)}
+        assert before - after == counter
 
     def test_two_counters_get_two_names(self, qgis_app, ui) -> None:
         page, pane = ui
@@ -298,7 +305,8 @@ class TestSettingItUp:
         number = _configured(qgis_app, pane, page)
         caption = lc.caption_of(page.layout, number)
         page.layout.deselectAll()
-        caption.setSelected(True)
+        centre = caption.sceneBoundingRect().center()
+        _click_page(qgis_app, pane, centre.x(), centre.y())
         pane.controls.refresh()
         assert _setup(pane).isVisibleTo(pane.controls)
         assert _setup(pane).number() is number
@@ -599,7 +607,7 @@ class TestSavingAndReopening:
         _settle(qgis_app, 0.3)
         assert reopened.text() == str(count_sites(status="Closed"))
         layout.deselectAll()
-        reopened.setSelected(True)
+        reopened.parentGroup().setSelected(True)
         again.controls.refresh()
         shown = again.controls.live_setup
         assert shown.layer_combo.currentText() == "Monitoring sites"
@@ -724,3 +732,164 @@ class TestExistingFiguresAreUntouched:
         assert pane.controls.text_edit.toPlainText() == "214"
         pane.live_counts.close()
         pane.close()
+
+
+def _drag_on_page(qgis_app, pane, start_mm, end_mm, steps: int = 14) -> None:
+    """Drag from one point of the page to another with the real mouse, along
+    a smooth path."""
+    from qgis.PyQt.QtCore import QPoint, QPointF, Qt
+    from qgis.PyQt.QtTest import QTest
+
+    view = pane.preview.view
+    viewport = view.viewport()
+    first = view.mapFromScene(QPointF(*start_mm))
+    last = view.mapFromScene(QPointF(*end_mm))
+    QTest.mouseMove(viewport, first)
+    qgis_app.processEvents()
+    QTest.mousePress(
+        viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, first
+    )
+    for step in range(1, steps + 1):
+        point = QPoint(
+            first.x() + (last.x() - first.x()) * step // steps,
+            first.y() + (last.y() - first.y()) * step // steps,
+        )
+        QTest.mouseMove(viewport, point)
+        qgis_app.processEvents()
+    QTest.mouseRelease(
+        viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last
+    )
+    _settle(qgis_app, 0.1)
+
+
+def _corner(item) -> tuple[float, float]:
+    rect = item.sceneBoundingRect()
+    return round(rect.x(), 3), round(rect.y(), 3)
+
+
+class TestOneItemOnThePage:
+    """A Live count is one thing to the user: its three parts show together
+    and move together."""
+
+    def test_a_counter_is_not_hidden_by_something_already_on_the_page(
+        self, qgis_app, ui
+    ) -> None:
+        from qgis.core import QgsLayoutExporter
+        from qgis.PyQt.QtCore import QRect, QSize
+        from qgis.PyQt.QtGui import QColor
+
+        page, pane = ui
+        # A template's legend or notes box: opaque, and above what a new item
+        # is put on by default.
+        cover = QgsLayoutItemLabel(page.layout)
+        cover.setText("")
+        page.layout.addLayoutItem(cover)
+        cover.attemptSetSceneRect(QRectF(150.0, 10.0, 80.0, 120.0))
+        cover.setBackgroundEnabled(True)
+        cover.setBackgroundColor(QColor("#ff00ff"))
+        cover.setZValue(100.0)
+        number = _add(qgis_app, pane, page, at=(170.0, 30.0))
+        _pick(_setup(pane).layer_combo, page.sites.id())
+        _number_shows(qgis_app, number, "30")
+        page.layout.deselectAll()
+        scale = 4
+        image = QgsLayoutExporter(page.layout).renderPageToImage(
+            0, QSize(297 * scale, 210 * scale)
+        )
+        box = number.sceneBoundingRect()
+        area = QRect(
+            int(box.x() * scale),
+            int(box.y() * scale),
+            int(box.width() * scale),
+            int(box.height() * scale),
+        )
+        seen = {
+            image.pixelColor(x, y).name()
+            for x in range(area.left(), area.right(), 2)
+            for y in range(area.top(), area.bottom(), 2)
+        }
+        assert seen - {"#ff00ff"}, "the number is hidden behind the other item"
+
+    def test_dragging_the_number_moves_the_caption_and_the_rule_with_it(
+        self, qgis_app, ui
+    ) -> None:
+        page, pane = ui
+        number = _configured(qgis_app, pane, page)
+        parts = [number, *lc.parts_of(page.layout, number)]
+        before = {p.uuid(): _corner(p) for p in parts}
+        stack = page.layout.undoStack().stack()
+        steps = stack.count()
+        spot = number.sceneBoundingRect().center()
+        _drag_on_page(
+            qgis_app, pane, (spot.x(), spot.y()), (spot.x() + 40.0, spot.y() + 25.0)
+        )
+        moved = {p.uuid(): _corner(p) for p in parts}
+        deltas = {
+            (round(moved[u][0] - before[u][0], 2), round(moved[u][1] - before[u][1], 2))
+            for u in before
+        }
+        assert len(deltas) == 1, f"the parts moved apart: {deltas}"
+        ((dx, dy),) = deltas
+        assert dx > 10.0 and dy > 5.0
+        # One drag, one undo step: undoing it puts every part back.
+        assert stack.count() == steps + 1
+        stack.undo()
+        _settle(qgis_app, 0.1)
+        assert {p.uuid(): _corner(p) for p in parts} == before
+
+    def test_dragging_the_caption_moves_the_whole_counter_too(
+        self, qgis_app, ui
+    ) -> None:
+        page, pane = ui
+        number = _configured(qgis_app, pane, page)
+        caption = lc.caption_of(page.layout, number)
+        parts = [number, *lc.parts_of(page.layout, number)]
+        before = {p.uuid(): _corner(p) for p in parts}
+        spot = caption.sceneBoundingRect().center()
+        _drag_on_page(
+            qgis_app, pane, (spot.x(), spot.y()), (spot.x() - 30.0, spot.y() + 20.0)
+        )
+        moved = {p.uuid(): _corner(p) for p in parts}
+        deltas = {
+            (round(moved[u][0] - before[u][0], 2), round(moved[u][1] - before[u][1], 2))
+            for u in before
+        }
+        assert len(deltas) == 1 and next(iter(deltas)) != (0.0, 0.0)
+
+    def test_the_parts_stay_together_after_saving_and_reopening(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        page = build_page(project, folder=tmp_path)
+        pane = PagePane()
+        pane.resize(1000, 760)
+        pane.show()
+        pane.show_layout(page.layout)
+        pane.controls.show()
+        _settle(qgis_app)
+        number = _add(qgis_app, pane, page)
+        _pick(_setup(pane).layer_combo, page.sites.id())
+        _number_shows(qgis_app, number, "30")
+        spot = number.sceneBoundingRect().center()
+        _drag_on_page(
+            qgis_app, pane, (spot.x(), spot.y()), (spot.x() + 30.0, spot.y() + 20.0)
+        )
+        shape = {
+            p.uuid(): _corner(p) for p in [number, *lc.parts_of(page.layout, number)]
+        }
+        pane.live_counts.close()
+        pane.close()
+        path = str(tmp_path / "count.qgz")
+        assert project.write(path)
+        project.clear()
+        assert project.read(path)
+        layout = project.layoutManager().layoutByName("Count page")
+        (reopened,) = lc.live_counts(layout)
+        parts = [reopened, *lc.parts_of(layout, reopened)]
+        assert {p.uuid(): _corner(p) for p in parts} == shape
+        # Moving the reopened counter still moves all of it.
+        before = {p.uuid(): _corner(p) for p in parts}
+        group = reopened.parentGroup()
+        x, y = _corner(group)
+        group.attemptMove(QgsLayoutPoint(x + 10.0, y + 10.0, layout.units()))
+        after = {p.uuid(): _corner(p) for p in parts}
+        assert len({(after[u][0] - before[u][0]) for u in before}) == 1
