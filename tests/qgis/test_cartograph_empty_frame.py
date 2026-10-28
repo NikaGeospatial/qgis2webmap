@@ -214,6 +214,9 @@ class TestRemovingTheLastLayer:
         )
         assert not is_deliberately_empty(inset)
         assert _drawn_names(inset) == [TRAILS]
+        # Setting a list of layers never touches the user's own expression.
+        set_frame_layers(inset, [world.layers[PEAKS]])
+        assert _drawn_names(inset) == [TRAILS]
         set_frame_layers(inset, [])
         assert _drawn_names(inset) == []
         set_frame_layers(inset, [world.layers[PEAKS]])
