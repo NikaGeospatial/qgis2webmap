@@ -100,6 +100,7 @@ from ..background_job import BackgroundJob
 from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
+from ..reveal_file import RevealOutcome, reveal_file
 from ..runtime_setup import ensure_runtime
 from . import layout_thumbnails
 from .frames import FrameItem, layout_map_items
@@ -189,6 +190,7 @@ _THEME_LABELS = (
 #: Links in the status line after a PDF is saved.
 _PDF_OPEN_LINK = "open-pdf"
 _PDF_SHOW_LINK = "show-pdf"
+_COPY_PATH_LINK = "copy-path"
 
 
 def _reveal_label() -> str:
@@ -376,6 +378,7 @@ class CartographController:
         # events run around it); a second request waits for the first.
         self._pdf_running = False
         self._last_pdf_path: Path | None = None
+        self._last_reveal_path: Path | None = None
         self._status_links_connected = False
         self._legend_entries: tuple[LegendEntry, ...] = ()
         self._pending_spec: CartographSpec | None = None
@@ -2796,13 +2799,44 @@ class CartographController:
         path = self._current_path()
         if path is None:
             return
-        # The folder may not exist until the first save makes it: open the
-        # nearest one that does, and say which.
-        folder = path.parent
-        while not folder.exists() and folder != folder.parent:
-            folder = folder.parent
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-        self.dialog.status_label.setText(tr("Opened {path}").format(path=folder))
+        self._reveal(path)
+
+    def _reveal(self, path: Path) -> None:
+        """Show `path` in the file manager and say what happened once the
+        platform has answered (the folder may not exist until the first save
+        makes it: the nearest one that does is shown, and named)."""
+        self._last_reveal_path = path
+        self._connect_status_links()
+        reveal_file(path, lambda outcome: self._on_revealed(path, outcome))
+
+    def _on_revealed(self, path: Path, outcome: RevealOutcome) -> None:
+        label = self.dialog.status_label
+        if sip.isdeleted(label):
+            return
+        if outcome.ok and outcome.selected:
+            label.setText(
+                tr("Showing {name} in the file manager").format(name=path.name)
+            )
+        elif outcome.ok:
+            label.setText(tr("Opened {path}").format(path=outcome.folder))
+        else:
+            colour = self.dialog.palette().color(QPalette.ColorRole.Link).name()
+            failure = html.escape(
+                tr("Could not show the file in a file manager: {reason}.").format(
+                    reason=outcome.reason
+                )
+            )
+            copy = (
+                f'<a href="{_COPY_PATH_LINK}"><span style="color:{colour}">'
+                f"{html.escape(tr('Copy path'))}</span></a>"
+            )
+            label.setText(f"{failure} {copy}")
+        label.setToolTip(str(path))
+
+    def _connect_status_links(self) -> None:
+        if not self._status_links_connected:
+            self.dialog.status_label.linkActivated.connect(self._on_status_link)
+            self._status_links_connected = True
 
     def on_handoff(self, task: str, cvd_findings: str | None = None) -> None:
         """Share > Enhance / Critique: the hand-off dialog on the saved file.
@@ -3060,9 +3094,7 @@ class CartographController:
         area, with whatever the exporter noted after it. A `handoff` says
         plainly that no printer was found and nothing was printed."""
         self._last_pdf_path = path
-        if not self._status_links_connected:
-            self.dialog.status_label.linkActivated.connect(self._on_status_link)
-            self._status_links_connected = True
+        self._connect_status_links()
         # The theme's link colour, stated outright: the label's own style
         # sheet otherwise leaves a dark theme with the default dark blue.
         colour = self.dialog.palette().color(QPalette.ColorRole.Link).name()
@@ -3090,13 +3122,20 @@ class CartographController:
         self.dialog.status_label.setToolTip(str(path))
 
     def _on_status_link(self, link: str) -> None:
+        if link == _COPY_PATH_LINK:
+            if self._last_reveal_path is not None:
+                QGuiApplication.clipboard().setText(str(self._last_reveal_path))
+                self.dialog.status_label.setText(
+                    tr("Copied {path}").format(path=self._last_reveal_path)
+                )
+            return
         path = self._last_pdf_path
         if path is None:
             return
         if link == _PDF_OPEN_LINK:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         elif link == _PDF_SHOW_LINK:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
+            self._reveal(path)
 
     def on_export_png(self) -> None:
         path = self._current_path()

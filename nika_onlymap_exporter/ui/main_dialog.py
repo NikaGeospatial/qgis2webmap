@@ -193,6 +193,7 @@ from .preview import (
     remove_preview,
     write_preview,
 )
+from .reveal_file import RevealOutcome, reveal_file
 from .runtime_setup import ensure_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -4548,27 +4549,31 @@ class MainDialog(QDialog):
         self.status_label.setText(tr("Copied {path}").format(path=destination))
 
     def on_reveal_map_file(self) -> None:
-        """Open the file manager at the folder holding the map file.
+        """Show the map file in the platform's file manager (`reveal_file`:
+        the file selected where the platform can, never a default folder opener
+        that may be a code editor). Success is reported once the platform has
+        accepted the request; a failure names the path so it can be copied."""
 
-        **The folder, not the file selected in it.** Selecting the file needs a
-        platform command - `open -R` on macOS, `explorer /select,` on Windows -
-        and running system commands is exactly what CONTRIBUTING.md rule 2
-        forbids, after qgis2web shelled out to `apt-get` and took QGIS down with
-        it on every non-Debian machine. Reaching for `QProcess` instead of
-        `subprocess` would dodge the guard rather than honour the rule.
+        def reveal(destination: Path) -> None:
+            def report(outcome: RevealOutcome) -> None:
+                if sip.isdeleted(self.status_label):
+                    return
+                if outcome.ok and outcome.selected:
+                    text = tr("Showing {name} in the file manager").format(
+                        name=destination.name
+                    )
+                elif outcome.ok:
+                    text = tr("Opened {path}").format(path=outcome.folder)
+                else:
+                    text = tr(
+                        "Could not show the file in a file manager: {reason}. "
+                        "Use Copy file path for {path}."
+                    ).format(reason=outcome.reason, path=destination)
+                self.status_label.setText(text)
 
-        The folder is enough in practice: the map file is the one the user just
-        named in the field above, so they know what they are looking for. Copy
-        file path is there for the times they do not.
-        """
-        self._with_current_map_file(
-            lambda destination: (
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(destination.parent))),
-                self.status_label.setText(
-                    tr("Opened {path}").format(path=destination.parent)
-                ),
-            )
-        )
+            reveal_file(destination, report)
+
+        self._with_current_map_file(reveal)
 
     def on_handoff(self, task: str) -> None:
         """Share > Enhance / Critique: the hand-off dialog, on a current file.

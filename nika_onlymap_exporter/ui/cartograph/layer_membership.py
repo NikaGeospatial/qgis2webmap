@@ -36,6 +36,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ...core.frame_layers import rendered_layers, set_frame_layers
 from ...core.legend_edit import (
     left_out_of_legend,
     park_layer,
@@ -67,7 +68,7 @@ def membership_kind(map_item: QgsLayoutItemMap) -> MembershipKind:
 def drawn_layers(map_item: QgsLayoutItemMap) -> list[QgsMapLayer]:
     """The layers the map draws, top first - what the preview, the image or
     PDF and the HTML all read."""
-    return list(map_item.layersToRender())
+    return list(rendered_layers(map_item))
 
 
 def layout_legends(
@@ -182,8 +183,7 @@ def _apply_to_map(
         map_item.setKeepLayerStyles(map_item.keepLayerStyles() or bool(active))
         map_item.setLayerStyleOverrides(active)
         _save_inactive_overrides(map_item, stash)
-    map_item.setKeepLayerSet(True)
-    map_item.setLayers(list(layers))
+    set_frame_layers(map_item, layers)
     map_item.invalidateCache()
 
 

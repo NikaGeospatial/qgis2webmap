@@ -61,6 +61,7 @@ from qgis.PyQt.QtGui import QPainter, QPolygonF
 
 from ..core.atlas_live_counts import AtlasPageCounts, follow_maps_in_copy
 from ..core.atomic_write import staged_beside
+from ..core.frame_layers import rendered_layers
 from ..core.live_count import refresh_live_counts
 from ..core.page_settings import attribution_in_layout
 from ..core.print_settings import (
@@ -259,7 +260,7 @@ def _needs_rasterising(layout: QgsLayout) -> bool:
         ):
             return True
         if isinstance(item, QgsLayoutItemMap):
-            for layer in item.layersToRender():
+            for layer in rendered_layers(item):
                 if layer.opacity() < 1 or layer.blendMode() != normal:
                     return True
                 if isinstance(layer, QgsVectorLayer):

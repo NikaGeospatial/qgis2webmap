@@ -1308,6 +1308,38 @@ class TestShareBuildsWhatItNeeds:
         finally:
             dialog.close()
 
+    def test_showing_the_web_map_file_asks_the_file_manager(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        """The same reveal as Cartograph: the file selected in a file manager,
+        reported as done only after the platform accepted it."""
+        from qgis.PyQt.QtCore import QUrl
+
+        module = "nika_onlymap_exporter.ui.reveal_file"
+        asked: list[tuple[str, str]] = []
+        monkeypatch.setattr(f"{module}._platform", lambda: "linux")
+        monkeypatch.setattr(
+            f"{module}._ask_file_manager",
+            lambda method, uri, done: (asked.append((method, uri)), done(None)),
+        )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "map.html"
+            destination.write_text("<p>map</p>", encoding="utf-8")
+            dialog.path_edit.setText(str(destination))
+            monkeypatch.setattr(
+                dialog, "_with_current_map_file", lambda then: then(destination)
+            )
+
+            dialog.on_reveal_map_file()
+
+            assert asked == [
+                ("ShowItems", QUrl.fromLocalFile(str(destination)).toString())
+            ]
+            assert "map.html" in dialog.status_label.text()
+        finally:
+            dialog.close()
+
     def test_no_map_file_is_refused_with_an_explanation(
         self, qgis_app, project, make_memory_layer, monkeypatch
     ) -> None:

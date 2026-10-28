@@ -20,12 +20,13 @@ import re
 from atlas_fixtures import build_atlas_layout
 from cartograph_fixtures import build_survey_layout
 from print_fixtures import media_boxes_mm
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox, QToolButton
 from test_cartograph_dialog import (  # noqa: F401 - the fixture is used by name
     _choose_cartograph,
     _dialog,
+    _file_manager_answers,
     _wait_for,
     fake_cartograph_export,
 )
@@ -63,7 +64,10 @@ def chosen_pdf(monkeypatch, tmp_path):
     monkeypatch.setattr(
         controller_module.QDesktopServices, "openUrl", lambda url: opened.append(url)
     )
-    return types.SimpleNamespace(asked=asked, target=target, opened=opened)
+    revealed = _file_manager_answers(monkeypatch)
+    return types.SimpleNamespace(
+        asked=asked, target=target, opened=opened, revealed=revealed
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -192,9 +196,11 @@ class TestSavePdf:
         # Following each link, as a click on it does.
         for href in re.findall(r'href="([^"]+)"', label.text()):
             label.linkActivated.emit(href)
-        assert [u.toLocalFile() for u in chosen_pdf.opened] == [
-            str(chosen_pdf.target),
-            str(chosen_pdf.target.parent),
+        # Open PDF goes to the viewer; Show in folder goes to the file
+        # manager, selecting the saved PDF (never the default folder opener).
+        assert [u.toLocalFile() for u in chosen_pdf.opened] == [str(chosen_pdf.target)]
+        assert chosen_pdf.revealed == [
+            ("ShowItems", QUrl.fromLocalFile(str(chosen_pdf.target)).toString())
         ]
 
     def test_disabled_with_no_layout(self, qgis_app, project) -> None:

@@ -29,6 +29,8 @@ from qgis.core import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
+from .frame_layers import rendered_layers, set_frame_layers
+
 NEAREST = "nearestNeighbour"
 BILINEAR = "bilinear"
 _ELEMENT = "resampling"
@@ -171,7 +173,7 @@ def own_layers(map_item: QgsLayoutItemMap) -> None:
     if map_item.followVisibilityPreset():
         layout = map_item.layout()
         project = layout.project() if layout is not None else None
-        drawn = list(map_item.layersToRender())
+        drawn = list(rendered_layers(map_item))
         overrides = (
             project.mapThemeCollection().mapThemeStyleOverrides(
                 map_item.followVisibilityPresetName()
@@ -188,11 +190,9 @@ def own_layers(map_item: QgsLayoutItemMap) -> None:
                 if layer.id() in overrides
             }
         )
-        map_item.setKeepLayerSet(True)
-        map_item.setLayers(drawn)
+        set_frame_layers(map_item, drawn)
     elif not map_item.keepLayerSet():
-        map_item.setKeepLayerSet(True)
-        map_item.setLayers(list(map_item.layersToRender()))
+        set_frame_layers(map_item, rendered_layers(map_item))
 
 
 def store_overrides(map_item: QgsLayoutItemMap, overrides: dict[str, str]) -> None:
@@ -205,7 +205,7 @@ def smoothable_layers(map_item: QgsLayoutItemMap) -> list[QgsRasterLayer]:
     """The continuous rasters `map_item` draws, top first."""
     return [
         layer
-        for layer in map_item.layersToRender()
+        for layer in rendered_layers(map_item)
         if isinstance(layer, QgsRasterLayer) and is_continuous_raster(layer)
     ]
 
