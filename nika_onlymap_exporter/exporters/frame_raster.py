@@ -66,7 +66,7 @@ from qgis.PyQt.QtCore import (
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QImage, QPainter, QPen, QTransform
+from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPen, QTransform
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -433,7 +433,7 @@ class AsyncFrameRender(QObject):
         painter.setBrush(self._map_item.brush())
         painter.setPen(Qt.PenStyle.NoPen)
         self._set_hints(painter)
-        painter.drawRect(rect_mm)
+        painter.drawPath(_rect_path(rect_mm))
         painter.restore()
 
     def _set_hints(self, painter: QPainter) -> None:
@@ -471,7 +471,7 @@ class AsyncFrameRender(QObject):
                 painter.setPen(self._frame_pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 self._set_hints(painter)
-                painter.drawRect(self._frame_rect)
+                painter.drawPath(_rect_path(self._frame_rect))
                 painter.restore()
             painter.end()
             self._painter = None
@@ -497,6 +497,14 @@ class AsyncFrameRender(QObject):
         if not self._done or self._image is None:
             raise RuntimeError("the frame has not finished drawing")
         return self._image
+
+
+def _rect_path(rect: QRectF) -> QPainterPath:
+    """`QgsLayoutItem.framePath`: QGIS fills and strokes the item as a path,
+    which rasterises its edges differently from `QPainter.drawRect`."""
+    path = QPainterPath()
+    path.addRect(rect)
+    return path
 
 
 def _round_half_up(value: float) -> int:
