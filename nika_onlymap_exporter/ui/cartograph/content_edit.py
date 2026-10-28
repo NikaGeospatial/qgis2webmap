@@ -38,14 +38,19 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
+    QColor,
+    QImage,
     QKeyEvent,
     QMouseEvent,
     QPainter,
+    QPainterPath,
     QPaintEvent,
     QPalette,
+    QPixmap,
+    QPolygonF,
     QWheelEvent,
 )
-from qgis.PyQt.QtWidgets import QApplication, QLabel, QWidget
+from qgis.PyQt.QtWidgets import QApplication, QGraphicsRectItem, QLabel, QWidget
 
 from ..i18n import tr
 
@@ -58,6 +63,8 @@ WHEEL_PIXELS_PER_NOTCH = 60.0
 #: A press this close outside the frame still counts as on it, so the
 #: select tool's resize handles round the frame cannot be reached in this mode.
 _HANDLE_REACH_PX = 10
+#: The layout view's selection handles are scene items at or above this z.
+_HANDLES_Z = 10000.0
 #: First merge id of the wheel bursts; QGIS's own item commands use small ids.
 _BURST_ID_BASE = 0x4E4B0000
 
@@ -103,6 +110,107 @@ def _wheel_steps(event: QWheelEvent) -> float:
     return event.pixelDelta().y() / WHEEL_PIXELS_PER_NOTCH
 
 
+def _difference(shown: QPixmap, bare: QPixmap) -> QPixmap:
+    """`shown` with every pixel that equals `bare` made transparent."""
+    shown_image = shown.toImage().convertToFormat(QImage.Format.Format_RGB32)
+    bare_image = bare.toImage().convertToFormat(QImage.Format.Format_RGB32)
+    delta = QImage(shown_image)
+    painter = QPainter(delta)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Difference)
+    painter.drawImage(0, 0, bare_image)
+    # Any difference at all becomes full opacity: add it to itself until it
+    # saturates.
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+    for _ in range(8):
+        painter.drawImage(0, 0, QImage(delta))
+    painter.end()
+    chrome = shown_image.convertToFormat(QImage.Format.Format_ARGB32)
+    chrome.setAlphaChannel(delta.convertToFormat(QImage.Format.Format_Grayscale8))
+    result = QPixmap.fromImage(chrome)
+    result.setDevicePixelRatio(shown.devicePixelRatio())
+    return result
+
+
+class _DragPicture(QWidget):
+    """What the viewport showed when a drag began, kept over it for the drag.
+
+    Redrawing the real page on every pointer move is what made a fast drag lag:
+    the page view repaints the whole viewport, and with a colour-vision
+    simulation on, every repaint also runs the simulation filter over the
+    viewport and everything inside it (50-80 ms). This widget paints the
+    picture the user already sees, with the frame's part of it shifted by the
+    pointer's travel, which is a plain copy. It sits beside the view, not in
+    it (the filter would run over it too), and is opaque, so Qt leaves the
+    view underneath unpainted while it is up.
+    """
+
+    def __init__(self, view: QgsLayoutView) -> None:
+        super().__init__(view.window())
+        self._view = view
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self._picture = QPixmap()
+        self._still = QPixmap()
+        self._chrome = QPixmap()
+        self._clip = QPainterPath()
+        self._dirty = QRect()
+        self._shift = QPointF(0, 0)
+        self.hide()
+
+    def show_over(
+        self,
+        shown: QPixmap,
+        bare: QPixmap,
+        frame: QPolygonF,
+        background: QColor,
+    ) -> None:
+        """`shown` is the viewport as the user sees it; `bare` the same without
+        what is drawn over the map (selection handles, the banner); `frame` is
+        the map's outline in viewport pixels."""
+        self._picture = bare
+        self._chrome = _difference(shown, bare)
+        # Everything but the frame never changes during the drag; the frame's
+        # own area, where the picture slides, starts as the item background.
+        self._still = QPixmap(shown)
+        self._clip = QPainterPath()
+        self._clip.addPolygon(frame)
+        painter = QPainter(self._still)
+        painter.fillPath(self._clip, background)
+        painter.end()
+        self._dirty = frame.boundingRect().toAlignedRect().adjusted(-2, -2, 2, 2)
+        self._shift = QPointF(0, 0)
+        viewport = self._view.viewport()
+        self.setGeometry(
+            QRect(viewport.mapTo(self.parentWidget(), QPoint(0, 0)), viewport.size())
+        )
+        self.show()
+        self.raise_()
+
+    def shift_to(self, shift: QPointF) -> None:
+        self._shift = shift
+        # Only the frame's area changes; the rest of the picture stands still.
+        self.update(self._dirty)
+
+    def paintEvent(self, event: QPaintEvent | None) -> None:  # noqa: N802 - Qt override
+        if event is None:
+            return
+        painter = QPainter(self)
+        painter.setClipRegion(event.region())
+        painter.drawPixmap(0, 0, self._still)
+        painter.save()
+        # Only what the frame showed slides, and only inside the frame: the
+        # page around it must never slide into view.
+        sliding = self._clip.translated(self._shift)
+        painter.setClipPath(
+            self._clip.intersected(sliding), Qt.ClipOperation.IntersectClip
+        )
+        painter.drawPixmap(self._shift, self._picture)
+        painter.restore()
+        # What sits over the map (handles, banner) stays where it is.
+        painter.drawPixmap(0, 0, self._chrome)
+        painter.end()
+
+
 class ContentEditor(QObject):
     """The "drag pans, wheel zooms the content" mode of one layout view."""
 
@@ -117,11 +225,13 @@ class ContentEditor(QObject):
         self._start_scene: QPointF | None = None
         self._offset = QPointF(0, 0)
         self._dragging = False
+        self._press_at = QPoint()
         self._burst_id = _BURST_ID_BASE
         self._burst_at = 0.0
         self._burst_index = -1
         self._banner = _Banner(view.viewport())
         self._banner.hide()
+        self._drag_picture = _DragPicture(view)
         view.viewport().installEventFilter(self)
         view.installEventFilter(self)
 
@@ -251,7 +361,42 @@ class ContentEditor(QObject):
         self._dragging = True
         self._start_scene = QPointF(self._view.mapToScene(at))
         self._offset = QPointF(0, 0)
+        self._press_at = QPoint(at)
         self._view.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+        # One grab as the user sees it, one without what is drawn over the map
+        # (the banner, the selection handles): that one is what slides.
+        viewport = self._view.viewport()
+        shown = viewport.grab()
+        banner_was_shown = self._banner.isVisible()
+        self._banner.hide()
+        handles = [
+            thing
+            for thing in self._view.scene().items()
+            if isinstance(thing, QGraphicsRectItem)
+            and thing.isVisible()
+            and thing.zValue() >= _HANDLES_Z
+        ]
+        for thing in handles:
+            thing.hide()
+        bare = viewport.grab()
+        for thing in handles:
+            thing.show()
+        self._banner.setVisible(banner_was_shown)
+        frame = self._view.mapFromScene(item.mapToScene(item.rect()))
+        background = (
+            item.backgroundColor()
+            if item.hasBackground()
+            else QColor(Qt.GlobalColor.white)
+        )
+        self._drag_picture.show_over(
+            shown,
+            bare,
+            QPolygonF([QPointF(corner) for corner in frame]),
+            background,
+        )
+        # The view under the picture would only repaint, filter and all, for
+        # nothing the user can see; it catches up in one paint on release.
+        viewport.setUpdatesEnabled(False)
 
     def _item_delta(self, item: QgsLayoutItemMap, scene: QPointF) -> QPointF:
         """How far `scene` is from the press, in the item's own coordinates
@@ -275,7 +420,7 @@ class ContentEditor(QObject):
             return
         self._set_offset_from(at)
         item.setMoveContentPreviewOffset(self._offset.x(), self._offset.y())
-        item.update()
+        self._drag_picture.shift_to(QPointF(at - self._press_at))
 
     def _end_drag(self, apply: bool = True) -> None:
         if not self._dragging:
@@ -297,6 +442,13 @@ class ContentEditor(QObject):
                 self.edited.emit()
             else:
                 item.update()
+        # Gone only after the content moved, so the view repaints once, in the
+        # state the release leaves it in.
+        if not sip.isdeleted(self._view):
+            viewport = self._view.viewport()
+            viewport.setUpdatesEnabled(True)
+            viewport.repaint()
+        self._drag_picture.hide()
         if self.active and not sip.isdeleted(self._view):
             self._view.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
 

@@ -25,7 +25,7 @@ from qgis.core import QgsLayoutItemMap, QgsRectangle  # noqa: E402
 from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, QRect, Qt  # noqa: E402
 from qgis.PyQt.QtGui import QKeyEvent, QWheelEvent  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
-from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication, QLabel  # noqa: E402
 
 from nika_onlymap_exporter.core.canvas_cartograph import (  # noqa: E402
     cartograph_from_view,
@@ -997,3 +997,158 @@ class TestLegendAddedFromThePreview:
         finally:
             pane.close()
             pane.deleteLater()
+
+
+def _frame_has_rendered_map(pane, item) -> bool:
+    """The map frame on screen shows real map pixels, not the blank page or
+    the grey "rendering" placeholder: several distinct colours (the fixture's
+    parcels, region and outlines), never one flat colour."""
+    view = pane.preview.view
+    viewport = view.viewport()
+    box = view.mapFromScene(item.sceneBoundingRect()).boundingRect()
+    box = box.intersected(viewport.rect())
+    shot = viewport.grab().toImage().copy(box).scaled(60, 60)
+    colours = {shot.pixel(x, y) for x in range(60) for y in range(60)}
+    return len(colours) > 3
+
+
+def _wait_for_rendered_map(qgis_app, pane, item, seconds: float = 40.0) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        _settle(qgis_app, 0.2)
+        if not item.isDrawing() and _frame_has_rendered_map(pane, item):
+            return
+    pytest.fail("the map never finished rendering real pixels on the page")
+
+
+def _richest_patch(image, box: QRect, size: int = 24) -> QRect:
+    """The size x size square inside `box` with the most distinct colours."""
+    best, best_rect = -1, QRect()
+    for y in range(box.top() + 10, box.bottom() - size - 110, 12):
+        for x in range(box.left() + 10, box.right() - size - 100, 12):
+            colours = {
+                image.pixel(x + i, y + j)
+                for i in range(0, size, 3)
+                for j in range(0, size, 3)
+            }
+            if len(colours) > best:
+                best, best_rect = len(colours), QRect(x, y, size, size)
+    return best_rect
+
+
+def _patch_difference(a, rect_a: QRect, b, rect_b: QRect) -> float:
+    total = 0
+    for i in range(rect_a.width()):
+        for j in range(rect_a.height()):
+            pa = a.pixelColor(rect_a.x() + i, rect_a.y() + j)
+            pb = b.pixelColor(rect_b.x() + i, rect_b.y() + j)
+            total += abs(pa.red() - pb.red()) + abs(pa.green() - pb.green())
+            total += abs(pa.blue() - pb.blue())
+    return total / (rect_a.width() * rect_a.height() * 3)
+
+
+class TestAFastDragStaysSmooth:
+    """A flick across a large page keeps up with the pointer: the picture is
+    at the latest pointer position and the event loop is never held up, also
+    with a colour-vision simulation on (its filter makes every full repaint of
+    the view cost tens of milliseconds)."""
+
+    #: Per move (send + the event loop turning once, repaint included).
+    MOVE_BUDGET_MS = 30.0
+    #: Longest stall of the event loop during the whole flick.
+    STALL_BUDGET_MS = 60.0
+
+    @pytest.mark.parametrize("simulate", [False, True])
+    def test_a_flick_follows_the_pointer_without_stalling(
+        self, qgis_app, near_far, simulate
+    ) -> None:
+        from qgis.gui import QgsPreviewEffect
+        from qgis.PyQt.QtCore import QTimer
+        from test_cartograph_panel_widgets import _move_held
+
+        pane, layout, main, _inset, _region = near_far
+        pane.resize(1500, 1000)
+        view = pane.preview.view
+        if simulate:
+            view.setPreviewModeEnabled(True)
+            view.setPreviewMode(QgsPreviewEffect.PreviewMode.PreviewDeuteranope)
+        _settle(qgis_app, 0.5)
+        _wait_for_rendered_map(qgis_app, pane, main)
+        _edit_on(qgis_app, pane, layout, main)
+        # Edit view is really on: its button says so and the banner shows.
+        assert pane.controls.edit_view_button.text() == "Done editing view"
+        viewport = view.viewport()
+        assert any(
+            label.isVisible() and label.text().startswith("Editing the view inside")
+            for label in viewport.findChildren(QLabel)
+        )
+        frame_before = _geometry(main)
+        box = view.mapFromScene(main.sceneBoundingRect()).boundingRect()
+        before = viewport.grab().toImage()
+        patch = _richest_patch(before, box)
+        start = QPoint(patch.center())
+        shift = QPoint(70, 90)
+        gaps: list[float] = []
+        last = [time.perf_counter()]
+
+        def beat() -> None:
+            now = time.perf_counter()
+            gaps.append((now - last[0]) * 1000)
+            last[0] = now
+
+        heart = QTimer()
+        heart.setInterval(5)
+        heart.timeout.connect(beat)
+        QTest.mouseMove(viewport, start)
+        QTest.mousePress(
+            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start
+        )
+        qgis_app.processEvents()
+        heart.start()
+        last[0] = time.perf_counter()
+        per_move: list[float] = []
+        steps = 60
+        for step in range(1, steps + 1):
+            # Out and back: a big sweep that ends at `shift` from the press.
+            wobble = 90 if step < steps else 0
+            point = start + QPoint(
+                shift.x() * step // steps,
+                shift.y() * step // steps + (wobble * (step % 7)) // 7,
+            )
+            began = time.perf_counter()
+            _move_held(viewport, point)
+            qgis_app.processEvents()
+            per_move.append((time.perf_counter() - began) * 1000)
+            time.sleep(0.004)  # a flick sends a move every few milliseconds
+        end = start + shift
+        _move_held(viewport, end)
+        qgis_app.processEvents()
+        heart.stop()
+        _settle(qgis_app, 0.1)
+        # What is on screen: the window as composed, the viewport's part of it.
+        spot = viewport.mapTo(pane, QPoint(0, 0))
+        mid = pane.grab().toImage().copy(QRect(spot, viewport.size()))
+        QTest.mouseRelease(
+            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end
+        )
+        _settle(qgis_app, 0.2)
+        per_move.sort()
+        median = per_move[len(per_move) // 2]
+        assert median < self.MOVE_BUDGET_MS, per_move
+        assert max(gaps) < self.STALL_BUDGET_MS, max(gaps)
+        # The picture mid-drag is at the latest pointer position.
+        assert _geometry(main) == frame_before  # the content moves, not the frame
+        # Nothing of the page around the frame slides into it: the strip the
+        # shift uncovers (under the title) is one flat colour.
+        strip = QRect(box.left() + shift.x() + 4, box.top() + 3, 60, shift.y() - 6)
+        flat = {
+            mid.pixel(x, y)
+            for x in range(strip.left(), strip.right(), 3)
+            for y in range(strip.top(), strip.bottom(), 3)
+        }
+        assert len(flat) <= 2, len(flat)
+        moved = QRect(patch.translated(shift))
+        assert _patch_difference(before, patch, mid, moved) < 6
+        assert _patch_difference(before, patch, mid, patch) > _patch_difference(
+            before, patch, mid, moved
+        )
