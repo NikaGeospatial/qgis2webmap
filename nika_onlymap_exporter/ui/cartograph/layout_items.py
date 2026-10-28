@@ -14,11 +14,15 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import math
 from collections.abc import Iterator
 from enum import Enum
 
 from qgis.core import (
     Qgis,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
     QgsLayout,
     QgsLayoutItem,
     QgsLayoutItemLabel,
@@ -29,6 +33,7 @@ from qgis.core import (
     QgsLayoutMeasurement,
     QgsLayoutPoint,
     QgsLayoutSize,
+    QgsPointXY,
     QgsRectangle,
     QgsUnitTypes,
 )
@@ -378,3 +383,70 @@ def create_detail_map(layout: QgsLayout, source: QgsLayoutItemMap) -> QgsLayoutI
         item.setBackgroundColor(QColor("#ffffff"))
         item.refresh()
     return item
+
+
+_WGS84 = "EPSG:4326"
+
+
+def _wgs84_transform(item: QgsLayoutItemMap, *, to_map: bool) -> QgsCoordinateTransform:
+    """Between the map's CRS and WGS 84, with the project's transform context."""
+    layout = item.layout()
+    project = layout.project() if layout is not None else None
+    wgs84 = QgsCoordinateReferenceSystem(_WGS84)
+    source, target = (wgs84, item.crs()) if to_map else (item.crs(), wgs84)
+    if project is None:
+        return QgsCoordinateTransform(source, target, QgsCoordinateTransformContext())
+    return QgsCoordinateTransform(source, target, project.transformContext())
+
+
+def map_centre_wgs84(item: QgsLayoutItemMap) -> tuple[float, float] | None:
+    """The centre of what the map shows, as (latitude, longitude) in WGS 84;
+    None when the map's CRS cannot be carried to it."""
+    try:
+        point = _wgs84_transform(item, to_map=False).transform(item.extent().center())
+    except Exception:  # QgsCsException, or a CRS without a valid transform
+        return None
+    if not (math.isfinite(point.x()) and math.isfinite(point.y())):
+        return None
+    return point.y(), point.x()
+
+
+def recentre_map(item: QgsLayoutItemMap, latitude: float, longitude: float) -> bool:
+    """Show the same ground size (so the same scale and rotation) centred on
+    a WGS 84 point, as one undo step. False, with nothing changed, when the
+    point cannot be carried into the map's CRS or lies outside its valid area."""
+    layout = item.layout()
+    if layout is None or not (-90.0 <= latitude <= 90.0):
+        return False
+    if not (-180.0 <= longitude <= 180.0):
+        return False
+    crs = item.crs()
+    try:
+        bounds = crs.bounds()
+    except AttributeError:  # older QGIS without a bounds accessor
+        bounds = QgsRectangle()
+    if (
+        bounds is not None
+        and not bounds.isEmpty()
+        and not bounds.contains(QgsPointXY(longitude, latitude))
+    ):
+        return False
+    try:
+        point = _wgs84_transform(item, to_map=True).transform(
+            QgsPointXY(longitude, latitude)
+        )
+    except Exception:  # QgsCsException, or a CRS without a valid transform
+        return False
+    if not (math.isfinite(point.x()) and math.isfinite(point.y())):
+        return False
+    extent = item.extent()
+    half_width, half_height = extent.width() / 2.0, extent.height() / 2.0
+    target = QgsRectangle(
+        point.x() - half_width,
+        point.y() - half_height,
+        point.x() + half_width,
+        point.y() + half_height,
+    )
+    with item_edit(layout, item, tr("Centre map")):
+        item.zoomToExtent(target)
+    return True

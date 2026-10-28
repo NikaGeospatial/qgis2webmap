@@ -27,6 +27,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import re
 from collections.abc import Callable
 
 from qgis.core import (
@@ -62,6 +63,7 @@ from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QPlainTextEdit,
     QPushButton,
@@ -92,9 +94,11 @@ from .layout_items import (
     is_detail_map,
     item_edit,
     link_map,
+    map_centre_wgs84,
     map_frames,
     map_label,
     one_step,
+    recentre_map,
 )
 
 #: What opens a legend editor: called with the tab body as parent, it returns a
@@ -133,6 +137,22 @@ class _QuietDoubleSpin(QDoubleSpinBox):
     def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
         if event is not None:
             event.ignore()
+
+
+#: Digits after the point shown for a detail map's centre (about 0.1 m).
+CENTRE_DECIMALS = 6
+#: A pasted "lat, lon" pair: separated by a comma, semicolon or whitespace.
+_COORDINATE_SPLIT = re.compile(r"[,;\s]+")
+
+
+def parse_degrees(text: str) -> float | None:
+    """A decimal-degree number from typed text; None when it is not one."""
+    cleaned = text.strip().replace("\N{MINUS SIGN}", "-")
+    try:
+        value = float(cleaned)
+    except ValueError:
+        return None
+    return value if value == value and abs(value) != float("inf") else None
 
 
 #: The Edit tab's layout: content inset from the panel's sides, the gap between
@@ -372,6 +392,7 @@ class ContextControls(QFrame):
         self._legend_editor: QWidget | None = None
         self._text_dirty = False
         self._field_labels: list[QLabel] = []
+        self._watched_map: QgsLayoutItemMap | None = None
 
         column = QVBoxLayout(self)
         column.setContentsMargins(
@@ -603,6 +624,33 @@ class ContextControls(QFrame):
         self.dpi_combo.activated.connect(self._on_dpi)
         grid.addWidget(self.dpi_label, 2, 0)
         grid.addWidget(self.dpi_combo, 2, 1)
+        # A detail map's centre, in WGS 84 degrees.
+        self.centre_label = self._field_label(tr("Centre"), self.map_page)
+        self.latitude_label = self._field_label(tr("Latitude"), self.map_page)
+        self.latitude_edit = self._centre_edit(self.latitude_label)
+        self.longitude_label = self._field_label(tr("Longitude"), self.map_page)
+        self.longitude_edit = self._centre_edit(self.longitude_label)
+        self.centre_error = QLabel(self.map_page)
+        self.centre_error.setProperty("role", "checkVerdict")
+        self.centre_error.setProperty("tone", "error")
+        self.centre_error.setWordWrap(True)
+        self.centre_error.setMinimumWidth(1)
+        self.centre_error.setVisible(False)
+        grid.addWidget(self.centre_label, 3, 0, 1, 2)
+        grid.addWidget(self.latitude_label, 4, 0)
+        grid.addWidget(self.latitude_edit, 4, 1)
+        grid.addWidget(self.longitude_label, 5, 0)
+        grid.addWidget(self.longitude_edit, 5, 1)
+        grid.addWidget(self.centre_error, 6, 0, 1, 2)
+        self._centre_widgets = (
+            self.centre_label,
+            self.latitude_label,
+            self.latitude_edit,
+            self.longitude_label,
+            self.longitude_edit,
+        )
+        for widget in self._centre_widgets:
+            widget.setVisible(False)
         column.addLayout(grid)
 
         # Only for an inset: what it draws and how much it shows.
@@ -632,6 +680,17 @@ class ContextControls(QFrame):
         self.context_note.setWordWrap(True)
         column.addWidget(self.context_note)
         column.addStretch(1)
+
+    def _centre_edit(self, label: QLabel) -> QLineEdit:
+        edit = QLineEdit(self.map_page)
+        edit.setAccessibleName(label.text())
+        edit.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        edit.setMinimumWidth(1)
+        label.setBuddy(edit)
+        edit.editingFinished.connect(self._on_centre)
+        edit.returnPressed.connect(edit.clearFocus)
+        return edit
 
     def _field_label(self, text: str, parent: QWidget) -> QLabel:
         """A label of the panel's label column: all share one width."""
@@ -909,6 +968,51 @@ class ContextControls(QFrame):
         self.rotation_spin.setValue(item.mapRotation())
         self._show_frame_state()
         self._show_inset(item)
+        self._show_centre(item)
+
+    def _watch_extent(self, item: QgsLayoutItemMap | None) -> None:
+        """Follow the selected detail map's extent (Edit view, Use canvas
+        extent, undo) so the centre fields never show a stale point."""
+        old = self._watched_map
+        if old is item:
+            return
+        if old is not None and not sip.isdeleted(old):
+            with contextlib.suppress(TypeError, RuntimeError):
+                old.extentChanged.disconnect(self._on_extent_changed)
+        self._watched_map = item
+        if item is not None:
+            item.extentChanged.connect(self._on_extent_changed)
+
+    def _on_extent_changed(self) -> None:
+        item = self._watched_map
+        if item is None or sip.isdeleted(item) or self._item is not item:
+            return
+        if not (self.latitude_edit.hasFocus() or self.longitude_edit.hasFocus()):
+            self._show_centre(item)
+
+    def _show_centre(self, item: QgsLayoutItemMap) -> None:
+        detail = is_detail_map(item)
+        self._watch_extent(item if detail else None)
+        for widget in self._centre_widgets:
+            widget.setVisible(detail)
+        self.centre_error.setVisible(False)
+        if not detail:
+            return
+        centre = map_centre_wgs84(item)
+        was_loading = self._loading
+        self._loading = True
+        try:
+            for edit, value in zip(
+                (self.latitude_edit, self.longitude_edit),
+                centre if centre is not None else ("", ""),
+                strict=True,
+            ):
+                edit.setText(
+                    f"{value:.{CENTRE_DECIMALS}f}" if centre is not None else ""
+                )
+                edit.setCursorPosition(0)
+        finally:
+            self._loading = was_loading
 
     def _show_frame_state(self) -> None:
         item = self._item
@@ -1183,6 +1287,50 @@ class ContextControls(QFrame):
         with item_edit(self._layout, item, tr("Rotate map")):
             item.setMapRotation(value)
         self.edited.emit()
+
+    def _on_centre(self) -> None:
+        item = self._live_item()
+        if self._loading or not isinstance(item, QgsLayoutItemMap):
+            return
+        if not is_detail_map(item):
+            return
+        # "lat, lon" pasted into either field fills both.
+        parts = [
+            p for p in _COORDINATE_SPLIT.split(self.latitude_edit.text().strip()) if p
+        ]
+        if len(parts) == 2:
+            self.latitude_edit.setText(parts[0])
+            self.longitude_edit.setText(parts[1])
+        latitude = parse_degrees(self.latitude_edit.text())
+        longitude = parse_degrees(self.longitude_edit.text())
+        if latitude is None or longitude is None:
+            self._centre_failed(tr("Enter the latitude and longitude as numbers."))
+            return
+        if not -90.0 <= latitude <= 90.0:
+            self._centre_failed(tr("Latitude must be between -90 and 90."))
+            return
+        if not -180.0 <= longitude <= 180.0:
+            self._centre_failed(tr("Longitude must be between -180 and 180."))
+            return
+        current = map_centre_wgs84(item)
+        tolerance = 0.5 * 10.0**-CENTRE_DECIMALS
+        if (
+            current is not None
+            and abs(current[0] - latitude) <= tolerance
+            and abs(current[1] - longitude) <= tolerance
+        ):
+            self._show_centre(item)
+            return
+        if not recentre_map(item, latitude, longitude):
+            self._centre_failed(tr("This map cannot be centred on that point."))
+            return
+        self.centre_error.setVisible(False)
+        self._show_centre(item)
+        self.edited.emit()
+
+    def _centre_failed(self, message: str) -> None:
+        self.centre_error.setText(message)
+        self.centre_error.setVisible(True)
 
     def _on_columns(self) -> None:
         item = self._live_item()
