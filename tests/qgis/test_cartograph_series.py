@@ -768,3 +768,179 @@ class TestPersistence:
         assert [f["name"] for f in s.built.places.getFeatures()] == [
             name for name, _x, _y in PLACES
         ]
+
+
+class TestWheelGuard:
+    def test_the_wheel_never_changes_a_closed_dropdown_of_the_tab(self, series) -> None:
+        """Every dropdown the tab adds scrolls the panel instead of changing."""
+        from nika_onlymap_exporter.ui.wheel_guard import (
+            install_wheel_guard,
+            remove_wheel_guard,
+        )
+
+        s = series(maps=2, atlas_on=True)
+        tab = s.tab
+        tab.advanced_section.set_open(True)
+        tab.framing_section.set_open(True)
+        s.app.processEvents()
+        install_wheel_guard()  # the plugin installs it once, at start-up
+        try:
+            self._check_dropdowns(tab)
+        finally:
+            remove_wheel_guard()
+
+    @staticmethod
+    def _check_dropdowns(tab) -> None:
+        from qgis.PyQt.QtCore import QPoint, QPointF, Qt
+        from qgis.PyQt.QtGui import QWheelEvent
+        from qgis.PyQt.QtWidgets import QApplication, QComboBox
+
+        def state(widget):
+            combos = (
+                [widget]
+                if isinstance(widget, QComboBox)
+                else widget.findChildren(QComboBox)
+            )
+            return [(c.currentIndex(), c.currentText()) for c in combos]
+
+        def wheel(target) -> None:
+            centre = QPoint(target.width() // 2, target.height() // 2)
+            QApplication.sendEvent(
+                target,
+                QWheelEvent(
+                    QPointF(centre),
+                    QPointF(target.mapToGlobal(centre)),
+                    QPoint(0, 0),
+                    QPoint(0, -120),
+                    Qt.MouseButton.NoButton,
+                    Qt.KeyboardModifier.NoModifier,
+                    Qt.ScrollPhase.NoScrollPhase,
+                    False,
+                ),
+            )
+
+        widgets = [
+            tab.coverage_combo,
+            tab.map_combo,
+            tab.framing_combo,
+            tab.direction_combo,
+            tab.sort_edit,
+            tab.filter_edit,
+            tab.page_name_edit,
+            tab.filename_edit,
+        ]
+        for widget in widgets:
+            before = state(widget)
+            leaves = widget.findChildren(QComboBox) or [widget]
+            targets = list(leaves) + [
+                c.lineEdit()
+                for c in leaves
+                if getattr(c, "lineEdit", None) and c.lineEdit()
+            ]
+            for target in targets:
+                if target is not None and target.isVisible():
+                    wheel(target)
+            assert state(widget) == before, type(widget).__name__
+
+
+class TestRevealingAWrongSetting:
+    def test_the_panel_scrolls_to_the_field_and_its_error_and_focuses_it(
+        self, series
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QScrollArea
+
+        s = series(atlas_on=True)
+        s.dialog.resize(900, 520)
+        tab = s.tab
+        area = tab.parentWidget()
+        while not isinstance(area, QScrollArea):
+            area = area.parentWidget()
+        tab.framing_section.set_open(True)
+        s.app.processEvents()
+        area.verticalScrollBar().setValue(0)
+        s.type_filter('"lot" =')
+        assert _wait_for(s.app, lambda: tab.filter_error_label.isVisible())
+        s.app.processEvents()
+        view = area.viewport().rect()
+
+        def inside(widget) -> bool:
+            top = widget.mapTo(area.viewport(), widget.rect().topLeft())
+            bottom = widget.mapTo(area.viewport(), widget.rect().bottomLeft())
+            return view.top() <= top.y() and bottom.y() <= view.bottom()
+
+        assert _wait_for(
+            s.app,
+            lambda: inside(tab.filter_edit) and inside(tab.filter_error_label),
+        )
+        assert tab.filter_edit.isAncestorOf(s.dialog.focusWidget())
+
+
+class TestPagingKeepsTheRestCoherent:
+    def test_selection_survives_paging_and_leaving(self, series) -> None:
+        s = series(atlas_on=True)
+        layout = s.built.layout
+        s.built.label.setSelected(True)
+        s.tab.next_button.click()
+        s.tab.next_button.click()
+        assert layout.selectedLayoutItems() == [s.built.label]
+        s.cartograph.open_section("edit")
+        s.app.processEvents()
+        assert layout.selectedLayoutItems() == [s.built.label]
+        s.cartograph.open_section("atlas")
+        s.app.processEvents()
+        assert layout.selectedLayoutItems() == [s.built.label]
+        assert s.page_text().startswith("3 of 3")
+
+    def test_a_live_count_recounts_for_the_shown_page(self, series) -> None:
+        """Checks that the existing Live count refresh follows the page: the
+        counter's number matches the places inside the extent shown."""
+        from qgis.core import QgsLayoutItemLabel
+        from qgis.PyQt.QtCore import QRectF
+
+        from nika_onlymap_exporter.core import live_count as lc
+
+        s = series(atlas_on=True)
+        main = s.built.maps[0]
+        number = QgsLayoutItemLabel(s.built.layout)
+        number.setId("Live count")
+        s.built.layout.addLayoutItem(number)
+        number.attemptSetSceneRect(QRectF(200, 5, 40, 14))
+        lc.write_spec(
+            number,
+            lc.CountSpec(
+                map_uuid=main.uuid(),
+                layer_id=s.built.places.id(),
+                layer_name=s.built.places.name(),
+                mode=lc.MODE_ALL,
+                field="",
+                value=None,
+                value_is_null=False,
+            ),
+        )
+        s.cartograph.show_layout_named(s.built.layout.name())
+        s.cartograph.open_section("atlas")
+        s.settle()
+
+        def expected() -> str:
+            extent = main.extent()
+            return str(
+                sum(
+                    extent.xMinimum() <= x <= extent.xMaximum()
+                    and extent.yMinimum() <= y <= extent.yMaximum()
+                    for _name, x, y in PLACES
+                )
+            )
+
+        seen = set()
+        for index in range(3):
+            assert _wait_for(s.app, lambda: number.text() == expected()), (
+                index,
+                number.text(),
+                expected(),
+            )
+            seen.add(number.text())
+            if index < 2:
+                s.tab.next_button.click()
+        # Back on the authored (whole) view, every place is counted again.
+        s.cartograph.open_section("layout")
+        assert _wait_for(s.app, lambda: number.text() == "4"), number.text()

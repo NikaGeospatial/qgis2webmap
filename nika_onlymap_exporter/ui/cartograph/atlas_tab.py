@@ -44,7 +44,9 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -122,6 +124,8 @@ class AtlasTab(QWidget):
         self._sort_error: str | None = None
         # A coverage layer taken out of the project under an enabled series.
         self._layer_removed = False
+        # Advanced fields whose error has already been scrolled into view.
+        self._revealed: set[str] = set()
         # The coverage layer the series was last seen on.
         self._coverage_id = ""
         self._preview: AtlasPreview | None = None
@@ -628,6 +632,27 @@ class AtlasTab(QWidget):
             label.setVisible(error is not None)
             if error is not None or (text and active and kind in ("sort", "filter")):
                 self.advanced_section.set_open(True)
+            if error is None:
+                self._revealed.discard(kind)
+            elif kind not in self._revealed:
+                # Newly wrong: bring the field and its error into view.
+                self._revealed.add(kind)
+                QTimer.singleShot(0, lambda e=edit, m=label: self._reveal(e, m))
+
+    def _reveal(self, edit: QWidget, message: QWidget) -> None:
+        """Scroll the panel to `edit` and its error, and focus the field."""
+        if sip.isdeleted(edit) or not edit.isVisible():
+            return
+        area = self.parentWidget()
+        while area is not None and not isinstance(area, QScrollArea):
+            area = area.parentWidget()
+        if isinstance(area, QScrollArea):
+            area.ensureWidgetVisible(message)
+            area.ensureWidgetVisible(edit)
+            # The error sits under the field: keep both in view.
+            area.ensureWidgetVisible(message)
+        line = edit.findChild(QLineEdit)
+        (line or edit).setFocus()
 
     # ---- Preview -----------------------------------------------------------
 
