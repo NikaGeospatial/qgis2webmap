@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from qgis.core import (
@@ -54,6 +55,7 @@ from qgis.core import (
     QgsSettings,
     QgsUnitTypes,
 )
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
     QBuffer,
     QIODevice,
@@ -88,6 +90,28 @@ class StaticFrameRender:
     crs_def: str
 
 
+@contextlib.contextmanager
+def _selection_untouched(layout: QgsPrintLayout) -> Iterator[None]:
+    """Hiding a layout item deselects it (Qt), and the Edit tab follows the
+    layout's selection, so a render that hides the other items would empty
+    the tab after every map change. The selection is taken first, the
+    layout's signals are held while the items are hidden and shown again, and
+    the same items are selected again before the signals are released: to
+    everything listening, the selection never changed. Nothing is repainted
+    in between (no event loop turns inside the render's hiding window)."""
+    selected = [
+        item for item in layout.selectedLayoutItems() if isinstance(item, QgsLayoutItem)
+    ]
+    was_blocked = layout.blockSignals(True)
+    try:
+        yield
+    finally:
+        for item in selected:
+            if not sip.isdeleted(item) and item.isVisible():
+                item.setSelected(True)
+        layout.blockSignals(was_blocked)
+
+
 def render_static_frame(
     layout: QgsPrintLayout,
     map_item: QgsLayoutItemMap,
@@ -106,17 +130,18 @@ def render_static_frame(
     overlays = [*map_item.grids().asList(), *map_item.overviews().asList()]
     previous_enabled = [overlay.enabled() for overlay in overlays]
 
-    try:
-        for item in others:
-            item.setVisible(False)
-        for overlay in overlays:
-            overlay.setEnabled(False)
-        png_bytes = _render_region(layout, map_item, dpi)
-    finally:
-        for item in others:
-            item.setVisible(previous_visibility[item.uuid()])
-        for overlay, enabled in zip(overlays, previous_enabled):
-            overlay.setEnabled(enabled)
+    with _selection_untouched(layout):
+        try:
+            for item in others:
+                item.setVisible(False)
+            for overlay in overlays:
+                overlay.setEnabled(False)
+            png_bytes = _render_region(layout, map_item, dpi)
+        finally:
+            for item in others:
+                item.setVisible(previous_visibility[item.uuid()])
+            for overlay, enabled in zip(overlays, previous_enabled):
+                overlay.setEnabled(enabled)
 
     crs = map_item.crs()
     project = layout.project() or QgsProject.instance()
@@ -300,28 +325,29 @@ class AsyncFrameRender(QObject):
         original_position = map_item.positionWithUnits()
         opacity = map_item.itemOpacity()
         hidden_ancestors = _hidden_chain(map_item)
-        try:
-            for item in others:
-                item.setVisible(False)
-            for overlay in overlays:
-                overlay.setEnabled(False)
-            for hidden in hidden_ancestors:
-                hidden.setVisible(True)
-            map_item.setItemOpacity(1.0)
-            if rotation:
-                map_item.setItemRotation(0, True)
-            self._begin(size.width(), size.height())
-        finally:
-            for item in others:
-                item.setVisible(previous_visibility[item.uuid()])
-            for overlay, enabled in zip(overlays, previous_enabled):
-                overlay.setEnabled(enabled)
-            map_item.setItemOpacity(opacity)
-            if rotation:
-                map_item.setItemRotation(rotation, False)
-                map_item.attemptMove(original_position)
-            for hidden in hidden_ancestors:
-                hidden.setVisible(False)
+        with _selection_untouched(layout):
+            try:
+                for item in others:
+                    item.setVisible(False)
+                for overlay in overlays:
+                    overlay.setEnabled(False)
+                for hidden in hidden_ancestors:
+                    hidden.setVisible(True)
+                map_item.setItemOpacity(1.0)
+                if rotation:
+                    map_item.setItemRotation(0, True)
+                self._begin(size.width(), size.height())
+            finally:
+                for item in others:
+                    item.setVisible(previous_visibility[item.uuid()])
+                for overlay, enabled in zip(overlays, previous_enabled):
+                    overlay.setEnabled(enabled)
+                map_item.setItemOpacity(opacity)
+                if rotation:
+                    map_item.setItemRotation(rotation, False)
+                    map_item.attemptMove(original_position)
+                for hidden in hidden_ancestors:
+                    hidden.setVisible(False)
 
     def _begin(self, width_mm: float, height_mm: float) -> None:
         """What `QgsLayoutItemMap.paint` does for an exported layout, up to

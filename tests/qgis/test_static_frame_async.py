@@ -162,6 +162,57 @@ class TestAsyncPictureEqualsTheSynchronousOne:
             assert _wait_for(qgis_app, lambda: drawing.done, timeout=60.0)
 
 
+class TestTheUsersSelectionSurvivesTheRender:
+    """Drawing the frame must not touch what the user has selected on the
+    page: the Edit tab follows the layout's selection, and an item hidden for
+    the render used to be deselected by Qt, so the tab fell to its empty
+    state after every map change."""
+
+    @pytest.fixture
+    def survey(self, project, tmp_path):
+        return build_survey_layout(project, tmp_path)
+
+    @staticmethod
+    def _others(survey):
+        from qgis.core import QgsLayoutItem
+
+        return [
+            i
+            for i in survey.layout.items()
+            if isinstance(i, QgsLayoutItem) and i is not survey.main_map
+        ]
+
+    def _selected_uuids(self, survey) -> set[str]:
+        return {i.uuid() for i in survey.layout.selectedLayoutItems()}
+
+    def _select_a_visible_other(self, survey):
+        other = next(i for i in self._others(survey) if i.isVisible())
+        survey.layout.setSelectedItem(other)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        return other
+
+    def test_an_async_render_keeps_the_selection(self, qgis_app, survey) -> None:
+        other = self._select_a_visible_other(survey)
+        changes: list[int] = []
+        survey.layout.selectionChanged.connect(lambda *_: changes.append(1))
+        _drawn_async(qgis_app, survey.layout, survey.main_map, 100)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        assert not changes, "the render signalled a selection change"
+
+    def test_a_synchronous_render_keeps_the_selection(self, survey) -> None:
+        other = self._select_a_visible_other(survey)
+        changes: list[int] = []
+        survey.layout.selectionChanged.connect(lambda *_: changes.append(1))
+        render_static_frame(survey.layout, survey.main_map, dpi=100)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        assert not changes
+
+    def test_a_selected_map_stays_selected(self, qgis_app, survey) -> None:
+        survey.layout.setSelectedItem(survey.main_map)
+        _drawn_async(qgis_app, survey.layout, survey.main_map, 100)
+        assert self._selected_uuids(survey) == {survey.main_map.uuid()}
+
+
 # ---- A heavy static frame, through the real dialog -------------------------
 
 
