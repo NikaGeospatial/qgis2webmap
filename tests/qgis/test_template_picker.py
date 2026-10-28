@@ -1471,7 +1471,7 @@ class TestBackgroundPages:
     ):
         """No step of a full pass holds the event loop: a heartbeat timer
         never waits long, and the cards still fill in."""
-        renderer = _SlowRenderer(delay_ms=120)
+        renderer = _SlowRenderer(delay_ms=300)
         picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
         gaps: list[float] = []
         last = [time.monotonic()]
@@ -1491,8 +1491,11 @@ class TestBackgroundPages:
                 qgis_app.processEvents()
             assert picker.rows[picker.template_id].drawn
             assert len(renderer.started) > 1
-            # Pages took >100 ms each, in sequence, yet no gap came close.
-            assert max(gaps) < 0.1
+            # A page takes 300 ms, so a step that held the loop for it would
+            # leave a gap of 300 ms or more. Idle runs show beats up to ~100
+            # ms (first show and layout); the bound keeps headroom over that
+            # for a loaded shared CPU while still catching a held page.
+            assert max(gaps) < 0.25
         finally:
             heartbeat.stop()
             picker.reject()
