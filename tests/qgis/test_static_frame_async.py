@@ -365,9 +365,9 @@ class TestAutosaveWaitsForTheUser:
         self,
         qgis_app,
         project,
-        fake_cartograph_export,
+        fake_cartograph_export,  # noqa: F811
         tmp_path,
-        monkeypatch,  # noqa: F811
+        monkeypatch,
     ) -> None:
         """Mechanism: a build is not begun mid-drag, and is begun after."""
         from qgis.PyQt.QtCore import Qt
@@ -402,9 +402,9 @@ class TestAutosaveWaitsForTheUser:
         self,
         qgis_app,
         project,
-        fake_cartograph_export,
+        fake_cartograph_export,  # noqa: F811
         tmp_path,
-        monkeypatch,  # noqa: F811
+        monkeypatch,
     ) -> None:
         """Mechanism: a button that is never released cannot stop the file
         being written."""
