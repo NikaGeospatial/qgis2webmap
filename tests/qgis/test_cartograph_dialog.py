@@ -149,6 +149,7 @@ def fake_cartograph_export(monkeypatch):
         export_dpi=None,
         title_override=None,
         pending_static=None,
+        refresh_counts=True,
     ):
         report.approximated("Map frame 'Overview'", "Rendered as a static raster.")
         calls.append(

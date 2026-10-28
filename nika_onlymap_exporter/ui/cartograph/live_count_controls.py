@@ -254,11 +254,7 @@ class LiveCountSetup(QWidget):
         self.caption_label.setVisible(caption is not None)
         self.caption_edit.setVisible(caption is not None)
 
-        self.summary.setText(
-            lc.source_summary(
-                layout, number, map_label(followed_map) if followed_map else None
-            )
-        )
+        self.summary.setText(lc.source_summary(layout, number))
         self.summary.setVisible(bool(self.summary.text()))
         self._show_message(layers)
 

@@ -121,6 +121,7 @@ class TestAddMenu:
             "Legend": False,
             "Scale bar": False,
             "North arrow": False,
+            "Live count": False,
             "Detail map": True,
         }
         pane.close()

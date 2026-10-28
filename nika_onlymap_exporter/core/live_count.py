@@ -504,9 +504,7 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
     is not drawn so nothing is shown), or a `Prepared` to run. GUI thread."""
     spec = read_spec(number)
     if not spec.layer_id:
-        return _no(
-            CountState.UNCONFIGURED, tr("Choose the layer to count in the Edit tab.")
-        )
+        return _no(CountState.UNCONFIGURED, tr("Choose the layer to count."))
     project = layout.project()
     layer = project.mapLayer(spec.layer_id) if project is not None else None
     if layer is None:
@@ -663,10 +661,9 @@ def refresh_live_counts(layout: QgsLayout) -> dict[str, CountOutcome]:
     return outcomes
 
 
-def source_summary(
-    layout: QgsLayout, number: QgsLayoutItemLabel, map_name: str | None
-) -> str:
-    """ "Monitoring sites · Status: Active · Following Main map"."""
+def source_summary(layout: QgsLayout, number: QgsLayoutItemLabel) -> str:
+    """What the counter counts, in a line: "Monitoring sites · Status: Active".
+    (Which map it follows is the line above it in the Edit tab.)"""
     spec = read_spec(number)
     project = layout.project()
     layer = project.mapLayer(spec.layer_id) if project and spec.layer_id else None
@@ -681,8 +678,6 @@ def source_summary(
             else (spec.value if spec.value is not None else "?")
         )
         parts.append(f"{spec.field}: {shown}")
-    if map_name:
-        parts.append(tr("Following {map}").format(map=map_name))
     return " \N{MIDDLE DOT} ".join(parts)
 
 

@@ -223,9 +223,8 @@ class TestSettingItUp:
         page, pane = ui
         number = _configured(qgis_app, pane, page)
         assert lc.caption_of(page.layout, number).text() == "Monitoring sites"
-        assert _setup(pane).summary.text() == (
-            "Monitoring sites \N{MIDDLE DOT} Following Main map"
-        )
+        assert _setup(pane).summary.text() == "Monitoring sites"
+        assert _setup(pane).following_text.text() == "Following: Main map"
 
     def test_the_number_cannot_be_typed_over_in_the_edit_tab(
         self, qgis_app, ui
