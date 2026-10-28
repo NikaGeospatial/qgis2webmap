@@ -92,6 +92,7 @@ from .cartograph_ir import (
     ShapeSpec,
     TextSpec,
 )
+from .frame_layers import set_frame_layers
 from .layout_reader import TEXT_KIND_PROPERTY, FrameMode, chosen_style_property
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
@@ -595,8 +596,7 @@ class _Builder:
 
         layers = self.frame_layers.get(frame.id)
         if layers is not None:
-            map_item.setKeepLayerSet(True)
-            map_item.setLayers(list(layers))
+            set_frame_layers(map_item, layers, self.project)
 
         if frame.mode == "static":
             crs, extent, rotation = self._static_extent(frame, subject)

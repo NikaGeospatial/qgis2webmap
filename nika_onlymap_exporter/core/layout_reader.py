@@ -130,6 +130,7 @@ from .expression_tokens import (
     translate_label,
 )
 from .fidelity_report import FidelityReportBuilder
+from .frame_layers import rendered_layers
 from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
@@ -735,7 +736,7 @@ def plane_blocking_layers(item: QgsLayoutItemMap) -> list[str]:
     from .layer_reader import xyz_template
 
     blockers = []
-    for layer in item.layersToRender():
+    for layer in rendered_layers(item):
         if not isinstance(layer, QgsRasterLayer):
             continue
         provider = (layer.providerType() or "").lower()
@@ -804,7 +805,7 @@ def _record_rasterised_layers(
     click or restyle. Recorded per layer so the Fidelity tab can show it
     beside each layer's other rows.
     """
-    for layer in item.layersToRender():
+    for layer in rendered_layers(item):
         report.raster_fallback(
             f"Map frame {_name(item)}: layer '{layer.name()}'",
             "Drawn into this image frame's picture by QGIS, exactly as QGIS "
@@ -819,7 +820,7 @@ def _frame_layer_ids(frame: MapFrameReading) -> list[str]:
     """The QGIS ids of the layers a live frame is written with: what the map
     draws, then any hidden layer it does not draw (an atlas coverage layer
     the map left out, which the atlas still pages through)."""
-    ids = [layer.id() for layer in frame.map_item.layersToRender()]
+    ids = [layer.id() for layer in rendered_layers(frame.map_item)]
     ids.extend(layer_id for layer_id in frame.hidden_layer_ids if layer_id not in ids)
     return ids
 
@@ -1175,7 +1176,7 @@ class _AtlasPlan:
 
 
 def _draws_layer(frame: MapFrameReading, layer_id: str) -> bool:
-    return any(layer.id() == layer_id for layer in frame.map_item.layersToRender())
+    return any(layer.id() == layer_id for layer in rendered_layers(frame.map_item))
 
 
 def _without_atlas_fit(frames: Sequence[MapFrameReading]) -> list[MapFrameReading]:
@@ -2018,7 +2019,7 @@ def _classed_legend_layers(
     """The layers this legend lists that are drawn with classes."""
     listed = {node.layerId() for node in item.model().rootGroup().findLayers()}
     classed = []
-    for layer in map_item.layersToRender():
+    for layer in rendered_layers(map_item):
         if layer.id() not in listed or not isinstance(layer, QgsVectorLayer):
             continue
         renderer = layer.renderer()
@@ -2068,7 +2069,7 @@ def _legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> i
         for node in model.rootGroup().findLayers()
     }
     left_out = 0
-    for layer in map_item.layersToRender():
+    for layer in rendered_layers(map_item):
         layer_legend = layer.legend()
         own = 0
         if layer_legend is not None:
@@ -2112,7 +2113,7 @@ def _live_legend_rows(
     categories, symbol-level edits, layers from outside the map -- is
     reported as approximated.
     """
-    layers_by_id = {layer.id(): layer for layer in map_item.layersToRender()}
+    layers_by_id = {layer.id(): layer for layer in rendered_layers(map_item)}
     if not _legend_is_manual(item):
         ordered = [layer_id for layer_id in layers_by_id if layer_id in dom_ids]
         return tuple(
@@ -2229,7 +2230,7 @@ def _legend_entry_rows(
 
 def _literal_legend_rows(map_item: QgsLayoutItemMap) -> tuple[LegendRowSpec, ...]:
     rows: list[LegendRowSpec] = []
-    for layer in map_item.layersToRender():
+    for layer in rendered_layers(map_item):
         if isinstance(layer, QgsVectorLayer) and layer.renderer() is not None:
             for symbol_item in layer.renderer().legendSymbolItems():
                 color = None

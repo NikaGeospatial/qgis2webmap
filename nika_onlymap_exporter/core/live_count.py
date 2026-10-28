@@ -66,6 +66,7 @@ from qgis.PyQt.QtCore import QMetaType, QSizeF
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..ui.i18n import tr
+from .frame_layers import rendered_layers
 
 #: On the number label: marks it as a Live count.
 MARKER_PROPERTY = "nika/live-count"
@@ -304,7 +305,7 @@ def countable_layers(project: QgsProject) -> list[QgsVectorLayer]:
 def map_draws(map_item: QgsLayoutItemMap, layer_id: str) -> bool:
     """Whether the frame draws the layer: in its layer set, its theme or the
     project's visible layers, whichever decides what it shows."""
-    return any(layer.id() == layer_id for layer in map_item.layersToRender())
+    return any(layer.id() == layer_id for layer in rendered_layers(map_item))
 
 
 # -- one calculation ----------------------------------------------------------

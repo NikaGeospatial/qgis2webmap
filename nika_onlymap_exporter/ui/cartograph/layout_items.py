@@ -44,6 +44,7 @@ from qgis.PyQt.QtCore import QPointF, QRectF, Qt
 from qgis.PyQt.QtGui import QColor
 
 from ...core import live_count
+from ...core.frame_layers import rendered_layers
 from ...core.layout_builder import _north_svg
 from ...core.legend_edit import apply_template_defaults
 from ...core.locator_context import is_locator
@@ -290,7 +291,7 @@ def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) ->
         legend.setAutoUpdateModel(False)
     root = legend.model().rootGroup()
     root.removeAllChildren()
-    for layer in map_item.layersToRender():
+    for layer in rendered_layers(map_item):
         root.addLayer(layer)
     apply_template_defaults(legend)
 

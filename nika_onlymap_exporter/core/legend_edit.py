@@ -48,6 +48,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import Qt
 
+from .frame_layers import rendered_layers
 from .raster_legend import ramp_range
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -129,7 +130,7 @@ def _scope_layers(
     """The layers a legend may list: its linked map's, else the project's."""
     map_item = legend.linkedMap()
     if map_item is not None:
-        return list(map_item.layersToRender())
+        return list(rendered_layers(map_item))
     return [
         node.layer()
         for node in project.layerTreeRoot().findLayers()
