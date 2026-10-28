@@ -1101,18 +1101,19 @@ class TestCartographShareMenu:
             # No atlas configured, so no "Save atlas as PDF…" yet.
             assert rows == [
                 ("Export", True),
+                ("Save PDF…", False),
                 ("Export PNG…", False),
                 ("Export QGIS layout template…", False),
                 ("PDF settings…", False),
                 ("HTML cartograph", True),
                 ("Preview in browser", False),
                 ("Copy HTML file path", False),
-                (rows[7][0], False),  # "Show HTML in folder"
+                (rows[8][0], False),  # "Show HTML in folder"
                 ("NIKA hand-off", True),
                 ("Prepare enhancement prompt...", False),
                 ("Prepare critique prompt...", False),
             ]
-            assert rows[7][0] == "Show HTML in folder"
+            assert rows[8][0] == "Show HTML in folder"
             assert "export_pdf" not in cartograph.cartograph_share_actions
         finally:
             dialog.close()
@@ -3912,12 +3913,16 @@ class TestPanel:
             assert actions.accessibleName() == "Layout actions"
             assert actions.toolTip() == "Layout actions"
             assert actions.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
-            assert [a.text() for a in actions.menu().actions()] == [
+            # One layout: "Switch layout..." (and its separator) is hidden.
+            shown = [
+                a for a in actions.menu().actions() if a.isVisible() and not a.isSeparator()
+            ]
+            assert [a.text() for a in shown] == [
                 "Rename layout...",
                 "Import cartograph...",
             ]
             action = cartograph.import_action
-            assert action is actions.menu().actions()[1]
+            assert action is shown[1]
             # Import needs no canvas.
             assert not button.isEnabled() and action.isEnabled()
             action.trigger()
