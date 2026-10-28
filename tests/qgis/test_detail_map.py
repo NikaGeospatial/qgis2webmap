@@ -394,6 +394,7 @@ class TestCentreFields:
                 assert m.extent() == source_extents[m.uuid()]
         assert layout.undoStack().stack().index() == steps + 2
         assert not c.centre_error.isVisibleTo(c)
+        assert not c.longitude_edit.hasFocus()
 
     def test_one_entry_is_one_undo_step_and_undo_restores(self, qgis_app, page) -> None:
         pane, layout = page
