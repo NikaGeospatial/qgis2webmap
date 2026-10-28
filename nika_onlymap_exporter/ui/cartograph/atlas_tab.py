@@ -34,7 +34,7 @@ from qgis.core import (
     QgsMapLayerProxyModel,
     QgsPrintLayout,
 )
-from qgis.gui import QgsFieldExpressionWidget, QgsMapLayerComboBox
+from qgis.gui import QgsFieldComboBox, QgsFieldExpressionWidget, QgsMapLayerComboBox
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QHideEvent, QShowEvent
@@ -47,10 +47,18 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from ...core.atlas_filter import (
+    FALSE_TEXT,
+    TRUE_TEXT,
+    Matching,
+    condition_expression,
+    read_condition,
+)
 from ...core.atlas_preview import AtlasPreview
 from ...core.atlas_series import (
     Operation,
@@ -64,9 +72,10 @@ from ...core.atlas_series import (
     series_status,
 )
 from ...core.layout_reader import expression_error
+from ...core.live_count import field_kind, unique_values
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
-from ..theme import PANEL_PANE_GAP
+from ..theme import PANEL_PANE_GAP, align_embedded_edits
 from .item_controls import SELECTED_HEADER_CLEARANCE
 from .panel_section import PanelSection
 
@@ -77,6 +86,16 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: The margin a map gets when this tab first makes it follow the atlas: QGIS's
 #: own default in the Item Properties panel.
 DEFAULT_ATLAS_MARGIN = 0.1
+
+#: How "Include pages" is set: every feature, one field's value, or a
+#: written expression.
+FILTER_ALL = "all"
+FILTER_VALUE = "value"
+FILTER_CUSTOM = "custom"
+
+#: How many of a field's values are offered as suggestions (any value can
+#: still be typed).
+VALUE_SUGGESTIONS = 1000
 
 #: The ways a map frames each page, in the order the tab lists them.
 _FRAMING = (
@@ -123,6 +142,14 @@ class AtlasTab(QWidget):
         # Problems the last save reported for the atlas (cartograph outputs).
         self._saved_problems: tuple[str, ...] = ()
         self._filter_error: str | None = None
+        # What the typed value of "Matching a value" cannot be turned into.
+        self._filter_value_error: str | None = None
+        # "Matching a value" chosen (and maybe a field) before there is a
+        # complete condition to store: kept so the choice stays on screen.
+        self._filter_pending_mode = ""
+        self._filter_pending_field = ""
+        # The value picked is the field's real null, not text.
+        self._filter_value_is_null = False
         self._sort_error: str | None = None
         # A coverage layer taken out of the project under an enabled series.
         self._layer_removed = False
@@ -196,7 +223,9 @@ class AtlasTab(QWidget):
         self.coverage_combo.setAllowEmptyLayer(True, tr("Choose a layer…"))
         self.coverage_combo.setAccessibleName(tr("Layer that receives a page"))
         self.coverage_combo.layerChanged.connect(self._on_coverage)
-        column.addWidget(self.coverage_combo)
+        self.coverage_clear = self._clear_button(parent, tr("Clear layer"))
+        self.coverage_clear.clicked.connect(self._on_clear_coverage)
+        column.addWidget(self._with_clear(self.coverage_combo, self.coverage_clear))
         self.source_help = FittedLabel(
             tr("Each area or location in this layer becomes a page."), parent
         )
@@ -220,7 +249,9 @@ class AtlasTab(QWidget):
         self.map_combo.setPlaceholderText(tr("Choose a map…"))
         self.map_combo.setAccessibleName(tr("Map to update on each page"))
         self.map_combo.currentIndexChanged.connect(self._on_map)
-        chooser.addWidget(self.map_combo)
+        self.map_clear = self._clear_button(self.map_chooser, tr("Clear map"))
+        self.map_clear.clicked.connect(self._on_clear_map)
+        chooser.addWidget(self._with_clear(self.map_combo, self.map_clear))
         other = FittedLabel(tr("Other maps keep their current view."), parent)
         other.setProperty("role", "hint")
         chooser.addWidget(other)
@@ -310,16 +341,7 @@ class AtlasTab(QWidget):
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.advanced_section.body_layout.addLayout(form)
 
-        self.filter_edit = _typed_expression_widget(parent)
-        self.filter_edit.setToolTip(
-            tr("Only features for which this is true get a page. Blank: all.")
-        )
-        self.filter_edit.fieldChanged.connect(self._on_filter)
-        self.filter_error_label = self._error_label(parent)
-        form.addRow(
-            tr("Include pages"),
-            self._with_error(self.filter_edit, self.filter_error_label),
-        )
+        self._build_filter(form, parent)
 
         self.sort_edit = _typed_expression_widget(parent)
         self.sort_edit.setAllowEmptyFieldName(True)
@@ -333,7 +355,9 @@ class AtlasTab(QWidget):
         order = QWidget(parent)
         order_column = QVBoxLayout(order)
         order_column.setContentsMargins(0, 0, 0, 0)
-        order_column.addWidget(self.sort_edit)
+        self.sort_clear = self._clear_button(parent, tr("Clear page order"))
+        self.sort_clear.clicked.connect(self._on_clear_sort)
+        order_column.addWidget(self._with_clear(self.sort_edit, self.sort_clear))
         order_column.addWidget(self.direction_combo)
         order_column.addWidget(self.sort_error_label)
         form.addRow(tr("Page order"), order)
@@ -341,9 +365,14 @@ class AtlasTab(QWidget):
         self.page_name_edit = _typed_expression_widget(parent)
         self.page_name_edit.fieldChanged.connect(self._on_page_name)
         self.page_name_error_label = self._error_label(parent)
+        self.page_name_clear = self._clear_button(parent, tr("Clear page names"))
+        self.page_name_clear.clicked.connect(self._on_clear_page_names)
         form.addRow(
             tr("Page names"),
-            self._with_error(self.page_name_edit, self.page_name_error_label),
+            self._with_error(
+                self._with_clear(self.page_name_edit, self.page_name_clear),
+                self.page_name_error_label,
+            ),
         )
 
         self.filename_edit = _typed_expression_widget(parent)
@@ -352,9 +381,14 @@ class AtlasTab(QWidget):
         )
         self.filename_edit.fieldChanged.connect(self._on_filename)
         self.filename_error_label = self._error_label(parent)
+        self.filename_clear = self._clear_button(parent, tr("Clear export filenames"))
+        self.filename_clear.clicked.connect(self._on_clear_filenames)
         form.addRow(
             tr("Export filenames"),
-            self._with_error(self.filename_edit, self.filename_error_label),
+            self._with_error(
+                self._with_clear(self.filename_edit, self.filename_clear),
+                self.filename_error_label,
+            ),
         )
         self._expression_widgets = (
             self.sort_edit,
@@ -362,6 +396,89 @@ class AtlasTab(QWidget):
             self.page_name_edit,
             self.filename_edit,
         )
+
+    def _build_filter(self, form: QFormLayout, parent: QWidget) -> None:
+        """Include pages: all features, one field's value, or an expression."""
+        self.filter_mode_combo = QComboBox(parent)
+        self.filter_mode_combo.addItem(tr("All features"), FILTER_ALL)
+        self.filter_mode_combo.addItem(tr("Matching a value"), FILTER_VALUE)
+        self.filter_mode_combo.addItem(tr("Custom expression"), FILTER_CUSTOM)
+        self.filter_mode_combo.setAccessibleName(tr("Include pages"))
+        self.filter_mode_combo.activated.connect(self._on_filter_mode)
+        self.filter_clear = self._clear_button(parent, tr("Clear page filter"))
+        self.filter_clear.clicked.connect(self._on_clear_filter)
+
+        # Matching a value: a field, then the value it must have.
+        self.filter_match = QWidget(parent)
+        match = QVBoxLayout(self.filter_match)
+        match.setContentsMargins(0, 0, 0, 0)
+        match.setSpacing(4)
+        match.addWidget(FittedLabel(tr("Field"), self.filter_match))
+        self.filter_field_combo = QgsFieldComboBox(self.filter_match)
+        self.filter_field_combo.setAllowEmptyFieldName(True)
+        self.filter_field_combo.setAccessibleName(tr("Field"))
+        self.filter_field_combo.activated.connect(self._on_filter_field)
+        match.addWidget(self.filter_field_combo)
+        match.addWidget(FittedLabel(tr("Value"), self.filter_match))
+        self.filter_value_combo = QComboBox(self.filter_match)
+        self.filter_value_combo.setEditable(True)
+        self.filter_value_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.filter_value_combo.setAccessibleName(tr("Value"))
+        self.filter_value_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.filter_value_combo.setMinimumContentsLength(6)
+        self.filter_value_combo.activated.connect(self._on_filter_value_chosen)
+        line = self.filter_value_combo.lineEdit()
+        if line is not None:
+            line.editingFinished.connect(self._on_filter_value_typed)
+        match.addWidget(self.filter_value_combo)
+
+        # Custom expression: the picker QGIS's own atlas panel offers.
+        self.filter_edit = _typed_expression_widget(parent)
+        self.filter_edit.setToolTip(
+            tr("Only features for which this is true get a page. Blank: all.")
+        )
+        self.filter_edit.fieldChanged.connect(self._on_filter)
+        self.filter_error_label = self._error_label(parent)
+        # How many pages the filter leaves, or that it leaves none.
+        self.filter_count_label = FittedLabel("", parent)
+        self.filter_count_label.setProperty("role", "hint")
+
+        holder = QWidget(parent)
+        box = QVBoxLayout(holder)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addWidget(self._with_clear(self.filter_mode_combo, self.filter_clear))
+        box.addWidget(self.filter_match)
+        box.addWidget(self.filter_edit)
+        box.addWidget(self.filter_error_label)
+        box.addWidget(self.filter_count_label)
+        form.addRow(tr("Include pages"), holder)
+
+    @staticmethod
+    def _clear_button(parent: QWidget, name: str) -> QToolButton:
+        """The clear button beside an optional field: back to its default."""
+        button = QToolButton(parent)
+        button.setProperty("lineIcon", "clear")
+        button.setAutoRaise(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(name)
+        button.setAccessibleName(name)
+        # A click gives no lingering focus ring; Tab still reaches it.
+        button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        button.setVisible(False)
+        return button
+
+    @staticmethod
+    def _with_clear(widget: QWidget, button: QToolButton) -> QWidget:
+        """`widget` with its clear button beside it, never over its text or arrow."""
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        row.addWidget(widget, 1)
+        row.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
+        return holder
 
     @staticmethod
     def _with_error(widget: QWidget, label: QLabel) -> QWidget:
@@ -390,6 +507,8 @@ class AtlasTab(QWidget):
     def show_layout(self, layout: QgsPrintLayout | None) -> None:
         """Show `layout`'s series, without the display counting as an edit."""
         self._release_preview()
+        if layout is not self._layout:
+            self._filter_pending_mode = self._filter_pending_field = ""
         self._layout = layout
         self._layer_removed = False
         self._page_index = 0
@@ -413,6 +532,7 @@ class AtlasTab(QWidget):
             self.coverage_combo.setLayer(coverage)
             for widget in self._expression_widgets:
                 widget.setLayer(coverage)
+            self.filter_field_combo.setLayer(coverage)
             if atlas is not None:
                 self.sort_edit.setExpression(
                     atlas.sortExpression() if atlas.sortFeatures() else ""
@@ -424,10 +544,12 @@ class AtlasTab(QWidget):
                 self.filter_edit.setExpression(
                     atlas.filterExpression() if atlas.filterFeatures() else ""
                 )
+                self._show_filter()
                 self.page_name_edit.setExpression(atlas.pageNameExpression())
                 self.filename_edit.setExpression(atlas.filenameExpression())
             self._fill_maps()
             self._load_framing()
+            self._update_clear_buttons()
         finally:
             self._loading = False
 
@@ -528,6 +650,8 @@ class AtlasTab(QWidget):
         self._sync_preview(status)
         self._update_status_text(status)
         self._update_actions()
+        self._update_filter_note(status)
+        self._update_clear_buttons()
 
     def _update_source(self, status: SeriesStatus) -> None:
         layer = self.coverage_combo.currentLayer()
@@ -631,15 +755,13 @@ class AtlasTab(QWidget):
                 if text and active and coverage is not None
                 else None
             )
+            if kind == "filter" and error is None:
+                error = self._filter_value_error
             if kind == "sort":
                 self._sort_error = error
             elif kind == "filter":
                 self._filter_error = error
-            label.setText(
-                tr("Not a valid expression: {error}").format(error=error)
-                if error
-                else ""
-            )
+            label.setText(self._error_text(kind, error) if error else "")
             label.setVisible(error is not None)
             if error is not None or (text and active and kind in ("sort", "filter")):
                 self.advanced_section.set_open(True)
@@ -811,6 +933,8 @@ class AtlasTab(QWidget):
         if _atlas_state(layout) == self._shown:
             return
         self._release_preview_quietly()
+        self._filter_pending_mode = self._filter_pending_field = ""
+        self._filter_value_error = None
         self._load()
         self._shown = _atlas_state(layout)
         self.refresh_now()
@@ -904,8 +1028,10 @@ class AtlasTab(QWidget):
     def _on_coverage(self, layer) -> None:
         for widget in self._expression_widgets:
             widget.setLayer(layer)
+        self.filter_field_combo.setLayer(layer)
         if self._loading:
             return
+        self._filter_pending_field = ""
 
         def apply(layout: QgsPrintLayout) -> None:
             atlas = layout.atlas()
@@ -920,10 +1046,23 @@ class AtlasTab(QWidget):
 
         self._layer_removed = False
         self._edit(tr("Change Atlas Coverage"), apply, touches=self._atlas_and_new_map)
+        self._show_filter()
+
+    def _on_clear_coverage(self) -> None:
+        """Back to no layer chosen, which the tab then says it needs."""
+        self.coverage_combo.setLayer(None)
 
     def _on_map(self, _index: int) -> None:
-        chosen = self.map_combo.currentData()
+        self._set_map(self.map_combo.currentData())
 
+    def _on_clear_map(self) -> None:
+        """Back to no map chosen: no map follows the series until one is."""
+        self.map_combo.blockSignals(True)
+        self.map_combo.setCurrentIndex(-1)
+        self.map_combo.blockSignals(False)
+        self._set_map(None)
+
+    def _set_map(self, chosen: str | None) -> None:
         def switching(layout: QgsPrintLayout) -> list[QgsLayoutItemMap]:
             return [
                 item
@@ -976,15 +1115,285 @@ class AtlasTab(QWidget):
             lambda layout: layout.atlas().setSortAscending(ascending),
         )
 
+    # ---- Include pages ----------------------------------------------------
+
     def _on_filter(self, *_args: object) -> None:
-        expression = self.filter_edit.expression().strip()
+        """A written expression, from the Custom expression picker."""
+        if self._loading:
+            return
+        self._filter_pending_mode = FILTER_CUSTOM
+        self._filter_value_error = None
+        self._set_filter(self.filter_edit.expression().strip())
+        self._show_filter()
+
+    def _stored_filter(self) -> str:
+        layout = self._layout
+        if layout is None or sip.isdeleted(layout):
+            return ""
+        atlas = layout.atlas()
+        return atlas.filterExpression().strip() if atlas.filterFeatures() else ""
+
+    def _set_filter(self, expression: str) -> None:
+        """Store `expression` as the series' filter ("" for none), as one
+        undo step; the picker for written expressions shows it too."""
+        self.filter_edit.blockSignals(True)
+        self.filter_edit.setExpression(expression)
+        self.filter_edit.blockSignals(False)
+        layout = self._layout
+        if layout is None or sip.isdeleted(layout):
+            return
+        atlas = layout.atlas()
+        if self._stored_filter() == expression and atlas.filterFeatures() == bool(
+            expression
+        ):
+            self._request_refresh()  # an error shown may have changed
+            return
+
+        def apply(layout: QgsPrintLayout) -> None:
+            layout.atlas().setFilterFeatures(bool(expression))
+            layout.atlas().setFilterExpression(expression)
+
+        self._edit(tr("Change Atlas Filter"), apply)
+
+    def _show_filter(self) -> None:
+        """Show the stored filter as the choice it is: all features, one
+        field's value, or a written expression."""
+        layer = self.coverage_combo.currentLayer()
+        expression = self._stored_filter()
+        match = (
+            read_condition(layer, expression)
+            if layer is not None and expression
+            else None
+        )
+        if not expression:
+            mode = self._filter_pending_mode or FILTER_ALL
+        elif match is not None and self._filter_pending_mode != FILTER_CUSTOM:
+            mode = FILTER_VALUE
+        else:
+            mode = FILTER_CUSTOM
+        self.filter_mode_combo.setCurrentIndex(self.filter_mode_combo.findData(mode))
+        self.filter_match.setVisible(mode == FILTER_VALUE)
+        self.filter_edit.setVisible(mode == FILTER_CUSTOM)
+        field = match.field if match is not None else self._filter_pending_field
+        self.filter_field_combo.setField(field)
+        self._fill_filter_values(layer, field, match)
+
+    def _fill_filter_values(
+        self, layer: object, field: str, match: Matching | None
+    ) -> None:
+        """The value choices for `field`: what the layer holds, a real null,
+        or Yes and No; any other value can be typed."""
+        combo = self.filter_value_combo
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            kind = (
+                field_kind(layer, field)  # type: ignore[arg-type]
+                if layer is not None and field
+                else None
+            )
+            combo.setEditable(kind != "bool")
+            # A new editable box has a new line edit.
+            align_embedded_edits(combo)
+            line = combo.lineEdit()
+            if line is not None and not line.property("wired"):
+                line.setProperty("wired", True)
+                line.editingFinished.connect(self._on_filter_value_typed)
+            combo.setEnabled(kind is not None)
+            self._filter_value_is_null = False
+            if kind is None:
+                if line is not None:
+                    line.clear()
+                return
+            combo.addItem(tr("(no value)"), None)
+            if kind == "bool":
+                combo.addItem(tr("Yes"), TRUE_TEXT)
+                combo.addItem(tr("No"), FALSE_TEXT)
+            else:
+                for text in unique_values(layer, field, VALUE_SUGGESTIONS):  # type: ignore[arg-type]
+                    combo.addItem(text, text)
+            if match is None:
+                combo.setCurrentIndex(-1)
+                if line is not None:
+                    line.clear()
+            elif match.is_null:
+                combo.setCurrentIndex(0)
+                self._filter_value_is_null = True
+            else:
+                index = combo.findData(match.value)
+                combo.setCurrentIndex(index)
+                if index < 0 and line is not None:
+                    line.setText(match.value)
+        finally:
+            combo.blockSignals(False)
+
+    def _on_filter_mode(self, index: int) -> None:
+        mode = self.filter_mode_combo.itemData(index)
+        self._filter_value_error = None
+        if mode == FILTER_ALL:
+            self._on_clear_filter()
+            return
+        self._filter_pending_mode = str(mode)
+        layer = self.coverage_combo.currentLayer()
+        stored = self._stored_filter()
+        if (
+            mode == FILTER_VALUE
+            and stored
+            and (layer is None or read_condition(layer, stored) is None)
+        ):
+            # A written expression is replaced by the choice; Undo gets it back.
+            self._set_filter("")
+        self._show_filter()
+        self._request_refresh()
+        if mode == FILTER_CUSTOM:
+            self.filter_edit.setFocus(Qt.FocusReason.TabFocusReason)
+
+    def _on_clear_filter(self) -> None:
+        """Include every feature again."""
+        self._filter_pending_mode = self._filter_pending_field = ""
+        self._filter_value_error = None
+        self._set_filter("")
+        self._show_filter()
+
+    def _on_filter_field(self, _index: int) -> None:
+        self._filter_pending_mode = FILTER_VALUE
+        self._filter_pending_field = self.filter_field_combo.currentField()
+        self._fill_filter_values(
+            self.coverage_combo.currentLayer(), self._filter_pending_field, None
+        )
+        self._apply_matching()
+
+    def _on_filter_value_chosen(self, index: int) -> None:
+        self._filter_value_is_null = index == 0
+        self._apply_matching()
+
+    def _on_filter_value_typed(self) -> None:
+        line = self.filter_value_combo.lineEdit()
+        if self._loading or line is None:
+            return
+        if self._filter_value_is_null and line.text() == tr("(no value)"):
+            return
+        self._filter_value_is_null = False
+        self._apply_matching()
+
+    def _apply_matching(self) -> None:
+        """Store the field-and-value choice as a typed comparison, once it is
+        complete; until then the series is not filtered by it."""
+        if self._loading:
+            return
+        layer = self.coverage_combo.currentLayer()
+        field = self.filter_field_combo.currentField()
+        combo = self.filter_value_combo
+        line = combo.lineEdit()
+        self._filter_value_error = None
+        expression = ""
+        if layer is not None and field and combo.isEnabled():
+            if line is None:  # a yes/no field: its choice is the value
+                value = str(combo.currentData() or "")
+                complete = bool(value) or self._filter_value_is_null
+            else:
+                value = line.text()
+                complete = bool(value) or self._filter_value_is_null
+            if complete:
+                try:
+                    expression = condition_expression(
+                        layer,  # type: ignore[arg-type]
+                        field,
+                        value,
+                        self._filter_value_is_null,
+                    )
+                except ValueError as problem:
+                    self._filter_value_error = str(problem)
+                    self._request_refresh()
+                    return
+        self._set_filter(expression)
+
+    def _update_filter_note(self, status: SeriesStatus) -> None:
+        """How many pages the filter leaves, or that it leaves none."""
+        text, warn = "", False
+        if self._stored_filter() and self._filter_error is None:
+            if status.state is SeriesState.READY:
+                text = plural(status.pages, "{n} page matches", "{n} pages match")
+            elif status.state is SeriesState.NO_MATCH:
+                text, warn = tr("No features match your filter."), True
+        label = self.filter_count_label
+        label.setText(text)
+        label.setVisible(bool(text))
+        label.setProperty("role", "checkVerdict" if warn else "hint")
+        label.setProperty("tone", "warning" if warn else "")
+        style = label.style()
+        style.unpolish(label)
+        style.polish(label)
+
+    def _error_text(self, kind: str, error: str) -> str:
+        if kind == "filter" and error == self._filter_value_error:
+            return error
+        return tr("Not a valid expression: {error}").format(error=error)
+
+    def _update_clear_buttons(self) -> None:
+        """Show a clear button on exactly the optional fields that hold something."""
+        layout = self._layout
+        atlas = (
+            layout.atlas() if layout is not None and not sip.isdeleted(layout) else None
+        )
+        self.coverage_clear.setVisible(self.coverage_combo.currentLayer() is not None)
+        self.map_clear.setVisible(
+            layout is not None
+            and not sip.isdeleted(layout)
+            and bool(driven_maps(layout))
+        )
+        self.filter_clear.setVisible(
+            bool(self._stored_filter()) or bool(self._filter_pending_mode)
+        )
+        self.sort_clear.setVisible(
+            atlas is not None
+            and atlas.sortFeatures()
+            and bool(atlas.sortExpression().strip())
+        )
+        self.page_name_clear.setVisible(
+            atlas is not None and bool(atlas.pageNameExpression().strip())
+        )
+        self.filename_clear.setVisible(
+            atlas is not None and bool(atlas.filenameExpression().strip())
+        )
+
+    def _on_clear_sort(self) -> None:
+        """Back to the features' own order."""
+        self.sort_edit.blockSignals(True)
+        self.sort_edit.setExpression("")
+        self.sort_edit.blockSignals(False)
 
         def apply(layout: QgsPrintLayout) -> None:
             atlas = layout.atlas()
-            atlas.setFilterFeatures(bool(expression))
-            atlas.setFilterExpression(expression)
+            atlas.setSortFeatures(False)
+            atlas.setSortExpression("")
+            atlas.setSortAscending(True)
 
-        self._edit(tr("Change Atlas Filter"), apply)
+        self._edit(tr("Change Atlas Sort"), apply)
+        self.direction_combo.blockSignals(True)
+        self.direction_combo.setCurrentIndex(0)
+        self.direction_combo.blockSignals(False)
+        self.direction_combo.setEnabled(False)
+
+    def _on_clear_page_names(self) -> None:
+        """Back to page names QGIS makes itself."""
+        self.page_name_edit.blockSignals(True)
+        self.page_name_edit.setExpression("")
+        self.page_name_edit.blockSignals(False)
+        self._edit(
+            tr("Change Atlas Page Names"),
+            lambda layout: layout.atlas().setPageNameExpression(""),
+        )
+
+    def _on_clear_filenames(self) -> None:
+        """Back to file names QGIS makes itself."""
+        self.filename_edit.blockSignals(True)
+        self.filename_edit.setExpression("")
+        self.filename_edit.blockSignals(False)
+        self._edit(
+            tr("Change Atlas Filename"),
+            lambda layout: layout.atlas().setFilenameExpression(""),
+        )
 
     def _on_page_name(self, *_args: object) -> None:
         expression = self.page_name_edit.expression().strip()

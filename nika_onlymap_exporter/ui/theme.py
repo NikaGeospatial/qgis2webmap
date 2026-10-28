@@ -101,6 +101,8 @@ LINE_ICONS = {
         '<circle cx="8" cy="11.4" r="0.4" fill="{c}"/>'
     ),
     "back": '<path d="M9.8 3.5 5.3 8l4.5 4.5"/>',
+    # The clear button beside an optional field.
+    "clear": '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>',
     # The page preview's bar when it has no room for words.
     "select": '<path d="M4 2.5v10l2.6-2.4 1.8 3.4 1.6-.8-1.8-3.3 3.4-.2z"/>',
     "pan": (
@@ -1869,7 +1871,10 @@ def align_embedded_edits(root: QWidget) -> None:
     default, it matches the plain drop-down on every one but about 1.5x,
     where it is a pixel high instead of a pixel low.
     """
-    for combo in root.findChildren(QComboBox):
+    combos = root.findChildren(QComboBox)
+    if isinstance(root, QComboBox):
+        combos.append(root)
+    for combo in combos:
         edit = combo.lineEdit()
         if edit is not None:
             edit.setTextMargins(0, EMBEDDED_TEXT_RAISE, 0, 0)
