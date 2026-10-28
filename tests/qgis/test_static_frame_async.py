@@ -162,6 +162,57 @@ class TestAsyncPictureEqualsTheSynchronousOne:
             assert _wait_for(qgis_app, lambda: drawing.done, timeout=60.0)
 
 
+class TestTheUsersSelectionSurvivesTheRender:
+    """Drawing the frame must not touch what the user has selected on the
+    page: the Edit tab follows the layout's selection, and an item hidden for
+    the render used to be deselected by Qt, so the tab fell to its empty
+    state after every map change."""
+
+    @pytest.fixture
+    def survey(self, project, tmp_path):
+        return build_survey_layout(project, tmp_path)
+
+    @staticmethod
+    def _others(survey):
+        from qgis.core import QgsLayoutItem
+
+        return [
+            i
+            for i in survey.layout.items()
+            if isinstance(i, QgsLayoutItem) and i is not survey.main_map
+        ]
+
+    def _selected_uuids(self, survey) -> set[str]:
+        return {i.uuid() for i in survey.layout.selectedLayoutItems()}
+
+    def _select_a_visible_other(self, survey):
+        other = next(i for i in self._others(survey) if i.isVisible())
+        survey.layout.setSelectedItem(other)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        return other
+
+    def test_an_async_render_keeps_the_selection(self, qgis_app, survey) -> None:
+        other = self._select_a_visible_other(survey)
+        changes: list[int] = []
+        survey.layout.selectionChanged.connect(lambda *_: changes.append(1))
+        _drawn_async(qgis_app, survey.layout, survey.main_map, 100)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        assert not changes, "the render signalled a selection change"
+
+    def test_a_synchronous_render_keeps_the_selection(self, survey) -> None:
+        other = self._select_a_visible_other(survey)
+        changes: list[int] = []
+        survey.layout.selectionChanged.connect(lambda *_: changes.append(1))
+        render_static_frame(survey.layout, survey.main_map, dpi=100)
+        assert self._selected_uuids(survey) == {other.uuid()}
+        assert not changes
+
+    def test_a_selected_map_stays_selected(self, qgis_app, survey) -> None:
+        survey.layout.setSelectedItem(survey.main_map)
+        _drawn_async(qgis_app, survey.layout, survey.main_map, 100)
+        assert self._selected_uuids(survey) == {survey.main_map.uuid()}
+
+
 # ---- A heavy static frame, through the real dialog -------------------------
 
 
@@ -346,6 +397,72 @@ class TestAutosaveOfAHeavyStaticFrame:
 
 
 # ---- The autosave lets the user finish first --------------------------------
+
+
+class TestEditTabAfterAMapChange:
+    """The user selects a map on the page and changes its view: when the
+    autosave has drawn the static frame, the map is still the selected item
+    and the Edit tab still shows its controls, not the empty hint."""
+
+    NO_ITEM_TEXT = "Select an item on the page to edit its properties."
+
+    @pytest.mark.parametrize("selected_id", ["Overview", "Title"])
+    def test_the_selection_and_edit_tab_survive(
+        self, qgis_app, project, tmp_path, selected_id
+    ) -> None:
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR (see CONTRIBUTING.md)")
+        from qgis.core import QgsLayoutItemLabel
+
+        from nika_onlymap_exporter.core.settings import FrameChoice
+
+        layout, map_item = _heavy_layout(project)
+        title = QgsLayoutItemLabel(layout)
+        title.setText("Title")
+        title.setId("Title")
+        layout.addLayoutItem(title)
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        cartograph = dialog._cartograph
+        cartograph.show_layout_named(layout.name())
+        dialog.state.frame_choices(layout.name())[map_item.uuid()] = FrameChoice(
+            mode="static", dpi=150
+        )
+        target = tmp_path / "edit.html"
+        cartograph.file_edit.setText(str(target))
+        cartograph._on_file_edited(str(target))
+        idle = lambda: (  # noqa: E731
+            cartograph._job is None and not cartograph._autosave_timer.isActive()
+        )
+        try:
+            assert _wait_for(qgis_app, target.exists, timeout=240)
+            assert _wait_for(qgis_app, idle, timeout=240)
+            current = cartograph.page_pane.preview.view.currentLayout()
+            current.setSelectedItem(
+                next(
+                    i
+                    for i in current.items()
+                    if getattr(i, "id", lambda: "")() == selected_id
+                )
+            )
+            controls = cartograph.page_pane.controls
+            assert controls.heading.text() != self.NO_ITEM_TEXT
+            before = target.stat().st_mtime_ns
+            extent = map_item.extent()
+            shift = extent.width() * 0.07
+            current.undoStack().beginCommand(map_item, "Move map content")
+            extent.setXMinimum(extent.xMinimum() + shift)
+            extent.setXMaximum(extent.xMaximum() + shift)
+            map_item.setExtent(extent)
+            current.undoStack().endCommand()
+            assert _wait_for(
+                qgis_app, lambda: target.stat().st_mtime_ns != before, timeout=240
+            )
+            assert _wait_for(qgis_app, idle, timeout=240)
+            assert [i.id() for i in current.selectedLayoutItems()] == [selected_id]
+            assert controls.heading.text() != self.NO_ITEM_TEXT
+        finally:
+            dialog.close()
 
 
 class TestAutosaveWaitsForTheUser:
