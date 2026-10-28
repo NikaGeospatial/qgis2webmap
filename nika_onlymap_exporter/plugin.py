@@ -111,6 +111,12 @@ class Qgis2WebMapPlugin:
             )
 
     def initGui(self) -> None:  # noqa: N802 -- QGIS plugin API
+        # A wheel turn over a closed dropdown in the plugin's windows scrolls
+        # the panel instead of changing the dropdown.
+        from .ui.wheel_guard import install_wheel_guard
+
+        install_wheel_guard()
+
         # QGIS registers 3D renderers lazily - normally when a 3D view is
         # first opened. A project loaded before that parses its 3D renderer
         # XML to nothing, so an export made in a session that never opened a
@@ -193,6 +199,10 @@ class Qgis2WebMapPlugin:
 
     def unload(self) -> None:
         """Remove everything `initGui` added. Must be idempotent-safe."""
+        from .ui.wheel_guard import remove_wheel_guard
+
+        remove_wheel_guard()
+
         if self.provider is not None:
             from qgis.core import QgsApplication
 
