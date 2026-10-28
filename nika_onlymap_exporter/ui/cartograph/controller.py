@@ -1306,6 +1306,7 @@ class CartographController:
                 switch_to_interactive=self._switch_frames_to_interactive,
                 export_pdf=self.on_save_atlas_pdf,
                 open_pages=self._open_series_pages,
+                print_series=self.on_print_series,
                 browse_templates=self.create_from_canvas,
             ),
             self.dialog,
@@ -2892,6 +2893,93 @@ class CartographController:
         """Share > Save atlas as PDF…: one run of pages per atlas feature."""
         self._save_pdf(atlas=True)
 
+    def on_print_series(self) -> None:
+        """Atlas > Print series > Print with QGIS: every page of the series,
+        in order, through the system print dialog (which also prints to a PDF
+        file). Where Qt knows of no printer, the series is saved as a PDF to
+        print from instead, and the status says that nothing was printed."""
+        from qgis.core import QgsFeedback
+        from qgis.PyQt.QtPrintSupport import QPrintDialog, QPrinter, QPrinterInfo
+        from qgis.PyQt.QtWidgets import QMessageBox, QProgressDialog
+
+        from ...exporters.print_native import PrintSeriesError, print_series
+
+        layout = self._current_layout
+        if layout is None or self._pdf_running or not self._atlas_configured():
+            return
+        title = tr("Print series")
+        if not QPrinterInfo.availablePrinterNames():
+            self._save_pdf(atlas=True, handoff=True)
+            return
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        chooser = QPrintDialog(printer, self.dialog)
+        chooser.setWindowTitle(title)
+        if not chooser.exec():
+            self.dialog.status_label.setText(
+                tr("Printing cancelled. Nothing was sent to a printer.")
+            )
+            return
+        print_settings = self._print_settings() or PrintSettings()
+        feedback = QgsFeedback()
+        progress = QProgressDialog(
+            tr("Preparing the print…"), tr("Cancel"), 0, 0, self.dialog
+        )
+        progress.setWindowTitle(title)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.setMinimumDuration(0)
+        progress.canceled.connect(feedback.cancel)
+
+        def on_page(page: int, pages: int) -> None:
+            progress.setMaximum(pages)
+            progress.setValue(page - 1)
+            progress.setLabelText(
+                tr("Preparing page {page} of {pages}…").format(page=page, pages=pages)
+            )
+            QGuiApplication.processEvents()
+
+        self._pdf_running = True
+        self.dialog.status_label.setText(tr("Printing…"))
+        self._update_share_enabled()
+        progress.show()
+        QGuiApplication.processEvents()
+        try:
+            result = print_series(
+                layout,
+                printer,
+                dpi=print_settings.dpi,
+                embed_fonts=print_settings.embed_fonts,
+                feedback=feedback,
+                progress=on_page,
+            )
+        except PrintSeriesError as exc:
+            self.dialog.status_label.setText(
+                tr("Could not print the series: {error}").format(error=exc)
+            )
+            QMessageBox.warning(self.dialog, title, str(exc))
+            return
+        finally:
+            progress.close()
+            progress.deleteLater()
+            self._pdf_running = False
+            self._update_share_enabled()
+        if result.cancelled:
+            self.dialog.status_label.setText(
+                tr("Printing cancelled. The rest of the series was not sent.")
+            )
+            return
+        target = printer.printerName() or printer.outputFileName()
+        text = plural(
+            result.sheets,
+            "Sent {n} sheet to {printer}.",
+            "Sent {n} sheets to {printer}.",
+            printer=target,
+        )
+        if result.warnings:
+            text += " - " + " ".join(result.warnings)
+        self.dialog.status_label.setText(text)
+
     def _suggested_pdf_path(self, atlas: bool) -> Path:
         name = _file_name_part(self.state.cartograph_layout or "") or "layout"
         if atlas:
@@ -2904,7 +2992,9 @@ class CartographController:
         )
         return folder / f"{name}.pdf"
 
-    def _save_pdf(self, *, atlas: bool) -> None:
+    def _save_pdf(self, *, atlas: bool, handoff: bool = False) -> None:
+        """`handoff`: the series is saved to be printed from elsewhere because
+        no printer is available here; nothing is printed."""
         from qgis.PyQt.QtWidgets import QMessageBox
 
         from ...exporters.print_pdf import PrintPdfError, export_print_pdf
@@ -2915,6 +3005,8 @@ class CartographController:
         if atlas and not self._atlas_configured():
             return
         title = tr("Save atlas as PDF") if atlas else tr("Save PDF")
+        if handoff:
+            title = tr("Save the series as a PDF to print")
         chosen, _ = QFileDialog.getSaveFileName(
             self.dialog,
             title,
@@ -2952,11 +3044,14 @@ class CartographController:
         finally:
             self._pdf_running = False
             self._update_share_enabled()
-        self._show_pdf_saved(result.path, result.warnings)
+        self._show_pdf_saved(result.path, result.warnings, handoff=handoff)
 
-    def _show_pdf_saved(self, path: Path, warnings: tuple[str, ...]) -> None:
+    def _show_pdf_saved(
+        self, path: Path, warnings: tuple[str, ...], *, handoff: bool = False
+    ) -> None:
         """ "Saved PDF: name.pdf · Open PDF · Show in folder" in the status
-        area, with whatever the exporter noted after it."""
+        area, with whatever the exporter noted after it. A `handoff` says
+        plainly that no printer was found and nothing was printed."""
         self._last_pdf_path = path
         if not self._status_links_connected:
             self.dialog.status_label.linkActivated.connect(self._on_status_link)
@@ -2971,8 +3066,13 @@ class CartographController:
                 f"{html.escape(text)}</span></a>"
             )
 
+        saved = (
+            tr("No printer found: nothing was printed. PDF to print: {name}")
+            if handoff
+            else tr("Saved PDF: {name}")
+        )
         parts = [
-            html.escape(tr("Saved PDF: {name}").format(name=path.name)),
+            html.escape(saved.format(name=path.name)),
             link(_PDF_OPEN_LINK, tr("Open PDF")),
             link(_PDF_SHOW_LINK, tr("Show in folder")),
         ]

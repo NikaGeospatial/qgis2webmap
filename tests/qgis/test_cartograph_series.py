@@ -118,6 +118,22 @@ def _parcel_center(lot: str) -> tuple[float, float]:
     raise KeyError(lot)
 
 
+def _printing_by(way: str):
+    """A stand-in for the print-way dialog that answers `way` (never shown)."""
+
+    class _Dialog:
+        def __init__(self, *_args: object) -> None:
+            pass
+
+        def exec(self) -> int:
+            return 1
+
+        def chosen_way(self) -> str:
+            return way
+
+    return _Dialog
+
+
 class TestSetup:
     def test_off_shows_the_explanation_and_the_enable_control_only(
         self, series
@@ -562,9 +578,10 @@ class TestReadiness:
         assert not status.images.ok and not status.html.ok and not status.print.ok
         assert [r.name for r in status.html.needs_interactive] == ["Main map"]
         assert s.tab.export_button.isEnabled()
-        assert not s.tab.print_button.isEnabled()
-        assert '"Main map"' in s.tab.actions_note.text()
-        assert s.tab.actions_note.isVisible() and s.tab.switch_button.isVisible()
+        # Printing through QGIS needs no Interactive map; printing from the
+        # web page does, and says which map.
+        assert status.native_print.ok and s.tab.print_button.isEnabled()
+        assert [r.name for r in status.print.needs_interactive] == ["Main map"]
         assert s.built.maps[0].atlasDriven()
 
     def test_the_saved_page_count_gates_nothing(self, series) -> None:
@@ -580,15 +597,21 @@ class TestReadiness:
         s = series(atlas_on=True)
         self._static(s)
         item_id = s.built.maps[0].uuid()
-        s.tab.switch_button.click()
+        from nika_onlymap_exporter.ui.cartograph.series_print_dialog import (
+            SeriesPrintDialog,
+        )
+
+        dialog = SeriesPrintDialog(s.tab._current_status, s.tab._switch_maps, s.tab)
+        assert not dialog.rows[1].switch.isHidden()
+        dialog.rows[1].switch.click()  # beside "Print from the web page"
         s.app.processEvents()
         assert s.cartograph._frame_mode(item_id) == "live"
-        assert s.tab.status().html.ok and s.tab.print_button.isEnabled()
-        assert not s.tab.switch_button.isVisible()
+        assert s.tab.status().html.ok and s.tab.status().print.ok
+        assert dialog.rows[1].switch.isHidden()
         s.undo.undo()
         s.app.processEvents()
         assert s.cartograph._frame_mode(item_id) == "static"
-        assert not s.tab.print_button.isEnabled()
+        assert not s.tab.status().print.ok
         s.undo.redo()
         s.app.processEvents()
         assert s.cartograph._frame_mode(item_id) == "live"
@@ -702,9 +725,27 @@ class TestExport:
         opened = []
         monkeypatch.setattr(s.cartograph, "_open_url", opened.append)
         assert _wait_for(s.app, lambda: target is not None and target.exists())
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.cartograph.series_print_dialog.SeriesPrintDialog",
+            _printing_by("web"),
+        )
         s.tab.print_button.click()
         assert _wait_for(s.app, lambda: len(opened) == 1)
         assert opened[0].query() == "atlas=print"
+
+    def test_print_series_through_qgis_is_the_default_way(
+        self, series, monkeypatch
+    ) -> None:
+        s = series(atlas_on=True)
+        ran: list[str] = []
+        s.tab._host.print_series = lambda: ran.append("qgis")
+        s.tab._host.open_pages = ran.append
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.cartograph.series_print_dialog.SeriesPrintDialog",
+            _printing_by("qgis"),
+        )
+        s.tab.print_button.click()
+        assert ran == ["qgis"]
 
 
 class TestPersistence:

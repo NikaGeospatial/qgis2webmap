@@ -21,6 +21,7 @@ from atlas_count_fixtures import build_atlas_counts
 from pdf_text import pdf_pages_text
 
 from nika_onlymap_exporter.core import atlas_live_counts
+from nika_onlymap_exporter.core.atlas_series import series_status
 from nika_onlymap_exporter.core.print_settings import PrintSettings
 from nika_onlymap_exporter.exporters.print_pdf import PrintPdfError, export_print_pdf
 
@@ -123,3 +124,50 @@ class TestAtlasPdfCountsPerPage:
 
         assert not out.exists()  # no file claiming numbers that were not updated
         assert _state(counts) == before
+
+
+class TestOtherAtlasOutputsAreHonest:
+    """The cartograph (HTML, the image ZIP and printing from the web page)
+    writes a counter's number once; it has no way to change it between
+    pages. Those outputs must say so instead of presenting one number as
+    every page's."""
+
+    def test_the_html_holds_one_number_for_every_page(self, project) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import (
+            export_layout_to_cartograph,
+        )
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        built = build_atlas_counts(project)
+        runtime = RuntimeBundle(
+            javascript=b"//",
+            css=b"/**/",
+            version="0.12.0",
+            sha256="0" * 64,
+            cartograph_javascript=b"//",
+            cartograph_css=b"/**/",
+        )
+        html = export_layout_to_cartograph(
+            built.layout, project, runtime, FidelityReportBuilder()
+        )
+        numbers = re.findall(r'id="label_detail"[^>]*>(\d+)', html)
+        assert len(numbers) == 1  # one text, shared by both atlas pages
+
+    def test_the_cartograph_outputs_say_so_and_the_qgis_ones_do_not(
+        self, counts
+    ) -> None:
+        status = series_status(counts.layout, lambda _id: "live")
+        for operation in (status.images, status.html, status.print):
+            assert operation.limitation
+        assert not status.pdf.limitation
+        assert not status.native_print.limitation
+
+    def test_a_counter_that_does_not_change_between_pages_adds_no_warning(
+        self, counts
+    ) -> None:
+        # Only the fixed overview's counter is left.
+        counts.layout.removeLayoutItem(counts.detail_total)
+        counts.layout.removeLayoutItem(counts.detail_kind_y)
+        status = series_status(counts.layout, lambda _id: "live")
+        assert not status.html.limitation

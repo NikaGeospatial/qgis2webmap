@@ -98,6 +98,8 @@ class AtlasHost:
     export_pdf: Callable[[], None]
     # Open the saved cartograph on its pages: "zip", "print" or "html".
     open_pages: Callable[[str], None]
+    # Print the series through QGIS (the print dialog, or a PDF to print from).
+    print_series: Callable[[], None]
     # The existing layout-template route, for a layout with no map.
     browse_templates: Callable[[], None]
 
@@ -269,20 +271,16 @@ class AtlasTab(QWidget):
         self.print_button.clicked.connect(self._on_print)
         buttons.addWidget(self.print_button)
         column.addLayout(buttons)
-        # Why printing is out of reach while exporting is not, with the fix.
+        # What the last save found wrong with the series' own outputs.
         self.actions_note = FittedLabel("", parent)
         self._tone(self.actions_note)
         column.addWidget(self.actions_note)
-        self.switch_button = QPushButton(tr("Switch to Interactive"), parent)
-        self.switch_button.clicked.connect(self._on_switch_to_interactive)
-        column.addWidget(self.switch_button)
         # A click gives no lingering focus ring; Tab still reaches them.
         for button in (
             self.previous_button,
             self.next_button,
             self.export_button,
             self.print_button,
-            self.switch_button,
         ):
             button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
@@ -593,22 +591,12 @@ class AtlasTab(QWidget):
         self.scope_label.setText(scope)
         self.scope_label.setVisible(bool(scope))
         self.export_button.setEnabled(ready)
-        self.print_button.setEnabled(ready and status.print.ok)
-        needs = status.print.needs_interactive if ready else ()
+        self.print_button.setEnabled(ready and status.native_print.ok)
         note = ""
-        if ready and not status.print.ok:
-            note = (
-                tr('Printing needs the map "{name}" to be Interactive.').format(
-                    name=", ".join(ref.name for ref in needs)
-                )
-                + " "
-                + tr("Switching changes how the map behaves in the exported HTML.")
-            )
-        elif ready and self._saved_problems:
+        if ready and self._saved_problems:
             note = " ".join(self._saved_problems)
         self.actions_note.setText(note)
         self.actions_note.setVisible(bool(note))
-        self.switch_button.setVisible(bool(needs))
         self.navigator.setVisible(ready)
 
     def _validate_expressions(self) -> None:
@@ -771,14 +759,19 @@ class AtlasTab(QWidget):
             self._host.open_pages("html")
 
     def _on_print(self) -> None:
-        self.refresh_now()
-        if self._status.state is SeriesState.READY and self._status.print.ok:
-            self._host.open_pages("print")
+        from .series_print_dialog import QGIS, WEB, SeriesPrintDialog
 
-    def _on_switch_to_interactive(self) -> None:
-        self._switch_maps(
-            tuple(ref.item_id for ref in self._status.print.needs_interactive)
-        )
+        self.refresh_now()
+        if self._status.state is not SeriesState.READY:
+            return
+        dialog = SeriesPrintDialog(self._current_status, self._switch_maps, self)
+        if not dialog.exec():
+            return
+        chosen = dialog.chosen_way()
+        if chosen == QGIS:
+            self._host.print_series()
+        elif chosen == WEB:
+            self._host.open_pages("print")
 
     def _switch_maps(self, item_ids: Sequence[str]) -> None:
         self._host.switch_to_interactive(item_ids)
