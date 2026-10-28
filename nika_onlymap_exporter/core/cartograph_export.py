@@ -1290,6 +1290,23 @@ def _resolution_for(
     return resolution.dpi
 
 
+def _start_drawing(
+    layout: QgsPrintLayout, map_item: QgsLayoutItemMap, dpi: int
+) -> AsyncFrameRender | None:
+    """Start drawing `map_item` off the GUI thread, or None when the item is
+    one the job cannot reproduce exactly (or QGIS refused to start it), in
+    which case the caller draws it the synchronous way."""
+    if not AsyncFrameRender.supports(layout, map_item):
+        return None
+    drawing = AsyncFrameRender(layout, map_item, dpi)
+    try:
+        drawing.start()
+    except Exception:
+        drawing.cancel()
+        return None
+    return drawing
+
+
 def _build_static_frame(
     layout: QgsPrintLayout,
     project: QgsProject,
@@ -1304,21 +1321,26 @@ def _build_static_frame(
         entry, cached = raster_cache.lookup(layout, frame.map_item, static_dpi, project)
     if cached is not None:
         render = cached
-    elif pending is not None and AsyncFrameRender.supports(layout, frame.map_item):
-        drawing = AsyncFrameRender(layout, frame.map_item, static_dpi)
-        drawing.start()
-        pending.append(PendingStaticFrame(frame.frame_id, drawing, raster_cache, entry))
-        assert drawing.corners is not None  # set by `start`
-        render = StaticFrameRender(
-            png_bytes=b"",
-            corners=drawing.corners,
-            crs_authid=drawing.crs_authid,
-            crs_def=drawing.crs_def,
-        )
     else:
-        render = render_static_frame(layout, frame.map_item, dpi=static_dpi)
-        if raster_cache is not None and entry is not None:
-            raster_cache.store(entry, render)
+        drawing = (
+            _start_drawing(layout, frame.map_item, static_dpi)
+            if pending is not None
+            else None
+        )
+        if pending is not None and drawing is not None and drawing.corners:
+            pending.append(
+                PendingStaticFrame(frame.frame_id, drawing, raster_cache, entry)
+            )
+            render = StaticFrameRender(
+                png_bytes=b"",
+                corners=drawing.corners,
+                crs_authid=drawing.crs_authid,
+                crs_def=drawing.crs_def,
+            )
+        else:
+            render = render_static_frame(layout, frame.map_item, dpi=static_dpi)
+            if raster_cache is not None and entry is not None:
+                raster_cache.store(entry, render)
     return FrameSpec(
         id=frame.frame_id,
         box=frame.box,
