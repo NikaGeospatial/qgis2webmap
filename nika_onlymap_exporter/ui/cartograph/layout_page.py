@@ -89,14 +89,17 @@ from .legend_editor import LegendEditor
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
 
-#: The floating Add item / Fit page buttons: their distance from the page
-#: view's bottom and right edges, and from each other.
-FLOAT_MARGIN = 12
+#: The floating Add item / Fit page buttons: their distance from the
+#: viewport's bottom and right edges, and from each other.
+FLOAT_MARGIN = 16
 FLOAT_GAP = 8
 #: The least height of a floating button, in pixels.
 FLOAT_MIN_HEIGHT = 32
 #: Workspace left clear around the fitted page, in pixels.
 FIT_MARGIN = 8
+#: The least viewport side, in pixels, a fit is measured against: a panel that
+#: is hidden, collapsed or still being laid out is not a size to fit to.
+FIT_MIN_VIEWPORT = 64
 #: The editor workspace around the paper (the page keeps its own colour).
 WORKSPACE_COLOUR = "#dfe4e1"
 
@@ -297,6 +300,10 @@ class LayoutPreview(QStackedWidget):
         self._select: QgsLayoutViewToolSelect | None = None
         # The scale of the last fit (None until one): at it, no scroll bars.
         self._fitted_scale: float | None = None
+        # The page size (mm) the view was last fitted to: another size (the
+        # orientation or paper changed) is fitted again, zoomed or not.
+        self._fitted_page_size: tuple[float, float] | None = None
+        self._watched_pages: set[str] = set()
         self.view.setTool(self._pan)
         self.addWidget(self.view)
         self._make_floating_controls()
@@ -372,7 +379,7 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.timeout.connect(self._fit)
 
     def _make_floating_controls(self) -> None:
-        """Add item above Fit page, stacked over the page's bottom-right corner.
+        """Add item above Fit page, stacked in the viewport's bottom-right corner.
 
         Children of the view (not of its viewport, and never scene items), so
         they sit still while the page zooms and pans, are not drawn into an
@@ -402,11 +409,14 @@ class LayoutPreview(QStackedWidget):
             # A style or font change resizes a button: size the stack again.
             button.installEventFilter(self)
         self._placing = False
-        # The corner moves with every zoom and pan.
+        # The viewport shrinks when a scroll bar appears, and the buttons keep
+        # clear of it.
         self.view.zoomLevelChanged.connect(self._on_zoom_level_changed)
         for bar in (self.view.horizontalScrollBar(), self.view.verticalScrollBar()):
-            bar.valueChanged.connect(self._place_floating_controls)
             bar.rangeChanged.connect(self._place_floating_controls)
+            # Only the user's own drag of a bar (not a fit's, nor a resize's
+            # clamping) leaves the fitted view.
+            bar.actionTriggered.connect(self._on_user_moved_view)
 
     def _floating_button(self, text: str, name: str, hint: str = "") -> QToolButton:
         button = QToolButton(self._overlay)
@@ -423,6 +433,9 @@ class LayoutPreview(QStackedWidget):
     def floating_buttons(self) -> tuple[QToolButton, QToolButton]:
         """Top to bottom, as they sit."""
         return (self.add_button, self.fit_button)
+
+    def _on_user_moved_view(self, *_args: object) -> None:
+        self._user_zoomed = True
 
     def _on_zoom_level_changed(self, *_args: object) -> None:
         self._sync_scroll_bars()
@@ -454,9 +467,9 @@ class LayoutPreview(QStackedWidget):
             self._placing = False
 
     def _move_floating_controls(self) -> None:
-        """Size the stack, then seat it FLOAT_MARGIN inside the current page's
-        bottom-right corner - or, where zoom or pan has put that corner out
-        of the viewport, at the nearest place inside it."""
+        """Size the stack, then seat it FLOAT_MARGIN inside the viewport's
+        bottom-right corner (the viewport excludes the scroll bars), wherever
+        the page is zoomed or panned to."""
         buttons = self.floating_buttons()
         for button in buttons:
             button.setMinimumSize(0, 0)
@@ -471,15 +484,10 @@ class LayoutPreview(QStackedWidget):
         self._overlay.resize(width, top - FLOAT_GAP)
         viewport = self.view.viewport()
         rect = viewport.geometry()
-        page = self._current_page_rect()
-        if page is None:
-            corner = QPoint(rect.width(), rect.height())
-        else:
-            corner = self.view.mapFromScene(page.bottomRight())
-        x = corner.x() + rect.x() - FLOAT_MARGIN - self._overlay.width()
-        y = corner.y() + rect.y() - FLOAT_MARGIN - self._overlay.height()
-        x = max(rect.left(), min(x, rect.right() + 1 - self._overlay.width()))
-        y = max(rect.top(), min(y, rect.bottom() + 1 - self._overlay.height()))
+        x = rect.right() + 1 - FLOAT_MARGIN - self._overlay.width()
+        y = rect.bottom() + 1 - FLOAT_MARGIN - self._overlay.height()
+        x = max(rect.left(), x)
+        y = max(rect.top(), y)
         self._overlay.move(x, y)
         self._overlay.raise_()
 
@@ -492,7 +500,7 @@ class LayoutPreview(QStackedWidget):
 
     def _current_page_rect(self) -> QRectF | None:
         """The page most in view (the first, when none is): the one Fit page
-        fits and the controls sit on."""
+        fits."""
         pages = self._page_rects()
         if not pages:
             return None
@@ -518,10 +526,32 @@ class LayoutPreview(QStackedWidget):
             # An undo or redo may change the selected item's text size.
             layout.undoStack().stack().indexChanged.connect(self._on_selection_changed)
             self.view.setTool(self._select)
+            layout.pageCollection().changed.connect(self._on_pages_changed)
+            self._watched_pages = set()
+            self._watch_pages(layout)
             self._user_zoomed = False
             self._reported_selection = self._selection_key()
+            self._fitted_page_size = None
         self.setCurrentWidget(self.view)
         self._fit_timer.start()
+
+    def _on_pages_changed(self) -> None:
+        """A page added, removed or resized: `_fit` fits again if the page the
+        view shows is not the size it was fitted to."""
+        if sip.isdeleted(self):
+            return
+        layout = self.view.currentLayout()
+        if layout is not None and not sip.isdeleted(layout):
+            self._watch_pages(layout)
+        self._fit_timer.start()
+
+    def _watch_pages(self, layout) -> None:  # QgsPrintLayout
+        """Hear each page's resize (a page's size or orientation changed
+        through setPageSize reaches no collection signal)."""
+        for page in layout.pageCollection().pages():
+            if page.uuid() not in self._watched_pages:
+                self._watched_pages.add(page.uuid())
+                page.sizePositionChanged.connect(self._on_pages_changed)
 
     def _on_selection_changed(self, *_args: object) -> None:
         # Only the layout on show matters; one left behind may still emit.
@@ -568,7 +598,6 @@ class LayoutPreview(QStackedWidget):
         """The next click or drag on the page places a new item of `kind`
         (about `map_item`, for a legend, scale bar or north arrow). The page
         stays as the user has it."""
-        self._user_zoomed = True
         self.placer.begin(kind, map_item)
 
     def delete_selected(self) -> bool:
@@ -600,7 +629,6 @@ class LayoutPreview(QStackedWidget):
         if map_item is None:
             self.content_editor.finish()
             return
-        self._user_zoomed = True
         self.placer.cancel()
         self.content_editor.begin(map_item)
 
@@ -627,7 +655,16 @@ class LayoutPreview(QStackedWidget):
         self.view.zoomOut()
 
     def _fit(self) -> None:
-        if not (self.isVisible() and self.showing_page()) or self._user_zoomed:
+        if not (self.isVisible() and self.showing_page()):
+            return
+        page = self._current_page_rect()
+        if page is not None and self._fitted_page_size not in (
+            None,
+            (page.width(), page.height()),
+        ):
+            # Another paper or orientation: the old zoom no longer means anything.
+            self._user_zoomed = False
+        if self._user_zoomed:
             return
         self._fit_current_page()
 
@@ -635,16 +672,26 @@ class LayoutPreview(QStackedWidget):
         """The current page at the largest scale that shows all of it, with
         FIT_MARGIN of workspace round it. Measured again if the scroll bars
         came or went with the new scale."""
+        layout = self.view.currentLayout()
+        if layout is not None and not sip.isdeleted(layout):
+            # The scene's bounds follow a resized page only on their own
+            # schedule, and `centerOn` stops at them.
+            layout.updateBounds()
         page = self._current_page_rect()
         if page is None or page.width() <= 0 or page.height() <= 0:
             return
         # Off first, so the room measured is the room the page keeps.
-        self._fitted_scale = None
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Not the viewport's size: it follows the bars' going only once the
         # view has laid out again.
         viewport = self.view.maximumViewportSize()
+        if min(viewport.width(), viewport.height()) < FIT_MIN_VIEWPORT:
+            # Not a size to fit to; the resize that makes it one fits.
+            self._sync_scroll_bars()
+            return
+        self._fitted_scale = None
+        self._fitted_page_size = (page.width(), page.height())
         room_w = max(1, viewport.width() - 2 * FIT_MARGIN)
         room_h = max(1, viewport.height() - 2 * FIT_MARGIN)
         scale = min(room_w / page.width(), room_h / page.height())
@@ -686,6 +733,7 @@ class LayoutPreview(QStackedWidget):
             and event.button() == Qt.MouseButton.LeftButton
         ):
             self._pan_from = _local_point(event)
+            self._user_zoomed = True
             viewport.setCursor(Qt.CursorShape.ClosedHandCursor)
             return True
         if self._pan_from is None:
@@ -848,11 +896,16 @@ class LayoutPreview(QStackedWidget):
             and isinstance(event, QMouseEvent)
         ):
             self._keep_dragged_legend_size(event)
+        # Only a move of the view itself leaves the fit: the wheel and the
+        # middle button's pan. Selecting or moving an item does not, or the
+        # page would stay at its old size when the window is then resized.
         if event is not None and (
             event.type() == QEvent.Type.Wheel
-            # Having selected or moved something, the page stays as the user
-            # has it: an edit's refresh must not fit the page under their hand.
-            or (event.type() == QEvent.Type.MouseButtonPress and self.select_mode())
+            or (
+                event.type() == QEvent.Type.MouseButtonPress
+                and isinstance(event, QMouseEvent)
+                and event.button() == Qt.MouseButton.MiddleButton
+            )
         ):
             self._user_zoomed = True
         return False

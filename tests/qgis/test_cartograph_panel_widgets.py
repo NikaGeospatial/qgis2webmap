@@ -308,14 +308,16 @@ class TestEditingThePage:
         assert frame.pos() == before
         assert layout.undoStack().stack().count() == count
 
-    def test_selecting_stops_the_page_refitting(self, qgis_app, editing) -> None:
+    def test_selecting_does_not_stop_the_page_fitting(self, qgis_app, editing) -> None:
+        """Selecting is not a zoom: the page still fits a window made bigger
+        afterwards (it used to stay at its old, tiny size)."""
         pane, _layout, frame = editing
         centre = self._centre(pane, frame)
         _drag(qgis_app, pane, centre, centre)
-        kept = _scale(pane)
+        small = _scale(pane)
         pane.resize(1000, 800)
         _settle(qgis_app)
-        assert _scale(pane) == pytest.approx(kept, rel=0.01)
+        assert _scale(pane) > small * 1.1
 
 
 def _handle_rect(pane):
@@ -961,20 +963,19 @@ def _from_corner(pane) -> dict[str, tuple[int, int]]:
 
 class TestFloatingControls:
     @pytest.mark.parametrize("size", [(1000, 700), (480, 360)])
-    def test_they_are_stacked_in_the_pages_bottom_right_corner(
+    def test_they_are_stacked_in_the_viewports_bottom_right_corner(
         self, qgis_app, pane, size
     ) -> None:
         pane.resize(*size)
         _settle(qgis_app)
         rects = _control_rects(pane)
-        page = _page_px(pane)
+        viewport = pane.preview.view.viewport()
         assert rects["add"].width() == rects["fit"].width()
         assert rects["add"].left() == rects["fit"].left()
         assert rects["add"].height() >= 32 and rects["fit"].height() >= 32
         assert rects["fit"].top() - rects["add"].bottom() - 1 == 8
-        # Within a pixel: the page's drawn edge is a fraction of one.
-        assert abs(page.right() - rects["fit"].right() - 12) <= 1
-        assert abs(page.bottom() - rects["fit"].bottom() - 12) <= 1
+        assert viewport.width() - rects["fit"].right() - 1 == 16
+        assert viewport.height() - rects["fit"].bottom() - 1 == 16
 
     def test_the_container_is_no_larger_than_the_buttons(self, qgis_app, pane) -> None:
         overlay = pane.preview._overlay
@@ -1045,19 +1046,19 @@ class TestFloatingControls:
                 # The page's corner is well off the viewport.
                 assert not viewport.contains(_page_px(pane).bottomRight())
 
-    def test_they_follow_a_corner_that_is_in_view_after_zooming(
+    def test_they_stay_at_the_viewport_corner_wherever_the_page_is_scrolled(
         self, qgis_app, pane
     ) -> None:
         view = pane.preview.view
         _wheel_zoom(pane, 120)
-        for bar in (view.horizontalScrollBar(), view.verticalScrollBar()):
-            bar.setValue(bar.maximum())
-        _settle(qgis_app)
-        page = _page_px(pane)
-        assert view.viewport().rect().contains(page.bottomRight())
-        rects = _control_rects(pane)
-        assert abs(page.right() - rects["fit"].right() - 12) <= 1
-        assert abs(page.bottom() - rects["fit"].bottom() - 12) <= 1
+        viewport = view.viewport()
+        for to_end in (True, False):
+            for bar in (view.horizontalScrollBar(), view.verticalScrollBar()):
+                bar.setValue(bar.maximum() if to_end else bar.minimum())
+            _settle(qgis_app)
+            fit = _control_rects(pane)["fit"]
+            assert viewport.width() - fit.right() - 1 == 16
+            assert viewport.height() - fit.bottom() - 1 == 16
 
     def test_the_removed_zoom_row_gave_its_height_to_the_preview(self, pane) -> None:
         preview = pane.preview
