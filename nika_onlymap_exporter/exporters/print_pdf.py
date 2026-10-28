@@ -59,6 +59,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QT_VERSION_STR, QPointF
 from qgis.PyQt.QtGui import QPainter, QPolygonF
 
+from ..core.atlas_live_counts import AtlasPageCounts, follow_maps_in_copy
 from ..core.atomic_write import staged_beside
 from ..core.live_count import refresh_live_counts
 from ..core.page_settings import attribution_in_layout
@@ -130,8 +131,9 @@ def export_print_pdf(
     project = layout.project()
     if project is None:
         raise PrintPdfError(tr("The layout does not belong to a project."))
-    if refresh_counts:
+    if refresh_counts and not atlas:
         # The numbers of the view that is printed (a no-op without counters).
+        # An atlas gets its numbers page by page, on the copy that is exported.
         refresh_live_counts(layout)
 
     # Copying and exporting a layout both mark the project modified, and so
@@ -210,9 +212,17 @@ def _export(
         ):
             exporter = QgsLayoutExporter(copy)
             if atlas:
-                result, detail = QgsLayoutExporter.exportToPdf(
-                    copy.atlas(), str(staged), export_settings
-                )
+                # Each page's Live counts are calculated on the copy as the
+                # atlas reaches it, before that page is drawn.
+                with AtlasPageCounts(copy) as page_counts:
+                    result, detail = QgsLayoutExporter.exportToPdf(
+                        copy.atlas(), str(staged), export_settings
+                    )
+                if result == QgsLayoutExporter.ExportResult.Success:
+                    problem = page_counts.problem(copy.atlas().count())
+                    if problem:
+                        raise PrintPdfError(problem)
+                    warnings.extend(page_counts.warnings())
             else:
                 result = exporter.exportToPdf(str(staged), export_settings)
                 detail = (
@@ -290,6 +300,7 @@ def build_print_layout(
     copy = layout.clone()
     if copy is None:
         raise PrintPdfError(tr("QGIS could not copy the layout for printing."))
+    follow_maps_in_copy(layout, copy)
     if page_choice is not None:
         _apply_page_choice(copy, page_choice, warnings)
     pages = copy.pageCollection()
