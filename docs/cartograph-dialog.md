@@ -204,28 +204,29 @@ Changing anything here saves the cartograph again.
 
 ## Atlas
 
-One page per feature of a coverage layer, in one file. The tab edits the
-layout's own atlas - the same settings as QGIS's Atlas panel - so every change
-goes on the layout's undo stack, and **Undo** in the layout designer takes it
-back. The tab reads **Atlas (on)** while the atlas is on.
+**Create a map series**: one page per feature of a layer, in one file. The tab
+edits the layout's own atlas - the same settings as QGIS's Atlas panel - so
+every change goes on the layout's undo stack, and **Undo** in the layout
+designer takes it back. The tab reads **Atlas (on)** while the series is on.
 [Atlas cartographs](cartograph-atlas.md) explains the rules.
 
-![The Atlas tab: Generate an atlas ticked, the coverage layer, the map that follows it, sort, filter and file names, the page count, and the two all-pages buttons.](images/cartograph-atlas-tab.png)
+![The Atlas tab: Create a map series ticked, the layer that receives a page, the map being updated, the page preview with Previous and Next, and Export series and Print series.](images/cartograph-atlas-tab.png)
 
 | Control | What it is |
 |---|---|
-| **Generate an atlas** | Turns the layout's atlas on or off. The rest of the tab is greyed out while it is off |
-| **Coverage layer** | One page per feature of this vector layer |
-| **Map that follows it** | The map that zooms to each feature in turn. It must be an **Interactive** frame. Choosing a map that did not follow the atlas before sets it to QGIS's own defaults: fit each feature, with a 10% margin |
-| **Sort by** + **Descending** | The field pages are ordered by. Blank keeps the layer's order |
-| **Filter** | An expression: only features for which it is true get a page. Blank gives every feature a page |
-| **File names** | An expression naming each page's image when all pages are exported |
-| *N pages in QGIS* | How many pages QGIS's atlas has. The cartograph can have fewer, because it skips features the map does not draw |
-| A warning line | Why the cartograph will not page, when it will not - for example *Set the atlas map to Interactive in Map frames* (Map frames, on the Layout tab) |
-| **Export all pages (PNG, ZIP)...** | Opens the cartograph, which renders every page and downloads them as one ZIP |
-| **Print all pages...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF, each page at its true size in a Chromium-based browser |
+| **Create a map series** | Turns the series on or off. While it is off only the explanation shows; settings are kept |
+| **Make one page for each feature in** | The layer whose areas or locations become pages. Nothing is chosen for you; the tab says how many ("3 areas", "12 locations") |
+| *Updating map: Main map* / **Map to update on each page** | With one map the tab names it. With several, choose which one; the others keep their current view. With none, **Browse templates...** |
+| **Previous** / **Next** | Step through the pages in the page beside the panel. Moving is not an edit, and leaving the tab puts the layout back as you authored it |
+| *3 pages ready* | The number of pages. A layout with several sheets per feature says so |
+| **Export series...** | Asks for PDF (QGIS's own, always available), Images (ZIP) or Web page (HTML) |
+| **Print series...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF |
+| **Switch to Interactive** | Shown when the ZIP, web page or printing needs the map to be Interactive. One undoable step |
+| **Page framing** | Fit area with margin, Fixed scale or Predefined scales |
+| **Advanced settings** | **Include pages** (a filter), **Page order**, **Page names**, **Export filenames**. Opens by itself when a setting is wrong |
 
-The two buttons stay greyed out until the saved cartograph has atlas pages.
+Each output is checked on its own: the saved cartograph's page count does not
+enable or disable anything.
 
 ---
 
