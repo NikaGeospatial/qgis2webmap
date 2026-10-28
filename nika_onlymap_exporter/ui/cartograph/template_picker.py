@@ -416,6 +416,7 @@ class _TemplateRow(QFrame):
         self.status.setWordWrap(True)
         self.status.setVisible(False)
         over.addWidget(self.status, 0, Qt.AlignmentFlag.AlignHCenter)
+        over.addStretch(1)
         faces.addWidget(self.page)
         self.failure = QFrame(self.preview)
         self.failure.setProperty("role", "templateFailure")
@@ -496,6 +497,9 @@ class _TemplateRow(QFrame):
         self.drawn = False
         self.failed = False
         self._image: QImage | None = None
+        #: Whether the page is taller than wide, as last seen: kept while
+        #: the page is replaced by a failure, so the box does not change shape.
+        self.tall = False
         self._box = QSize(_MIN_BOX_WIDTH, round(_MIN_BOX_WIDTH / _PAGE_ASPECT))
 
     # ---- What the text says --------------------------------------------------
@@ -555,6 +559,8 @@ class _TemplateRow(QFrame):
         self.crowded.setText(crowded)
         self.crowded.setVisible(bool(crowded))
         self._image = image
+        if image is not None:
+            self.tall = image.height() > image.width()
         self.drawn = image is not None
         self.failed = False
         self._faces.setCurrentWidget(self.page)
@@ -1521,12 +1527,7 @@ class TemplatePicker(QDialog):
             for template_id in self.rows:
                 self._show_state(template_id)
         turns = tuple(
-            self.orientation == "portrait"
-            or (
-                self.orientation == "auto"
-                and row._image is not None
-                and row._image.height() > row._image.width()
-            )
+            self.orientation == "portrait" or (self.orientation == "auto" and row.tall)
             for row in self.rows.values()
         )
         state = (card_w, height, columns, turns)

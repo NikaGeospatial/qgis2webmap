@@ -24,6 +24,7 @@ from test_template_picker import (
     _SlowRenderer,
 )
 
+from nika_onlymap_exporter.core.layout_templates import TemplateInput, plan_template
 from nika_onlymap_exporter.ui.cartograph import template_picker
 from nika_onlymap_exporter.ui.cartograph.template_picker import TemplatePicker
 from nika_onlymap_exporter.ui.cartograph.template_preview_dialog import (
@@ -133,6 +134,32 @@ def test_one_failed_card_does_not_stop_the_queue(qgis_app, tmp_path):
         renderer.only_first = True
         first.retry.click()
         assert _until(qgis_app, lambda: _ready(first))
+    finally:
+        picker.reject()
+
+
+def test_a_card_keeps_its_box_when_it_fails(qgis_app, tmp_path):
+    renderer = _FailingFirst(delay_ms=300)
+
+    def tall_map(template_id, page_size, orientation):
+        return plan_template(
+            template_id,
+            TemplateInput(
+                700, 1000, False, page_size=page_size, orientation=orientation
+            ),
+        )
+
+    picker = TemplatePicker(renderer, qsettings=_settings(tmp_path), planner=tall_map)
+    try:
+        _shown(qgis_app, picker, _TALL)
+        first = picker.rows[picker.template_id]
+        assert first.preview.height() > first.preview.width()  # a tall map
+        others = [r for t, r in picker.rows.items() if t != picker.template_id]
+        before = first.preview.size()
+        positions = [r.mapTo(picker, r.rect().topLeft()) for r in others]
+        assert _until(qgis_app, lambda: _unavailable(first))
+        assert first.preview.size() == before
+        assert [r.mapTo(picker, r.rect().topLeft()) for r in others] == positions
     finally:
         picker.reject()
 
@@ -269,13 +296,13 @@ def _slow_layer(project):
     """Two features of a million vertices, buffered while drawn: the draw
     takes seconds, and one buffer cannot be interrupted part way."""
     from qgis.core import (
-        QgsCircle,
         QgsCoordinateReferenceSystem,
         QgsFeature,
         QgsFillSymbol,
         QgsGeometry,
         QgsGeometryGeneratorSymbolLayer,
-        QgsPoint,
+        QgsLineString,
+        QgsPolygon,
         QgsRectangle,
         QgsSingleSymbolRenderer,
         QgsVectorLayer,
@@ -283,11 +310,27 @@ def _slow_layer(project):
 
     crs = QgsCoordinateReferenceSystem("EPSG:3857")
     layer = QgsVectorLayer("Polygon?crs=EPSG:3857&field=n:integer", "Slow", "memory")
+    import math
+
     features = []
+    count = 1_000_000
     for index in range(2):
         feature = QgsFeature(layer.fields())
-        circle = QgsCircle(QgsPoint(25000 + index * 50000, 35000), 20000)
-        feature.setGeometry(QgsGeometry(circle.toPolygon(1_000_000)))
+        radii = [8000 + 400 * math.sin(k * 0.01) for k in range(count)]
+        ring = QgsLineString(
+            [
+                25000 + index * 50000 + r * math.cos(2 * math.pi * k / count)
+                for k, r in enumerate(radii)
+            ],
+            [
+                35000 + r * math.sin(2 * math.pi * k / count)
+                for k, r in enumerate(radii)
+            ],
+        )
+        ring.close()
+        polygon = QgsPolygon()
+        polygon.setExteriorRing(ring)
+        feature.setGeometry(QgsGeometry(polygon))
         features.append(feature)
     layer.dataProvider().addFeatures(features)
     generator = QgsGeometryGeneratorSymbolLayer.create(
