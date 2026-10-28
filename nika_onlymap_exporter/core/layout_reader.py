@@ -1516,6 +1516,12 @@ class _MapState:
         map_item.setAtlasDriven(self.atlas_driven)
         map_item.setAtlasScalingMode(self.scaling_mode)
         map_item.setAtlasMargin(self.margin)
+        self.restore_view(map_item)
+
+    def restore_view(self, map_item: QgsLayoutItemMap) -> None:
+        """Only what the map shows (extent, size, rotation), not how the atlas
+        drives it: for putting a map back after an atlas preview while the
+        atlas settings may have been edited since."""
         map_item.setMapRotation(self.rotation)
         # `setExtent` resizes the item to the extent's aspect, so the size
         # goes back afterwards, and the extent is fitted to it once more.
