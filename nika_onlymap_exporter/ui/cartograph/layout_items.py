@@ -25,6 +25,7 @@ from qgis.core import (
     QgsCoordinateTransformContext,
     QgsLayout,
     QgsLayoutItem,
+    QgsLayoutItemGroup,
     QgsLayoutItemLabel,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
@@ -208,10 +209,11 @@ def _unique_count_name(layout: QgsLayout) -> str:
 
 def _create_live_count(
     layout: QgsLayout, rect: QRectF, map_item: QgsLayoutItemMap | None
-) -> QgsLayoutItemLabel:
+) -> QgsLayoutItemGroup:
     """A Live count at `rect`'s corner: the number (which holds the setup),
-    its caption and the accent rule, following `map_item`. The caller's undo
-    step is open."""
+    its caption and the accent rule, following `map_item`, as one group (the
+    item the user moves, selects and deletes). The caller's undo step is
+    open."""
     scale = layout.convertToLayoutUnits(
         QgsLayoutSize(1, 0, QgsUnitTypes.LayoutMillimeters)
     ).width()
@@ -255,13 +257,14 @@ def _create_live_count(
     )
     for part in (caption, rule):
         part.setCustomProperty(live_count.PART_OF_PROPERTY, number.uuid())
-    # Drawn above everything already on the page: a template's legend or
-    # notes box has a background and a higher stacking position than a new
-    # item gets, and would hide the number and the rule.
-    for part in (rule, number, caption):
+    # One item on the page: it moves, selects and deletes as a whole.
+    group = layout.groupItems([rule, number, caption])
+    # A group only moves its members: each is still stacked on its own, so
+    # each is raised (and the group) above everything already on the page.
+    for part in (rule, number, caption, group):
         while layout.raiseItem(part):
             pass
-    return number
+    return group
 
 
 def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
