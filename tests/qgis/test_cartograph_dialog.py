@@ -3915,7 +3915,9 @@ class TestPanel:
             assert actions.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
             # One layout: "Switch layout..." (and its separator) is hidden.
             shown = [
-                a for a in actions.menu().actions() if a.isVisible() and not a.isSeparator()
+                a
+                for a in actions.menu().actions()
+                if a.isVisible() and not a.isSeparator()
             ]
             assert [a.text() for a in shown] == [
                 "Rename layout...",
