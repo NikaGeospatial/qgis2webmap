@@ -223,6 +223,9 @@ class ContentEditor(QObject):
                 self._drag_to(at)
                 return True
             if kind == QEvent.Type.MouseButtonRelease:
+                # From the release position itself, so a MouseMove that never
+                # arrived cannot leave the content behind the pointer.
+                self._set_offset_from(at)
                 self._end_drag()
                 return True
             return True
@@ -257,6 +260,12 @@ class ContentEditor(QObject):
             return QPointF(0, 0)
         return item.mapFromScene(scene) - item.mapFromScene(self._start_scene)
 
+    def _set_offset_from(self, at: QPoint) -> None:
+        item = self._map
+        if item is None or sip.isdeleted(item) or self._start_scene is None:
+            return
+        self._offset = self._item_delta(item, QPointF(self._view.mapToScene(at)))
+
     def _drag_to(self, at: QPoint) -> None:
         # Like the layout designer's "Move item content" tool: the map's cached
         # picture is shifted under the frame while the pointer moves, and the
@@ -264,7 +273,7 @@ class ContentEditor(QObject):
         item = self._map
         if item is None or sip.isdeleted(item) or self._start_scene is None:
             return
-        self._offset = self._item_delta(item, QPointF(self._view.mapToScene(at)))
+        self._set_offset_from(at)
         item.setMoveContentPreviewOffset(self._offset.x(), self._offset.y())
         item.update()
 

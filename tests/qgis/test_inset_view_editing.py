@@ -22,7 +22,7 @@ from test_locator_context import _region
 
 qgis_core = pytest.importorskip("qgis.core")
 from qgis.core import QgsLayoutItemMap, QgsRectangle  # noqa: E402
-from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, Qt  # noqa: E402
+from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, QRect, Qt  # noqa: E402
 from qgis.PyQt.QtGui import QKeyEvent, QWheelEvent  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
@@ -328,6 +328,19 @@ def _drag_path(start: QPoint, end: QPoint, steps: int = 12) -> list[QPoint]:
     ]
 
 
+def _similar(a, b, tolerance: int = 40) -> bool:
+    """Two same-sized images whose pixels differ by little (a re-render
+    redraws labels and edges a shade differently)."""
+    if a.size() != b.size():
+        return False
+    total = 0
+    for y in range(a.height()):
+        for x in range(a.width()):
+            p, q = a.pixelColor(x, y), b.pixelColor(x, y)
+            total += abs(p.red() - q.red()) + abs(p.green() - q.green())
+    return total / (a.width() * a.height()) < tolerance
+
+
 class TestTheDragIsLive:
     """The content follows the pointer during a drag with no re-render, as the
     layout designer's own Move item content tool does; the change is applied
@@ -429,6 +442,89 @@ class TestTheDragIsLive:
         # set after the move would show the content at twice the drag.
         assert any(o != (0, 0) for o in offsets[:-1])
         assert offsets[-1] == (0, 0)
+
+    @staticmethod
+    def _frame(pane):
+        return pane.preview.view.viewport().grab().toImage()
+
+    @staticmethod
+    def _wait_rendered(qgis_app, item) -> None:
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and item.isDrawing():
+            _settle(qgis_app, 0.05)
+        _settle(qgis_app, 0.2)
+
+    def test_the_picture_follows_the_pointer_mid_drag(self, qgis_app, near_far) -> None:
+        """What is on screen mid-drag: the map picture is the one from before
+        the press, moved by the pointer's displacement; the frame is still."""
+        from test_cartograph_panel_widgets import _move_held
+
+        pane, layout, main, _inset, _region = near_far
+        self._wait_rendered(qgis_app, main)
+        _edit_on(qgis_app, pane, layout, main)
+        view = pane.preview.view
+        box = view.mapFromScene(main.sceneBoundingRect()).boundingRect()
+        before = self._frame(pane)
+        start = box.center()
+        self._press(pane, start)
+        shift = QPoint(0, 0)
+        for point in _drag_path(start, start + QPoint(36, 24), 6):
+            _move_held(view.viewport(), point)
+            qgis_app.processEvents()
+        shift = QPoint(36, 24)
+        _settle(qgis_app, 0.2)
+        mid = self._frame(pane)
+        # A patch well inside the part of the old picture that is still shown.
+        patch = QRect(
+            box.right() - shift.x() - 90, box.bottom() - shift.y() - 90, 60, 60
+        )
+        moved = patch.translated(shift)
+        assert box.contains(patch) and box.contains(moved)
+        assert mid.copy(moved) == before.copy(patch)
+        # ... and it is a real picture shown, not a flat fill that matches anyway.
+        assert before.copy(patch) != before.copy(patch.translated(shift))
+        # The frame's own edge has not moved.
+        assert view.mapFromScene(main.sceneBoundingRect()).boundingRect() == box
+        QTest.mouseRelease(
+            view.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            start + shift,
+        )
+        self._wait_rendered(qgis_app, main)
+        after = self._frame(pane)
+        # After the one real move the same landmark is at the same place: no
+        # snap-back and no second shift.
+        assert _similar(after.copy(moved), before.copy(patch))
+
+    def test_a_lost_last_move_still_ends_at_the_release_position(
+        self, qgis_app, near_far
+    ) -> None:
+        from test_cartograph_panel_widgets import _move_held
+
+        pane, layout, main, _inset, _region = near_far
+        _edit_on(qgis_app, pane, layout, main)
+        view = pane.preview.view
+        start = _centre(pane, main)
+        before = main.extent().center()
+        scale = main.extent().width() / main.rect().width()
+        self._press(pane, start)
+        _move_held(view.viewport(), start + QPoint(10, 5))
+        qgis_app.processEvents()
+        end = start + QPoint(40, 25)  # no move event reached here
+        QTest.mouseRelease(
+            view.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            end,
+        )
+        _settle(qgis_app, 0.2)
+        delta = main.mapFromScene(view.mapToScene(end)) - main.mapFromScene(
+            view.mapToScene(start)
+        )
+        assert main.extent().center().x() - before.x() == pytest.approx(
+            -delta.x() * scale, rel=1e-3
+        )
 
     def test_escape_mid_drag_restores_without_an_undo_step(
         self, qgis_app, near_far, monkeypatch
