@@ -2179,45 +2179,53 @@ class CartographController:
 
         self._corner = corner
         self._update_share_enabled()
+        self._colour_vision_dialog()
         return corner
 
     # ---- Accessibility: colour vision --------------------------------------
 
+    def _colour_vision_dialog(self) -> AccessibilityDialog:
+        """The one Colour vision dialog, built on first use. Built as soon as
+        the corner is, too, so a simulation applied in an earlier session is
+        on in the preview (and the button says so) before it is ever opened."""
+        from .accessibility_dialog import AccessibilityDialog, simulating_tooltip
+
+        if self._colour_vision is not None:
+            return self._colour_vision
+        dialog = AccessibilityDialog(
+            lambda: self._legend_entries,
+            canvas=self._map_canvas(),
+            preview_view=self.page_pane.preview.view,
+            open_preview=self._open_cvd_preview,
+            # The hand-off is not ready for cartographs: greyed out here
+            # too, as on the Share menu.
+            ask_nika=None,
+            parent=self.dialog,
+        )
+
+        def on_mode(condition: str) -> None:
+            self.accessibility_button.setChecked(bool(condition))
+            self.accessibility_button.setToolTip(
+                simulating_tooltip(cast("Condition", condition))
+                if condition
+                else tr("Colour vision: simulate it and check the legend's colours")
+            )
+
+        dialog.mode_changed.connect(on_mode)
+        self._colour_vision = dialog
+        on_mode(dialog.applied_condition() or "")
+        return dialog
+
     def on_accessibility(self) -> None:
         """The corner's Accessibility button: one non-modal Colour vision
         dialog, raised again rather than duplicated."""
-        from .accessibility_dialog import AccessibilityDialog, simulating_tooltip
-
-        if self._colour_vision is None:
-            dialog = AccessibilityDialog(
-                lambda: self._legend_entries,
-                canvas=self._map_canvas(),
-                preview_view=self.page_pane.preview.view,
-                open_preview=self._open_cvd_preview,
-                # The hand-off is not ready for cartographs: greyed out here
-                # too, as on the Share menu.
-                ask_nika=None,
-                parent=self.dialog,
-            )
-
-            def on_mode(condition: str) -> None:
-                self.accessibility_button.setChecked(bool(condition))
-                self.accessibility_button.setToolTip(
-                    simulating_tooltip(cast("Condition", condition))
-                    if condition
-                    else tr("Colour vision: simulate it and check the legend's colours")
-                )
-
-            dialog.mode_changed.connect(on_mode)
-            self._colour_vision = dialog
-        # A checkable button toggles itself before this runs; the dialog's own
-        # mode is what it should show.
-        self.accessibility_button.setChecked(
-            bool(self._colour_vision.applied_condition())
-        )
-        self._colour_vision.refresh()
-        self._colour_vision.show()
-        self._colour_vision.raise_()
+        dialog = self._colour_vision_dialog()
+        # A checkable button toggles itself before this runs; a simulation
+        # applied anywhere is what it should show.
+        self.accessibility_button.setChecked(bool(dialog.applied_condition()))
+        dialog.refresh()
+        dialog.show()
+        dialog.raise_()
 
     def _open_cvd_preview(self, condition: str | None) -> None:
         """Share's Preview in browser, with the applied simulation."""

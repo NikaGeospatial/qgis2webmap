@@ -2055,6 +2055,87 @@ class TestAccessibility:
             dialog.close()
 
 
+class TestColourVisionInTheCartograph:
+    """The Colour vision window over the real Cartograph dialog."""
+
+    def _click(self, widget, local=None) -> None:
+        """A click as the window system delivers it, to the widget's window."""
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+
+        window = widget.window()
+        at = widget.mapTo(window, local or QPoint(widget.width() // 2, 5))
+        QTest.mouseClick(
+            window.windowHandle(), Qt.MouseButton.LeftButton, pos=at, delay=30
+        )
+
+    def test_choosing_an_option_and_clicking_out_leaves_the_dialog_usable(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+        from qgis.PyQt.QtWidgets import QApplication, QWidget
+
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            cartograph.accessibility_button.click()
+            window = cartograph._colour_vision
+            assert window.isVisible()
+            radio = window.mode_buttons["deuteranopia"]
+            self._click(radio, QPoint(8, radio.height() // 2))
+            _wait_for(qgis_app, lambda: window.current_condition(), timeout=2)
+            assert window.current_condition() == "deuteranopia"
+
+            tabs = cartograph.panel_tabs
+            bar = tabs.tabBar()
+            for index in range(tabs.count()):
+                if index == tabs.currentIndex() or not tabs.isTabEnabled(index):
+                    continue
+                # Clear of the Colour vision window, which sits over the page.
+                window.move(dialog.x() + dialog.width() + 20, dialog.y())
+                _wait_for(qgis_app, lambda: False, timeout=0.1)
+                self._click(bar, bar.tabRect(index).center())
+                assert _wait_for(
+                    qgis_app, lambda i=index: tabs.currentIndex() == i, timeout=2
+                ), "a click on the Cartograph dialog did nothing"
+            assert QWidget.mouseGrabber() is None
+            assert QWidget.keyboardGrabber() is None
+            assert QApplication.activeModalWidget() is None
+            assert QApplication.activePopupWidget() is None
+            assert window.isVisible() or window.current_condition() is None
+        finally:
+            dialog.close()
+
+    def test_an_applied_simulation_is_on_before_the_window_is_opened(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            cartograph = dialog._cartograph
+            assert not cartograph.accessibility_button.isChecked()
+            cartograph.accessibility_button.click()
+            cartograph._colour_vision.set_condition("tritanopia")
+            cartograph._colour_vision.apply_button.click()
+            cartograph._colour_vision.close()
+            view = cartograph.page_pane.preview.view
+            assert view.previewModeEnabled()
+        finally:
+            dialog.close()
+        # A new dialog, as after reopening Cartograph or restarting QGIS.
+        again = _dialog(project)
+        try:
+            _choose_cartograph(again)
+            cartograph = again._cartograph
+            assert cartograph.accessibility_button.isChecked()
+            assert "tritanopia" in cartograph.accessibility_button.toolTip().lower()
+            assert cartograph.page_pane.preview.view.previewModeEnabled()
+            cartograph.accessibility_button.click()
+            assert cartograph._colour_vision.current_condition() == "tritanopia"
+        finally:
+            again.close()
+
+
 class TestWhereItSaves:
     def test_an_unsaved_project_saves_in_the_cartographs_folder_at_once(
         self, qgis_app, project, fake_cartograph_export

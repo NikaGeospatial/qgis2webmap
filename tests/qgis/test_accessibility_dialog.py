@@ -1,6 +1,7 @@
 """The Colour vision dialog against a real QGIS: the simulation in the layout
 preview before Apply, the canvas, the browser Apply flow, the legend table, the
-mode signal and the NIKA hand-off.
+mode signal, where Apply goes, what is remembered, input never left blocked
+and the NIKA hand-off.
 
 The canvas half is tested on a real `QgsMapCanvas`, not a double: the preview
 enum names changed shape between PyQt5 and PyQt6, and a double would only
@@ -202,6 +203,7 @@ class TestPreviewBeforeApply:
 
         dialog = make_dialog_with_preview()
         dialog.show()
+        dialog.canvas_check.setChecked(True)
         for condition, mode in (
             ("protanopia", QgsPreviewEffect.PreviewProtanope),
             ("deuteranopia", QgsPreviewEffect.PreviewDeuteranope),
@@ -228,6 +230,7 @@ class TestPreviewBeforeApply:
         dialog = make_dialog_with_preview()
         dialog.show()
         normal = preview_colour(pane)
+        dialog.canvas_check.setChecked(True)
         dialog.set_condition("deuteranopia")
         dialog.apply_button.click()
         simulated = preview_colour(pane)
@@ -239,7 +242,7 @@ class TestPreviewBeforeApply:
         if how == "close_button":
             dialog.close_button.click()
         elif how == "escape":
-            QTest.keyClick(dialog.mode_combo, Qt.Key.Key_Escape)
+            QTest.keyClick(dialog.mode_buttons["tritanopia"], Qt.Key.Key_Escape)
         else:
             dialog.close()
         settle(qgis_app, 0.05)
@@ -270,10 +273,12 @@ class TestPreviewBeforeApply:
         canvas.setPreviewMode(QgsPreviewEffect.PreviewMono)
         dialog = make_dialog_with_preview()
         dialog.show()
+        dialog.canvas_check.setChecked(True)
         dialog.set_condition("deuteranopia")
         dialog.close()
         assert canvas.previewMode() == QgsPreviewEffect.PreviewMono
         dialog.show()
+        dialog.canvas_check.setChecked(True)
         dialog.set_condition("tritanopia")
         dialog.apply_button.click()
         assert canvas.previewMode() == QgsPreviewEffect.PreviewTritanope
@@ -322,6 +327,260 @@ class TestPreviewBeforeApply:
         image = QImage(str(target))
         centre = image.pixelColor(image.width() // 2, image.height() // 2)
         assert centre.name() == SHAPE_COLOUR
+
+
+class TestWhereApplyGoes:
+    def test_the_canvas_box_starts_unchecked_with_its_label(self, make_dialog):
+        dialog = make_dialog()
+        assert not dialog.canvas_check.isChecked()
+        assert dialog.canvas_check.text() == "Also apply to the QGIS map canvas"
+
+    def test_unchecked_apply_changes_the_previews_only(
+        self, qgis_app, page, make_dialog_with_preview, canvas
+    ) -> None:
+        pane, _layout = page
+        dialog = make_dialog_with_preview()
+        dialog.show()
+        dialog.set_condition("deuteranopia")
+        dialog.apply_button.click()
+        settle(qgis_app, 0.05)
+        assert preview_colour(pane) != SHAPE_COLOUR
+        assert not canvas.previewModeEnabled()
+
+    def test_checked_apply_reaches_the_canvas_too(
+        self, qgis_app, page, make_dialog_with_preview, canvas
+    ) -> None:
+        from qgis.gui import QgsPreviewEffect
+
+        pane, _layout = page
+        dialog = make_dialog_with_preview()
+        dialog.show()
+        dialog.canvas_check.setChecked(True)
+        dialog.set_condition("tritanopia")
+        dialog.apply_button.click()
+        settle(qgis_app, 0.05)
+        assert preview_colour(pane) != SHAPE_COLOUR
+        assert canvas.previewModeEnabled()
+        assert canvas.previewMode() == QgsPreviewEffect.PreviewTritanope
+
+    def test_unticking_the_box_and_applying_takes_the_canvas_back(
+        self, qgis_app, page, make_dialog_with_preview, canvas
+    ) -> None:
+        pane, _layout = page
+        dialog = make_dialog_with_preview()
+        dialog.show()
+        dialog.canvas_check.setChecked(True)
+        dialog.set_condition("deuteranopia")
+        dialog.apply_button.click()
+        assert canvas.previewModeEnabled()
+        assert not dialog.apply_button.isEnabled()
+        dialog.canvas_check.setChecked(False)
+        assert dialog.apply_button.isEnabled()  # the box alone is a change
+        dialog.apply_button.click()
+        settle(qgis_app, 0.05)
+        assert not canvas.previewModeEnabled()
+        assert preview_colour(pane) != SHAPE_COLOUR  # the previews keep it
+
+    def test_the_box_alone_is_nothing_to_apply_in_normal_vision(
+        self, make_dialog_with_preview
+    ) -> None:
+        dialog = make_dialog_with_preview()
+        dialog.canvas_check.setChecked(True)
+        assert not dialog.apply_button.isEnabled()
+
+    def test_leaving_discards_an_unapplied_box_change(
+        self, make_dialog_with_preview
+    ) -> None:
+        dialog = make_dialog_with_preview()
+        dialog.show()
+        dialog.canvas_check.setChecked(True)
+        dialog.close()
+        dialog.show()
+        assert not dialog.canvas_check.isChecked()
+
+
+class TestRemembered:
+    def test_an_applied_preview_simulation_outlives_closing_the_dialog(
+        self, qgis_app, page, make_dialog_with_preview, canvas
+    ) -> None:
+        pane, _layout = page
+        dialog = make_dialog_with_preview()
+        dialog.show()
+        dialog.set_condition("deuteranopia")
+        dialog.apply_button.click()
+        simulated = preview_colour(pane)
+        dialog.close()
+        settle(qgis_app, 0.05)
+        assert preview_colour(pane) == simulated != SHAPE_COLOUR
+        dialog.show()
+        assert dialog.current_condition() == "deuteranopia"
+        assert not dialog.apply_button.isEnabled()
+
+    def test_it_survives_switching_layouts(
+        self, qgis_app, page, make_dialog_with_preview
+    ) -> None:
+        pane, layout = page
+        dialog = make_dialog_with_preview()
+        dialog.set_condition("achromatopsia")
+        dialog.apply_button.click()
+        simulated = preview_colour(pane)
+        assert simulated != SHAPE_COLOUR
+        other = layout.clone()
+        other.setName("Other")
+        pane.show_layout(other)
+        settle(qgis_app, 0.2)
+        assert preview_colour(pane) == simulated
+        pane.show_layout(layout)
+        settle(qgis_app, 0.2)
+        assert preview_colour(pane) == simulated
+
+    def test_a_new_dialog_starts_where_the_last_one_left_off(
+        self, qgis_app, page, make_dialog_with_preview, canvas
+    ) -> None:
+        pane, _layout = page
+        first = make_dialog_with_preview()
+        first.set_condition("protanopia")
+        first.apply_button.click()
+        simulated = preview_colour(pane)
+        # A restart: the preview is plain again, and a fresh dialog is built.
+        first.reset_canvas()
+        settle(qgis_app, 0.05)
+        assert preview_colour(pane) == SHAPE_COLOUR
+        seen = Recorder()
+        second = make_dialog_with_preview()
+        second.mode_changed.connect(seen)
+        settle(qgis_app, 0.05)
+        assert second.applied_condition() == "protanopia"
+        assert second.current_condition() == "protanopia"
+        assert preview_colour(pane) == simulated
+        assert not canvas.previewModeEnabled()
+        assert not second.canvas_check.isChecked()
+
+    def test_the_canvas_choice_is_remembered_and_put_back_on_the_canvas(
+        self, qgis_app, make_dialog_with_preview, canvas
+    ) -> None:
+        from qgis.gui import QgsMapCanvas, QgsPreviewEffect
+
+        first = make_dialog_with_preview()
+        first.canvas_check.setChecked(True)
+        first.set_condition("deuteranopia")
+        first.apply_button.click()
+        fresh_canvas = QgsMapCanvas()
+        try:
+            second = make_dialog_with_preview(canvas=fresh_canvas)
+            assert second.canvas_check.isChecked()
+            assert fresh_canvas.previewModeEnabled()
+            assert fresh_canvas.previewMode() == QgsPreviewEffect.PreviewDeuteranope
+        finally:
+            fresh_canvas.deleteLater()
+
+    def test_applying_normal_vision_forgets_it(
+        self, qgis_app, make_dialog_with_preview
+    ) -> None:
+        first = make_dialog_with_preview()
+        first.set_condition("tritanopia")
+        first.apply_button.click()
+        first.set_condition(None)
+        first.apply_button.click()
+        second = make_dialog_with_preview()
+        assert second.current_condition() is None
+        assert second.applied_condition() is None
+
+    def test_an_unapplied_choice_is_not_remembered(
+        self, make_dialog_with_preview
+    ) -> None:
+        first = make_dialog_with_preview()
+        first.show()
+        first.set_condition("tritanopia")
+        first.close()
+        assert make_dialog_with_preview().applied_condition() is None
+
+    def test_the_users_own_canvas_mode_survives_a_rebuilt_dialog(
+        self, make_dialog_with_preview, canvas
+    ) -> None:
+        """The language switch rebuilds the whole window: a dialog built over a
+        canvas that still carries the last one's simulation must give back the
+        user's own View > Preview Mode, not keep the old simulation."""
+        from qgis.gui import QgsPreviewEffect
+
+        canvas.setPreviewModeEnabled(True)
+        canvas.setPreviewMode(QgsPreviewEffect.PreviewMono)
+        first = make_dialog_with_preview()
+        first.canvas_check.setChecked(True)
+        first.set_condition("deuteranopia")
+        first.apply_button.click()
+        assert canvas.previewMode() == QgsPreviewEffect.PreviewDeuteranope
+        second = make_dialog_with_preview()  # the old one is simply abandoned
+        second.canvas_check.setChecked(False)
+        second.apply_button.click()
+        assert canvas.previewModeEnabled()
+        assert canvas.previewMode() == QgsPreviewEffect.PreviewMono
+
+
+class TestInputIsNeverLeftBlocked:
+    """Clicking out of the window after choosing an option, without Apply,
+    must leave the window behind it fully usable."""
+
+    @pytest.mark.parametrize("how", ["radio_click", "radio_then_other_window"])
+    def test_a_click_on_the_window_behind_still_lands(
+        self, qgis_app, make_dialog, how
+    ) -> None:
+        from qgis.PyQt.QtCore import QPoint, Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import (
+            QApplication,
+            QPushButton,
+            QVBoxLayout,
+            QWidget,
+        )
+
+        host = QWidget()
+        host_layout = QVBoxLayout(host)
+        behind = QPushButton("Behind", host)
+        host_layout.addWidget(behind)
+        host.resize(260, 120)
+        host.move(0, 0)
+        host.show()
+        dialog = make_dialog(parent=host)
+        dialog.host_alive = host  # the fixture closes the dialog after this test
+        dialog.move(host.width() + 40, 0)
+        dialog.show()
+        clicks = []
+        behind.clicked.connect(lambda: clicks.append(1))
+        try:
+            settle(qgis_app, 0.1)
+            radio = dialog.mode_buttons["deuteranopia"]
+            QTest.mouseClick(
+                radio, Qt.MouseButton.LeftButton, pos=QPoint(8, radio.height() // 2)
+            )
+            assert dialog.current_condition() == "deuteranopia"
+            if how == "radio_then_other_window":
+                dialog.activateWindow()
+            # Through the window system, as a real click arrives.
+            window = host.windowHandle()
+            QTest.mouseClick(
+                window,
+                Qt.MouseButton.LeftButton,
+                pos=behind.mapTo(host, QPoint(5, 5)),
+                delay=30,
+            )
+            settle(qgis_app, 0.1)
+            assert clicks == [1]
+            assert QWidget.mouseGrabber() is None
+            assert QWidget.keyboardGrabber() is None
+            assert QApplication.activeModalWidget() is None
+            assert QApplication.activePopupWidget() is None
+            # Coherent: still open, or closed with the unapplied choice gone.
+            assert dialog.isVisible() or dialog.current_condition() is None
+        finally:
+            dialog.close()
+            host.close()
+
+    def test_the_window_opens_no_pop_up_to_leave_behind(self, make_dialog) -> None:
+        """A drop-down's list is a grabbing pop-up window; this one has none."""
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        assert make_dialog().findChildren(QComboBox) == []
 
 
 class TestBrowser:
@@ -386,9 +645,6 @@ class TestTable:
         assert notes == ["like Rejected", "like Approved", "ok", "ok"]
         # Simulated colours: the runtime's, rounded for display.
         assert rows[1][3] == "#7f7f13"
-        assert dialog.summary_label.text() == (
-            "1 pair of classes collapses under deuteranopia."
-        )
 
     def test_swatches_are_painted(self, make_dialog):
         dialog = make_dialog()
@@ -402,15 +658,20 @@ class TestTable:
         dialog = make_dialog()
         notes = [r[4] for r in table_rows(dialog)]
         assert notes[0] == "like Rejected (deuteranopia)"
-        assert "most under deuteranopia" in dialog.summary_label.text()
 
     def test_a_safe_condition_says_so(self, make_dialog):
         dialog = make_dialog()
         dialog.set_condition("protanopia")
         assert [r[4] for r in table_rows(dialog)] == ["ok"] * 4
-        assert dialog.summary_label.text() == (
-            "All classes stay distinguishable under protanopia."
-        )
+
+    def test_no_summary_line_is_shown(self, make_dialog):
+        from qgis.PyQt.QtWidgets import QLabel
+
+        dialog = make_dialog()
+        dialog.show()
+        texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        assert "collapse" not in texts
+        assert dialog.empty_label.isHidden()  # there are classes to show
 
     def test_refresh_reads_the_provider_again(self, make_dialog):
         entries = list(PERMITS)
@@ -423,7 +684,8 @@ class TestTable:
     def test_empty_legend_explains_itself(self, make_dialog):
         dialog = make_dialog(entries=())
         assert dialog.table.rowCount() == 0
-        assert "Save the cartograph" in dialog.summary_label.text()
+        assert not dialog.empty_label.isHidden()
+        assert "Save the cartograph" in dialog.empty_label.text()
         assert not dialog.ask_button.isEnabled()
         assert dialog.ask_button.toolTip()
 

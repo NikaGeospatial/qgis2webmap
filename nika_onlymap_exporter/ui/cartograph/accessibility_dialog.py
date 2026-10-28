@@ -2,9 +2,10 @@
 
 One non-modal tool window does simulate *and* check: pick a condition and the
 embedded layout preview shows it at once, with the table of every legend class
-and its simulated colour and the classes it collapses into. Apply then puts the
-same simulation on the QGIS canvas, and, if asked, reopens the browser preview
-with it. Closing the dialog discards what was not applied.
+and its simulated colour and the classes it collapses into. Apply keeps it on
+in the plugin's previews, also puts it on the QGIS canvas if that box is
+ticked, and, if asked, reopens the browser preview with it. Closing the dialog
+discards what was not applied; what was applied is remembered per user.
 
 The preview, the canvas and the browser use different models, and that is
 deliberate. The preview and the canvas are filtered by QGIS's own
@@ -20,6 +21,11 @@ browser preview with a runtime `cvd` value (or `None` for normal vision), and
 `ask_nika` receives the findings text for the hand-off dialog. `preview_view`
 is the embedded layout view the simulation shows in first.
 
+The conditions are a plain list of radio buttons, not a drop-down: a combo
+box's list is a grabbing pop-up window, and this window is a transient tool
+window over the Cartograph dialog. Nothing here opens a pop-up, so there is no
+grab that can outlive a click outside this window.
+
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
 """
@@ -27,20 +33,21 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QSettings, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QCheckBox,
-    QComboBox,
     QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
+    QRadioButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -57,7 +64,7 @@ from ...core.cvd import (
     simulate,
 )
 from ..fitted_label import FittedLabel
-from ..i18n import N_, plural, tr
+from ..i18n import N_, tr
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgsLayoutView, QgsMapCanvas
@@ -80,6 +87,14 @@ CONDITION_WORDS: dict[Condition, str] = {
     "achromatopsia": N_("achromatopsia"),
 }
 
+# The applied simulation and whether it also went to the QGIS canvas, per user.
+CONDITION_SETTING = "qgis2webmap/cartographColourVision"
+CANVAS_SETTING = "qgis2webmap/cartographColourVisionCanvas"
+# Where the canvas's own preview mode is parked while this plugin's simulation
+# is on it, so a dialog built later (the language switch rebuilds the whole
+# window) still gives the user's mode back instead of keeping ours.
+CANVAS_ORIGINAL_PROPERTY = "q2wColourVisionOriginal"
+
 COLUMN_LAYER, COLUMN_CLASS, COLUMN_COLOUR, COLUMN_SIMULATED, COLUMN_NOTE = range(5)
 SWATCH_SIZE = 14
 NAME_COLUMN_MAX = 120
@@ -101,6 +116,24 @@ def preview_mode_for(condition: Condition) -> object:
         "tritanopia": QgsPreviewEffect.PreviewTritanope,
         "achromatopsia": QgsPreviewEffect.PreviewGrayscale,
     }[condition]
+
+
+def _enum_number(mode: object) -> int:
+    """A preview mode's number: a sip enum (Qt 5) is an int already, a Python
+    enum (Qt 6) carries it as `.value`."""
+    return int(getattr(mode, "value", mode))  # type: ignore[call-overload]
+
+
+def stored_condition() -> Condition | None:
+    """The applied simulation remembered from the last session (None: normal
+    vision, or nothing usable stored)."""
+    value = str(QSettings().value(CONDITION_SETTING, "", type=str))
+    return cast("Condition", value) if value in CONDITION_NAMES else None
+
+
+def stored_canvas_choice() -> bool:
+    """Whether Apply was last set to reach the QGIS canvas too."""
+    return bool(QSettings().value(CANVAS_SETTING, False, type=bool))
 
 
 def simulating_tooltip(condition: Condition | None) -> str:
@@ -162,9 +195,11 @@ class AccessibilityDialog(QDialog):
     """Simulate a colour-vision condition and check the legend against it.
 
     Choosing a condition changes the embedded layout preview and the table,
-    nothing else. `Apply` makes it the QGIS canvas's display simulation (and
-    reopens the browser preview if asked) and keeps the dialog open; closing
-    it, by Close, Escape or the window, goes back to the last applied state.
+    nothing else. `Apply` keeps it on in the plugin's previews (and on the
+    QGIS canvas too if that box is ticked, and in the browser preview if that
+    one is) and keeps the dialog open; closing it, by Close, Escape or the
+    window, goes back to the last applied state. The applied state is stored
+    per user and put back when the dialog is next built.
 
     `mode_changed` carries the applied condition, or `""` for normal vision,
     so the corner button can stay checked with a tooltip while a simulation
@@ -191,9 +226,11 @@ class AccessibilityDialog(QDialog):
         self._ask_nika = ask_nika
         self._entries: tuple[LegendEntry, ...] = ()
         self._lint = LegendLint()
-        # The simulation last applied (None: normal vision): what the preview
-        # and the canvas show, and what closing the dialog goes back to.
-        self._applied: Condition | None = None
+        # The simulation last applied (None: normal vision), and whether it
+        # also went to the canvas: what the previews show and what closing the
+        # dialog goes back to. Remembered from the last session.
+        self._applied: Condition | None = stored_condition()
+        self._applied_canvas = stored_canvas_choice()
         # The canvas's own preview mode before this dialog first changed it
         # (enabled, mode), so a user who chose one from View > Preview Mode
         # keeps it, and gets it back when the simulation is cleared.
@@ -207,24 +244,28 @@ class AccessibilityDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        row = QHBoxLayout()
         simulate_label = QLabel(tr("&Simulate"))
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItem(tr("Normal vision"), "")
-        for condition, name in CONDITION_NAMES.items():
-            self.mode_combo.addItem(tr(name), condition)
-        self.mode_combo.setToolTip(
+        simulate_label.setToolTip(
             tr("How a reader with this colour-vision condition sees the map.")
         )
-        simulate_label.setBuddy(self.mode_combo)
-        row.addWidget(simulate_label)
-        row.addWidget(self.mode_combo, stretch=1)
-        layout.addLayout(row)
+        layout.addWidget(simulate_label)
+        self.mode_group = QButtonGroup(self)
+        self.mode_buttons: dict[str, QRadioButton] = {}
+        names: list[tuple[str, str]] = [("", N_("Normal vision"))]
+        names.extend(CONDITION_NAMES.items())
+        for value, name in names:
+            button = QRadioButton(tr(name))
+            # Keyboard focus only, so a click leaves no focus ring behind.
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+            self.mode_group.addButton(button)
+            self.mode_buttons[value] = button
+            layout.addWidget(button)
+        simulate_label.setBuddy(self.mode_buttons[""])
 
         self.explanation_label = QLabel(
             tr(
                 "Changes appear in the layout preview.\n"
-                "Apply also updates the main QGIS canvas."
+                "Apply keeps them on in the plugin's previews."
             )
         )
         self.explanation_label.setWordWrap(True)
@@ -265,15 +306,29 @@ class AccessibilityDialog(QDialog):
             )
         layout.addWidget(self.browser_check)
 
-        self.summary_label = FittedLabel()
-        layout.addWidget(self.summary_label)
+        # The one thing the table cannot say for itself when it is empty.
+        self.empty_label = FittedLabel(
+            tr(
+                "No legend classes to check yet. Save the cartograph with an "
+                "Interactive map frame first."
+            )
+        )
+        layout.addWidget(self.empty_label)
+
+        # Where Apply goes besides the plugin's own previews.
+        self.canvas_check = QCheckBox(tr("Also apply to the QGIS map canvas"))
+        self.canvas_check.setToolTip(
+            tr("Show this simulation on the main QGIS window's map as well.")
+        )
+        self.canvas_check.setChecked(self._applied_canvas)
+        layout.addWidget(self.canvas_check)
 
         buttons = QHBoxLayout()
         self.ask_button = QPushButton(tr("Ask NIKA to fix ↗"))
         self.close_button = QPushButton(tr("Close"))
         self.apply_button = QPushButton(tr("Apply"))
         self.apply_button.setToolTip(
-            tr("Show this simulation on the QGIS canvas as well.")
+            tr("Keep this simulation on in the plugin's previews.")
         )
         buttons.addWidget(self.ask_button)
         buttons.addStretch(1)
@@ -281,30 +336,44 @@ class AccessibilityDialog(QDialog):
         buttons.addWidget(self.apply_button)
         layout.addLayout(buttons)
 
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        for button in self.mode_buttons.values():
+            button.toggled.connect(self._on_mode_toggled)
+        self.canvas_check.toggled.connect(self._update_apply_button)
         self.ask_button.clicked.connect(self._on_ask_nika)
         self.close_button.clicked.connect(self.close)
         self.apply_button.clicked.connect(self.apply)
 
+        self.set_condition(self._applied)
         self.refresh()
         self._update_apply_button()
+        # What was applied last session is on again before the dialog is ever
+        # opened: the previews, and the canvas if that was chosen.
+        self._show_in_preview(self._applied)
+        if self._applied_canvas:
+            self._apply_canvas(self._applied)
 
     # ---- State -------------------------------------------------------------
 
     def current_condition(self) -> Condition | None:
         """The condition selected now, applied or not."""
-        value = self.mode_combo.currentData()
-        return value if value else None
+        for value, button in self.mode_buttons.items():
+            if button.isChecked():
+                return cast("Condition", value) if value else None
+        return None
 
     def applied_condition(self) -> Condition | None:
         """The condition last applied (None: normal vision)."""
         return self._applied
 
+    def applied_to_canvas(self) -> bool:
+        """Whether the applied simulation is on the QGIS canvas."""
+        return self._applied is not None and self._applied_canvas
+
     def set_condition(self, condition: Condition | None) -> None:
         """Select `condition` (None for normal vision), as the combo would."""
-        index = self.mode_combo.findData(condition or "")
-        if index >= 0:
-            self.mode_combo.setCurrentIndex(index)
+        button = self.mode_buttons.get(condition or "")
+        if button is not None:
+            button.setChecked(True)
 
     @property
     def lint(self) -> LegendLint:
@@ -319,13 +388,21 @@ class AccessibilityDialog(QDialog):
 
     # ---- Preview, Apply, discard -------------------------------------------
 
-    def _on_mode_changed(self, _index: int) -> None:
+    def _on_mode_toggled(self, checked: bool) -> None:
+        if not checked:  # the button being left; the one chosen reports next
+            return
         self._show_in_preview(self.current_condition())
         self._fill_table()
         self._update_apply_button()
 
-    def _update_apply_button(self) -> None:
-        self.apply_button.setEnabled(self.current_condition() != self._applied)
+    def _update_apply_button(self, *_args: object) -> None:
+        condition = self.current_condition()
+        # The box alone changes nothing while there is no simulation to send.
+        canvas_changed = (
+            condition is not None
+            and self.canvas_check.isChecked() != self._applied_canvas
+        )
+        self.apply_button.setEnabled(condition != self._applied or canvas_changed)
 
     def _show_in_preview(self, condition: Condition | None) -> None:
         """The embedded layout preview, filtered as a reader would see it."""
@@ -339,19 +416,31 @@ class AccessibilityDialog(QDialog):
         view.setPreviewMode(preview_mode_for(condition))
 
     def apply(self) -> None:
-        """Make the selected simulation the applied one: the canvas follows,
-        and the browser preview opens if the box is ticked. The dialog stays."""
+        """Make the selected simulation the applied one: kept in the plugin's
+        previews, on the canvas if that box is ticked, and in the browser
+        preview if that box is. The dialog stays, and the choice is
+        remembered."""
         condition = self.current_condition()
+        to_canvas = self.canvas_check.isChecked()
         self._applied = condition
-        self._apply_canvas(condition)
+        self._applied_canvas = to_canvas
+        self._apply_canvas(condition if to_canvas else None)
+        self._remember(condition, to_canvas)
         self._update_apply_button()
         if self.browser_check.isChecked() and self._open_preview is not None:
             self._open_preview(condition)
         self.mode_changed.emit(condition or "")
 
+    @staticmethod
+    def _remember(condition: Condition | None, to_canvas: bool) -> None:
+        settings = QSettings()
+        settings.setValue(CONDITION_SETTING, condition or "")
+        settings.setValue(CANVAS_SETTING, to_canvas)
+
     def _discard_unapplied(self) -> None:
         """Back to the last applied simulation (normal vision if none)."""
         self.set_condition(self._applied)
+        self.canvas_check.setChecked(self._applied_canvas)
 
     def closeEvent(self, event: QCloseEvent | None) -> None:  # noqa: N802 - Qt override
         self._discard_unapplied()
@@ -368,23 +457,45 @@ class AccessibilityDialog(QDialog):
 
     # ---- Canvas ------------------------------------------------------------
 
+    def _canvas_original_state(
+        self, canvas: QgsMapCanvas
+    ) -> tuple[bool, object] | None:
+        """The canvas's own preview mode from before any simulation of ours,
+        if one is parked on it (by this dialog or an earlier one)."""
+        if self._canvas_original is not None:
+            return self._canvas_original
+        parked = canvas.property(CANVAS_ORIGINAL_PROPERTY)
+        if not parked:
+            return None
+        from qgis.gui import QgsPreviewEffect
+
+        enabled, _, mode = str(parked).partition(":")
+        try:
+            return enabled == "1", QgsPreviewEffect.PreviewMode(int(mode))
+        except (TypeError, ValueError):
+            return None
+
     def _apply_canvas(self, condition: Condition | None) -> None:
         canvas = self._canvas
         if canvas is None or sip.isdeleted(canvas):
             return
+        original = self._canvas_original_state(canvas)
         if condition is None:
-            if self._canvas_original is not None:
-                enabled, mode = self._canvas_original
+            if original is not None:
+                enabled, mode = original
                 canvas.setPreviewModeEnabled(enabled)
                 if enabled:
                     canvas.setPreviewMode(mode)
                 self._canvas_original = None
+                canvas.setProperty(CANVAS_ORIGINAL_PROPERTY, None)
             return
-        if self._canvas_original is None:
-            self._canvas_original = (
-                canvas.previewModeEnabled(),
-                canvas.previewMode(),
+        if original is None:
+            original = (canvas.previewModeEnabled(), canvas.previewMode())
+            canvas.setProperty(
+                CANVAS_ORIGINAL_PROPERTY,
+                f"{int(original[0])}:{_enum_number(original[1])}",
             )
+        self._canvas_original = original
         canvas.setPreviewModeEnabled(True)
         canvas.setPreviewMode(preview_mode_for(condition))
 
@@ -449,7 +560,7 @@ class AccessibilityDialog(QDialog):
                 column, min(self.table.columnWidth(column), NAME_COLUMN_MAX)
             )
 
-        self.summary_label.setText(self._summary(condition))
+        self.empty_label.setVisible(not self._entries)
         self._update_ask_button()
 
     @staticmethod
@@ -465,35 +576,6 @@ class AccessibilityDialog(QDialog):
         item.setToolTip(colour)
         item.setData(Qt.ItemDataRole.AccessibleTextRole, colour)
         return item
-
-    def _summary(self, condition: Condition | None) -> str:
-        if not self._entries:
-            return tr(
-                "No legend classes to check yet. Save the cartograph with an "
-                "Interactive map frame first."
-            )
-        if condition:
-            count = len(self._lint.under(condition))
-            word = tr(CONDITION_WORDS[condition])
-            if not count:
-                return tr("All classes stay distinguishable under {condition}.").format(
-                    condition=word
-                )
-            return plural(
-                count,
-                "{n} pair of classes collapses under {condition}.",
-                "{n} pairs of classes collapse under {condition}.",
-                condition=word,
-            )
-        pairs = len(self._lint.pairs())
-        if not pairs or self._lint.worst_condition is None:
-            return tr("All classes stay distinguishable under every condition.")
-        return plural(
-            pairs,
-            "{n} pair of classes collapses for some readers; most under {condition}.",
-            "{n} pairs of classes collapse for some readers; most under {condition}.",
-            condition=tr(CONDITION_WORDS[self._lint.worst_condition]),
-        )
 
     # ---- NIKA --------------------------------------------------------------
 
