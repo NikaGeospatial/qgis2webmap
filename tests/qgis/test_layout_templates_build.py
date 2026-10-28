@@ -260,22 +260,32 @@ class TestTheRefinedDesigns:
         assert left >= focus.x - 0.1 and right <= focus.x + focus.w + 0.1
         assert top >= focus.y - 0.1 and bottom <= focus.y + focus.h + 0.1
 
-    def test_signal_shows_the_figures_the_project_gives(self, parcels, project) -> None:
+    def test_signal_shows_the_figures_it_is_given_and_none_from_the_project(
+        self, parcels, project
+    ) -> None:
+        # Older versions kept key figures in project variables; a new page
+        # reads nothing from them (its key numbers are Live counts).
         project.setCustomVariables(
             {"nika_figure_1": "214 | parcels surveyed", "nika_figure_2": " | blank"}
         )
-        result = cartograph_from_view(
-            _view(parcels), UTM, [parcels], project, template_id="dashboard"
-        )
-        layout = result.layout
-        assert layout.itemById("figure-0").text() == "214"
-        assert layout.itemById("figure-0-label").text() == "parcels surveyed"
-        assert layout.itemById("figure-1") is None
-        project.setCustomVariables({})
         bare = cartograph_from_view(
             _view(parcels), UTM, [parcels], project, template_id="dashboard"
         )
         assert bare.layout.itemById("figure-0") is None
+        given = cartograph_from_view(
+            _view(parcels),
+            UTM,
+            [parcels],
+            project,
+            template_id="dashboard",
+            figures=[("214", "parcels surveyed")],
+            layout_name="given",
+        )
+        layout = given.layout
+        assert layout.itemById("figure-0").text() == "214"
+        assert layout.itemById("figure-0-label").text() == "parcels surveyed"
+        assert layout.itemById("figure-1") is None
+        assert project.customVariables()["nika_figure_1"] == "214 | parcels surveyed"
 
     @pytest.mark.parametrize("template_id", ["classic", "dark", "story-map"])
     def test_a_turned_map_gets_a_north_arrow(

@@ -29,12 +29,6 @@ def test_signal_keeps_every_class_with_three_figures_and_long_notes(project, siz
     metadata = project.metadata()
     metadata.setAbstract(data["notes"])
     project.setMetadata(metadata)
-    project.setCustomVariables(
-        {
-            f"nika_figure_{i + 1}": f"{value} | {label}"
-            for i, (value, label) in enumerate(data["figures"])
-        }
-    )
     layers = []
     for name, labels in zip(data["layer_names"], data["legend_labels"]):
         layer = QgsVectorLayer(
@@ -64,6 +58,7 @@ def test_signal_keeps_every_class_with_three_figures_and_long_notes(project, siz
         template_id="dashboard",
         page_size=size,
         orientation="landscape",
+        figures=[(value, label) for value, label in data["figures"]],
     )
     assert result.legend_left_out == 0
     legend = next(

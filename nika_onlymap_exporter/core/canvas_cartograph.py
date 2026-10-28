@@ -228,10 +228,11 @@ def cartograph_from_view(
     Raises `ValueError` for an empty or non-finite extent, an invalid CRS or
     an unknown template, page size or orientation.
     """
-    # A design with figures and none given starts from the older shared
-    # figures a project may still hold, once: they become this layout's own.
-    takes_legacy = figures is None and get_template(template_id).takes_figures
-    drawn = tuple(project_figures(project)) if takes_legacy else tuple(figures or ())
+    # Figures are only what the caller gives: a new page reads nothing from
+    # the project (older versions kept key figures in project variables; a
+    # layout made then keeps its figures as ordinary text). Key numbers on a
+    # new page are Live counts, added with Add item.
+    drawn = tuple(figures or ())
     plan, spec, built, left_out = _build_from_view(
         extent,
         crs,
@@ -247,8 +248,6 @@ def cartograph_from_view(
         text_sizes=text_sizes,
         layout_name=layout_name,
     )
-    if takes_legacy:
-        clear_project_figures(project)
     _record_template(
         built.layout,
         TemplateRecord(
@@ -369,7 +368,7 @@ def template_preview(
     outside the project and thrown away; nothing is added to it.
 
     `figures` are the key figures as the picker's fields hold them, not yet
-    saved; `None` takes the project's (`project_figures`). `text_sizes` is
+    saved; `None` draws none. `text_sizes` is
     the same for the title, legend and notes sizes (`project_text_sizes`).
     The image's `text(PREVIEW_LEGEND_LEFT_OUT_KEY)` is how many legend
     entries the page leaves out for want of room ("0" when none)."""
@@ -627,9 +626,8 @@ def view_input(
 ) -> TemplateInput:
     """What the template planner takes for this view and project: the one
     place a canvas becomes a `TemplateInput`, for the layout, its preview,
-    and the picker's check of what each page includes. `figures` and
-    `text_sizes` `None` take the project's (`project_figures`,
-    `project_text_sizes`)."""
+    and the picker's check of what each page includes. `figures` are only those
+    given; `text_sizes` `None` takes the project's (`project_text_sizes`)."""
     from .template_framing import project_framing
 
     data = TemplateInput(
@@ -648,7 +646,7 @@ def view_input(
         placeholders=dict(placeholders or {}),
         author=project.metadata().author(),
         rotation=rotation,
-        figures=project_figures(project) if figures is None else tuple(figures),
+        figures=tuple(figures or ()),
         extent_center=(extent.center().x(), extent.center().y()),
         fill_frame=project_framing(project) == "fill",
     )
@@ -1129,42 +1127,6 @@ def _view_around_focus(
     return QgsRectangle(cx - half_w, cy - half_h, cx + half_w, cy + half_h)
 
 
-#: The project variables older versions kept the key figures in, in order:
-#: each "value | what it is" -- the user's own numbers, never computed here.
-#: These are only read, to give a new Signal layout the figures a project
-#: already had; they become ordinary text items on that layout.
-FIGURE_VARIABLES = ("nika_figure_1", "nika_figure_2", "nika_figure_3")
-
-
-def project_figures(project: QgsProject) -> tuple[tuple[str, str], ...]:
-    """The key figures the user set as project variables (`FIGURE_VARIABLES`),
-    as (value, label) pairs; one with no value is skipped."""
-    return tuple(row for row in project_figure_rows(project) if row[0])
-
-
-def project_figure_rows(project: QgsProject) -> tuple[tuple[str, str], ...]:
-    """Every one of `FIGURE_VARIABLES` as a (value, label) pair, in order,
-    ("", "") where it is unset. A label with
-    no value is kept here; `project_figures` and the
-    page leave it out."""
-    variables = project.customVariables()
-    rows = []
-    for name in FIGURE_VARIABLES:
-        raw = str(variables.get(name) or "").strip()
-        value, _, label = raw.partition("|")
-        rows.append((value.strip(), label.strip()))
-    return tuple(rows)
-
-
-def clear_project_figures(project: QgsProject) -> None:
-    """Remove `FIGURE_VARIABLES` from the project: once a layout has taken
-    them as its own text items, no other layout is to inherit them."""
-    variables = dict(project.customVariables())
-    taken = [variables.pop(name, None) for name in FIGURE_VARIABLES]
-    if any(value is not None for value in taken):
-        project.setCustomVariables(variables)
-
-
 #: The project variables the title, legend and notes size steps are kept in
 #: (whole percent; older versions stored a step id, still read); unset is 100.
 TEXT_SIZE_VARIABLES = ("nika_size_title", "nika_size_legend", "nika_size_notes")
@@ -1271,7 +1233,7 @@ def preview_state_key(
     extent, CRS and rotation; each layer in order -- its id, name, source,
     whole style (symbology, labels, opacity, blend), credit, filter,
     feature count and data `revisions`; the project's title, abstract,
-    author, key figure and text size variables; today's date (two designs print it);
+    author and text size variables; today's date (two designs print it);
     and the set of designs. Any of them changing changes the key, so a
     page drawn before is never shown after."""
     parts = [
@@ -1289,7 +1251,6 @@ def preview_state_key(
         project.title(),
         project.metadata().abstract(),
         project.metadata().author(),
-        repr(sorted(project_figure_rows(project))),
         repr(project_text_sizes(project)),
         date.today().isoformat(),
         repr(tuple(template.id for template in layout_templates.TEMPLATES)),

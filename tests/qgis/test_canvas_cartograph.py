@@ -13,9 +13,6 @@ from nika_onlymap_exporter.core.canvas_cartograph import (
     FRAME_ID,
     cartograph_from_canvas,
     cartograph_from_view,
-    clear_project_figures,
-    project_figure_rows,
-    project_figures,
     project_text_sizes,
     view_input,
 )
@@ -209,38 +206,6 @@ class TestCanvasLayout:
     def test_empty_extent_is_rejected(self, project, parcels) -> None:
         with pytest.raises(ValueError):
             cartograph_from_view(qgis_core.QgsRectangle(), UTM, [parcels], project)
-
-
-class TestKeyFigureVariables:
-    """The key figures older versions kept as project variables, now only
-    read (they become ordinary text items: `test_signal_figures.py`)."""
-
-    def test_rows_keep_every_slot_and_the_figures_only_real_ones(self, project) -> None:
-        project.setCustomVariables(
-            {
-                "nika_figure_1": " 214 | parcels surveyed ",
-                "nika_figure_2": "| a label alone",
-                "nika_figure_3": "12 km",
-            }
-        )
-        assert project_figure_rows(project) == (
-            ("214", "parcels surveyed"),
-            ("", "a label alone"),
-            ("12 km", ""),
-        )
-        assert project_figures(project) == (
-            ("214", "parcels surveyed"),
-            ("12 km", ""),
-        )
-
-    def test_taking_them_for_a_layout_removes_the_variables(self, project) -> None:
-        project.setCustomVariables(
-            {"nika_figure_1": "1 | one", "nika_figure_2": "2 | two", "other": "kept"}
-        )
-        clear_project_figures(project)
-        assert project.customVariables() == {"other": "kept"}
-        clear_project_figures(project)
-        assert project.customVariables() == {"other": "kept"}
 
 
 class TestTextSizeVariables:

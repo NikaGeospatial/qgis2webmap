@@ -350,9 +350,6 @@ class LayoutTemplate:
     #: A short English "Best for: ..." line naming the jobs the design suits,
     #: shown in the card's tooltip; translated by the UI.
     best_for: str = ""
-    #: Whether the design draws `TemplateInput.figures` (its key figures):
-    #: the Edit tab offers to add them to a page made from a design that does.
-    takes_figures: bool = False
     #: The design's readable floor for legend rows on a page, in points
     #: (`TemplatePlan.legend_min_pt`); `None` is `MINIMUM_TYPE.legend`. A
     #: large-print design sets a higher one.
@@ -1604,12 +1601,14 @@ TEMPLATES: tuple[LayoutTemplate, ...] = (
     LayoutTemplate(
         "dashboard",
         N_("Signal"),
-        N_("A data-led page: the map, with its notes, legend and scale bar."),
+        N_(
+            "A data-led page: the map, with its notes, legend and scale bar. "
+            "Add Live counts for its key numbers."
+        ),
         _dashboard,
         category=CHARACTERFUL,
         best_for=N_("Best for: data summaries and briefings with key statistics."),
         includes=(N_("notes"), N_("legend"), N_("scale bar")),
-        takes_figures=True,
     ),
     LayoutTemplate(
         "dark",

@@ -67,7 +67,8 @@ around it (not from an item), or hold **Space** and drag, or drag with the
 middle mouse button, to pan. There are no Select and Pan buttons: the page is always in
 selecting mode.
 
-**Add item** offers **Text**, **Legend**, **Scale bar** and **North arrow**.
+**Add item** offers **Text**, **Legend**, **Scale bar**, **North arrow**,
+**Live count** and **Detail map**.
 Choose one, then click the page to place it at its default size, or drag to
 draw its box. The new item is selected and the panel opens its **Edit** tab.
 
@@ -250,6 +251,22 @@ undo step on the layout.
   labels, their order, **restore** for removed entries, columns, text size and
   row spacing, and the map it is about.
 - **Scale bar** and **North arrow** - the map they are linked to.
+- **Live count** - a number that counts what a map frame currently shows, with
+  a caption under it. It follows one map (**Following: Main map**; with several
+  maps, choose which). **Count from** is the layer; **Count** is **All features**
+  or **Matching a value** (a **Field** and a **Value**; "no value" is offered
+  apart from an empty text). The count is the layer's features in the ground
+  the frame shows (including its rotation), as the frame draws them: a layer the
+  frame does not draw, a switched-off category or rule, a layer filter and a
+  scale limit all apply, and a line or polygon counts once if any part of it is
+  shown. It updates by itself when the map, the layers or their styles
+  change. The number reads **—** while the counter is not set up or its layer,
+  field or map is gone (the Edit tab says which), and **n/a** if it could not
+  be calculated; it is never a made-up 0. The lettering and position are
+  the ordinary text controls; the number itself cannot be typed over.
+  Saving, printing and exporting use the number of the view that leaves. In the
+  exported web page the number is fixed text: it does not change when a reader
+  pans or zooms an Interactive map.
 - **Delete** - removes the selected item (also the Delete key).
 
 ---

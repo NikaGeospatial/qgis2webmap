@@ -1727,7 +1727,6 @@ class TestCanvasAndImport:
             "extent": lambda: canvas.zoomByFactor(0.5),
             "title": lambda: project.setTitle("Lakes"),
             "abstract": abstract,
-            "figures": lambda: project.setCustomVariables({"nika_figure_1": "214"}),
             "layer toggled off": lambda: canvas.setLayers([]),
         }
         try:

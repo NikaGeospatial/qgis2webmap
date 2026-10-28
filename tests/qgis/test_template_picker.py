@@ -1343,10 +1343,6 @@ class TestThePreviewKey:
             pytest.param(lambda v: v.project.setTitle("Lakes"), id="title"),
             pytest.param(_abstract, id="abstract"),
             pytest.param(_author, id="author"),
-            pytest.param(
-                lambda v: v.project.setCustomVariables({"nika_figure_1": "214"}),
-                id="figures",
-            ),
         ],
     )
     def test_each_change_a_preview_shows_is_a_new_key(self, qgis_app, view, change):

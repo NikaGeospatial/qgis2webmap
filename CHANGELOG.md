@@ -49,8 +49,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     the page: a panel with nothing real to show is left out and the map takes
     its room. Each card says what that page includes for this project, and
     what else the design can show with more content (notes, a source line, a
-    sheet number). Signal's key figures, where a project holds them as variables,
-    are drawn as ordinary text items you edit like any other text.
+    sheet number). Signal's key numbers are **Live counts** added with
+    **Add item**; a page made by an earlier version keeps its figures as
+    ordinary text items you edit like any other text.
     The picker only chooses a design, page size, orientation and framing;
     change text sizes with **A-** / **A+** in the **Edit** tab. Legend text never drops below a readable size (8 pt): a legend that still cannot fit leaves
     its last entries out, and the card and the **Checks** tab say how many.
@@ -66,14 +67,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     its unit. A ramp whose range QGIS never computed is marked in the editor
     rather than restyled.
   - **Edit on the page**: the preview bar has **Fit page**, **Add item**
-    (Text, Legend, Scale bar, North arrow - click to place, or drag to draw)
+    (Text, Legend, Scale bar, North arrow, Live count, Detail map - click to
+    place, or drag to draw)
     and zoom; pan with Space and drag or the middle mouse button (a press that
     moves under 3 px is a click). The **Edit** tab holds the selected item's
     controls - text words, bold, colour and alignment, **A−**/**A+** lettering
     size, a map's **Edit view**, **Context layers...**, **Fit context**,
     **Remove inset**, **Use canvas extent**, rotation and Interactive/Image,
-    the legend editor, a scale bar's or north arrow's map, and **Delete**.
+    the legend editor, a scale bar's or north arrow's map, a **Live count**'s
+    layer, field and value, and **Delete**.
     Double-clicking an item or adding one switches to it.
+  - **Live count**: a number that counts what a map frame currently shows -
+    a layer's features, or those with one field value, in the frame's displayed
+    ground (rotation included) and as the frame draws them (layers, themes,
+    filters, switched-off categories and rules, scale limits). It follows the
+    map by itself, shows **—** when it is not set up or its source is gone
+    (with the reason in the **Edit** tab), and is fixed text in the exported
+    page. It replaces the typed-in statistic callout.
   - **Print PDF** (the PDF QGIS writes for CMYK and ICC) keeps text and
     shapes as vectors and rasterises only the transparent or blended layers.
   - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's

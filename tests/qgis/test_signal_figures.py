@@ -19,7 +19,6 @@ from qgis.PyQt.QtCore import QRectF
 
 from nika_onlymap_exporter.core.canvas_cartograph import (
     cartograph_from_view,
-    project_figures,
     template_record,
 )
 
@@ -118,11 +117,9 @@ class TestSignalBalance:
 class TestOlderProjects:
     """Key figures an older version kept as project variables."""
 
-    def test_the_first_new_signal_page_takes_the_variables_once(
-        self, parcels, project
-    ) -> None:
+    def test_a_new_signal_page_ignores_the_variables(self, parcels, project) -> None:
         project.setCustomVariables({"nika_figure_1": "214 | parcels surveyed"})
-        first = cartograph_from_view(
+        layout = cartograph_from_view(
             _view(parcels),
             UTM,
             [parcels],
@@ -130,17 +127,11 @@ class TestOlderProjects:
             template_id="dashboard",
             layout_name="a",
         ).layout
-        assert _words(first) == [("214", "parcels surveyed")]
-        assert project_figures(project) == ()
-        second = cartograph_from_view(
-            _view(parcels),
-            UTM,
-            [parcels],
-            project,
-            template_id="dashboard",
-            layout_name="b",
-        ).layout
-        assert _words(second) == []
+        assert _words(layout) == []
+        # They are not taken, changed or removed either.
+        assert project.customVariables() == {
+            "nika_figure_1": "214 | parcels surveyed"
+        }
 
     def test_a_new_project_shows_no_statistics(self, parcels, project) -> None:
         layout = cartograph_from_view(

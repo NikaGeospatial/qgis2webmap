@@ -90,11 +90,10 @@ keeps showing them on the pages it makes.
 - **Near & Far** - the map with a locator inset that outlines where it is,
   beside the map or below it, whichever shows your view larger. *Best for: maps of a small area that need locating.*
 - **Signal** - a data-led page: the map with its notes, legend and scale bar.
-  Where a project holds key figures (a value such as *214* over what it
-  counts), Signal draws them as ordinary text, which you select and edit like
-  any other text on the page. With a substantial legend, Signal arranges the
-  figures in a row or gives the key a full-height column to keep its entries
-  readable. *Best for: data summaries and briefings with key statistics.*
+  For its key numbers, add **Live counts** with **Add item** (see below): each
+  counts what a map on the page currently shows. A Signal page made by an
+  earlier version keeps its key figures as ordinary text, which you select and
+  edit like any other text. *Best for: data summaries and briefings with key statistics.*
 - **Wayfinder** - a long map for routes, rivers and coasts, with a distance
   scale. It adds no routes or waypoints of its own. *Best for: routes, rivers and coasts.*
 
