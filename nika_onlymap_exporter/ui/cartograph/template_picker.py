@@ -48,6 +48,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import time
 from collections import OrderedDict
 from collections.abc import Iterable
 from typing import Protocol
@@ -183,6 +184,10 @@ _CARD_RENDER_TIMEOUT_MS = 45_000
 _WIDTH_STEP = 40
 #: How soon to look again while a cancelled page still holds the render slot.
 _SLOT_RECHECK_MS = 100
+#: How long one turn of planning cards may run before the window gets the
+#: event loop back (a single card's plan is not split, so a turn can run a
+#: little past it).
+_PLAN_TURN_S = 0.05
 
 _PAGE_LABELS = {
     "Letter": N_("Letter (ANSI A)"),
@@ -592,6 +597,16 @@ class _TemplateRow(QFrame):
             tr("Layout guide. Your current map replaces it as it is drawn.")
         )
 
+    def show_waiting(self) -> None:
+        """An empty page, "Waiting to draw": the card is not planned yet, so
+        there is no layout guide to show over it."""
+        self.show_page(None)
+        self.status.setText(tr("Waiting to draw"))
+        self.status.setVisible(True)
+        self.page.setToolTip(
+            tr("Layout guide. Your current map replaces it as it is drawn.")
+        )
+
     def _refit(self) -> None:
         box = self._box
         if self._image is not None:
@@ -821,6 +836,13 @@ class TemplatePicker(QDialog):
         #: The designs still to draw for the current settings, most useful
         #: first. Recomputed whenever what is useful changes.
         self._queue: list[str] = []
+        #: The designs whose cues and layout guide are still to be planned,
+        #: most useful first; planned in short turns after the window shows
+        #: (`_plan_turn`), never all in the constructor.
+        self._plan_queue: list[str] = []
+        #: False until the constructor is done: choosing a card plans it at
+        #: once only from then on.
+        self._ready = False
         #: The design being drawn in the background, its page key and the
         #: pending preview; one at a time, so the order above holds.
         self._inflight: tuple[str, _PageKey, PendingPreview] | None = None
@@ -828,6 +850,10 @@ class TemplatePicker(QDialog):
         self._timer.setSingleShot(True)
         self._timer.setInterval(0)
         self._timer.timeout.connect(self._render_next)
+        self._plan_timer = QTimer(self)
+        self._plan_timer.setSingleShot(True)
+        self._plan_timer.setInterval(0)
+        self._plan_timer.timeout.connect(self._plan_turn)
         #: Running while the list scrolls: no page is drawn until it stops.
         self._scroll_rest = QTimer(self)
         self._scroll_rest.setSingleShot(True)
@@ -1026,6 +1052,7 @@ class TemplatePicker(QDialog):
         theme.attach_menus(self)
         self._fit_to_screen(parent)
         self._restart_previews()
+        self._ready = True
 
     # ---- The choice ----------------------------------------------------------
 
@@ -1142,7 +1169,6 @@ class TemplatePicker(QDialog):
         """Show what is already drawn for the current page settings, and draw
         the rest, the most useful first. Never draws in this call: a page
         setting changed over and over costs nothing but the last one."""
-        self._update_cues(self.rows)
         self._relayout()
         for template_id in self.rows:
             self._show_state(template_id)
@@ -1167,6 +1193,14 @@ class TemplatePicker(QDialog):
                 and self._inflight[0] == template_id
                 and self._inflight[1] == key
             )
+            if not self._is_planned(template_id):
+                if not drawing:
+                    row.show_waiting()
+                    self._items[template_id].setToolTip(
+                        card_tooltip(self._templates[template_id])
+                    )
+                    return
+                self._update_cues([template_id])
             row.show_guide(self._guide(template_id, key), drawing)
             self._items[template_id].setToolTip(
                 card_tooltip(self._templates[template_id])
@@ -1225,14 +1259,65 @@ class TemplatePicker(QDialog):
             self._plans.popitem(last=False)
         return plan
 
+    def _is_planned(self, template_id: str) -> bool:
+        """Whether the card's cues are known for the current page settings.
+        Without a planner there is nothing to plan."""
+        return self._planner is None or _plan_key(self._key(template_id)) in self._cues
+
+    def _plan_order(self) -> list[str]:
+        """The unplanned designs, most useful first: the chosen one, the
+        cards in view, the ones a short scroll away, then the rest of the
+        list."""
+        current = self.template_list.currentItem()
+        chosen = (
+            str(current.data(Qt.ItemDataRole.UserRole))
+            if current is not None and not current.isHidden()
+            else None
+        )
+        shown = [t for t, item in self._items.items() if not item.isHidden()]
+        order = ([chosen] if chosen else []) + self.visible_ids() + self.near_ids()
+        order += shown
+        seen: set[str] = set()
+        return [
+            t
+            for t in order
+            if t in self._templates
+            and t not in seen
+            and not seen.add(t)
+            and not self._is_planned(t)
+        ]
+
+    def _plan_turn(self) -> None:
+        """Plan cards for a short while, then let the window breathe: each
+        card's cues and layout guide appear as it is planned."""
+        if self._closed:
+            return
+        deadline = time.monotonic() + _PLAN_TURN_S
+        planned = False
+        while self._plan_queue:
+            template_id = self._plan_queue.pop(0)
+            if self._is_planned(template_id):
+                continue
+            self._update_cues([template_id])
+            self._show_state(template_id)
+            planned = True
+            if time.monotonic() >= deadline:
+                break
+        if planned:
+            self._relayout()
+        if self._plan_queue:
+            self._plan_timer.start()
+
     def _stop_drawing(self) -> None:
         """The picker is answered: obsolete callbacks are dropped at once
         (a late page finds no page in flight) and the page being drawn is
         handed back to QGIS to cancel."""
         self._closed = True
         self._timer.stop()
+        self._plan_timer.stop()
         self._scroll_rest.stop()
         self._queue.clear()
+        self._plan_queue.clear()
         self._cancel_inflight()
 
     def _update_cues(self, template_ids: Iterable[str]) -> None:
@@ -1269,7 +1354,11 @@ class TemplatePicker(QDialog):
         further down the list waits until it comes near the view."""
         if self._closed:
             self._queue.clear()
+            self._plan_queue.clear()
             return
+        self._plan_queue = self._plan_order()
+        if self._plan_queue and not self._plan_timer.isActive():
+            self._plan_timer.start()
         current = self.template_list.currentItem()
         chosen = (
             str(current.data(Qt.ItemDataRole.UserRole))
@@ -1583,6 +1672,11 @@ class TemplatePicker(QDialog):
         template = self._templates.get(str(chosen)) if chosen else None
         name = tr(template.name) if template else ""
         self.selected_label.setText(tr("Selected: {name}").format(name=name))
+        if self._ready and chosen and not self._is_planned(str(chosen)):
+            # Chosen before its turn: plan it now, as if it always had been.
+            self._update_cues([str(chosen)])
+            self._show_state(str(chosen))
+            self._relayout()
         self._reprioritise()
 
     def _on_filter(self, _button: object, checked: bool) -> None:
