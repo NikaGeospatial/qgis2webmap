@@ -134,6 +134,13 @@ class _QuietDoubleSpin(QDoubleSpinBox):
             event.ignore()
 
 
+#: The Edit tab's layout: content inset from the panel's sides, the gap between
+#: neighbouring controls, and the clearance between the tab underline and the
+#: selected-item header (the same for every kind of item).
+PANEL_INSET = 12
+PANEL_SPACING = 8
+SELECTED_HEADER_CLEARANCE = 16
+
 #: The Edit tab's text box: its default, floor and ceiling, in lines of the
 #: panel font, and where the user's own height is remembered (as lines, so a
 #: different font or scaling keeps the same number of lines).
@@ -366,17 +373,19 @@ class ContextControls(QFrame):
         self._field_labels: list[QLabel] = []
 
         column = QVBoxLayout(self)
-        column.setContentsMargins(0, 4, 0, 0)
-        column.setSpacing(6)
+        column.setContentsMargins(
+            PANEL_INSET, SELECTED_HEADER_CLEARANCE, PANEL_INSET, 0
+        )
+        column.setSpacing(PANEL_SPACING)
 
         head = QHBoxLayout()
-        head.setSpacing(6)
+        head.setSpacing(PANEL_SPACING)
         # "Selected: Legend", or the hint with nothing selected. The tab's
         # own title never changes, so the tab bar does not jump.
         self.heading = QLabel(self)
         self.heading.setWordWrap(True)
         self.heading.setMinimumWidth(1)
-        head.addWidget(self.heading, 1)
+        head.addWidget(self.heading, 1, Qt.AlignmentFlag.AlignVCenter)
         self.delete_button = _small_button(
             tr("Delete"), tr("Delete the selected item (Delete key)"), self
         )
@@ -385,24 +394,28 @@ class ContextControls(QFrame):
         self.delete_button.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        head.addWidget(self.delete_button)
-        column.addLayout(head)
+        head.addWidget(self.delete_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.head_row = QWidget(self)
+        self.head_row.setLayout(head)
+        head.setContentsMargins(0, 0, 0, 0)
+        column.addWidget(self.head_row)
 
         # Everything below the heading belongs to a selected item.
         self.body = QWidget(self)
         body = QVBoxLayout(self.body)
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(6)
+        body.setSpacing(PANEL_SPACING)
         self._build_text_size_row(body)
         self.pages = _CurrentPageStack(self.body)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.pages.currentChanged.connect(lambda _index: self.pages.updateGeometry())
         body.addWidget(self.pages)
         column.addWidget(self.body)
-        # Statistic callouts of a layout that has them: shown with or without
-        # a selection, so a first one can be added to an empty page.
+        # Statistic callouts: the creation form only after "Statistic
+        # callout..." in the Add item menu, and a selected callout's words.
         self.callout_controls = CalloutControls(self)
         self.callout_controls.edited.connect(self.edited)
+        self.callout_controls.form_closed.connect(self.refresh)
         column.addWidget(self.callout_controls)
         column.addStretch(1)
         self._build_text_page()
@@ -418,7 +431,7 @@ class ContextControls(QFrame):
         page = QWidget(self.pages)
         column = QVBoxLayout(page)
         column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(4)
+        column.setSpacing(PANEL_SPACING)
         self.pages.addWidget(page)
         return page, column
 
@@ -534,18 +547,16 @@ class ContextControls(QFrame):
             tr("Set this map's extent to what the QGIS map canvas shows")
         )
         self.canvas_button.clicked.connect(self._on_canvas)
-        # The buttons wrap onto a second line in a narrow panel rather than
-        # widening it.
-        column.addWidget(
-            flow_row(self.map_page, [self.edit_view_button, self.canvas_button])
-        )
+        # Each button takes a full row of the panel.
+        column.addWidget(self.edit_view_button)
+        column.addWidget(self.canvas_button)
 
         # Labels in one column, fields in the other: every field starts and
         # ends at the same edges, however wide the panel.
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(6)
+        grid.setHorizontalSpacing(PANEL_SPACING)
+        grid.setVerticalSpacing(PANEL_SPACING)
         grid.setColumnStretch(1, 1)
         rotation_label = self._field_label(tr("Rotation"), self.map_page)
         self.rotation_spin = _QuietDoubleSpin(self.map_page)
@@ -554,6 +565,12 @@ class ContextControls(QFrame):
         self.rotation_spin.setSuffix("\N{DEGREE SIGN}")
         self.rotation_spin.setKeyboardTracking(False)
         self.rotation_spin.setAccessibleName(tr("Map rotation"))
+        self.rotation_spin.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.rotation_spin.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         rotation_label.setBuddy(self.rotation_spin)
         self.rotation_spin.editingFinished.connect(self._on_rotation)
         grid.addWidget(rotation_label, 0, 0)
@@ -696,6 +713,16 @@ class ContextControls(QFrame):
         self._item = None
         self.refresh()
 
+    def begin_callout(self) -> None:
+        """ "Statistic callout..." in the Add item menu: nothing selected, and
+        the form for a new callout in the Edit tab."""
+        layout = self._layout
+        if layout is None or sip.isdeleted(layout):
+            return
+        layout.deselectAll()
+        self.callout_controls.begin(layout)
+        self.refresh()
+
     def selected_item(self) -> QgsLayoutItem | None:
         """The one selected item the tab is showing, if any."""
         return self._item
@@ -729,6 +756,7 @@ class ContextControls(QFrame):
         if item is None or layout is None:
             self._show_nothing_selected()
             return
+        self.head_row.setVisible(True)
         self._loading = True
         try:
             kind = self._kind(item)
@@ -805,12 +833,14 @@ class ContextControls(QFrame):
         self.heading.setText(
             tr(
                 "Select an item on the page to edit it. "
-                "Add item puts a new one on the page."
+                "Use Add item to add something new."
             )
         )
         self.heading.setProperty("role", "hint")
         self.heading.style().unpolish(self.heading)
         self.heading.style().polish(self.heading)
+        # The creation form, opened from the Add item menu, replaces the hint.
+        self.head_row.setVisible(not self.callout_controls.isVisibleTo(self))
         self.delete_button.setVisible(False)
         self.text_size_row.setVisible(False)
         self.body.setVisible(False)
@@ -932,12 +962,26 @@ class ContextControls(QFrame):
             self.edit_view_button.setChecked(editing)
         finally:
             self._loading = was_loading
+        self._sync_edit_view_label()
+
+    def _sync_edit_view_label(self) -> None:
+        """ "Done editing view" while the map's view is being edited."""
+        item = self._item
+        inset = (
+            isinstance(item, QgsLayoutItemMap)
+            and not sip.isdeleted(item)
+            and is_locator(item)
+        )
+        if self.edit_view_button.isChecked():
+            text = tr("Done editing view")
+        else:
+            text = tr("Edit inset view") if inset else tr("Edit view")
+        self.edit_view_button.setText(text)
+        self.edit_view_button.setMinimumWidth(self.edit_view_button.sizeHint().width())
 
     def _show_inset(self, item: QgsLayoutItemMap) -> None:
         inset = is_locator(item)
-        self.edit_view_button.setText(
-            tr("Edit inset view") if inset else tr("Edit view")
-        )
+        self._sync_edit_view_label()
         self.inset_row.setVisible(inset)
         self.context_note.setVisible(False)
         if not inset:
@@ -1018,6 +1062,7 @@ class ContextControls(QFrame):
         self.refresh()
 
     def _on_edit_view(self, on: bool) -> None:
+        self._sync_edit_view_label()
         if not self._loading:
             self.edit_view_toggled.emit(on)
 

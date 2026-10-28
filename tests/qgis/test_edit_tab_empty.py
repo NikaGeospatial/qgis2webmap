@@ -1,0 +1,346 @@
+"""The Edit tab's empty state, the statistic callout entry in the Add item
+menu, and the selected item's header and map controls.
+
+Real widgets, judged by what is visible: what shows with nothing selected, how
+a callout is created, where the header and the buttons sit.
+
+Copyright (C) 2026 NIKA
+SPDX-License-Identifier: GPL-2.0-or-later
+"""
+
+from __future__ import annotations
+
+import pytest
+from cartograph_fixtures import UTM, build_parcels_layer
+from test_cartograph_panel_widgets import _settle
+from test_edit_tab_fit import _item_of
+
+pytest.importorskip("qgis.core")
+
+NO_ITEM_TEXT = (
+    "Select an item on the page to edit it. Use Add item to add something new."
+)
+THREE = "This layout already has three callouts. Select one to edit or remove it."
+
+
+@pytest.fixture
+def parcels(project):
+    project.setTitle("Survey")
+    layer = build_parcels_layer()
+    project.addMapLayer(layer)
+    return layer
+
+
+def _layout(parcels, project, template_id="dashboard"):
+    from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
+
+    extent = parcels.extent()
+    extent.grow(200)
+    return cartograph_from_view(
+        extent, UTM, [parcels], project, template_id=template_id, layout_name="x"
+    ).layout
+
+
+@pytest.fixture
+def pane(qgis_app, parcels, project):
+    from nika_onlymap_exporter.ui import theme
+    from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+    layout = _layout(parcels, project)
+    pane = PagePane()
+    theme.apply(pane)
+    pane.resize(900, 650)
+    pane.show()
+    pane.show_layout(layout)
+    pane.controls.resize(340, 640)
+    pane.controls.show()
+    layout.deselectAll()
+    pane.controls.refresh()
+    _settle(qgis_app, 0.1)
+    yield pane, layout
+    pane.close()
+    pane.deleteLater()
+
+
+def _visible(controls, widget) -> bool:
+    return widget.isVisibleTo(controls)
+
+
+def _menu_action(pane, title):
+    pane._fill_add_menu()
+    return next((a for a in pane.add_menu.actions() if a.text() == title), None)
+
+
+def _callout_words(layout):
+    from nika_onlymap_exporter.ui.cartograph.callouts import layout_callouts
+
+    return [(c.value, c.label) for c in layout_callouts(layout)]
+
+
+class TestNothingSelected:
+    def test_only_the_hint_is_visible(self, pane) -> None:
+        pane, _ = pane
+        controls = pane.controls
+        assert controls.heading.text() == NO_ITEM_TEXT
+        assert _visible(controls, controls.heading)
+        for hidden in (
+            controls.delete_button,
+            controls.body,
+            controls.text_size_row,
+            controls.callout_controls,
+            controls.callout_controls.add_button,
+            controls.callout_controls.value_edit,
+        ):
+            assert not _visible(controls, hidden), hidden
+
+    def test_existing_callouts_do_not_bring_the_form_back(self, qgis_app, pane) -> None:
+        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
+
+        pane, layout = pane
+        assert add_callout(layout, "12 km", "of road")
+        layout.deselectAll()
+        pane.controls.refresh()
+        assert not _visible(pane.controls, pane.controls.callout_controls)
+        assert pane.controls.heading.text() == NO_ITEM_TEXT
+
+
+class TestStatisticCalloutMenuEntry:
+    def test_present_for_a_design_with_callouts_absent_otherwise(
+        self, qgis_app, parcels, project, pane
+    ) -> None:
+        from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
+
+        pane, _ = pane
+        action = _menu_action(pane, "Statistic callout…")
+        assert action is not None and action.isEnabled()
+        classic = PagePane()
+        try:
+            classic.show()
+            classic.show_layout(_layout(parcels, project, "classic"))
+            assert _menu_action(classic, "Statistic callout…") is None
+        finally:
+            classic.close()
+
+    def test_choosing_it_opens_the_form_with_add_and_cancel(self, pane) -> None:
+        pane, layout = pane
+        controls = pane.controls
+        _menu_action(pane, "Statistic callout…").trigger()
+        assert layout.selectedLayoutItems() == []
+        form = controls.callout_controls
+        assert _visible(controls, form)
+        assert _visible(controls, form.value_edit)
+        assert _visible(controls, form.add_button)
+        assert _visible(controls, form.cancel_button)
+        assert not _visible(controls, controls.delete_button)
+        assert not _visible(controls, controls.body)
+        assert not _visible(controls, form.remove_button)
+
+    def test_cancel_returns_to_the_empty_tab(self, pane) -> None:
+        pane, layout = pane
+        controls = pane.controls
+        _menu_action(pane, "Statistic callout…").trigger()
+        controls.callout_controls.cancel_button.click()
+        assert not _visible(controls, controls.callout_controls)
+        assert controls.heading.text() == NO_ITEM_TEXT
+        assert _callout_words(layout) == []
+
+    def test_add_puts_the_callout_on_the_page_and_selects_it(self, pane) -> None:
+        from qgis.PyQt.QtTest import QTest
+
+        pane, layout = pane
+        controls = pane.controls
+        form = controls.callout_controls
+        _menu_action(pane, "Statistic callout…").trigger()
+        form.value_edit.setFocus()
+        QTest.keyClicks(form.value_edit, "214")
+        QTest.keyClicks(form.label_edit, "parcels")
+        form.add_button.click()
+        assert _callout_words(layout) == [("214", "parcels")]
+        selected = layout.selectedLayoutItems()
+        assert len(selected) == 1
+        assert selected[0].text() in ("214", "parcels")
+        # Its editing controls, not the creation form.
+        assert _visible(controls, form.remove_button)
+        assert not _visible(controls, form.add_button)
+        assert not _visible(controls, form.cancel_button)
+        assert _visible(controls, controls.body)
+        assert _visible(controls, controls.delete_button)
+
+    def test_selecting_an_existing_callout_shows_its_fields(self, pane) -> None:
+        from nika_onlymap_exporter.ui.cartograph.callouts import (
+            add_callout,
+            find_part,
+        )
+
+        pane, layout = pane
+        assert add_callout(layout, "12 km", "of road")
+        layout.deselectAll()
+        find_part(layout, 0, False).setSelected(True)
+        controls = pane.controls
+        controls.refresh()
+        form = controls.callout_controls
+        assert _visible(controls, form)
+        assert form.value_edit.text() == "12 km"
+        assert form.label_edit.text() == "of road"
+        assert _visible(controls, controls.text_size_row)
+        assert _visible(controls, controls.bold_button)
+
+    def test_at_three_callouts_the_entry_is_disabled_with_a_reason(self, pane) -> None:
+        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
+
+        pane, layout = pane
+        for value in ("1", "2", "3"):
+            assert add_callout(layout, value, "")
+        action = _menu_action(pane, "Statistic callout…")
+        assert not action.isEnabled()
+        assert action.toolTip() == THREE
+
+    def test_picking_something_else_closes_the_form(self, pane) -> None:
+        pane, layout = pane
+        controls = pane.controls
+        _menu_action(pane, "Statistic callout…").trigger()
+        item = _item_of(layout, "map")
+        item.setSelected(True)
+        controls.refresh()
+        assert not _visible(controls, controls.callout_controls)
+        layout.deselectAll()
+        controls.refresh()
+        assert not _visible(controls, controls.callout_controls)
+
+
+@pytest.fixture
+def map_tab(qgis_app, parcels, project):
+    from test_edit_tab_fit import shown_controls
+
+    layout = _layout(parcels, project)
+    scroll, controls = shown_controls(layout, "map", 340)
+    controls.dpi_combo.clear()
+    _settle(qgis_app, 0.2)
+    yield scroll, controls
+    scroll.close()
+
+
+def _top_in(scroll, widget) -> int:
+    return widget.mapTo(scroll.viewport(), widget.rect().topLeft()).y()
+
+
+class TestSelectedItemHeader:
+    @pytest.mark.parametrize(
+        "kind", ["map", "text", "legend", "scale_bar", "north_arrow"]
+    )
+    def test_sixteen_pixels_clear_for_every_kind(
+        self, qgis_app, parcels, project, kind
+    ) -> None:
+        from test_edit_tab_fit import shown_controls
+
+        scroll, controls = shown_controls(_layout(parcels, project), kind, 340)
+        try:
+            _settle(qgis_app, 0.2)
+            assert _top_in(scroll, controls.head_row) == 16
+        finally:
+            scroll.close()
+
+    def test_label_and_delete_are_centred_and_delete_is_fully_hit_able(
+        self, qgis_app, map_tab
+    ) -> None:
+        scroll, controls = map_tab
+        label, delete = controls.heading, controls.delete_button
+        label_mid = label.mapTo(controls, label.rect().center()).y()
+        delete_mid = delete.mapTo(controls, delete.rect().center()).y()
+        assert abs(label_mid - delete_mid) <= 1
+        area = controls.head_row.rect()
+        box = delete.geometry()
+        assert area.contains(box)
+        assert box.height() >= delete.sizeHint().height()
+        assert box.width() >= delete.sizeHint().width()
+        right = delete.mapTo(scroll.viewport(), delete.rect().topRight()).x()
+        assert right <= scroll.viewport().width() - 12 + 1
+
+    def test_content_is_inset_twelve_pixels(self, qgis_app, map_tab) -> None:
+        scroll, controls = map_tab
+        left = controls.edit_view_button.mapTo(
+            scroll.viewport(), controls.edit_view_button.rect().topLeft()
+        ).x()
+        right = controls.edit_view_button.mapTo(
+            scroll.viewport(), controls.edit_view_button.rect().topRight()
+        ).x()
+        assert left == 12
+        assert right == scroll.viewport().width() - 12 - 1
+
+
+class TestMapControls:
+    def test_the_two_buttons_are_full_width_rows(self, qgis_app, map_tab) -> None:
+        scroll, controls = map_tab
+        first, second = controls.edit_view_button, controls.canvas_button
+        assert first.width() == second.width() == controls.width() - 24
+        assert _top_in(scroll, second) > _top_in(scroll, first) + first.height()
+
+    def test_the_form_fields_line_up_and_expand(self, qgis_app, map_tab) -> None:
+        _scroll, controls = map_tab
+        fields = (controls.rotation_spin, controls.mode_combo)
+        lefts = {f.mapTo(controls, f.rect().topLeft()).x() for f in fields}
+        rights = {f.mapTo(controls, f.rect().topRight()).x() for f in fields}
+        assert len(lefts) == len(rights) == 1
+        assert min(rights) == controls.width() - 12 - 1
+        assert fields[0].width() > 120
+
+    @pytest.mark.parametrize("mode, shown", [("live", False), ("static", True)])
+    def test_image_resolution_only_for_an_image_map(
+        self, qgis_app, parcels, project, mode, shown
+    ) -> None:
+        from test_edit_tab_fit import shown_controls
+
+        from nika_onlymap_exporter.ui.cartograph.frames_list import (
+            FrameRow,
+            FramesList,
+        )
+
+        layout = _layout(parcels, project)
+        scroll, controls = shown_controls(layout, "map", 340)
+        try:
+            item = controls.selected_item()
+            frames = FramesList((72, 150, 300))
+            frames.set_frames(
+                [FrameRow(item.uuid(), "Main", "EPSG:32648", mode, 150, None)]
+            )
+            controls.bind_frames(frames)
+            controls.refresh()
+            _settle(qgis_app, 0.1)
+            assert controls.dpi_combo.isVisibleTo(controls) is shown
+            assert controls.dpi_label.isVisibleTo(controls) is shown
+        finally:
+            scroll.close()
+
+    @pytest.mark.parametrize("width", [300, 340, 560])
+    def test_no_sideways_scroll_bar_and_no_cut_label(
+        self, qgis_app, parcels, project, width
+    ) -> None:
+        from test_edit_tab_fit import shown_controls
+
+        scroll, controls = shown_controls(_layout(parcels, project), "map", width)
+        try:
+            _settle(qgis_app, 0.2)
+            assert not scroll.horizontalScrollBar().isVisible()
+            for label in controls._field_labels:
+                if label.isVisibleTo(controls):
+                    assert label.width() >= label.fontMetrics().horizontalAdvance(
+                        label.text()
+                    )
+        finally:
+            scroll.close()
+
+    def test_the_toggle_reads_done_while_editing_and_goes_back(
+        self, qgis_app, map_tab
+    ) -> None:
+        _scroll, controls = map_tab
+        button = controls.edit_view_button
+        assert button.text() == "Edit view"
+        button.click()
+        assert button.text() == "Done editing view"
+        assert button.width() >= button.fontMetrics().horizontalAdvance(button.text())
+        button.click()
+        assert button.text() == "Edit view"
+        controls.set_editing(True)
+        assert button.text() == "Done editing view"
+        controls.set_editing(False)
+        assert button.text() == "Edit view"

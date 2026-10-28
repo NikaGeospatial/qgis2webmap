@@ -61,13 +61,21 @@ def _select(layout, controls, item_id: str) -> None:
     controls.refresh()
 
 
+def _open_form(controls: ContextControls) -> None:
+    """What "Statistic callout..." in the Add item menu does."""
+    controls.begin_callout()
+
+
 class TestOnlyWhereTheDesignHasThem:
-    def test_shown_for_signal_hidden_for_other_designs(
+    def test_form_opens_for_signal_never_for_other_designs(
         self, qgis_app, parcels, project
     ) -> None:
         signal = _controls(_layout(parcels, project))
         classic = _controls(_layout(parcels, project, "classic", "classic"))
         try:
+            assert not signal.callout_controls.isVisibleTo(signal)
+            _open_form(signal)
+            _open_form(classic)
             assert signal.callout_controls.isVisibleTo(signal)
             assert not classic.callout_controls.isVisibleTo(classic)
         finally:
@@ -82,6 +90,7 @@ class TestAdding:
         edits: list[int] = []
         controls.edited.connect(lambda: edits.append(1))
         panel = controls.callout_controls
+        _open_form(controls)
         try:
             assert not panel.add_button.isEnabled()
             _type(panel.value_edit, "214")
@@ -106,6 +115,7 @@ class TestAdding:
         layout = _layout(parcels, project)
         controls = _controls(layout)
         panel = controls.callout_controls
+        _open_form(controls)
         try:
             _type(panel.label_edit, "only a line")
             assert not panel.add_button.isEnabled()
@@ -123,15 +133,14 @@ class TestAdding:
         try:
             for index in range(3):
                 layout.deselectAll()
-                controls.refresh()
+                _open_form(controls)
                 _type(panel.value_edit, str(index + 1))
                 QTest.keyClick(panel.value_edit, Qt.Key.Key_Return)
             assert _words(layout) == [("1", ""), ("2", ""), ("3", "")]
             layout.deselectAll()
-            controls.refresh()
-            assert not panel.value_edit.isEnabled()
-            assert not panel.add_button.isEnabled()
-            assert "three" in panel.add_button.toolTip()
+            _open_form(controls)
+            # At three there is nothing to create: the form stays shut.
+            assert not panel.isVisibleTo(controls)
         finally:
             controls.close()
 
@@ -143,7 +152,7 @@ class TestSelectedOnThePage:
         panel = controls.callout_controls
         for value, label in (("214", "parcels"), ("12 km", "of road"), ("9", "wells")):
             layout.deselectAll()
-            controls.refresh()
+            _open_form(controls)
             _type(panel.value_edit, value)
             _type(panel.label_edit, label)
             QTest.mouseClick(panel.add_button, Qt.MouseButton.LeftButton)
@@ -251,7 +260,7 @@ class TestWhereItShows:
             panel = controls.callout_controls
             layout.deselectAll()
             controls.refresh()
-            assert panel.isVisibleTo(controls)
+            assert not panel.isVisibleTo(controls)
             _select(layout, controls, "figure-0")
             assert panel.isVisibleTo(controls)
             plain_label = next(

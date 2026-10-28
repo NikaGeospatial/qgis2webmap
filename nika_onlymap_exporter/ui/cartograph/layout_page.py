@@ -69,6 +69,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..i18n import plural, tr
+from .callouts import can_add_callout, supports_callouts
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
 from .item_placement import ItemPlacer
@@ -1066,6 +1067,25 @@ class PagePane(QWidget):
                         map_label(map_item),
                         lambda kind=kind, m=map_item: self.preview.add_item(kind, m),
                     )
+        if (
+            layout is not None
+            and not sip.isdeleted(layout)
+            and supports_callouts(layout)
+        ):
+            callout = menu.addAction(tr("Statistic callout…"), self._begin_callout)
+            if not can_add_callout(layout):
+                callout.setEnabled(False)
+                callout.setToolTip(
+                    tr(
+                        "This layout already has three callouts. "
+                        "Select one to edit or remove it."
+                    )
+                )
+
+    def _begin_callout(self) -> None:
+        """Open the new-callout form in the Edit tab."""
+        self.controls.begin_callout()
+        self.edit_requested.emit()
 
     def _refresh_controls(self) -> None:
         """Follow the selection in the Edit tab. A view being edited inside a

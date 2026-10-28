@@ -315,7 +315,7 @@ class TestPanAndZoomTheContent:
         _drag(qgis_app, pane, start, start + QPoint(20, 20))
         assert _geometry(main) == pytest.approx(frame)
         assert main.extent().center() != before.center()
-        assert pane.controls.edit_view_button.text() == "Edit view"
+        assert pane.controls.edit_view_button.text() == "Done editing view"
 
 
 def _drag_path(start: QPoint, end: QPoint, steps: int = 12) -> list[QPoint]:
