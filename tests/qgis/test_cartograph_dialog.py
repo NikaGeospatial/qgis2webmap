@@ -32,6 +32,16 @@ def _dialog(project):
     return MainDialog(FakeIface(), None)
 
 
+def _offers_preview_in_browser(dialog) -> bool:
+    """Whether the dialog offers "Preview in browser" anywhere - a button or a
+    menu row - whichever control currently carries it."""
+    from qgis.PyQt.QtGui import QAction
+    from qgis.PyQt.QtWidgets import QAbstractButton
+
+    controls = dialog.findChildren(QAction) + dialog.findChildren(QAbstractButton)
+    return any(control.text() == "Preview in browser" for control in controls)
+
+
 def _choose_cartograph(dialog) -> None:
     """Pick Cartograph from the title's menu, as a click on its row does."""
     from nika_onlymap_exporter.core.settings import DialogOutput
@@ -3392,8 +3402,8 @@ class TestPanel:
                 label.text() == "Create:" for label in row.findChildren(QLabel)
             )
             assert dialog.output_switcher.toolTip() == "Choose what to make"
-            preview = dialog._cartograph.cartograph_preview_button
-            assert preview.text() == "Preview in browser"
+            # The browser preview is offered by name, wherever it lives.
+            assert _offers_preview_in_browser(dialog)
         finally:
             dialog.close()
 
@@ -3604,7 +3614,7 @@ class TestPanel:
             texts = [label.text() for label in body.findChildren(QLabel)]
             assert {"Title", "Attribution", "Theme"} <= set(texts)
             assert not any("Only the web page changes" in t for t in texts)
-            assert cartograph.cartograph_preview_button.text() == "Preview in browser"
+            assert _offers_preview_in_browser(dialog)
         finally:
             dialog.close()
 
