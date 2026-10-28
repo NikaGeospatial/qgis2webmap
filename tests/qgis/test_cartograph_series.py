@@ -601,7 +601,9 @@ class TestReadiness:
             SeriesPrintDialog,
         )
 
-        dialog = SeriesPrintDialog(s.tab._current_status, s.tab._switch_maps, s.tab)
+        dialog = SeriesPrintDialog(
+            s.tab._current_status, s.tab._switch_maps, lambda: (), s.tab
+        )
         assert not dialog.rows[1].switch.isHidden()
         dialog.rows[1].switch.click()  # beside "Print from the web page"
         s.app.processEvents()
@@ -732,6 +734,24 @@ class TestExport:
         s.tab.print_button.click()
         assert _wait_for(s.app, lambda: len(opened) == 1)
         assert opened[0].query() == "atlas=print"
+
+    def test_what_the_save_found_wrong_is_said_beside_web_printing_only(
+        self, series
+    ) -> None:
+        s = series(atlas_on=True)
+        from nika_onlymap_exporter.ui.cartograph.series_print_dialog import (
+            SeriesPrintDialog,
+        )
+
+        dialog = SeriesPrintDialog(
+            s.tab._current_status,
+            s.tab._switch_maps,
+            lambda: ("The page lost its atlas.",),
+            s.tab,
+        )
+        assert "lost its atlas" in dialog.rows[1].reason.text()
+        assert "lost its atlas" not in dialog.rows[0].reason.text()
+        assert dialog.chosen_way() == "qgis"  # the QGIS print is the default
 
     def test_print_series_through_qgis_is_the_default_way(
         self, series, monkeypatch

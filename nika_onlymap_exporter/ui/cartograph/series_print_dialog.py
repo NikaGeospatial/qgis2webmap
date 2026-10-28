@@ -37,12 +37,14 @@ class SeriesPrintDialog(QDialog):
         self,
         status: Callable[[], SeriesStatus],
         switch_to_interactive: Callable[[Sequence[str]], None],
+        saved_problems: Callable[[], tuple[str, ...]],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Print series"))
         self._status = status
         self._switch = switch_to_interactive
+        self._saved_problems = saved_problems
         column = QVBoxLayout(self)
         self.scope = FittedLabel("", self)
         column.addWidget(self.scope)
@@ -92,7 +94,7 @@ class SeriesPrintDialog(QDialog):
             scope = status.message
         self.scope.setText(scope)
         self.rows[0].show_operation(status.native_print)
-        self.rows[1].show_operation(status.print)
+        self.rows[1].show_operation(status.print, " ".join(self._saved_problems()))
         self._pending = tuple(ref.item_id for ref in status.print.needs_interactive)
         for row in self.rows:
             if row.radio.isChecked() and not row.radio.isEnabled():

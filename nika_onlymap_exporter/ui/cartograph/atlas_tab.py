@@ -271,10 +271,6 @@ class AtlasTab(QWidget):
         self.print_button.clicked.connect(self._on_print)
         buttons.addWidget(self.print_button)
         column.addLayout(buttons)
-        # What the last save found wrong with the series' own outputs.
-        self.actions_note = FittedLabel("", parent)
-        self._tone(self.actions_note)
-        column.addWidget(self.actions_note)
         # A click gives no lingering focus ring; Tab still reaches them.
         for button in (
             self.previous_button,
@@ -592,11 +588,6 @@ class AtlasTab(QWidget):
         self.scope_label.setVisible(bool(scope))
         self.export_button.setEnabled(ready)
         self.print_button.setEnabled(ready and status.native_print.ok)
-        note = ""
-        if ready and self._saved_problems:
-            note = " ".join(self._saved_problems)
-        self.actions_note.setText(note)
-        self.actions_note.setVisible(bool(note))
         self.navigator.setVisible(ready)
 
     def _validate_expressions(self) -> None:
@@ -764,7 +755,12 @@ class AtlasTab(QWidget):
         self.refresh_now()
         if self._status.state is not SeriesState.READY:
             return
-        dialog = SeriesPrintDialog(self._current_status, self._switch_maps, self)
+        dialog = SeriesPrintDialog(
+            self._current_status,
+            self._switch_maps,
+            lambda: self._saved_problems,
+            self,
+        )
         if not dialog.exec():
             return
         chosen = dialog.chosen_way()
