@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
-from qgis.PyQt.QtCore import QPoint, Qt, QTimer
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 from test_cartograph_dialog import (
@@ -58,10 +58,7 @@ def _with_chooser(cartograph, drive):
 
     QTimer.singleShot(0, run)
     watchdog = _modal_watchdog(failures)
-    button = cartograph.layout_header.switch_button
-    QTest.mouseClick(
-        button, Qt.MouseButton.LeftButton, pos=QPoint(4, button.height() // 2)
-    )
+    cartograph.layout_header.switch_action.trigger()
     watchdog.stop()
     if failures:
         raise failures[0]
@@ -133,7 +130,8 @@ class TestHeader:
             assert button.accessibleName() == "Layout actions"
             assert button.toolTip() == "Layout actions"
             assert button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
-            assert [a.text() for a in button.menu().actions()] == [
+            # One layout: no Switch layout, and no separator left dangling.
+            assert [a.text() for a in button.menu().actions() if a.isVisible()] == [
                 "Rename layout...",
                 "Import cartograph...",
             ]
@@ -146,16 +144,63 @@ class TestHeader:
         finally:
             dialog.close()
 
-    def test_switch_layout_shows_only_with_two_or_more_layouts(
+    def test_switch_layout_leads_the_menu_only_with_two_or_more_layouts(
         self, qgis_app, project
     ) -> None:
         dialog, cartograph = _open(project, "One")
         try:
-            switch = cartograph.layout_header.switch_button
-            assert switch.isHidden()
+            menu = cartograph.layout_header.actions_button.menu()
+
+            def shown() -> list[str]:
+                return [
+                    "---" if a.isSeparator() else a.text()
+                    for a in menu.actions()
+                    if a.isVisible()
+                ]
+
+            assert shown() == ["Rename layout...", "Import cartograph..."]
             _add_layout(project, "Two", [("M", "EPSG:4326")])
-            assert not switch.isHidden()
-            assert switch.text() == "Switch layout..."
+            assert shown() == [
+                "Switch layout...",
+                "---",
+                "Rename layout...",
+                "Import cartograph...",
+            ]
+        finally:
+            dialog.close()
+
+    def test_there_is_no_separate_switch_link_under_new_from_template(
+        self, qgis_app, project
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QToolButton
+
+        dialog, _cartograph = _open(project, "One", "Two")
+        try:
+            assert not any(
+                b.text() == "Switch layout..." and b.isVisibleTo(dialog)
+                for b in dialog.findChildren(QToolButton)
+            )
+        finally:
+            dialog.close()
+
+    def test_the_actions_button_is_a_compact_square_of_only_dots(
+        self, qgis_app, project
+    ) -> None:
+        dialog, cartograph = _open(project, "One", "Two")
+        try:
+            button = cartograph.layout_header.actions_button
+            assert 28 <= button.width() <= 36 and button.height() == button.width()
+            image = button.grab().toImage()
+            # Nothing is drawn in the right-hand quarter but the button's own
+            # fill and border: a chevron would add ink there. The dots are
+            # centred, so compare every pixel there with the button's fill.
+            fill = image.pixelColor(image.width() // 2, 4)
+            quarter = range(int(image.width() * 0.78), image.width() - 3)
+            for x in quarter:
+                for y in range(4, image.height() - 4):
+                    got = image.pixelColor(x, y)
+                    assert abs(got.red() - fill.red()) < 24, (x, y)
+                    assert abs(got.green() - fill.green()) < 24, (x, y)
         finally:
             dialog.close()
 

@@ -2,10 +2,11 @@
 
 The header names the layout (two lines at most), says what it is in a line
 (paper, orientation, pages, atlas), and holds the "Layout actions" menu. A
-plain "New from template..." button sits under it, and "Switch layout..."
-when the project has more than one layout. The chooser behind that lists every
-layout of the project by its full name and the same line, with a thumbnail
-when the layout has been shown (`layout_thumbnails.py`) - it never renders one.
+plain "New from template..." button sits under it. "Switch layout..." is the
+first entry of the actions menu when the project has more than one layout. The
+chooser behind that lists every layout of the project by its full name and the
+same line, with a thumbnail when the layout has been shown
+(`layout_thumbnails.py`) - it never renders one.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -131,7 +132,7 @@ def _actions_glyph(button: QToolButton) -> str:
 
 
 class LayoutHeader(QWidget):
-    """Name, one metadata line, "Layout actions", New from template, Switch."""
+    """Name, one metadata line, "Layout actions", New from template."""
 
     rename_requested = pyqtSignal()
     import_requested = pyqtSignal()
@@ -157,12 +158,18 @@ class LayoutHeader(QWidget):
         self.actions_button.setText(_actions_glyph(self.actions_button))
         self.actions_button.setProperty("role", "secondary")
         self.actions_button.setProperty("hasMenu", False)
+        # Only the dots, in a compact square: hasMenu=false does not stop the
+        # shared menu arrow, so this has its own rule.
+        self.actions_button.setProperty("layoutActions", True)
         self.actions_button.setAccessibleName(tr("Layout actions"))
         self.actions_button.setToolTip(tr("Layout actions"))
         self.actions_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.actions_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         menu = QMenu(self.actions_button)
         menu.setToolTipsVisible(True)
+        self.switch_action = menu.addAction(tr("Switch layout..."))
+        self.switch_action.setToolTip(tr("Open another print layout of this project"))
+        self.switch_separator = menu.addSeparator()
         self.rename_action = menu.addAction(tr("Rename layout..."))
         self.rename_action.setToolTip(
             tr(
@@ -176,6 +183,7 @@ class LayoutHeader(QWidget):
         )
         # The button's menu arrow would be a second, redundant cue.
         self.actions_button.setMenu(menu)
+        self.switch_action.triggered.connect(self.switch_requested)
         self.rename_action.triggered.connect(self.rename_requested)
         self.import_action.triggered.connect(self.import_requested)
         top.addWidget(self.actions_button, 0, Qt.AlignmentFlag.AlignTop)
@@ -200,15 +208,6 @@ class LayoutHeader(QWidget):
         self.new_from_template_button.clicked.connect(self.new_from_template_requested)
         column.addWidget(self.new_from_template_button)
 
-        self.switch_button = QToolButton(self)
-        self.switch_button.setText(tr("Switch layout..."))
-        self.switch_button.setToolTip(tr("Open another print layout of this project"))
-        self.switch_button.setAutoRaise(True)
-        self.switch_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.switch_button.clicked.connect(self.switch_requested)
-        column.addWidget(self.switch_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.switch_button.setVisible(False)
-
     def show_layout(self, name: str, metadata: str, layout_count: int) -> None:
         """The layout shown ("" for none), its line, and how many there are."""
         has_layout = bool(name)
@@ -218,7 +217,9 @@ class LayoutHeader(QWidget):
         self.meta_label.setText(metadata)
         self.meta_label.setToolTip(metadata)
         self.rename_action.setEnabled(has_layout)
-        self.switch_button.setVisible(layout_count > 1)
+        many = layout_count > 1
+        self.switch_action.setVisible(many)
+        self.switch_separator.setVisible(many)
 
 
 @dataclass(frozen=True)
