@@ -624,6 +624,34 @@ class TestAtlasCartograph:
             page.evaluate("() => window.__printedSheets") == expected["atlas"]["pages"]
         )
 
+    @pytest.mark.parametrize("which", ["parcels", "places"])
+    def test_a_map_series_prints_and_zips_every_page(
+        self, page, fixtures: Path, expected, which: str
+    ) -> None:
+        """The series the Atlas tab sets up: Print series sends one sheet per
+        feature to the print, and Export series (images) downloads one PNG per
+        feature."""
+        import zipfile
+
+        _needs_webgl(page)
+        pages = expected["atlas_series"][which]
+        assert pages == {"parcels": 3, "places": 4}[which]
+        target = (fixtures / f"atlas-series-{which}.html").as_uri()
+        page.add_init_script(
+            "window.print = () => { window.__printedSheets = document"
+            ".querySelectorAll('[data-qgis2webmap-atlas-print] img').length; };"
+        )
+        page.goto(target + "?atlas=print&dpi=72")
+        page.wait_for_function(
+            "() => window.__printedSheets !== undefined", timeout=120_000
+        )
+        assert page.evaluate("() => window.__printedSheets") == pages
+        with page.expect_download(timeout=120_000) as download_info:
+            page.goto(target + "?atlas=zip&dpi=72")
+        with zipfile.ZipFile(download_info.value.path()) as archive:
+            names = archive.namelist()
+        assert len(names) == pages and all(n.endswith(".png") for n in names)
+
     def test_a_page_that_fails_to_print_releases_the_earlier_ones(
         self, page, fixtures: Path, expected
     ) -> None:

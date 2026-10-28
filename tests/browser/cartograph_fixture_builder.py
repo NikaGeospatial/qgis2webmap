@@ -86,6 +86,8 @@ def main(out_dir: Path) -> int:
         QgsProject.instance().clear()
         expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
+        expected["atlas_series"] = _write_atlas_series(QgsProject.instance(), out_dir)
+        QgsProject.instance().clear()
         expected["atlas_fixed"] = _write_atlas_fixed(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         QgsProject.instance().clear()
@@ -402,6 +404,31 @@ def _write_atlas(project, out_dir: Path) -> dict:
     )
     (out_dir / "atlas-live.html").write_text(html, encoding="utf-8")
     return {"pages": atlas_page_count(built.layout)}
+
+
+def _write_atlas_series(project, out_dir: Path) -> dict:
+    """What the Atlas tab ("Create a map series") sets up: a series over the
+    parcels, and one over the four places, each on the layout's only map."""
+    from atlas_fixtures import build_series_layout
+
+    from nika_onlymap_exporter.core.cartograph_export import (
+        export_layout_to_cartograph,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.layout_reader import atlas_page_count
+
+    built = build_series_layout(project, atlas_on=True)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-series-parcels.html").write_text(html, encoding="utf-8")
+    parcels = atlas_page_count(built.layout)
+    built.layout.atlas().setCoverageLayer(built.places)
+    html = export_layout_to_cartograph(
+        built.layout, project, _runtime(), FidelityReportBuilder()
+    )
+    (out_dir / "atlas-series-places.html").write_text(html, encoding="utf-8")
+    return {"parcels": parcels, "places": atlas_page_count(built.layout)}
 
 
 def _write_atlas_undrawn(project, out_dir: Path) -> dict:
