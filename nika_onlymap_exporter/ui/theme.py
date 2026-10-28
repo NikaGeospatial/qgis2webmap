@@ -305,6 +305,7 @@ def apply(dialog: QWidget) -> Palette:
         form.setVerticalSpacing(8)
         form.setHorizontalSpacing(14)
     attach_menus(dialog)
+    align_embedded_edits(dialog)
     paint_line_icons(dialog, palette)
     # Sections are cards: their contents sit inset from the card's edge, with
     # the title outside and above it.
@@ -1767,7 +1768,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     padding: 6px 12px 2px 12px;
 }}
 """
-    return base + focus_rules(p, object_name)
+    return base + focus_rules(p, object_name) + embedded_line_edit_rules(object_name)
 
 
 # Keyboard focus: one 2 px ring in the link colour (or ink round an accent
@@ -1780,6 +1781,8 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 # mirror (see `_FOCUS_NOT_MIRRORED`). The entries run
 # from plain to specific, the order the base rules cascade in.
 FOCUS_WIDTH = 2
+# How far an embedded line edit's text is raised; see `align_embedded_edits`.
+EMBEDDED_TEXT_RAISE = -1
 _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     # selector, padding, border width, sits on an accent fill
     ("QLineEdit", (5, 8, 5, 8), 1, False),
@@ -1825,6 +1828,51 @@ _FOCUS_RECOLOURED = (
     "QCheckBox",
     "QRadioButton",
 )
+
+
+def embedded_line_edit_rules(object_name: str) -> str:
+    """Make a box that wraps a line edit (an editable combo box, an expression
+    picker, a spin box) one field: the outer box draws the border and padding
+    and the line edit inside draws only text. The generic QLineEdit rules would
+    otherwise pad and outline the inner edit a second time, which sat its text
+    lower than a plain drop-down's, and moved it again when focus arrived.
+    Written last so it wins over the `:hover`, `:focus` and `:disabled` rules.
+    Where Qt leaves the inner edit unstyled these rules do nothing, and
+    `align_embedded_edits` does the rest.
+    """
+    d = f"#{object_name}"
+    selectors = ",\n".join(
+        f"{d} {box} QLineEdit{state}"
+        for box in ("QComboBox", "QAbstractSpinBox")
+        for state in ("", ":hover", ":focus", ":disabled")
+    )
+    return (
+        f"{selectors} {{\n"
+        "    background: transparent;\n"
+        "    border: none;\n"
+        "    border-radius: 0;\n"
+        "    padding: 0;\n"
+        "    margin: 0;\n"
+        "    min-height: 0;\n}\n"
+    )
+
+
+def align_embedded_edits(root: QWidget) -> None:
+    """Sit the text of every editable combo box and expression picker under
+    `root` where a plain drop-down's text sits.
+
+    A line edit centres its text with `(height - text + 1) / 2` where a
+    drop-down's label uses `(height - text) / 2`, so over the same box the
+    edit's text lands a pixel lower than the label's. Qt does not style the
+    edit inside a combo box, so no stylesheet can move it; a top text margin
+    of -1 does. Measured on rendered boxes over font sizes from 0.8x to 2x the
+    default, it matches the plain drop-down on every one but about 1.5x,
+    where it is a pixel high instead of a pixel low.
+    """
+    for combo in root.findChildren(QComboBox):
+        edit = combo.lineEdit()
+        if edit is not None:
+            edit.setTextMargins(0, EMBEDDED_TEXT_RAISE, 0, 0)
 
 
 def focus_colour(p: Palette, on_accent_fill: bool = False) -> str:
