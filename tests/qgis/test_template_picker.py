@@ -149,6 +149,16 @@ def _drain(qgis_app, picker) -> None:
     qgis_app.processEvents()
 
 
+def _planned(qgis_app, picker) -> None:
+    """Until every card has been planned (its cues and layout guide), as the
+    picker does a few at a time after it shows; bounded."""
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline and (
+        picker._plan_queue or picker._plan_timer.isActive()
+    ):
+        qgis_app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
+
+
 def _in_reach(picker) -> set[str]:
     """The designs the picker draws without being asked: the chosen one,
     and the cards in view or a short scroll from it."""
@@ -1114,6 +1124,7 @@ class TestTheCues:
             _Renderer(), qsettings=_settings(tmp_path), planner=_planner(_PROJECT)
         )
         try:
+            _planned(qgis_app, picker)
             marginalia = picker.rows["marginalia"]
             assert marginalia.includes.text() == "Includes: legend, scale bar"
             assert marginalia.supports.text() == "Can also show: notes, source line"
@@ -1139,6 +1150,7 @@ class TestTheCues:
             _Renderer(), qsettings=_settings(tmp_path), planner=_planner(data)
         )
         try:
+            _planned(qgis_app, picker)
             marginalia = picker.rows["marginalia"]
             assert marginalia.includes.text() == (
                 "Includes: notes, legend, scale bar, source line"
@@ -1160,11 +1172,14 @@ class TestTheCues:
         )
         try:
             count = len(layout_templates.TEMPLATES)
+            _planned(qgis_app, picker)
             assert len(calls) == count
             assert {c[1] for c in calls} == {"A4"}
             picker.page_combo.setCurrentIndex(picker.page_combo.findData("A5"))
+            _planned(qgis_app, picker)
             assert len(calls) == 2 * count
             picker.page_combo.setCurrentIndex(picker.page_combo.findData("A4"))
+            _planned(qgis_app, picker)
             assert len(calls) == 2 * count
         finally:
             picker.reject()
@@ -1179,6 +1194,7 @@ class TestTheCues:
             _Renderer(), qsettings=_settings(tmp_path), planner=failing
         )
         try:
+            _planned(qgis_app, picker)
             marginalia = picker.rows["marginalia"]
             assert marginalia.includes.text() == "Includes: scale bar"
             assert "notes" in marginalia.supports.text()

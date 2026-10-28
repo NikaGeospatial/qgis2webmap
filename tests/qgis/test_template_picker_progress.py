@@ -16,8 +16,11 @@ from qgis.PyQt.QtCore import QEventLoop, QSize, QTimer
 from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
 from test_template_picker import (
+    _PROJECT,
     _drain,
     _Pending,
+    _planned,
+    _planner,
     _Renderer,
     _settings,
     _shown,
@@ -409,3 +412,89 @@ def test_closing_during_a_slow_render_stays_responsive_and_frees_the_slot(
             second.reject()
         assert _until(qgis_app, lambda: not render_slot_busy(), 40.0)
         project.removeMapLayer(layer)
+
+
+class TestPlanningDoesNotHoldTheWindow:
+    """Planning every card (its cues and layout guide) used to run in the
+    constructor, so a heavy project showed nothing for a second or more.
+    Now the window is made at once and the cards are planned after it shows."""
+
+    def _slow_planner(self, delay_s: float):
+        inner = _planner(_PROJECT)
+
+        def plan(template_id, page_size, orientation):
+            time.sleep(delay_s)
+            return inner(template_id, page_size, orientation)
+
+        return plan
+
+    def test_the_window_is_made_at_once_however_slow_the_planner(
+        self, qgis_app, tmp_path
+    ):
+        started = time.monotonic()
+        picker = TemplatePicker(
+            _Renderer(),
+            qsettings=_settings(tmp_path),
+            planner=self._slow_planner(0.15),
+        )
+        made = time.monotonic() - started
+        try:
+            # Eleven cards at 0.15 s each is over a second of planning.
+            assert made < 0.5
+            _shown(qgis_app, picker, _TALL)
+        finally:
+            picker.reject()
+
+    def test_every_card_ends_up_as_if_planned_up_front(self, qgis_app, tmp_path):
+        eager = TemplatePicker(
+            _Renderer(), qsettings=_settings(tmp_path), planner=_planner(_PROJECT)
+        )
+        try:
+            _shown(qgis_app, eager, _TALL)
+            _planned(qgis_app, eager)
+            _drain(qgis_app, eager)
+            want = {
+                t: (r.includes.text(), r.supports.text(), r.status.isHidden())
+                for t, r in eager.rows.items()
+            }
+            want_pixels = {t: _centre(r.page.pixmap()) for t, r in eager.rows.items()}
+        finally:
+            eager.reject()
+        lazy = TemplatePicker(
+            _Renderer(),
+            qsettings=_settings(tmp_path / "again"),
+            planner=self._slow_planner(0.01),
+        )
+        try:
+            _shown(qgis_app, lazy, _TALL)
+            assert _until(
+                qgis_app,
+                lambda: not (lazy._plan_queue or lazy._plan_timer.isActive()),
+            )
+            _drain(qgis_app, lazy)
+            got = {
+                t: (r.includes.text(), r.supports.text(), r.status.isHidden())
+                for t, r in lazy.rows.items()
+            }
+            assert got == want
+            for t, row in lazy.rows.items():
+                assert _centre(row.page.pixmap()) == want_pixels[t]
+        finally:
+            lazy.reject()
+
+    def test_a_card_chosen_before_its_turn_is_planned_at_once(self, qgis_app, tmp_path):
+        picker = TemplatePicker(
+            _Renderer(),
+            qsettings=_settings(tmp_path),
+            planner=self._slow_planner(0.05),
+        )
+        try:
+            _shown(qgis_app, picker, _TALL)
+            last = list(picker.rows)[-1]
+            row = picker.rows[last]
+            assert not picker._is_planned(last)
+            picker.choose(last)
+            assert picker._is_planned(last)
+            assert row.includes.text().startswith("Includes")
+        finally:
+            picker.reject()
