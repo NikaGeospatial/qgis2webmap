@@ -2013,7 +2013,19 @@ class TestAccessibility:
             first = cartograph._colour_vision
             assert first is not None and first.isVisible()
             cartograph.accessibility_button.click()
-            assert cartograph._colour_vision is first
+            # Pressing again shows one window, never a second alongside.
+            from qgis.PyQt.QtWidgets import QApplication
+
+            from nika_onlymap_exporter.ui.cartograph.accessibility_dialog import (
+                AccessibilityDialog,
+            )
+
+            showing = [
+                widget
+                for widget in QApplication.topLevelWidgets()
+                if isinstance(widget, AccessibilityDialog) and widget.isVisible()
+            ]
+            assert len(showing) == 1
             # The survey's static legend is literal rows: the check sees them.
             assert [e.color for e in cartograph._legend_entries] == ["#eba941"]
         finally:
@@ -2103,6 +2115,44 @@ class TestColourVisionInTheCartograph:
             assert QApplication.activeModalWidget() is None
             assert QApplication.activePopupWidget() is None
             assert window.isVisible() or window.current_condition() is None
+        finally:
+            dialog.close()
+
+    def test_the_button_opens_the_window_again_while_one_is_open(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        """A window the user clicked behind the Cartograph dialog cannot be
+        raised on Wayland; pressing the button again must still put one
+        showing window in front, with what was applied kept."""
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent
+        from qgis.PyQt.QtWidgets import QApplication
+
+        from nika_onlymap_exporter.ui.cartograph.accessibility_dialog import (
+            AccessibilityDialog,
+        )
+
+        def showing() -> list:
+            return [
+                widget
+                for widget in QApplication.topLevelWidgets()
+                if isinstance(widget, AccessibilityDialog) and widget.isVisible()
+            ]
+
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            cartograph.accessibility_button.click()
+            first = cartograph._colour_vision
+            first.set_condition("tritanopia")
+            first.apply()
+            for _press in range(3):
+                cartograph.accessibility_button.click()
+                _wait_for(qgis_app, lambda: False, timeout=0.1)
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                windows = showing()
+                assert len(windows) == 1, "the button left no window, or two"
+                assert windows[0].applied_condition() == "tritanopia"
         finally:
             dialog.close()
 

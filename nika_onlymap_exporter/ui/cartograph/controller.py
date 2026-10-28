@@ -2211,17 +2211,31 @@ class CartographController:
         dialog.mode_changed.connect(on_mode)
         # Closing destroys the window; the next open builds a fresh one that
         # picks the applied simulation up from the stored settings.
-        dialog.destroyed.connect(self._forget_colour_vision)
+        dialog.destroyed.connect(lambda *_args: self._forget_colour_vision(dialog))
         self._colour_vision = dialog
         on_mode(dialog.applied_condition() or "")
         return dialog
 
-    def _forget_colour_vision(self) -> None:
-        self._colour_vision = None
+    def _forget_colour_vision(self, dialog: AccessibilityDialog) -> None:
+        # Only the window that went: a replacement may already be open.
+        if self._colour_vision is dialog:
+            self._colour_vision = None
 
     def on_accessibility(self) -> None:
         """The corner's Accessibility button: one non-modal Colour vision
-        dialog, raised again rather than duplicated."""
+        dialog, opened on top every time it is pressed."""
+        open_window = self._colour_vision
+        if (
+            open_window is not None
+            and not sip.isdeleted(open_window)
+            and open_window.isVisible()
+        ):
+            # Wayland lets no application raise its own window, so one the
+            # user clicked behind the Cartograph dialog would stay out of
+            # sight however often the button asked. A new window always
+            # opens on top; closing the old one keeps what was applied.
+            self._colour_vision = None
+            open_window.close()
         dialog = self._colour_vision_dialog()
         # A checkable button toggles itself before this runs; a simulation
         # applied anywhere is what it should show.
