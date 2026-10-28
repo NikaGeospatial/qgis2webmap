@@ -253,7 +253,8 @@ class ContentEditor(QObject):
     def _item_delta(self, item: QgsLayoutItemMap, scene: QPointF) -> QPointF:
         """How far `scene` is from the press, in the item's own coordinates
         (so a rotated frame pans the way the pointer goes)."""
-        assert self._start_scene is not None
+        if self._start_scene is None:
+            return QPointF(0, 0)
         return item.mapFromScene(scene) - item.mapFromScene(self._start_scene)
 
     def _drag_to(self, at: QPoint) -> None:
