@@ -22,7 +22,13 @@ from __future__ import annotations
 import contextlib
 from dataclasses import replace
 
-from qgis.core import QgsFeature, QgsLayout, QgsLayoutItem, QgsLayoutItemMap
+from qgis.core import (
+    QgsFeature,
+    QgsFeedback,
+    QgsLayout,
+    QgsLayoutItem,
+    QgsLayoutItemMap,
+)
 
 from ..ui.i18n import tr
 from .live_count import (
@@ -85,8 +91,11 @@ class AtlasPageCounts:
     """While active, every atlas feature the layout's atlas moves to gets its
     counters calculated before that page is drawn."""
 
-    def __init__(self, layout: QgsLayout) -> None:
+    def __init__(self, layout: QgsLayout, feedback: QgsFeedback | None = None) -> None:
         self._layout = layout
+        #: Cancelled as soon as a page's counts fail, so a printer is not fed
+        #: the rest of a series whose numbers are known to be wrong.
+        self._feedback = feedback
         self.active = bool(live_counts(layout))
         #: How many pages had their counters calculated.
         self.pages_counted = 0
@@ -116,6 +125,8 @@ class AtlasPageCounts:
             outcomes = refresh_live_counts(self._layout)
         except Exception as exc:
             self.error = self.error or str(exc)
+            if self._feedback is not None:
+                self._feedback.cancel()
             return
         self.pages_counted += 1
         for uuid, outcome in outcomes.items():
