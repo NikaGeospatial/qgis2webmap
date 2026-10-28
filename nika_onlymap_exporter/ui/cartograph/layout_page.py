@@ -1278,6 +1278,9 @@ class PagePane(QWidget):
         warning_row.setSpacing(12)
         self.legend_warning_label = QLabel(self.legend_warning)
         self.legend_warning_label.setWordWrap(True)
+        warning_font = self.legend_warning_label.font()
+        warning_font.setBold(True)
+        self.legend_warning_label.setFont(warning_font)
         warning_row.addWidget(self.legend_warning_label, 1)
         self.adjust_legend_button = QPushButton(
             tr("Adjust legend"), self.legend_warning
