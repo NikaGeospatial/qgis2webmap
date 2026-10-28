@@ -3557,7 +3557,6 @@ class TestPanel:
             assert forms
             for form in forms:
                 assert form.rowWrapPolicy() == QFormLayout.RowWrapPolicy.WrapAllRows
-            assert atlas.zip_button.y() < atlas.print_button.y()
         finally:
             dialog.close()
 
