@@ -123,7 +123,7 @@ the top of the panel, under **Print layout**:
 The page on the left is now the layout, captioned with its size -
 *Layout preview — QGIS · A4 landscape*. It is QGIS's own drawing of the layout and
 follows every change you make. Zoom with the bar under it or the mouse wheel,
-and hold Space (or the middle mouse button) and drag to pan.
+and drag from empty space (or hold Space, or use the middle mouse button) to pan.
 
 **New from template ▾ → Import cartograph...** goes the other way: it turns a cartograph
 file back into a QGIS print layout.

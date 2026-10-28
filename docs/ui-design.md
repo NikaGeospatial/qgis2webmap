@@ -76,7 +76,7 @@ So the cartograph is one screen:
   *Layout preview — QGIS · A4 landscape* because it is QGIS's drawing, not the HTML;
   the two can differ, and saying so beats a preview that quietly disagrees
   with the file. A link beside the caption counts the differences and opens
-  Checks. The bar under it has Fit page, Add item and zoom; Space or the middle button pans.
+  Checks. The bar under it has Fit page, Add item and zoom; dragging empty space, Space or the middle button pans.
 - **Right: the panel.** The current layout in a header (its name on up to
   two lines, then paper, orientation, pages and atlas), with a **Layout
   actions** menu (Rename, Import cartograph), a **New from template...** button

@@ -62,8 +62,9 @@ settings (title, attribution, theme) change the HTML, so they show in
 
 Under the page, the preview bar: **Fit page**, **Add item**, then **−**, the
 zoom level and **+**. 100% is the page at its real size on your screen. The
-mouse wheel zooms; hold **Space** and drag, or drag with the middle mouse
-button, to pan. There are no Select and Pan buttons: the page is always in
+mouse wheel zooms; drag from an empty part of the page or the workspace
+around it (not from an item), or hold **Space** and drag, or drag with the
+middle mouse button, to pan. There are no Select and Pan buttons: the page is always in
 selecting mode.
 
 **Add item** offers **Text**, **Legend**, **Scale bar** and **North arrow**.
