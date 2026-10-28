@@ -35,17 +35,25 @@ Choose a condition under **Simulate**:
 - **Grayscale (achromatopsia)** - no colour at all; also how the page looks
   photocopied
 
-It applies to two places, each with its own tick box:
+Choosing one shows it at once on the layout preview, beside the table. Press
+**Apply** to keep it on. Closing the dialog (**Close**, Escape or the window)
+drops a choice you did not apply.
 
-- **QGIS canvas** - filters the map canvas, the same as QGIS's own
-  **View → Preview Mode**.
-- **Browser preview** - reopens the cartograph in your browser with the same
-  simulation applied to the whole page.
+Apply keeps the simulation on in the plugin's own previews, and your choice is
+remembered: it is still on after you close the dialog, switch layouts, reopen
+Cartograph or restart QGIS. Two tick boxes add places to send it to:
 
-While a simulation is on, the colour vision button stays pressed and its
-tooltip names the condition. Closing the dialog leaves the canvas as you set
-it - choose **Normal vision** to switch it off. A preview mode you had set in
-QGIS yourself before opening the dialog is left alone.
+- **Also apply to the QGIS map canvas** - filters the main QGIS window's map,
+  the same as QGIS's own **View → Preview Mode**. Off by default.
+- **Also open browser preview when applying** - reopens the cartograph in your
+  browser with the same simulation applied to the whole page. Off each time
+  the dialog opens.
+
+While a simulation is on anywhere, the colour vision button stays pressed and
+its tooltip names the condition. Choose **Normal vision** and Apply to switch
+it off. A preview mode you had set in QGIS yourself before the simulation
+reached the canvas is put back then. Saved files and exports always keep their
+real colours.
 
 ## Check
 
@@ -58,8 +66,6 @@ The table lists every legend class, layer by layer:
 | **Simulated** | The same colour as the chosen condition sees it |
 | **Note** | **ok**, or **like** the classes it can no longer be told apart from |
 
-Under the table, one line sums it up: *2 pairs of classes collapse under
-deuteranopia*, or *All classes stay distinguishable under every condition*.
 With **Normal vision** chosen, the table shows every collapse under any
 condition, each marked with the condition it happens under.
 
