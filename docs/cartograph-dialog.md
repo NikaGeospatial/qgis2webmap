@@ -220,8 +220,7 @@ designer takes it back. The tab reads **Atlas (on)** while the series is on.
 | **Previous** / **Next** | Step through the pages in the page beside the panel. Moving is not an edit, and leaving the tab puts the layout back as you authored it |
 | *3 pages ready* | The number of pages. A layout with several sheets per feature says so |
 | **Export series...** | Asks for PDF (QGIS's own, always available), Images (ZIP) or Web page (HTML) |
-| **Print series...** | Opens the cartograph with every page laid out for one print. Choose **Save as PDF** for a multi-page PDF |
-| **Switch to Interactive** | Shown when the ZIP, web page or printing needs the map to be Interactive. One undoable step |
+| **Print series...** | Asks how to print: **Print with QGIS** (every page, in order, through the system print dialog; no Interactive map needed; with no printer available the series is saved as a PDF to print from, and the status says nothing was printed) or **Print from the web page** (needs Interactive maps). **Switch to Interactive** sits beside that choice (and in **Export series...** for the ZIP and web page): one undoable step |
 | **Page framing** | Fit area with margin, Fixed scale or Predefined scales |
 | **Advanced settings** | **Include pages** (a filter), **Page order**, **Page names**, **Export filenames**. Opens by itself when a setting is wrong |
 
@@ -265,9 +264,12 @@ undo step on the layout.
   field or map is gone (the Edit tab says which), and **n/a** if it could not
   be calculated; it is never a made-up 0. The lettering and position are
   the ordinary text controls; the number itself cannot be typed over.
-  Saving, printing and exporting use the number of the view that leaves. In the
-  exported web page the number is fixed text: it does not change when a reader
-  pans or zooms an Interactive map.
+  Saving, printing and exporting use the number of the view that leaves. In a
+  map series the PDF and **Print with QGIS** work out each page's own number
+  after the page's map is set up. The exported web page, the image ZIP and web
+  printing hold the number as fixed text, so it is the same on every page (and
+  does not change when a reader pans or zooms an Interactive map); **Export
+  series...** and **Print series...** say so beside those choices.
 - **Delete** - removes the selected item (also the Delete key).
 
 ---
