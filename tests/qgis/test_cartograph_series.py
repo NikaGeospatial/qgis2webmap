@@ -487,6 +487,19 @@ class TestPreview:
 
 
 class TestLayout:
+    def test_the_first_heading_sits_as_low_as_the_edit_headers(self, series) -> None:
+        from nika_onlymap_exporter.ui.cartograph.item_controls import (
+            SELECTED_HEADER_CLEARANCE,
+        )
+        from nika_onlymap_exporter.ui.theme import PANEL_PANE_GAP
+
+        s = series()
+        tab = s.tab
+        heading = tab.findChildren(type(tab.intro_label).__mro__[1])[0]
+        top = heading.mapTo(tab, heading.rect().topLeft()).y()
+        # The pane's own gap plus the tab's margin: no second margin on top.
+        assert top + PANEL_PANE_GAP == SELECTED_HEADER_CLEARANCE
+
     def test_the_tab_reads_in_order_of_importance(self, series) -> None:
         """What it produces, the source, the preview, then export and print,
         and only then the optional sections."""

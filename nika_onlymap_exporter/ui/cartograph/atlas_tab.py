@@ -66,6 +66,8 @@ from ...core.atlas_series import (
 from ...core.layout_reader import expression_error
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
+from ..theme import PANEL_PANE_GAP
+from .item_controls import SELECTED_HEADER_CLEARANCE
 from .panel_section import PanelSection
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -141,6 +143,15 @@ class AtlasTab(QWidget):
         self._prepare_timer.timeout.connect(self._run_prepare)
 
         page = QVBoxLayout(self)
+        # The first heading sits as far below the tab underline as the Edit
+        # tab's header does; the panel's pane already gives PANEL_PANE_GAP.
+        margins = page.contentsMargins()
+        page.setContentsMargins(
+            margins.left(),
+            SELECTED_HEADER_CLEARANCE - PANEL_PANE_GAP,
+            margins.right(),
+            margins.bottom(),
+        )
         heading = QLabel(tr("Create a map series"), self)
         heading.setProperty("role", "panelHeading")
         page.addWidget(heading)
