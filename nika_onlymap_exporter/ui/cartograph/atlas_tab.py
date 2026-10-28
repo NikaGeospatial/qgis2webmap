@@ -36,10 +36,14 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
 )
-from qgis.gui import QgsFieldComboBox, QgsFieldExpressionWidget, QgsMapLayerComboBox
+from qgis.gui import (
+    QgsFieldComboBox,
+    QgsFieldExpressionWidget,
+    QgsMapLayerComboBox,
+)
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QHideEvent, QShowEvent
+from qgis.PyQt.QtGui import QHideEvent, QResizeEvent, QShowEvent
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -152,6 +156,8 @@ class AtlasTab(QWidget):
         # complete condition to store: kept so the choice stays on screen.
         self._filter_pending_mode = ""
         self._filter_pending_field = ""
+        # Empty room that lines the plain fields up with the expression pickers.
+        self._pads: list[tuple[QWidget, bool]] = []
         # The value picked is the field's real null, not text.
         self._filter_value_is_null = False
         self._sort_error: str | None = None
@@ -354,7 +360,7 @@ class AtlasTab(QWidget):
         self.sort_clear = self._clear_button(parent, tr("Clear page order"))
         self.sort_clear.clicked.connect(self._on_clear_sort)
         order_column.addWidget(self._with_clear(self.sort_edit, self.sort_clear))
-        order_column.addWidget(self.direction_combo)
+        order_column.addWidget(self._with_clear(self.direction_combo, None, pad=True))
         order_column.addWidget(self.sort_error_label)
         form.addRow(tr("Page order"), order)
 
@@ -414,7 +420,7 @@ class AtlasTab(QWidget):
         self.filter_field_combo.setAllowEmptyFieldName(True)
         self.filter_field_combo.setAccessibleName(tr("Field"))
         self.filter_field_combo.activated.connect(self._on_filter_field)
-        match.addWidget(self.filter_field_combo)
+        match.addWidget(self._with_clear(self.filter_field_combo, None, pad=True))
         match.addWidget(FittedLabel(tr("Value"), self.filter_match))
         self.filter_value_combo = QComboBox(self.filter_match)
         self.filter_value_combo.setEditable(True)
@@ -428,7 +434,7 @@ class AtlasTab(QWidget):
         line = self.filter_value_combo.lineEdit()
         if line is not None:
             line.editingFinished.connect(self._on_filter_value_typed)
-        match.addWidget(self.filter_value_combo)
+        match.addWidget(self._with_clear(self.filter_value_combo, None, pad=True))
 
         # Custom expression: the picker QGIS's own atlas panel offers.
         self.filter_edit = _typed_expression_widget(parent)
@@ -444,7 +450,9 @@ class AtlasTab(QWidget):
         holder = QWidget(parent)
         box = QVBoxLayout(holder)
         box.setContentsMargins(0, 0, 0, 0)
-        box.addWidget(self._with_clear(self.filter_mode_combo, self.filter_clear))
+        box.addWidget(
+            self._with_clear(self.filter_mode_combo, self.filter_clear, pad=True)
+        )
         box.addWidget(self.filter_match)
         box.addWidget(self.filter_edit)
         box.addWidget(self.filter_error_label)
@@ -462,19 +470,47 @@ class AtlasTab(QWidget):
         button.setAccessibleName(name)
         # A click gives no lingering focus ring; Tab still reaches it.
         button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        # Hidden, it still holds its place: the field never changes width.
+        policy = button.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        button.setSizePolicy(policy)
         button.setVisible(False)
         return button
 
-    @staticmethod
-    def _with_clear(widget: QWidget, button: QToolButton) -> QWidget:
-        """`widget` with its clear button beside it, never over its text or arrow."""
+    def _with_clear(
+        self, widget: QWidget, button: QToolButton | None, *, pad: bool = False
+    ) -> QWidget:
+        """`widget` with its clear button beside it, never over its text or
+        arrow. With `pad`, empty room is kept where the expression picker's
+        builder button sits (and where a clear button would, with no `button`),
+        so every field of the section is as wide as the picker's own box."""
         holder = QWidget()
         row = QHBoxLayout(holder)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(4)
         row.addWidget(widget, 1)
-        row.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
+        if pad:
+            spacer = QWidget(holder)
+            self._pads.append((spacer, button is None))
+            row.addWidget(spacer, 0)
+        if button is not None:
+            row.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
         return holder
+
+    def _equalise_widths(self) -> None:
+        """Size the pads so that the Include pages choice, its field and value,
+        and the page order direction span what the expression picker's box
+        spans (its builder button, and the clear button, are beside it)."""
+        combo = self.sort_edit.findChild(QComboBox)
+        if combo is None or not self.sort_edit.isVisible():
+            return
+        extra = self.sort_edit.width() - combo.width()
+        clear = self.sort_clear.sizeHint().width() + 4
+        for spacer, takes_clear in self._pads:
+            # One 4 px gap already sits between the field and its pad.
+            width = max(0, extra + (clear if takes_clear else 0) - 4)
+            if spacer.width() != width or spacer.minimumWidth() != width:
+                spacer.setFixedWidth(width)
 
     @staticmethod
     def _with_error(widget: QWidget, label: QLabel) -> QWidget:
@@ -648,6 +684,7 @@ class AtlasTab(QWidget):
         self._update_actions()
         self._update_filter_note(status)
         self._update_clear_buttons()
+        self._equalise_widths()
 
     def _update_source(self, status: SeriesStatus) -> None:
         layer = self.coverage_combo.currentLayer()
@@ -772,8 +809,14 @@ class AtlasTab(QWidget):
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
+        QTimer.singleShot(0, self._equalise_widths)
         if self._layout is not None:
             self._sync_preview(self._status)
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        self._equalise_widths()
+        QTimer.singleShot(0, self._equalise_widths)
 
     def hideEvent(self, event: QHideEvent | None) -> None:  # noqa: N802 - Qt override
         super().hideEvent(event)
@@ -1323,6 +1366,8 @@ class AtlasTab(QWidget):
 
     def _update_clear_buttons(self) -> None:
         """Show a clear button on exactly the optional fields that hold something."""
+        for picker in self._expression_widgets:
+            one_clear_action(picker)
         layout = self._layout
         atlas = (
             layout.atlas() if layout is not None and not sip.isdeleted(layout) else None
@@ -1484,6 +1529,13 @@ def _typed_expression_widget(parent: QWidget) -> QgsFieldExpressionWidget:
     if combo is not None:
         combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
     return widget
+
+
+def one_clear_action(widget: QWidget) -> None:
+    """Leave `widget` (an expression picker) only the tab's clear button, not
+    QGIS's grey one inside its box as well."""
+    for line in widget.findChildren(QLineEdit):
+        line.setClearButtonEnabled(False)
 
 
 def _atlas_state(layout: QgsPrintLayout | None) -> tuple[object, ...]:

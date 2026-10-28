@@ -720,3 +720,49 @@ class TestWheelOnTheIncludePagesControls:
         s.settle()
         assert _stored_filter(s) == (True, "\"size\" = 'small'")
         assert WEB_MERCATOR.isValid()
+
+
+class TestOneClearActionAndEqualWidths:
+    def test_each_populated_field_has_exactly_one_clear_action(self, series) -> None:
+        from qgis.PyQt.QtWidgets import QLineEdit
+
+        s = series(atlas_on=True)
+        _populate_every_optional_field(s)
+        tab = s.tab
+        pairs = (
+            (tab.filter_edit, tab.filter_clear),
+            (tab.sort_edit, tab.sort_clear),
+            (tab.page_name_edit, tab.page_name_clear),
+            (tab.filename_edit, tab.filename_clear),
+        )
+        for edit, ours in pairs:
+            assert ours.isVisible()
+            lines = edit.findChildren(QLineEdit)
+            assert lines, "the picker's line edit was not found"
+            assert not any(line.isClearButtonEnabled() for line in lines)
+
+    def test_the_plain_fields_span_the_same_width_as_the_picker_boxes(
+        self, series
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QComboBox
+
+        s = series(atlas_on=True)
+        _populate_every_optional_field(s)
+        tab = s.tab
+        _choose_mode(s, "value")
+        _choose_field(s, "size")
+        for _ in range(3):
+            s.app.processEvents()
+            tab._equalise_widths()
+        picker_box = tab.sort_edit.findChild(QComboBox)
+        picker_right = picker_box.mapTo(tab, QPoint(picker_box.width(), 0)).x()
+        for name in (
+            "filter_mode_combo",
+            "filter_field_combo",
+            "filter_value_combo",
+            "direction_combo",
+        ):
+            widget = getattr(tab, name)
+            right = widget.mapTo(tab, QPoint(widget.width(), 0)).x()
+            assert abs(right - picker_right) <= 1, (name, right, picker_right)
+        assert abs(tab.filter_mode_combo.width() - tab.filter_field_combo.width()) <= 1

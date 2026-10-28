@@ -278,6 +278,29 @@ class TestSettingItUp:
         _number_shows(qgis_app, number, DASH)
         _wait_for(qgis_app, lambda: "lots" in setup.message.text(), "the explanation")
 
+    def test_a_typed_value_still_applies_after_a_yes_no_field_came_and_went(
+        self, qgis_app, ui
+    ) -> None:
+        from qgis.core import QgsField
+        from qgis.PyQt.QtCore import QMetaType
+
+        page, pane = ui
+        number = _configured(qgis_app, pane, page)
+        page.sites.dataProvider().addAttributes([QgsField("ok", QMetaType.Type.Bool)])
+        page.sites.updateFields()
+        setup = _setup(pane)
+        _pick(setup.mode_combo, lc.MODE_VALUE)
+        _pick(setup.field_combo, "ok")  # the value box stops being editable
+        assert not setup.value_combo.isEditable()
+        _pick(setup.field_combo, "cap")  # and becomes editable again
+        assert setup.value_combo.isEditable()
+        line = setup.value_combo.lineEdit()
+        line.setText("5")
+        line.setModified(True)
+        line.editingFinished.emit()
+        _number_shows(qgis_app, number, str(count_sites(cap=5)))
+        assert count_sites(cap=5) != 30
+
     def test_a_layer_the_map_does_not_draw_is_offered_with_a_note_and_counts_zero(
         self, qgis_app, ui
     ) -> None:
