@@ -213,3 +213,73 @@ def qgis_atlas_page_ids(layout: QgsPrintLayout) -> list[int]:
     finally:
         atlas.endRender()
     return ids
+
+
+#: Four places for the point-layer series, one per page.
+PLACES = (
+    ("Harbour", 1000, 200),
+    ("Market", 5400, 300),
+    ("Ridge", 10100, 150),
+    ("Quay", 7000, 600),
+)
+
+
+def build_places(name: str = "places") -> QgsVectorLayer:
+    layer = QgsVectorLayer("Point?crs=EPSG:3857&field=name:string", name, "memory")
+    features = []
+    for place, x, y in PLACES:
+        feature = QgsFeature(layer.fields())
+        feature.setAttribute("name", place)
+        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+    return layer
+
+
+@dataclass
+class SeriesLayout:
+    project: QgsProject
+    layout: QgsPrintLayout
+    parcels: QgsVectorLayer
+    places: QgsVectorLayer
+    maps: list[QgsLayoutItemMap]
+    label: QgsLayoutItemLabel
+
+
+def build_series_layout(
+    project: QgsProject, *, maps: int = 1, atlas_on: bool = False
+) -> SeriesLayout:
+    """A layout that has no series yet: three parcels, four places and `maps`
+    maps over them (none follows an atlas), a label reading the current
+    feature. With `atlas_on` the series is set up over the parcels."""
+    project.setCrs(WEB_MERCATOR)
+    parcels = build_parcels()
+    places = build_places()
+    project.addMapLayers([parcels, places])
+    layout = QgsPrintLayout(project)
+    layout.initializeDefaults()
+    layout.setName("series")
+    items = [
+        add_map(layout, [parcels, places], x=10, y=20 + 130 * index, w=150, h=120)
+        for index in range(maps)
+    ]
+    for index, item in enumerate(items):
+        item.setId("main" if index == 0 else f"inset_{index}")
+    if items:
+        layout.setReferenceMap(items[0])
+    label = QgsLayoutItemLabel(layout)
+    layout.addLayoutItem(label)
+    label.setText('Lot [% "lot" %] -- page [% @atlas_featurenumber %]')
+    label.attemptMove(QgsLayoutPoint(10, 5, QgsUnitTypes.LayoutMillimeters))
+    label.attemptResize(QgsLayoutSize(150, 10, QgsUnitTypes.LayoutMillimeters))
+    atlas = layout.atlas()
+    atlas.setPageNameExpression("lot")
+    if atlas_on:
+        atlas.setCoverageLayer(parcels)
+        atlas.setEnabled(True)
+    if atlas_on and items:
+        items[0].setAtlasDriven(True)
+        items[0].setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Auto)
+        items[0].setAtlasMargin(0.1)
+    return SeriesLayout(project, layout, parcels, places, items, label)

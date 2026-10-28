@@ -2461,8 +2461,9 @@ class TestAtlasTab:
             tab = dialog._cartograph.atlas_tab
             assert tab.enabled_check.isChecked()
             assert tab.coverage_combo.currentLayer() is built.parcels
-            assert tab.map_combo.currentData() == built.main_map.uuid()
-            assert tab.count_label.text() == "3 pages in QGIS"
+            assert built.main_map.atlasDriven()
+            assert tab.map_summary.text().startswith("Updating map: ")
+            assert tab.status().pages == 3
         finally:
             dialog.close()
             project.setFileName("")
@@ -2477,7 +2478,8 @@ class TestAtlasTab:
             tab.filter_edit.setExpression(""""lot" <> 'A-1'""")
             tab.filter_edit.fieldChanged.emit(tab.filter_edit.expression())
             assert built.atlas.filterFeatures()
-            assert tab.count_label.text() == "2 pages in QGIS"
+            tab.refresh_now()
+            assert tab.status().pages == 2
             assert _wait_for(
                 qgis_app, lambda: len(fake_cartograph_export.calls) > before
             )
@@ -2582,15 +2584,15 @@ class TestAtlasTab:
             assert (atlas.sortFeatures(), atlas.sortExpression()) == (True, sort)
             assert atlas.sortAscending() and undo.count() == steps
 
-            tab.descending_check.setChecked(True)
+            tab.direction_combo.setCurrentIndex(1)
             assert (atlas.sortFeatures(), atlas.sortExpression()) == (True, sort)
             assert not atlas.sortAscending()
             undo.undo()
             assert atlas.sortAscending() and atlas.sortExpression() == sort
-            assert not tab.descending_check.isChecked()
+            assert tab.direction_combo.currentIndex() == 0
             undo.redo()
             assert not atlas.sortAscending()
-            assert tab.descending_check.isChecked()
+            assert tab.direction_combo.currentIndex() == 1
 
             tab.sort_edit.setExpression('upper("size")')
             tab.sort_edit.fieldChanged.emit(tab.sort_edit.expression())
@@ -2619,13 +2621,13 @@ class TestAtlasTab:
             tab = dialog._cartograph.atlas_tab
             tab.show_layout(built.layout)
             # Unsorted: the direction is kept but there is nothing to apply it to.
-            assert tab.descending_check.isChecked()
-            assert not tab.descending_check.isEnabled()
+            assert tab.direction_combo.currentIndex() == 1
+            assert not tab.direction_combo.isEnabled()
             tab.sort_edit.setField("lot")
             tab.sort_edit.fieldChanged.emit("lot")
-            assert tab.descending_check.isEnabled()
+            assert tab.direction_combo.isEnabled()
             assert (atlas.sortFeatures(), atlas.sortAscending()) == (True, False)
-            assert tab.descending_check.isChecked()
+            assert tab.direction_combo.currentIndex() == 1
         finally:
             dialog.close()
             project.setFileName("")
@@ -2677,11 +2679,6 @@ class TestAtlasTab:
             undo.redo()
             assert state() == after
 
-            tab.map_combo.setCurrentIndex(tab.map_combo.findData(""))
-            assert state()[:2] == (False, False)
-            assert tab.map_combo.currentData() == ""
-            undo.undo()
-            assert state() == after
             undo.undo()
             undo.undo()
             assert not built.atlas.filterFeatures()
@@ -2712,151 +2709,11 @@ class TestAtlasTab:
             dialog.close()
             project.setFileName("")
 
-    def test_the_all_pages_buttons_say_why_only_while_greyed_out(
-        self, qgis_app, project
-    ) -> None:
-        dialog = _dialog(project)
-        try:
-            tab = dialog._cartograph.atlas_tab
-            buttons = (tab.zip_button, tab.print_button)
-            greyed = ["The saved cartograph has no atlas pages yet"] * 2
-            ready = [
-                "Opens the cartograph and downloads every page as one ZIP",
-                "Opens the cartograph with every page ready to print - choose "
-                "Save as PDF for one multi-page PDF",
-            ]
-            for pages, tips in (
-                (None, greyed),
-                (3, ready),
-                (None, greyed),
-            ):
-                tab.show_outcome((), pages=pages)
-                assert [b.isEnabled() for b in buttons] == [pages is not None] * 2
-                assert [b.toolTip() for b in buttons] == tips
-        finally:
-            dialog.close()
-
-    def test_a_static_atlas_map_shows_why_it_will_not_page(
-        self, qgis_app, project, tmp_path
-    ) -> None:
-        import os
-
-        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
-            pytest.skip("needs ONLYMAP_RUNTIME_DIR")
-        dialog, built = self._atlas_dialog(project, tmp_path)
-        try:
-            cartograph = dialog._cartograph
-            (item_id,) = [
-                key for key in cartograph._frame_rows if key == built.main_map.uuid()
-            ]
-            mode = cartograph._frame_rows[item_id]["mode"]
-            mode.setCurrentIndex(mode.findData("static"))
-            tab = cartograph.atlas_tab
-            assert _wait_for(
-                qgis_app, lambda: not tab.problem_label.isHidden(), timeout=60
-            )
-            assert "Interactive" in tab.problem_label.text()
-            assert not tab.zip_button.isEnabled()
-        finally:
-            dialog.close()
-            project.setFileName("")
-
     def _type_filter(self, tab, expression: str) -> None:
         tab.advanced_section.set_open(True)
         tab.window()._cartograph.open_section("atlas")
         tab.filter_edit.setExpression(expression)
         tab.filter_edit.fieldChanged.emit(tab.filter_edit.expression())
-
-    def test_an_invalid_filter_says_so_beside_the_field_and_blocks_export(
-        self, qgis_app, project, tmp_path, fake_cartograph_export
-    ) -> None:
-        dialog, _built = self._atlas_dialog(project, tmp_path)
-        try:
-            dialog.show()
-            tab = dialog._cartograph.atlas_tab
-            buttons = (tab.zip_button, tab.print_button)
-            # A saved atlas with pages, as the last good save left it.
-            tab.show_outcome((), pages=3)
-            assert [b.isEnabled() for b in buttons] == [True, True]
-            self._type_filter(tab, '"lot" =')
-            assert tab.filter_error_label.isVisible()
-            assert tab.filter_error_label.text().startswith("Not a valid expression")
-            assert not tab.sort_error_label.isVisible()
-            # Not "0 pages in QGIS", and no export from the earlier save.
-            assert tab.count_label.text() == ""
-            assert not tab.saved_label.isVisible()
-            assert [b.isEnabled() for b in buttons] == [False, False]
-            assert "Correct" in buttons[0].toolTip()
-            # An unknown field is as invalid as a typo.
-            self._type_filter(tab, '"nothing_here" = 1')
-            assert tab.filter_error_label.isVisible()
-        finally:
-            dialog.close()
-            project.setFileName("")
-
-    def test_valid_zero_match_and_subset_are_told_apart_from_invalid(
-        self, qgis_app, project, tmp_path, fake_cartograph_export
-    ) -> None:
-        dialog, _built = self._atlas_dialog(project, tmp_path)
-        try:
-            dialog.show()
-            tab = dialog._cartograph.atlas_tab
-            buttons = (tab.zip_button, tab.print_button)
-            self._type_filter(tab, "\"lot\" = 'nowhere'")
-            assert not tab.filter_error_label.isVisible()
-            assert tab.count_label.text() == "0 pages in QGIS"
-            tab.show_outcome((), pages=0)
-            assert tab.saved_label.isVisible()
-            assert "no feature matches" in tab.saved_label.text()
-            assert [b.isEnabled() for b in buttons] == [False, False]
-            assert "No feature matches" in buttons[0].toolTip()
-
-            self._type_filter(tab, "\"size\" = 'small'")
-            assert tab.count_label.text() == "2 pages in QGIS"
-            tab.show_outcome((), pages=2)
-            assert tab.saved_label.text() == "2 pages saved in the cartograph"
-            assert [b.isEnabled() for b in buttons] == [True, True]
-
-            # Recovery: invalid, then corrected.
-            self._type_filter(tab, '"size" =')
-            assert [b.isEnabled() for b in buttons] == [False, False]
-            self._type_filter(tab, "\"lot\" = 'A-1'")
-            assert not tab.filter_error_label.isVisible()
-            assert tab.count_label.text() == "1 page in QGIS"
-            tab.show_outcome((), pages=1)
-            assert [b.isEnabled() for b in buttons] == [True, True]
-            assert tab.saved_label.text() == "1 page saved in the cartograph"
-        finally:
-            dialog.close()
-            project.setFileName("")
-
-    def test_the_advanced_expressions_sit_below_the_basic_choices(
-        self, qgis_app, project, tmp_path, fake_cartograph_export
-    ) -> None:
-        dialog, _built = self._atlas_dialog(project, tmp_path)
-        try:
-            dialog.show()
-            dialog._cartograph.open_section("atlas")
-            tab = dialog._cartograph.atlas_tab
-            qgis_app.processEvents()
-
-            def top(widget) -> int:
-                return widget.mapTo(tab, widget.rect().topLeft()).y()
-
-            section = tab.advanced_section
-            assert top(tab.coverage_combo) < top(tab.map_combo) < top(section)
-            assert top(section) < top(tab.count_label) < top(tab.zip_button)
-            # Opens by itself when an expression is set or wrong.
-            section.set_open(False)
-            tab.show_layout(tab._layout)
-            assert not section.is_open()
-            tab._layout.atlas().setFilterFeatures(True)
-            tab._layout.atlas().setFilterExpression('"lot" =')
-            tab.show_layout(tab._layout)
-            assert section.is_open()
-        finally:
-            dialog.close()
-            project.setFileName("")
 
     def test_a_saved_atlas_follows_the_filter_through_to_the_pages_it_pages(
         self, qgis_app, project, tmp_path
@@ -2874,8 +2731,10 @@ class TestAtlasTab:
             dialog.show()
             cartograph = dialog._cartograph
             tab = cartograph.atlas_tab
-            buttons = (tab.zip_button, tab.print_button)
-            assert _wait_for(qgis_app, lambda: tab.zip_button.isEnabled(), timeout=60)
+            buttons = (tab.export_button, tab.print_button)
+            assert _wait_for(
+                qgis_app, lambda: tab.export_button.isEnabled(), timeout=60
+            )
 
             def saved(expression: str):
                 before = cartograph._builds_started
@@ -2894,29 +2753,29 @@ class TestAtlasTab:
             assert saved('"lot" =') is None
             assert [b.isEnabled() for b in buttons] == [False, False]
             assert tab.filter_error_label.isVisible()
-            assert tab.problem_label.isVisible()
+            assert tab.status_label.text().startswith("Couldn't prepare")
 
             nowhere = saved("\"lot\" = 'nowhere'")
             assert nowhere is not None and 'filter="false"' in nowhere
             assert [b.isEnabled() for b in buttons] == [False, False]
-            assert "no feature matches" in tab.saved_label.text()
+            assert tab.status_label.text() == "No features match your filter."
 
             small = saved("\"size\" = 'small'")
             assert small is not None and "d.id == 2" in small
             assert [b.isEnabled() for b in buttons] == [True, True]
-            assert tab.saved_label.text() == "2 pages saved in the cartograph"
+            assert tab.status_label.text() == "2 pages ready"
 
             assert saved('"lot" =') is None
             assert [b.isEnabled() for b in buttons] == [False, False]
             fixed = saved("\"lot\" = 'A-1'")
             assert fixed is not None and "d.id == 2" in fixed
             assert [b.isEnabled() for b in buttons] == [True, True]
-            assert tab.saved_label.text() == "1 page saved in the cartograph"
+            assert tab.status_label.text() == "1 page ready"
         finally:
             dialog.close()
             project.setFileName("")
 
-    def test_all_pages_buttons_open_the_atlas_triggers(
+    def test_print_and_image_export_open_the_atlas_triggers(
         self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
         import os
@@ -2927,14 +2786,14 @@ class TestAtlasTab:
         try:
             cartograph = dialog._cartograph
             tab = cartograph.atlas_tab
-            assert _wait_for(qgis_app, lambda: tab.zip_button.isEnabled(), timeout=60)
+            assert _wait_for(qgis_app, lambda: tab.print_button.isEnabled(), timeout=60)
             opened = []
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
-            tab.zip_button.click()
             tab.print_button.click()
+            tab._host.open_pages("zip")
             # Both, in order, even when a save is still landing.
             assert _wait_for(qgis_app, lambda: len(opened) == 2, timeout=60)
-            assert [url.query() for url in opened] == ["atlas=zip", "atlas=print"]
+            assert [url.query() for url in opened] == ["atlas=print", "atlas=zip"]
         finally:
             dialog.close()
             project.setFileName("")

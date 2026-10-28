@@ -93,7 +93,8 @@ class TestFramesFollowItemEdits:
             assert card.name_label.text() == "Overview"
             stack.undo()
             assert card.name_label.text() == "inset"
-            assert combo.itemText(combo.findData(uuid)) == "inset"
+            # The chooser names a map as people say it ("Inset map").
+            assert combo.itemText(combo.findData(uuid)) == "Inset map"
             stack.redo()
             stack.redo()
             assert card.name_label.text() == "Overview"
