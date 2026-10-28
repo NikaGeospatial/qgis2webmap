@@ -67,9 +67,25 @@ def make_dialog(qgis_app, canvas):
         return dialog
 
     yield make
+    from qgis.PyQt import sip
+
     for dialog in made:
-        dialog.close()
-        dialog.deleteLater()
+        if not sip.isdeleted(dialog):  # closing destroys the window
+            dialog.close()
+            dialog.deleteLater()
+
+
+def gone(window) -> bool:
+    """Whether a window is closed for good: destroyed, or at least not a
+    hidden window left alive among the top-level widgets."""
+    from qgis.PyQt import sip
+    from qgis.PyQt.QtCore import QCoreApplication, QEvent
+    from qgis.PyQt.QtWidgets import QApplication
+
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    if sip.isdeleted(window):
+        return True
+    return not window.isVisible() and window not in QApplication.topLevelWidgets()
 
 
 def table_rows(dialog):
@@ -158,9 +174,12 @@ def make_dialog_with_preview(qgis_app, canvas, page):
         return dialog
 
     yield make
+    from qgis.PyQt import sip
+
     for dialog in made:
-        dialog.close()
-        dialog.deleteLater()
+        if not sip.isdeleted(dialog):  # closing destroys the window
+            dialog.close()
+            dialog.deleteLater()
 
 
 class TestPreviewBeforeApply:
@@ -245,9 +264,10 @@ class TestPreviewBeforeApply:
         else:
             dialog.close()
         settle(qgis_app, 0.05)
-        assert not dialog.isVisible()
+        assert gone(dialog)
         assert preview_colour(pane) == simulated
         assert canvas.previewModeEnabled()
+        dialog = make_dialog_with_preview()  # closing destroys the window
         dialog.show()
         assert dialog.current_condition() == "deuteranopia"
 
@@ -411,6 +431,7 @@ class TestRemembered:
         dialog.close()
         settle(qgis_app, 0.05)
         assert preview_colour(pane) == simulated != SHAPE_COLOUR
+        dialog = make_dialog_with_preview()  # closing destroys the window
         dialog.show()
         assert dialog.current_condition() == "deuteranopia"
         assert not dialog.apply_button.isEnabled()
@@ -577,6 +598,54 @@ class TestInputIsNeverLeftBlocked:
             host.close()
 
 
+class TestNothingIsLeftBehind:
+    """Whatever hides the window, it ends up closed - never a hidden window
+    that is still alive (on Wayland its surface can keep eating clicks)."""
+
+    @pytest.mark.parametrize("how", ["close", "close_button", "escape", "stray_hide"])
+    def test_a_window_that_goes_is_gone_and_the_next_one_opens(
+        self, qgis_app, make_dialog, how
+    ) -> None:
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QWidget
+
+        host = QWidget()
+        host.show()
+        dialog = make_dialog(parent=host)
+        dialog.show()
+        dialog.set_condition("deuteranopia")  # chosen, not applied
+        settle(qgis_app, 0.05)
+        if how == "close":
+            dialog.close()
+        elif how == "close_button":
+            dialog.close_button.click()
+        elif how == "escape":
+            QTest.keyClick(dialog, Qt.Key.Key_Escape)
+        else:
+            dialog.hide()
+        settle(qgis_app, 0.1)
+        try:
+            assert gone(dialog)
+        finally:
+            host.close()
+
+    def test_a_deactivated_application_does_not_hide_the_window(
+        self, qgis_app, make_dialog
+    ) -> None:
+        from qgis.PyQt.QtCore import QEvent
+        from qgis.PyQt.QtWidgets import QApplication
+
+        dialog = make_dialog()
+        dialog.show()
+        QApplication.sendEvent(dialog, QEvent(QEvent.Type.WindowDeactivate))
+        QApplication.sendEvent(
+            QApplication.instance(), QEvent(QEvent.Type.ApplicationDeactivate)
+        )
+        settle(qgis_app, 0.1)
+        assert dialog.isVisible()
+
+
 class TestBrowser:
     def test_the_box_starts_unchecked_with_its_label(self, make_dialog) -> None:
         dialog = make_dialog()
@@ -615,6 +684,8 @@ class TestBrowser:
         dialog.show()
         dialog.browser_check.setChecked(True)
         dialog.close()
+        # Closing destroys the window; the next one opens unchecked.
+        dialog = make_dialog()
         dialog.show()
         assert not dialog.browser_check.isChecked()
 
@@ -699,12 +770,21 @@ class TestSignals:
         assert seen == ["deuteranopia", ""]
         assert simulating_tooltip("deuteranopia") == "Simulating deuteranopia"
 
-    def test_is_a_non_modal_tool_window(self, make_dialog):
+    def test_is_a_non_modal_window_that_never_hides_on_deactivation(self, make_dialog):
+        """A Tool window hides itself when the application is deactivated; on
+        Wayland that can leave an invisible surface over the parent."""
         from qgis.PyQt.QtCore import Qt
 
         dialog = make_dialog()
         assert not dialog.isModal()
-        assert dialog.windowFlags() & Qt.WindowType.Tool == Qt.WindowType.Tool
+        assert dialog.windowFlags() & Qt.WindowType.Tool != Qt.WindowType.Tool
+        for bad in (
+            Qt.WindowType.Popup,
+            Qt.WindowType.ToolTip,
+            Qt.WindowType.FramelessWindowHint,
+            Qt.WindowType.WindowStaysOnTopHint,
+        ):
+            assert dialog.windowFlags() & bad != bad
 
 
 class TestLegendFromProject:

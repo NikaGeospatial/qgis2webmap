@@ -31,7 +31,15 @@ from typing import TYPE_CHECKING, cast
 
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSettings, QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QShowEvent
+from qgis.PyQt.QtGui import (
+    QCloseEvent,
+    QColor,
+    QHideEvent,
+    QIcon,
+    QPainter,
+    QPixmap,
+    QShowEvent,
+)
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -195,8 +203,14 @@ class AccessibilityDialog(QDialog):
         self._canvas_original: tuple[bool, object] | None = None
 
         self.setWindowTitle(tr("Colour vision"))
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.Tool)
+        # An ordinary dialog window over its parent, not a Tool window: Tool
+        # windows hide themselves when the application is deactivated, and on
+        # Wayland a surface hidden that way can be left over the parent,
+        # swallowing its clicks. This one is only ever shown or closed (and
+        # destroyed on close), never hidden-but-alive.
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setModal(False)
+        self._closing = False
         self.setMinimumWidth(360)
         self.resize(520, 520)
 
@@ -379,12 +393,25 @@ class AccessibilityDialog(QDialog):
         self.canvas_check.setChecked(self._applied_canvas)
 
     def closeEvent(self, event: QCloseEvent | None) -> None:  # noqa: N802 - Qt override
+        self._closing = True
         self._discard_unapplied()
         super().closeEvent(event)
 
     def reject(self) -> None:
+        # Escape and the window's own close both end up here; either way the
+        # window is destroyed, not left hidden.
+        self._closing = True
         self._discard_unapplied()
         super().reject()
+        self.deleteLater()
+
+    def hideEvent(self, event: QHideEvent | None) -> None:  # noqa: N802 - Qt override
+        super().hideEvent(event)
+        # Hidden by anything but the window system minimising it (its parent
+        # going away, a stray hide()): that is Close, never a hidden window
+        # left behind.
+        if event is not None and not event.spontaneous() and not self._closing:
+            self.close()
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)

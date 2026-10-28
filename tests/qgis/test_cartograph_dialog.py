@@ -2106,6 +2106,43 @@ class TestColourVisionInTheCartograph:
         finally:
             dialog.close()
 
+    def test_closing_the_window_leaves_nothing_behind_and_it_opens_again(
+        self, qgis_app, project, tmp_path
+    ) -> None:
+        from qgis.PyQt import sip
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent
+        from qgis.PyQt.QtWidgets import QApplication
+
+        dialog, _target = TestPrintSettings()._real_dialog(qgis_app, project, tmp_path)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            cartograph.accessibility_button.click()
+            first = cartograph._colour_vision
+            first.set_condition("deuteranopia")  # chosen, not applied
+            first.close()
+            _wait_for(qgis_app, lambda: False, timeout=0.1)
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            assert sip.isdeleted(first) or (
+                not first.isVisible() and first not in QApplication.topLevelWidgets()
+            )
+            # The Cartograph dialog still takes clicks, and the button opens a
+            # window again, showing normal vision (nothing was applied).
+            tabs = cartograph.panel_tabs
+            target = next(
+                i
+                for i in range(tabs.count())
+                if i != tabs.currentIndex() and tabs.isTabEnabled(i)
+            )
+            self._click(tabs.tabBar(), tabs.tabBar().tabRect(target).center())
+            assert _wait_for(qgis_app, lambda: tabs.currentIndex() == target, timeout=2)
+            cartograph.accessibility_button.click()
+            again = cartograph._colour_vision
+            assert again is not None and again.isVisible()
+            assert again.current_condition() is None
+        finally:
+            dialog.close()
+
     def test_an_applied_simulation_is_on_before_the_window_is_opened(
         self, qgis_app, project, tmp_path
     ) -> None:

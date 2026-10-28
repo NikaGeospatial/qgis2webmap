@@ -2209,9 +2209,15 @@ class CartographController:
             )
 
         dialog.mode_changed.connect(on_mode)
+        # Closing destroys the window; the next open builds a fresh one that
+        # picks the applied simulation up from the stored settings.
+        dialog.destroyed.connect(self._forget_colour_vision)
         self._colour_vision = dialog
         on_mode(dialog.applied_condition() or "")
         return dialog
+
+    def _forget_colour_vision(self) -> None:
+        self._colour_vision = None
 
     def on_accessibility(self) -> None:
         """The corner's Accessibility button: one non-modal Colour vision
@@ -2231,8 +2237,7 @@ class CartographController:
     def release_canvas_effects(self) -> None:
         """Undo a colour-vision preview this plugin put on the QGIS canvas.
         Called when the plugin unloads; closing a dialog leaves it, per #4."""
-        if self._colour_vision is not None:
-            self._colour_vision.reset_canvas()
+        self._colour_vision_dialog().reset_canvas()
 
     def _collect_legend_entries(
         self, spec: CartographSpec, projects: Sequence[ExportProject] = ()
