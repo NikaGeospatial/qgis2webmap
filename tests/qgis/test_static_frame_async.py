@@ -399,6 +399,72 @@ class TestAutosaveOfAHeavyStaticFrame:
 # ---- The autosave lets the user finish first --------------------------------
 
 
+class TestEditTabAfterAMapChange:
+    """The user selects a map on the page and changes its view: when the
+    autosave has drawn the static frame, the map is still the selected item
+    and the Edit tab still shows its controls, not the empty hint."""
+
+    NO_ITEM_TEXT = "Select an item on the page to edit its properties."
+
+    @pytest.mark.parametrize("selected_id", ["Overview", "Title"])
+    def test_the_selection_and_edit_tab_survive(
+        self, qgis_app, project, tmp_path, selected_id
+    ) -> None:
+        if not os.environ.get("ONLYMAP_RUNTIME_DIR"):
+            pytest.skip("needs ONLYMAP_RUNTIME_DIR (see CONTRIBUTING.md)")
+        from qgis.core import QgsLayoutItemLabel
+
+        from nika_onlymap_exporter.core.settings import FrameChoice
+
+        layout, map_item = _heavy_layout(project)
+        title = QgsLayoutItemLabel(layout)
+        title.setText("Title")
+        title.setId("Title")
+        layout.addLayoutItem(title)
+        dialog = _dialog(project)
+        _choose_cartograph(dialog)
+        cartograph = dialog._cartograph
+        cartograph.show_layout_named(layout.name())
+        dialog.state.frame_choices(layout.name())[map_item.uuid()] = FrameChoice(
+            mode="static", dpi=150
+        )
+        target = tmp_path / "edit.html"
+        cartograph.file_edit.setText(str(target))
+        cartograph._on_file_edited(str(target))
+        idle = lambda: (  # noqa: E731
+            cartograph._job is None and not cartograph._autosave_timer.isActive()
+        )
+        try:
+            assert _wait_for(qgis_app, target.exists, timeout=240)
+            assert _wait_for(qgis_app, idle, timeout=240)
+            current = cartograph.page_pane.preview.view.currentLayout()
+            current.setSelectedItem(
+                next(
+                    i
+                    for i in current.items()
+                    if getattr(i, "id", lambda: "")() == selected_id
+                )
+            )
+            controls = cartograph.page_pane.controls
+            assert controls.heading.text() != self.NO_ITEM_TEXT
+            before = target.stat().st_mtime_ns
+            extent = map_item.extent()
+            shift = extent.width() * 0.07
+            current.undoStack().beginCommand(map_item, "Move map content")
+            extent.setXMinimum(extent.xMinimum() + shift)
+            extent.setXMaximum(extent.xMaximum() + shift)
+            map_item.setExtent(extent)
+            current.undoStack().endCommand()
+            assert _wait_for(
+                qgis_app, lambda: target.stat().st_mtime_ns != before, timeout=240
+            )
+            assert _wait_for(qgis_app, idle, timeout=240)
+            assert [i.id() for i in current.selectedLayoutItems()] == [selected_id]
+            assert controls.heading.text() != self.NO_ITEM_TEXT
+        finally:
+            dialog.close()
+
+
 class TestAutosaveWaitsForTheUser:
     """Mechanism checks (advisory): the result tests above are the gates."""
 
