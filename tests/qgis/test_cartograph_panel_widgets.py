@@ -708,11 +708,12 @@ class TestSelectedTextSize:
         self._select(qgis_app, layout, title)
         pane.resize(300, 500)
         _settle(qgis_app, 0.1)
-        viewport = pane.preview.view.viewport()
         for button in (pane.fit_button, pane.add_button):
             assert button.toolTip().startswith(button.accessibleName())
-        for rect in _control_rects(pane).values():
-            assert viewport.rect().contains(rect)
+        strip = pane.preview._strip
+        for button in (pane.fit_button, pane.add_button):
+            assert strip.rect().contains(button.geometry())
+        assert pane.preview.rect().contains(strip.geometry())
         base = title.textFormat().size()
         pane.controls.text_bigger_button.click()
         assert title.textFormat().size() == pytest.approx(base + 1)
@@ -930,12 +931,12 @@ class TestSelectingDoesNotDisturbThePage:
 
 
 def _control_rects(pane):
-    """Where Add item and Fit page are, in the page view's viewport."""
-    view = pane.preview.view
-    viewport = view.viewport()
+    """Where Add item and Fit page are, in the page view's viewport pixels
+    (below its bottom edge: they sit in the control strip under the view)."""
+    viewport = pane.preview.view.viewport()
     return {
         name: button.rect().translated(
-            button.mapTo(view, button.rect().topLeft()) - viewport.pos()
+            viewport.mapFromGlobal(button.mapToGlobal(button.rect().topLeft()))
         )
         for name, button in (("add", pane.add_button), ("fit", pane.fit_button))
     }
@@ -949,21 +950,12 @@ def _page_px(pane, index: int = 0):
     return view.mapFromScene(page.mapRectToScene(page.rect())).boundingRect()
 
 
-def _from_corner(pane) -> dict[str, tuple[int, int]]:
-    """Each control's distance from the view's bottom-right corner."""
-    viewport = pane.preview.view.viewport()
-    return {
-        name: (
-            viewport.width() - rect.right() - 1,
-            viewport.height() - rect.bottom() - 1,
-        )
-        for name, rect in _control_rects(pane).items()
-    }
-
-
 class TestFloatingControls:
+    """Add item and Fit page sit in a compact strip under the page view,
+    right-aligned in one row; the view above is all the page has."""
+
     @pytest.mark.parametrize("size", [(1000, 700), (480, 360)])
-    def test_they_are_stacked_in_the_viewports_bottom_right_corner(
+    def test_they_sit_in_one_right_aligned_row_below_the_page_view(
         self, qgis_app, pane, size
     ) -> None:
         pane.resize(*size)
@@ -971,104 +963,62 @@ class TestFloatingControls:
         rects = _control_rects(pane)
         viewport = pane.preview.view.viewport()
         assert rects["add"].width() == rects["fit"].width()
-        assert rects["add"].left() == rects["fit"].left()
+        assert rects["add"].top() == rects["fit"].top()
         assert rects["add"].height() >= 32 and rects["fit"].height() >= 32
-        assert rects["fit"].top() - rects["add"].bottom() - 1 == 8
-        assert viewport.width() - rects["fit"].right() - 1 == 16
-        assert viewport.height() - rects["fit"].bottom() - 1 == 16
+        assert rects["add"].right() < rects["fit"].left()
+        assert rects["fit"].left() - rects["add"].right() - 1 == 8
+        strip = pane.preview._strip
+        assert strip.width() - pane.fit_button.geometry().right() - 1 == 8
+        # Wholly under the page view, never over any part of it.
+        assert rects["add"].top() >= viewport.height()
+        assert rects["fit"].top() >= viewport.height()
 
-    def test_the_container_is_no_larger_than_the_buttons(self, qgis_app, pane) -> None:
-        overlay = pane.preview._overlay
-        union = pane.add_button.geometry().united(pane.fit_button.geometry())
-        assert overlay.size() == union.size()
-
-    def test_a_click_beside_or_between_the_buttons_reaches_the_page(
+    def test_the_strip_is_no_taller_than_a_button_and_a_little_room(
         self, qgis_app, pane
     ) -> None:
-        """No invisible surface: with a shape covering the page, a click at
-        the gap between the buttons, and one just beside them, select it."""
-        from qgis.core import (
-            QgsLayoutItemShape,
-            QgsLayoutPoint,
-            QgsLayoutSize,
-            QgsUnitTypes,
-        )
-        from qgis.PyQt.QtCore import QPoint, Qt
-        from qgis.PyQt.QtTest import QTest
+        strip = pane.preview._strip
+        assert strip.height() <= pane.fit_button.height() + 12
+        assert strip.height() >= pane.fit_button.height()
+
+    def test_a_click_on_a_button_reaches_that_button(self, qgis_app, pane) -> None:
         from qgis.PyQt.QtWidgets import QApplication
 
-        view = pane.preview.view
-        layout = view.currentLayout()
-        shape = QgsLayoutItemShape(layout)
-        shape.setShapeType(QgsLayoutItemShape.Shape.Rectangle)
-        mm = QgsUnitTypes.LayoutMillimeters
-        shape.attemptMove(QgsLayoutPoint(-20, -20, mm))
-        shape.attemptResize(QgsLayoutSize(400, 300, mm))
-        layout.addLayoutItem(shape)
-        _settle(qgis_app)
-        rects = _control_rects(pane)
-        gap = QPoint(
-            rects["add"].center().x(), (rects["add"].bottom() + rects["fit"].top()) // 2
-        )
-        beside = QPoint(rects["add"].left() - 6, rects["add"].center().y())
-        for spot in (gap, beside):
-            layout.deselectAll()
-            # As a mouse does: to whatever widget is under the pointer.
-            at = view.viewport().mapToGlobal(spot)
-            target = QApplication.widgetAt(at)
-            assert target is not None
-            QTest.mouseClick(
-                target,
-                Qt.MouseButton.LeftButton,
-                Qt.KeyboardModifier.NoModifier,
-                target.mapFromGlobal(at),
-            )
-            _settle(qgis_app, 0.1)
-            assert layout.selectedLayoutItems() == [shape], spot
+        for button in (pane.add_button, pane.fit_button):
+            at = button.mapToGlobal(button.rect().center())
+            assert QApplication.widgetAt(at) is button
 
-    def test_they_follow_the_corner_and_stay_inside_when_it_leaves(
+    def test_they_stay_put_wherever_the_page_is_zoomed_and_scrolled(
         self, qgis_app, pane
     ) -> None:
         view = pane.preview.view
+        before = {n: r for n, r in _control_rects(pane).items()}
         for _ in range(4):
             _wheel_zoom(pane, 120)
         _settle(qgis_app)
-        viewport = view.viewport().rect()
-        bars = (view.horizontalScrollBar(), view.verticalScrollBar())
         for to_end in (False, True):
-            for bar in bars:
-                bar.setValue(bar.maximum() if to_end else bar.minimum())
-            _settle(qgis_app)
-            rects = _control_rects(pane)
-            union = rects["add"].united(rects["fit"])
-            assert viewport.contains(union), (to_end, union, viewport)
-            if not to_end:
-                # The page's corner is well off the viewport.
-                assert not viewport.contains(_page_px(pane).bottomRight())
-
-    def test_they_stay_at_the_viewport_corner_wherever_the_page_is_scrolled(
-        self, qgis_app, pane
-    ) -> None:
-        view = pane.preview.view
-        _wheel_zoom(pane, 120)
-        viewport = view.viewport()
-        for to_end in (True, False):
             for bar in (view.horizontalScrollBar(), view.verticalScrollBar()):
                 bar.setValue(bar.maximum() if to_end else bar.minimum())
             _settle(qgis_app)
-            fit = _control_rects(pane)["fit"]
-            assert viewport.width() - fit.right() - 1 == 16
-            assert viewport.height() - fit.bottom() - 1 == 16
+            now = _control_rects(pane)
+            for name, rect in before.items():
+                assert now[name].size() == rect.size()
+                assert now[name].top() == rect.top()
+                assert now[name].left() == rect.left()
+            # The page's corner is well off the viewport: only the view moved.
+            if not to_end:
+                assert not view.viewport().rect().contains(_page_px(pane).bottomRight())
 
     def test_the_removed_zoom_row_gave_its_height_to_the_preview(self, pane) -> None:
         preview = pane.preview
         assert preview.geometry().bottom() + 1 == pane.height()
 
     @pytest.mark.parametrize("fill", ["#000000", "#ffffff"])
-    def test_the_controls_are_opaque_over_a_dark_or_light_map(
+    def test_the_strip_is_the_workspace_whatever_the_map_behind_the_page(
         self, qgis_app, pane, fill
     ) -> None:
-        """Whatever the map behind them, their label background is theirs."""
+        """A map filling the whole view does not reach the strip: beside the
+        buttons it is the neutral workspace colour, and the buttons draw
+        their own background."""
         from qgis.core import (
             QgsFillSymbol,
             QgsLayoutItemShape,
@@ -1091,23 +1041,15 @@ class TestFloatingControls:
             QgsFillSymbol.createSimple({"color": fill, "outline_style": "no"})
         )
         layout.addLayoutItem(shape)
-        for _ in range(3):  # zoomed in: the map fills the view behind them
+        for _ in range(3):  # zoomed in: the map fills the view
             _wheel_zoom(pane, 120)
         _settle(qgis_app)
-        view = pane.preview.view
-        rect = _control_rects(pane)["fit"]
-        # The whole view as drawn, buttons included.
-        image = view.grab().toImage()
-        origin = view.viewport().pos()
-        behind = image.pixelColor(
-            origin.x() + rect.left() - 4, origin.y() + rect.top() - 4
-        )
-        assert behind.name() == fill
-        # Just inside the button's border, at its left.
-        inside = image.pixelColor(
-            origin.x() + rect.left() + 3, origin.y() + rect.top() + rect.height() // 2
-        )
-        assert inside.name() != fill
+        strip = pane.preview._strip
+        image = strip.grab().toImage()
+        assert image.pixelColor(2, 2).name() == "#dfe4e1"
+        button = pane.add_button
+        inside = image.pixelColor(button.x() + 3, button.y() + button.height() // 2)
+        assert inside.name() != "#dfe4e1"
 
     @pytest.mark.parametrize("size", [(1280, 800), (480, 360)])
     def test_fit_page_shows_the_whole_page_as_large_as_the_view_allows(
@@ -1124,9 +1066,6 @@ class TestFloatingControls:
         # One dimension is within about 8 px of the view's edge, both sides.
         slack = min(viewport.width() - page.width(), viewport.height() - page.height())
         assert 10 <= slack <= 24, slack
-        # Larger than when the page was fitted above a strip for the buttons.
-        old_room = viewport.height() - 2 * (pane.fit_button.height() + 12 + 8)
-        assert page.height() > old_room
 
     def test_the_workspace_is_grey_and_the_page_keeps_its_own_colour(
         self, qgis_app, pane
@@ -1221,10 +1160,10 @@ class TestControlsAndColourSimulation:
         view = pane.preview.view
 
         def button_pixels() -> list[str]:
-            image = view.grab().toImage()
+            image = pane.preview._page.grab().toImage()
             out = []
             for button in (pane.add_button, pane.fit_button):
-                spot = button.mapTo(view, button.rect().topLeft())
+                spot = button.mapTo(pane.preview._page, button.rect().topLeft())
                 out.append(image.pixelColor(spot.x() + 4, spot.y() + 4).name())
             return out
 

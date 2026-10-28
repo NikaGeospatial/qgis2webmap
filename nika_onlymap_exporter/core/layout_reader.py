@@ -131,6 +131,7 @@ from .expression_tokens import (
 )
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
+from .legend_edit import support_left_out
 from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
@@ -2069,7 +2070,12 @@ def _legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> i
         for node in model.rootGroup().findLayers()
     }
     left_out = 0
+    # Layers the template left out as technical (a hillshade, a basemap) did
+    # not fail to fit, and the user can restore them: not counted.
+    support = support_left_out(item)
     for layer in rendered_layers(map_item):
+        if layer.id() in support:
+            continue
         layer_legend = layer.legend()
         own = 0
         if layer_legend is not None:

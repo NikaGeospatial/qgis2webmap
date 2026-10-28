@@ -52,7 +52,6 @@ from qgis.PyQt.QtGui import (
     QMouseEvent,
     QPainter,
     QPaintEvent,
-    QRegion,
     QResizeEvent,
     QShowEvent,
 )
@@ -78,6 +77,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import live_count as lc
+from ...core.layout_reader import legend_left_out
 from ..i18n import plural, tr
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
@@ -99,9 +99,11 @@ from .live_counts import LiveCounts
 #: The layout list's narrowest, beside its Add... button in the panel.
 PICKER_MIN_WIDTH = 120
 
-#: The floating Add item / Fit page buttons: their distance from the
-#: viewport's bottom and right edges, and from each other.
-FLOAT_MARGIN = 16
+#: The control strip under the page view, holding Add item and Fit page in one
+#: right-aligned row: the room right of the buttons, above and below them, and
+#: between them.
+STRIP_MARGIN_X = 8
+STRIP_MARGIN_Y = 4
 FLOAT_GAP = 8
 #: The least height of a floating button, in pixels.
 FLOAT_MIN_HEIGHT = 32
@@ -312,13 +314,13 @@ class LayoutPreview(QStackedWidget):
         # made before that it crashes on the first wheel turn.
         self._select: QgsLayoutViewToolSelect | None = None
         # The scale of the last fit (None until one): at it, no scroll bars.
+        self._equalising = False
         self._fitted_scale: float | None = None
         # The page size (mm) the view was last fitted to: another size (the
         # orientation or paper changed) is fitted again, zoomed or not.
         self._fitted_page_size: tuple[float, float] | None = None
         self._watched_pages: set[str] = set()
         self.view.setTool(self._pan)
-        self.addWidget(self.view)
         self._make_floating_controls()
 
         empty = QFrame(self)
@@ -396,19 +398,36 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.timeout.connect(self._fit)
 
     def _make_floating_controls(self) -> None:
-        """Add item above Fit page, stacked in the viewport's bottom-right corner.
+        """The page view over a compact control strip: Add item and Fit page,
+        right-aligned in one row.
 
-        Children of the view (not of its viewport, and never scene items), so
-        they sit still while the page zooms and pans, are not drawn into an
-        export, a thumbnail or the colour-vision preview's filter, and still
-        take clicks and Tab. They share a container exactly as big as the
-        stack, masked to the two buttons (so even the gap between them is the
-        view's; "transparent for mouse events" would also pass clicks through
-        the buttons themselves, children included). Placed by
-        `_place_floating_controls` whenever the page or the viewport moves.
+        The strip is a widget of its own under the view, not a child of it
+        and never a scene item: the view (and so every fit) has only the room
+        above it, the buttons sit still while the page zooms and pans, are
+        not drawn into an export, a thumbnail or the colour-vision preview's
+        filter, and still take clicks and Tab.
         """
-        self._overlay = QWidget(self.view)
-        self._overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._page = QWidget(self)
+        column = QVBoxLayout(self._page)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(self.view, 1)
+        self._strip = QWidget(self._page)
+        self._strip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # The same neutral workspace as round the paper, whatever the theme.
+        self._strip.setObjectName("layoutControlStrip")
+        self._strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._strip.setStyleSheet(
+            f"QWidget#layoutControlStrip {{ background: {WORKSPACE_COLOUR}; }}"
+        )
+        row = QHBoxLayout(self._strip)
+        row.setContentsMargins(
+            STRIP_MARGIN_X, STRIP_MARGIN_Y, STRIP_MARGIN_X, STRIP_MARGIN_Y
+        )
+        row.setSpacing(FLOAT_GAP)
+        row.addStretch(1)
+        column.addWidget(self._strip)
+        self.addWidget(self._page)
         self.add_button = self._floating_button(
             tr("Add item"),
             tr(
@@ -425,21 +444,38 @@ class LayoutPreview(QStackedWidget):
             tr("Fit page"), tr("Fit the whole page"), tr(_PAN_HINT)
         )
         self.fit_button.clicked.connect(self.fit_page)
+        # Both as wide as the larger label; a style or font change resizes
+        # them, so they are sized again (and the page fitted to what is left).
         for button in self.floating_buttons():
-            # A style or font change resizes a button: size the stack again.
+            row.addWidget(button)
             button.installEventFilter(self)
-        self._placing = False
-        # The viewport shrinks when a scroll bar appears, and the buttons keep
-        # clear of it.
+        self._equalise_buttons()
         self.view.zoomLevelChanged.connect(self._on_zoom_level_changed)
         for bar in (self.view.horizontalScrollBar(), self.view.verticalScrollBar()):
-            bar.rangeChanged.connect(self._place_floating_controls)
             # Only the user's own drag of a bar (not a fit's, nor a resize's
             # clamping) leaves the fitted view.
             bar.actionTriggered.connect(self._on_user_moved_view)
 
+    def _equalise_buttons(self) -> None:
+        """Same width (the larger label's) and height (at least
+        FLOAT_MIN_HEIGHT) for both buttons."""
+        if self._equalising:
+            return
+        self._equalising = True
+        try:
+            buttons = self.floating_buttons()
+            for button in buttons:
+                button.setMinimumSize(0, 0)
+                button.setMaximumSize(16777215, 16777215)
+            width = max(b.sizeHint().width() for b in buttons)
+            height = max(FLOAT_MIN_HEIGHT, *(b.sizeHint().height() for b in buttons))
+            for button in buttons:
+                button.setFixedSize(width, height)
+        finally:
+            self._equalising = False
+
     def _floating_button(self, text: str, name: str, hint: str = "") -> QToolButton:
-        button = QToolButton(self._overlay)
+        button = QToolButton(self._strip)
         button.setText(text)
         button.setToolTip(f"{name}. {hint}" if hint else name)
         button.setAccessibleName(name)
@@ -451,7 +487,7 @@ class LayoutPreview(QStackedWidget):
         return button
 
     def floating_buttons(self) -> tuple[QToolButton, QToolButton]:
-        """Top to bottom, as they sit."""
+        """Left to right, as they sit."""
         return (self.add_button, self.fit_button)
 
     def _on_user_moved_view(self, *_args: object) -> None:
@@ -459,7 +495,6 @@ class LayoutPreview(QStackedWidget):
 
     def _on_zoom_level_changed(self, *_args: object) -> None:
         self._sync_scroll_bars()
-        self._place_floating_controls()
 
     def _sync_scroll_bars(self) -> None:
         """No scroll bars while the page is fitted (the scene's margin is
@@ -476,45 +511,6 @@ class LayoutPreview(QStackedWidget):
         )
         self.view.setHorizontalScrollBarPolicy(policy)
         self.view.setVerticalScrollBarPolicy(policy)
-
-    def _place_floating_controls(self, *_args: object) -> None:
-        if self._placing or sip.isdeleted(self):
-            return
-        self._placing = True
-        try:
-            self._move_floating_controls()
-        finally:
-            self._placing = False
-
-    def _move_floating_controls(self) -> None:
-        """Size the stack, then seat it FLOAT_MARGIN inside the viewport's
-        bottom-right corner (the viewport excludes the scroll bars), wherever
-        the page is zoomed or panned to."""
-        buttons = self.floating_buttons()
-        for button in buttons:
-            button.setMinimumSize(0, 0)
-            button.setMaximumSize(16777215, 16777215)
-        width = max(b.sizeHint().width() for b in buttons)
-        height = max(FLOAT_MIN_HEIGHT, *(b.sizeHint().height() for b in buttons))
-        top = 0
-        for button in buttons:
-            button.setFixedSize(width, height)
-            button.move(0, top)
-            top += height + FLOAT_GAP
-        self._overlay.resize(width, top - FLOAT_GAP)
-        self._overlay.setMask(
-            QRegion(QRect(0, 0, width, height)).united(
-                QRegion(QRect(0, height + FLOAT_GAP, width, height))
-            )
-        )
-        viewport = self.view.viewport()
-        rect = viewport.geometry()
-        x = rect.right() + 1 - FLOAT_MARGIN - self._overlay.width()
-        y = rect.bottom() + 1 - FLOAT_MARGIN - self._overlay.height()
-        x = max(rect.left(), x)
-        y = max(rect.top(), y)
-        self._overlay.move(x, y)
-        self._overlay.raise_()
 
     def _page_rects(self) -> list[QRectF]:
         layout = self.view.currentLayout()
@@ -557,7 +553,7 @@ class LayoutPreview(QStackedWidget):
             self._user_zoomed = False
             self._reported_selection = self._selection_key()
             self._fitted_page_size = None
-        self.setCurrentWidget(self.view)
+        self.setCurrentWidget(self._page)
         self._fit_timer.start()
 
     def _on_pages_changed(self) -> None:
@@ -656,7 +652,7 @@ class LayoutPreview(QStackedWidget):
         return bool(chosen)
 
     def showing_page(self) -> bool:
-        return self.currentWidget() is self.view
+        return self.currentWidget() is self._page
 
     def fit_page(self) -> None:
         """Fit page: the whole page again, and fitted from now on, as if
@@ -745,7 +741,6 @@ class LayoutPreview(QStackedWidget):
         self._fitted_scale = self.view.transform().m11()
         self.view.emitZoomLevelChanged()
         self._sync_scroll_bars()
-        self._place_floating_controls()
 
     def _space_pan(self, watched: QObject | None, event: QEvent) -> bool | None:
         """Hold Space and drag to pan the page; None when `event` is not
@@ -943,17 +938,23 @@ class LayoutPreview(QStackedWidget):
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
         if (
             event is not None
-            and event.type() == QEvent.Type.Resize
-            and (watched is self.view or watched in self.floating_buttons())
+            and watched in self.floating_buttons()
+            and event.type()
+            in (
+                QEvent.Type.StyleChange,
+                QEvent.Type.FontChange,
+                QEvent.Type.PolishRequest,
+            )
         ):
-            self._place_floating_controls()
+            self._equalise_buttons()
         if (
             event is not None
             and watched is self.view.viewport()
             and event.type() in (QEvent.Type.Resize, QEvent.Type.Show)
         ):
-            # A scroll bar appearing or the dialog resizing moves the corner.
-            self._place_floating_controls()
+            # The room for the page changed (a window resize, a scroll bar,
+            # the strip growing with a larger font): fit again unless zoomed.
+            self._fit_timer.start()
         if event is not None:
             panned = self._space_pan(watched, event)
             if panned is not None:
@@ -1186,12 +1187,25 @@ class LayoutPreview(QStackedWidget):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
-        self._place_floating_controls()
         self._fit_timer.start()
 
 
 #: How to move the page, said on the Fit page and zoom buttons.
 _PAN_HINT = "Pan: hold Space or the middle mouse button and drag. Zoom: the wheel"
+
+
+def legend_entries_left_out(layout) -> int:  # QgsPrintLayout | None
+    """How many legend entries the layout's template legends still leave out
+    for want of room, counted afresh (entries the user put back are not)."""
+    if layout is None or sip.isdeleted(layout):
+        return 0
+    total = 0
+    for item in layout.items():
+        if isinstance(item, QgsLayoutItemLegend) and not sip.isdeleted(item):
+            linked = item.linkedMap()
+            if linked is not None:
+                total += legend_left_out(item, linked)
+    return total
 
 
 class PagePane(QWidget):
@@ -1213,6 +1227,8 @@ class PagePane(QWidget):
     edit_requested = pyqtSignal()
     changes_requested = pyqtSignal()
     open_editor_requested = pyqtSignal()
+    # The legend warning's "New from template...".
+    new_layout_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1253,6 +1269,42 @@ class PagePane(QWidget):
         self.editor_link.setEnabled(False)
         caption_row.addWidget(self.editor_link)
         column.addLayout(caption_row)
+        # Entries a template's legend had no room for: said here, where the
+        # page is, with the ways out that already exist.
+        self.legend_warning = QFrame(self)
+        self.legend_warning.setProperty("role", "legendWarning")
+        warning_row = QHBoxLayout(self.legend_warning)
+        warning_row.setContentsMargins(8, 4, 8, 4)
+        warning_row.setSpacing(12)
+        self.legend_warning_label = QLabel(self.legend_warning)
+        self.legend_warning_label.setWordWrap(True)
+        warning_font = self.legend_warning_label.font()
+        warning_font.setBold(True)
+        self.legend_warning_label.setFont(warning_font)
+        warning_row.addWidget(self.legend_warning_label, 1)
+        self.adjust_legend_button = QPushButton(
+            tr("Adjust legend"), self.legend_warning
+        )
+        self.adjust_legend_button.setProperty("role", "link")
+        self.adjust_legend_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.adjust_legend_button.clicked.connect(self._adjust_legend)
+        warning_row.addWidget(self.adjust_legend_button)
+        self.other_layout_button = QPushButton(
+            tr("New from template..."), self.legend_warning
+        )
+        self.other_layout_button.setProperty("role", "link")
+        self.other_layout_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.other_layout_button.setToolTip(
+            tr("Choose another layout, page size or orientation")
+        )
+        self.other_layout_button.clicked.connect(self.new_layout_requested)
+        warning_row.addWidget(self.other_layout_button)
+        self.legend_warning.setVisible(False)
+        column.addWidget(self.legend_warning)
+        self._legend_refresh = QTimer(self)
+        self._legend_refresh.setSingleShot(True)
+        self._legend_refresh.setInterval(150)
+        self._legend_refresh.timeout.connect(self.refresh_legend_warning)
         self.preview = LayoutPreview(self)
         column.addWidget(self.preview, 1)
 
@@ -1286,6 +1338,7 @@ class PagePane(QWidget):
         )
         self.preview.currentChanged.connect(lambda _index: self._show_page_parts())
         self._show_page_parts()
+        self._watched_layout = None
 
     def set_change_count(self, count: int) -> None:
         """How many things the HTML changes from this page; none hides it."""
@@ -1295,9 +1348,52 @@ class PagePane(QWidget):
         )
         self._show_page_parts()
 
+    def refresh_legend_warning(self) -> None:
+        """Count the legend entries left out again (after any change to the
+        layout) and show or clear the warning."""
+        if sip.isdeleted(self):
+            return
+        count = legend_entries_left_out(self.preview.view.currentLayout())
+        self.legend_warning_label.setText(
+            plural(
+                count,
+                "{n} legend entry does not fit.",
+                "{n} legend entries do not fit.",
+            )
+            if count
+            else ""
+        )
+        self.legend_warning.setVisible(bool(count))
+
+    def _watch_for_legend_changes(self, layout) -> None:  # QgsPrintLayout | None
+        if layout is None or layout is self._watched_layout:
+            return
+        self._watched_layout = layout
+        schedule = self._legend_refresh.start
+        layout.undoStack().stack().indexChanged.connect(lambda _i: schedule())
+        layout.changed.connect(schedule)
+
+    def _adjust_legend(self) -> None:
+        """Select the legend that leaves entries out and open its editor."""
+        layout = self.preview.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return
+        for item in layout.items():
+            if (
+                isinstance(item, QgsLayoutItemLegend)
+                and item.linkedMap() is not None
+                and legend_left_out(item, item.linkedMap())
+            ):
+                layout.deselectAll()
+                item.setSelected(True)
+                self.edit_requested.emit()
+                return
+
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         self.preview.show_layout(layout)
         self.controls.set_layout(layout)
+        self._watch_for_legend_changes(layout)
+        self.refresh_legend_warning()
         self.live_counts.set_layout(layout)
         self.caption.setText(
             tr("Layout preview — QGIS · {page}").format(page=_page_name(layout))
