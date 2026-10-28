@@ -120,6 +120,7 @@ from .export_ir import (
 from .export_resolution import frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
+from .frame_layers import rendered_layers
 from .layer_reader import PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
@@ -304,7 +305,7 @@ class StaticFrameCache:
         slot and the digest of everything its pixels depend on - and the raster
         already held for it, if still right. A caller that draws the frame
         itself (see `AsyncFrameRender`) gives the entry back to `store`."""
-        for layer in map_item.layersToRender():
+        for layer in rendered_layers(map_item):
             self._watch(layer)
         key = _static_frame_key(layout, map_item, dpi, project, self._generations)
         slot = (layout.name(), map_item.uuid())
@@ -423,7 +424,7 @@ def _static_frame_key(
     document.appendChild(element)
     map_item.writeXml(element, document, QgsReadWriteContext())
     add(document.toString())
-    for layer in map_item.layersToRender():
+    for layer in rendered_layers(map_item):
         style = QgsMapLayerStyle()
         style.readFromLayer(layer)
         add(layer.id())

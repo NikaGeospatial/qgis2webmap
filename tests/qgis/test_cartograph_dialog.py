@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 qgis_core = pytest.importorskip("qgis.core")
+from qgis.PyQt.QtCore import QUrl  # noqa: E402
 
 
 class FakeIface:
@@ -1308,13 +1309,11 @@ class TestCartographShareMenu:
         try:
             cartograph = dialog._cartograph
             cartograph.file_edit.setText(str(tmp_path / "not yet" / "x.html"))
-            opened = []
-            monkeypatch.setattr(
-                "nika_onlymap_exporter.ui.cartograph.controller.QDesktopServices.openUrl",
-                lambda url: opened.append(url.toLocalFile()),
-            )
+            asked = _file_manager_answers(monkeypatch)
             cartograph.on_reveal()
-            assert opened == [str(tmp_path)]
+            assert asked == [
+                ("ShowFolders", QUrl.fromLocalFile(str(tmp_path)).toString())
+            ]
             assert dialog.status_label.text() == f"Opened {tmp_path}"
         finally:
             dialog.close()
@@ -1326,12 +1325,9 @@ class TestCartographShareMenu:
         _add_layout(project, "Other", [("Map", "EPSG:4326")])
         try:
             cartograph = dialog._cartograph
-            monkeypatch.setattr(
-                "nika_onlymap_exporter.ui.cartograph.controller.QDesktopServices.openUrl",
-                lambda url: None,
-            )
+            _file_manager_answers(monkeypatch)
             cartograph.on_reveal()
-            assert dialog.status_label.text().startswith("Opened")
+            assert dialog.status_label.text().startswith(("Opened", "Showing"))
             cartograph._on_file_edited(str(tmp_path / "elsewhere.html"))
             assert dialog.status_label.text() == ""
             cartograph.on_reveal()
@@ -1340,20 +1336,69 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
-    def test_reveal_opens_the_parent_folder(
+    def test_reveal_selects_the_saved_file_in_the_file_manager(
         self, qgis_app, project, tmp_path, monkeypatch
     ) -> None:
         dialog, target = self._ready_dialog(project, tmp_path)
         try:
-            opened = []
-            monkeypatch.setattr(
-                "nika_onlymap_exporter.ui.cartograph.controller.QDesktopServices.openUrl",
-                lambda url: opened.append(url.toLocalFile()),
-            )
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("<html></html>")
+            asked = _file_manager_answers(monkeypatch)
             dialog._cartograph.on_reveal()
-            assert opened == [str(target.parent)]
+            assert asked == [("ShowItems", QUrl.fromLocalFile(str(target)).toString())]
+            assert target.name in dialog.status_label.text()
         finally:
             dialog.close()
+
+    def test_a_refused_reveal_explains_and_offers_the_path(
+        self, qgis_app, project, tmp_path, monkeypatch
+    ) -> None:
+        dialog, target = self._ready_dialog(project, tmp_path)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("<html></html>")
+            opened = []
+            _file_manager_answers(monkeypatch, error="ServiceUnknown")
+            monkeypatch.setattr(
+                "nika_onlymap_exporter.ui.reveal_file._open_folder",
+                lambda folder: opened.append(folder) or True,
+            )
+            monkeypatch.setattr(
+                "nika_onlymap_exporter.ui.reveal_file."
+                "default_folder_opener_is_file_manager",
+                lambda env=None: False,
+            )
+            cartograph = dialog._cartograph
+            cartograph.on_reveal()
+            text = dialog.status_label.text()
+            # Nothing was opened (the folder opener may be an editor), nothing
+            # claims success, and the path can be copied from the message.
+            assert opened == []
+            assert "Could not show the file" in text
+            assert "Opened" not in text and "Showing" not in text
+            cartograph._on_status_link("copy-path")
+            from qgis.PyQt.QtGui import QGuiApplication
+
+            assert QGuiApplication.clipboard().text() == str(target)
+        finally:
+            dialog.close()
+
+
+def _file_manager_answers(
+    monkeypatch, error: str | None = None
+) -> list[tuple[str, str]]:
+    """Stand in for the desktop's file manager: record each request, answer it
+    at once. Nothing is launched."""
+    asked: list[tuple[str, str]] = []
+
+    def ask(method, uri, done) -> None:
+        asked.append((method, uri))
+        done(error)
+
+    module = "nika_onlymap_exporter.ui.reveal_file"
+    monkeypatch.setattr(f"{module}._platform", lambda: "linux")
+    monkeypatch.setattr(f"{module}._ask_file_manager", ask)
+    return asked
 
 
 class TestRealAutosave:

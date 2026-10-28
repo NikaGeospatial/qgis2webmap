@@ -66,6 +66,7 @@ from qgis.PyQt.QtCore import QMetaType, QSizeF
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..ui.i18n import tr
+from .frame_layers import rendered_layers
 
 #: On the number label: marks it as a Live count.
 MARKER_PROPERTY = "nika/live-count"
@@ -304,7 +305,7 @@ def countable_layers(project: QgsProject) -> list[QgsVectorLayer]:
 def map_draws(map_item: QgsLayoutItemMap, layer_id: str) -> bool:
     """Whether the frame draws the layer: in its layer set, its theme or the
     project's visible layers, whichever decides what it shows."""
-    return any(layer.id() == layer_id for layer in map_item.layersToRender())
+    return any(layer.id() == layer_id for layer in rendered_layers(map_item))
 
 
 # -- one calculation ----------------------------------------------------------
@@ -451,6 +452,22 @@ def _style_parts(
     return renderer, scaled, minimum, maximum
 
 
+def _style_opacity(xml: str) -> float | None:
+    """The layer opacity a saved layer style (a map theme's or a frame's
+    override) carries; `None` when the style does not hold one, in which case
+    the layer's own opacity is what the frame draws with."""
+    document = QDomDocument()
+    if not document.setContent(xml):
+        return None
+    element = document.documentElement().firstChildElement("layerOpacity")
+    if element.isNull():
+        return None
+    try:
+        return float(element.text())
+    except ValueError:
+        return None
+
+
 def _in_scale(scaled: bool, minimum: float, maximum: float, scale: float) -> bool:
     if not scaled:
         return True
@@ -570,7 +587,12 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
         layer.minimumScale(),
         layer.maximumScale(),
     )
+    opacity = layer.opacity()
     if layer.id() in overrides:
+        # The style the frame draws with decides, not the project's current one.
+        style_opacity = _style_opacity(overrides[layer.id()])
+        if style_opacity is not None:
+            opacity = style_opacity
         styled, s_scaled, s_min, s_max = _style_parts(
             QgsMapLayerStyle(overrides[layer.id()]).xmlData()
         )
@@ -585,7 +607,7 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
     if renderer is None:
         source = layer.renderer()
         renderer = source.clone() if source is not None else None
-    if renderer is None or layer.opacity() <= 0:
+    if renderer is None or opacity <= 0:
         return counted(0)
     scale = map_item.scale()
     if not _in_scale(scaled, minimum, maximum, scale):

@@ -25,13 +25,15 @@ from live_count_fixtures import (
 pytest.importorskip("qgis.core")
 from qgis.core import (
     QgsLayerTreeModel,
+    QgsLayoutExporter,
     QgsLayoutItemMap,
+    QgsMapLayerStyle,
     QgsMapThemeCollection,
     QgsMarkerSymbol,
     QgsRectangle,
     QgsRuleBasedRenderer,
 )
-from qgis.PyQt.QtCore import QRectF, Qt
+from qgis.PyQt.QtCore import QRectF, QSize, Qt
 
 from nika_onlymap_exporter.core import live_count as lc
 
@@ -236,6 +238,115 @@ class TestWhatIsSwitchedOff:
         _ok(count_of(page, number), 30)
         page.frame.setFollowVisibilityPreset(True)
         page.frame.setFollowVisibilityPresetName("Quiet")
+        _ok(count_of(page, number), count_sites() - count_sites(status="Closed"))
+
+
+def _style_with_opacity(layer, opacity: float) -> str:
+    """The layer's style as a map frame would keep it, drawn at `opacity`;
+    the layer itself is put back as it was."""
+    before = layer.opacity()
+    layer.setOpacity(opacity)
+    style = QgsMapLayerStyle()
+    style.readFromLayer(layer)
+    layer.setOpacity(before)
+    return style.xmlData()
+
+
+def _frame_shows_marks(page) -> bool:
+    """Whether the frame, drawn by QGIS, has any site symbol in it."""
+    region = QRectF(page.frame.pos().x(), page.frame.pos().y(), 120, 100)
+    image = QgsLayoutExporter(page.layout).renderRegionToImage(region, QSize(), 40)
+    white = 0xFFFFFFFF
+    return any(
+        image.pixel(x, y) != white
+        for x in range(0, image.width(), 2)
+        for y in range(0, image.height(), 2)
+    )
+
+
+def _keep_style(page, xml: str) -> None:
+    page.frame.setLayers([page.sites])
+    page.frame.setKeepLayerStyles(True)
+    page.frame.setLayerStyleOverrides({page.sites.id(): xml})
+
+
+class TestTheStyleTheFrameDrawsWith:
+    """A count describes what the frame renders: its kept style or theme, not
+    only the project layer's current style."""
+
+    def test_a_transparent_frame_style_counts_nothing_over_an_opaque_layer(
+        self, page
+    ) -> None:
+        number = add_counter(page)
+        _ok(count_of(page, number), 30)
+        _keep_style(page, _style_with_opacity(page.sites, 0.0))
+        assert page.sites.opacity() == 1.0  # the project style is opaque
+        assert not _frame_shows_marks(page)
+        _ok(count_of(page, number), 0)
+
+    def test_an_opaque_frame_style_counts_over_a_transparent_layer(self, page) -> None:
+        number = add_counter(page)
+        xml = _style_with_opacity(page.sites, 1.0)
+        page.sites.setOpacity(0.0)  # the project style draws nothing
+        _ok(count_of(page, number), 0)  # a frame that follows the project
+        _keep_style(page, xml)
+        assert _frame_shows_marks(page)
+        _ok(count_of(page, number), 30)
+
+    def test_a_map_theme_decides_the_opacity_both_ways(self, page, project) -> None:
+        root = project.layerTreeRoot()
+        root.findLayer(page.squares.id()).setItemVisibilityChecked(False)
+        number = add_counter(page)
+        # Two named styles of the layer, and a theme using each.
+        styles = page.sites.styleManager()
+        page.sites.setOpacity(0.0)
+        styles.addStyleFromLayer("Faded")
+        page.sites.setOpacity(1.0)
+        styles.addStyleFromLayer("Opaque")
+        model = QgsLayerTreeModel(root)
+        for name in ("Faded", "Opaque"):
+            styles.setCurrentStyle(name)
+            project.mapThemeCollection().insert(
+                name, QgsMapThemeCollection.createThemeFromCurrentState(root, model)
+            )
+        styles.setCurrentStyle("default")
+        page.frame.setFollowVisibilityPreset(True)
+
+        # The theme is transparent, the project's own style is opaque.
+        page.sites.setOpacity(1.0)
+        page.frame.setFollowVisibilityPresetName("Faded")
+        assert not _frame_shows_marks(page)
+        _ok(count_of(page, number), 0)
+
+        # The theme is opaque, the project's own style is transparent.
+        page.sites.setOpacity(0.0)
+        page.frame.setFollowVisibilityPresetName("Opaque")
+        assert _frame_shows_marks(page)
+        _ok(count_of(page, number), 30)
+
+    def test_a_frame_following_the_project_uses_the_projects_opacity(
+        self, page
+    ) -> None:
+        number = add_counter(page)
+        page.sites.setOpacity(0.0)
+        _ok(count_of(page, number), 0)
+        page.sites.setOpacity(0.5)
+        _ok(count_of(page, number), 30)
+
+    def test_an_opaque_frame_style_still_hides_its_locked_categories(
+        self, page
+    ) -> None:
+        number = add_counter(page)
+        renderer = page.sites.renderer()
+        closed = next(
+            i for i, c in enumerate(renderer.categories()) if c.value() == "Closed"
+        )
+        renderer.updateCategoryRenderState(closed, False)
+        style = QgsMapLayerStyle()
+        style.readFromLayer(page.sites)  # "Closed" is off in this style
+        renderer.updateCategoryRenderState(closed, True)  # and on in the project
+        _ok(count_of(page, number), 30)
+        _keep_style(page, style.xmlData())
         _ok(count_of(page, number), count_sites() - count_sites(status="Closed"))
 
 

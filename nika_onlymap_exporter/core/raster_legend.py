@@ -24,6 +24,8 @@ from qgis.core import (
     QgsSingleBandPseudoColorRenderer,
 )
 
+from .frame_layers import rendered_layers
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap, QgsMapLayer
 
@@ -53,7 +55,7 @@ def layers_with_unavailable_range(
 ) -> list[str]:
     """Names of the map's raster layers whose colour-ramp entry in `legend`
     has a minimum or maximum that is not a finite number."""
-    drawn = {layer.id() for layer in map_item.layersToRender()}
+    drawn = {layer.id() for layer in rendered_layers(map_item)}
     model = legend.model()
     names: list[str] = []
     for node in model.rootGroup().findLayers():

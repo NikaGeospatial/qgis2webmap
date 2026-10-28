@@ -29,7 +29,7 @@ from ..i18n import plural, tr
 PDF, IMAGES, HTML = "pdf", "images", "html"
 
 
-class _FormatRow(QWidget):
+class FormatRow(QWidget):
     """One format: its radio button, what it makes, and why it is unavailable."""
 
     def __init__(self, key: str, title: str, about: str, parent: QWidget) -> None:
@@ -53,6 +53,8 @@ class _FormatRow(QWidget):
     def show_operation(self, operation: Operation, extra: str = "") -> None:
         self.radio.setEnabled(operation.ok)
         text = operation.reason if not operation.ok else extra
+        if operation.limitation:
+            text = f"{operation.limitation} {text}"
         if operation.needs_interactive:
             text += " " + tr(
                 "Switching changes how the map behaves in the exported HTML."
@@ -82,19 +84,19 @@ class SeriesExportDialog(QDialog):
         column.addWidget(self.scope)
 
         self.rows = (
-            _FormatRow(
+            FormatRow(
                 PDF,
                 tr("PDF document"),
                 tr("All pages in one PDF file, made by QGIS."),
                 self,
             ),
-            _FormatRow(
+            FormatRow(
                 IMAGES,
                 tr("Images (ZIP)"),
                 tr("One PNG image per page, downloaded together as a ZIP file."),
                 self,
             ),
-            _FormatRow(
+            FormatRow(
                 HTML,
                 tr("Web page (HTML)"),
                 tr("An interactive page you can step through page by page."),

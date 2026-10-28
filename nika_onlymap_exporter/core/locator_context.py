@@ -38,6 +38,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
+from .frame_layers import rendered_layers, set_frame_layers
 from .raster_smoothing import own_layers, store_overrides, style_xml
 
 #: The most of the world an inset shows, per side, relative to the main view.
@@ -169,7 +170,7 @@ def draw_quietly(map_item: QgsLayoutItemMap) -> None:
     style and every other map are untouched."""
     labelled = [
         layer
-        for layer in map_item.layersToRender()
+        for layer in rendered_layers(map_item)
         if isinstance(layer, QgsVectorLayer) and layer.labelsEnabled()
     ]
     if not labelled:
@@ -242,7 +243,7 @@ def locator_view_for(
     project = layout.project() if layout is not None else None
     if main is None or project is None:
         return None
-    chosen = list(layers) if layers is not None else list(locator.layersToRender())
+    chosen = list(layers) if layers is not None else list(rendered_layers(locator))
     size = locator.rect()
     return locator_view(
         main.extent(),
@@ -282,9 +283,8 @@ def set_locator_context_layers(
     is (`fit_locator_to_context` refits it)."""
 
     def apply() -> None:
-        locator.setKeepLayerSet(True)
         locator.setFollowVisibilityPreset(False)
-        locator.setLayers(list(layers))
+        set_frame_layers(locator, layers)
         locator.invalidateCache()
 
     _undoable(locator, "Choose inset layers", apply)

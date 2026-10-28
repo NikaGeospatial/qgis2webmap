@@ -3,11 +3,17 @@
 The Atlas tab asks this module, not the saved cartograph, whether a series is
 set up and which outputs it can make. Readiness is per operation:
 
-- the preview and the native QGIS PDF need only a usable source layer, a map
-  to update and at least one page;
-- the image ZIP, the HTML page and printing run through the cartograph, whose
-  runtime turns pages with an Interactive map, so they also need the maps the
-  series updates to be Interactive.
+- the preview, the native QGIS PDF and printing through QGIS (`native_print`:
+  the print dialog, or a PDF to print from) need only a usable source layer, a
+  map to update and at least one page;
+- the image ZIP, the HTML page and printing from the web page run through the
+  cartograph, whose runtime turns pages with an Interactive map, so they also
+  need the maps the series updates to be Interactive.
+
+A Live count that follows a map the atlas moves is recalculated for every
+page of the QGIS outputs (PDF, native print) but written once into the
+cartograph, which has no way to change a number from page to page; those
+outputs say so (`Operation.limitation`).
 
 Nothing here edits the layout; the tab owns every edit (and its undo step).
 
@@ -33,6 +39,7 @@ from qgis.core import (
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..ui.i18n import plural, tr
+from .atlas_live_counts import follows_atlas_page
 from .layout_reader import atlas_page_count, expression_error
 
 #: A frame's mode as the Map frames list stores it.
@@ -69,6 +76,8 @@ class Operation:
     reason: str = ""
     # Maps that must be switched to Interactive for this output to work.
     needs_interactive: tuple[MapRef, ...] = ()
+    # What this output cannot do right now even though it can be made.
+    limitation: str = ""
 
 
 @dataclass(frozen=True)
@@ -83,6 +92,9 @@ class SeriesStatus:
     pdf: Operation = field(default_factory=lambda: Operation(False))
     images: Operation = field(default_factory=lambda: Operation(False))
     html: Operation = field(default_factory=lambda: Operation(False))
+    # Printing through QGIS (the print dialog, or a PDF handed over to print).
+    native_print: Operation = field(default_factory=lambda: Operation(False))
+    # Printing from the exported web page.
     print: Operation = field(default_factory=lambda: Operation(False))
 
     @property
@@ -192,6 +204,7 @@ def series_status(
             pdf=none,
             images=none,
             html=none,
+            native_print=none,
             print=none,
         )
 
@@ -231,7 +244,9 @@ def series_status(
         return blocked(SeriesState.NO_MATCH, tr("No features match your filter."))
 
     static = tuple(ref for ref in updated if frame_mode(ref.item_id) != LIVE)
-    cartograph_output = _cartograph_operation(static)
+    cartograph_output = _cartograph_operation(
+        static, _counts_limitation() if pages > 1 and follows_atlas_page(layout) else ""
+    )
     return SeriesStatus(
         SeriesState.READY,
         pages=pages,
@@ -241,16 +256,28 @@ def series_status(
         pdf=Operation(True),
         images=cartograph_output,
         html=cartograph_output,
+        native_print=Operation(True),
         print=cartograph_output,
     )
 
 
-def _cartograph_operation(static: tuple[MapRef, ...]) -> Operation:
+def _counts_limitation() -> str:
+    return tr(
+        "A Live count follows the map that changes on each page. This output "
+        "shows the same number on every page; the PDF and Print series give "
+        "each page its own."
+    )
+
+
+def _cartograph_operation(
+    static: tuple[MapRef, ...], limitation: str = ""
+) -> Operation:
     if not static:
-        return Operation(True)
+        return Operation(True, limitation=limitation)
     names = ", ".join(f"“{ref.name}”" for ref in static)
     return Operation(
         False,
         tr("Needs the map {names} to be Interactive.").format(names=names),
         needs_interactive=static,
+        limitation=limitation,
     )
