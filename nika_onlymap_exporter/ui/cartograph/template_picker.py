@@ -21,7 +21,10 @@ page size is instant; given a `canvas_key`, they are kept for the next
 opening too, until the canvas or project changes. The last choice is
 remembered per user (`QSettings`).
 
-Each card starts with an inexpensive diagram of its planned layout, labelled
+The window is made at once: the cards are planned (their cues and layout
+guides) a few at a time on the event loop after it shows -- the chosen one,
+then those in view -- and a card not planned yet says "Waiting to draw".
+Each card then starts with an inexpensive diagram of its planned layout, labelled
 "Waiting to draw", then "Drawing your map..." while its turn comes, then the
 real page. There is no budget for the whole opening: a slow map still fills
 every card, one at a time, and a card that fails or takes too long (one
