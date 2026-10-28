@@ -72,7 +72,9 @@ credentials are never written into the file in either case.
 1. Make the cartograph - [your first cartograph](cartograph-first-export.md)
    takes about ten minutes. It saves itself; there is no export step.
 2. **Share → Reveal in Finder** (**Show in Explorer**, **Show in file
-   manager**) opens the folder it is in. **Copy file path** puts its path on the
+   manager**) shows the file selected in your file manager. If your
+   system has none that can do that, it says so rather than opening an editor,
+   and offers the path to copy. **Copy file path** puts its path on the
    clipboard for an upload form.
 3. **Zip it before emailing.** Mail providers and corporate filters often
    quarantine or strip `.html` attachments, because HTML is a common phishing
