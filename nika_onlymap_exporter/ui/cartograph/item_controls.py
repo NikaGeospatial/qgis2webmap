@@ -89,6 +89,7 @@ from .item_text_size import text_size_points
 from .layer_membership import drawn_layers, set_layer_included
 from .layout_items import (
     delete_items,
+    is_detail_map,
     item_edit,
     link_map,
     map_frames,
@@ -411,11 +412,9 @@ class ContextControls(QFrame):
         self.pages.currentChanged.connect(lambda _index: self.pages.updateGeometry())
         body.addWidget(self.pages)
         column.addWidget(self.body)
-        # Statistic callouts: the creation form only after "Statistic
-        # callout..." in the Add item menu, and a selected callout's words.
+        # A selected statistic callout's words.
         self.callout_controls = CalloutControls(self)
         self.callout_controls.edited.connect(self.edited)
-        self.callout_controls.form_closed.connect(self.refresh)
         column.addWidget(self.callout_controls)
         column.addStretch(1)
         self._build_text_page()
@@ -717,16 +716,6 @@ class ContextControls(QFrame):
         self._item = None
         self.refresh()
 
-    def begin_callout(self) -> None:
-        """ "Statistic callout..." in the Add item menu: nothing selected, and
-        the form for a new callout in the Edit tab."""
-        layout = self._layout
-        if layout is None or sip.isdeleted(layout):
-            return
-        layout.deselectAll()
-        self.callout_controls.begin(layout)
-        self.refresh()
-
     def selected_item(self) -> QgsLayoutItem | None:
         """The one selected item the tab is showing, if any."""
         return self._item
@@ -764,7 +753,9 @@ class ContextControls(QFrame):
         self._loading = True
         try:
             kind = self._kind(item)
-            self.heading.setText(self._title(kind))
+            self.heading.setText(
+                self._title("detail_map" if is_detail_map(item) else kind)
+            )
             self.heading.setProperty("role", "")
             self.heading.style().unpolish(self.heading)
             self.heading.style().polish(self.heading)
@@ -838,8 +829,7 @@ class ContextControls(QFrame):
         self.heading.setProperty("role", "hint")
         self.heading.style().unpolish(self.heading)
         self.heading.style().polish(self.heading)
-        # The creation form, opened from the Add item menu, replaces the hint.
-        self.head_row.setVisible(not self.callout_controls.isVisibleTo(self))
+        self.head_row.setVisible(True)
         self.delete_button.setVisible(False)
         self.text_size_row.setVisible(False)
         self.body.setVisible(False)
@@ -888,6 +878,7 @@ class ContextControls(QFrame):
         names = {
             "text": tr("Text"),
             "map": tr("Map"),
+            "detail_map": tr("Detail map"),
             "legend": tr("Legend"),
             "scale_bar": tr("Scale bar"),
             "north_arrow": tr("North arrow"),
@@ -983,6 +974,15 @@ class ContextControls(QFrame):
         self._sync_edit_view_label()
         self.inset_row.setVisible(inset)
         self.context_note.setVisible(False)
+        if is_detail_map(item) and not inset:
+            self.context_note.setText(
+                tr(
+                    "Choose the area to show in this detail map. Dragging the "
+                    "frame on the page moves it; Edit view changes the area "
+                    "inside it."
+                )
+            )
+            self.context_note.setVisible(True)
         if not inset:
             return
         view = locator_view_for(item)

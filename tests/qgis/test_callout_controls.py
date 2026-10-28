@@ -1,5 +1,6 @@
-"""The Edit tab's statistic callouts, driven as a user would: type a value,
-press Add, select a callout on the page, change or remove it, undo.
+"""The Edit tab's statistic callout, driven as a user would: select a callout
+on the page, change its words or remove it, undo. Adding is the Add item menu
+(`test_detail_map.py` and `test_edit_tab_empty.py`).
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -9,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QRectF, Qt
 from qgis.PyQt.QtTest import QTest
 
 from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
-from nika_onlymap_exporter.ui.cartograph.callouts import layout_callouts
+from nika_onlymap_exporter.ui.cartograph.callouts import add_callout, layout_callouts
 from nika_onlymap_exporter.ui.cartograph.item_controls import ContextControls
 from nika_onlymap_exporter.ui.cartograph.item_text_size import step_text_size
 from nika_onlymap_exporter.ui.cartograph.layout_items import delete_items
@@ -61,88 +62,25 @@ def _select(layout, controls, item_id: str) -> None:
     controls.refresh()
 
 
-def _open_form(controls: ContextControls) -> None:
-    """What "Statistic callout..." in the Add item menu does."""
-    controls.begin_callout()
+def _add(layout, value, label="", y=20.0) -> None:
+    """What a click on the page does after Add item > Statistic callout."""
+    assert add_callout(layout, QRectF(20, y, 50, 30), value, label)
 
 
-class TestOnlyWhereTheDesignHasThem:
-    def test_form_opens_for_signal_never_for_other_designs(
+class TestAnyLayout:
+    def test_a_selected_callout_shows_its_form_on_any_layout(
         self, qgis_app, parcels, project
     ) -> None:
-        signal = _controls(_layout(parcels, project))
-        classic = _controls(_layout(parcels, project, "classic", "classic"))
-        try:
-            assert not signal.callout_controls.isVisibleTo(signal)
-            _open_form(signal)
-            _open_form(classic)
-            assert signal.callout_controls.isVisibleTo(signal)
-            assert not classic.callout_controls.isVisibleTo(classic)
-        finally:
-            signal.close()
-            classic.close()
-
-
-class TestAdding:
-    def test_type_a_value_and_press_add(self, qgis_app, parcels, project) -> None:
-        layout = _layout(parcels, project)
-        controls = _controls(layout)
-        edits: list[int] = []
-        controls.edited.connect(lambda: edits.append(1))
-        panel = controls.callout_controls
-        _open_form(controls)
-        try:
-            assert not panel.add_button.isEnabled()
-            _type(panel.value_edit, "214")
-            _type(panel.label_edit, "parcels surveyed")
-            assert panel.add_button.isEnabled()
-            stack = layout.undoStack().stack()
-            before = stack.index()
-            QTest.mouseClick(panel.add_button, Qt.MouseButton.LeftButton)
-            assert _words(layout) == [("214", "parcels surveyed")]
-            assert stack.index() == before + 1
-            assert edits
-            # The new callout is selected, ready for its lettering.
-            assert layout.selectedLayoutItems()[0].id() == "figure-0"
-            stack.undo()
-            assert _words(layout) == []
-            stack.redo()
-            assert _words(layout) == [("214", "parcels surveyed")]
-        finally:
-            controls.close()
-
-    def test_a_blank_value_cannot_be_added(self, qgis_app, parcels, project) -> None:
-        layout = _layout(parcels, project)
-        controls = _controls(layout)
-        panel = controls.callout_controls
-        _open_form(controls)
-        try:
-            _type(panel.label_edit, "only a line")
-            assert not panel.add_button.isEnabled()
-            QTest.keyClick(panel.label_edit, Qt.Key.Key_Return)
-            assert _words(layout) == []
-        finally:
-            controls.close()
-
-    def test_enter_adds_and_a_fourth_is_refused(
-        self, qgis_app, parcels, project
-    ) -> None:
-        layout = _layout(parcels, project)
-        controls = _controls(layout)
-        panel = controls.callout_controls
-        try:
-            for index in range(3):
-                layout.deselectAll()
-                _open_form(controls)
-                _type(panel.value_edit, str(index + 1))
-                QTest.keyClick(panel.value_edit, Qt.Key.Key_Return)
-            assert _words(layout) == [("1", ""), ("2", ""), ("3", "")]
-            layout.deselectAll()
-            _open_form(controls)
-            # At three there is nothing to create: the form stays shut.
-            assert not panel.isVisibleTo(controls)
-        finally:
-            controls.close()
+        for template in ("dashboard", "classic"):
+            layout = _layout(parcels, project, template, template)
+            _add(layout, "214", "parcels")
+            controls = _controls(layout)
+            try:
+                _select(layout, controls, "figure-0")
+                assert controls.callout_controls.isVisibleTo(controls)
+                assert controls.callout_controls.value_edit.text() == "214"
+            finally:
+                controls.close()
 
 
 class TestSelectedOnThePage:
@@ -150,12 +88,10 @@ class TestSelectedOnThePage:
         layout = _layout(parcels, project)
         controls = _controls(layout)
         panel = controls.callout_controls
-        for value, label in (("214", "parcels"), ("12 km", "of road"), ("9", "wells")):
-            layout.deselectAll()
-            _open_form(controls)
-            _type(panel.value_edit, value)
-            _type(panel.label_edit, label)
-            QTest.mouseClick(panel.add_button, Qt.MouseButton.LeftButton)
+        for n, (value, label) in enumerate(
+            (("214", "parcels"), ("12 km", "of road"), ("9", "wells"))
+        ):
+            _add(layout, value, label, y=20.0 + 40 * n)
         return layout, controls, panel
 
     def test_selecting_one_shows_its_words_and_remove(
@@ -167,7 +103,6 @@ class TestSelectedOnThePage:
             assert panel.value_edit.text() == "12 km"
             assert panel.label_edit.text() == "of road"
             assert panel.remove_button.isVisibleTo(controls)
-            assert not panel.add_button.isVisibleTo(controls)
         finally:
             controls.close()
 
@@ -189,7 +124,7 @@ class TestSelectedOnThePage:
         finally:
             controls.close()
 
-    def test_remove_closes_up_and_undo_brings_it_back(
+    def test_remove_takes_that_one_and_undo_brings_it_back(
         self, qgis_app, parcels, project
     ) -> None:
         layout, controls, panel = self._three(parcels, project)
@@ -248,13 +183,10 @@ class TestWhereItShows:
             QgsLayoutItemMap,
         )
 
-        from nika_onlymap_exporter.ui.cartograph.callouts import (
-            add_callout,
-            callout_index,
-        )
+        from nika_onlymap_exporter.ui.cartograph.callouts import callout_index
 
         layout = _layout(parcels, project)
-        assert add_callout(layout, "12 km", "of road")
+        _add(layout, "12 km", "of road")
         controls = _controls(layout)
         try:
             panel = controls.callout_controls

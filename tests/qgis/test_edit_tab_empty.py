@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
+from qgis.PyQt.QtCore import QRectF
 from test_cartograph_panel_widgets import _settle
 from test_edit_tab_fit import _item_of
 
 pytest.importorskip("qgis.core")
 
 NO_ITEM_TEXT = "Select an item on the page to edit its properties."
-THREE = "This layout already has three callouts. Select one to edit or remove it."
 
 
 @pytest.fixture
@@ -86,7 +86,6 @@ class TestNothingSelected:
             controls.body,
             controls.text_size_row,
             controls.callout_controls,
-            controls.callout_controls.add_button,
             controls.callout_controls.value_edit,
         ):
             assert not _visible(controls, hidden), hidden
@@ -95,7 +94,7 @@ class TestNothingSelected:
         from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
 
         pane, layout = pane
-        assert add_callout(layout, "12 km", "of road")
+        assert add_callout(layout, QRectF(20, 20, 50, 30), "12 km", "of road")
         layout.deselectAll()
         pane.controls.refresh()
         assert not _visible(pane.controls, pane.controls.callout_controls)
@@ -103,64 +102,35 @@ class TestNothingSelected:
 
 
 class TestStatisticCalloutMenuEntry:
-    def test_present_for_a_design_with_callouts_absent_otherwise(
-        self, qgis_app, parcels, project, pane
-    ) -> None:
+    def test_offered_on_every_layout(self, qgis_app, parcels, project, pane) -> None:
         from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane
 
         pane, _ = pane
-        action = _menu_action(pane, "Statistic callout…")
+        action = _menu_action(pane, "Statistic callout")
         assert action is not None and action.isEnabled()
         classic = PagePane()
         try:
             classic.show()
             classic.show_layout(_layout(parcels, project, "classic"))
-            assert _menu_action(classic, "Statistic callout…") is None
+            other = _menu_action(classic, "Statistic callout")
+            assert other is not None and other.isEnabled()
         finally:
             classic.close()
 
-    def test_choosing_it_opens_the_form_with_add_and_cancel(self, pane) -> None:
+    def test_a_click_on_the_page_places_it_and_selects_it(self, qgis_app, pane) -> None:
+        from test_preview_item_editing import _click_page
+
         pane, layout = pane
         controls = pane.controls
-        _menu_action(pane, "Statistic callout…").trigger()
+        _menu_action(pane, "Statistic callout").trigger()
         assert layout.selectedLayoutItems() == []
-        form = controls.callout_controls
-        assert _visible(controls, form)
-        assert _visible(controls, form.value_edit)
-        assert _visible(controls, form.add_button)
-        assert _visible(controls, form.cancel_button)
-        assert not _visible(controls, controls.delete_button)
-        assert not _visible(controls, controls.body)
-        assert not _visible(controls, form.remove_button)
-
-    def test_cancel_returns_to_the_empty_tab(self, pane) -> None:
-        pane, layout = pane
-        controls = pane.controls
-        _menu_action(pane, "Statistic callout…").trigger()
-        controls.callout_controls.cancel_button.click()
-        assert not _visible(controls, controls.callout_controls)
-        assert controls.heading.text() == NO_ITEM_TEXT
-        assert _callout_words(layout) == []
-
-    def test_add_puts_the_callout_on_the_page_and_selects_it(self, pane) -> None:
-        from qgis.PyQt.QtTest import QTest
-
-        pane, layout = pane
-        controls = pane.controls
-        form = controls.callout_controls
-        _menu_action(pane, "Statistic callout…").trigger()
-        form.value_edit.setFocus()
-        QTest.keyClicks(form.value_edit, "214")
-        QTest.keyClicks(form.label_edit, "parcels")
-        form.add_button.click()
-        assert _callout_words(layout) == [("214", "parcels")]
+        _click_page(qgis_app, pane, 60.0, 150.0)
+        assert len(_callout_words(layout)) == 1
         selected = layout.selectedLayoutItems()
         assert len(selected) == 1
-        assert selected[0].text() in ("214", "parcels")
-        # Its editing controls, not the creation form.
+        form = controls.callout_controls
+        assert _visible(controls, form)
         assert _visible(controls, form.remove_button)
-        assert not _visible(controls, form.add_button)
-        assert not _visible(controls, form.cancel_button)
         assert _visible(controls, controls.body)
         assert _visible(controls, controls.delete_button)
 
@@ -171,7 +141,7 @@ class TestStatisticCalloutMenuEntry:
         )
 
         pane, layout = pane
-        assert add_callout(layout, "12 km", "of road")
+        assert add_callout(layout, QRectF(20, 20, 50, 30), "12 km", "of road")
         layout.deselectAll()
         find_part(layout, 0, False).setSelected(True)
         controls = pane.controls
@@ -183,20 +153,21 @@ class TestStatisticCalloutMenuEntry:
         assert _visible(controls, controls.text_size_row)
         assert _visible(controls, controls.bold_button)
 
-    def test_at_three_callouts_the_entry_is_disabled_with_a_reason(self, pane) -> None:
+    def test_the_entry_stays_enabled_with_many_callouts(self, pane) -> None:
         from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
 
         pane, layout = pane
-        for value in ("1", "2", "3"):
-            assert add_callout(layout, value, "")
-        action = _menu_action(pane, "Statistic callout…")
-        assert not action.isEnabled()
-        assert action.toolTip() == THREE
+        for n in range(5):
+            assert add_callout(layout, QRectF(20, 20 + 20 * n, 50, 30), str(n), "")
+        action = _menu_action(pane, "Statistic callout")
+        assert action is not None and action.isEnabled()
 
-    def test_picking_something_else_closes_the_form(self, pane) -> None:
+    def test_picking_something_else_hides_the_form(self, pane) -> None:
+        from nika_onlymap_exporter.ui.cartograph.callouts import add_callout
+
         pane, layout = pane
+        assert add_callout(layout, QRectF(20, 20, 50, 30), "5", "")
         controls = pane.controls
-        _menu_action(pane, "Statistic callout…").trigger()
         item = _item_of(layout, "map")
         item.setSelected(True)
         controls.refresh()

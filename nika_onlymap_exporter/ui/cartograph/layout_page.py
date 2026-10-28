@@ -72,7 +72,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..i18n import plural, tr
-from .callouts import can_add_callout, supports_callouts
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
 from .item_placement import ItemPlacer
@@ -80,7 +79,9 @@ from .item_text_size import step_text_size, text_size_points
 from .layout_items import (
     LINKED_KINDS,
     ItemKind,
+    create_detail_map,
     delete_items,
+    detail_source,
     kind_title,
     map_frames,
     map_label,
@@ -605,6 +606,24 @@ class LayoutPreview(QStackedWidget):
         (about `map_item`, for a legend, scale bar or north arrow). The page
         stays as the user has it."""
         self.placer.begin(kind, map_item)
+
+    def add_detail_map(self) -> bool:
+        """Add a detail map - a closer view of an area of the selected map, else
+        of the page's main map - and select it. False when the page has no map
+        to zoom into."""
+        layout = self.view.currentLayout()
+        if layout is None or sip.isdeleted(layout):
+            return False
+        source = detail_source(layout)
+        if source is None:
+            return False
+        self.placer.cancel()
+        self.content_editor.finish()
+        item = create_detail_map(layout, source)
+        layout.deselectAll()
+        item.setSelected(True)
+        self.item_placed.emit(item)
+        return True
 
     def delete_selected(self) -> bool:
         """Delete the selected items as one undo step."""
@@ -1207,25 +1226,28 @@ class PagePane(QWidget):
                         map_label(map_item),
                         lambda kind=kind, m=map_item: self.preview.add_item(kind, m),
                     )
-        if (
-            layout is not None
-            and not sip.isdeleted(layout)
-            and supports_callouts(layout)
-        ):
-            callout = menu.addAction(tr("Statistic callout…"), self._begin_callout)
-            if not can_add_callout(layout):
-                callout.setEnabled(False)
-                callout.setToolTip(
-                    tr(
-                        "This layout already has three callouts. "
-                        "Select one to edit or remove it."
-                    )
-                )
+        menu.addAction(tr("Detail map"), self._add_detail_map).setToolTip(
+            tr("Show a closer view of an area.")
+        )
+        menu.addAction(
+            kind_title(ItemKind.CALLOUT),
+            lambda: self.preview.add_item(ItemKind.CALLOUT, None),
+        )
 
-    def _begin_callout(self) -> None:
-        """Open the new-callout form in the Edit tab."""
-        self.controls.begin_callout()
-        self.edit_requested.emit()
+    def _add_detail_map(self) -> None:
+        """Add > Detail map; with no map on the page, say what it needs."""
+        if self.preview.add_detail_map():
+            return
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        QMessageBox.information(
+            self,
+            tr("Detail map"),
+            tr(
+                "A detail map shows a closer view of a map on the page, and "
+                "this page has no map yet. Pick a template that includes a map."
+            ),
+        )
 
     def _refresh_controls(self) -> None:
         """Follow the selection in the Edit tab. A view being edited inside a

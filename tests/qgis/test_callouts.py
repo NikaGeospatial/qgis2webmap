@@ -15,7 +15,6 @@ from qgis.core import (
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
     QgsLayoutItemScaleBar,
-    QgsLayoutPoint,
     QgsUnitTypes,
 )
 from qgis.PyQt.QtCore import QRectF
@@ -26,14 +25,11 @@ from nika_onlymap_exporter.core.canvas_cartograph import (
     template_record,
 )
 from nika_onlymap_exporter.ui.cartograph.callouts import (
-    CALLOUT_LIMIT,
     add_callout,
-    can_add_callout,
     change_callout,
     layout_callouts,
     migrate_project_figures,
     remove_callout,
-    supports_callouts,
 )
 
 pytest.importorskip("qgis.core")
@@ -140,38 +136,77 @@ class TestSignalBalance:
         assert b.width() * b.height() > 0.4 * a.width() * a.height()
 
 
+def _place(layout, figure, x=20.0, y=20.0):
+    return add_callout(layout, QRectF(x, y, 50, 30), *figure)
+
+
+def _plain_layout(project):
+    from test_cartograph_panel_widgets import _a4_layout
+
+    return _a4_layout(project)
+
+
 class TestAddChangeRemove:
-    def test_adding_matches_a_page_built_with_them(self, parcels, project) -> None:
-        layout = _signal(parcels, project, [], layout_name="grown")
-        for index, figure in enumerate(FIGURES, start=1):
-            assert can_add_callout(layout)
-            assert add_callout(layout, *figure)
-            fresh = _signal(
-                parcels, project, FIGURES[:index], layout_name=f"fresh {index}"
-            )
-            assert _rects(layout) == _rects(fresh)
-        assert _words(layout) == FIGURES
+    def test_a_callout_goes_on_any_layout(self, parcels, project) -> None:
+        for layout in (
+            _plain_layout(project),
+            cartograph_from_view(
+                _view(parcels), UTM, [parcels], project, template_id="classic"
+            ).layout,
+            _signal(parcels, project, FIGURES[:1], layout_name="signal"),
+        ):
+            before = len(layout_callouts(layout))
+            assert _place(layout, ("214", "parcels surveyed"))
+            made = layout_callouts(layout)
+            assert len(made) == before + 1
+            assert (made[-1].value, made[-1].label) == ("214", "parcels surveyed")
 
-    def test_a_fourth_is_refused(self, parcels, project) -> None:
+    def test_it_lands_where_it_was_placed_and_is_visible(self, project) -> None:
+        layout = _plain_layout(project)
+        assert _place(layout, ("214", "parcels"), x=40.0, y=60.0)
+        value = layout.itemById("figure-0")
+        line = layout.itemById("figure-0-label")
+        assert value.pos().x() == pytest.approx(40.0, abs=0.5)
+        assert value.pos().y() > 60.0
+        assert line.pos().y() > value.pos().y()
+        assert value.textFormat().size() > line.textFormat().size()
+
+    def test_adding_moves_nothing_else(self, parcels, project) -> None:
+        layout = _signal(parcels, project, [], layout_name="steady")
+        before = _rects(layout)
+        assert _place(layout, FIGURES[0])
+        after = _rects(layout)
+        assert {k: v for k, v in after.items() if k in before} == before
+
+    def test_there_is_no_limit(self, parcels, project) -> None:
         layout = _signal(parcels, project, FIGURES)
-        assert not can_add_callout(layout)
-        assert not add_callout(layout, "1", "more")
-        assert len(layout_callouts(layout)) == CALLOUT_LIMIT
+        for n in range(5):
+            assert _place(layout, (str(n), "more"), y=20.0 + 20 * n)
+        assert len(layout_callouts(layout)) == 8
 
-    def test_a_blank_or_repeated_one_is_refused(self, parcels, project) -> None:
-        layout = _signal(parcels, project, FIGURES[:1])
-        assert not add_callout(layout, "  ", "nothing")
-        assert not add_callout(layout, *FIGURES[0])
-        assert _words(layout) == FIGURES[:1]
+    def test_a_blank_one_is_refused(self, project) -> None:
+        layout = _plain_layout(project)
+        assert not _place(layout, ("  ", "nothing"))
+        assert _words(layout) == []
 
-    def test_removing_closes_up_the_rest(self, parcels, project) -> None:
+    def test_removing_takes_only_that_one(self, parcels, project) -> None:
         layout = _signal(parcels, project, FIGURES, layout_name="three")
+        others = {k: v for k, v in _rects(layout).items() if "figure-1" not in k}
         assert remove_callout(layout, 1)
         assert _words(layout) == [FIGURES[0], FIGURES[2]]
-        assert layout.itemById("figure-2") is None
-        assert layout.itemById("figure-1").text() == "9"
-        fresh = _signal(parcels, project, [FIGURES[0], FIGURES[2]], layout_name="two")
-        assert _rects(layout) == _rects(fresh)
+        assert layout.itemById("figure-1") is None
+        assert layout.itemById("figure-2").text() == "9"
+        assert _rects(layout) == others
+
+    def test_the_freed_number_is_used_again(self, project) -> None:
+        layout = _plain_layout(project)
+        for figure in FIGURES:
+            assert _place(layout, figure)
+        assert remove_callout(layout, 1)
+        assert _place(layout, ("5", "bridges"))
+        assert sorted(c.value for c in layout_callouts(layout)) == sorted(
+            ["214", "9", "5"]
+        )
 
     def test_changing_words_keeps_the_lettering(self, parcels, project) -> None:
         layout = _signal(parcels, project, FIGURES)
@@ -185,47 +220,26 @@ class TestAddChangeRemove:
         assert layout.itemById("figure-0").textFormat().size() == 31
         assert _rects(layout) == before
 
-    def test_clearing_a_line_makes_room_again(self, parcels, project) -> None:
-        layout = _signal(parcels, project, FIGURES, layout_name="three")
-        assert change_callout(layout, 2, "9", "")
-        assert layout.itemById("figure-2-label") is None
-        fresh = _signal(
-            parcels, project, [*FIGURES[:2], ("9", "")], layout_name="fresh"
-        )
-        assert _rects(layout) == _rects(fresh)
+    def test_a_line_can_be_added_to_a_callout_without_one(self, project) -> None:
+        layout = _plain_layout(project)
+        assert _place(layout, ("9", ""))
+        assert layout.itemById("figure-0-label") is None
+        assert change_callout(layout, 0, "9", "wells")
+        assert _words(layout) == [("9", "wells")]
 
-    def test_what_the_user_moved_stays_put(self, parcels, project) -> None:
-        layout = _signal(parcels, project, [], layout_name="moved")
-        notes = layout.itemById("notes")
-        assert notes is not None
-        notes.attemptMove(QgsLayoutPoint(notes.pos().x(), notes.pos().y() + 3, UNITS))
-        moved = _rects(layout)["notes"]
-        assert add_callout(layout, "214", "parcels")
-        assert _rects(layout)["notes"] == moved
-
-    def test_undo_and_redo_each_step(self, parcels, project) -> None:
-        layout = _signal(parcels, project, FIGURES[:1])
+    def test_undo_and_redo_each_step(self, project) -> None:
+        layout = _plain_layout(project)
         stack = layout.undoStack().stack()
-        start = _rects(layout)
-        assert add_callout(layout, *FIGURES[1])
-        added = _rects(layout)
-        assert added != start
+        assert _place(layout, FIGURES[0])
+        assert stack.index() == 1
+        assert _place(layout, FIGURES[1], y=80.0)
         stack.undo()
-        assert _rects(layout) == start
         assert _words(layout) == FIGURES[:1]
         stack.redo()
-        assert _rects(layout) == added
+        assert _words(layout) == FIGURES[:2]
         assert remove_callout(layout, 0)
         stack.undo()
         assert _words(layout) == FIGURES[:2]
-        assert _rects(layout) == added
-
-    def test_each_change_is_one_undo_step(self, parcels, project) -> None:
-        layout = _signal(parcels, project, FIGURES[:1])
-        stack = layout.undoStack().stack()
-        before = stack.index()
-        add_callout(layout, *FIGURES[1])
-        assert stack.index() == before + 1
 
 
 class TestScopedToTheLayout:
@@ -233,19 +247,11 @@ class TestScopedToTheLayout:
         first = _signal(parcels, project, FIGURES[:2], layout_name="first")
         second = _signal(parcels, project, FIGURES[:2], layout_name="second")
         before = _rects(second), _words(second)
-        add_callout(first, *FIGURES[2])
+        _place(first, FIGURES[2])
         change_callout(first, 0, "999", "changed")
         remove_callout(first, 1)
         assert (_rects(second), _words(second)) == before
         assert project.customVariables().get("nika_figure_1") is None
-
-    def test_a_layout_not_from_signal_has_no_callouts(self, parcels, project) -> None:
-        classic = cartograph_from_view(
-            _view(parcels), UTM, [parcels], project, template_id="classic"
-        ).layout
-        assert not supports_callouts(classic)
-        assert not can_add_callout(classic)
-        assert not add_callout(classic, "1", "x")
 
 
 class TestOlderProjects:
@@ -344,8 +350,9 @@ class TestExportAndImport:
     def test_the_html_follows_the_edits(self, parcels, project, runtime) -> None:
         layout = _signal(parcels, project, FIGURES[:1])
         assert ">214<" in self._html(layout, project, runtime)
-        add_callout(layout, "77", "culverts")
-        change_callout(layout, 0, "215", "parcels surveyed")
+        remove_callout(layout, 0)
+        _place(layout, ("215", "parcels surveyed"))
+        _place(layout, ("77", "culverts"), y=90.0)
         html = self._html(layout, project, runtime)
         assert ">215<" in html and ">77<" in html and ">culverts<" in html
         assert ">214<" not in html
@@ -363,11 +370,8 @@ class TestExportAndImport:
         path.write_text(self._html(layout, project, runtime))
         built = import_cartograph_file(path, project)
         assert _words(built.layout) == FIGURES
-        # It can be edited, though it is no longer a page to plan again.
-        assert supports_callouts(built.layout)
-        assert not can_add_callout(built.layout)
         assert change_callout(built.layout, 0, "215", "parcels surveyed")
         assert remove_callout(built.layout, 1)
         assert _words(built.layout) == [("215", "parcels surveyed"), FIGURES[2]]
-        assert built.layout.itemById("label_figure_1").text() == "9"
-        assert built.layout.itemById("label_figure_2") is None
+        assert built.layout.itemById("label_figure_2").text() == "9"
+        assert built.layout.itemById("label_figure_1") is None

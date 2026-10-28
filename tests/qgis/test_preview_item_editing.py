@@ -101,6 +101,8 @@ class TestAddMenu:
             "Legend",
             "Scale bar",
             "North arrow",
+            "Detail map",
+            "Statistic callout",
         ]
         assert pane.add_button.toolTip()
         assert pane.add_button.accessibleName() == pane.add_button.toolTip()
@@ -119,6 +121,8 @@ class TestAddMenu:
             "Legend": False,
             "Scale bar": False,
             "North arrow": False,
+            "Detail map": True,
+            "Statistic callout": True,
         }
         pane.close()
 

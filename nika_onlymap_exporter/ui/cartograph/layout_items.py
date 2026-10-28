@@ -26,15 +26,19 @@ from qgis.core import (
     QgsLayoutItemMap,
     QgsLayoutItemPicture,
     QgsLayoutItemScaleBar,
+    QgsLayoutMeasurement,
     QgsLayoutPoint,
     QgsLayoutSize,
+    QgsRectangle,
     QgsUnitTypes,
 )
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QPointF, QRectF
+from qgis.PyQt.QtGui import QColor
 
 from ...core.layout_builder import _north_svg
 from ...core.legend_edit import apply_template_defaults
+from ...core.locator_context import is_locator
 from ..i18n import tr
 
 
@@ -43,6 +47,7 @@ class ItemKind(Enum):
     LEGEND = "legend"
     SCALE_BAR = "scale_bar"
     NORTH_ARROW = "north_arrow"
+    CALLOUT = "callout"
 
 
 #: Items that draw something about a map and so need to be linked to one.
@@ -55,6 +60,7 @@ DEFAULT_SIZE_MM = {
     ItemKind.LEGEND: (50.0, 40.0),
     ItemKind.SCALE_BAR: (50.0, 12.0),
     ItemKind.NORTH_ARROW: (15.0, 15.0),
+    ItemKind.CALLOUT: (50.0, 30.0),
 }
 
 _DEFAULT_TEXT_POINTS = 12.0
@@ -66,6 +72,7 @@ def kind_title(kind: ItemKind) -> str:
         ItemKind.LEGEND: tr("Legend"),
         ItemKind.SCALE_BAR: tr("Scale bar"),
         ItemKind.NORTH_ARROW: tr("North arrow"),
+        ItemKind.CALLOUT: tr("Statistic callout"),
     }[kind]
 
 
@@ -107,6 +114,8 @@ def create_item(
     size their contents need, from the box's corner.
     """
     title = kind_title(kind)
+    if kind is ItemKind.CALLOUT:
+        return _create_callout(layout, rect)
     with one_step(layout, tr("Add {item}").format(item=title.lower())):
         item: QgsLayoutItem
         if kind is ItemKind.TEXT:
@@ -140,6 +149,18 @@ def create_item(
         else:
             item.attemptSetSceneRect(rect)
     return item
+
+
+def _create_callout(layout: QgsLayout, rect: QRectF) -> QgsLayoutItem:
+    """A statistic callout at `rect`'s corner: its value is the item returned
+    (the one selected, with its line and rule beside it)."""
+    from .callouts import add_callout, default_words, find_part, layout_callouts
+
+    value, label = default_words()
+    before = {c.index for c in layout_callouts(layout)}
+    add_callout(layout, rect, value, label)
+    index = next(c.index for c in layout_callouts(layout) if c.index not in before)
+    return find_part(layout, index, False)  # type: ignore[return-value]
 
 
 def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> None:
@@ -221,3 +242,139 @@ def item_edit(layout: QgsLayout, item: QgsLayoutItem, text: str) -> Iterator[Non
     finally:
         layout.undoStack().endCommand()
         redraw(item)
+
+
+#: A detail map's frame, against the map it zooms into: this share of its
+#: width and height, showing this share of its ground - so the frame is smaller
+#: than the source map and shows a closer view (the scale grows by their ratio).
+_DETAIL_FRAME_SHARE = 0.4
+_DETAIL_GROUND_SHARE = 0.2
+_DETAIL_MIN_SIDE_MM = 30.0
+_DETAIL_MARGIN_MM = 4.0
+_DETAIL_FRAME_MM = 0.3
+
+#: The custom property that marks a map frame as a detail map (the inspector
+#: words its controls for choosing an area).
+DETAIL_PROPERTY = "nika/detail-map"
+
+
+def is_detail_map(item: object) -> bool:
+    return isinstance(item, QgsLayoutItemMap) and bool(
+        item.customProperty(DETAIL_PROPERTY, False)
+    )
+
+
+def detail_source(layout: QgsLayout) -> QgsLayoutItemMap | None:
+    """The map a new detail map zooms into: the selected map frame when one
+    map is selected, else the layout's primary map (its reference map, else the
+    largest map that is not a locator inset), else any map."""
+    chosen = [
+        i for i in layout.selectedLayoutItems() if isinstance(i, QgsLayoutItemMap)
+    ]
+    if len(chosen) == 1 and len(layout.selectedLayoutItems()) == 1:
+        return chosen[0]
+    maps = map_frames(layout)
+    if not maps:
+        return None
+    reference = layout.referenceMap()
+    if reference is not None and not is_locator(reference):
+        return reference  # type: ignore[no-any-return]
+    main = [m for m in maps if not is_locator(m)] or maps
+    return max(main, key=lambda m: m.rect().width() * m.rect().height())
+
+
+def detail_name(layout: QgsLayout) -> str:
+    """ "Detail map", then "Detail map 2" ...: a name no map on the page has."""
+    taken = {m.id() for m in map_frames(layout)}
+    base = tr("Detail map")
+    if base not in taken:
+        return base
+    number = 2
+    while f"{base} {number}" in taken:
+        number += 1
+    return f"{base} {number}"
+
+
+def detail_rect(layout: QgsLayout, source: QgsLayoutItemMap) -> QRectF:
+    """The detail frame's box (layout scene units): a corner of the source map,
+    smaller than it, kept on the page."""
+    margin = layout.convertToLayoutUnits(
+        QgsLayoutSize(_DETAIL_MARGIN_MM, 0, QgsUnitTypes.LayoutMillimeters)
+    ).width()
+    minimum = layout.convertToLayoutUnits(
+        QgsLayoutSize(_DETAIL_MIN_SIDE_MM, 0, QgsUnitTypes.LayoutMillimeters)
+    ).width()
+    frame = source.sceneBoundingRect()
+    width = min(max(frame.width() * _DETAIL_FRAME_SHARE, minimum), frame.width() * 0.8)
+    height = min(
+        max(frame.height() * _DETAIL_FRAME_SHARE, minimum), frame.height() * 0.8
+    )
+    rect = QRectF(
+        frame.right() - margin - width, frame.bottom() - margin - height, width, height
+    )
+    return _inside_source(rect, frame)
+
+
+def _inside_source(rect: QRectF, frame: QRectF) -> QRectF:
+    moved = QRectF(rect)
+    moved.moveLeft(max(moved.left(), frame.left()))
+    moved.moveTop(max(moved.top(), frame.top()))
+    return moved
+
+
+def detail_extent(source: QgsLayoutItemMap, rect: QRectF) -> QgsRectangle:
+    """The ground a new detail map shows: around the middle of the source's,
+    a fraction of it, in the shape of the detail frame (so nothing is padded)."""
+    whole = source.extent()
+    width = whole.width() * _DETAIL_GROUND_SHARE
+    height = whole.height() * _DETAIL_GROUND_SHARE
+    if rect.width() > 0 and rect.height() > 0 and height > 0:
+        aspect = rect.width() / rect.height()
+        if width / height > aspect:
+            width = height * aspect
+        else:
+            height = width / aspect
+    centre = whole.center()
+    return QgsRectangle(
+        centre.x() - width / 2,
+        centre.y() - height / 2,
+        centre.x() + width / 2,
+        centre.y() + height / 2,
+    )
+
+
+def create_detail_map(layout: QgsLayout, source: QgsLayoutItemMap) -> QgsLayoutItemMap:
+    """Add a detail map: another real map frame on the page, closer on an area
+    of `source`, as one undo step. It follows the layers and styles the way the
+    source does (the project's visible layers unless the source pins its own),
+    has its own extent and scale, and draws no link to the source."""
+    with one_step(layout, tr("Add {item}").format(item=tr("Detail map").lower())):
+        item = QgsLayoutItemMap(layout)
+        item.setId(detail_name(layout))
+        item.setCustomProperty(DETAIL_PROPERTY, True)
+        layout.addLayoutItem(item)
+        rect = detail_rect(layout, source)
+        extent = detail_extent(source, rect)
+        item.setCrs(source.crs())
+        item.setKeepLayerSet(source.keepLayerSet())
+        if source.keepLayerSet():
+            item.setLayers(source.layers())
+        item.setKeepLayerStyles(source.keepLayerStyles())
+        if source.keepLayerStyles():
+            item.setLayerStyleOverrides(source.layerStyleOverrides())
+        item.setFollowVisibilityPreset(source.followVisibilityPreset())
+        item.setFollowVisibilityPresetName(source.followVisibilityPresetName())
+        # The order the template builder uses: the extent on the fresh item
+        # (which resizes it), the box back, then the zoom that fits the two.
+        item.setExtent(extent)
+        item.attemptSetSceneRect(rect)
+        item.zoomToExtent(extent)
+        item.setFrameEnabled(True)
+        item.setFrameStrokeWidth(
+            QgsLayoutMeasurement(_DETAIL_FRAME_MM, QgsUnitTypes.LayoutMillimeters)
+        )
+        item.setFrameStrokeColor(QColor("#444444"))
+        item.setBackgroundEnabled(True)
+        item.setBackgroundColor(QColor("#ffffff"))
+        item.refresh()
+    return item
