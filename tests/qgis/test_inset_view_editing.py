@@ -23,7 +23,13 @@ from test_locator_context import _region
 qgis_core = pytest.importorskip("qgis.core")
 from qgis.core import QgsLayoutItemMap, QgsRectangle  # noqa: E402
 from qgis.PyQt.QtCore import QEvent, QPoint, QPointF, QRect, Qt  # noqa: E402
-from qgis.PyQt.QtGui import QKeyEvent, QWheelEvent  # noqa: E402
+from qgis.PyQt.QtGui import (  # noqa: E402
+    QColor,
+    QKeyEvent,
+    QPainter,
+    QPixmap,
+    QWheelEvent,
+)
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication, QLabel  # noqa: E402
 
@@ -32,6 +38,7 @@ from nika_onlymap_exporter.core.canvas_cartograph import (  # noqa: E402
 )
 from nika_onlymap_exporter.ui.cartograph.content_edit import (  # noqa: E402
     WHEEL_BURST_MS,
+    _difference,
 )
 from nika_onlymap_exporter.ui.cartograph.layout_page import PagePane  # noqa: E402
 
@@ -1152,3 +1159,37 @@ class TestAFastDragStaysSmooth:
         assert _patch_difference(before, patch, mid, patch) > _patch_difference(
             before, patch, mid, moved
         )
+
+
+class TestTheHandleLayerSitsWhereTheHandlesAre:
+    """The layer that stays put mid-drag is cut from two grabs; on a screen
+    with a device pixel ratio above 1 (125 % scaling) it came out stretched, so
+    the handles were missing and map bits showed in the uncovered strip."""
+
+    @pytest.mark.parametrize("ratio", [1.0, 1.25, 1.5, 2.0])
+    def test_only_the_changed_pixels_are_kept_where_they_are(self, qgis_app, ratio):
+        bare = QPixmap(int(200 * ratio), int(120 * ratio))
+        bare.setDevicePixelRatio(ratio)
+        bare.fill(QColor("#c8b080"))
+        shown = QPixmap(bare)
+        painter = QPainter(shown)
+        painter.fillRect(20, 30, 24, 16, QColor("#2060d0"))  # a "handle"
+        painter.end()
+        layer = _difference(shown, bare).toImage()
+        assert layer.devicePixelRatio() == pytest.approx(ratio)
+        changed = QRect(
+            round(20 * ratio), round(30 * ratio), round(24 * ratio), round(16 * ratio)
+        )
+        for x in range(layer.width()):
+            for y in range(layer.height()):
+                inside = changed.contains(x, y)
+                alpha = layer.pixelColor(x, y).alpha()
+                margin = 2  # edge rounding
+                if inside and changed.adjusted(
+                    margin, margin, -margin, -margin
+                ).contains(x, y):
+                    assert alpha == 255, (x, y)
+                elif not changed.adjusted(-margin, -margin, margin, margin).contains(
+                    x, y
+                ):
+                    assert alpha == 0, (x, y)

@@ -112,8 +112,13 @@ def _wheel_steps(event: QWheelEvent) -> float:
 
 def _difference(shown: QPixmap, bare: QPixmap) -> QPixmap:
     """`shown` with every pixel that equals `bare` made transparent."""
+    # Compared in device pixels: on a screen with a device pixel ratio above 1
+    # (125 % scaling) painting one such image onto another stretches the
+    # difference, which put the handles and stray map bits in the wrong places.
     shown_image = shown.toImage().convertToFormat(QImage.Format.Format_RGB32)
     bare_image = bare.toImage().convertToFormat(QImage.Format.Format_RGB32)
+    shown_image.setDevicePixelRatio(1.0)
+    bare_image.setDevicePixelRatio(1.0)
     delta = QImage(shown_image)
     painter = QPainter(delta)
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Difference)
