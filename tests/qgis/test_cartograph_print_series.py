@@ -112,7 +112,7 @@ class TestPrintSeriesButton:
         assert [_read(p, "OVERVIEW") for p in pages] == [4, 4]
         assert [_read(p, "DETAIL") for p in pages] == [1, 3]
         status = series.dialog.status_label.text()
-        assert "Sent 2 sheets" in status and "printed.pdf" in status
+        assert "2 sheets" in status and "printed.pdf" in status
         assert not series.cartograph._pdf_running
 
     def test_cancelling_the_print_dialog_prints_nothing_and_says_so(

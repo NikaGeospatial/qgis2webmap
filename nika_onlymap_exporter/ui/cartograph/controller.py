@@ -2969,13 +2969,20 @@ class CartographController:
                 tr("Printing cancelled. The rest of the series was not sent.")
             )
             return
-        target = printer.printerName() or printer.outputFileName()
-        text = plural(
-            result.sheets,
-            "Sent {n} sheet to {printer}.",
-            "Sent {n} sheets to {printer}.",
-            printer=target,
-        )
+        if printer.printerName():
+            text = plural(
+                result.sheets,
+                "Sent {n} sheet to {printer}.",
+                "Sent {n} sheets to {printer}.",
+                printer=printer.printerName(),
+            )
+        else:  # "Print to file (PDF)" in the print dialog
+            text = plural(
+                result.sheets,
+                "Printed {n} sheet to the file {printer}.",
+                "Printed {n} sheets to the file {printer}.",
+                printer=printer.outputFileName(),
+            )
         if result.warnings:
             text += " - " + " ".join(result.warnings)
         self.dialog.status_label.setText(text)
