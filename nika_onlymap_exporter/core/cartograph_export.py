@@ -73,6 +73,7 @@ from qgis.core import (
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..exporters.frame_raster import (
+    AsyncFrameRender,
     StaticFrameRender,
     frame_corners_wgs84,
     render_static_frame,
@@ -274,20 +275,43 @@ class StaticFrameCache:
         dpi: int,
         project: QgsProject,
     ) -> StaticFrameRender:
+        entry, cached = self.lookup(layout, map_item, dpi, project)
+        if cached is not None:
+            return cached
+        render = render_static_frame(layout, map_item, dpi=dpi)
+        self.store(entry, render)
+        return render
+
+    def lookup(
+        self,
+        layout: QgsPrintLayout,
+        map_item: QgsLayoutItemMap,
+        dpi: int,
+        project: QgsProject,
+    ) -> tuple[tuple[tuple[str, str], str], StaticFrameRender | None]:
+        """The cache entry a render of this frame now would fill - the frame's
+        slot and the digest of everything its pixels depend on - and the raster
+        already held for it, if still right. A caller that draws the frame
+        itself (see `AsyncFrameRender`) gives the entry back to `store`."""
         for layer in map_item.layersToRender():
             self._watch(layer)
         key = _static_frame_key(layout, map_item, dpi, project, self._generations)
         slot = (layout.name(), map_item.uuid())
         cached = self._entries.get(slot)
         if cached is not None and cached[0] == key:
-            return cached[1]
-        render = render_static_frame(layout, map_item, dpi=dpi)
+            return (slot, key), cached[1]
+        return (slot, key), None
+
+    def store(
+        self, entry: tuple[tuple[str, str], str], render: StaticFrameRender
+    ) -> None:
+        """Keep `render` as the raster for the entry `lookup` gave."""
+        slot, key = entry
         self.render_count += 1
         self._entries.pop(slot, None)
         self._entries[slot] = (key, render)
         while len(self._entries) > self.max_frames:
             del self._entries[next(iter(self._entries))]
-        return render
 
     def clear(self) -> None:
         """Forget every raster and stop listening to every layer."""
@@ -595,6 +619,56 @@ def prepare_live_reads(
     return replace(prepared, live_reads=reads)
 
 
+@dataclass
+class PendingStaticFrame:
+    """A static frame whose picture is still being drawn.
+
+    `prepare_cartograph` starts the drawing (`AsyncFrameRender`) and leaves the
+    frame's spec without its image; `with_static_images` puts the pictures in
+    once `render` has finished and been encoded, and `remember_static_frames`
+    keeps them in the frame cache."""
+
+    frame_id: str
+    render: AsyncFrameRender
+    cache: StaticFrameCache | None
+    cache_entry: tuple[tuple[str, str], str] | None
+
+
+def with_static_images(
+    prepared: PreparedCartograph, png_by_frame: Mapping[str, bytes]
+) -> PreparedCartograph:
+    """`prepared` with the pictures of its pending static frames put in."""
+    items = tuple(
+        replace(item, image_bytes=png_by_frame[item.id])
+        if isinstance(item, FrameSpec) and item.id in png_by_frame
+        else item
+        for item in prepared.spec.items
+    )
+    return replace(prepared, spec=replace(prepared.spec, items=items))
+
+
+def remember_static_frames(
+    pending: Sequence[PendingStaticFrame], png_by_frame: Mapping[str, bytes]
+) -> None:
+    """Hand the finished pictures to the frame cache, as a synchronous render
+    would have. GUI thread (the cache listens to layers there)."""
+    for frame in pending:
+        render = frame.render
+        if frame.cache is None or frame.cache_entry is None:
+            continue
+        if render.corners is None or frame.frame_id not in png_by_frame:
+            continue
+        frame.cache.store(
+            frame.cache_entry,
+            StaticFrameRender(
+                png_bytes=png_by_frame[frame.frame_id],
+                corners=render.corners,
+                crs_authid=render.crs_authid,
+                crs_def=render.crs_def,
+            ),
+        )
+
+
 def prepare_cartograph(
     layout: QgsPrintLayout,
     project: QgsProject,
@@ -607,6 +681,7 @@ def prepare_cartograph(
     export_dpi: int | None = None,
     title_override: str | None = None,
     raster_cache: StaticFrameCache | None = _DEFAULT_CACHE,
+    pending_static: list[PendingStaticFrame] | None = None,
 ) -> PreparedCartograph:
     """Everything that touches `layout`. GUI thread only.
 
@@ -619,6 +694,13 @@ def prepare_cartograph(
 
     `raster_cache` reuses static-frame rasters across calls (the module's
     shared cache by default); `None` renders every static frame afresh.
+
+    `pending_static`, when given, keeps the GUI thread free: a static frame
+    that is not in the cache is drawn by QGIS's own render job instead of
+    being waited for (the picture is identical), its spec is returned without
+    its image, and the frame is appended to the list. The caller finishes the
+    pictures with `with_static_images` once every `render` is done. A frame
+    the job cannot reproduce exactly is still drawn here, synchronously.
 
     Raises `ValueError` up front when the runtime bundle has no cartograph
     dist files at all -- that is a packaging problem, not a fidelity one, so
@@ -656,7 +738,11 @@ def prepare_cartograph(
             dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
             if export_dpi is not None:
                 dpi = _resolution_for(frame, dpi, export_dpi, report)
-            items.append(_build_static_frame(layout, project, frame, dpi, raster_cache))
+            items.append(
+                _build_static_frame(
+                    layout, project, frame, dpi, raster_cache, pending_static
+                )
+            )
         else:
             frame_spec, source = _build_live_frame(
                 frame,
@@ -1210,11 +1296,29 @@ def _build_static_frame(
     frame: MapFrameReading,
     static_dpi: int,
     raster_cache: StaticFrameCache | None,
+    pending: list[PendingStaticFrame] | None = None,
 ) -> FrameSpec:
-    if raster_cache is None:
-        render = render_static_frame(layout, frame.map_item, dpi=static_dpi)
+    entry = None
+    cached = None
+    if raster_cache is not None:
+        entry, cached = raster_cache.lookup(layout, frame.map_item, static_dpi, project)
+    if cached is not None:
+        render = cached
+    elif pending is not None and AsyncFrameRender.supports(layout, frame.map_item):
+        drawing = AsyncFrameRender(layout, frame.map_item, static_dpi)
+        drawing.start()
+        pending.append(PendingStaticFrame(frame.frame_id, drawing, raster_cache, entry))
+        assert drawing.corners is not None  # set by `start`
+        render = StaticFrameRender(
+            png_bytes=b"",
+            corners=drawing.corners,
+            crs_authid=drawing.crs_authid,
+            crs_def=drawing.crs_def,
+        )
     else:
-        render = raster_cache.render(layout, frame.map_item, static_dpi, project)
+        render = render_static_frame(layout, frame.map_item, dpi=static_dpi)
+        if raster_cache is not None and entry is not None:
+            raster_cache.store(entry, render)
     return FrameSpec(
         id=frame.frame_id,
         box=frame.box,
