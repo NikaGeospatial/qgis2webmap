@@ -1253,7 +1253,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 
 /* The Cartograph tab: the page preview, and the panel beside it. */
 {d} QgsLayoutView[role="layoutPreview"] {{
-    background: {p.canvas};
+    background: #dfe4e1;
     border: 1px solid {p.rule};
     border-radius: 6px;
 }}

@@ -4171,6 +4171,10 @@ class TestDesignerEditsAutosave:
             fake_cartograph_export.calls.clear()
             view = cartograph.page_pane.preview.view
             viewport = view.viewport()
+            # Let the page finish fitting before aiming at the map on it.
+            for _ in range(20):
+                qgis_app.processEvents()
+                time.sleep(0.01)
             centre = view.mapFromScene(map_item.sceneBoundingRect().center())
             before = map_item.pos()
             stack = layout.undoStack().stack()

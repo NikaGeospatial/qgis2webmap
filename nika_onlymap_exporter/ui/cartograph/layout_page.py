@@ -34,24 +34,26 @@ from qgis.PyQt.QtCore import (
     QPoint,
     QPointF,
     QRect,
+    QRectF,
     QSize,
     Qt,
     QTimer,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
+    QColor,
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
     QPainter,
     QPaintEvent,
-    QPalette,
     QResizeEvent,
     QShowEvent,
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
     QApplication,
+    QBoxLayout,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -91,6 +93,12 @@ PICKER_MIN_WIDTH = 120
 #: view's bottom and right edges, and from each other.
 FLOAT_MARGIN = 12
 FLOAT_GAP = 8
+#: The least height of a floating button, in pixels.
+FLOAT_MIN_HEIGHT = 32
+#: Workspace left clear around the fitted page, in pixels.
+FIT_MARGIN = 8
+#: The editor workspace around the paper (the page keeps its own colour).
+WORKSPACE_COLOUR = "#dfe4e1"
 
 
 class LayoutPicker(QComboBox):
@@ -287,6 +295,8 @@ class LayoutPreview(QStackedWidget):
         # once the view has a layout: it is made in `show_layout`, and
         # made before that it crashes on the first wheel turn.
         self._select: QgsLayoutViewToolSelect | None = None
+        # The scale of the last fit (None until one): at it, no scroll bars.
+        self._fitted_scale: float | None = None
         self.view.setTool(self._pan)
         self.addWidget(self.view)
         self._make_floating_controls()
@@ -359,14 +369,19 @@ class LayoutPreview(QStackedWidget):
         self._fit_timer.timeout.connect(self._fit)
 
     def _make_floating_controls(self) -> None:
-        """Add item and Fit page, floating over the page's bottom-right corner.
+        """Add item above Fit page, stacked over the page's bottom-right corner.
 
         Children of the view (not of its viewport, and never scene items), so
         they sit still while the page zooms and pans, are not drawn into an
         export, a thumbnail or the colour-vision preview's filter, and still
-        take clicks and Tab. Placed by `_place_floating_controls` whenever the
-        viewport is resized.
+        take clicks and Tab. They share a container exactly as big as the
+        stack, which lets mouse events through (so even the gap between the
+        buttons is the view's). Placed by `_place_floating_controls` whenever
+        the page or the viewport moves.
         """
+        self._overlay = QWidget(self.view)
+        self._overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._overlay.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.add_button = self._floating_button(
             tr("Add item"),
             tr("Add text, a legend, a scale bar or a north arrow, then click the page"),
@@ -380,17 +395,18 @@ class LayoutPreview(QStackedWidget):
             tr("Fit page"), tr("Fit the whole page"), tr(_PAN_HINT)
         )
         self.fit_button.clicked.connect(self.fit_page)
-        # Same height whatever the label or font.
-        height = max(b.sizeHint().height() for b in self.floating_buttons())
         for button in self.floating_buttons():
-            button.setFixedHeight(height)
-            # A style or font change resizes a button from its left edge:
-            # put its right edge back at the corner.
+            # A style or font change resizes a button: size the stack again.
             button.installEventFilter(self)
         self._placing = False
+        # The corner moves with every zoom and pan.
+        self.view.zoomLevelChanged.connect(self._on_zoom_level_changed)
+        for bar in (self.view.horizontalScrollBar(), self.view.verticalScrollBar()):
+            bar.valueChanged.connect(self._place_floating_controls)
+            bar.rangeChanged.connect(self._place_floating_controls)
 
     def _floating_button(self, text: str, name: str, hint: str = "") -> QToolButton:
-        button = QToolButton(self.view)
+        button = QToolButton(self._overlay)
         button.setText(text)
         button.setToolTip(f"{name}. {hint}" if hint else name)
         button.setAccessibleName(name)
@@ -402,71 +418,88 @@ class LayoutPreview(QStackedWidget):
         return button
 
     def floating_buttons(self) -> tuple[QToolButton, QToolButton]:
-        """Left to right, as they sit."""
+        """Top to bottom, as they sit."""
         return (self.add_button, self.fit_button)
 
-    def _floating_reserve(self) -> int:
-        """The strip along the viewport's bottom the controls occupy: the
-        page is fitted above it."""
-        return self.fit_button.height() + FLOAT_MARGIN + FLOAT_GAP
+    def _on_zoom_level_changed(self, *_args: object) -> None:
+        self._sync_scroll_bars()
+        self._place_floating_controls()
 
-    def _place_floating_controls(self) -> None:
-        if self._placing:
+    def _sync_scroll_bars(self) -> None:
+        """No scroll bars while the page is fitted (the scene's margin is
+        wider than the fit's, so they would show on a page that is all in
+        view and take room from it); they are there once zoomed."""
+        fitted = (
+            self._fitted_scale is not None
+            and abs(self.view.transform().m11() - self._fitted_scale) < 1e-9
+        )
+        policy = (
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if fitted
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.view.setHorizontalScrollBarPolicy(policy)
+        self.view.setVerticalScrollBarPolicy(policy)
+
+    def _place_floating_controls(self, *_args: object) -> None:
+        if self._placing or sip.isdeleted(self):
             return
         self._placing = True
         try:
             self._move_floating_controls()
         finally:
             self._placing = False
-        # Again once the view has finished laying out its scroll bars.
-        QTimer.singleShot(0, self._move_floating_controls_if_alive)
-
-    def _move_floating_controls_if_alive(self) -> None:
-        if not sip.isdeleted(self) and not self._placing:
-            self._move_floating_controls()
 
     def _move_floating_controls(self) -> None:
+        """Size the stack, then seat it FLOAT_MARGIN inside the current page's
+        bottom-right corner - or, where zoom or pan has put that corner out
+        of the viewport, at the nearest place inside it."""
+        buttons = self.floating_buttons()
+        for button in buttons:
+            button.setMinimumSize(0, 0)
+            button.setMaximumSize(16777215, 16777215)
+        width = max(b.sizeHint().width() for b in buttons)
+        height = max(FLOAT_MIN_HEIGHT, *(b.sizeHint().height() for b in buttons))
+        top = 0
+        for button in buttons:
+            button.setFixedSize(width, height)
+            button.move(0, top)
+            top += height + FLOAT_GAP
+        self._overlay.resize(width, top - FLOAT_GAP)
         viewport = self.view.viewport()
         rect = viewport.geometry()
-        for button in self.floating_buttons():
-            button.adjustSize()
-        right = rect.right() + 1 - FLOAT_MARGIN
-        bottom = rect.bottom() + 1 - FLOAT_MARGIN
-        for button in reversed(self.floating_buttons()):
-            button.move(right - button.width(), bottom - button.height())
-            button.raise_()
-            right -= button.width() + FLOAT_GAP
+        page = self._current_page_rect()
+        if page is None:
+            corner = QPoint(rect.width(), rect.height())
+        else:
+            corner = self.view.mapFromScene(page.bottomRight())
+        x = corner.x() + rect.x() - FLOAT_MARGIN - self._overlay.width()
+        y = corner.y() + rect.y() - FLOAT_MARGIN - self._overlay.height()
+        x = max(rect.left(), min(x, rect.right() + 1 - self._overlay.width()))
+        y = max(rect.top(), min(y, rect.bottom() + 1 - self._overlay.height()))
+        self._overlay.move(x, y)
+        self._overlay.raise_()
 
-    def _clear_of_floating_controls(self) -> None:
-        """After a fit: if the controls cover part of a page, fit smaller.
-
-        The fitted page is centred, so shrinking it by the controls' height
-        and margin on both sides keeps it centred and clear of them.
-        """
+    def _page_rects(self) -> list[QRectF]:
         layout = self.view.currentLayout()
         if layout is None or sip.isdeleted(layout):
-            return
-        pages = [p.sceneBoundingRect() for p in layout.pageCollection().pages()]
+            return []
+        # The paper itself: a page's bounding rectangle includes its shadow.
+        return [p.mapRectToScene(p.rect()) for p in layout.pageCollection().pages()]
+
+    def _current_page_rect(self) -> QRectF | None:
+        """The page most in view (the first, when none is): the one Fit page
+        fits and the controls sit on."""
+        pages = self._page_rects()
         if not pages:
-            return
-        bounds = pages[0]
-        for page in pages[1:]:
-            bounds = bounds.united(page)
-        shown = self.view.mapFromScene(bounds).boundingRect()
-        zone = self.add_button.geometry().united(self.fit_button.geometry())
-        zone = zone.translated(
-            -self.view.viewport().x(), -self.view.viewport().y()
-        ).adjusted(-FLOAT_GAP, -FLOAT_GAP, FLOAT_MARGIN, FLOAT_MARGIN)
-        if not shown.intersects(zone):
-            return
-        room = self.view.viewport().height() - 2 * self._floating_reserve()
-        if room <= 0 or bounds.height() <= 0:
-            return
-        scale = min(self.view.transform().m11(), room / bounds.height())
-        self.view.resetTransform()
-        self.view.scale(scale, scale)
-        self.view.centerOn(bounds.center())
-        self.view.emitZoomLevelChanged()
+            return None
+        seen = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
+
+        def visible(page: QRectF) -> float:
+            shared = page.intersected(seen)
+            return max(0.0, shared.width()) * max(0.0, shared.height())
+
+        return max(pages, key=visible)
 
     def show_layout(self, layout) -> None:  # QgsPrintLayout | None
         if layout is None:
@@ -577,9 +610,32 @@ class LayoutPreview(QStackedWidget):
     def _fit(self) -> None:
         if not (self.isVisible() and self.showing_page()) or self._user_zoomed:
             return
+        self._fit_current_page()
+
+    def _fit_current_page(self) -> None:
+        """The current page at the largest scale that shows all of it, with
+        FIT_MARGIN of workspace round it. Measured again if the scroll bars
+        came or went with the new scale."""
+        page = self._current_page_rect()
+        if page is None or page.width() <= 0 or page.height() <= 0:
+            return
+        # Off first, so the room measured is the room the page keeps.
+        self._fitted_scale = None
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Not the viewport's size: it follows the bars' going only once the
+        # view has laid out again.
+        viewport = self.view.maximumViewportSize()
+        room_w = max(1, viewport.width() - 2 * FIT_MARGIN)
+        room_h = max(1, viewport.height() - 2 * FIT_MARGIN)
+        scale = min(room_w / page.width(), room_h / page.height())
+        self.view.resetTransform()
+        self.view.scale(scale, scale)
+        self.view.centerOn(page.center())
+        self._fitted_scale = self.view.transform().m11()
+        self.view.emitZoomLevelChanged()
+        self._sync_scroll_bars()
         self._place_floating_controls()
-        self.view.zoomFull()
-        self._clear_of_floating_controls()
 
     def _space_pan(self, watched: QObject | None, event: QEvent) -> bool | None:
         """Hold Space and drag to pan the page; None when `event` is not
@@ -913,12 +969,9 @@ class LayoutPreview(QStackedWidget):
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
-        # Around the page, the dialog's own window colour rather than the
-        # designer's grey; the theme sets it on the palette. The window's
-        # palette, which the theme sets, not this widget's inherited copy.
-        self.view.setBackgroundBrush(
-            self.window().palette().color(QPalette.ColorRole.Window)
-        )
+        # Around the page, a neutral grey workspace in both themes; the paper,
+        # the map and exports keep their own colours.
+        self.view.setBackgroundBrush(QColor(WORKSPACE_COLOUR))
         self._fit_timer.start()
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
@@ -1188,7 +1241,8 @@ class ElidedLabel(QLabel):
 class SaveLocation(QWidget):
     """Where the cartograph saves, as one row for the dialog's bottom bar:
 
-        parcels-Survey.html   Saved just now · 2.6 MB   [Change...] [Show in folder]
+        parcels-Survey.html  Saved just now · 2.6 MB  [Change save location…]
+        [Show in folder]
 
     The file name first and whole while there is room, because it is what
     someone sharing the file looks for; it is the part that gives way, cut
@@ -1212,7 +1266,14 @@ class SaveLocation(QWidget):
         self._row.setSpacing(8)
         self._path = ""
         self._placeholder = ""
-        self.label = QLabel(self)
+        self._status: QWidget | None = None
+        # The name and the save status: side by side while both fit, one
+        # above the other (wrapped) before an action label would be clipped.
+        self._info = QWidget(self)
+        self._info_row = QBoxLayout(QBoxLayout.Direction.LeftToRight, self._info)
+        self._info_row.setContentsMargins(0, 0, 0, 0)
+        self._info_row.setSpacing(8)
+        self.label = QLabel(self._info)
         self.label.setProperty("role", "saveName")
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.label.setMinimumWidth(1)
@@ -1220,9 +1281,15 @@ class SaveLocation(QWidget):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self.label.setAccessibleName(tr("File to save to"))
-        self._row.addWidget(self.label, 1)
-        self.change_button = QPushButton(tr("Change..."), self)
-        self.change_button.setToolTip(tr("Choose another file to save to"))
+        self._info_row.addWidget(self.label, 1)
+        self._row.addWidget(self._info, 1)
+        self.change_button = QPushButton(tr("Change save location…"), self)
+        self.change_button.setToolTip(
+            tr(
+                "Choose a different name or folder for this HTML cartograph. "
+                "Future autosaves use the new location."
+            )
+        )
         self.change_button.setAccessibleName(tr("Change the file to save to"))
         self.change_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.change_button.clicked.connect(self.change_requested)
@@ -1238,8 +1305,41 @@ class SaveLocation(QWidget):
 
     def set_status_widget(self, widget: QWidget) -> None:
         """Seat the save status between the name and the buttons."""
-        widget.setParent(self)
-        self._row.insertWidget(1, widget)
+        widget.setParent(self._info)
+        self._info_row.insertWidget(1, widget)
+        self._status = widget
+        # A new status text changes how much room the pair needs.
+        widget.installEventFilter(self)
+        self._wrap_if_needed()
+
+    def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override
+        if (
+            watched is self._status
+            and event is not None
+            and event.type() == QEvent.Type.LayoutRequest
+        ):
+            self._wrap_if_needed()
+        return False
+
+    def _wrap_if_needed(self) -> None:
+        """Stack the status under the name when the two together are wider
+        than the room the buttons leave."""
+        status = self._status
+        if status is None:
+            return
+        buttons = self.change_button.sizeHint().width() + self._row.spacing()
+        if not self.reveal_button.isHidden():
+            buttons += self.reveal_button.sizeHint().width() + self._row.spacing()
+        name = self.label.fontMetrics().horizontalAdvance(Path(self._path).name)
+        needed = name + self._info_row.spacing() + status.sizeHint().width()
+        stacked = needed > self.width() - buttons
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        if self._info_row.direction() != direction:
+            self._info_row.setDirection(direction)
 
     def text(self) -> str:
         return self._path
@@ -1264,6 +1364,7 @@ class SaveLocation(QWidget):
         self.label.setToolTip(self._path)
         self.label.setAccessibleDescription(self._path)
         self.reveal_button.setVisible(bool(self._path))
+        self._wrap_if_needed()
         self._elide()
 
     def _elide(self) -> None:
@@ -1280,4 +1381,5 @@ class SaveLocation(QWidget):
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
+        self._wrap_if_needed()
         self._elide()

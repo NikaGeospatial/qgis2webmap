@@ -297,3 +297,39 @@ class TestSaveBlockInTheBottomRow:
             assert label.text() == "Saved 5 min ago · 2.5 MB"
         finally:
             dialog.close()
+
+
+class TestSaveLocationWrapsBeforeClipping:
+    def test_a_long_status_goes_under_the_name_and_the_actions_stay_whole(
+        self, qgis_app, project
+    ) -> None:
+        from nika_onlymap_exporter.ui.main_dialog import (
+            MINIMUM_DIALOG_HEIGHT,
+            MINIMUM_DIALOG_WIDTH,
+        )
+
+        dialog = _cartograph_dialog(project)
+        try:
+            dialog.show()
+            cartograph = dialog._cartograph
+            edit = cartograph.file_edit
+            name = "carto-grand-canyon-dense-labels-Access.html"
+            edit.setText(f"/home/someone/Documents/QGIS2WebMap/Cartographs/{name}")
+            cartograph.cartograph_status_label.setText(
+                "Could not save the cartograph: permission denied for this folder"
+            )
+            dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
+            _settle(qgis_app, 0.3)
+            # The name is still read whole, not squeezed out by the status.
+            assert edit.label.text() == name
+            assert edit.label.isVisible()
+            for button in (edit.change_button, edit.reveal_button):
+                assert button.isVisible()
+                assert button.width() >= button.sizeHint().width()
+                assert button.geometry().right() <= edit.rect().right()
+            assert edit.change_button.text() == "Change save location…"
+            assert "Future autosaves use the new location" in (
+                edit.change_button.toolTip()
+            )
+        finally:
+            dialog.close()
