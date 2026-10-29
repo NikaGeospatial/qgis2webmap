@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
@@ -257,18 +258,29 @@ def _clip_request(
 class FieldFormat:
     """One field's editor-widget formatter, with the inputs it needs copied out.
 
-    `QgsJsonExporter` given a layer writes a field the way its widget shows it -
-    a Value Map's description rather than its stored key - and that needs the
-    layer, which a worker must not touch. So the formatter, its configuration
-    and its lookup cache (a Value Relation's table of the other layer, read
-    here on the GUI thread) are taken up front, and `LayerFeatures.represent`
-    applies them to the features a worker reads.
+    A Value Map shows a description rather than its stored key, and a Value
+    Relation the other layer's text; formatting needs the layer, which a worker
+    must not touch. So the formatter, its configuration and its lookup cache (a
+    Value Relation's table of the other layer, read here on the GUI thread) are
+    taken up front, and `LayerFeatures.display_values` applies them to the
+    features a worker reads.
+
+    The shown value never replaces the stored one: drawing, filtering and
+    expressions compare the stored value, so the shown one travels beside it
+    under `display_name`, which only the popup reads.
     """
 
     index: int
+    name: str
+    display_name: str
     formatter: QgsFieldFormatter
     config: dict[str, Any]
     cache: Any
+    # A Value Relation's other layer as `key -> text`, read on the GUI thread
+    # because its own cache cannot be carried into Python; `None` for every
+    # other formatter.
+    relation: Mapping[str, str] | None = None
+    null_text: str = "NULL"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -294,57 +306,189 @@ class LayerFeatures:
     crs: QgsCoordinateReferenceSystem
     transform_context: QgsCoordinateTransformContext
     total: int = -1
-    # Only fields whose editor widget changes how a value reads. Empty - almost
-    # always - means the values go out as stored, and `formats_layer` is `None`.
+    # Only the popup-visible fields whose editor widget changes how a value
+    # reads. Empty - almost always - means no display copy is written, and
+    # `formats_layer` is `None`.
     formats: tuple[FieldFormat, ...] = ()
     # A private clone for the formatters to be called with, never the project's
     # layer. Made only when `formats` is not empty.
     formats_layer: QgsVectorLayer | None = None
 
-    def represent(self, features: list[QgsFeature]) -> list[QgsFeature]:
-        """The features with each formatted field in the form its widget shows."""
-        if not self.formats:
-            return features
+    def display_values(self, features: list[QgsFeature]) -> list[dict[str, Any]]:
+        """Per feature, each formatted field's shown value under its display name."""
+        shown: list[dict[str, Any]] = []
         for feature in features:
             attributes = feature.attributes()
+            values: dict[str, Any] = {}
             for fmt in self.formats:
-                attributes[fmt.index] = fmt.formatter.representValue(
-                    self.formats_layer,
-                    fmt.index,
-                    fmt.config,
-                    fmt.cache,
-                    attributes[fmt.index],
+                if fmt.relation is not None:
+                    value: Any = _relation_text(fmt, attributes[fmt.index])
+                else:
+                    value = fmt.formatter.representValue(
+                        self.formats_layer,
+                        fmt.index,
+                        fmt.config,
+                        fmt.cache,
+                        attributes[fmt.index],
+                    )
+                values[fmt.display_name] = (
+                    value if isinstance(value, (str, int, float, bool)) else str(value)
                 )
-            feature.setAttributes(attributes)
-        return features
+            shown.append(values)
+        return shown
 
 
-def _field_formats(layer: QgsVectorLayer) -> tuple[FieldFormat, ...]:
-    """The fields `QgsJsonExporter(layer)` would reformat. **GUI thread only.**"""
+def _relation_key(value: object) -> str:
+    """A Value Relation key the way QGIS compares it: 2 and 2.0 are one key."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _relation_text(fmt: FieldFormat, value: object) -> str:
+    """What a Value Relation shows for `value`, from the table read up front."""
+    from qgis.core import QgsValueRelationFieldFormatter, QgsVariantUtils
+
+    table = fmt.relation or {}
+    if QgsVariantUtils.isNull(value):
+        return fmt.null_text
+    if fmt.config.get("AllowMulti"):
+        keys = QgsValueRelationFieldFormatter.valueToStringList(value)
+        return "{" + ", ".join(table[key] for key in keys if key in table) + "}"
+    return table.get(_relation_key(value), f"({value})")
+
+
+def _value_relation_table(config: dict[str, Any]) -> dict[str, str]:
+    """The other layer of a Value Relation as `key -> text`. **GUI thread only.**"""
+    from qgis.core import QgsProject, QgsValueRelationFieldFormatter
+
+    related = QgsValueRelationFieldFormatter.resolveLayer(config, QgsProject.instance())
+    if related is None:
+        return {}
+    key_field, value_field = config.get("Key"), config.get("Value")
+    return {
+        _relation_key(feature[key_field]): str(feature[value_field])
+        for feature in related.getFeatures()
+    }
+
+
+def _display_property(
+    field_name: str, taken: set[str], assigned: Mapping[str, str]
+) -> str:
+    """A property name for `field_name`'s shown value that nothing else uses.
+
+    ASCII word characters only, because the popup template substitutes nothing
+    else; `taken` holds every field of the layer, so a real field already called
+    `kind_shown` is never overwritten.
+    """
+    stem = re.sub(r"\W+", "_", field_name, flags=re.ASCII).strip("_") or "field"
+    candidate = f"{stem}_shown"
+    while candidate in taken or candidate in assigned.values():
+        candidate += "_"
+    return candidate
+
+
+def popup_display_names(layer: QgsVectorLayer, popup: PopupSpec) -> dict[str, str]:
+    """Field name -> property carrying its shown value, for the popup's fields.
+
+    Only fields a popup shows and whose editor widget formats the value get one,
+    so a field the user hid never gains a second copy. **GUI thread only.**
+    """
+    from qgis.core import QgsApplication
+
+    if not popup.enabled:
+        return {}
+    registry = QgsApplication.fieldFormatterRegistry()
+    fallback_id = registry.fallbackFieldFormatter().id()
+    visible = {field.name for field in popup.visible_fields}
+    taken = set(layer.fields().names()) | {
+        re.sub(r"\W+", "_", name, flags=re.ASCII).strip("_") for name in visible
+    }
+    names: dict[str, str] = {}
+    for field in layer.fields():
+        if field.name() not in visible:
+            continue
+        if (
+            registry.fieldFormatter(field.editorWidgetSetup().type()).id()
+            == fallback_id
+        ):
+            continue
+        names[field.name()] = _display_property(field.name(), taken, names)
+    return names
+
+
+def popup_reading_display(popup: PopupSpec, names: Mapping[str, str]) -> PopupSpec:
+    """`popup` with each named field reading its display property.
+
+    The label keeps the field's own spelling.
+    """
+    return dataclasses.replace(
+        popup,
+        fields=tuple(
+            dataclasses.replace(f, name=names[f.name], alias=f.alias or f.name)
+            if f.name in names
+            else f
+            for f in popup.fields
+        ),
+    )
+
+
+def _field_formats(
+    layer: QgsVectorLayer, display_names: Mapping[str, str]
+) -> tuple[FieldFormat, ...]:
+    """The formatters of the fields in `display_names`. **GUI thread only.**"""
     from qgis.core import QgsApplication
 
     registry = QgsApplication.fieldFormatterRegistry()
-    fallback_id = registry.fallbackFieldFormatter().id()
     formats = []
     for index, field in enumerate(layer.fields()):
+        if field.name() not in display_names:
+            continue
         setup = field.editorWidgetSetup()
         formatter = registry.fieldFormatter(setup.type())
-        if formatter.id() == fallback_id:
-            continue
         config = setup.config()
+        if formatter.id() == "ValueRelation":
+            # Its cache is a C++ list Python cannot hold, so the table is read
+            # here and the text looked up on the worker.
+            formats.append(
+                FieldFormat(
+                    index,
+                    field.name(),
+                    display_names[field.name()],
+                    formatter,
+                    config,
+                    None,
+                    _value_relation_table(config),
+                    QgsApplication.nullRepresentation(),
+                )
+            )
+            continue
         formats.append(
             FieldFormat(
-                index, formatter, config, formatter.createCache(layer, index, config)
+                index,
+                field.name(),
+                display_names[field.name()],
+                formatter,
+                config,
+                formatter.createCache(layer, index, config),
             )
         )
     return tuple(formats)
 
 
-def snapshot_features(layer: QgsVectorLayer, clip_extent: Any | None) -> LayerFeatures:
-    """Copy out what `export_geojson_from` needs. **GUI thread only.**"""
+def snapshot_features(
+    layer: QgsVectorLayer,
+    clip_extent: Any | None,
+    display_names: Mapping[str, str] | None = None,
+) -> LayerFeatures:
+    """Copy out what `export_geojson_from` needs. **GUI thread only.**
+
+    `display_names` is `popup_display_names`: the fields to write a shown-value
+    copy of, which is none for a caller that has no popup.
+    """
     from qgis.core import QgsProject
 
-    formats = _field_formats(layer)
+    formats = _field_formats(layer, display_names or {})
     return LayerFeatures(
         source=QgsVectorLayerFeatureSource(layer),
         layer_id=layer.id(),
@@ -413,8 +557,9 @@ def export_geojson_from(
             )
             collected = list(features.source.getFeatures(request))
             _report_clip(report, subject, layer_id, len(collected), features.total)
-        text = exporter.exportFeatures(features.represent(collected))
-        collection = json.loads(text)
+        collection = json.loads(exporter.exportFeatures(collected))
+        if features.formats:
+            _add_display_values(collection, features.display_values(collected))
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
             subject,
@@ -433,6 +578,17 @@ def export_geojson_from(
         )
 
     return collection
+
+
+def _add_display_values(
+    collection: dict[str, Any], shown: list[dict[str, Any]]
+) -> None:
+    """Write each feature's shown values into its properties, in place."""
+    exported = collection.get("features") or []
+    if len(exported) != len(shown):
+        raise RuntimeError("the exporter returned a different number of features")
+    for feature, values in zip(exported, shown, strict=True):
+        feature["properties"] = {**(feature.get("properties") or {}), **values}
 
 
 def drop_hidden_features(
@@ -1183,6 +1339,7 @@ class PendingLayer:
         # Before counting: a switched-off category means the author does not want
         # those features on the map at all, so they must leave the data, not just
         # the style. The count has to reflect what actually ships.
+        read_count = len(geojson.get("features") or ())
         geojson = drop_hidden_features(geojson, base.renderer)
 
         # Only the attributes something still reads survive: what the popup shows,
@@ -1191,6 +1348,10 @@ class PendingLayer:
         keep = set(self.drawing)
         if base.popup.enabled:
             keep |= {field.name for field in base.popup.visible_fields}
+        # The stored value of a field whose shown value the popup reads stays
+        # too: what the popup reads is a copy, and a map or atlas that reads the
+        # field by its own name still gets the value it was built against.
+        keep |= {fmt.name for fmt in self.features.formats}
         geojson = keep_only_fields(geojson, keep)
         feature_ids: tuple[tuple[int, int], ...] = ()
         if self.renumber_ids:
@@ -1208,7 +1369,16 @@ class PendingLayer:
         )
 
         feature_count = len(geojson.get("features") or ())
-        if feature_count == 0:
+        if feature_count == 0 and read_count > 0:
+            report.unsupported(
+                f"Layer '{base.name}'",
+                f"The layer has {read_count} feature(s), but every one belongs to "
+                "a category or range that is switched off, or that no category "
+                "or range claims, so none is drawn. It is exported but will show "
+                "nothing - check the layer's symbology.",
+                base.layer_id,
+            )
+        elif feature_count == 0:
             report.unsupported(
                 f"Layer '{base.name}'",
                 "The layer contains no features. It is exported but will show "
@@ -1332,8 +1502,6 @@ def prepare_layer(
         )
         return None
 
-    features = snapshot_features(layer, clip_extent)
-
     renderer = translate_renderer(layer, report)
 
     # After the renderer, because the atlas rasterises the very symbols the
@@ -1373,12 +1541,19 @@ def prepare_layer(
         if with_popup
         else PopupSpec(enabled=False)
     )
+    # A field the popup shows through an editor widget (a Value Map's
+    # description) is read from a separate property, so the stored value stays
+    # under the field's own name for everything that draws or filters.
+    display_names = popup_display_names(layer, popup)
+    popup = popup_reading_display(popup, display_names)
+    features = snapshot_features(layer, clip_extent, display_names)
 
     # The primary-key check reads the live layer, so it is made here; the strip
     # it guards happens in `PendingLayer.finish`.
     keep = set(drawing_fields(renderer, labeling, elevation))
     if popup.enabled:
         keep |= {field.name for field in popup.visible_fields}
+    keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
 
     base = ExportLayer(
