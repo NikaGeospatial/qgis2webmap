@@ -981,8 +981,14 @@ class TestWorkerSnapshot:
         # does not list, or a NULL, keeps whatever the formatter makes of it.
         shown = [f["properties"]["kind"] for f in expected["features"]]
         assert shown[:2] == ["Camp", "Ford"]
+        # The stored value stays under the field's name; the shown one is a
+        # separate property, which is what the popup reads.
+        for feature in expected["features"]:
+            feature["properties"]["kind_shown"] = feature["properties"]["kind"]
+        for feature, stored in zip(expected["features"], [1, 2, None, 9], strict=True):
+            feature["properties"]["kind"] = stored
 
-        snapshot = snapshot_features(layer, None)
+        snapshot = snapshot_features(layer, None, {"kind": "kind_shown"})
         project.removeAllMapLayers()
         del layer
 
