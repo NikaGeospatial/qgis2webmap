@@ -762,6 +762,7 @@ def _drag_on_page(qgis_app, pane, start_mm, end_mm, steps: int = 14) -> None:
     a smooth path."""
     from qgis.PyQt.QtCore import QPoint, QPointF, Qt
     from qgis.PyQt.QtTest import QTest
+    from test_cartograph_panel_widgets import _move_held
 
     view = pane.preview.view
     viewport = view.viewport()
@@ -777,7 +778,8 @@ def _drag_on_page(qgis_app, pane, start_mm, end_mm, steps: int = 14) -> None:
             first.x() + (last.x() - first.x()) * step // steps,
             first.y() + (last.y() - first.y()) * step // steps,
         )
-        QTest.mouseMove(viewport, point)
+        # Sent with the button held: Qt 5's QTest.mouseMove has none.
+        _move_held(viewport, point)
         qgis_app.processEvents()
     QTest.mouseRelease(
         viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last
@@ -788,6 +790,20 @@ def _drag_on_page(qgis_app, pane, start_mm, end_mm, steps: int = 14) -> None:
 def _corner(item) -> tuple[float, float]:
     rect = item.sceneBoundingRect()
     return round(rect.x(), 3), round(rect.y(), 3)
+
+
+# Qt 5 keeps layout positions in single precision, so a part can land a
+# thousandth of a millimetre from its sibling; a real drift is far larger.
+POSITION_TOLERANCE_MM = 0.02
+
+
+def _moved_together(before: dict, moved: dict) -> tuple[float, float]:
+    """The one shift every part made, failing if the parts moved apart."""
+    shifts = [(moved[u][0] - before[u][0], moved[u][1] - before[u][1]) for u in before]
+    for dx, dy in shifts:
+        assert abs(dx - shifts[0][0]) <= POSITION_TOLERANCE_MM, shifts
+        assert abs(dy - shifts[0][1]) <= POSITION_TOLERANCE_MM, shifts
+    return shifts[0]
 
 
 class TestOneItemOnThePage:
@@ -847,12 +863,7 @@ class TestOneItemOnThePage:
             qgis_app, pane, (spot.x(), spot.y()), (spot.x() + 40.0, spot.y() + 25.0)
         )
         moved = {p.uuid(): _corner(p) for p in parts}
-        deltas = {
-            (round(moved[u][0] - before[u][0], 2), round(moved[u][1] - before[u][1], 2))
-            for u in before
-        }
-        assert len(deltas) == 1, f"the parts moved apart: {deltas}"
-        ((dx, dy),) = deltas
+        dx, dy = _moved_together(before, moved)
         assert dx > 10.0 and dy > 5.0
         # One drag, one undo step: undoing it puts every part back.
         assert stack.count() == steps + 1
@@ -873,11 +884,8 @@ class TestOneItemOnThePage:
             qgis_app, pane, (spot.x(), spot.y()), (spot.x() - 30.0, spot.y() + 20.0)
         )
         moved = {p.uuid(): _corner(p) for p in parts}
-        deltas = {
-            (round(moved[u][0] - before[u][0], 2), round(moved[u][1] - before[u][1], 2))
-            for u in before
-        }
-        assert len(deltas) == 1 and next(iter(deltas)) != (0.0, 0.0)
+        dx, dy = _moved_together(before, moved)
+        assert (round(dx, 2), round(dy, 2)) != (0.0, 0.0)
 
     def test_the_parts_stay_together_after_saving_and_reopening(
         self, qgis_app, project, tmp_path
@@ -908,7 +916,13 @@ class TestOneItemOnThePage:
         layout = project.layoutManager().layoutByName("Count page")
         (reopened,) = lc.live_counts(layout)
         parts = [reopened, *lc.parts_of(layout, reopened)]
-        assert {p.uuid(): _corner(p) for p in parts} == shape
+        reopened_shape = {p.uuid(): _corner(p) for p in parts}
+        assert reopened_shape.keys() == shape.keys()
+        assert all(
+            abs(reopened_shape[u][i] - shape[u][i]) <= POSITION_TOLERANCE_MM
+            for u in shape
+            for i in (0, 1)
+        )
         # Moving the reopened counter still moves all of it.
         before = {p.uuid(): _corner(p) for p in parts}
         group = reopened.parentGroup()
