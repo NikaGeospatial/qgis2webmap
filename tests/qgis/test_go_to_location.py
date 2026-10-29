@@ -501,7 +501,7 @@ class TestChangingTheCoordinateSystem:
 
 
 class TestCancel:
-    def _untouched(self, canyon, dismiss) -> None:
+    def _untouched(self, canyon, dismiss, tab: int) -> None:
         world = canyon.world
         canyon.project.setDirty(False)
         before = (
@@ -512,9 +512,17 @@ class TestCancel:
         )
 
         def script(dialog) -> None:
+            # A complete, valid destination in both tabs: nothing may apply it.
             fill_coordinates(dialog, "36.20", "-112.20")
-            dialog.tabs.setCurrentIndex(1)
+            choose_layer(dialog, world.viewpoints)
+            search(dialog, "mather")
+            assert dialog.go_button.isEnabled()
+            dialog.tabs.setCurrentIndex(tab)
+            QApplication.processEvents()
+            assert dialog.go_button.isEnabled()
             dismiss(dialog)
+            QApplication.processEvents()
+            assert not dialog.isVisible(), "the dialog closed"
 
         canyon.open(script)
         assert (
@@ -524,11 +532,13 @@ class TestCancel:
             world.main.scale(),
         ) == before
 
-    def test_cancel_leaves_the_document_alone(self, canyon) -> None:
-        self._untouched(canyon, lambda dialog: dialog.cancel_button.click())
+    @pytest.mark.parametrize("tab", [0, 1])
+    def test_cancel_leaves_the_document_alone(self, canyon, tab) -> None:
+        self._untouched(canyon, lambda dialog: dialog.cancel_button.click(), tab)
 
-    def test_escape_is_cancel(self, canyon) -> None:
-        self._untouched(canyon, lambda dialog: press(dialog, Qt.Key.Key_Escape))
+    @pytest.mark.parametrize("tab", [0, 1])
+    def test_escape_is_cancel(self, canyon, tab) -> None:
+        self._untouched(canyon, lambda dialog: press(dialog, Qt.Key.Key_Escape), tab)
 
     def test_typing_searching_and_switching_tabs_change_nothing(self, canyon) -> None:
         world = canyon.world
@@ -1241,16 +1251,21 @@ class TestResultsAndTheirLimits:
             dialog.search_button.click()
             (old, _), (new, _) = jobs
             seen["searching"] = dialog.status_label.text()
+            # The older search finishes first: its answer is for a question no
+            # longer asked.
+            old.outcome = outcome_for("Lipan Point")
+            old.done = True
+            QTest.qWait(150)
+            seen["after_old"] = (dialog.results.count(), dialog.status_label.text())
             new.outcome = outcome_for("Mather Point")
             new.done = True
             wait_for(lambda: dialog.results.count() == 1, what="the newer search")
-            old.outcome = outcome_for("Lipan Point")
-            old.done = True
             QTest.qWait(150)
             seen["rows"] = rows(dialog)
 
         canyon.open(script)
         assert seen["searching"] == "Searching…"
+        assert seen["after_old"] == (0, "Searching…")
         assert seen["rows"] == [("Mather Point", "QGIS ID: 4")]
 
     def test_a_single_click_selects_and_never_moves_the_map(self, canyon) -> None:
@@ -1781,34 +1796,45 @@ class TestWhatFollowsTheNewView:
     def test_a_pending_edit_view_gesture_cannot_overwrite_the_destination(
         self, canyon
     ) -> None:
+        from qgis.PyQt.QtCore import QPoint
+
         world = canyon.world
         preview = canyon.cartograph.page_preview
         view = preview.view
         viewport = view.viewport()
-        preview.edit_content(world.main)
-        QApplication.processEvents()
-        centre = view.mapFromScene(world.main.sceneBoundingRect().center())
-        QTest.mouseMove(viewport, centre)
-        QTest.mousePress(
-            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centre
-        )
-        from qgis.PyQt.QtCore import QPoint
+        seen = {}
 
-        for step in range(1, 9):
-            QTest.mouseMove(
-                viewport, QPoint(centre.x() - 6 * step, centre.y() + 4 * step)
+        def script(dialog) -> None:
+            # An Edit view drag that began and has not been released yet.
+            preview.edit_content(world.main)
+            QApplication.processEvents()
+            centre = view.mapFromScene(world.main.sceneBoundingRect().center())
+            QTest.mouseMove(viewport, centre)
+            QTest.mousePress(
+                viewport,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                centre,
+            )
+            for step in range(1, 9):
+                QTest.mouseMove(
+                    viewport, QPoint(centre.x() - 6 * step, centre.y() + 4 * step)
+                )
+                QApplication.processEvents()
+            seen["dragging"] = preview.content_editor._dragging
+            fill_coordinates(dialog, "36.20", "-112.20")
+            dialog.go_button.click()
+            QTest.mouseRelease(
+                viewport,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                QPoint(centre.x() - 48, centre.y() + 32),
             )
             QApplication.processEvents()
-        assert preview.content_editor._dragging, "the drag is under way"
-        _go_to_coordinates(canyon, "36.20", "-112.20")
-        QTest.mouseRelease(
-            viewport,
-            Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
-            QPoint(centre.x() - 48, centre.y() + 32),
-        )
-        QApplication.processEvents()
-        assert _centre_is(world.main, -112.20, 36.20), "the old drag was applied on top"
+
+        canyon.open(script)
+        assert seen["dragging"], "the drag was under way"
+        assert _centre_is(world.main, -112.20, 36.20), "the old drag moved the view"
 
 
 class TestLargeLayers:
