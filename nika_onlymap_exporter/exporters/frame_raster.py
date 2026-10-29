@@ -73,6 +73,8 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPen, QTransform
 from qgis.PyQt.QtXml import QDomDocument
 
+from ..core.export_resolution import check_frame_size, frame_pixel_size
+
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
 LonLat = tuple[float, float]
@@ -200,9 +202,10 @@ def _render_region(
         map_item.setItemOpacity(1.0)
         if rotation:
             map_item.setItemRotation(0, True)
-        pixel_size = QSize(
-            round(size.width() / 25.4 * dpi), round(size.height() / 25.4 * dpi)
-        )
+        pixel_size = QSize(*frame_pixel_size(size.width(), size.height(), dpi))
+        # The last line before the picture is allocated (QGIS allocates it
+        # inside `renderRegionToImage`): a size over the limits is refused.
+        check_frame_size(pixel_size.width(), pixel_size.height())
         # QGIS paints an item's content (map layers, text, symbol sizes) as
         # if scene units were millimetres, so a layout in inches or points
         # would draw it 25.4 or 2.8 times off scale. Such a layout is drawn
@@ -418,7 +421,8 @@ class AsyncFrameRender(QObject):
         context = layout.renderContext()
         self._flags = context.renderContextFlags()
         smooth = bool(context.flags() & QgsLayoutRenderContext.Flag.FlagAntialiasing)
-        pixel_size = QSize(round(width_mm / 25.4 * dpi), round(height_mm / 25.4 * dpi))
+        pixel_size = QSize(*frame_pixel_size(width_mm, height_mm, dpi))
+        check_frame_size(pixel_size.width(), pixel_size.height())
         image = QImage(pixel_size, QImage.Format.Format_ARGB32)
         image.fill(Qt.GlobalColor.transparent)
         # `QgsLayoutExporter.renderRegionToImage` takes the resolution from
@@ -470,6 +474,7 @@ class AsyncFrameRender(QObject):
                 _round_half_up(bounds.width() / 25.4 * destination_dpi),
                 _round_half_up(bounds.height() / 25.4 * destination_dpi),
             )
+            check_frame_size(layers_size.width(), layers_size.height())
             layers_image = QImage(layers_size, QImage.Format.Format_ARGB32)
             layers_image.fill(Qt.GlobalColor.transparent)
             layers_image.setDotsPerMeterX(_round_half_up(1000 * destination_dpi / 25.4))
