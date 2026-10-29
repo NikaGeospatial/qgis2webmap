@@ -19,7 +19,7 @@ import pytest
 
 pytest.importorskip("qgis.core")
 
-from go_to_location_fixtures import (  # noqa: E402
+from go_to_location_fixtures import (
     choose_layer,
     frame_centre,
     go_action,
@@ -27,7 +27,7 @@ from go_to_location_fixtures import (  # noqa: E402
     search,
     wgs_to_frame,
 )
-from test_cartograph_dialog import (  # noqa: E402
+from test_cartograph_dialog import (
     _choose_cartograph,
     _dialog,
     picked_template,  # noqa: F401 - autouse fixture the dialog tests rely on
@@ -91,7 +91,7 @@ def test_latitude_longitude_into_the_projected_canyon_frame(canyon_project) -> N
 
 
 def test_a_named_viewpoint_is_found_and_gone_to(canyon_project) -> None:
-    project, layout, cartograph, maps = canyon_project
+    project, _layout, cartograph, maps = canyon_project
     main = maps["main"]
     viewpoints = project.mapLayersByName("Viewpoints")[0]
     first = next(iter(viewpoints.getFeatures()))
