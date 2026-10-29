@@ -46,7 +46,61 @@ CLIPPED_RGB = (255, 0, 0)
 FREE_RGB = (0, 0, 255)
 
 
-def _build(project, unit_name: str, *, restrict: bool = True, clipping: bool = True):
+LABEL_POINTS = (("WIDE LABEL", 4.0, 4.5), ("B", 0.5, 0.5))
+
+
+def _label_layer():
+    """Invisible points with big black labels: the first sits inside the
+    triangle with its label running out across the hypotenuse, the second has
+    its label wholly inside."""
+    from qgis.core import (
+        QgsFeature,
+        QgsGeometry,
+        QgsMarkerSymbol,
+        QgsPalLayerSettings,
+        QgsPointXY,
+        QgsSingleSymbolRenderer,
+        QgsTextFormat,
+        QgsVectorLayer,
+        QgsVectorLayerSimpleLabeling,
+    )
+    from qgis.PyQt.QtGui import QColor, QFont
+
+    layer = QgsVectorLayer("Point?crs=EPSG:4326&field=name:string", "words", "memory")
+    features = []
+    for text, x, y in LABEL_POINTS:
+        feature = QgsFeature(layer.fields())
+        feature.setAttributes([text])
+        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.setRenderer(
+        QgsSingleSymbolRenderer(
+            QgsMarkerSymbol.createSimple({"color": "0,0,0,0", "outline_style": "no"})
+        )
+    )
+    label_format = QgsTextFormat()
+    label_format.setFont(QFont("DejaVu Sans"))
+    label_format.setSize(20)
+    label_format.setColor(QColor(0, 0, 0))
+    settings = QgsPalLayerSettings()
+    settings.fieldName = "name"
+    settings.setFormat(label_format)
+    settings.placement = QgsPalLayerSettings.Placement.AroundPoint
+    settings.displayAll = False
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+    layer.setLabelsEnabled(True)
+    return layer
+
+
+def _build(
+    project,
+    unit_name: str,
+    *,
+    restrict: bool = True,
+    clipping: bool = True,
+    labels: bool = False,
+):
     from qgis.core import (
         QgsLayoutItemMap,
         QgsLayoutPoint,
@@ -71,7 +125,12 @@ def _build(project, unit_name: str, *, restrict: bool = True, clipping: bool = T
     item.attemptResize(QgsLayoutSize(FRAME_MM[0] / mm, FRAME_MM[1] / mm, unit))
     item.attemptMove(QgsLayoutPoint(20 / mm, 20 / mm, unit))
     item.setCrs(WGS84)
-    item.setLayers([clipped, free])
+    layers = [clipped, free]
+    if labels:
+        words = _label_layer()
+        project.addMapLayer(words)
+        layers.append(words)
+    item.setLayers(layers)
     item.setKeepLayerSet(True)
     item.setExtent(QgsRectangle(*EXTENT))
     # A map-level blend mode keeps the frame on the synchronous path.
@@ -79,7 +138,7 @@ def _build(project, unit_name: str, *, restrict: bool = True, clipping: bool = T
     settings = item.atlasClippingSettings()
     settings.setEnabled(clipping)
     settings.setRestrictToLayers(restrict)
-    settings.setLayersToClip([clipped])
+    settings.setLayersToClip([clipped, words] if labels else [clipped])
     atlas = layout.atlas()
     atlas.setCoverageLayer(coverage)
     atlas.setEnabled(True)
@@ -219,3 +278,54 @@ class TestAtlasClippingOnTheSynchronousPath:
             item.extent().toString(6),
             item.atlasClippingSettings().enabled(),
         )
+
+
+def _dark_pixels(image) -> tuple[int, int]:
+    """Black label pixels (inside, outside) the triangle of page one."""
+    import numpy as np
+
+    ptr = image.constBits()
+    ptr.setsize(image.sizeInBytes())
+    data = np.frombuffer(ptr, dtype=np.uint8).reshape(image.height(), -1, 4)
+    dark = (data[:, : image.width(), :3].max(axis=2) < 70) & (
+        data[:, : image.width(), 3] > 200
+    )
+    ys, xs = np.nonzero(dark)
+    lon = EXTENT[0] + (xs + 0.5) / image.width() * (EXTENT[2] - EXTENT[0])
+    lat = EXTENT[3] - (ys + 0.5) / image.height() * (EXTENT[3] - EXTENT[1])
+    inside = (lon >= 0) & (lat >= 0) & (lon + lat <= 10)
+    return int(inside.sum()), int((~inside).sum())
+
+
+def _label_pictures(project, unit_name: str, force: bool):
+    pictures = []
+    for name in ("mm", unit_name):
+        layout, item = _build(project, name, labels=True)
+        item.atlasClippingSettings().setForceLabelsInsideFeature(force)
+        _page(layout, 0)
+        pictures.append(_render(layout, item))
+    return pictures
+
+
+@pytest.mark.parametrize("unit_name", ["mm", "inch", "cm", "pt"])
+class TestForceLabelsInside:
+    def test_labels_are_kept_inside_when_asked(
+        self, qgis_app, project, unit_name
+    ) -> None:
+        mm_picture, picture = _label_pictures(project, unit_name, True)
+        inside, outside = _dark_pixels(mm_picture)
+        assert inside > 50, "the labels were not drawn at all"
+        assert _dark_pixels(picture) == pytest.approx((inside, outside), abs=30)
+        assert outside <= 5, "the millimetre render shows label outside the triangle"
+        _pictures_match(mm_picture, picture)
+
+    def test_labels_are_not_forced_in_when_not_asked(
+        self, qgis_app, project, unit_name
+    ) -> None:
+        """QGIS clips geometries only: a label of a point inside the triangle
+        is drawn whole, across the edge."""
+        mm_picture, picture = _label_pictures(project, unit_name, False)
+        inside, outside = _dark_pixels(mm_picture)
+        assert inside > 50 and outside > 200
+        assert _dark_pixels(picture) == pytest.approx((inside, outside), abs=30)
+        _pictures_match(mm_picture, picture)
