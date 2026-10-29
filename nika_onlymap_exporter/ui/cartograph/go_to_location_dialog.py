@@ -346,7 +346,7 @@ class _ZoomControl(QFrame):
             button.setToolTip(tip)
             button.setCheckable(True)
             button.setAutoRaise(False)
-            button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
             button.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
