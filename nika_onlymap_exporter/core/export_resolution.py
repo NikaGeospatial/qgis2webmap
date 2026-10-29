@@ -150,5 +150,9 @@ def frame_resolution(
         dpi += 1
     # A frame too large even at 1 dpi has no supported resolution: it is left
     # as asked, unflagged, and the allocation guard refuses it.
-    by_working_picture = fits_frame_limits(*frame_pixel_size(width_mm, height_mm, wanted))
-    return FrameResolution(dpi, wanted, dpi < wanted, dpi < wanted and by_working_picture)
+    by_working_picture = fits_frame_limits(
+        *frame_pixel_size(width_mm, height_mm, wanted)
+    )
+    return FrameResolution(
+        dpi, wanted, dpi < wanted, dpi < wanted and by_working_picture
+    )
