@@ -190,6 +190,13 @@ def stored_text_box_lines() -> float:
     return min(max(lines, TEXT_BOX_LINES_MIN), TEXT_BOX_LINES_MAX)
 
 
+def _global_y(event: QMouseEvent) -> int:
+    # Qt 6 has `globalPosition()`; Qt 5 (QGIS 3) only `globalPos()`.
+    if hasattr(event, "globalPosition"):
+        return int(event.globalPosition().y())
+    return int(event.globalPos().y())
+
+
 class _HeightGrip(QFrame):
     """A bar under a box that drags its height, and only its height.
 
@@ -215,13 +222,13 @@ class _HeightGrip(QFrame):
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
         if event is not None and event.button() == Qt.MouseButton.LeftButton:
-            self._press_y = int(event.globalPosition().y())
+            self._press_y = _global_y(event)
             self.grabbed.emit()
             event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
         if event is not None and self._press_y is not None:
-            self.dragged.emit(int(event.globalPosition().y()) - self._press_y)
+            self.dragged.emit(_global_y(event) - self._press_y)
             event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
