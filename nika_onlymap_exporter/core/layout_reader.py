@@ -622,8 +622,14 @@ def _box(item: QgsLayoutItem, converter: QgsLayoutMeasurementConverter) -> Box:
         # at (10, 20), 100 x 50, rotated 20 degrees reads (21.57, 4.41)),
         # but the runtime rotates the x/y/w/h box about its centre. So the
         # box is the unrotated one around the item's scene centre -- scene
-        # units are layout millimetres.
-        centre = item.mapToScene(item.rect().center())
+        # units are the layout's *native* units (inches, points, ...), so the
+        # centre is converted to millimetres like every other length here.
+        scene_centre = item.mapToScene(item.rect().center())
+        centre = (
+            item.layout()
+            .convertFromLayoutUnits(scene_centre, QgsUnitTypes.LayoutMillimeters)
+            .toQPointF()
+        )
         return Box(
             x=centre.x() - size.width() / 2.0,
             y=centre.y() - size.height() / 2.0,
