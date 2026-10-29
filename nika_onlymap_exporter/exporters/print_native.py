@@ -64,11 +64,22 @@ def print_series(
     project = layout.project()
     if project is None:
         raise PrintSeriesError(tr("The layout does not belong to a project."))
-    copy = layout.clone()
-    if copy is None:
-        raise PrintSeriesError(tr("QGIS could not copy the layout for printing."))
-    follow_maps_in_copy(layout, copy)
-    _require_atlas(copy)
+    # A copy and a print are not edits of the project, but making the copy
+    # marks it modified. Its state is taken before the copy and put back once
+    # the copy is ready, failed or not; nothing here runs the event loop, so
+    # no edit of the user's can land in between. The print itself changes
+    # only the copy and leaves the project's state alone, keeping any edit
+    # made while it runs.
+    was_dirty = project.isDirty()
+    try:
+        copy = layout.clone()
+        if copy is None:
+            raise PrintSeriesError(tr("QGIS could not copy the layout for printing."))
+        follow_maps_in_copy(layout, copy)
+        _require_atlas(copy)
+    finally:
+        if not was_dirty:
+            project.setDirty(False)
     settings = QgsLayoutExporter.PrintExportSettings()
     settings.dpi = dpi
     # Text stays text (searchable, sharp at any size) unless the print
@@ -79,58 +90,51 @@ def print_series(
         else Qgis.TextRenderFormat.AlwaysOutlines
     )
     feedback = feedback or QgsFeedback()
-    # A copy and a print are not edits of the project.
-    was_dirty = project.isDirty()
-    try:
-        atlas = copy.atlas()
-        callback_errors: list[str] = []
+    atlas = copy.atlas()
+    callback_errors: list[str] = []
 
-        def on_page(feature: QgsFeature) -> None:
-            if progress is None or not feature.isValid():
-                return
-            try:  # an exception inside a Qt slot would abort QGIS
-                progress(atlas.currentFeatureNumber() + 1, atlas.count())
-            except Exception as exc:
-                callback_errors.append(str(exc))
-                feedback.cancel()
+    def on_page(feature: QgsFeature) -> None:
+        if progress is None or not feature.isValid():
+            return
+        try:  # an exception inside a Qt slot would abort QGIS
+            progress(atlas.currentFeatureNumber() + 1, atlas.count())
+        except Exception as exc:
+            callback_errors.append(str(exc))
+            feedback.cancel()
 
-        # Connected after the counts' own hook, so a page's counts are ready
-        # by the time anything reports it.
-        with AtlasPageCounts(copy, feedback) as page_counts:
-            atlas.featureChanged.connect(on_page)
-            try:
-                result, detail = QgsLayoutExporter.print(
-                    atlas, printer, settings, feedback
-                )
-            finally:
-                with contextlib.suppress(TypeError, RuntimeError):
-                    atlas.featureChanged.disconnect(on_page)
-        pages = copy.atlas().count()
-        sheets = pages * max(1, int(copy.pageCollection().pageCount()))
-        if callback_errors:
-            printer.abort()
-            raise PrintSeriesError(
-                tr("QGIS could not print the series: {error}").format(
-                    error=callback_errors[0]
-                )
+    # Connected after the counts' own hook, so a page's counts are ready
+    # by the time anything reports it.
+    with AtlasPageCounts(copy, feedback) as page_counts:
+        atlas.featureChanged.connect(on_page)
+        try:
+            result, detail = QgsLayoutExporter.print(atlas, printer, settings, feedback)
+        finally:
+            with contextlib.suppress(TypeError, RuntimeError):
+                atlas.featureChanged.disconnect(on_page)
+    pages = copy.atlas().count()
+    sheets = pages * max(1, int(copy.pageCollection().pageCount()))
+    if callback_errors:
+        printer.abort()
+        raise PrintSeriesError(
+            tr("QGIS could not print the series: {error}").format(
+                error=callback_errors[0]
             )
-        if page_counts.error:
-            printer.abort()  # nothing of a series with wrong numbers is kept
-            raise PrintSeriesError(page_counts.problem(pages))
-        if result == QgsLayoutExporter.ExportResult.Canceled:
-            printer.abort()
-            return PrintSeriesResult(cancelled=True)
-        if result != QgsLayoutExporter.ExportResult.Success:
-            raise PrintSeriesError(
-                tr("QGIS could not print the series: {error}").format(
-                    error=detail or _result_name(result)
-                )
-            )
-        problem = page_counts.problem(pages)
-        if problem:
-            raise PrintSeriesError(problem)
-        return PrintSeriesResult(
-            pages=pages, sheets=sheets, warnings=page_counts.warnings()
         )
-    finally:
-        project.setDirty(was_dirty)
+    if page_counts.error:
+        printer.abort()  # nothing of a series with wrong numbers is kept
+        raise PrintSeriesError(page_counts.problem(pages))
+    if result == QgsLayoutExporter.ExportResult.Canceled:
+        printer.abort()
+        return PrintSeriesResult(cancelled=True)
+    if result != QgsLayoutExporter.ExportResult.Success:
+        raise PrintSeriesError(
+            tr("QGIS could not print the series: {error}").format(
+                error=detail or _result_name(result)
+            )
+        )
+    problem = page_counts.problem(pages)
+    if problem:
+        raise PrintSeriesError(problem)
+    return PrintSeriesResult(
+        pages=pages, sheets=sheets, warnings=page_counts.warnings()
+    )

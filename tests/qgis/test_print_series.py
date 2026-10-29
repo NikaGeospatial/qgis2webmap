@@ -161,3 +161,135 @@ class TestPrintingIsReadyWithoutInteractiveMaps:
         counts.layout.atlas().setEnabled(False)
         status = series_status(counts.layout, lambda _id: "static")
         assert not status.native_print.ok and not status.print.ok
+
+
+def _collect_the_copy() -> None:
+    """Whatever the print copied is gone, as after the call returns for real."""
+    import gc
+
+    from qgis.PyQt.QtCore import QCoreApplication, QEvent
+
+    gc.collect()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QCoreApplication.processEvents()
+
+
+class TestTheProjectsModifiedState:
+    """Copying the layout marks the project modified; printing must not."""
+
+    def test_a_clean_project_stays_clean_after_a_print(
+        self, counts, project, tmp_path
+    ) -> None:
+        project.setDirty(False)
+        result = print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert result.pages == 2
+        assert not project.isDirty()
+
+    def test_a_clean_project_with_a_legend_and_scale_bar_stays_clean(
+        self, counts, project, tmp_path
+    ) -> None:
+        from qgis.core import QgsLayoutItemLegend, QgsLayoutItemScaleBar
+
+        legend = QgsLayoutItemLegend(counts.layout)
+        legend.setLinkedMap(counts.detail)
+        counts.layout.addLayoutItem(legend)
+        bar = QgsLayoutItemScaleBar(counts.layout)
+        bar.setLinkedMap(counts.detail)
+        bar.applyDefaultSize()
+        counts.layout.addLayoutItem(bar)
+        project.setDirty(False)
+        print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert not project.isDirty()
+
+    def test_a_modified_project_stays_modified(self, counts, project, tmp_path) -> None:
+        project.setDirty(True)
+        print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert project.isDirty()
+
+    def test_a_cancelled_print_leaves_a_clean_project_clean(
+        self, counts, project, tmp_path
+    ) -> None:
+        feedback = QgsFeedback()
+        project.setDirty(False)
+        result = print_series(
+            counts.layout,
+            _printer(tmp_path / "printed.pdf"),
+            feedback=feedback,
+            progress=lambda page, pages: feedback.cancel(),
+        )
+        _collect_the_copy()
+        assert result.cancelled
+        assert not project.isDirty()
+
+    def test_a_failure_while_preparing_leaves_a_clean_project_clean(
+        self, counts, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.exporters import print_native
+
+        def fail(layout, copy):
+            raise RuntimeError("injected")
+
+        monkeypatch.setattr(print_native, "follow_maps_in_copy", fail)
+        project.setDirty(False)
+        with pytest.raises(RuntimeError, match="injected"):
+            print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert not project.isDirty()
+
+    def test_a_layout_without_a_series_leaves_a_clean_project_clean(
+        self, counts, project, tmp_path
+    ) -> None:
+        counts.layout.atlas().setEnabled(False)
+        project.setDirty(False)
+        with pytest.raises(PrintSeriesError):
+            print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert not project.isDirty()
+
+    def test_a_failure_while_printing_leaves_a_clean_project_clean(
+        self, counts, project, tmp_path, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.exporters import print_native
+
+        def fail(atlas, printer, settings, feedback):
+            return print_native.QgsLayoutExporter.ExportResult.PrintError, "jammed"
+
+        monkeypatch.setattr(print_native.QgsLayoutExporter, "print", fail)
+        project.setDirty(False)
+        with pytest.raises(PrintSeriesError, match="jammed"):
+            print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert not project.isDirty()
+
+    def test_an_edit_made_while_printing_is_kept(
+        self, counts, project, tmp_path
+    ) -> None:
+        from qgis.core import QgsProject
+
+        project.setDirty(False)
+
+        def edit(page: int, pages: int) -> None:
+            # The user renames the project while the print runs its pages.
+            if page == 2:
+                QgsProject.instance().setTitle("Renamed while printing")
+
+        print_series(counts.layout, _printer(tmp_path / "printed.pdf"), progress=edit)
+        _collect_the_copy()
+        assert project.title() == "Renamed while printing"
+        assert project.isDirty()
+
+    def test_the_layout_and_atlas_preview_are_kept_whatever_the_state(
+        self, counts, project, tmp_path
+    ) -> None:
+        atlas = counts.layout.atlas()
+        atlas.beginRender()
+        atlas.seekTo(1)
+        before = _state(counts)
+        project.setDirty(False)
+        print_series(counts.layout, _printer(tmp_path / "printed.pdf"))
+        _collect_the_copy()
+        assert _state(counts) == before
+        assert not project.isDirty()
