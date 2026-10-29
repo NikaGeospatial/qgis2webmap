@@ -37,6 +37,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -54,7 +56,9 @@ from qgis.core import (
     QgsLayoutItemGroup,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
+    QgsMapClippingRegion,
     QgsMapLayerStyle,
+    QgsMapSettings,
     QgsProject,
     QgsReadWriteContext,
     QgsRenderContext,
@@ -357,6 +361,65 @@ def parse_number(text: str) -> float | None:
         return None
 
 
+#: Field types that hold whole numbers. They are compared as integers: a
+#: float has 53 bits of mantissa, so neighbouring IDs above 2**53 would merge.
+_INTEGER_FIELD_TYPES = (
+    QMetaType.Type.Int,
+    QMetaType.Type.LongLong,
+    QMetaType.Type.UInt,
+    QMetaType.Type.ULongLong,
+)
+#: Typed whole numbers: an optional sign, digits, and a fraction of zeros only
+#: ("5.0" is the whole number 5; "1.5" and "1e3" are not accepted).
+_WHOLE_NUMBER = re.compile(r"[+-]?\d+(?:\.0*)?", re.ASCII)
+
+
+def is_integer_field(layer: QgsVectorLayer, name: str) -> bool:
+    index = layer.fields().lookupField(name)
+    return index >= 0 and layer.fields().at(index).type() in _INTEGER_FIELD_TYPES
+
+
+def parse_integer(text: str) -> int | None:
+    """The whole number `text` spells, exactly, or `None` when it is not one.
+    Never goes through a float, so no value is rounded into another."""
+    cleaned = text.strip()
+    if _WHOLE_NUMBER.fullmatch(cleaned):
+        return int(cleaned.split(".")[0])
+    try:  # the user's own digit grouping, e.g. "1,000"
+        from qgis.PyQt.QtCore import QLocale
+
+        number, ok = QLocale().toLongLong(cleaned)
+        return number if ok else None
+    except Exception:
+        return None
+
+
+def parse_field_number(layer: QgsVectorLayer, field: str, text: str) -> int | float:
+    """The number `text` names for a numeric field: an exact `int` for a
+    whole-number field, a `float` for a decimal one. Raises `ValueError` with
+    words for the user when it does not fit the field."""
+    if is_integer_field(layer, field):
+        whole = parse_integer(text)
+        if whole is not None:
+            return whole
+        decimal = parse_number(text)
+        if decimal is not None and math.isfinite(decimal):
+            raise ValueError(
+                tr(
+                    "“{value}” is not a whole number; “{field}” holds whole numbers."
+                ).format(value=text, field=field)
+            )
+    else:
+        number = parse_number(text)
+        if number is not None:
+            return number
+    raise ValueError(
+        tr("“{value}” is not a number, and “{field}” is a numeric field.").format(
+            value=text, field=field
+        )
+    )
+
+
 def _parse_bool(text: str) -> bool | None:
     word = text.strip().lower()
     if word in ("true", "yes", "1", "t", "y"):
@@ -386,14 +449,10 @@ def _matcher(layer: QgsVectorLayer, spec: CountSpec):  # type: ignore[no-untyped
         return _no(CountState.UNCONFIGURED, tr("Choose the value to match."))
     text = spec.value
     if kind == "number":
-        number = parse_number(text)
-        if number is None:
-            return _no(
-                CountState.INVALID,
-                tr(
-                    "“{value}” is not a number, and “{field}” is a numeric field."
-                ).format(value=text, field=field),
-            )
+        try:
+            number = parse_field_number(layer, field, text)
+        except ValueError as exc:
+            return _no(CountState.INVALID, str(exc))
         return lambda feature: (
             not _is_null(feature[field]) and _same_number(feature[field], number)
         )
@@ -416,7 +475,10 @@ def _matcher(layer: QgsVectorLayer, spec: CountSpec):  # type: ignore[no-untyped
     return lambda feature: not _is_null(feature[field]) and str(feature[field]) == text
 
 
-def _same_number(attribute: object, number: float) -> bool:
+def _same_number(attribute: object, number: int | float) -> bool:
+    if isinstance(number, int):
+        # A whole number is compared as one: exact for any size.
+        return isinstance(attribute, int) and attribute == number
     try:
         return float(attribute) == number  # type: ignore[arg-type]
     except (TypeError, ValueError):
@@ -615,11 +677,9 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
 
     try:
         area = _displayed_area(map_item, layer)
-        extent = map_item.extent()
-        settings = map_item.mapSettings(
-            extent, QSizeF(800.0, 800.0 * extent.height() / extent.width()), 96.0, True
-        )
-        context = QgsRenderContext.fromMapSettings(settings)
+        if area.isEmpty():  # the clipping leaves no ground to count on
+            return counted(0)
+        context = QgsRenderContext.fromMapSettings(_map_settings(map_item))
         expression = map_item.createExpressionContext()
         expression.appendScopes(
             QgsExpressionContextUtils.globalProjectLayerScopes(layer)
@@ -635,26 +695,63 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
     return Prepared(layer, request, area, renderer, context, matches)
 
 
+def _map_settings(map_item: QgsLayoutItemMap) -> QgsMapSettings:
+    """The settings the frame renders with now (its clipping regions included)."""
+    extent = map_item.extent()
+    return map_item.mapSettings(
+        extent, QSizeF(800.0, 800.0 * extent.height() / extent.width()), 96.0, True
+    )
+
+
+def _to_layer_crs(
+    shown: QgsGeometry, map_item: QgsLayoutItemMap, layer: QgsVectorLayer
+) -> QgsGeometry:
+    """`shown`, a geometry in the frame's CRS, carried to the layer's CRS."""
+    if map_item.crs() == layer.crs():
+        return shown
+    layout = map_item.layout()
+    project = layout.project() if layout is not None else None
+    context = (
+        project.transformContext()
+        if project is not None
+        else QgsCoordinateTransformContext()
+    )
+    transform = QgsCoordinateTransform(map_item.crs(), layer.crs(), context)
+    # Edges bend when carried to another CRS: follow them in small steps.
+    shown = shown.densifyByCount(24)
+    if shown.transform(transform) != Qgis.GeometryOperationResult.Success:
+        raise ValueError(tr("the map's area cannot be carried to the layer's CRS"))
+    return shown
+
+
 def _displayed_area(map_item: QgsLayoutItemMap, layer: QgsVectorLayer) -> QgsGeometry:
-    """The ground the frame shows, as a polygon in the layer's CRS: its final
-    extent turned by its rotation, not the rectangle enclosing it."""
+    """The ground the frame shows of `layer`, as a polygon in the layer's CRS:
+    its final extent turned by its rotation (not the rectangle enclosing it),
+    cut to the clipping the frame applies to this layer. The clipping is what
+    QGIS itself renders with: the atlas feature's outline and a clipping
+    shape item, each only for the layers it is restricted to
+    (`QgsMapSettings.clippingRegions`). Nothing is changed in the layer or in
+    the clipping geometry."""
     shown = QgsGeometry.fromQPolygonF(map_item.visibleExtentPolygon())
     if shown.isNull() or shown.isEmpty():
         raise ValueError(tr("the map shows no area"))
-    layout = map_item.layout()
-    project = layout.project() if layout is not None else None
-    if map_item.crs() != layer.crs():
-        context = (
-            project.transformContext()
-            if project is not None
-            else QgsCoordinateTransformContext()
-        )
-        transform = QgsCoordinateTransform(map_item.crs(), layer.crs(), context)
-        # Edges bend when carried to another CRS: follow them in small steps.
-        shown = shown.densifyByCount(24)
-        if shown.transform(transform) != Qgis.GeometryOperationResult.Success:
-            raise ValueError(tr("the map's area cannot be carried to the layer's CRS"))
-    return shown
+    area = _to_layer_crs(shown, map_item, layer)
+    for region in _map_settings(map_item).clippingRegions():
+        if region.featureClip() == QgsMapClippingRegion.FeatureClippingType.NoClipping:
+            continue
+        if not region.appliesToLayer(layer):
+            continue
+        clip = region.geometry()
+        if clip.isNull() or clip.isEmpty():
+            continue
+        if not clip.isGeosValid():
+            clip = clip.makeValid()
+        area = area.intersection(_to_layer_crs(clip, map_item, layer))
+        if area.isNull():
+            raise ValueError(tr("the map's clipping cannot be applied"))
+        if area.isEmpty():
+            break
+    return area
 
 
 def run(prepared: Prepared) -> CountOutcome:
