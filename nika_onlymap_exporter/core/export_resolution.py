@@ -41,11 +41,15 @@ class FrameTooLargeError(ValueError):
 class FrameResolution:
     """`dpi` a frame is drawn at; `limited` when the wanted resolution was
     more than the size limits allow and `dpi` is what they allow (so `dpi`
-    is lower than `wanted` exactly when `limited`)."""
+    is lower than `wanted` exactly when `limited`). `by_working_picture` when
+    the frame's own picture would have fitted at `wanted` and it is the
+    larger picture it is drawn through (see `working_pixel_size`) that did
+    not."""
 
     dpi: int
     wanted: int
     limited: bool
+    by_working_picture: bool = False
 
 
 def frame_pixel_size(width_mm: float, height_mm: float, dpi: float) -> tuple[int, int]:
@@ -56,6 +60,29 @@ def frame_pixel_size(width_mm: float, height_mm: float, dpi: float) -> tuple[int
     return (
         max(1, math.floor(width_mm / _MM_PER_INCH * dpi + 0.5)),
         max(1, math.floor(height_mm / _MM_PER_INCH * dpi + 0.5)),
+    )
+
+
+def working_pixel_size(
+    width_mm: float,
+    height_mm: float,
+    bounds_width_mm: float,
+    bounds_height_mm: float,
+    dpi: float,
+) -> tuple[int, int]:
+    """The whole-pixel size of the picture a frame with a blend mode or
+    effect is first drawn onto: its layers over the item's whole bounding box
+    (`bounds_*_mm`, the frame line included, so a little larger than the
+    `width_mm` x `height_mm` frame itself), at the scale the frame's own
+    rounded pixel size works out to. `AsyncFrameRender` allocates exactly this
+    size, so the limits are checked on the same numbers."""
+    frame_width_px, frame_height_px = frame_pixel_size(width_mm, height_mm, dpi)
+    destination_dpi = (
+        min(frame_width_px / width_mm, frame_height_px / height_mm) * _MM_PER_INCH
+    )
+    return (
+        math.floor(bounds_width_mm / _MM_PER_INCH * destination_dpi + 0.5),
+        math.floor(bounds_height_mm / _MM_PER_INCH * destination_dpi + 0.5),
     )
 
 
@@ -79,33 +106,49 @@ def check_frame_size(width_px: int, height_px: int) -> None:
 
 
 def frame_resolution(
-    frame_dpi: int, export_dpi: int | None, width_mm: float, height_mm: float
+    frame_dpi: int,
+    export_dpi: int | None,
+    width_mm: float,
+    height_mm: float,
+    working_bounds_mm: tuple[float, float] | None = None,
 ) -> FrameResolution:
     """The resolution for a static frame `width_mm` x `height_mm` whose own
     choice is `frame_dpi`, on a page saved at `export_dpi` (`None` when there
     is none to follow): the higher of the two, or when that would make a
     picture over the limits, the highest whole dpi whose picture, rounded to
-    whole pixels, is within them."""
+    whole pixels, is within them. A frame drawn through a larger working
+    picture (`working_bounds_mm`, the item's bounding box) keeps that one
+    within the limits too."""
+
+    def fits(dpi: int) -> bool:
+        if not fits_frame_limits(*frame_pixel_size(width_mm, height_mm, dpi)):
+            return False
+        return working_bounds_mm is None or fits_frame_limits(
+            *working_pixel_size(width_mm, height_mm, *working_bounds_mm, dpi)
+        )
+
     wanted = max(frame_dpi, export_dpi or 0)
     if width_mm <= 0 or height_mm <= 0:
         return FrameResolution(wanted, wanted, False)
-    if fits_frame_limits(*frame_pixel_size(width_mm, height_mm, wanted)):
+    if fits(wanted):
         return FrameResolution(wanted, wanted, False)
-    allowed_by_side = MAX_FRAME_SIDE_PX * _MM_PER_INCH / max(width_mm, height_mm)
-    allowed_by_area = _MM_PER_INCH * (MAX_FRAME_PIXELS / (width_mm * height_mm)) ** 0.5
+    long_mm, short_mm = (
+        (max(width_mm, working_bounds_mm[0]), max(height_mm, working_bounds_mm[1]))
+        if working_bounds_mm is not None
+        else (width_mm, height_mm)
+    )
+    allowed_by_side = MAX_FRAME_SIDE_PX * _MM_PER_INCH / max(long_mm, short_mm)
+    allowed_by_area = _MM_PER_INCH * (MAX_FRAME_PIXELS / (long_mm * short_mm)) ** 0.5
     # The bound ignores rounding, which can add up to half a pixel a side, so
     # step down until the rounded size really fits.
     dpi = min(wanted - 1, math.floor(min(allowed_by_side, allowed_by_area)))
-    while dpi > 1 and not fits_frame_limits(
-        *frame_pixel_size(width_mm, height_mm, dpi)
-    ):
+    while dpi > 1 and not fits(dpi):
         dpi -= 1
     dpi = max(dpi, 1)
     # Rounding can also let one more dpi fit than the bound allows.
-    while dpi + 1 < wanted and fits_frame_limits(
-        *frame_pixel_size(width_mm, height_mm, dpi + 1)
-    ):
+    while dpi + 1 < wanted and fits(dpi + 1):
         dpi += 1
     # A frame too large even at 1 dpi has no supported resolution: it is left
     # as asked, unflagged, and the allocation guard refuses it.
-    return FrameResolution(dpi, wanted, dpi < wanted)
+    by_working_picture = fits_frame_limits(*frame_pixel_size(width_mm, height_mm, wanted))
+    return FrameResolution(dpi, wanted, dpi < wanted, dpi < wanted and by_working_picture)
