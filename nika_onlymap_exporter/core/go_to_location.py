@@ -540,7 +540,8 @@ class SearchPlan:
     def requests(self) -> list[tuple[int | None, QgsFeatureRequest]]:
         """Each request with the tier it finds (None: not tiered)."""
         if self.source.kind == FEATURE_ID:
-            assert self.whole_number is not None
+            if self.whole_number is None:
+                return []
             # An expression, not setFilterFid: a fetch by ID would ignore the
             # layer's own subset filter, which must hold here too.
             return [

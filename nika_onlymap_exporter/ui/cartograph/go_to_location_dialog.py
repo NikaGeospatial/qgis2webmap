@@ -107,7 +107,9 @@ def reset_session() -> None:
 
 def _remembered_layers() -> dict[str, str]:
     layers = _session["layers"]
-    assert isinstance(layers, dict)
+    if not isinstance(layers, dict):
+        layers = {}
+        _session["layers"] = layers
     return layers
 
 
@@ -734,7 +736,8 @@ class GoToLocationDialog(QDialog):
                 if index == 0
                 else tr("Enter a valid northing.")
             )
-        assert parsed.value is not None
+        if parsed.value is None:
+            return ""
         if core.field_range_problem(index, parsed.value, self._crs):
             return (
                 tr("Latitude must be between -90 and 90.")
@@ -1074,7 +1077,8 @@ class GoToLocationDialog(QDialog):
 
     def _hit(self, item: QListWidgetItem | None) -> Hit:
         data = item.data(_ROW_ROLE) if item is not None else None
-        assert isinstance(data, Hit)
+        if not isinstance(data, Hit):
+            raise LookupError("result row without its data")
         return data
 
     def _selected_hit(self) -> Hit | None:
@@ -1194,7 +1198,8 @@ class GoToLocationDialog(QDialog):
         try:
             if self.tabs.currentIndex() == COORDINATES_TAB:
                 point = self._typed_point()
-                assert point is not None
+                if point is None:
+                    return
                 extent = core.coordinate_destination(self.target, point, self._crs)
             else:
                 extent = self._feature_extent()

@@ -2212,7 +2212,7 @@ class TestTheDialogsLook:
         assert seen["size"][0] <= 360 and seen["size"][1] <= 660
         assert seen["scroll"] is False and seen["inside"] is True
         assert "extraordinarily long feature name" in seen["tooltip"]
-        assert seen["context_tooltip"] == long_name
+        assert seen["context_tooltip"] == long_name.strip()
 
 
 class TestRegressions:
