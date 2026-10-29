@@ -310,6 +310,15 @@ def _forget_build_commands(layout: QgsPrintLayout) -> None:
     layout.undoStack().stack().clear()
 
 
+@dataclasses.dataclass
+class _DocumentRevisions:
+    """One layout's cartograph file against its edits: `made` counts the saves
+    asked for, `saved` how many of them the file on disk carries."""
+
+    made: int = 0
+    saved: int = 0
+
+
 class _StaticRenders:
     """The build phase in which QGIS draws the static frames' pictures off the
     GUI thread. It stands in `CartographController._job` so that everything
@@ -375,8 +384,14 @@ class CartographController:
         # Saves asked for, and how many of them the file on disk carries: the
         # file is current only when the two meet. A failed save (worker or
         # disk) leaves it behind, so an action never opens an older file.
-        self._edits_made = 0
-        self._edits_saved = 0
+        # Counted per layout (see `_revisions`), so switching away from a layout
+        # with a save pending neither forgets it nor lets another layout's
+        # save stand in for it.
+        self._revisions: dict[str, _DocumentRevisions] = {}
+        # Why a layout other than the one on screen could not be saved.
+        self._document_errors: dict[str, str] = {}
+        # The layout the running build is for.
+        self._job_document: str | None = None
         # The user asked for a check and no build has answered yet; and the
         # report state the Checks tab and strip were last drawn for.
         self._check_requested = False
@@ -420,6 +435,11 @@ class CartographController:
         self._autosave_timer.setSingleShot(True)
         self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
         self._autosave_timer.timeout.connect(self._run_autosave)
+        # Saves the layouts that were switched away from with edits pending.
+        self._other_saves_timer = QTimer(dialog)
+        self._other_saves_timer.setSingleShot(True)
+        self._other_saves_timer.setInterval(0)
+        self._other_saves_timer.timeout.connect(self._run_other_saves)
         self._close_save_timer = QTimer(dialog)
         self._close_save_timer.setInterval(CLOSE_SAVE_POLL_MS)
         self._close_save_timer.timeout.connect(self._advance_close_save)
@@ -477,12 +497,88 @@ class CartographController:
         """Whether a build is reading the project right now."""
         return self._job is not None
 
+    @property
+    def _document(self) -> _DocumentRevisions:
+        """The revisions of the layout on screen."""
+        return self._document_named(self.state.cartograph_layout)
+
+    def _document_named(self, name: str) -> _DocumentRevisions:
+        return self._revisions.setdefault(name, _DocumentRevisions())
+
+    @property
+    def _edits_made(self) -> int:
+        return self._document.made
+
+    @_edits_made.setter
+    def _edits_made(self, value: int) -> None:
+        self._document.made = value
+
+    @property
+    def _edits_saved(self) -> int:
+        return self._document.saved
+
+    @_edits_saved.setter
+    def _edits_saved(self, value: int) -> None:
+        self._document.saved = value
+
+    def _destination_of(self, name: str) -> Path | None:
+        """Where the layout called `name` is saved: the file box for the one
+        on screen, the remembered file for any other."""
+        if name == self.state.cartograph_layout:
+            return self._current_path()
+        text = self.state.cartograph_file_for(name).strip()
+        return Path(text) if text else None
+
+    def _dirty_other_documents(self) -> list[str]:
+        """The layouts not on screen whose file is behind their edits, and
+        that still exist and have somewhere to be saved. (A removed layout has
+        nothing to save: `_forget_document` drops its record.)"""
+        manager = self.project.layoutManager()
+        dirty: list[str] = []
+        for name, revisions in self._revisions.items():
+            if (
+                name == self.state.cartograph_layout
+                or revisions.saved >= revisions.made
+            ):
+                continue
+            layout = manager.layoutByName(name)
+            if layout is None or sip.isdeleted(layout):
+                continue
+            if self._destination_of(name) is not None:
+                dirty.append(name)
+        return dirty
+
+    def _forget_document(self, name: str) -> None:
+        """A layout is gone (or the project cleared): what was pending for it
+        is dropped, and a build under way for it delivers nothing."""
+        self._revisions.pop(name, None)
+        self._document_errors.pop(name, None)
+        if self._job_document == name:
+            self._abandon_build()
+
+    def _run_other_saves(self) -> None:
+        """Save the next layout that was switched away from with edits pending
+        - one build at a time, never while one is running. A layout whose save
+        failed is left for the close, which reports it, rather than retried in
+        a loop."""
+        if self._shut_down or self._job is not None or self.dialog._job is not None:
+            return
+        for name in self._dirty_other_documents():
+            if name in self._document_errors:
+                continue
+            try:
+                self._start_build(name)
+            except Exception as exc:
+                self._document_errors[name] = str(exc)
+            return
+
     def shutdown(self) -> None:
         """Release everything that outlives a single widget - called once,
         from `MainDialog._shutdown`, alongside the web map's own teardown."""
         self._close_waiter = None
         self._close_save_timer.stop()
         self._autosave_timer.stop()
+        self._other_saves_timer.stop()
         self._refresh_timer.stop()
         self._thumbnail_timer.stop()
         self._status_timer.stop()
@@ -505,6 +601,7 @@ class CartographController:
         neither write the file nor report a save. A worker thread still running
         is left owned by `background_job`, never destroyed with the dialog."""
         job, self._job = self._job, None
+        self._job_document = None
         if isinstance(job, _StaticRenders):
             job.cancel()
         elif job is not None:
@@ -524,10 +621,13 @@ class CartographController:
         on a save simply stops waiting; the window closes it itself.
         """
         self._autosave_timer.stop()
+        self._other_saves_timer.stop()
         self._refresh_timer.stop()
         self._thumbnail_timer.stop()
         self.stop_close_save()
         self._abandon_build()
+        self._revisions.clear()
+        self._document_errors.clear()
         self._disconnect_layout_manager()
         self._disconnect_current_layout()
         self._current_layout = None
@@ -554,13 +654,13 @@ class CartographController:
         file; edits waiting for the debounce have nowhere to go. (The manager
         announces it by name; names are unique in a project.)"""
         current = self._current_layout
-        if (
-            self._shut_down
-            or current is None
-            or sip.isdeleted(current)
-            or current.name() != name
-        ):
+        if self._shut_down:
             return
+        if current is None or sip.isdeleted(current) or current.name() != name:
+            # Not the one on screen, but it may have a save pending.
+            self._forget_document(name)
+            return
+        self._forget_document(name)
         self._autosave_timer.stop()
         self._abandon_build()
         self._disconnect_current_layout()
@@ -569,17 +669,18 @@ class CartographController:
     # ---- Closing with changes pending ---------------------------------------
 
     def unsaved_for_close(self) -> bool:
-        """Whether closing now would leave the cartograph file behind the
+        """Whether closing now would leave a cartograph file behind its
         edits: one still waiting out the debounce, one a running build does
-        not carry, or the last save having failed. False when there is nowhere
-        to save (no layout on screen, no file chosen): nothing could be done."""
+        not carry, or the last save having failed - for the layout on screen or
+        any layout switched away from. False when there is nowhere to save (no
+        file chosen): nothing could be done."""
+        if self._shut_down:
+            return False
+        return self._current_unsaved() or bool(self._dirty_other_documents())
+
+    def _current_unsaved(self) -> bool:
         layout = self._current_layout
-        if (
-            self._shut_down
-            or layout is None
-            or sip.isdeleted(layout)
-            or not self.file_edit.text().strip()
-        ):
+        if layout is None or sip.isdeleted(layout) or not self.file_edit.text().strip():
             return False
         return self._autosave_timer.isActive() or self._edits_saved < self._edits_made
 
@@ -598,6 +699,7 @@ class CartographController:
         still ends the wait.
         """
         self._last_error = ""
+        self._document_errors.clear()
         self._close_waiter = (on_saved, on_failed)
         self._close_save_timer.start()
         self._update_status_label()
@@ -649,8 +751,25 @@ class CartographController:
             if self._last_error:
                 self._finish_close_save(self._last_error)
                 return
+            failed = [
+                self._document_errors[name]
+                for name in self._dirty_other_documents()
+                if name in self._document_errors
+            ]
+            if failed:
+                self._finish_close_save(failed[0])
+                return
             if not self.unsaved_for_close():
                 self._finish_close_save(None)
+                return
+            if not self._current_unsaved():
+                # Only layouts switched away from are behind.
+                self._run_other_saves()
+                if self._job is None and self.dialog._job is None:
+                    self._finish_close_save(
+                        next(iter(self._document_errors.values()), "")
+                        or tr("The cartograph could not be saved. Nothing was written.")
+                    )
                 return
             self._autosave_timer.stop()
             self._run_autosave(urgent=True)
@@ -1403,10 +1522,12 @@ class CartographController:
             return
         iface.openLayoutDesigner(layout)
 
-    def _apply_page_fields(self, spec: CartographSpec) -> CartographSpec:
-        """The Cartograph tab's title, attribution and theme on the page root."""
-        page = self.state.page_choice(self.state.cartograph_layout)
-        layout = self._current_layout
+    def _apply_page_fields(
+        self, spec: CartographSpec, name: str, layout: QgsPrintLayout | None
+    ) -> CartographSpec:
+        """The Cartograph tab's title, attribution and theme on the page root,
+        for the layout called `name`."""
+        page = self.state.page_choice(name)
         if layout is not None and not sip.isdeleted(layout):
             # The layout is the one source: the web page says what the preview
             # and the PDF say.
@@ -1807,6 +1928,12 @@ class CartographController:
             self.state.rename_cartograph_layout(old, new_name)
             if self._selected_name == old:
                 self._selected_name = new_name
+            if old in self._revisions:
+                self._revisions[new_name] = self._revisions.pop(old)
+            if old in self._document_errors:
+                self._document_errors[new_name] = self._document_errors.pop(old)
+            if self._job_document == old:
+                self._job_document = new_name
             self._renamed = {
                 was: (new_name if now == old else now)
                 for was, now in self._renamed.items()
@@ -1856,6 +1983,10 @@ class CartographController:
         switching = name != self._selected_name
         if switching:
             self._remember_thumbnail()
+            if self._selected_name and self._last_error:
+                # The layout left behind keeps its failure: closing reports it.
+                self._document_errors[self._selected_name] = self._last_error
+            self._document_errors.pop(name, None)
         self._selected_name = name
         self._disconnect_current_layout()
         manager = self.project.layoutManager()
@@ -1909,6 +2040,8 @@ class CartographController:
             # The file is a document that follows its layout: bring it up to
             # date now, not on the user's first edit.
             self.schedule_autosave()
+            # The layout just left may still have an edit to save.
+            self._kick_other_saves()
 
     def _forget_last_save(self) -> None:
         """What the status line and Fidelity tab say about a save belongs to
@@ -2045,42 +2178,60 @@ class CartographController:
         self._autosave_timer.start()
         return True
 
-    def _start_build(self) -> None:
-        if self._current_layout is None or sip.isdeleted(self._current_layout):
+    def _start_build(self, other: str | None = None) -> None:
+        """Build the layout on screen, or - `other` - the layout of that name
+        that was switched away from with edits pending. Either way the layout,
+        its file and its edit revision are taken here, at the start: what lands
+        later is written to and counted for that document and no other."""
+        if other is None:
+            layout = self._current_layout
+            name = self.state.cartograph_layout
+        else:
+            layout = self.project.layoutManager().layoutByName(other)
+            name = other
+        if layout is None or sip.isdeleted(layout):
             # Destroyed since the debounce started; `layoutRemoved` picks
             # another layout once it is gone.
             self._cancel_waiting_pages()
             return
-        path_text = self.file_edit.text().strip()
-        if not path_text:
+        destination = self._destination_of(name)
+        if destination is None:
             self._cancel_waiting_pages()
             return
         if self._job is not None or self.dialog._job is not None:
             # A build, or a web-map job, is already reading the project - and
             # two threads walking the same layers is what takes QGIS down.
             # Try again after another debounce; nothing is lost.
-            self._autosave_timer.start()
+            if other is None:
+                self._autosave_timer.start()
+            else:
+                self._other_saves_timer.start()
             return
 
+        shown_error = self._last_error
         runtime = self._load_runtime()
         if runtime is None:
+            if other is not None:
+                # Belongs to that layout, not to the one on screen.
+                self._document_errors[other] = self._last_error
+                self._last_error = shown_error
+                return
             self._cancel_waiting_pages()
             self._check_requested = False
             self._update_status_label()
             self._sync_report_display()
             return
 
-        path = Path(path_text)
-        layout = self._current_layout
+        path = destination
         project = self.project
-        choices = dict(self.state.frame_choices(self.state.cartograph_layout))
+        choices = dict(self.state.frame_choices(name))
         frame_modes = {item_id: choice.mode for item_id, choice in choices.items()}
         frame_dpis = {item_id: choice.dpi for item_id, choice in choices.items()}
 
         from ...core.fidelity_report import FidelityReportBuilder
 
         report = FidelityReportBuilder()
-        print_settings = self._print_settings()
+        print_settings = self._print_settings(name)
         # The resolution the cartograph is saved at (the runtime's own
         # default when no print settings were saved): a static frame is
         # drawn at least that sharp, whatever its own choice.
@@ -2088,9 +2239,10 @@ class CartographController:
 
         # The edits this build carries: those made before it took its
         # snapshot of the layout, whatever is made while it runs.
-        edits = self._edits_made
-        self._job_edits = edits
-        built_for = self.state.cartograph_layout
+        edits = self._document_named(name).made
+        self._job_edits = edits if other is None else -1
+        self._job_document = name
+        built_for = name
 
         # The layout half here, on the GUI thread: it hides and renders the
         # layout's own items, and the layout may be open in its designer.
@@ -2119,19 +2271,20 @@ class CartographController:
         except Exception as exc:
             for frame in pending:
                 frame.render.cancel()
-            self._on_build_failed(str(exc), traceback.format_exc())
+            self._on_build_failed(str(exc), traceback.format_exc(), built_for)
             return
         finally:
             self._exporting = False
         prepared = dataclasses.replace(
-            prepared, spec=self._apply_page_fields(prepared.spec)
+            prepared, spec=self._apply_page_fields(prepared.spec, name, layout)
         )
         if print_settings is not None:
             prepared = dataclasses.replace(
                 prepared, spec=apply_to_spec(prepared.spec, print_settings)
             )
-        self._last_page_label = page_label(prepared.spec)
-        self._pending_spec = prepared.spec
+        if other is None:
+            self._last_page_label = page_label(prepared.spec)
+            self._pending_spec = prepared.spec
 
         def carry_on() -> None:
             self._continue_build(
@@ -2193,7 +2346,9 @@ class CartographController:
         # The Layers tab's popup and label choices, copied: the worker must
         # not read state the GUI thread may be editing.
         layers = copy.deepcopy(dict(self.state.layers))
-        self._built_layers_signature = self._layers_signature()
+        on_screen = self._current_name_of(built_for) == self.state.cartograph_layout
+        if on_screen:
+            self._built_layers_signature = self._layers_signature()
         # The live project's part of reading each frame's layers, still on
         # this thread; the worker finishes it from the snapshot.
         try:
@@ -2201,7 +2356,7 @@ class CartographController:
                 prepared, project, report, layer_settings=layers
             )
         except Exception as exc:
-            self._on_build_failed(str(exc), traceback.format_exc())
+            self._on_build_failed(str(exc), traceback.format_exc(), built_for)
             return
 
         # The web page's legend is taller than QGIS's: the legend boxes are
@@ -2214,11 +2369,12 @@ class CartographController:
                 layout, project, prepared, report
             )
         except Exception as exc:
-            self._on_build_failed(str(exc), traceback.format_exc())
+            self._on_build_failed(str(exc), traceback.format_exc(), built_for)
             return
         finally:
             self._exporting = False
-        self._pending_spec = prepared.spec
+        if on_screen:
+            self._pending_spec = prepared.spec
 
         # The dialog's own writer, so a licence key the user set reaches the
         # cartograph's live frames exactly as it reaches a web map.
@@ -2297,14 +2453,21 @@ class CartographController:
         edits: int | None = None,
     ) -> None:
         self._job = None
+        self._job_document = None
         if self._shut_down:
             return
         html = finished.html
         current = self._is_current_build(path, built_for)
+        document = self._current_name_of(built_for) if built_for else None
         try:
             self._write_atomic(path, html)
         except OSError as exc:
+            if document is not None and not current:
+                self._document_errors[document] = tr(
+                    "Could not save the cartograph: {error}"
+                ).format(error=str(exc))
             if not current:
+                self._kick_other_saves()
                 return
             # The pages waiting on this save would open the file it failed
             # to replace.
@@ -2316,11 +2479,20 @@ class CartographController:
             self._update_status_label()
             self._sync_report_display()
             return
+        if document is not None and self._destination_of(document) == path:
+            # The file on disk now carries this document's edits up to the
+            # revision the build was started at - whichever layout is on screen.
+            revisions = self._document_named(document)
+            revisions.saved = max(
+                revisions.saved, revisions.made if edits is None else edits
+            )
+            self._document_errors.pop(document, None)
         if not current:
             # Saved for a layout (or file) no longer on screen: its own file is
             # up to date, but the status, Checks and a pending print belong to
             # what is selected now, whose own build follows.
             self._update_status_label()
+            self._kick_other_saves()
             return
         self._last_error = ""
         self._check_requested = False
@@ -2328,9 +2500,6 @@ class CartographController:
             # An open browser preview follows the layout on screen, and every
             # save of it.
             self._preview_server.show(path)
-        self._edits_saved = max(
-            self._edits_saved, self._edits_made if edits is None else edits
-        )
         self._last_saved_at = time.time()
         self._last_saved_bytes = path.stat().st_size
         self._last_summary = summarise(report.items)
@@ -2356,11 +2525,19 @@ class CartographController:
         self._update_share_enabled()
         if self.state.output is DialogOutput.CARTOGRAPH:
             self.show_fidelity()
+        self._kick_other_saves()
+
+    def _kick_other_saves(self) -> None:
+        """Look for a switched-away layout still to be saved, on the next turn
+        of the event loop (never from inside a build's landing)."""
+        if not self._shut_down and self._dirty_other_documents():
+            self._other_saves_timer.start()
 
     def _on_build_failed(
         self, message: str, details: str, built_for: str | None = None
     ) -> None:
         self._job = None
+        self._job_document = None
         if self._shut_down:
             return
         from qgis.core import Qgis, QgsMessageLog
@@ -2372,7 +2549,11 @@ class CartographController:
             built_for is not None
             and self._current_name_of(built_for) != self.state.cartograph_layout
         ):
+            self._document_errors[self._current_name_of(built_for) or ""] = tr(
+                "Could not build the cartograph: {message}"
+            ).format(message=message)
             self._update_status_label()
+            self._kick_other_saves()
             return
         # The page waiting on this save would open without the latest edits.
         self._cancel_waiting_pages()
@@ -3057,8 +3238,10 @@ class CartographController:
 
     # ---- Print settings ----------------------------------------------------
 
-    def _print_settings(self) -> PrintSettings | None:
-        text = self.state.cartograph_print.get(self.state.cartograph_layout)
+    def _print_settings(self, name: str | None = None) -> PrintSettings | None:
+        text = self.state.cartograph_print.get(
+            self.state.cartograph_layout if name is None else name
+        )
         if not text:
             return None
         try:
