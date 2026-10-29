@@ -178,14 +178,18 @@ def test_a_failed_write_for_a_is_reported_and_a_retry_saves_it(qgis_app, two) ->
     dialog, cartograph, (layout_a, label_a, file_a), (layout_b, _lb, file_b) = two
     _show(qgis_app, cartograph, layout_a)
     assert _wait_for(qgis_app, lambda: _settled(cartograph))
-    file_a.unlink()
-    file_a.mkdir()  # nothing can replace a folder with a file
-    edit_label(layout_a, label_a, "EditedA")
-    _show(qgis_app, cartograph, layout_b)
-    _click_close(dialog)
-    assert _wait_for(qgis_app, lambda: _failure_box() is not None)
-    assert dialog.isVisible()
-    file_a.rmdir()
+    # Nothing can be written into a read-only folder. (A folder at A's path
+    # would not do: a destination that is not A's own file is not replaced,
+    # the cartograph is saved beside it instead.)
+    file_a.parent.chmod(0o500)
+    try:
+        edit_label(layout_a, label_a, "EditedA")
+        _show(qgis_app, cartograph, layout_b)
+        _click_close(dialog)
+        assert _wait_for(qgis_app, lambda: _failure_box() is not None)
+        assert dialog.isVisible()
+    finally:
+        file_a.parent.chmod(0o700)
     assert _answer(qgis_app, "Try again")
     assert _wait_for(qgis_app, lambda: not dialog.isVisible())
     assert "EditedA" in _text(file_a)
@@ -198,15 +202,16 @@ def test_cancelling_after_a_failure_for_a_keeps_the_window_usable(
     dialog, cartograph, (layout_a, label_a, file_a), (layout_b, _lb, _fb) = two
     _show(qgis_app, cartograph, layout_a)
     assert _wait_for(qgis_app, lambda: _settled(cartograph))
-    file_a.unlink()
-    file_a.mkdir()
-    edit_label(layout_a, label_a, "EditedA")
-    _show(qgis_app, cartograph, layout_b)
-    _click_close(dialog)
-    assert _answer(qgis_app, "Cancel closing")
-    qgis_app.processEvents()
-    assert dialog.isVisible() and dialog.close_button.isEnabled()
-    file_a.rmdir()
+    file_a.parent.chmod(0o500)  # nothing can be written into it
+    try:
+        edit_label(layout_a, label_a, "EditedA")
+        _show(qgis_app, cartograph, layout_b)
+        _click_close(dialog)
+        assert _answer(qgis_app, "Cancel closing")
+        qgis_app.processEvents()
+        assert dialog.isVisible() and dialog.close_button.isEnabled()
+    finally:
+        file_a.parent.chmod(0o700)
     _click_close(dialog)
     assert _wait_for(qgis_app, lambda: not dialog.isVisible())
     assert "EditedA" in _text(file_a)
@@ -229,3 +234,33 @@ def test_a_layout_removed_with_a_pending_save_writes_nothing_and_b_still_saves(
     assert _text(file_a) == before
     assert "EditedA" not in _text(file_a)
     assert "EditedB" in _text(file_b)
+
+
+def test_a_background_save_never_replaces_a_file_that_is_not_its_own(
+    qgis_app, two, export
+) -> None:
+    dialog, cartograph, (layout_a, label_a, file_a), (layout_b, _lb, file_b) = two
+    _show(qgis_app, cartograph, layout_a)
+    assert _wait_for(qgis_app, lambda: _settled(cartograph))
+    export.worker_started.clear()
+    export.hold_workers()
+    edit_label(layout_a, label_a, "EditedA")
+    _show(qgis_app, cartograph, layout_b)  # A is now saved in the background
+    assert _wait_for(qgis_app, export.worker_started.is_set)
+    # While that save runs, something else takes A's file: the write is
+    # refused and explained, and a retry saves beside it instead.
+    file_a.write_text("someone else's notes", encoding="utf-8")
+    export.release()
+    _click_close(dialog)
+    assert _wait_for(qgis_app, lambda: _failure_box() is not None)
+    assert "not this cartograph's own file" in _failure_box().text()
+    assert file_a.read_text(encoding="utf-8") == "someone else's notes"
+    assert _answer(qgis_app, "Try again")
+    assert _wait_for(qgis_app, lambda: not dialog.isVisible())
+    assert file_a.read_text(encoding="utf-8") == "someone else's notes"
+    beside = file_a.with_name("a (2).html")
+    assert "EditedA" in _text(beside)
+    # Only A's own setting moved; B is untouched.
+    assert cartograph.state.cartograph_file_for("A") == str(beside)
+    assert cartograph.state.cartograph_file_for("B") == str(file_b)
+    assert "OldB" in _text(file_b)
