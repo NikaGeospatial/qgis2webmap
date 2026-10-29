@@ -184,31 +184,35 @@ _SPACES = "\u00a0\u202f\u2009 "
 _SCALE_PREFIX = re.compile(r"^\s*1\s*:\s*")
 
 
+def round_scale(value: float) -> float:
+    """A scale denominator as a whole number, halves rounding up: the way every
+    scale is shown and, except for 1x, applied."""
+    return float(math.floor(value + 0.5))
+
+
 def preset_scale(baseline: float, factor: float) -> float:
     """The scale denominator `factor` times closer than `baseline`: absolute,
-    so asking for the same preset twice never zooms twice."""
-    return baseline / factor
+    so asking for the same preset twice never zooms twice. 1x is the baseline
+    itself, exactly; the others are the whole number they are shown as."""
+    if factor == 1.0:
+        return baseline
+    return round_scale(baseline / factor)
 
 
 def preset_for_scale(baseline: float, scale: float) -> int | None:
-    """Index of the preset whose scale `scale` is, to the precision it is shown
-    with (a whole number), or None for a custom scale."""
+    """Index of the preset whose shown (whole-number) scale `scale` is, or None
+    for a custom scale."""
+    shown = round_scale(scale)
     for index, factor in enumerate(PRESET_FACTORS):
-        wanted = preset_scale(baseline, factor)
-        if abs(scale - wanted) <= max(0.5, wanted * 1e-9):
+        if round_scale(preset_scale(baseline, factor)) == shown:
             return index
     return None
 
 
 def format_scale(value: float, locale: QLocale | None = None) -> str:
-    """A scale denominator as the field shows it: grouped, whole when it is
-    (nearly) whole, otherwise to two decimals."""
+    """A scale denominator as the field shows it: a whole number, grouped."""
     locale = locale or QLocale()
-    if abs(value - round(value)) < 0.005:
-        return locale.toString(round(value))
-    text = locale.toString(round(value, 2), "f", 2)
-    decimal = locale.decimalPoint()
-    return text.rstrip("0").rstrip(decimal) if decimal in text else text
+    return locale.toString(round(round_scale(value)))
 
 
 def parse_scale(text: str, locale: QLocale | None = None) -> ParsedNumber:

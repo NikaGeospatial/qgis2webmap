@@ -1380,17 +1380,18 @@ class GoToLocationDialog(QDialog):
     # ---- zoom -------------------------------------------------------------------
 
     def _read_scale(self) -> core.ParsedNumber:
-        """The scale field as it reads now. A value that is a preset's, to the
-        precision it is shown with, is exactly that preset's."""
+        """The scale field as it reads now, as a whole number. What is a preset's
+        is exactly that preset's (1x being the baseline itself)."""
         parsed = core.parse_scale(self.scale_edit.text(), self._locale)
+        if parsed.value is None:
+            return parsed
+        whole = core.round_scale(parsed.value)
         baseline = self._baseline
-        if parsed.value is None or baseline is None:
-            return parsed
-        index = core.preset_for_scale(baseline, parsed.value)
-        if index is None:
-            return parsed
-        exact = core.preset_scale(baseline, core.PRESET_FACTORS[index])
-        return core.ParsedNumber(value=exact)
+        index = None if baseline is None else core.preset_for_scale(baseline, whole)
+        if baseline is None or index is None:
+            return core.ParsedNumber(value=whole)
+        factor = core.PRESET_FACTORS[index]
+        return core.ParsedNumber(value=core.preset_scale(baseline, factor))
 
     def _fit_active(self) -> bool:
         """Go will fit the whole feature, so the manual scale is not used."""

@@ -164,6 +164,51 @@ class TestThePresets:
         assert math.isclose(canyon.world.main.scale(), scale, rel_tol=1e-6)
         assert _centre_at(canyon.world.main, -112.20, 36.20)
 
+    def test_a_fractional_baseline_shows_whole_numbers_and_one_x_keeps_it_exactly(
+        self, canyon
+    ) -> None:
+        item = canyon.world.main
+        item.setScale(111_420.7)
+        exact = item.scale()
+        shown = {}
+
+        def script(dialog) -> None:
+            shown["open"] = _scale_text(dialog)
+            _preset(dialog, 3)
+            shown["four"] = _scale_text(dialog)
+            _preset(dialog, 1)
+            shown["one"] = _scale_text(dialog)
+            fill_coordinates(dialog, "36.20", "-112.20")
+            _click(dialog.go_button)
+
+        canyon.open(script)
+        assert shown == {"open": "111,421", "four": "27,855", "one": "111,421"}
+        assert math.isclose(item.scale(), exact, rel_tol=1e-9)  # untouched
+        assert _centre_at(item, -112.20, 36.20)
+
+        item.setScale(exact)
+
+        def four(dialog) -> None:
+            _preset(dialog, 3)
+            fill_coordinates(dialog, "36.20", "-112.20")
+            _click(dialog.go_button)
+
+        canyon.open(four)
+        assert math.isclose(item.scale(), 27_855, rel_tol=1e-9)
+
+    def test_a_typed_decimal_is_rounded_when_editing_finishes(self, canyon) -> None:
+        seen = {}
+
+        def script(dialog) -> None:
+            _type_scale(dialog, "30000.5")
+            seen["text"] = _scale_text(dialog)
+            fill_coordinates(dialog, "36.20", "-112.20")
+            _click(dialog.go_button)
+
+        canyon.open(script)
+        assert seen["text"] == "30,001"
+        assert math.isclose(canyon.world.main.scale(), 30_001, rel_tol=1e-9)
+
     def test_repeated_and_switched_clicks_never_compound(self, canyon) -> None:
         seen = []
 
@@ -250,7 +295,8 @@ class TestThePresets:
         assert core.parse_scale("2e9", english).value is None
         assert core.format_scale(25000, english) == "25,000"
         assert core.format_scale(25000, german) == "25.000"
-        assert core.format_scale(12500.5, english) == "12,500.5"
+        assert core.format_scale(12500.5, english) == "12,501"
+        assert core.format_scale(27855.125, english) == "27,855"
         assert core.format_scale(1000000, english) == "1,000,000"
 
     def test_the_wheel_changes_neither_the_scale_nor_a_preset_nor_a_dropdown(
