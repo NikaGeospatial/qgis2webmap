@@ -117,7 +117,7 @@ from .export_ir import (
     OutputMode,
     RasterSpec,
 )
-from .export_resolution import frame_resolution
+from .export_resolution import frame_pixel_size, frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
@@ -707,7 +707,9 @@ def prepare_cartograph(
     resolution the cartograph is saved at (`core/export_resolution.py`): no
     static frame is drawn below it, since its page is rendered at that
     resolution and a lower picture would be enlarged there. `None` leaves
-    each frame at its own choice.
+    each frame at its own choice. Either way no picture is drawn past the size
+    limits: a frame whose resolution would need one is drawn at what fits and
+    the report says so.
 
     `raster_cache` reuses static-frame rasters across calls (the module's
     shared cache by default); `None` renders every static frame afresh.
@@ -755,8 +757,7 @@ def prepare_cartograph(
     for frame in reading.frames:
         if frame.mode == "static":
             dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
-            if export_dpi is not None:
-                dpi = _resolution_for(frame, dpi, export_dpi, report)
+            dpi = _resolution_for(frame, dpi, export_dpi, report)
             items.append(
                 _build_static_frame(
                     layout, project, frame, dpi, raster_cache, pending_static
@@ -1290,20 +1291,29 @@ def _cartograph_id(layout: QgsPrintLayout) -> str:
 def _resolution_for(
     frame: MapFrameReading,
     frame_dpi: int,
-    export_dpi: int,
+    export_dpi: int | None,
     report: FidelityReportBuilder,
 ) -> int:
-    """The resolution `frame`'s picture is drawn at on a cartograph saved at
-    `export_dpi`: never lower, within what a browser canvas holds -- and said
-    when the frame is too large to reach it."""
+    """The resolution `frame`'s picture is drawn at: never lower than the
+    frame's own choice or `export_dpi` (when the cartograph saves one), but
+    within what a browser canvas and memory hold -- the frame's own choice
+    included -- and said when the frame is too large to reach it."""
     resolution = frame_resolution(frame_dpi, export_dpi, frame.box.w, frame.box.h)
     if resolution.limited:
+        width_px, height_px = frame_pixel_size(frame.box.w, frame.box.h, resolution.dpi)
         report.approximated(
             f"Map frame {frame.map_item.displayName()}",
-            f"Drawn at {resolution.dpi} dpi, not the saved {resolution.wanted} "
-            "dpi: at that resolution this frame's picture would be larger than "
-            "a browser can draw. Make the map smaller or save a lower "
-            "resolution.",
+            tr(
+                "Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} "
+                "pixels): at {wanted} dpi this frame's picture would be larger "
+                "than a browser can draw. Make the map smaller or ask for a "
+                "lower resolution."
+            ).format(
+                wanted=resolution.wanted,
+                dpi=resolution.dpi,
+                width=width_px,
+                height=height_px,
+            ),
             item_id=frame.frame_id,
         )
     return resolution.dpi

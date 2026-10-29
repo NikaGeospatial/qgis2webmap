@@ -317,7 +317,7 @@ class TestPrepareThenFinish:
             export_dpi=2400,
             raster_cache=None,
         )
-        assert any("not the saved 2400 dpi" in i.detail for i in report.items)
+        assert any("Requested 2400 dpi, drawn at" in i.detail for i in report.items)
         for item in prepared.items:
             if hasattr(item, "image_bytes"):
                 assert item.dpi < 2400
