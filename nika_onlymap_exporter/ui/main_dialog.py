@@ -314,6 +314,16 @@ COMMIT_AT = 95
 # that a wedged data source cannot make Close appear to do nothing.
 SHUTDOWN_WAIT_MS = 5000
 
+# How long a close waits for the cartograph's last save before it asks the user
+# what to do (try again, keep the window, or close without it). Long for a big
+# map, short enough that a wedged save cannot trap the window.
+CLOSE_SAVE_LIMIT_MS = 60000
+
+# How long unloading the plugin waits for that save. Unloading is QGIS shutting
+# down or reloading plugins and cannot ask anything, so it saves if it can in
+# this time and closes regardless.
+UNLOAD_SAVE_WAIT_MS = 10000
+
 # Marks the per-layer options row, so it is never mistaken for a field row.
 LAYER_OPTIONS_ROLE = "__layer_options__"
 
@@ -1038,6 +1048,20 @@ class MainDialog(QDialog):
         # Close would lose every setting they had just made.
         self._shut_down = False
         self.finished.connect(lambda _code: self._shutdown())
+        # Closing is a request: with cartograph changes not yet in the file the
+        # window stays until they are (see `done`). `_close_result` is the
+        # result the held-back close will finish with, None when none is held.
+        self._close_result: int | None = None
+        self._closing_for_good = False
+        self._close_failure_box: QMessageBox | None = None
+        self._close_choices: dict[str, QPushButton] = {}
+        # Set by whoever asked for this close because it wants the dialog
+        # rebuilt afterwards (a language change); cleared if the close is
+        # cancelled, so a later ordinary close does not rebuild it.
+        self.reopen_after_close = False
+        self._close_limit_timer = QTimer(self)
+        self._close_limit_timer.setSingleShot(True)
+        self._close_limit_timer.timeout.connect(self._on_close_save_timeout)
 
         # ---- Live preview ------------------------------------------------
         # The server is created on first use, not here: a user with live preview
@@ -4911,6 +4935,137 @@ class MainDialog(QDialog):
         self.content_watcher.disconnect_all()
         self._cartograph.shutdown()
 
+    # ---- Closing --------------------------------------------------------
+    #
+    # Every way of closing a shown dialog - the Close button, Escape, the window
+    # manager's close - ends in `done`: `reject` calls it, and so does the
+    # default `closeEvent`. That is the one place a close can be held back.
+
+    def done(self, result: int) -> None:
+        """Close, once the cartograph file has caught up with the edits.
+
+        An edit still in the autosave debounce, or one a running build does not
+        carry, would otherwise be lost with the window. So the close waits for
+        the save and finishes when the file is current; if saving fails the
+        user is asked what to do. A dialog that is not on screen has nobody to
+        ask and closes as it always did.
+        """
+        if self._closing_for_good or self._shut_down or not self.isVisible():
+            super().done(result)
+            return
+        self._request_close(result)
+
+    def _request_close(self, result: int) -> None:
+        if self._close_result is not None or self._close_failure_box is not None:
+            return  # already waiting for the save, or asking about it
+        if not self._cartograph.unsaved_for_close():
+            super().done(result)
+            return
+        self._close_result = result
+        # A web-map job in the way would stop the cartograph's build starting;
+        # closing is cancelling it anyway.
+        if self._job is not None:
+            self._job.cancel()
+        self.close_button.setEnabled(False)
+        self.status_label.setText(tr("Saving the cartograph before closing..."))
+        self._close_limit_timer.start(CLOSE_SAVE_LIMIT_MS)
+        self._cartograph.start_close_save(
+            self._on_close_save_done, self._on_close_save_failed
+        )
+
+    def _on_close_save_done(self) -> None:
+        result, self._close_result = self._close_result, None
+        self._close_limit_timer.stop()
+        self._closing_for_good = True
+        super().done(0 if result is None else result)
+
+    def _on_close_save_timeout(self) -> None:
+        self._cartograph.stop_close_save()
+        self._on_close_save_failed(
+            tr("Saving is taking longer than expected, and is not finished yet.")
+        )
+
+    def _on_close_save_failed(self, message: str) -> None:
+        """Say why, and offer the three ways out: try again, keep the window
+        open to fix it, or close without the unsaved changes.
+
+        "Close without saving" is offered because a destination that can never
+        be written (a read-only folder, a full disk) would otherwise leave the
+        window impossible to close. It is a button the user presses on purpose,
+        never the default, and what it gives up is the web page only: the
+        layout itself is in the QGIS project and is untouched.
+        """
+        self._close_limit_timer.stop()
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("The cartograph could not be saved"))
+        box.setText(message)
+        box.setInformativeText(
+            tr(
+                "Your latest changes are not in the cartograph file yet. Try "
+                "again, keep the window open to fix the problem, or close "
+                "without saving them."
+            )
+        )
+        self._close_choices = {
+            "retry": box.addButton(tr("Try again"), QMessageBox.ButtonRole.AcceptRole),
+            "cancel": box.addButton(
+                tr("Cancel closing"), QMessageBox.ButtonRole.RejectRole
+            ),
+            "discard": box.addButton(
+                tr("Close without saving"), QMessageBox.ButtonRole.DestructiveRole
+            ),
+        }
+        box.setDefaultButton(self._close_choices["retry"])
+        box.setEscapeButton(self._close_choices["cancel"])
+        self._close_failure_box = box
+        box.finished.connect(self._on_close_failure_answered)
+        box.open()
+
+    def _on_close_failure_answered(self, _code: int) -> None:
+        box, self._close_failure_box = self._close_failure_box, None
+        choices, self._close_choices = self._close_choices, {}
+        if box is None or sip.isdeleted(box):
+            return
+        clicked = box.clickedButton()
+        box.deleteLater()
+        result, self._close_result = self._close_result, None
+        if clicked is not None and clicked is choices.get("retry"):
+            self._request_close(0 if result is None else result)
+        elif clicked is not None and clicked is choices.get("discard"):
+            self._cartograph.stop_close_save()
+            self._closing_for_good = True
+            super().done(0 if result is None else result)
+        else:
+            self._cartograph.stop_close_save()
+            self.reopen_after_close = False
+            self.close_button.setEnabled(True)
+            self.status_label.setText("")
+
+    def close_for_unload(self) -> None:
+        """Close for the plugin being unloaded: save what can be saved within
+        `UNLOAD_SAVE_WAIT_MS`, then close whatever happened. Unloading cannot
+        ask the user anything, so a save that fails or runs out of time is
+        logged and the window closes."""
+        if (
+            self.isVisible()
+            and not self._shut_down
+            and self._cartograph.unsaved_for_close()
+            and not self._cartograph.save_within(UNLOAD_SAVE_WAIT_MS)
+        ):
+            QgsMessageLog.logMessage(
+                "The cartograph's latest changes could not be saved before the "
+                "plugin was unloaded.",
+                LOG_TAG,
+                level=Qgis.MessageLevel.Warning,
+            )
+        self._close_limit_timer.stop()
+        self._closing_for_good = True
+        self.close()
+
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
-        self._shutdown()
+        if not self.isVisible():
+            # Never shown, or already hidden: `QDialog` closes it without a
+            # `done`, so nothing would reach `_shutdown` through `finished`.
+            self._shutdown()
         super().closeEvent(event)

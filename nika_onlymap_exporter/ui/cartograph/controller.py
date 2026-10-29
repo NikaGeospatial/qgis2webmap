@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, cast
 
 from qgis.core import QgsLayoutItemMap
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
+from qgis.PyQt.QtCore import QCoreApplication, QSize, Qt, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -163,6 +163,9 @@ STATUS_TICK_MS = 1000
 STATUS_AGE_REFRESH_MS = 30_000
 # How long closing waits for a running build, as `main_dialog`'s own job.
 SHUTDOWN_WAIT_MS = 5000
+
+# How often a close waiting for the last save looks at how that save is going.
+CLOSE_SAVE_POLL_MS = 50
 DPI_CHOICES = (150, 200, 300)
 
 # The runtime's built-in themes (`core/cartograph_ir.CARTOGRAPH_THEMES`), in
@@ -400,6 +403,11 @@ class CartographController:
         self._listed_layouts: list[tuple[QgsPrintLayout, str]] = []
         self._renamed: dict[str, str] = {}
         self._shut_down = False
+        # Set while the window waits to close until the file is current: the
+        # two ways that wait can end (saved, failed). See `start_close_save`.
+        self._close_waiter: tuple[Callable[[], None], Callable[[str], None]] | None = (
+            None
+        )
         self._preview_server: PreviewServer | None = None
         self._preview_server_error = ""
 
@@ -411,6 +419,9 @@ class CartographController:
         self._autosave_timer.setSingleShot(True)
         self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
         self._autosave_timer.timeout.connect(self._run_autosave)
+        self._close_save_timer = QTimer(dialog)
+        self._close_save_timer.setInterval(CLOSE_SAVE_POLL_MS)
+        self._close_save_timer.timeout.connect(self._advance_close_save)
         # A restyle in QGIS arrives as a stream of events; each refresh drops
         # the preview's caches and starts the maps drawing again, so only the
         # last of a burst is worth it.
@@ -468,6 +479,8 @@ class CartographController:
     def shutdown(self) -> None:
         """Release everything that outlives a single widget - called once,
         from `MainDialog._shutdown`, alongside the web map's own teardown."""
+        self._close_waiter = None
+        self._close_save_timer.stop()
         self._autosave_timer.stop()
         self._refresh_timer.stop()
         self._thumbnail_timer.stop()
@@ -492,6 +505,103 @@ class CartographController:
         self.page_pane.live_counts.close()
         with contextlib.suppress(TypeError, RuntimeError):
             self.project.cleared.disconnect(cartograph_export.clear_static_frame_cache)
+
+    # ---- Closing with changes pending ---------------------------------------
+
+    def unsaved_for_close(self) -> bool:
+        """Whether closing now would leave the cartograph file behind the
+        edits: one still waiting out the debounce, one a running build does
+        not carry, or the last save having failed. False when there is nowhere
+        to save (no layout on screen, no file chosen): nothing could be done."""
+        layout = self._current_layout
+        if (
+            self._shut_down
+            or layout is None
+            or sip.isdeleted(layout)
+            or not self.file_edit.text().strip()
+        ):
+            return False
+        return self._autosave_timer.isActive() or self._edits_saved < self._edits_made
+
+    def start_close_save(
+        self, on_saved: Callable[[], None], on_failed: Callable[[str], None]
+    ) -> None:
+        """Save every edit made so far, then call `on_saved`; or `on_failed`
+        with the reason if that cannot be done.
+
+        A build already running does not count unless it carries the latest
+        edit: when it lands, the file is behind again and another build
+        follows, as many as it takes. "Saved" means `_on_build_succeeded` has
+        committed the file for that revision (`_edits_saved`), nothing earlier.
+        Each step is looked at from a short timer rather than hooked into the
+        build's many exits, so a build that ends some way nobody thought of
+        still ends the wait.
+        """
+        self._last_error = ""
+        self._close_waiter = (on_saved, on_failed)
+        self._close_save_timer.start()
+        self._update_status_label()
+        self._sync_report_display()
+        self._advance_close_save()
+
+    def save_within(self, wait_ms: int) -> bool:
+        """`start_close_save` for a caller that cannot wait for a signal
+        (unloading): run the event loop for at most `wait_ms` and say whether
+        the file ended up current."""
+        outcome: list[bool] = []
+        self.start_close_save(
+            lambda: outcome.append(True), lambda _reason: outcome.append(False)
+        )
+        deadline = time.monotonic() + wait_ms / 1000
+        while not outcome and time.monotonic() < deadline:
+            QCoreApplication.processEvents()
+            time.sleep(0.01)
+        self.stop_close_save()
+        return bool(outcome and outcome[0])
+
+    def stop_close_save(self) -> None:
+        """Stop waiting (the user cancelled, or the window closes anyway). A
+        build in flight carries on and lands as any autosave would."""
+        self._close_waiter = None
+        self._close_save_timer.stop()
+        self._update_status_label()
+
+    def _finish_close_save(self, failure: str | None) -> None:
+        waiter, self._close_waiter = self._close_waiter, None
+        self._close_save_timer.stop()
+        self._update_status_label()
+        self._sync_report_display()
+        if waiter is None:
+            return
+        on_saved, on_failed = waiter
+        if failure is None:
+            on_saved()
+        else:
+            on_failed(failure)
+
+    def _advance_close_save(self) -> None:
+        """One look at how the save a close is waiting for is going."""
+        if self._close_waiter is None or self._shut_down:
+            return
+        try:
+            if self._job is not None:
+                return  # a build is running; its landing is looked at in turn
+            if self._last_error:
+                self._finish_close_save(self._last_error)
+                return
+            if not self.unsaved_for_close():
+                self._finish_close_save(None)
+                return
+            self._autosave_timer.stop()
+            self._run_autosave(urgent=True)
+            if self._job is None and not self._autosave_timer.isActive():
+                # Nothing started and nothing will: say why rather than wait.
+                self._finish_close_save(
+                    self._last_error
+                    or tr("The cartograph could not be saved. Nothing was written.")
+                )
+        except Exception as exc:
+            self._finish_close_save(str(exc))
 
     # ---- Cartograph tab -----------------------------------------------
 
@@ -1840,6 +1950,8 @@ class CartographController:
         `AUTOSAVE_DEFER_LIMIT_S`, so a map that never finishes drawing cannot
         hold the file back."""
         try:
+            # A close waiting on the save is not going to wait for a drag.
+            urgent = urgent or self._close_waiter is not None
             if not urgent and self._defer_for_preview():
                 return
             self._deferred_since = None
@@ -2257,7 +2369,7 @@ class CartographController:
         """Where the cartograph file stands against the edits made: "saving"
         while a build runs, "pending" while the debounce waits, else "". The
         layout preview's own rendering status is a separate line."""
-        if self._job is not None:
+        if self._job is not None or self._close_waiter is not None:
             return "saving"
         if self._autosave_timer.isActive():
             return "pending"

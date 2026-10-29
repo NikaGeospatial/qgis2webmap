@@ -24,6 +24,7 @@ import traceback
 from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsMessageLog
+from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
@@ -249,7 +250,7 @@ class Qgis2WebMapPlugin:
             # preview the user chose; unloading the plugin must not leave it.
             with contextlib.suppress(Exception):
                 dialog.release_canvas_effects()
-            dialog.close()
+            dialog.close_for_unload()
             dialog.deleteLater()
 
         # A worker that outlived the dialog is stopped and given a moment to end.
@@ -371,23 +372,40 @@ class Qgis2WebMapPlugin:
         Every label is set once, when the dialog is built, so a new language
         needs a new dialog. Closing saves the settings, and the next one reads
         them back, so the user loses nothing but a blink.
+
+        The close may be held back while the cartograph saves its last changes,
+        so the rebuild happens once the dialog has actually finished
+        (`_on_dialog_finished`), not when it was asked to close: opening the
+        new one beside a still-saving old one would have two writing the same
+        file. If the user cancels the close, nothing is rebuilt.
         """
-        from qgis.PyQt.QtCore import QSettings, QTimer
+        if self.dialog is not None:
+            self.dialog.reopen_after_close = True
+            self.dialog.close()
+            return
+        self._apply_chosen_language()
+        QTimer.singleShot(0, self.run)
+
+    @staticmethod
+    def _apply_chosen_language() -> None:
+        from qgis.PyQt.QtCore import QSettings
 
         from .ui import languages
         from .ui.i18n import qgis_locale, use_language
 
-        if self.dialog is not None:
-            self.dialog.close()
         # The language is applied here, not only at plugin load: the dialog
         # stores the choice and asks to be rebuilt, and rebuilding without
         # switching the catalogue first just draws the old language again.
         setting = QSettings().value(languages.SETTING_KEY, languages.AUTO, type=str)
         use_language(languages.effective(setting, qgis_locale()))
-        QTimer.singleShot(0, self.run)
 
     def _on_dialog_finished(self, _result: int) -> None:
-        """Drop the reference so the next run rebuilds against a fresh project."""
+        """Drop the reference so the next run rebuilds against a fresh project,
+        and rebuild right away if the dialog was closed to change language."""
         if self.dialog is not None:
+            reopen = self.dialog.reopen_after_close
             self.dialog.deleteLater()
             self.dialog = None
+            if reopen:
+                self._apply_chosen_language()
+                QTimer.singleShot(0, self.run)
