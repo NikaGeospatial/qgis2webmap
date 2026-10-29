@@ -1380,10 +1380,8 @@ class PagePane(QWidget):
                 previous.undoStack().stack().indexChanged,
                 previous.changed,
             ):
-                try:
+                with contextlib.suppress(TypeError, RuntimeError):
                     signal.disconnect(self._schedule_legend_refresh)
-                except (TypeError, RuntimeError):
-                    pass
         self._watched_layout = layout
         if layout is None:
             return
