@@ -250,6 +250,9 @@ def open_dialog(action, script: Callable[[object], None], limit_ms: int = 25000)
         dialog = QApplication.activeModalWidget()
         outcome["dialog"] = dialog
         try:
+            # Focus changes only reach widgets of the active window.
+            dialog.activateWindow()
+            QTest.qWaitForWindowActive(dialog, 3000)
             script(dialog)
         except BaseException:  # reported to the test, never lost in a slot
             outcome["error"] = traceback.format_exc()
@@ -283,3 +286,103 @@ def type_text(edit, text: str) -> None:
 
 def press(widget, key: Qt.Key) -> None:
     QTest.keyClick(widget, key)
+
+
+def choose_crs(dialog, authid: str) -> None:
+    """Click Change… and answer QGIS's own coordinate-system chooser."""
+    from qgis.gui import QgsProjectionSelectionDialog
+
+    def answer() -> None:
+        chooser = QApplication.activeModalWidget()
+        assert isinstance(chooser, QgsProjectionSelectionDialog), chooser
+        chooser.setCrs(QgsCoordinateReferenceSystem(authid))
+        chooser.accept()
+
+    QTimer.singleShot(50, answer)
+    dialog.crs_button.click()
+
+
+def fill_coordinates(dialog, first: str, second: str) -> None:
+    """Type both fields like a user and leave the second one."""
+    type_text(dialog.first_edit, first)
+    type_text(dialog.second_edit, second)
+    dialog.cancel_button.setFocus()
+    QApplication.processEvents()
+
+
+def rows(dialog) -> list[tuple[str, str]]:
+    """The result list as the user reads it: (name, second line) per row."""
+    found = []
+    for index in range(dialog.results.count()):
+        item = dialog.results.item(index)
+        found.append(
+            (
+                str(item.data(Qt.ItemDataRole.UserRole + 1)),
+                str(item.data(Qt.ItemDataRole.UserRole + 2)),
+            )
+        )
+    return found
+
+
+def choose_layer(dialog, layer) -> None:
+    dialog.tabs.setCurrentIndex(1)
+    index = dialog.layer_combo.findData(layer.id())
+    assert index >= 0, f"{layer.name()} is not offered"
+    dialog.layer_combo.setCurrentIndex(index)
+
+
+def choose_source(dialog, label: str) -> None:
+    index = dialog.source_combo.findText(label)
+    assert index >= 0, [
+        dialog.source_combo.itemText(i) for i in range(dialog.source_combo.count())
+    ]
+    dialog.source_combo.setCurrentIndex(index)
+
+
+def search(dialog, text: str) -> None:
+    """Type the query and click Search, then wait until the dialog has an answer."""
+    type_text(dialog.query_edit, text)
+    dialog.search_button.click()
+    wait_for(
+        lambda: dialog.status_label.text() not in ("", "Searching…"),
+        what=f"the search for {text!r} to finish",
+    )
+
+
+def click_row(dialog, row: int, double: bool = False) -> None:
+    item = dialog.results.item(row)
+    point = dialog.results.visualItemRect(item).center()
+    viewport = dialog.results.viewport()
+    if double:
+        # What a real double click delivers: a press and release, then the
+        # double-click event and its release.
+        QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=point)
+        QTest.mouseDClick(viewport, Qt.MouseButton.LeftButton, pos=point)
+    else:
+        QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=point)
+
+
+def many_points(
+    project: QgsProject, count: int, name: str = "Many sites"
+) -> QgsVectorLayer:
+    """`count` points called "Site 000001"... on a grid near HOME, one layer, one
+    provider call (so building 200 000 of them takes a moment, not minutes)."""
+    layer = QgsVectorLayer(
+        "Point?crs=EPSG:4326&field=name:string&field=code:string", name, "memory"
+    )
+    features = []
+    for index in range(count):
+        feature = QgsFeature(layer.fields())
+        feature.setAttributes([f"Site {index:06d}", f"C{index:06d}"])
+        feature.setGeometry(
+            QgsGeometry.fromPointXY(
+                QgsPointXY(
+                    -112.5 + (index % 500) * 0.001, 35.8 + (index // 500) * 0.0005
+                )
+            )
+        )
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+    project.addMapLayer(layer)
+    return layer

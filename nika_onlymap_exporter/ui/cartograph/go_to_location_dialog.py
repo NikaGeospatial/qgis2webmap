@@ -28,6 +28,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import functools
+import traceback
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from qgis.core import (
@@ -35,6 +38,7 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsExpression,
     QgsFeature,
+    QgsMessageLog,
     QgsPointXY,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -43,6 +47,7 @@ from qgis.gui import QgsProjectionSelectionDialog
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QLocale, QModelIndex, QRect, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import (
+    QFont,
     QFontMetrics,
     QGuiApplication,
     QKeyEvent,
@@ -106,6 +111,25 @@ def _remembered_layers() -> dict[str, str]:
     return layers
 
 
+def _guarded(method: Callable[..., None]) -> Callable[..., None]:
+    """Make a slot or event handler unable to raise: an exception escaping into
+    Qt aborts QGIS. It is logged, and the dialog says something went wrong."""
+    wanted = method.__code__.co_argcount - 1
+
+    @functools.wraps(method)
+    def wrapper(self: GoToLocationDialog, *args: object, **kwargs: object) -> None:
+        try:
+            method(self, *args[:wanted], **kwargs)
+        except Exception:
+            QgsMessageLog.logMessage(
+                traceback.format_exc(), "QGIS2WebMap", Qgis.MessageLevel.Critical
+            )
+            if not sip.isdeleted(self):
+                self._fail(tr("Something went wrong. Close this dialog and try again."))
+
+    return wrapper
+
+
 @dataclass
 class Hit:
     """A result row. Its identity is the layer's ID and the feature's ID, never
@@ -115,7 +139,6 @@ class Hit:
     fid: int
     usable: bool  # has a location to go to
     single_point: bool
-    drawn: bool  # the layer's style draws it
 
 
 class _ResultDelegate(QStyledItemDelegate):
@@ -125,7 +148,7 @@ class _ResultDelegate(QStyledItemDelegate):
     PAD_X, PAD_Y = 8, 5
 
     def _lines(self, option: QStyleOptionViewItem) -> tuple[QFontMetrics, QFontMetrics]:
-        bold = option.font
+        bold = QFont(option.font)
         bold.setBold(True)
         return QFontMetrics(bold), QFontMetrics(option.font)
 
@@ -150,7 +173,7 @@ class _ResultDelegate(QStyledItemDelegate):
         enabled = bool(option.state & QStyle.StateFlag.State_Enabled)
         group = QPalette.ColorGroup.Normal if enabled else QPalette.ColorGroup.Disabled
         palette = option.palette
-        primary_font = option.font
+        primary_font = QFont(option.font)
         primary_font.setBold(True)
         primary, secondary = QFontMetrics(primary_font), QFontMetrics(option.font)
         area = option.rect.adjusted(self.PAD_X, self.PAD_Y, -self.PAD_X, -self.PAD_Y)
@@ -184,6 +207,41 @@ class _ResultDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+class _TabsFollowingTheOpenPage(QTabWidget):
+    """A tab widget as tall as the open tab needs, not the tallest one: Qt sizes
+    it by every page, which would give the short Coordinates tab the Feature
+    tab's empty room."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.currentChanged.connect(self.updateGeometry)
+
+    def _pages(self, hint: str) -> tuple[int, int]:
+        """(tallest page, open page) heights by `hint`."""
+        heights = [
+            getattr(self.widget(i), hint)().height() for i in range(self.count())
+        ]
+        current = self.currentWidget()
+        open_height = getattr(current, hint)().height() if current is not None else 0
+        return (max(heights) if heights else 0), open_height
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        # Qt's own answer takes the tallest page at every width.
+        return False
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        hint = super().sizeHint()
+        tallest, current = self._pages("sizeHint")
+        hint.setHeight(hint.height() - tallest + current)
+        return hint
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        hint = super().minimumSizeHint()
+        tallest, current = self._pages("minimumSizeHint")
+        hint.setHeight(hint.height() - tallest + current)
+        return hint
+
+
 class _ResultList(QListWidget):
     """The results: Enter on the selected row asks to go."""
 
@@ -193,6 +251,19 @@ class _ResultList(QListWidget):
         if event is not None and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             event.accept()
             self.go_requested.emit()
+            return
+        if (
+            event is not None
+            and event.key() in (Qt.Key.Key_Down, Qt.Key.Key_Up)
+            and self.count()
+            and not self.selectedItems()
+        ):
+            # Nothing is chosen yet: the first arrow press chooses the end it
+            # points from, rather than stepping over a row that was never chosen.
+            self.setCurrentRow(
+                0 if event.key() == Qt.Key.Key_Down else self.count() - 1
+            )
+            event.accept()
             return
         super().keyPressEvent(event)
 
@@ -252,11 +323,13 @@ class GoToLocationDialog(QDialog):
         self._crs = QgsCoordinateReferenceSystem(WGS84)
         self._coords_ready = False
         self._first_activation = True
+        self._no_layers = False
+        self._sized = False
         self._coordinate_note = ""
         self._revealed = [False, False]
         self._generation = 0
         self._job: SearchJob | None = None
-        self._layer: QgsVectorLayer | None = None
+        self._layer_id = ""
         self._results_fresh = False
         self._apply_error = ""
         self.setWindowTitle(tr("Go to location"))
@@ -276,8 +349,7 @@ class GoToLocationDialog(QDialog):
         self.context_label.setProperty("role", "hint")
         outer.addWidget(self.context_label)
 
-        self.tabs = QTabWidget(self)
-        self.tabs.setDocumentMode(True)
+        self.tabs = _TabsFollowingTheOpenPage(self)
         self.tabs.addTab(self._build_coordinates_tab(), tr("Coordinates"))
         self.tabs.addTab(self._build_feature_tab(), tr("Feature"))
         outer.addWidget(self.tabs, 1)
@@ -425,6 +497,13 @@ class GoToLocationDialog(QDialog):
         box.addWidget(self.feature_message)
         return page
 
+    def _say(self, text: str) -> None:
+        """The inline note under the Feature tab; with no layer to search, that
+        is what it says unless something more specific has come up."""
+        if not text and self._no_layers:
+            text = tr("This map has no searchable feature layers.")
+        self.feature_message.setText(text)
+
     def _group(self, title: str, field: QWidget, parent: QWidget) -> QVBoxLayout:
         group = QVBoxLayout()
         group.setSpacing(4)
@@ -466,15 +545,9 @@ class GoToLocationDialog(QDialog):
         available = self._screen_size()
         width = min(PREFERRED_WIDTH, available.width() - SCREEN_MARGIN)
         self.setMinimumWidth(min(MINIMUM_WIDTH, width))
-        current = self.tabs.currentWidget()
-        for index in range(self.tabs.count()):
-            page = self.tabs.widget(index)
-            policy = (
-                QSizePolicy.Policy.Preferred
-                if page is current
-                else QSizePolicy.Policy.Ignored
-            )
-            page.setSizePolicy(QSizePolicy.Policy.Preferred, policy)
+        if self._sized:  # the user's own width is kept across tabs
+            width = max(self.width(), width)
+        self._sized = True
         self.layout().activate()
         height = min(self.sizeHint().height(), available.height() - SCREEN_MARGIN)
         self.resize(width, max(height, self.minimumSizeHint().height()))
@@ -497,6 +570,7 @@ class GoToLocationDialog(QDialog):
 
     # ---- tabs ---------------------------------------------------------------
 
+    @_guarded
     def _on_tab_changed(self, index: int, remember: bool = True) -> None:
         if remember:
             _session["mode"] = index
@@ -528,7 +602,7 @@ class GoToLocationDialog(QDialog):
         return tr("Easting (X)"), tr("Northing (Y)")
 
     def _example(self, value: float) -> str:
-        return core.format_number(value, True, self._locale)
+        return self._locale.toString(value, "f", 2)
 
     def _set_crs(
         self, crs: QgsCoordinateReferenceSystem, announce: bool = True
@@ -600,6 +674,7 @@ class GoToLocationDialog(QDialog):
             edit.setCursorPosition(0)
         self._refresh_coordinates()
 
+    @_guarded
     def choose_crs(self) -> None:
         """Change...: QGIS's own coordinate-system chooser."""
         chooser = QgsProjectionSelectionDialog(self)
@@ -659,6 +734,7 @@ class GoToLocationDialog(QDialog):
             )
         return ""
 
+    @_guarded
     def _on_coordinate_text_changed(self, _text: str) -> None:
         edit = self.sender()
         index = (
@@ -669,6 +745,7 @@ class GoToLocationDialog(QDialog):
         self._coordinate_note = ""
         self._refresh_coordinates()
 
+    @_guarded
     def _on_coordinate_finished(self) -> None:
         edit = self.sender()
         index = (
@@ -708,6 +785,7 @@ class GoToLocationDialog(QDialog):
         )
         self._update_go()
 
+    @_guarded
     def submit_coordinates(self) -> None:
         """Enter in a coordinate field: validate what is populated and, if both
         fields are fine, go."""
@@ -744,6 +822,7 @@ class GoToLocationDialog(QDialog):
         self.layer_combo.setCurrentIndex(max(index, 0))
         self.layer_combo.blockSignals(False)
         searchable = bool(layers)
+        self._no_layers = not searchable
         for widget in (
             self.layer_combo,
             self.source_combo,
@@ -752,6 +831,16 @@ class GoToLocationDialog(QDialog):
         ):
             widget.setEnabled(searchable)
         self._select_layer()
+        self._say("")
+
+    @property
+    def _layer(self) -> QgsVectorLayer | None:
+        """The layer chosen in the combo, looked up afresh: a layer removed from
+        the project must never be touched through an old reference."""
+        for layer in self.target.layers():
+            if layer.id() == self._layer_id:
+                return layer
+        return None
 
     def _current_layer(self) -> QgsVectorLayer | None:
         layer_id = self.layer_combo.currentData()
@@ -764,7 +853,7 @@ class GoToLocationDialog(QDialog):
 
     def _select_layer(self) -> None:
         """Follow the layer combo: rebuild "Search in" for it."""
-        self._layer = self._current_layer()
+        self._layer_id = str(self.layer_combo.currentData() or "")
         self.source_combo.blockSignals(True)
         self.source_combo.clear()
         if self._layer is not None:
@@ -789,6 +878,7 @@ class GoToLocationDialog(QDialog):
         else:
             self.source_hint.setText(tr("Search {field}.").format(field=source.label))
 
+    @_guarded
     def _on_layer_changed(self, _index: int) -> None:
         layer_id = self.layer_combo.currentData()
         if layer_id:
@@ -797,11 +887,13 @@ class GoToLocationDialog(QDialog):
         self._invalidate(clear_status=True)
         self._refresh_search_button()
 
+    @_guarded
     def _on_source_changed(self, _index: int) -> None:
         self._update_source_hint()
         self._invalidate(clear_status=True)
         self._refresh_search_button()
 
+    @_guarded
     def _on_query_changed(self, _text: str) -> None:
         empty = not self.query_edit.text().strip()
         self._invalidate(clear_status=True, clear_results=empty)
@@ -814,7 +906,7 @@ class GoToLocationDialog(QDialog):
             and text
             and core.parse_whole_number(text) is None
         )
-        self.feature_message.setText(tr("Enter a whole-number ID.") if wrong else "")
+        self._say(tr("Enter a whole-number ID.") if wrong else "")
 
     def _refresh_search_button(self) -> None:
         source = self._current_source()
@@ -838,6 +930,7 @@ class GoToLocationDialog(QDialog):
         self._results_fresh = False
         self.results.blockSignals(True)
         self.results.clearSelection()
+        self.results.setCurrentRow(-1)
         self.results.blockSignals(False)
         if clear_results:
             self.results.clear()
@@ -846,9 +939,10 @@ class GoToLocationDialog(QDialog):
             self.status_label.setText("")
         self.fit_check.setEnabled(False)
         self.fit_check.setChecked(False)
-        self.feature_message.setText("")
+        self._say("")
         self._update_go()
 
+    @_guarded
     def start_search(self) -> None:
         """Search the whole selected layer for the query, in the background."""
         layer, source = self._layer, self._current_source()
@@ -864,6 +958,7 @@ class GoToLocationDialog(QDialog):
         self._job = core.start_search(layer, plan, self._generation)
         self._poll_timer.start()
 
+    @_guarded
     def _poll_search(self) -> None:
         job = self._job
         if job is None:
@@ -943,7 +1038,6 @@ class GoToLocationDialog(QDialog):
                     match.fid,
                     usable,
                     usable and core.is_single_point(geometry),
-                    True,
                 ),
             )
             self.results.addItem(item)
@@ -966,7 +1060,7 @@ class GoToLocationDialog(QDialog):
         elif len(usable_rows) == 1:
             self.results.setCurrentRow(usable_rows[0])
         elif count > 1:
-            self.feature_message.setText(tr("Select a feature."))
+            self._say(tr("Select a feature."))
         self._update_go()
 
     def _hit(self, item: QListWidgetItem | None) -> Hit:
@@ -980,6 +1074,7 @@ class GoToLocationDialog(QDialog):
             return None
         return self._hit(items[0])
 
+    @_guarded
     def _on_result_selected(self) -> None:
         hit = self._selected_hit()
         self.fit_check.blockSignals(True)
@@ -989,15 +1084,15 @@ class GoToLocationDialog(QDialog):
         elif not hit.usable:
             self.fit_check.setEnabled(False)
             self.fit_check.setChecked(False)
-            self.feature_message.setText(tr("This feature has no location to display."))
+            self._say(tr("This feature has no location to display."))
         elif hit.single_point:
             self.fit_check.setEnabled(False)
             self.fit_check.setChecked(False)
-            self.feature_message.setText("")
+            self._say("")
         else:
             self.fit_check.setEnabled(True)
             self.fit_check.setChecked(True)
-            self.feature_message.setText("")
+            self._say("")
         self.fit_check.blockSignals(False)
         if hit is not None and hit.usable:
             self._warn_if_hidden_by_style(hit)
@@ -1009,13 +1104,14 @@ class GoToLocationDialog(QDialog):
             return
         feature = layer.getFeature(hit.fid)
         if feature.isValid() and not core.would_be_drawn(layer, feature):
-            self.feature_message.setText(
+            self._say(
                 tr(
                     "This feature may not appear on the map: "
                     "the layer's styling hides it."
                 )
             )
 
+    @_guarded
     def _on_result_double_clicked(self, _item: QListWidgetItem) -> None:
         self.go()
 
@@ -1031,14 +1127,12 @@ class GoToLocationDialog(QDialog):
             )
         return ""
 
+    @_guarded
     def _watch(self) -> None:
         """The layout or a layer may change under an open dialog."""
         if sip.isdeleted(self):
             return
-        layer = self._layer
-        if layer is not None and not any(
-            other.id() == layer.id() for other in self.target.layers()
-        ):
+        if self._layer_id and self._layer is None:
             self._layer_gone()
         self._refresh_all()
 
@@ -1047,7 +1141,7 @@ class GoToLocationDialog(QDialog):
         dropped, and the list of layers is read again."""
         self._populate_layers()
         self._invalidate(clear_status=True, clear_results=True)
-        self.feature_message.setText(tr("This layer is no longer available."))
+        self._say(tr("This layer is no longer available."))
 
     def _refresh_all(self) -> None:
         self._refresh_coordinates()
@@ -1070,6 +1164,7 @@ class GoToLocationDialog(QDialog):
 
     # ---- go ---------------------------------------------------------------------
 
+    @_guarded
     def go(self) -> None:
         """Apply the destination of the open tab as one undo step, then close.
         On any problem the dialog stays open and says what to do."""
@@ -1130,6 +1225,7 @@ class GoToLocationDialog(QDialog):
         dropped and nothing moves."""
         self.results.blockSignals(True)
         self.results.clearSelection()
+        self.results.setCurrentRow(-1)
         self.results.blockSignals(False)
         self._results_fresh = False
         self.results.setEnabled(False)
@@ -1140,7 +1236,7 @@ class GoToLocationDialog(QDialog):
             "feature": tr("This feature is no longer available."),
             "location": tr("This feature has no location to display."),
         }.get(reason, tr("This feature is no longer available."))
-        self.feature_message.setText(message)
+        self._say(message)
         self._update_go()
 
     def _apply_message(self, reason: str) -> str:
@@ -1162,6 +1258,7 @@ class GoToLocationDialog(QDialog):
 
     # ---- keys ---------------------------------------------------------------------
 
+    @_guarded
     def keyPressEvent(self, event: QKeyEvent | None) -> None:  # noqa: N802
         if event is not None and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             focus = self.focusWidget()

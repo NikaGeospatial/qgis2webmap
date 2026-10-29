@@ -138,7 +138,7 @@ def parse_decimal(text: str, locale: QLocale | None = None) -> ParsedNumber:
         shape.fullmatch(p.translate(_MINUS_SIGNS)) for p in pieces
     ):
         return ParsedNumber(problem=PAIR)
-    if _UNSUPPORTED.search(text):
+    if _UNSUPPORTED.search(text) and re.search(r"\d", text):
         return ParsedNumber(problem=UNSUPPORTED)
     return ParsedNumber(problem=INVALID)
 
