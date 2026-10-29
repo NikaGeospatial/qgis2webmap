@@ -168,6 +168,74 @@ def format_number(value: float, geographic: bool, locale: QLocale | None = None)
     return text.replace(".", locale.decimalPoint())
 
 
+# ---------------------------------------------------------------------------
+# Map scale
+# ---------------------------------------------------------------------------
+
+#: The zoom presets, as how many times closer than the scale the dialog opened
+#: at: 1/2x shows more, 8x is eight times closer.
+PRESET_FACTORS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0, 8.0)
+#: The scale denominators a typed scale may have (1 : 1 to 1 : 1,000,000,000).
+SCALE_RANGE = (1.0, 1e9)
+#: A typed scale outside `SCALE_RANGE` (or zero, or negative).
+OUT_OF_RANGE = "range"
+
+_SPACES = "\u00a0\u202f\u2009 "
+_SCALE_PREFIX = re.compile(r"^\s*1\s*:\s*")
+
+
+def preset_scale(baseline: float, factor: float) -> float:
+    """The scale denominator `factor` times closer than `baseline`: absolute,
+    so asking for the same preset twice never zooms twice."""
+    return baseline / factor
+
+
+def preset_for_scale(baseline: float, scale: float) -> int | None:
+    """Index of the preset whose scale `scale` is, to the precision it is shown
+    with (a whole number), or None for a custom scale."""
+    for index, factor in enumerate(PRESET_FACTORS):
+        wanted = preset_scale(baseline, factor)
+        if abs(scale - wanted) <= max(0.5, wanted * 1e-9):
+            return index
+    return None
+
+
+def format_scale(value: float, locale: QLocale | None = None) -> str:
+    """A scale denominator as the field shows it: grouped, whole when it is
+    (nearly) whole, otherwise to two decimals."""
+    locale = locale or QLocale()
+    if abs(value - round(value)) < 0.005:
+        return locale.toString(int(round(value)))
+    text = locale.toString(round(value, 2), "f", 2)
+    decimal = locale.decimalPoint()
+    return text.rstrip("0").rstrip(decimal) if decimal in text else text
+
+
+def parse_scale(text: str, locale: QLocale | None = None) -> ParsedNumber:
+    """Read a typed or pasted scale denominator in `locale`: "25,000", "25000"
+    or "1:25,000". Empty, non-numeric, zero, negative and out-of-range values
+    come back with a problem and no value; nothing is substituted."""
+    locale = locale or QLocale()
+    decimal, group = _separators(locale)
+    cleaned = _SCALE_PREFIX.sub("", text.translate(_MINUS_SIGNS)).strip()
+    if not cleaned:
+        return ParsedNumber(problem=EMPTY)
+    group_chars = ({group} | set(_SPACES)) if group else set(_SPACES)
+    if any(c in group_chars for c in cleaned):
+        mark = re.escape("".join(sorted(group_chars)))
+        grouped = rf"[+-]?\d{{1,3}}(?:[{mark}]\d{{3}})+(?:{re.escape(decimal)}\d*)?"
+        if not re.fullmatch(grouped, cleaned, re.UNICODE):
+            return ParsedNumber(problem=INVALID)
+        cleaned = re.sub(rf"[{mark}]", "", cleaned)
+    parsed = parse_decimal(cleaned, locale)
+    if parsed.value is None:
+        return parsed
+    low, high = SCALE_RANGE
+    if not low <= parsed.value <= high:
+        return ParsedNumber(problem=OUT_OF_RANGE)
+    return parsed
+
+
 def is_geographic(crs: QgsCoordinateReferenceSystem) -> bool:
     return bool(crs.isValid() and crs.isGeographic())
 
@@ -783,6 +851,14 @@ class FrameTarget:
         item = self.item()
         return float(item.mapRotation()) if item is not None else 0.0
 
+    def scale(self) -> float | None:
+        """The scale denominator the frame shows now, or None when it has none."""
+        item = self.item()
+        if item is None:
+            return None
+        value = float(item.scale())
+        return value if math.isfinite(value) and value > 0 else None
+
     def view_is_data_defined(self) -> bool:
         item = self.item()
         if item is None:
@@ -790,8 +866,12 @@ class FrameTarget:
         properties = item.dataDefinedProperties()
         return any(properties.isActive(p) for p in _DATA_DEFINED_VIEW)
 
-    def apply_extent(self, extent: QgsRectangle, label: str) -> None:
-        """Show `extent` in the frame as one undo step. Raises `ApplyError`."""
+    def apply_extent(
+        self, extent: QgsRectangle, label: str, scale: float | None = None
+    ) -> None:
+        """Show `extent` in the frame as one undo step, at `scale` (a scale
+        denominator, about the same middle) when one is given. Raises
+        `ApplyError`."""
         item = self.item()
         if item is None:
             raise ApplyError("frame")
@@ -812,12 +892,24 @@ class FrameTarget:
         stack.beginCommand(item, label)
         try:
             item.zoomToExtent(extent)
+            if scale is not None:
+                self._apply_scale(item, scale)
             item.invalidateCache()
         finally:
             stack.endCommand()
         item.update()
         if self._after_apply is not None:
             self._after_apply()
+
+    @staticmethod
+    def _apply_scale(item: QgsLayoutItemMap, scale: float) -> None:
+        """Zoom the view about its middle to `scale`; the place, the frame's
+        size on the page and its rotation stay as they are."""
+        if not (math.isfinite(scale) and scale > 0):
+            raise ApplyError("extent")
+        now = float(item.scale())
+        if math.isfinite(now) and abs(now - scale) > scale * 1e-9:
+            item.setScale(scale)
 
 
 class ApplyError(Exception):
@@ -866,6 +958,27 @@ def feature_destination(
     return centered_extent(current, centre)
 
 
+def fit_available(target: FrameTarget, layer: QgsVectorLayer, fid: int) -> bool:
+    """Whether "Fit whole feature" means something for feature `fid`: it has an
+    extent worth fitting (not a single point, not a speck). False when it
+    cannot be read."""
+    try:
+        if sip.isdeleted(layer) or not layer.isValid():
+            return False
+        feature = layer.getFeature(fid)
+        current = target.extent()
+        if not feature.isValid() or current is None:
+            return False
+        geometry = transform_geometry(
+            feature.geometry(), layer.crs(), target.crs(), target.project
+        )
+        if not has_location(geometry) or is_single_point(geometry):
+            return False
+        return fitted_extent(geometry, current, target.rotation()) is not None
+    except TransformError:
+        return False
+
+
 def coordinate_destination(
     target: FrameTarget, point: QgsPointXY, source: QgsCoordinateReferenceSystem
 ) -> QgsRectangle:
@@ -896,6 +1009,9 @@ __all__: Sequence[str] = [
     "SearchPlan",
     "SearchSource",
     "TransformError",
+    "OUT_OF_RANGE",
+    "PRESET_FACTORS",
+    "SCALE_RANGE",
     "centered_extent",
     "coordinate_destination",
     "display_expression",
@@ -903,14 +1019,19 @@ __all__: Sequence[str] = [
     "feature_destination",
     "field_range_problem",
     "fields_to_point",
+    "fit_available",
     "fitted_extent",
     "format_number",
+    "format_scale",
     "has_location",
     "is_geographic",
     "is_single_point",
     "parse_decimal",
+    "parse_scale",
     "parse_whole_number",
     "point_to_fields",
+    "preset_for_scale",
+    "preset_scale",
     "rank_matches",
     "representative_point",
     "search_sources",
