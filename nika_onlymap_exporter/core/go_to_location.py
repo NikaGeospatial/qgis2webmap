@@ -205,7 +205,7 @@ def format_scale(value: float, locale: QLocale | None = None) -> str:
     (nearly) whole, otherwise to two decimals."""
     locale = locale or QLocale()
     if abs(value - round(value)) < 0.005:
-        return locale.toString(int(round(value)))
+        return locale.toString(round(value))
     text = locale.toString(round(value, 2), "f", 2)
     decimal = locale.decimalPoint()
     return text.rstrip("0").rstrip(decimal) if decimal in text else text
@@ -998,7 +998,10 @@ __all__: Sequence[str] = [
     "FIT_MARGIN",
     "INVALID",
     "MAX_SHOWN",
+    "OUT_OF_RANGE",
     "PAIR",
+    "PRESET_FACTORS",
+    "SCALE_RANGE",
     "UNSUPPORTED",
     "ApplyError",
     "FrameTarget",
@@ -1009,9 +1012,6 @@ __all__: Sequence[str] = [
     "SearchPlan",
     "SearchSource",
     "TransformError",
-    "OUT_OF_RANGE",
-    "PRESET_FACTORS",
-    "SCALE_RANGE",
     "centered_extent",
     "coordinate_destination",
     "display_expression",

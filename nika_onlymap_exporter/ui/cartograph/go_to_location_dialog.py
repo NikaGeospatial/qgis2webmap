@@ -8,6 +8,14 @@ while the user types, searches or selects: only **Go** changes the map, as one
 undo step on the layout's own stack, and only the area shown inside the frame
 changes - never the frame's place, size or rotation on the sheet.
 
+Below the tabs, one **Zoom** row is shared by both: five presets (1/2x to 8x,
+absolute against the scale the frame had when the dialog opened) and an exact
+"1 : N" scale. Go applies the place and that scale together as the same single
+undo step; "Fit whole feature" replaces the manual scale while it is on.
+
+The window keeps one size across tabs: it is sized once, when it first opens,
+and each tab's page scrolls inside a fixed area when the screen is too small.
+
 The logic (parsing, transforms, the search itself, the destination) lives in
 `core.go_to_location`; this module is the widgets and the rules of the
 interaction:
@@ -29,6 +37,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import functools
+import re
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,7 +54,15 @@ from qgis.core import (
 )
 from qgis.gui import QgsProjectionSelectionDialog
 from qgis.PyQt import sip
-from qgis.PyQt.QtCore import QLocale, QModelIndex, QRect, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QLocale,
+    QModelIndex,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import (
     QFont,
     QFontMetrics,
@@ -58,15 +75,19 @@ from qgis.PyQt.QtGui import (
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStyle,
     QStyledItemDelegate,
@@ -88,6 +109,16 @@ COORDINATES_TAB, FEATURE_TAB = 0, 1
 PREFERRED_WIDTH = 620
 MINIMUM_WIDTH = 520
 SCREEN_MARGIN = 40
+#: The Zoom row's controls are at least this tall (the inputs' height at the
+#: default font), and as tall as an input when the font is larger.
+ROW_HEIGHT = 36
+#: The widest scale the field must show without clipping.
+WIDEST_SCALE_TEXT = "1 : 1,000,000"
+#: Results the Feature page is first sized to show.
+VISIBLE_RESULTS = 3
+#: The fewest results rows the list keeps before its page scrolls instead.
+LEAST_RESULTS = 2
+PRESET_LABELS = ("\u00bd\u00d7", "1\u00d7", "2\u00d7", "4\u00d7", "8\u00d7")
 POLL_MS = 40
 WATCH_MS = 300
 
@@ -209,39 +240,30 @@ class _ResultDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class _TabsFollowingTheOpenPage(QTabWidget):
-    """A tab widget as tall as the open tab needs, not the tallest one: Qt sizes
-    it by every page, which would give the short Coordinates tab the Feature
-    tab's empty room."""
+class _PageScroll(QScrollArea):
+    """One tab's page, scrolling inside the area the tab gives it.
 
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.currentChanged.connect(self.updateGeometry)
+    The dialog is sized once, to the tallest page; this is what keeps a page
+    that does not fit (a small screen, a large font) reachable without the
+    window growing. Qt would cap a scroll area's own size hint at about 24 text
+    lines, which is shorter than the Feature page.
+    """
 
-    def _pages(self, hint: str) -> tuple[int, int]:
-        """(tallest page, open page) heights by `hint`."""
-        heights = [
-            getattr(self.widget(i), hint)().height() for i in range(self.count())
-        ]
-        current = self.currentWidget()
-        open_height = getattr(current, hint)().height() if current is not None else 0
-        return (max(heights) if heights else 0), open_height
-
-    def hasHeightForWidth(self) -> bool:  # noqa: N802
-        # Qt's own answer takes the tallest page at every width.
-        return False
+    def __init__(self, page: QWidget) -> None:
+        super().__init__()
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setWidget(page)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        hint = super().sizeHint()
-        tallest, current = self._pages("sizeHint")
-        hint.setHeight(hint.height() - tallest + current)
-        return hint
+        widget = self.widget()
+        return widget.sizeHint() if widget is not None else super().sizeHint()
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        hint = super().minimumSizeHint()
-        tallest, current = self._pages("minimumSizeHint")
-        hint.setHeight(hint.height() - tallest + current)
-        return hint
+        widget = self.widget()
+        width = widget.minimumSizeHint().width() if widget is not None else 0
+        return QSize(width, 8 * self.fontMetrics().height())
 
 
 class _ResultList(QListWidget):
@@ -249,14 +271,22 @@ class _ResultList(QListWidget):
 
     go_requested = pyqtSignal()
 
-    def sizeHint(self) -> QSize:  # noqa: N802
-        # Three rows, however the style sizes an empty list: the list takes
-        # the room the dialog has beyond that.
+    def _rows_height(self, rows: int) -> int:
         option = QStyleOptionViewItem()
         option.font = self.font()
         row = self.itemDelegate().sizeHint(option, QModelIndex())
-        height = 3 * row.height() + 2 * self.frameWidth()
-        return QSize(super().sizeHint().width(), height)
+        return rows * row.height() + 2 * self.frameWidth()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        # Three rows, however the style sizes an empty list: the list takes
+        # the room the dialog has beyond that.
+        return QSize(super().sizeHint().width(), self._rows_height(VISIBLE_RESULTS))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        # Never squeezed below two rows: the page scrolls first.
+        return QSize(
+            super().minimumSizeHint().width(), self._rows_height(LEAST_RESULTS)
+        )
 
     def keyPressEvent(self, event: QKeyEvent | None) -> None:  # noqa: N802
         if event is not None and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -277,6 +307,133 @@ class _ResultList(QListWidget):
             event.accept()
             return
         super().keyPressEvent(event)
+
+
+def _repolish(widget: QWidget) -> None:
+    """Apply a changed dynamic property to the stylesheet."""
+    style = widget.style()
+    style.unpolish(widget)
+    style.polish(widget)
+    widget.update()
+
+
+class _ZoomControl(QFrame):
+    """Five connected segments, one selected at most: one rounded border, the
+    segments divided by hairlines (all drawn by the theme)."""
+
+    chosen = pyqtSignal(int)
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "zoomControl")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(1, 1, 1, 1)
+        row.setSpacing(0)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self.buttons: list[QToolButton] = []
+        tips = (
+            tr("Zoom out to show more surrounding area."),
+            tr("Keep the current map scale."),
+            tr("Zoom twice as close."),
+            tr("Zoom four times as close."),
+            tr("Zoom eight times as close."),
+        )
+        for index, (label, tip) in enumerate(zip(PRESET_LABELS, tips, strict=True)):
+            button = QToolButton(self)
+            button.setText(label)
+            button.setToolTip(tip)
+            button.setCheckable(True)
+            button.setAutoRaise(False)
+            button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            button.setProperty("role", "zoomSegment")
+            edge = "start" if index == 0 else "end" if index == 4 else "middle"
+            button.setProperty("edge", edge)
+            button.clicked.connect(functools.partial(self.chosen.emit, index))
+            self.group.addButton(button, index)
+            self.buttons.append(button)
+            row.addWidget(button, 1)
+
+    def select(self, index: int | None) -> None:
+        """Show preset `index` as the chosen one, or none (a custom scale)."""
+        if index is None:
+            self.group.setExclusive(False)
+            for button in self.buttons:
+                button.setChecked(False)
+            self.group.setExclusive(True)
+        else:
+            self.buttons[index].setChecked(True)
+
+    def selected(self) -> int | None:
+        for index, button in enumerate(self.buttons):
+            if button.isChecked():
+                return index
+        return None
+
+
+class _ScaleInput(QLineEdit):
+    """The scale's text box: tells its frame when it has the keyboard."""
+
+    focus_changed = pyqtSignal(bool)
+
+    def focusInEvent(self, event) -> None:  # noqa: N802
+        super().focusInEvent(event)
+        self.focus_changed.emit(True)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802
+        super().focusOutEvent(event)
+        self.focus_changed.emit(False)
+
+    def wheelEvent(self, event) -> None:  # noqa: N802
+        # The wheel never edits a scale.
+        event.ignore()
+
+
+class _ScaleField(QFrame):
+    """ "1 : [number]" as one field: a fixed prefix and an editable denominator
+    inside one border."""
+
+    SIDE = 9
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setProperty("role", "scaleField")
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._row = QHBoxLayout(self)
+        self._row.setSpacing(6)
+        self._set_side(self.SIDE)
+        self.prefix = QLabel("1 :", self)
+        self.prefix.setProperty("role", "scalePrefix")
+        self.edit = _ScaleInput(self)
+        self.edit.setProperty("role", "scaleInput")
+        self.edit.setAccessibleName(tr("Map scale"))
+        self.edit.setToolTip(tr("Enter an exact map scale, for example 1:25,000."))
+        self.edit.focus_changed.connect(self._ring)
+        self.prefix.setBuddy(self.edit)
+        self._row.addWidget(self.prefix)
+        self._row.addWidget(self.edit, 1)
+
+    def _set_side(self, side: int) -> None:
+        self._row.setContentsMargins(side, 0, side, 0)
+
+    def _ring(self, on: bool) -> None:
+        # The focus ring is a thicker border: the margin gives that pixel back
+        # so the text does not move when the keyboard arrives.
+        self.setProperty("ringed", on)
+        _repolish(self)
+        self._set_side(self.SIDE - 1 if on else self.SIDE)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        # Room for the widest scale the field accepts, in the current font.
+        width = self.fontMetrics().horizontalAdvance(WIDEST_SCALE_TEXT)
+        return QSize(width + 2 * self.SIDE + 2 + 10, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return self.sizeHint()
 
 
 def _button(text: str, accessible: str, parent: QWidget) -> QPushButton:
@@ -336,6 +493,10 @@ class GoToLocationDialog(QDialog):
         self._first_activation = True
         self._no_layers = False
         self._sized = False
+        self._baseline = target.scale()
+        self._scale_revealed = False
+        self._fit_choice = True
+        self._zoom_tone = ""
         self._coordinate_note = ""
         self._revealed = [False, False]
         self._generation = 0
@@ -360,10 +521,11 @@ class GoToLocationDialog(QDialog):
         self.context_label.setProperty("role", "hint")
         outer.addWidget(self.context_label)
 
-        self.tabs = _TabsFollowingTheOpenPage(self)
-        self.tabs.addTab(self._build_coordinates_tab(), tr("Coordinates"))
-        self.tabs.addTab(self._build_feature_tab(), tr("Feature"))
+        self.tabs = QTabWidget(self)
+        self.tabs.addTab(_PageScroll(self._build_coordinates_tab()), tr("Coordinates"))
+        self.tabs.addTab(_PageScroll(self._build_feature_tab()), tr("Feature"))
         outer.addWidget(self.tabs, 1)
+        outer.addLayout(self._build_zoom_row())
         outer.addLayout(self._build_footer())
 
         self._poll_timer = QTimer(self)
@@ -380,7 +542,6 @@ class GoToLocationDialog(QDialog):
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self._on_tab_changed(self.tabs.currentIndex(), remember=False)
         self._refresh_all()
-        self._fit_to_content()
 
     # ---- building -----------------------------------------------------------
 
@@ -496,6 +657,7 @@ class GoToLocationDialog(QDialog):
         self.fit_check = QCheckBox(tr("Fit whole feature"), page)
         self.fit_check.setAccessibleName(tr("Fit whole feature"))
         self.fit_check.setEnabled(False)
+        self.fit_check.toggled.connect(self._on_fit_toggled)
         box.addWidget(self.fit_check)
         self.scope_hint = FittedLabel(
             tr("Searches the whole selected layer, beyond the current map view."), page
@@ -507,6 +669,37 @@ class GoToLocationDialog(QDialog):
         self.feature_message.setProperty("tone", "warning")
         box.addWidget(self.feature_message)
         return page
+
+    def _build_zoom_row(self) -> QVBoxLayout:
+        """Zoom [ 1/2x | 1x | 2x | 4x | 8x ] [ 1 : N ], under both tabs. The note
+        above the row is what is said about it, in the room the tabs give up, so
+        the row itself never moves."""
+        block = QVBoxLayout()
+        block.setSpacing(6)
+        self.zoom_note = FittedLabel("", self)
+        self.zoom_note.setProperty("role", "inlineNote")
+        self.zoom_note.setVisible(False)
+        block.addWidget(self.zoom_note)
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        self.zoom_label = QLabel(tr("Zoom"), self)
+        self.zoom_control = _ZoomControl(self)
+        self.scale_field = _ScaleField(self)
+        self.scale_edit = self.scale_field.edit
+        self.zoom_label.setBuddy(self.zoom_control.buttons[1])
+        centre = Qt.AlignmentFlag.AlignVCenter
+        row.addWidget(self.zoom_label, 0, centre)
+        row.addWidget(self.zoom_control, 1, centre)
+        row.addWidget(self.scale_field, 0, centre)
+        block.addLayout(row)
+        self._zoom_widgets = (self.zoom_label, self.zoom_control, self.scale_field)
+        baseline = self._baseline
+        if baseline is not None:
+            self.scale_edit.setText(core.format_scale(baseline, self._locale))
+        self.zoom_control.chosen.connect(self._on_preset_chosen)
+        self.scale_edit.textEdited.connect(self._on_scale_edited)
+        self.scale_edit.editingFinished.connect(self._on_scale_finished)
+        return block
 
     def _say(self, text: str) -> None:
         """The inline note under the Feature tab; with no layer to search, that
@@ -549,19 +742,59 @@ class GoToLocationDialog(QDialog):
             else QSize(1024, 768)
         )
 
-    def _fit_to_content(self) -> None:
-        """Width: 620 (not below 520), never wider than the screen. Height: what
-        the open tab needs, never taller than the screen. The tab that is not
-        open does not count towards the height."""
+    def _match_row_height(self) -> None:
+        """The Zoom row's controls are as tall as an input."""
+        height = max(ROW_HEIGHT, self.query_edit.sizeHint().height())
+        self.zoom_control.setFixedHeight(height)
+        self.scale_field.setFixedHeight(height)
+
+    def _notes_room(self) -> int:
+        """Room for the one line each of the status and the note under the
+        results, which are empty when the dialog opens: the three results the
+        list is sized for stay three once a search has filled them in."""
+        line = self.fontMetrics().height() + 12
+        empty = [
+            label
+            for label in (self.status_label, self.feature_message)
+            if not label.text()
+        ]
+        return line * len(empty)
+
+    def _natural_height(self, width: int) -> int:
+        """The height the content needs at `width`. Wrapped labels measure
+        themselves at the width they are given, so the layouts are measured
+        again once they have been given it."""
+        for layout in self.findChildren(QLayout):
+            layout.invalidate()
+        height = self.sizeHint().height() + self._notes_room()
+        for _ in range(2):
+            self.resize(width, height)
+            for layout in self.findChildren(QLayout):
+                layout.invalidate()
+            self.layout().activate()
+            height = max(height, self.sizeHint().height() + self._notes_room())
+        return height
+
+    def _size_once(self) -> None:
+        """The window's size, chosen once, as it first opens and with the theme
+        and font in place: 620 wide (not below 520), tall enough for the Feature
+        page with about three results. Switching tabs never changes it, and a
+        size the user drags it to is theirs."""
+        self._sized = True
         available = self._screen_size()
         width = min(PREFERRED_WIDTH, available.width() - SCREEN_MARGIN)
         self.setMinimumWidth(min(MINIMUM_WIDTH, width))
-        if self._sized:  # the user's own width is kept across tabs
-            width = max(self.width(), width)
-        self._sized = True
-        self.layout().activate()
-        height = min(self.sizeHint().height(), available.height() - SCREEN_MARGIN)
+        self.ensurePolished()
+        for child in self.findChildren(QWidget):
+            child.ensurePolished()
+        self._match_row_height()
+        height = min(self._natural_height(width), available.height() - SCREEN_MARGIN)
         self.resize(width, max(height, self.minimumSizeHint().height()))
+
+    def setVisible(self, visible: bool) -> None:  # noqa: N802
+        if visible and not self._sized:
+            self._size_once()
+        super().setVisible(visible)
 
     def showEvent(self, event: QShowEvent | None) -> None:  # noqa: N802
         super().showEvent(event)
@@ -585,7 +818,6 @@ class GoToLocationDialog(QDialog):
     def _on_tab_changed(self, index: int, remember: bool = True) -> None:
         if remember:
             _session["mode"] = index
-        self._fit_to_content()
         self._focus_for_tab(index)
         self._update_go()
 
@@ -949,10 +1181,15 @@ class GoToLocationDialog(QDialog):
         self.results.setEnabled(not self.results.count())
         if clear_status:
             self.status_label.setText("")
-        self.fit_check.setEnabled(False)
-        self.fit_check.setChecked(False)
+        self._reset_fit()
         self._say("")
         self._update_go()
+
+    def _reset_fit(self) -> None:
+        """Nothing selected to fit: the box is shown, off and unavailable."""
+        self.fit_check.setVisible(True)
+        self.fit_check.setEnabled(False)
+        self.fit_check.setChecked(False)
 
     @_guarded
     def start_search(self) -> None:
@@ -1091,24 +1328,36 @@ class GoToLocationDialog(QDialog):
     def _on_result_selected(self) -> None:
         hit = self._selected_hit()
         self.fit_check.blockSignals(True)
+        fits = False
+        layer = self._layer
+        if hit is not None and hit.usable and layer is not None:
+            fits = core.fit_available(self.target, layer, hit.fid)
         if hit is None:
-            self.fit_check.setEnabled(False)
-            self.fit_check.setChecked(False)
+            self._reset_fit()
         elif not hit.usable:
-            self.fit_check.setEnabled(False)
-            self.fit_check.setChecked(False)
+            self._reset_fit()
             self._say(tr("This feature has no location to display."))
-        elif hit.single_point:
+        elif not fits:
+            # A single point (or a speck) has no extent to fit: the Zoom row is
+            # the way to choose how close.
+            self.fit_check.setVisible(False)
             self.fit_check.setEnabled(False)
             self.fit_check.setChecked(False)
             self._say("")
         else:
+            self.fit_check.setVisible(True)
             self.fit_check.setEnabled(True)
-            self.fit_check.setChecked(True)
+            self.fit_check.setChecked(self._fit_choice)
             self._say("")
         self.fit_check.blockSignals(False)
         if hit is not None and hit.usable:
             self._warn_if_hidden_by_style(hit)
+        self._update_go()
+
+    @_guarded
+    def _on_fit_toggled(self, checked: bool) -> None:
+        if self.fit_check.isEnabled():
+            self._fit_choice = checked
         self._update_go()
 
     def _warn_if_hidden_by_style(self, hit: Hit) -> None:
@@ -1127,6 +1376,103 @@ class GoToLocationDialog(QDialog):
     @_guarded
     def _on_result_double_clicked(self, _item: QListWidgetItem) -> None:
         self.go()
+
+    # ---- zoom -------------------------------------------------------------------
+
+    def _read_scale(self) -> core.ParsedNumber:
+        """The scale field as it reads now. A value that is a preset's, to the
+        precision it is shown with, is exactly that preset's."""
+        parsed = core.parse_scale(self.scale_edit.text(), self._locale)
+        baseline = self._baseline
+        if parsed.value is None or baseline is None:
+            return parsed
+        index = core.preset_for_scale(baseline, parsed.value)
+        if index is None:
+            return parsed
+        exact = core.preset_scale(baseline, core.PRESET_FACTORS[index])
+        return core.ParsedNumber(value=exact)
+
+    def _fit_active(self) -> bool:
+        """Go will fit the whole feature, so the manual scale is not used."""
+        return (
+            self.tabs.currentIndex() == FEATURE_TAB
+            and not self.fit_check.isHidden()
+            and self.fit_check.isEnabled()
+            and self.fit_check.isChecked()
+        )
+
+    @_guarded
+    def _on_preset_chosen(self, index: int) -> None:
+        baseline = self._baseline
+        if baseline is None:
+            return
+        value = core.preset_scale(baseline, core.PRESET_FACTORS[index])
+        self.scale_edit.setText(core.format_scale(value, self._locale))
+        self._scale_revealed = False
+        self._update_go()
+
+    @_guarded
+    def _on_scale_edited(self, text: str) -> None:
+        parsed = core.parse_scale(text, self._locale)
+        if parsed.value is not None:
+            self._scale_revealed = False
+        elif not re.fullmatch(r"[\s+\-.,:]*(1\s*:)?[\s+\-.,]*", text):
+            # More than a number being started: say what is wrong now.
+            self._scale_revealed = True
+        self._update_go()
+
+    @_guarded
+    def _on_scale_finished(self) -> None:
+        parsed = self._read_scale()
+        if parsed.value is not None:
+            self.scale_edit.setText(core.format_scale(parsed.value, self._locale))
+            self._scale_revealed = False
+        else:
+            self._scale_revealed = True
+        self._update_go()
+
+    def _scale_message(self) -> str:
+        return tr("Enter a valid map scale, for example {example}.").format(
+            example=core.format_scale(25000, self._locale)
+        )
+
+    def _refresh_zoom(self, problem: str) -> None:
+        """The Zoom row shows what Go will do: off while the whole feature is
+        being fitted (the fit sets the scale), otherwise the chosen preset or
+        the typed scale, and a note when that scale is not usable."""
+        fit = self._fit_active()
+        usable = self._baseline is not None
+        enabled = usable and not fit and not problem
+        for widget in self._zoom_widgets:
+            widget.setEnabled(enabled)
+        parsed = self._read_scale()
+        baseline = self._baseline
+        chosen = None
+        if parsed.value is not None and baseline is not None:
+            chosen = core.preset_for_scale(baseline, parsed.value)
+        if self.zoom_control.selected() != chosen:
+            self.zoom_control.select(chosen)
+        note, tone = "", ""
+        if fit:
+            note = tr("Scale is set automatically when fitting the whole feature.")
+            tone = "hint"
+        elif enabled and parsed.value is None and self._scale_revealed:
+            note, tone = self._scale_message(), "warning"
+        if tone != self._zoom_tone:
+            self._zoom_tone = tone
+            self.zoom_note.setProperty("tone", tone or "warning")
+            _repolish(self.zoom_note)
+        if self.zoom_note.text() != note:
+            self.zoom_note.setText(note)
+        self.zoom_note.setVisible(bool(note))
+
+    def _scale_ready(self) -> bool:
+        """The scale Go would use is usable (or there is none to use)."""
+        return (
+            self._fit_active()
+            or self._baseline is None
+            or self._read_scale().value is not None
+        )
 
     # ---- state ------------------------------------------------------------------
 
@@ -1169,7 +1515,8 @@ class GoToLocationDialog(QDialog):
         else:
             hit = self._selected_hit()
             ready = hit is not None and hit.usable
-        self.go_button.setEnabled(bool(ready) and not problem)
+        self._refresh_zoom(problem)
+        self.go_button.setEnabled(bool(ready) and not problem and self._scale_ready())
         enabled = not problem
         self.crs_button.setEnabled(enabled)
         for widget in (self.first_edit, self.second_edit):
@@ -1195,6 +1542,16 @@ class GoToLocationDialog(QDialog):
         if problem:
             self._update_go()
             return
+        # One pending operation, read from what is on screen now: the place of
+        # the open tab (or the selected result) and, unless the whole feature is
+        # being fitted, the scale in the field.
+        scale: float | None = None
+        if not self._fit_active() and self._baseline is not None:
+            scale = self._read_scale().value
+            if scale is None:
+                self._scale_revealed = True
+                self._update_go()
+                return
         try:
             if self.tabs.currentIndex() == COORDINATES_TAB:
                 point = self._typed_point()
@@ -1205,7 +1562,7 @@ class GoToLocationDialog(QDialog):
                 extent = self._feature_extent()
                 if extent is None:
                     return
-            self.target.apply_extent(extent, tr("Go to location"))
+            self.target.apply_extent(extent, tr("Go to location"), scale)
         except TransformError:
             self._fail(
                 tr("This location cannot be converted to the map's coordinate system.")
@@ -1227,7 +1584,7 @@ class GoToLocationDialog(QDialog):
         if hit is None or layer is None or sip.isdeleted(layer):
             self._source_lost("layer")
             return None
-        fit = self.fit_check.isEnabled() and self.fit_check.isChecked()
+        fit = self._fit_active()
         try:
             return core.feature_destination(self.target, layer, hit.fid, fit)
         except LookupError as error:
@@ -1243,8 +1600,7 @@ class GoToLocationDialog(QDialog):
         self.results.blockSignals(False)
         self._results_fresh = False
         self.results.setEnabled(False)
-        self.fit_check.setEnabled(False)
-        self.fit_check.setChecked(False)
+        self._reset_fit()
         message = {
             "layer": tr("This layer is no longer available."),
             "feature": tr("This feature is no longer available."),

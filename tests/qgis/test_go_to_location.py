@@ -2154,7 +2154,7 @@ class TestTheDialogsLook:
         assert not seen["scroll0"] and not seen["scroll1"]
         assert seen["fits0"] == [] and seen["fits1"] == []
 
-    def test_the_size_follows_the_open_tab(self, canyon) -> None:
+    def test_the_size_is_the_same_on_every_tab(self, canyon) -> None:
         seen = {}
 
         def script(dialog) -> None:
@@ -2167,13 +2167,10 @@ class TestTheDialogsLook:
             seen["back"] = (dialog.width(), dialog.height())
 
         canyon.open(script)
-        assert seen["coordinates"][0] == 620 == seen["feature"][0]
-        # About 430 and 570 px with the default font: not the taller tab's height twice.
-        assert 380 <= seen["coordinates"][1] <= 470, seen
-        assert 520 <= seen["feature"][1] <= 620, seen
-        # Back on the short tab it is short again (give or take a wrapped line).
-        assert seen["back"][0] == 620
-        assert abs(seen["back"][1] - seen["coordinates"][1]) <= 30, seen
+        assert seen["coordinates"][0] == 620
+        # Sized once for the taller Feature page, and never again.
+        assert 450 <= seen["coordinates"][1] <= 720, seen
+        assert seen["coordinates"] == seen["feature"] == seen["back"]
 
     def test_a_narrow_screen_and_long_names_never_widen_or_scroll_the_dialog(
         self, canyon, monkeypatch

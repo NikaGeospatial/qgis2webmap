@@ -1797,7 +1797,12 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     padding: 6px 12px 2px 12px;
 }}
 """
-    return base + focus_rules(p, object_name) + embedded_line_edit_rules(object_name)
+    return (
+        base
+        + focus_rules(p, object_name)
+        + embedded_line_edit_rules(object_name)
+        + zoom_row_rules(p, object_name)
+    )
 
 
 # Keyboard focus: one 2 px ring in the link colour (or ink round an accent
@@ -1906,6 +1911,120 @@ def align_embedded_edits(root: QWidget) -> None:
         edit = combo.lineEdit()
         if edit is not None:
             edit.setTextMargins(0, EMBEDDED_TEXT_RAISE, 0, 0)
+
+
+def zoom_row_rules(p: Palette, object_name: str) -> str:
+    """Go to location's Zoom row: a segmented control (one rounded border,
+    hairline dividers, the chosen segment on a soft accent fill) and the
+    "1 : N" scale field drawn as one input. Every rule is keyed on the row's own
+    roles, and the block comes last so it wins over the generic input and
+    button rules (the scale's inner line edit draws only text)."""
+    d = f"#{object_name}"
+    seg = f'{d} QToolButton[role="zoomSegment"]'
+    field = f'{d} QFrame[role="scaleField"]'
+    edit = f'{d} QLineEdit[role="scaleInput"]'
+    inner_edit = ",\n".join(
+        f"{edit}{state}" for state in ("", ":hover", ":focus", ":disabled")
+    )
+    return f"""
+{d} QFrame[role="zoomControl"] {{
+    background: {p.field};
+    border: 1px solid {p.rule};
+    border-radius: 6px;
+}}
+{d} QFrame[role="zoomControl"]:disabled {{
+    background: transparent;
+}}
+{seg} {{
+    background: transparent;
+    color: {p.ink};
+    border: none;
+    border-left: 1px solid {p.rule};
+    border-radius: 0;
+    padding: 0 4px;
+    min-width: 0;
+}}
+{seg}[edge="start"] {{
+    border-left: none;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+{seg}[edge="end"] {{
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d}[rtl="true"] {seg} {{
+    border-left: none;
+    border-right: 1px solid {p.rule};
+}}
+{d}[rtl="true"] {seg}[edge="start"] {{
+    border-right: none;
+    border-radius: 0;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}}
+{d}[rtl="true"] {seg}[edge="end"] {{
+    border-radius: 0;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}}
+{seg}:hover {{
+    background: {p.hover};
+}}
+{seg}:pressed {{
+    background: {p.rule};
+}}
+{seg}:checked {{
+    background: {p.accent_soft};
+    color: {p.ink};
+}}
+{seg}:checked:hover {{
+    background: {p.accent_soft};
+}}
+{seg}:disabled {{
+    background: transparent;
+    color: {p.quiet};
+}}
+{seg}:checked:disabled {{
+    background: {p.rule};
+    color: {p.quiet};
+}}
+{seg}:focus {{
+    border: {FOCUS_WIDTH}px solid {p.link};
+    border-radius: 3px;
+}}
+{field} {{
+    background: {p.field};
+    border: 1px solid {p.rule};
+    border-radius: 5px;
+}}
+{field}:hover {{
+    border-color: {p.muted};
+}}
+{field}[ringed="true"] {{
+    border: {FOCUS_WIDTH}px solid {p.link};
+}}
+{field}:disabled {{
+    background: transparent;
+}}
+{inner_edit} {{
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+}}
+{d} QLabel[role="scalePrefix"] {{
+    color: {p.muted};
+}}
+{d} QLabel[role="scalePrefix"]:disabled {{
+    color: {p.quiet};
+}}
+{d} QLabel[role="inlineNote"][tone="hint"] {{
+    color: {p.muted};
+}}
+"""
 
 
 def focus_colour(p: Palette, on_accent_fill: bool = False) -> str:
