@@ -253,6 +253,10 @@ def open_dialog(action, script: Callable[[object], None], limit_ms: int = 25000)
             # Focus changes only reach widgets of the active window.
             dialog.activateWindow()
             QTest.qWaitForWindowActive(dialog, 3000)
+            if not dialog.isActiveWindow() and hasattr(QApplication, "setActiveWindow"):
+                # Qt 5's offscreen platform leaves the parent window active
+                # behind a modal dialog; a real window manager would not.
+                QApplication.setActiveWindow(dialog)
             script(dialog)
         except BaseException:  # reported to the test, never lost in a slot
             outcome["error"] = traceback.format_exc()
