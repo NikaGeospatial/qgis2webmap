@@ -9,7 +9,7 @@ undo step on the layout's own stack, and only the area shown inside the frame
 changes - never the frame's place, size or rotation on the sheet.
 
 Below the tabs, one **Zoom** row is shared by both: five presets (1/2x to 8x,
-absolute against the scale the frame had when the dialog opened) and an exact
+absolute against the frame's reference scale, stored on the frame) and an exact
 "1 : N" scale. Go applies the place and that scale together as the same single
 undo step; "Fit whole feature" replaces the manual scale while it is on.
 
@@ -335,7 +335,7 @@ class _ZoomControl(QFrame):
         self.buttons: list[QToolButton] = []
         tips = (
             tr("Zoom out to show more surrounding area."),
-            tr("Keep the current map scale."),
+            tr("Return to this map's reference scale."),
             tr("Zoom twice as close."),
             tr("Zoom four times as close."),
             tr("Zoom eight times as close."),
@@ -493,7 +493,12 @@ class GoToLocationDialog(QDialog):
         self._first_activation = True
         self._no_layers = False
         self._sized = False
-        self._baseline = target.scale()
+        # The frame's own reference scale; until a first Go stores one, the
+        # scale it has now stands in (opening or cancelling writes nothing).
+        current = target.scale()
+        stored = target.reference_scale()
+        self._baseline = stored if stored is not None else current
+        self._current_scale = current
         self._scale_revealed = False
         self._fit_choice = True
         self._zoom_tone = ""
@@ -693,9 +698,9 @@ class GoToLocationDialog(QDialog):
         row.addWidget(self.scale_field, 0, centre)
         block.addLayout(row)
         self._zoom_widgets = (self.zoom_label, self.zoom_control, self.scale_field)
-        baseline = self._baseline
-        if baseline is not None:
-            self.scale_edit.setText(core.format_scale(baseline, self._locale))
+        shown = self._current_scale
+        if shown is not None:
+            self.scale_edit.setText(core.format_scale(shown, self._locale))
         self.zoom_control.chosen.connect(self._on_preset_chosen)
         self.scale_edit.textEdited.connect(self._on_scale_edited)
         self.scale_edit.editingFinished.connect(self._on_scale_finished)
@@ -1563,7 +1568,9 @@ class GoToLocationDialog(QDialog):
                 extent = self._feature_extent()
                 if extent is None:
                     return
-            self.target.apply_extent(extent, tr("Go to location"), scale)
+            self.target.apply_extent(
+                extent, tr("Go to location"), scale, self._baseline
+            )
         except TransformError:
             self._fail(
                 tr("This location cannot be converted to the map's coordinate system.")

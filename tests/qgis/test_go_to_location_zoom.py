@@ -138,7 +138,7 @@ class TestThePresets:
         assert seen["names"] == ["½×", "1×", "2×", "4×", "8×"]
         assert seen["tips"] == [
             "Zoom out to show more surrounding area.",
-            "Keep the current map scale.",
+            "Return to this map's reference scale.",
             "Zoom twice as close.",
             "Zoom four times as close.",
             "Zoom eight times as close.",

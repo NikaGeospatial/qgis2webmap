@@ -175,6 +175,9 @@ def format_number(value: float, geographic: bool, locale: QLocale | None = None)
 #: The zoom presets, as how many times closer than the scale the dialog opened
 #: at: 1/2x shows more, 8x is eight times closer.
 PRESET_FACTORS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0, 8.0)
+#: The map frame's own reference scale (what 1x means), stored on the frame so it
+#: travels with the layout: saved in the project, copied with a duplicated frame.
+REFERENCE_SCALE_PROPERTY = "nika/reference-scale"
 #: The scale denominators a typed scale may have (1 : 1 to 1 : 1,000,000,000).
 SCALE_RANGE = (1.0, 1e9)
 #: A typed scale outside `SCALE_RANGE` (or zero, or negative).
@@ -204,7 +207,10 @@ def preset_for_scale(baseline: float, scale: float) -> int | None:
     for a custom scale."""
     shown = round_scale(scale)
     for index, factor in enumerate(PRESET_FACTORS):
-        if round_scale(preset_scale(baseline, factor)) == shown:
+        target = preset_scale(baseline, factor)
+        if round_scale(target) == shown or math.isclose(
+            scale, target, rel_tol=1e-9, abs_tol=1e-6
+        ):
             return index
     return None
 
@@ -863,6 +869,18 @@ class FrameTarget:
         value = float(item.scale())
         return value if math.isfinite(value) and value > 0 else None
 
+    def reference_scale(self) -> float | None:
+        """The frame's stored reference scale (what 1x returns to), or None when
+        it has none yet or the stored value is not a usable scale."""
+        item = self.item()
+        if item is None:
+            return None
+        try:
+            value = float(item.customProperty(REFERENCE_SCALE_PROPERTY, ""))
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) and value > 0 else None
+
     def view_is_data_defined(self) -> bool:
         item = self.item()
         if item is None:
@@ -871,11 +889,17 @@ class FrameTarget:
         return any(properties.isActive(p) for p in _DATA_DEFINED_VIEW)
 
     def apply_extent(
-        self, extent: QgsRectangle, label: str, scale: float | None = None
+        self,
+        extent: QgsRectangle,
+        label: str,
+        scale: float | None = None,
+        reference: float | None = None,
     ) -> None:
         """Show `extent` in the frame as one undo step, at `scale` (a scale
-        denominator, about the same middle) when one is given. Raises
-        `ApplyError`."""
+        denominator, about the same middle) when one is given. A frame with no
+        reference scale yet takes `reference` as its own inside the same undo
+        step, so Undo removes it again; an existing one is never replaced.
+        Raises `ApplyError`."""
         item = self.item()
         if item is None:
             raise ApplyError("frame")
@@ -895,6 +919,13 @@ class FrameTarget:
         stack = self._layout.undoStack()  # type: ignore[attr-defined]
         stack.beginCommand(item, label)
         try:
+            if (
+                reference is not None
+                and math.isfinite(reference)
+                and reference > 0
+                and self.reference_scale() is None
+            ):
+                item.setCustomProperty(REFERENCE_SCALE_PROPERTY, repr(float(reference)))
             item.zoomToExtent(extent)
             if scale is not None:
                 self._apply_scale(item, scale)
@@ -1005,6 +1036,7 @@ __all__: Sequence[str] = [
     "OUT_OF_RANGE",
     "PAIR",
     "PRESET_FACTORS",
+    "REFERENCE_SCALE_PROPERTY",
     "SCALE_RANGE",
     "UNSUPPORTED",
     "ApplyError",
