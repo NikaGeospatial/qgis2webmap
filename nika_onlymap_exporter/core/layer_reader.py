@@ -12,10 +12,12 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import bisect
 import dataclasses
 import functools
 import json
 import re
+from collections import Counter, deque
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
@@ -385,16 +387,75 @@ def _relation_text(fmt: FieldFormat, value: object) -> str:
     return table.first.get(_relation_key(value), f"({_relation_key(value)})")
 
 
-def _value_relation_table(config: dict[str, Any]) -> RelationTable:
-    """The other layer of a Value Relation as QGIS would cache it. **GUI thread only.**
+def _selection_literal(keys: list[str]) -> str:
+    """`keys` as the quoted array text a multi-select Value Relation stores."""
+    quoted = ('"' + key.replace("\\", "\\\\").replace('"', '\\"') + '"' for key in keys)
+    return "{" + ",".join(quoted) + "}"
 
-    Honours the config's filter expression and ordering the way
-    QgsValueRelationFieldFormatter.createCache does with no form open: rows are
-    sorted by key, or by text with "order by value" (which is what orders a
-    multi-select's output), and a filter
-    that needs the form (`current_value`, ...) cannot be evaluated and is
-    skipped, any other filter keeps only the rows it accepts (one that fails to
-    parse keeps none).
+
+def _split_shown_texts(shown: str, texts: Counter[str]) -> list[str] | None:
+    """Cut `{t1, t2, ...}` back into the known `texts`, in the order shown.
+
+    The texts may themselves hold ", ", so this searches (depth first, with an
+    explicit stack because a table can have thousands of rows) for a reading
+    that uses every text exactly once. `None` when there is none, or none is
+    found within a fixed effort; the caller then keeps the layer's own order.
+    """
+    inner = shown[1:-1]
+    total = sum(texts.values())
+    remaining = Counter(texts)
+    longest = max(map(len, remaining), default=0)
+    ends = [m.start() for m in re.finditer(r"(?=, )", inner)] + [len(inner)]
+    path: list[str] = []
+    path_ends: list[int] = []
+    cursors = [bisect.bisect_left(ends, 0)]
+    budget = 200_000
+    while budget > 0:
+        budget -= 1
+        depth = len(path)
+        if depth == total and path_ends[-1:] == [len(inner)]:
+            return path
+        start = path_ends[-1] + 2 if path_ends else 0
+        found = False
+        if depth < total:
+            index = cursors[depth]
+            while index < len(ends) and ends[index] - start <= longest:
+                end = ends[index]
+                index += 1
+                text = inner[start:end]
+                if remaining[text] > 0:
+                    cursors[depth] = index
+                    remaining[text] -= 1
+                    path.append(text)
+                    path_ends.append(end)
+                    cursors.append(bisect.bisect_left(ends, end + 2))
+                    found = True
+                    break
+        if not found:
+            if not path:
+                return None
+            cursors.pop()
+            path_ends.pop()
+            remaining[path.pop()] += 1
+    return None
+
+
+def _value_relation_table(
+    layer: QgsVectorLayer,
+    index: int,
+    formatter: QgsFieldFormatter,
+    config: dict[str, Any],
+) -> RelationTable:
+    """The other layer of a Value Relation in QGIS's own order. **GUI thread only.**
+
+    The related rows are read here (honouring the filter expression as
+    QgsValueRelationFieldFormatter does with no form open: a filter that needs
+    the form is skipped, one that fails to parse keeps no row) but their order
+    is QGIS's, not ours: QGIS sorts keys and texts differently from one version
+    to the next (3.44 compares texts by code point, 4.2 case-insensitively), and
+    the sorted cache cannot be read from Python (its items crash the binding).
+    So `representValue` is asked to show a selection of every key, which lists
+    the texts in cache order, and that listing is matched back to the rows.
     """
     from qgis.core import (
         QgsExpression,
@@ -424,16 +485,32 @@ def _value_relation_table(config: dict[str, Any]) -> RelationTable:
             )
         )
         request.setFilterExpression(filter_expression)
-    request.addOrderBy(str(value_field if config.get("OrderByValue") else key_field))
-    items: list[tuple[str, str]] = []
+    rows: list[tuple[str, str]] = []
     for feature in related.getFeatures(request):
         key, text = feature[key_field], feature[value_field]
         if QgsVariantUtils.isNull(key):
             continue
-        items.append(
+        rows.append(
             (_relation_key(key), "" if QgsVariantUtils.isNull(text) else str(text))
         )
-    return RelationTable(tuple(items))
+    if not rows:
+        return RelationTable()
+
+    multi_config = {**config, "AllowMulti": True}
+    shown = formatter.representValue(
+        layer,
+        index,
+        multi_config,
+        None,
+        _selection_literal(list(dict.fromkeys(key for key, _ in rows))),
+    )
+    texts = _split_shown_texts(str(shown), Counter(text for _, text in rows))
+    if texts is None:
+        return RelationTable(tuple(rows))
+    by_text: dict[str, deque[tuple[str, str]]] = {}
+    for row in rows:
+        by_text.setdefault(row[1], deque()).append(row)
+    return RelationTable(tuple(by_text[text].popleft() for text in texts))
 
 
 def _display_property(
@@ -512,7 +589,7 @@ def _field_formats(
         formatter = registry.fieldFormatter(setup.type())
         config = setup.config()
         if formatter.id() == "ValueRelation":
-            # Its cache is a C++ list Python cannot hold, so the table is read
+            # Its cache cannot be read from Python, so the table is read
             # here and the text looked up on the worker.
             formats.append(
                 FieldFormat(
@@ -522,7 +599,7 @@ def _field_formats(
                     formatter,
                     config,
                     None,
-                    _value_relation_table(config),
+                    _value_relation_table(layer, index, formatter, config),
                     QgsApplication.nullRepresentation(),
                 )
             )

@@ -612,6 +612,42 @@ class TestValueRelationMatchesQgis:
             "kind:integer&field=tags:string",
         )
 
+    @pytest.mark.parametrize("order_by_value", [False, True])
+    def test_multi_select_texts_holding_the_separator(
+        self, project, export, order_by_value
+    ) -> None:
+        """Texts with ", " and braces, and equal texts under two keys."""
+        related = qgis_core.QgsVectorLayer(
+            "None?field=id:integer&field=title:string", "commas", "memory"
+        )
+        rows = []
+        for key, title in (
+            (3, "b, a"),
+            (1, "a"),
+            (2, "a, b"),
+            (4, "{x}, y"),
+            (5, "a"),
+            (6, ""),
+            (7, "b"),
+        ):
+            feature = qgis_core.QgsFeature(related.fields())
+            feature.setAttributes([key, title])
+            rows.append(feature)
+        related.dataProvider().addFeatures(rows)
+        project.addMapLayer(related)
+        config = _value_relation(related).config()
+        config.update(LayerName="commas", AllowMulti=True, OrderByValue=order_by_value)
+        setup = qgis_core.QgsEditorWidgetSetup("ValueRelation", config)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, "{1,2,3,4,5,6,7}"), (2, "{3,2}"), (3, "{5,7,6}")],
+            "kind:integer&field=tags:string",
+        )
+
     @pytest.mark.parametrize("stored", [[1, 2], [2, 1], [], [9], [1, 9], None])
     def test_multi_select_list_field(self, project, export, stored) -> None:
         places = _places_layer()
