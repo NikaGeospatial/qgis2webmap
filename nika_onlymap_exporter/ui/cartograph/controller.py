@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, cast
 from qgis.core import QgsLayoutItemMap
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette, QUndoCommand
+from qgis.PyQt.QtGui import QDesktopServices, QGuiApplication, QPalette
 from qgis.PyQt.QtWidgets import (
     QAction,
     QComboBox,
@@ -53,6 +53,11 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+try:  # QtGui on Qt 6 (QGIS 4), QtWidgets on Qt 5 (QGIS 3).
+    from qgis.PyQt.QtGui import QUndoCommand
+except ImportError:  # pragma: no cover - QGIS 3
+    from qgis.PyQt.QtWidgets import QUndoCommand  # type: ignore[attr-defined,no-redef]
 
 from ...core import cartograph_export
 from ...core.atomic_write import write_text_atomic

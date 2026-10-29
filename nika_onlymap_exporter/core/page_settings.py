@@ -51,7 +51,12 @@ from qgis.core import (
     QgsSimpleFillSymbolLayer,
 )
 from qgis.PyQt import sip
-from qgis.PyQt.QtGui import QColor, QUndoCommand
+from qgis.PyQt.QtGui import QColor
+
+try:  # QtGui on Qt 6 (QGIS 4), QtWidgets on Qt 5 (QGIS 3).
+    from qgis.PyQt.QtGui import QUndoCommand
+except ImportError:  # pragma: no cover - QGIS 3
+    from qgis.PyQt.QtWidgets import QUndoCommand  # type: ignore[attr-defined,no-redef]
 
 from .layout_reader import TEXT_KIND_PROPERTY, _is_north_arrow
 from .page_style import parse_color
