@@ -37,6 +37,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -359,6 +361,65 @@ def parse_number(text: str) -> float | None:
         return None
 
 
+#: Field types that hold whole numbers. They are compared as integers: a
+#: float has 53 bits of mantissa, so neighbouring IDs above 2**53 would merge.
+_INTEGER_FIELD_TYPES = (
+    QMetaType.Type.Int,
+    QMetaType.Type.LongLong,
+    QMetaType.Type.UInt,
+    QMetaType.Type.ULongLong,
+)
+#: Typed whole numbers: an optional sign, digits, and a fraction of zeros only
+#: ("5.0" is the whole number 5; "1.5" and "1e3" are not accepted).
+_WHOLE_NUMBER = re.compile(r"[+-]?\d+(?:\.0*)?", re.ASCII)
+
+
+def is_integer_field(layer: QgsVectorLayer, name: str) -> bool:
+    index = layer.fields().lookupField(name)
+    return index >= 0 and layer.fields().at(index).type() in _INTEGER_FIELD_TYPES
+
+
+def parse_integer(text: str) -> int | None:
+    """The whole number `text` spells, exactly, or `None` when it is not one.
+    Never goes through a float, so no value is rounded into another."""
+    cleaned = text.strip()
+    if _WHOLE_NUMBER.fullmatch(cleaned):
+        return int(cleaned.split(".")[0])
+    try:  # the user's own digit grouping, e.g. "1,000"
+        from qgis.PyQt.QtCore import QLocale
+
+        number, ok = QLocale().toLongLong(cleaned)
+        return number if ok else None
+    except Exception:
+        return None
+
+
+def parse_field_number(layer: QgsVectorLayer, field: str, text: str) -> int | float:
+    """The number `text` names for a numeric field: an exact `int` for a
+    whole-number field, a `float` for a decimal one. Raises `ValueError` with
+    words for the user when it does not fit the field."""
+    if is_integer_field(layer, field):
+        whole = parse_integer(text)
+        if whole is not None:
+            return whole
+        decimal = parse_number(text)
+        if decimal is not None and math.isfinite(decimal):
+            raise ValueError(
+                tr(
+                    "“{value}” is not a whole number; “{field}” holds whole numbers."
+                ).format(value=text, field=field)
+            )
+    else:
+        number = parse_number(text)
+        if number is not None:
+            return number
+    raise ValueError(
+        tr("“{value}” is not a number, and “{field}” is a numeric field.").format(
+            value=text, field=field
+        )
+    )
+
+
 def _parse_bool(text: str) -> bool | None:
     word = text.strip().lower()
     if word in ("true", "yes", "1", "t", "y"):
@@ -388,14 +449,10 @@ def _matcher(layer: QgsVectorLayer, spec: CountSpec):  # type: ignore[no-untyped
         return _no(CountState.UNCONFIGURED, tr("Choose the value to match."))
     text = spec.value
     if kind == "number":
-        number = parse_number(text)
-        if number is None:
-            return _no(
-                CountState.INVALID,
-                tr(
-                    "“{value}” is not a number, and “{field}” is a numeric field."
-                ).format(value=text, field=field),
-            )
+        try:
+            number = parse_field_number(layer, field, text)
+        except ValueError as exc:
+            return _no(CountState.INVALID, str(exc))
         return lambda feature: (
             not _is_null(feature[field]) and _same_number(feature[field], number)
         )
@@ -418,7 +475,10 @@ def _matcher(layer: QgsVectorLayer, spec: CountSpec):  # type: ignore[no-untyped
     return lambda feature: not _is_null(feature[field]) and str(feature[field]) == text
 
 
-def _same_number(attribute: object, number: float) -> bool:
+def _same_number(attribute: object, number: int | float) -> bool:
+    if isinstance(number, int):
+        # A whole number is compared as one: exact for any size.
+        return isinstance(attribute, int) and attribute == number
     try:
         return float(attribute) == number  # type: ignore[arg-type]
     except (TypeError, ValueError):
