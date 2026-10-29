@@ -54,7 +54,9 @@ from qgis.core import (
     QgsLayoutItemGroup,
     QgsLayoutItemLabel,
     QgsLayoutItemMap,
+    QgsMapClippingRegion,
     QgsMapLayerStyle,
+    QgsMapSettings,
     QgsProject,
     QgsReadWriteContext,
     QgsRenderContext,
@@ -615,11 +617,9 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
 
     try:
         area = _displayed_area(map_item, layer)
-        extent = map_item.extent()
-        settings = map_item.mapSettings(
-            extent, QSizeF(800.0, 800.0 * extent.height() / extent.width()), 96.0, True
-        )
-        context = QgsRenderContext.fromMapSettings(settings)
+        if area.isEmpty():  # the clipping leaves no ground to count on
+            return counted(0)
+        context = QgsRenderContext.fromMapSettings(_map_settings(map_item))
         expression = map_item.createExpressionContext()
         expression.appendScopes(
             QgsExpressionContextUtils.globalProjectLayerScopes(layer)
@@ -635,26 +635,63 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
     return Prepared(layer, request, area, renderer, context, matches)
 
 
+def _map_settings(map_item: QgsLayoutItemMap) -> QgsMapSettings:
+    """The settings the frame renders with now (its clipping regions included)."""
+    extent = map_item.extent()
+    return map_item.mapSettings(
+        extent, QSizeF(800.0, 800.0 * extent.height() / extent.width()), 96.0, True
+    )
+
+
+def _to_layer_crs(
+    shown: QgsGeometry, map_item: QgsLayoutItemMap, layer: QgsVectorLayer
+) -> QgsGeometry:
+    """`shown`, a geometry in the frame's CRS, carried to the layer's CRS."""
+    if map_item.crs() == layer.crs():
+        return shown
+    layout = map_item.layout()
+    project = layout.project() if layout is not None else None
+    context = (
+        project.transformContext()
+        if project is not None
+        else QgsCoordinateTransformContext()
+    )
+    transform = QgsCoordinateTransform(map_item.crs(), layer.crs(), context)
+    # Edges bend when carried to another CRS: follow them in small steps.
+    shown = shown.densifyByCount(24)
+    if shown.transform(transform) != Qgis.GeometryOperationResult.Success:
+        raise ValueError(tr("the map's area cannot be carried to the layer's CRS"))
+    return shown
+
+
 def _displayed_area(map_item: QgsLayoutItemMap, layer: QgsVectorLayer) -> QgsGeometry:
-    """The ground the frame shows, as a polygon in the layer's CRS: its final
-    extent turned by its rotation, not the rectangle enclosing it."""
+    """The ground the frame shows of `layer`, as a polygon in the layer's CRS:
+    its final extent turned by its rotation (not the rectangle enclosing it),
+    cut to the clipping the frame applies to this layer. The clipping is what
+    QGIS itself renders with: the atlas feature's outline and a clipping
+    shape item, each only for the layers it is restricted to
+    (`QgsMapSettings.clippingRegions`). Nothing is changed in the layer or in
+    the clipping geometry."""
     shown = QgsGeometry.fromQPolygonF(map_item.visibleExtentPolygon())
     if shown.isNull() or shown.isEmpty():
         raise ValueError(tr("the map shows no area"))
-    layout = map_item.layout()
-    project = layout.project() if layout is not None else None
-    if map_item.crs() != layer.crs():
-        context = (
-            project.transformContext()
-            if project is not None
-            else QgsCoordinateTransformContext()
-        )
-        transform = QgsCoordinateTransform(map_item.crs(), layer.crs(), context)
-        # Edges bend when carried to another CRS: follow them in small steps.
-        shown = shown.densifyByCount(24)
-        if shown.transform(transform) != Qgis.GeometryOperationResult.Success:
-            raise ValueError(tr("the map's area cannot be carried to the layer's CRS"))
-    return shown
+    area = _to_layer_crs(shown, map_item, layer)
+    for region in _map_settings(map_item).clippingRegions():
+        if region.featureClip() == QgsMapClippingRegion.FeatureClippingType.NoClipping:
+            continue
+        if not region.appliesToLayer(layer):
+            continue
+        clip = region.geometry()
+        if clip.isNull() or clip.isEmpty():
+            continue
+        if not clip.isGeosValid():
+            clip = clip.makeValid()
+        area = area.intersection(_to_layer_crs(clip, map_item, layer))
+        if area.isNull():
+            raise ValueError(tr("the map's clipping cannot be applied"))
+        if area.isEmpty():
+            break
+    return area
 
 
 def run(prepared: Prepared) -> CountOutcome:
