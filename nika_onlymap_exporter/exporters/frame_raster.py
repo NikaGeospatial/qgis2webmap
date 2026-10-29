@@ -40,6 +40,7 @@ from dataclasses import dataclass
 
 from qgis.core import (
     Qgis,
+    QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsLayoutExporter,
@@ -52,6 +53,7 @@ from qgis.core import (
     QgsPointXY,
     QgsPrintLayout,
     QgsProject,
+    QgsReadWriteContext,
     QgsSettings,
     QgsUnitTypes,
 )
@@ -69,6 +71,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPen, QTransform
+from qgis.PyQt.QtXml import QDomDocument
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -197,14 +200,27 @@ def _render_region(
         map_item.setItemOpacity(1.0)
         if rotation:
             map_item.setItemRotation(0, True)
-        position = converter.convert(
-            map_item.positionWithUnits(), QgsUnitTypes.LayoutMillimeters
-        )
         pixel_size = QSize(
             round(size.width() / 25.4 * dpi), round(size.height() / 25.4 * dpi)
         )
-        region = QRectF(position.x(), position.y(), size.width(), size.height())
-        image = QgsLayoutExporter(layout).renderRegionToImage(region, pixel_size, dpi)
+        # QGIS paints an item's content (map layers, text, symbol sizes) as
+        # if scene units were millimetres, so a layout in inches or points
+        # would draw it 25.4 or 2.8 times off scale. Such a layout is drawn
+        # from a millimetre copy of the map item instead; the user's layout
+        # is never converted.
+        render_layout, render_item = layout, map_item
+        if layout.units() != QgsUnitTypes.LayoutMillimeters:
+            render_layout, render_item = _millimetre_copy(layout, map_item)
+        # `renderRegionToImage` takes its region in scene units, which are
+        # the layout's own units, not necessarily millimetres.
+        position = render_layout.convertToLayoutUnits(render_item.positionWithUnits())
+        native_size = render_layout.convertToLayoutUnits(render_item.sizeWithUnits())
+        region = QRectF(
+            position.x(), position.y(), native_size.width(), native_size.height()
+        )
+        image = QgsLayoutExporter(render_layout).renderRegionToImage(
+            region, pixel_size, dpi
+        )
     finally:
         map_item.setItemOpacity(opacity)
         if rotation:
@@ -214,6 +230,52 @@ def _render_region(
             hidden.setVisible(False)
 
     return encode_png(image)
+
+
+def _millimetre_copy(
+    layout: QgsPrintLayout, map_item: QgsLayoutItemMap
+) -> tuple[QgsPrintLayout, QgsLayoutItemMap]:
+    """A millimetre layout holding a copy of `map_item` (and of the items that
+    change how it draws: label blockers and its clipping item), same physical
+    size, extent, rotation and styling. The item's own units are kept, so it
+    lands at the same physical place; the source layout is only read."""
+    project = layout.project() or QgsProject.instance()
+    copy = QgsPrintLayout(project)
+    copy.initializeDefaults()
+    copy.renderContext().setFlags(layout.renderContext().flags())
+    context = QgsReadWriteContext()
+    clip_source = map_item.itemClippingSettings().sourceItem()
+    copied: dict[str, QgsLayoutItem] = {}
+
+    def duplicate(source: QgsLayoutItem) -> QgsLayoutItem:
+        document = QDomDocument()
+        element = document.createElement("item")
+        source.writeXml(element, document, context)
+        made = QgsApplication.layoutItemRegistry().createItem(source.type(), copy)
+        made.readXml(element.firstChildElement(), document, context)
+        copy.addLayoutItem(made)
+        made.setVisible(source.isVisible())
+        copied[source.uuid()] = made
+        return made
+
+    copied_map = duplicate(map_item)
+    for item in layout.items():
+        if not isinstance(item, QgsLayoutItem) or item is map_item:
+            continue
+        if item is clip_source or map_item.isLabelBlockingItem(item):
+            duplicate(item)
+    if clip_source is not None and clip_source.uuid() in copied:
+        clipping = copied_map.itemClippingSettings()
+        clipping.setSourceItem(copied[clip_source.uuid()])
+    return copy, copied_map  # type: ignore[return-value]  # a map item, copied as one
+
+
+def _millimetres_per_layout_unit(layout: QgsPrintLayout) -> float:
+    """How many millimetres one of the layout's native units is: scene
+    coordinates, pen widths and bounding boxes are all in those units."""
+    return layout.convertFromLayoutUnits(
+        QSizeF(1.0, 1.0), QgsUnitTypes.LayoutMillimeters
+    ).width()
 
 
 def _hidden_chain(item: QgsLayoutItem) -> list[QgsLayoutItem]:
@@ -375,13 +437,19 @@ class AsyncFrameRender(QObject):
         self._page_transform = painter.transform()
         rect_mm = QRectF(0, 0, width_mm, height_mm)
         self._frame_rect = rect_mm
+        # What QGIS reports in scene units (`pen()`, `boundingRect()`,
+        # `mapUnitsToLayoutUnits()`) is in the layout's native units, but
+        # this painter works in millimetres.
+        mm_per_unit = _millimetres_per_layout_unit(layout)
         if map_item.frameEnabled():
-            self._frame_pen = map_item.pen()
+            frame_pen = QPen(map_item.pen())
+            frame_pen.setWidthF(frame_pen.widthF() * mm_per_unit)
+            self._frame_pen = frame_pen
         if context.flags() & QgsLayoutRenderContext.Flag.FlagLosslessImageRendering:
             painter.setRenderHint(QPainter.RenderHint.LosslessImageRendering, True)
 
         extent = map_item.extent()
-        map_to_mm = map_item.mapUnitsToLayoutUnits()
+        map_to_mm = map_item.mapUnitsToLayoutUnits() * mm_per_unit
         forced_vector = (
             context.rasterizedRenderingPolicy()
             == Qgis.RasterizedRenderingPolicy.ForceVector
@@ -389,7 +457,13 @@ class AsyncFrameRender(QObject):
         if map_item.containsAdvancedEffects() and not forced_vector:
             # A layer with a blend mode or effect has to meet the background
             # in one flat picture, which is then laid over the page.
-            bounds = map_item.boundingRect()
+            native_bounds = map_item.boundingRect()
+            bounds = QRectF(
+                native_bounds.x() * mm_per_unit,
+                native_bounds.y() * mm_per_unit,
+                native_bounds.width() * mm_per_unit,
+                native_bounds.height() * mm_per_unit,
+            )
             dots_per_mm = ratio
             destination_dpi = ratio * 25.4
             layers_size = QSize(
