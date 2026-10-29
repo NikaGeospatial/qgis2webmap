@@ -3,7 +3,7 @@
 Each map is two or three short lines in the narrow Cartograph panel:
 
 - its name, how it appears in the HTML (Interactive or Image) and a small
-  actions menu (Use canvas extent, Locate on page);
+  actions menu (Use canvas extent, Go to location...);
 - its CRS, muted, and - only when the cartograph changes or leaves out
   something on it - an "N issues" badge that opens the detail in Checks;
 - for an Image, its Resolution.
@@ -161,10 +161,12 @@ class FrameCard(QFrame):
         self.canvas_action.setToolTip(
             tr("Set this map item's extent to what the QGIS map canvas shows")
         )
-        self.locate_action = QAction(tr("Locate on page"), menu)
-        self.locate_action.setToolTip(tr("Select this map on the layout page"))
+        self.go_to_location_action = QAction(tr("Go to location…"), menu)
+        self.go_to_location_action.setToolTip(
+            tr("Center this map on coordinates or find a feature.")
+        )
         menu.addAction(self.canvas_action)
-        menu.addAction(self.locate_action)
+        menu.addAction(self.go_to_location_action)
         # A choice per continuous raster the map draws, offered only when it
         # draws one: see `set_smoothing_options`.
         self.smoothing_menu = QMenu(tr("Smooth when enlarged"), menu)
@@ -337,7 +339,7 @@ class FramesList(QWidget):
     mode_changed = pyqtSignal(str, str)  # item_id, LIVE / STATIC
     dpi_changed = pyqtSignal(str, int)  # item_id, dpi
     match_canvas_requested = pyqtSignal(str)  # item_id
-    locate_requested = pyqtSignal(str)  # item_id
+    go_to_location_requested = pyqtSignal(str)  # item_id
     frame_selected = pyqtSignal(str)  # item_id
     issues_requested = pyqtSignal(str)  # item_id
     smoothing_changed = pyqtSignal(str, str, bool)  # item_id, layer id, smoothed
@@ -432,8 +434,8 @@ class FramesList(QWidget):
         card.canvas_action.triggered.connect(
             lambda _checked=False, card=card: self._on_match(card)
         )
-        card.locate_action.triggered.connect(
-            lambda _checked=False, card=card: self._on_locate(card)
+        card.go_to_location_action.triggered.connect(
+            lambda _checked=False, card=card: self._on_go_to_location(card)
         )
         card.issues_button.clicked.connect(
             lambda _checked=False, card=card: self._on_issues(card)
@@ -470,9 +472,9 @@ class FramesList(QWidget):
         if self._is_current(card):
             self.match_canvas_requested.emit(card.item_id)
 
-    def _on_locate(self, card: FrameCard) -> None:
+    def _on_go_to_location(self, card: FrameCard) -> None:
         if self._is_current(card):
-            self.locate_requested.emit(card.item_id)
+            self.go_to_location_requested.emit(card.item_id)
 
     def _on_issues(self, card: FrameCard) -> None:
         if self._is_current(card):

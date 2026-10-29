@@ -43,10 +43,10 @@ class Recorder:
         frames.mode_changed.connect(lambda i, m: self.modes.append((i, m)))
         frames.dpi_changed.connect(lambda i, d: self.dpis.append((i, d)))
         frames.match_canvas_requested.connect(self.matches.append)
-        self.located: list[str] = []
+        self.go_to_location: list[str] = []
         self.selected: list[str] = []
         self.issues: list[str] = []
-        frames.locate_requested.connect(self.located.append)
+        frames.go_to_location_requested.connect(self.go_to_location.append)
         frames.frame_selected.connect(self.selected.append)
         frames.issues_requested.connect(self.issues.append)
 
@@ -73,7 +73,7 @@ def test_cards_show_name_crs_mode_and_dpi(frames):
         a.text() for a in main.actions_button.menu().actions() if a.isVisible()
     ] == [
         "Use canvas extent",
-        "Locate on page",
+        "Go to location…",
     ]
     assert main.property("role") == "frameCard"
     assert main.name_label.property("role") == "frameName"
@@ -180,11 +180,13 @@ def test_use_canvas_view_reports_and_follows_canvas(frames):
     assert frames.card("map1").canvas_action.isEnabled()
 
 
-def test_locate_selects_and_reports(frames):
+def test_go_to_location_reports_the_card_it_was_chosen_on(frames):
     record = Recorder(frames)
     frames.set_frames(_rows())
-    frames.card("map2").locate_action.trigger()
-    assert record.located == ["map2"]
+    frames.card("map2").go_to_location_action.trigger()
+    assert record.go_to_location == ["map2"]
+    frames.card("map1").go_to_location_action.trigger()
+    assert record.go_to_location == ["map2", "map1"]
 
 
 def test_choosing_an_entry_selects_its_frame_once(frames):

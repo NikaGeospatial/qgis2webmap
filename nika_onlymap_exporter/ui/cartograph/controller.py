@@ -1297,7 +1297,7 @@ class CartographController:
         )
         self.frames_list.match_canvas_requested.connect(self._match_canvas)
         self.frames_list.frame_selected.connect(self._select_frame_on_page)
-        self.frames_list.locate_requested.connect(self._locate_frame)
+        self.frames_list.go_to_location_requested.connect(self._go_to_location)
         self.frames_list.issues_requested.connect(self._show_frame_issues)
         self.frames_list.actions_opening.connect(self._refresh_smoothing_options)
         self.frames_list.smoothing_changed.connect(self._set_raster_smoothing)
@@ -1470,14 +1470,25 @@ class CartographController:
         if item is not None and self._current_layout is not None:
             self._current_layout.setSelectedItem(item)
 
-    def _locate_frame(self, item_id: str) -> None:
-        """Map frames > Locate on page: select the map item and bring it to
-        the middle of the page view."""
+    def _go_to_location(self, item_id: str) -> None:
+        """Map frames > Go to location...: choose what the frame of this card
+        shows. The dialog changes the frame's view as one undo step on the
+        layout's stack; a drag of the Edit view mode still in progress is
+        dropped first, and the cartograph is saved again afterwards."""
+        from ...core.go_to_location import FrameTarget
+        from .go_to_location_dialog import GoToLocationDialog
+
         item = self._map_item(item_id)
-        if item is None:
+        if item is None or self._current_layout is None:
             return
-        self._select_frame_on_page(item_id)
-        self.page_pane.preview.view.centerOn(item)
+        target = FrameTarget(
+            self._current_layout,
+            item,
+            self.project,
+            before_apply=self.page_preview.content_editor.cancel_gesture,
+            after_apply=self.schedule_autosave,
+        )
+        GoToLocationDialog(target, self.dialog).exec()
 
     def _on_page_selection_changed(self, item: object) -> None:
         """The page's selection moved: mark the entry of a selected map."""

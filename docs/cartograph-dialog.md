@@ -154,13 +154,42 @@ One card per map item on the layout:
   saved export resolution, so the choice can only raise it;
 - a **⋯** menu: **Use canvas extent** sets the map's extent to what the QGIS
   canvas shows (an edit to your layout, so the layout designer's **Undo** takes
-  it back); **Locate on page** selects the map on the page; and, when the map
+  it back); **Go to location…** centres the map on coordinates or on a feature you
+  search for ([below](#go-to-location)); and, when the map
   draws a continuous raster such as elevation, **Smooth when enlarged**
   blends its pixels where the map draws them larger than they are. It changes
   only this map, never the layer's style, and applies to an Image map and to
   the PDF QGIS makes.
 
 ![The Map frames section with two cards: Locator, EPSG:3857, Interactive, and Main map, EPSG:32648, Image at 200 dpi.](images/cartograph-03-frames.png)
+
+### Go to location
+
+**Go to location…** in a card's **⋯** menu changes the area shown *inside* that
+map frame; the frame itself, its size and its rotation on the sheet stay as
+they are, and so do the QGIS canvas and your data. Nothing happens until you
+press **Go**, and **Cancel** or Esc leaves everything untouched. **Go** is one
+undo step on the layout's own stack, keeps the map's scale and rotation, and
+the Live counts, scale bars and saved cartograph follow it.
+
+- **Coordinates** takes a latitude and a longitude in decimal degrees
+  (WGS 84 to start with). **Change…** opens QGIS's own coordinate-system
+  chooser; with a projected system the fields become Easting (X) and
+  Northing (Y) in the system's units. Changing system converts a complete,
+  valid pair to the same place and clears anything else. Values are never
+  swapped, clamped or wrapped, and degrees/minutes/seconds, N/S/E/W and a pair
+  pasted into one field are not accepted.
+- **Feature** searches one layer the map draws, beyond the current view, by its
+  display name, its QGIS feature ID or one of its text or whole-number
+  fields. Matching is case-insensitive and literal; exact matches come first,
+  then names that start with the text, then the rest, and at most 50 are
+  shown. Enter in the search box searches; select a result and press **Go**
+  (or double-click it, or press Enter on it). **Fit whole feature** is offered
+  for lines and polygons and fits them with a 10% margin; otherwise the map
+  is centred on the feature (a point on a polygon's surface, the middle of a
+  line) at the current scale.
+- A map the layout's atlas drives cannot be moved by hand; turn off the map
+  series first.
 
 A map starts **Interactive** when the browser can draw it where QGIS does - in
 EPSG:3857 or EPSG:4326, or an unrotated projected map of vector layers and

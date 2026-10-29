@@ -204,8 +204,8 @@ class TestFrameIssuesAndSelection:
             layout.setSelectedItem(main)
             assert cartograph.frames_list.card(main.uuid()).property("selected")
             assert not card.property("selected")
-            # Locate on page selects it again.
-            card.locate_action.trigger()
+            # Choosing the entry selects it again.
+            QTest.mouseClick(card.name_label, Qt.MouseButton.LeftButton)
             assert layout.selectedLayoutItems() == [inset]
             assert card.property("selected")
             # A non-map item clears the marks.

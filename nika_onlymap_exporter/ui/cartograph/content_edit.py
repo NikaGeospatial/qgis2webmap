@@ -286,6 +286,11 @@ class ContentEditor(QObject):
             app.removeEventFilter(self)
         self.active_changed.emit(False)
 
+    def cancel_gesture(self) -> None:
+        """Drop a drag in progress without applying it, staying in the mode: a
+        new view chosen elsewhere must not be moved again by the old gesture."""
+        self._end_drag(apply=False)
+
     # ---- events ------------------------------------------------------------
 
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:  # noqa: N802 - Qt override

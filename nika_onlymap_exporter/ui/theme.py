@@ -857,6 +857,33 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     outline: none;
     border-color: {p.link};
 }}
+/* Go to location: the dialog's confirming button, filled like the panel's
+   primary button, and its read-only coordinate system, which looks like a
+   field but is text. */
+{d} QPushButton[role="primary"] {{
+    background: {p.accent};
+    color: {p.on_accent};
+    border: 1px solid {p.accent};
+    font-weight: 600;
+}}
+{d} QPushButton[role="primary"]:hover {{
+    background: {p.accent_hover};
+    border-color: {p.accent_hover};
+}}
+{d} QPushButton[role="primary"]:disabled {{
+    background: transparent;
+    color: {p.quiet};
+    border-color: {p.rule};
+}}
+{d} QLabel[role="fieldValue"] {{
+    background: {p.field};
+    border: 1px solid {p.rule};
+    border-radius: 5px;
+    padding: 5px 8px;
+}}
+{d} QLabel[role="inlineNote"][tone="warning"] {{
+    color: {p.warn};
+}}
 /* A bare icon button (the column help "i"): room for the focus ring. */
 {d} QToolButton[autoRaise="true"] {{
     background: transparent;
@@ -1793,6 +1820,7 @@ _FOCUS_PADDED: tuple[tuple[str, tuple[int, int, int, int], int, bool], ...] = (
     ("QPlainTextEdit", (5, 8, 5, 8), 1, False),
     ("QTextEdit", (5, 8, 5, 8), 1, False),
     ("QPushButton", (6, 14, 6, 14), 1, False),
+    ('QPushButton[role="primary"]', (6, 14, 6, 14), 1, True),
     ('QPushButton[role="chip"]', (4, 12, 4, 12), 1, False),
     ('QPushButton[role="link"]', (0, 2, 0, 2), 2, False),
     ('QToolButton[role="chip"]', (4, 12, 4, 12), 1, False),
