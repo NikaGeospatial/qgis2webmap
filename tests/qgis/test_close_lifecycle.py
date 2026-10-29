@@ -83,6 +83,7 @@ def saved(qgis_app, project, export, tmp_path):
     )
     assert "Old" in target.read_text(encoding="utf-8")
     yield dialog, cartograph, layout, label, target
+    target.parent.chmod(0o700)  # a test may leave its folder unwritable
     dialog.close()
 
 
@@ -212,13 +213,13 @@ class TestCloseFinishesThePendingSave:
 class TestCloseWhenTheSaveFails:
     @staticmethod
     def _break_destination(target: Path) -> None:
-        """A folder where the file belongs: nothing can replace it."""
-        target.unlink()
-        target.mkdir()
+        """A folder nothing can be written to. (A folder where the file
+        belongs is no longer a failure: the cartograph saves beside it.)"""
+        target.parent.chmod(0o500)
 
     @staticmethod
     def _repair_destination(target: Path) -> None:
-        target.rmdir()
+        target.parent.chmod(0o700)
 
     def test_it_explains_and_a_retry_after_the_fix_closes_with_the_edit(
         self, qgis_app, saved
@@ -280,12 +281,12 @@ class TestCloseWhenTheSaveFails:
     ) -> None:
         dialog, _cartograph, layout, label, target = saved
         edit_label(layout, label, "New")
-        target.unlink()
-        target.mkdir()
+        self._break_destination(target)
         _click_close(dialog)
         assert _answer(qgis_app, "Close without saving")
         assert _wait_for(qgis_app, lambda: not dialog.isVisible())
-        assert target.is_dir()
+        assert "Old" in target.read_text(encoding="utf-8")
+        assert "New" not in target.read_text(encoding="utf-8")
 
     def test_a_save_that_never_finishes_is_offered_the_same_choices(
         self, qgis_app, saved, export, monkeypatch

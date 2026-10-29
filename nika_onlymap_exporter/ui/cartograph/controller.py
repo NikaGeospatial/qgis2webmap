@@ -60,7 +60,7 @@ try:  # QtGui on Qt 6 (QGIS 4), QtWidgets on Qt 5 (QGIS 3).
 except ImportError:  # pragma: no cover - QGIS 3
     from qgis.PyQt.QtWidgets import QUndoCommand  # type: ignore[attr-defined,no-redef]
 
-from ...core import cartograph_export
+from ...core import cartograph_destination, cartograph_export
 from ...core.atomic_write import write_text_atomic
 from ...core.canvas_cartograph import (
     template_record,
@@ -369,6 +369,10 @@ class CartographController:
         self._last_saved_at: float | None = None
         self._last_saved_bytes: int | None = None
         self._last_error = ""
+        # Files the user picked in the Save dialog, which asked before
+        # replacing: the one kind of existing file an autosave may overwrite
+        # without it being this cartograph's own output.
+        self._approved_destinations: set[str] = set()
         self._last_summary: ReportSummary | None = None
         self._runtime: RuntimeBundle | None = None
         # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
@@ -1564,6 +1568,7 @@ class CartographController:
         path = Path(chosen)
         if path.suffix.lower() != ".html":
             path = path.with_suffix(".html")
+        self._approved_destinations.add(str(path))
         self.file_edit.choose(str(path))
 
     # ---- Frames tab -----------------------------------------------------
@@ -2222,7 +2227,7 @@ class CartographController:
             self._sync_report_display()
             return
 
-        path = destination
+        path = self._safe_destination(destination, layout, name)
         project = self.project
         choices = dict(self.state.frame_choices(name))
         frame_modes = {item_id: choice.mode for item_id, choice in choices.items()}
@@ -2460,7 +2465,7 @@ class CartographController:
         current = self._is_current_build(path, built_for)
         document = self._current_name_of(built_for) if built_for else None
         try:
-            self._write_atomic(path, html)
+            self._write_cartograph(path, html, built_for)
         except OSError as exc:
             if document is not None and not current:
                 self._document_errors[document] = tr(
@@ -2572,6 +2577,60 @@ class CartographController:
         ):
             return False
         return self._current_path() == path
+
+    def _safe_destination(self, path: Path, layout: QgsPrintLayout, name: str) -> Path:
+        """Where the cartograph of the layout called `name` may be saved:
+        `path`, unless that is a file that is not its own
+        (`core/cartograph_destination.py`). Then the new place replaces it in
+        the project's settings (and the file field, for the layout on screen),
+        and the footer says so."""
+        resolution = cartograph_destination.destination_for_layout(
+            path,
+            layout,
+            self.project,
+            default_cartograph_path(self.project.fileName(), name or "cartograph"),
+            self._approved_destinations,
+        )
+        if resolution.reason is None:
+            return resolution.path
+        if name == self.state.cartograph_layout:
+            self.file_edit.setText(str(resolution.path))
+        if name:
+            self.state.cartograph_files[name] = str(resolution.path)
+        save_state(self.project, self.state)
+        self.update_window_title()
+        self.dialog.status_label.setText(
+            tr(
+                "{old} was left as it is: it is not this cartograph's own "
+                "file, or cannot be saved to. Saved to {new} instead."
+            ).format(old=path, new=resolution.path)
+        )
+        return resolution.path
+
+    def _write_cartograph(self, path: Path, html: str, built_for: str | None) -> None:
+        """Write the finished page, stamped as this layout's own, to `path` -
+        which is checked again now, since the file may have changed since the
+        build began."""
+        layout = (
+            self.project.layoutManager().layoutByName(
+                self._current_name_of(built_for) or ""
+            )
+            if built_for is not None
+            else self._current_layout
+        )
+        if layout is None or sip.isdeleted(layout):
+            raise OSError(tr("The layout is gone; nothing was written."))
+        checked = cartograph_destination.destination_for_layout(
+            path, layout, self.project, path, self._approved_destinations
+        )
+        if checked.reason is not None:
+            raise OSError(
+                tr("{path} is not this cartograph's own file; not replaced.").format(
+                    path=path
+                )
+            )
+        html = cartograph_destination.stamp_for_layout(html, layout, self.project)
+        self._write_atomic(path, html)
 
     @staticmethod
     def _write_atomic(path: Path, content: str) -> None:
