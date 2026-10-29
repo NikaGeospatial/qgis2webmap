@@ -679,14 +679,14 @@ def would_be_drawn(layer: QgsVectorLayer, feature: QgsFeature) -> bool:
         return True
     try:
         clone = renderer.clone()
-        context = QgsRenderContext()
         scope = QgsExpressionContext(
             QgsExpressionContextUtils.globalProjectLayerScopes(layer)
         )
+        scope.setFeature(feature)
+        context = QgsRenderContext()
         context.setExpressionContext(scope)
         clone.startRender(context, layer.fields())
         try:
-            scope.setFeature(feature)
             return bool(clone.willRenderFeature(feature, context))
         finally:
             clone.stopRender(context)

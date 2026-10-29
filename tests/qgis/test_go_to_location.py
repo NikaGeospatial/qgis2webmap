@@ -20,6 +20,7 @@ pytest.importorskip("qgis.core")
 
 from go_to_location_fixtures import (
     GO_TO_LOCATION,
+    HOME,
     build_world,
     choose_crs,
     choose_layer,
@@ -1434,6 +1435,33 @@ class TestWhatLayerStylingHides:
         assert world.elsewhere.renderer().clone().dump() == renderer_before
         assert not world.elsewhere.renderer().categories()[1].renderState()
 
+    def test_a_rule_based_style_that_skips_the_feature_is_explained_too(
+        self, canyon
+    ) -> None:
+        from qgis.core import QgsMarkerSymbol, QgsRuleBasedRenderer
+
+        world = canyon.world
+        root = QgsRuleBasedRenderer.Rule(None)
+        root.appendChild(
+            QgsRuleBasedRenderer.Rule(
+                QgsMarkerSymbol.createSimple({}), 0, 0, "\"kind\" = 'shown'"
+            )
+        )
+        world.elsewhere.setRenderer(QgsRuleBasedRenderer(root))
+        seen = {}
+
+        def script(dialog) -> None:
+            choose_layer(dialog, world.elsewhere)
+            choose_source(dialog, "kind")
+            search(dialog, "hidden")
+            seen["hidden"] = dialog.feature_message.text()
+            search(dialog, "shown")
+            seen["shown"] = dialog.feature_message.text()
+
+        canyon.open(script)
+        assert "styling" in seen["hidden"]
+        assert seen["shown"] == ""
+
 
 class TestWhenTheDocumentChangesUnderTheDialog:
     def _with_a_result(self, dialog, world):
@@ -2146,3 +2174,93 @@ class TestTheDialogsLook:
         assert seen["scroll"] is False and seen["inside"] is True
         assert "extraordinarily long feature name" in seen["tooltip"]
         assert seen["context_tooltip"] == long_name
+
+
+class TestRegressions:
+    """The three things most likely to be quietly wrong, each with its own test."""
+
+    def test_latitude_first_is_longitude_second_in_the_transform(
+        self, qgis_app
+    ) -> None:
+        from qgis.core import QgsCoordinateReferenceSystem, QgsProject
+
+        from nika_onlymap_exporter.core import go_to_location as core
+
+        wgs = QgsCoordinateReferenceSystem("EPSG:4326")
+        utm = QgsCoordinateReferenceSystem("EPSG:32612")
+        point = core.fields_to_point(36.10, -112.10, wgs)
+        assert (point.x(), point.y()) == (-112.10, 36.10)
+        moved = core.transform_point(point, wgs, utm, QgsProject.instance())
+        expected = wgs_to_frame(-112.10, 36.10)
+        assert math.hypot(moved.x() - expected.x(), moved.y() - expected.y()) < 0.01
+        assert 395_000 < moved.x() < 410_000 and 3_990_000 < moved.y() < 4_005_000
+        # The swapped order is a different place altogether (or none at all).
+        swapped = core.fields_to_point(-112.10, 36.10, wgs)
+        assert (swapped.x(), swapped.y()) == (36.10, -112.10)
+        # A projected pair keeps its order: easting is X, northing is Y.
+        projected = core.fields_to_point(401234.5, 3996543.25, utm)
+        assert (projected.x(), projected.y()) == (401234.5, 3996543.25)
+        # And the typed values come back out in the same order.
+        assert core.point_to_fields(point, wgs) == (36.10, -112.10)
+        assert core.point_to_fields(projected, utm) == (401234.5, 3996543.25)
+
+    def test_a_result_is_its_layer_and_feature_id_not_its_name(self, canyon) -> None:
+        world = canyon.world
+
+        def script(dialog) -> None:
+            choose_layer(dialog, world.viewpoints)
+            search(dialog, "desert view")
+            click_row(dialog, 1)  # QGIS ID 3, at -112.05 / 36.15
+            # The two features swap names behind the open dialog: a look-up by
+            # name would now find the other one.
+            first = fid_of(world.viewpoints, station_id="STA-013")
+            second = fid_of(world.viewpoints, station_id="STA-014")
+            index = world.viewpoints.fields().indexOf("name")
+            world.viewpoints.dataProvider().changeAttributeValues(
+                {first: {index: "Renamed"}, second: {index: "Desert View"}}
+            )
+            dialog.go_button.click()
+
+        canyon.open(script)
+        assert _centre_is(world.main, -112.05, 36.15)
+
+    def test_two_layers_with_the_same_name_are_told_apart(self, canyon) -> None:
+        from go_to_location_fixtures import _add, _memory_layer, _pt
+
+        world = canyon.world
+        twin = _memory_layer(
+            canyon.project,
+            "Point",
+            "Viewpoints",
+            "field=name:string&field=station_id:string&field=sid:integer",
+        )
+        _add(twin, [(["Twin Only", "STA-900", 900], _pt(-112.30, 36.30))])
+        world.main.setLayers([world.viewpoints, twin])
+        seen = {}
+
+        def script(dialog) -> None:
+            dialog.tabs.setCurrentIndex(1)
+            seen["offered"] = [
+                dialog.layer_combo.itemText(i)
+                for i in range(dialog.layer_combo.count())
+            ]
+            choose_layer(dialog, twin)
+            search(dialog, "twin only")
+            seen["rows"] = rows(dialog)
+            dialog.go_button.click()
+
+        canyon.open(script)
+        names = seen["offered"][1:]
+        assert len(set(names)) == 2 and all(n.startswith("Viewpoints") for n in names)
+        assert seen["rows"] == [("Twin Only", "QGIS ID: 1")]
+        assert _centre_is(world.main, -112.30, 36.30)
+
+    def test_each_go_is_a_single_undo_step_even_when_repeated(self, canyon) -> None:
+        index = canyon.stack.index()
+        _go_to_coordinates(canyon, "36.20", "-112.20")
+        _go_to_coordinates(canyon, "36.30", "-112.30")
+        assert canyon.stack.index() == index + 2
+        canyon.stack.undo()
+        assert _centre_is(canyon.world.main, -112.20, 36.20)
+        canyon.stack.undo()
+        assert _centre_is(canyon.world.main, *HOME)

@@ -1488,7 +1488,9 @@ class CartographController:
             before_apply=self.page_preview.content_editor.cancel_gesture,
             after_apply=self.schedule_autosave,
         )
-        GoToLocationDialog(target, self.dialog).exec()
+        dialog = GoToLocationDialog(target, self.dialog)
+        dialog.exec()
+        dialog.deleteLater()
 
     def _on_page_selection_changed(self, item: object) -> None:
         """The page's selection moved: mark the entry of a selected map."""
