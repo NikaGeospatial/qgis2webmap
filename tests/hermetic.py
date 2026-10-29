@@ -62,7 +62,24 @@ def start_qgis(scratch: Path, gui: bool = True):
     QgsApplication.initQgis()
     # After `initQgis`, which points QSettings at the profile it was given.
     isolate_settings(scratch / "qsettings")
+    pin_application_font()
     return app
+
+
+def pin_application_font(point_size: float = 9.0) -> None:
+    """Give every Qt the same application font size.
+
+    With no desktop theme to ask, Qt 5's fallback application font is 12 pt
+    and Qt 6's is 9 pt, so the same layout assertions measured different text
+    on QGIS 3 and 4. A real desktop supplies the user's own font size either
+    way; the tests pin the one the layouts are specified at.
+    """
+    from qgis.PyQt.QtWidgets import QApplication
+
+    font = QApplication.font()
+    if font.pointSizeF() != point_size:
+        font.setPointSizeF(point_size)
+        QApplication.setFont(font)
 
 
 def stop_qgis() -> None:
