@@ -347,6 +347,13 @@ once. If a file of that name is already there, the new one gets a number:
 `parcels-Survey (2).html`. To use another folder for every new map, see
 **Settings → Saving** in [the dialog, tab by tab](the-dialog.md#settings).
 
+A cartograph only saves over a file that is its own earlier output, or one you
+picked in **Change...** and agreed to replace. If the project names any other
+file - a text file, somebody else's page, a link, a folder, or a folder that
+does not exist - that file is left alone, the cartograph saves to a free name
+beside it (or in the default folder), and the message under the file name says
+where.
+
 A cartograph is always **one standalone HTML file**. There is no Share ZIP or
 Folder type as there is for the web map: the page, the pictures of its Image frames and the
 data of its interactive maps are all inside it.
