@@ -47,6 +47,10 @@ CARTOGRAPH_SHORTCUT = "Ctrl+Alt+C"
 
 # The Cartograph (Beta) output's own Web-menu entry, beside the web map one.
 CARTOGRAPH_ACTION_TEXT = N_("Create cartograph...")
+
+# How long unloading waits, in total, for workers still running to notice they
+# were cancelled. Bounded: unloading is QGIS shutting down or reloading.
+UNLOAD_JOB_WAIT_MS = 3000
 # Added to the layout designer's own Layout menu, per project - one QGIS
 # print layout is open there already, so this skips the Source picker.
 DESIGNER_ACTION_TEXT = N_("Export as cartograph (HTML)...")
@@ -247,6 +251,14 @@ class Qgis2WebMapPlugin:
                 dialog.release_canvas_effects()
             dialog.close()
             dialog.deleteLater()
+
+        # A worker that outlived the dialog is stopped and given a moment to end.
+        # One that still runs after that is not destroyed and not waited for: the
+        # job module keeps it owned until it finishes, with its results dropped,
+        # so it calls nothing in this (about to be unloaded) plugin.
+        from .ui.background_job import release_all
+
+        release_all(UNLOAD_JOB_WAIT_MS)
 
         from .ui.i18n import use_language
 

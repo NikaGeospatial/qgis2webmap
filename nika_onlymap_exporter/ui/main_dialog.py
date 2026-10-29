@@ -170,7 +170,7 @@ from ..writers.onlymap_writer import (
 )
 from . import languages, theme
 from .account_button import AccountButton, PendingHostingBackend
-from .background_job import BackgroundJob, Progress
+from .background_job import BackgroundJob, Progress, retire
 from .cartograph import CartographController
 from .fidelity_panel import FidelityPanel, FidelityStrip, Proceed, ask_before
 from .fitted_label import FittedLabel
@@ -3765,7 +3765,7 @@ class MainDialog(QDialog):
         if self._refuse_while_busy():
             return False
 
-        job = BackgroundJob(work, self)
+        job = BackgroundJob(work)
         self._job = job
         job.progressed.connect(self._on_job_progress)
         job.committing.connect(self._on_job_committing)
@@ -3774,9 +3774,9 @@ class MainDialog(QDialog):
         )
         job.cancelled.connect(self._on_job_cancelled)
         job.succeeded.connect(lambda result: self._on_job_succeeded(result, on_success))
-        # Qt frees the thread object once it has actually stopped; doing it any
-        # earlier destroys a QThread that is still running.
-        job.finished.connect(job.deleteLater)
+        # No parent and no `deleteLater` here: the job owns itself until its
+        # thread has finished (see `background_job`), so closing this dialog
+        # never destroys a thread that is still running.
 
         self._set_busy(True, label)
         job.start()
@@ -4878,21 +4878,15 @@ class MainDialog(QDialog):
             return
         self._shut_down = True
 
-        # A running job holds a reference to this dialog and will emit into its
-        # slots. Ask it to stop, then wait: a thread still running when Python
-        # frees the widgets underneath it is a crash, and the user experiences
-        # that as QGIS vanishing. The wait is bounded by the current layer, and
-        # capped so a wedged provider cannot hang the close.
+        # A running job will emit into this dialog's slots. It is detached, so
+        # whatever it posts is dropped on this thread, and cancelled; the short
+        # wait only lets an ordinary layer finish cleanly before the preview
+        # files are cleaned up. It is a courtesy, not a safety net: a job that
+        # outlasts it keeps running, owned by `background_job`, and is never
+        # destroyed with this dialog.
         job, self._job = self._job, None
         if job is not None:
-            # Its result is for widgets that are about to go: a result queued
-            # by the finished thread would otherwise reach a deleted dialog.
-            for signal in (job.succeeded, job.failed, job.cancelled):
-                with contextlib.suppress(TypeError, RuntimeError):
-                    signal.disconnect()
-            job.cancel()
-            with contextlib.suppress(Exception):
-                job.wait(SHUTDOWN_WAIT_MS)
+            retire(job, SHUTDOWN_WAIT_MS)
 
         try:
             save_state(self.project, self.state)

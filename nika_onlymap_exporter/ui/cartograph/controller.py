@@ -101,7 +101,7 @@ from ...packaging.runtime_manager import (
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
-from ..background_job import BackgroundJob
+from ..background_job import BackgroundJob, retire
 from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
@@ -480,13 +480,10 @@ class CartographController:
         if isinstance(job, _StaticRenders):
             job.cancel()
         elif job is not None:
-            # Its result is for widgets that are about to go: never deliver it.
-            for signal in (job.succeeded, job.failed):
-                with contextlib.suppress(TypeError, RuntimeError):
-                    signal.disconnect()
-            job.cancel()
-            with contextlib.suppress(RuntimeError):
-                job.wait(SHUTDOWN_WAIT_MS)
+            # Its result is for widgets that are about to go: detached, so it is
+            # never delivered, and left owned by `background_job` if it outlasts
+            # the wait - never destroyed with the dialog.
+            retire(job, SHUTDOWN_WAIT_MS)
         if self._preview_server is not None:
             self._preview_server.stop()
             self._preview_server = None
@@ -2065,7 +2062,7 @@ class CartographController:
                 layer_settings=layers,
             )
 
-        job = BackgroundJob(work, self.dialog)
+        job = BackgroundJob(work)
         self._job = job
         self._builds_started += 1
         build_number = self._builds_started
@@ -2081,7 +2078,6 @@ class CartographController:
         job.failed.connect(
             lambda message, details: self._on_build_failed(message, details, built_for)
         )
-        job.finished.connect(job.deleteLater)
         job.start()
         self._update_status_label()
 
