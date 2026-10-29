@@ -13,6 +13,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import dataclasses
+import functools
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -255,6 +256,21 @@ def _clip_request(
 
 
 @dataclasses.dataclass(frozen=True)
+class RelationTable:
+    """A Value Relation's cache: `(key, text)` rows in the order QGIS lists them."""
+
+    items: tuple[tuple[str, str], ...] = ()
+
+    @functools.cached_property
+    def first(self) -> dict[str, str]:
+        """key -> text, the first row winning as in QGIS's own lookup."""
+        lookup: dict[str, str] = {}
+        for key, text in self.items:
+            lookup.setdefault(key, text)
+        return lookup
+
+
+@dataclasses.dataclass(frozen=True)
 class FieldFormat:
     """One field's editor-widget formatter, with the inputs it needs copied out.
 
@@ -276,10 +292,10 @@ class FieldFormat:
     formatter: QgsFieldFormatter
     config: dict[str, Any]
     cache: Any
-    # A Value Relation's other layer as `key -> text`, read on the GUI thread
-    # because its own cache cannot be carried into Python; `None` for every
-    # other formatter.
-    relation: Mapping[str, str] | None = None
+    # A Value Relation's other layer as its cache of `(key, text)` rows, read on
+    # the GUI thread because its own cache cannot be carried into Python; `None`
+    # for every other formatter.
+    relation: RelationTable | None = None
     null_text: str = "NULL"
 
 
@@ -346,30 +362,78 @@ def _relation_key(value: object) -> str:
 
 
 def _relation_text(fmt: FieldFormat, value: object) -> str:
-    """What a Value Relation shows for `value`, from the table read up front."""
+    """What a Value Relation shows for `value`, from the table read up front.
+
+    Mirrors QgsValueRelationFieldFormatter.representValue: a multi-select lists
+    the texts of the related rows whose key is selected, in the table's
+    order (by key, or by text with "order by value"; the selection's order is
+    moot), and an empty or null selection is `{}`; a single value shows its
+    first matching text, NULL as the null text, and an unknown key as `(key)`.
+    """
     from qgis.core import QgsValueRelationFieldFormatter, QgsVariantUtils
 
-    table = fmt.relation or {}
+    table = fmt.relation
+    if table is None:
+        return str(value)
+    if fmt.config.get("AllowMulti"):
+        selected = set(QgsValueRelationFieldFormatter.valueToStringList(value))
+        return (
+            "{" + ", ".join(text for key, text in table.items if key in selected) + "}"
+        )
     if QgsVariantUtils.isNull(value):
         return fmt.null_text
-    if fmt.config.get("AllowMulti"):
-        keys = QgsValueRelationFieldFormatter.valueToStringList(value)
-        return "{" + ", ".join(table[key] for key in keys if key in table) + "}"
-    return table.get(_relation_key(value), f"({value})")
+    return table.first.get(_relation_key(value), f"({_relation_key(value)})")
 
 
-def _value_relation_table(config: dict[str, Any]) -> dict[str, str]:
-    """The other layer of a Value Relation as `key -> text`. **GUI thread only.**"""
-    from qgis.core import QgsProject, QgsValueRelationFieldFormatter
+def _value_relation_table(config: dict[str, Any]) -> RelationTable:
+    """The other layer of a Value Relation as QGIS would cache it. **GUI thread only.**
+
+    Honours the config's filter expression and ordering the way
+    QgsValueRelationFieldFormatter.createCache does with no form open: rows are
+    sorted by key, or by text with "order by value" (which is what orders a
+    multi-select's output), and a filter
+    that needs the form (`current_value`, ...) cannot be evaluated and is
+    skipped, any other filter keeps only the rows it accepts (one that fails to
+    parse keeps none).
+    """
+    from qgis.core import (
+        QgsExpression,
+        QgsExpressionContext,
+        QgsExpressionContextUtils,
+        QgsFeature,
+        QgsFeatureRequest,
+        QgsProject,
+        QgsValueRelationFieldFormatter,
+        QgsVariantUtils,
+    )
 
     related = QgsValueRelationFieldFormatter.resolveLayer(config, QgsProject.instance())
     if related is None:
-        return {}
+        return RelationTable()
     key_field, value_field = config.get("Key"), config.get("Value")
-    return {
-        _relation_key(feature[key_field]): str(feature[value_field])
-        for feature in related.getFeatures()
-    }
+    request = QgsFeatureRequest().setFlags(QgsFeatureRequest.Flag.NoGeometry)
+    filter_expression = str(config.get("FilterExpression") or "")
+    if filter_expression and QgsValueRelationFieldFormatter.expressionIsUsable(
+        filter_expression, QgsFeature()
+    ):
+        if QgsExpression(filter_expression).hasParserError():
+            return RelationTable()
+        request.setExpressionContext(
+            QgsExpressionContext(
+                QgsExpressionContextUtils.globalProjectLayerScopes(related)
+            )
+        )
+        request.setFilterExpression(filter_expression)
+    request.addOrderBy(str(value_field if config.get("OrderByValue") else key_field))
+    items: list[tuple[str, str]] = []
+    for feature in related.getFeatures(request):
+        key, text = feature[key_field], feature[value_field]
+        if QgsVariantUtils.isNull(key):
+            continue
+        items.append(
+            (_relation_key(key), "" if QgsVariantUtils.isNull(text) else str(text))
+        )
+    return RelationTable(tuple(items))
 
 
 def _display_property(

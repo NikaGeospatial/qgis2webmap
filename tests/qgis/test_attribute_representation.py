@@ -161,14 +161,21 @@ def _value_map(layer, field: str, config=CAMP_FORD) -> None:
 
 
 def _places_layer():
-    """A table of places a Value Relation can look up: id 1 Harbour, 2 Ridge."""
+    """A table of places a Value Relation can look up, in group a or b."""
     places = qgis_core.QgsVectorLayer(
-        "None?field=id:integer&field=title:string", "places", "memory"
+        "None?field=id:integer&field=title:string&field=grp:string",
+        "places",
+        "memory",
     )
     rows = []
-    for key, title in ((1, "Harbour"), (2, "Ridge")):
+    for key, title, group in (
+        (1, "Harbour", "a"),
+        (2, "Ridge", "b"),
+        (3, "Zed", "a"),
+        (4, "Alpha", "b"),
+    ):
         feature = qgis_core.QgsFeature(places.fields())
-        feature.setAttributes([key, title])
+        feature.setAttributes([key, title, group])
         rows.append(feature)
     places.dataProvider().addFeatures(rows)
     return places
@@ -413,6 +420,253 @@ class TestFormattedFieldUsedElsewhere:
             "(9)",
             "NULL",
         ]
+
+
+class TestValueRelationMatchesQgis:
+    """The popup text of a Value Relation equals QGIS's own `representValue`.
+
+    The oracle is the formatter itself, called with the layer's own widget
+    setup for each feature's stored value; the export must show the same text
+    and keep the stored value untouched.
+    """
+
+    @staticmethod
+    def _oracle(layer, field: str, values) -> list[str]:
+        index = layer.fields().indexOf(field)
+        setup = layer.fields().field(index).editorWidgetSetup()
+        formatter = qgis_core.QgsApplication.fieldFormatterRegistry().fieldFormatter(
+            setup.type()
+        )
+        return [
+            formatter.representValue(layer, index, setup.config(), None, value)
+            for value in values
+        ]
+
+    def _check(self, project, export, setup, field, rows, fields) -> None:
+        layer = _layer(project, rows, fields=fields)
+        layer.setEditorWidgetSetup(layer.fields().indexOf(field), setup)
+        stored = [feature[field] for feature in layer.getFeatures()]
+        expected = self._oracle(layer, field, stored)
+
+        out = export()
+
+        assert [out.popup(p)[field] for p in out.properties] == expected
+        assert out.kinds(field) == stored
+
+    def _config(self, places, **overrides):
+        setup = _value_relation(places)
+        config = setup.config()
+        config.update(overrides)
+        return qgis_core.QgsEditorWidgetSetup("ValueRelation", config)
+
+    @pytest.mark.parametrize(
+        "filter_expression",
+        [
+            "\"grp\" = 'a'",
+            '"id" > 1',
+            '"id" < 0',
+            "current_value('kind') = 1",
+            "\"id\" = current_value('kind')",
+            "@undefined_variable = 1",
+            "this is ((not an expression",
+        ],
+    )
+    def test_filter_expression(self, project, export, filter_expression) -> None:
+        places = _places_layer()
+        project.addMapLayer(places)
+        setup = self._config(places, FilterExpression=filter_expression)
+        rows = [(key, "n") for key in (1, 2, 3, 4, 9)]
+
+        self._check(
+            project, export, setup, "kind", rows, "kind:integer&field=note:string"
+        )
+
+    def test_filter_expression_hides_a_key_outside_it(self, project, export) -> None:
+        places = _places_layer()
+        project.addMapLayer(places)
+        setup = self._config(places, FilterExpression="\"grp\" = 'a'")
+        layer = _layer(project, [(1, "a"), (2, "b")])
+        layer.setEditorWidgetSetup(0, setup)
+
+        out = export()
+
+        assert [out.popup(p)["kind"] for p in out.properties] == ["Harbour", "(2)"]
+
+    @pytest.mark.parametrize("order_by_value", [False, True])
+    @pytest.mark.parametrize(
+        "stored",
+        [
+            "{1,2}",
+            "{2,1}",
+            "{1,3,4}",
+            "{4,3,1}",
+            "{ 1 , 2 }",
+            "{1,1}",
+            "{9}",
+            "{1,9}",
+            "{}",
+            "",
+            "[1,2]",
+            None,
+        ],
+    )
+    def test_multi_select_integer_keys(
+        self, project, export, stored, order_by_value
+    ) -> None:
+        places = _places_layer()
+        project.addMapLayer(places)
+        setup = self._config(places, AllowMulti=True, OrderByValue=order_by_value)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, stored)],
+            "kind:integer&field=tags:string",
+        )
+
+    @pytest.mark.parametrize("allow_multi", [False, True])
+    @pytest.mark.parametrize(
+        "stored",
+        [
+            "a,b",
+            "x}",
+            "k1",
+            "it's",
+            "zz",
+            '{"a,b",k1}',
+            "{k2,k1}",
+            '{"x}",k1}',
+            '{"it\'s"}',
+            '["k1","k2"]',
+            "{a,b}",
+        ],
+    )
+    def test_text_keys_with_commas_and_braces(
+        self, project, export, stored, allow_multi
+    ) -> None:
+        places = qgis_core.QgsVectorLayer(
+            "None?field=id:string&field=title:string", "words", "memory"
+        )
+        rows = []
+        for key, title in (
+            ("a,b", "Comma"),
+            ("x}", "Brace"),
+            ("k1", "One"),
+            ("k2", "Two"),
+            ("it's", "Quote"),
+        ):
+            feature = qgis_core.QgsFeature(places.fields())
+            feature.setAttributes([key, title])
+            rows.append(feature)
+        places.dataProvider().addFeatures(rows)
+        project.addMapLayer(places)
+        config = _value_relation(places).config()
+        config.update(LayerName="words", AllowMulti=allow_multi)
+        setup = qgis_core.QgsEditorWidgetSetup("ValueRelation", config)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, stored)],
+            "kind:integer&field=tags:string",
+        )
+
+    @pytest.mark.parametrize("order_by_value", [False, True])
+    @pytest.mark.parametrize("key_type", ["integer", "string"])
+    def test_multi_select_order_follows_the_widget_ordering(
+        self, project, export, key_type, order_by_value
+    ) -> None:
+        """Unsorted rows, mixed-case texts, a repeated key: QGIS's order."""
+        related = qgis_core.QgsVectorLayer(
+            f"None?field=id:{key_type}&field=title:string", "shuffled", "memory"
+        )
+        rows = []
+        for key, title in (
+            (10, "ten"),
+            (9, "Nine"),
+            (2, "two"),
+            (100, "Hundred"),
+            (9, "again"),
+        ):
+            feature = qgis_core.QgsFeature(related.fields())
+            feature.setAttributes([key, title])
+            rows.append(feature)
+        related.dataProvider().addFeatures(rows)
+        project.addMapLayer(related)
+        config = _value_relation(related).config()
+        config.update(
+            LayerName="shuffled", AllowMulti=True, OrderByValue=order_by_value
+        )
+        setup = qgis_core.QgsEditorWidgetSetup("ValueRelation", config)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, "{100,2,9,10}")],
+            "kind:integer&field=tags:string",
+        )
+
+    @pytest.mark.parametrize("stored", [[1, 2], [2, 1], [], [9], [1, 9], None])
+    def test_multi_select_list_field(self, project, export, stored) -> None:
+        places = _places_layer()
+        project.addMapLayer(places)
+        setup = self._config(places, AllowMulti=True)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, stored)],
+            "kind:integer&field=tags:integerlist",
+        )
+
+    @pytest.mark.parametrize("stored", ["1", 1.0, 1.5, "abc", 3.0])
+    def test_a_text_field_holding_integer_keys(self, project, export, stored) -> None:
+        places = _places_layer()
+        project.addMapLayer(places)
+        setup = self._config(places, UseCompleter=True, OrderByValue=True)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "note",
+            [(1, stored)],
+            "kind:integer&field=note:string",
+        )
+
+    def test_an_empty_related_text_shows_empty_not_the_key(
+        self, project, export
+    ) -> None:
+        places = qgis_core.QgsVectorLayer(
+            "None?field=id:integer&field=title:string", "blank", "memory"
+        )
+        rows = []
+        for key, title in ((1, ""), (3, "Zed")):
+            feature = qgis_core.QgsFeature(places.fields())
+            feature.setAttributes([key, title])
+            rows.append(feature)
+        places.dataProvider().addFeatures(rows)
+        project.addMapLayer(places)
+        config = _value_relation(places).config()
+        config.update(LayerName="blank", AllowMulti=True)
+        setup = qgis_core.QgsEditorWidgetSetup("ValueRelation", config)
+
+        self._check(
+            project,
+            export,
+            setup,
+            "tags",
+            [(1, "{1,3}")],
+            "kind:integer&field=tags:string",
+        )
 
 
 class TestHiddenAndCollidingNames:
