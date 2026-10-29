@@ -495,3 +495,17 @@ class TestHiddenAndCollidingNames:
         assert [p["kind"] for p in popups] == ["Camp", "Ford"]
         assert [p["kind_shown"] for p in popups] == ["real one", "real two"]
         assert [out.fill(p) for p in out.properties] == [RED, BLUE]
+
+
+class TestEmptyExportDiagnosis:
+    def test_features_hidden_by_the_symbology_are_not_called_an_empty_source(
+        self, project, export
+    ) -> None:
+        layer = _layer(project, [(7, "a"), (8, "b")])
+        _categorized(layer, "kind", [(1, RED, True), ("", GREEN, False)])
+
+        out = export()
+
+        details = " ".join(item.detail for item in out.report.items)
+        assert "no features" not in details
+        assert "symbology" in details

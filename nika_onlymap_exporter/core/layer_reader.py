@@ -1339,6 +1339,7 @@ class PendingLayer:
         # Before counting: a switched-off category means the author does not want
         # those features on the map at all, so they must leave the data, not just
         # the style. The count has to reflect what actually ships.
+        read_count = len(geojson.get("features") or ())
         geojson = drop_hidden_features(geojson, base.renderer)
 
         # Only the attributes something still reads survive: what the popup shows,
@@ -1368,7 +1369,16 @@ class PendingLayer:
         )
 
         feature_count = len(geojson.get("features") or ())
-        if feature_count == 0:
+        if feature_count == 0 and read_count > 0:
+            report.unsupported(
+                f"Layer '{base.name}'",
+                f"The layer has {read_count} feature(s), but every one belongs to "
+                "a category or range that is switched off, or that no category "
+                "or range claims, so none is drawn. It is exported but will show "
+                "nothing - check the layer's symbology.",
+                base.layer_id,
+            )
+        elif feature_count == 0:
             report.unsupported(
                 f"Layer '{base.name}'",
                 "The layer contains no features. It is exported but will show "
