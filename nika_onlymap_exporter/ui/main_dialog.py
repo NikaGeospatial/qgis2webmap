@@ -5033,14 +5033,19 @@ class MainDialog(QDialog):
         if clicked is not None and clicked is choices.get("retry"):
             self._request_close(0 if result is None else result)
         elif clicked is not None and clicked is choices.get("discard"):
-            self._cartograph.stop_close_save()
-            self._closing_for_good = True
-            super().done(0 if result is None else result)
+            self.close_without_saving()
         else:
             self._cartograph.stop_close_save()
             self.reopen_after_close = False
             self.close_button.setEnabled(True)
             self.status_label.setText("")
+
+    def close_without_saving(self) -> None:
+        """Close now, whatever the cartograph file is missing."""
+        self._cartograph.stop_close_save()
+        self._close_limit_timer.stop()
+        self._closing_for_good = True
+        self.close()
 
     def close_for_unload(self) -> None:
         """Close for the plugin being unloaded: save what can be saved within

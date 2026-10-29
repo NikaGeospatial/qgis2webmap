@@ -115,6 +115,11 @@ class TestShutdownIsIdempotent:
             time.sleep(0.4)
             return "late"
 
+        # Whatever the dialog would do with a result, replaced by a recorder, so
+        # a delivery shows even though the dialog itself is gone by then.
+        dialog._on_job_succeeded = lambda result, _callback: arrived.append(result)
+        # A cancelled job reports as cancelled: that must not arrive either.
+        dialog._on_job_cancelled = lambda: arrived.append("cancelled")
         assert dialog._start_job(work, arrived.append, "Slow")
         dialog.close()
         dialog.deleteLater()

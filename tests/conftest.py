@@ -98,7 +98,8 @@ def release_widgets_made_by_the_test(request):
     QApplication.processEvents()
     for widget in QApplication.topLevelWidgets():
         if id(widget) not in before:
-            widget.close()
+            # A dialog holding a close for an unsaved cartograph: close it now.
+            getattr(widget, "close_without_saving", widget.close)()
             widget.deleteLater()
     QApplication.sendPostedEvents(None, int(QEvent.Type.DeferredDelete))
     QApplication.processEvents()
