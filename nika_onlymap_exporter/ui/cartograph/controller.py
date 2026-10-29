@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import dataclasses
+import functools
 import html
 import re
 import sys
@@ -489,14 +490,7 @@ class CartographController:
         # Same rule as the web map's job (`MainDialog._shutdown`): a build
         # thread still running when its dialog is destroyed takes QGIS down.
         self._shut_down = True
-        job, self._job = self._job, None
-        if isinstance(job, _StaticRenders):
-            job.cancel()
-        elif job is not None:
-            # Its result is for widgets that are about to go: detached, so it is
-            # never delivered, and left owned by `background_job` if it outlasts
-            # the wait - never destroyed with the dialog.
-            retire(job, SHUTDOWN_WAIT_MS)
+        self._abandon_build()
         if self._preview_server is not None:
             self._preview_server.stop()
             self._preview_server = None
@@ -505,6 +499,72 @@ class CartographController:
         self.page_pane.live_counts.close()
         with contextlib.suppress(TypeError, RuntimeError):
             self.project.cleared.disconnect(cartograph_export.clear_static_frame_cache)
+
+    def _abandon_build(self) -> None:
+        """Drop the build under way: its result is never delivered, so it can
+        neither write the file nor report a save. A worker thread still running
+        is left owned by `background_job`, never destroyed with the dialog."""
+        job, self._job = self._job, None
+        if isinstance(job, _StaticRenders):
+            job.cancel()
+        elif job is not None:
+            retire(job, SHUTDOWN_WAIT_MS)
+
+    def release_project(self) -> None:
+        """Let go of the project's layouts before QGIS destroys them: it is
+        being cleared (File > New) or replaced (opening another project).
+
+        The layouts are still alive when `aboutToBeCleared` is emitted and are
+        destroyed as `clear` carries on; a slot of ours reached from that
+        destruction (a layout's `changed`, the manager's `layoutRemoved`) calls
+        into half-destroyed objects and takes QGIS down. So everything stops
+        watching first, and nothing from here on can write: the cartograph
+        file belongs to a layout of a project that is gone, and nothing of this
+        dialog's state belongs to whatever project comes next. A close waiting
+        on a save simply stops waiting; the window closes it itself.
+        """
+        self._autosave_timer.stop()
+        self._refresh_timer.stop()
+        self._thumbnail_timer.stop()
+        self.stop_close_save()
+        self._abandon_build()
+        self._disconnect_layout_manager()
+        self._disconnect_current_layout()
+        self._current_layout = None
+        self.page_pane.show_layout(None)
+        self.membership.layout_changed()
+        self.atlas_tab.show_layout(None)
+
+    def _abandon_close_save(self) -> None:
+        """The layout a held close was saving is gone: there is nothing left to
+        save, so the close the user asked for goes ahead - on the next turn of
+        the event loop, not from inside the layout's removal."""
+        waiter, self._close_waiter = self._close_waiter, None
+        self._close_save_timer.stop()
+        if waiter is not None:
+            QTimer.singleShot(0, functools.partial(self._deliver_abandoned, waiter[0]))
+
+    def _deliver_abandoned(self, on_closed: Callable[[], None]) -> None:
+        if not self._shut_down:
+            on_closed()
+
+    def _on_layout_about_to_be_removed(self, name: str) -> None:
+        """The layout on screen is about to be deleted: stop watching it and
+        drop what was meant for it. A build under way would still write its
+        file; edits waiting for the debounce have nowhere to go. (The manager
+        announces it by name; names are unique in a project.)"""
+        current = self._current_layout
+        if (
+            self._shut_down
+            or current is None
+            or sip.isdeleted(current)
+            or current.name() != name
+        ):
+            return
+        self._autosave_timer.stop()
+        self._abandon_build()
+        self._disconnect_current_layout()
+        self._abandon_close_save()
 
     # ---- Closing with changes pending ---------------------------------------
 
@@ -1713,6 +1773,7 @@ class CartographController:
         manager = self.project.layoutManager()
         if not self._manager_connected:
             manager.layoutAdded.connect(self._on_layouts_changed)
+            manager.layoutAboutToBeRemoved.connect(self._on_layout_about_to_be_removed)
             manager.layoutRemoved.connect(self._on_layouts_changed)
             manager.layoutRenamed.connect(self._on_layout_renamed)
             self._manager_connected = True
@@ -1764,6 +1825,9 @@ class CartographController:
         manager = self.project.layoutManager()
         with contextlib.suppress(Exception):
             manager.layoutAdded.disconnect(self._on_layouts_changed)
+            manager.layoutAboutToBeRemoved.disconnect(
+                self._on_layout_about_to_be_removed
+            )
             manager.layoutRemoved.disconnect(self._on_layouts_changed)
             manager.layoutRenamed.disconnect(self._on_layout_renamed)
         self._manager_connected = False

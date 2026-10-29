@@ -1062,6 +1062,11 @@ class MainDialog(QDialog):
         self._close_limit_timer = QTimer(self)
         self._close_limit_timer.setSingleShot(True)
         self._close_limit_timer.timeout.connect(self._on_close_save_timeout)
+        # The dialog belongs to the project it was opened on: when that is
+        # cleared or replaced, it lets go of the layouts before they are
+        # destroyed and closes (see `_on_project_clearing`).
+        self._project_cleared = False
+        self.project.aboutToBeCleared.connect(self._on_project_clearing)
 
         # ---- Live preview ------------------------------------------------
         # The server is created on first use, not here: a user with live preview
@@ -4913,7 +4918,10 @@ class MainDialog(QDialog):
             retire(job, SHUTDOWN_WAIT_MS)
 
         try:
-            save_state(self.project, self.state)
+            # A project that was cleared or replaced is not the one these
+            # settings are about: writing them would put them in the new one.
+            if not self._project_cleared:
+                save_state(self.project, self.state)
         except Exception:
             QgsMessageLog.logMessage(
                 f"Could not save export settings:\n{traceback.format_exc()}",
@@ -4933,6 +4941,8 @@ class MainDialog(QDialog):
             prune_stale_previews()
         self.watcher.disconnect_all()
         self.content_watcher.disconnect_all()
+        with contextlib.suppress(TypeError, RuntimeError):
+            self.project.aboutToBeCleared.disconnect(self._on_project_clearing)
         self._cartograph.shutdown()
 
     # ---- Closing --------------------------------------------------------
@@ -5039,6 +5049,28 @@ class MainDialog(QDialog):
             self.reopen_after_close = False
             self.close_button.setEnabled(True)
             self.status_label.setText("")
+
+    def _on_project_clearing(self) -> None:
+        """The project is being cleared or replaced under the open dialog.
+
+        Its layouts are destroyed as that carries on, so the Cartograph tab
+        stops watching them now, while they are alive, and any save it was
+        holding the close for is dropped: its layout and the project it was
+        written for are gone, and what is written next must never be this
+        layout's for another project. The dialog's settings, layers and file
+        paths all belong to the old project, so the window closes too - not
+        from inside the clear, but on the next turn of the event loop - and
+        reopening it starts from the new project.
+        """
+        if self._shut_down or self._project_cleared:
+            return
+        self._project_cleared = True
+        self._cartograph.release_project()
+        QTimer.singleShot(0, self._close_after_project_change)
+
+    def _close_after_project_change(self) -> None:
+        if not self._shut_down and self.isVisible():
+            self.close_without_saving()
 
     def close_without_saving(self) -> None:
         """Close now, whatever the cartograph file is missing."""
