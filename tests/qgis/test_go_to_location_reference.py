@@ -360,3 +360,15 @@ class TestOlderDocuments:
         item = canyon.world.main
         item.setCustomProperty(PROPERTY, bad)
         assert _cancel_dialog(canyon) == ("100,000", 1)
+
+
+class TestAnExistingReferenceIsNeverReplaced:
+    def test_a_later_reference_offered_to_the_frame_is_ignored(self, canyon) -> None:
+        from nika_onlymap_exporter.core.go_to_location import FrameTarget
+
+        item = canyon.world.main
+        _go_coordinates(canyon, preset=2)
+        target = FrameTarget(canyon.world.layout, item, canyon.project)
+        target.apply_extent(item.extent(), "Go to location", 30_000, 77_777)
+        assert _stored(item) == START
+        assert _is(item, 30_000)
