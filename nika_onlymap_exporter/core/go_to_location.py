@@ -58,6 +58,7 @@ from qgis.core import (
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QLocale, QMetaType
 
+from .atlas_series import friendly_map_name
 from .frame_layers import rendered_layers
 
 #: Matches shown in the list; one more is read to know whether there are more.
@@ -725,7 +726,7 @@ class FrameTarget:
         self._layout = layout
         self._item = item
         self._uuid = item.uuid()
-        self.name = item.displayName()
+        self.name = friendly_map_name(item.displayName())
         self.project = project
         self._before_apply = before_apply
         self._after_apply = after_apply

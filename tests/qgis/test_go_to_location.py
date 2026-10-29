@@ -140,6 +140,17 @@ class TestTheMenuRow:
             "tabs": ["Coordinates", "Feature"],
         }
 
+    def test_a_template_map_id_reads_as_words(self, canyon) -> None:
+        # Templates name their main frame `main`; the label says "Main map".
+        canyon.world.main.setId("main")
+        seen = {}
+
+        def script(dialog) -> None:
+            seen["context"] = dialog.context_label.text()
+
+        canyon.open(script, canyon.world.main)
+        assert seen["context"] == "Map: Main map"
+
 
 def _extent_state(item):
     box = item.extent()
