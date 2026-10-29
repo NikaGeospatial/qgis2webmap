@@ -45,6 +45,7 @@ from test_cartograph_dialog import (
     _dialog,
     picked_template,  # noqa: F401 - autouse fixture the dialog tests rely on
 )
+from test_cartograph_export import fake_runtime  # noqa: F401 - fixture
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +83,15 @@ class Setup:
     def open(self, script, item=None):
         return open_dialog(self.action(item or self.world.main), script)
 
+    def quiet(self) -> None:
+        """No autosave pending: a layer set the test changed must not start an
+        export of a large layer behind the test."""
+        QApplication.processEvents()
+        self.cartograph._autosave_timer.stop()
+
     def close(self) -> None:
+        self.cartograph._autosave_timer.stop()
+        wait_for(lambda: not self.cartograph.busy, 20000, "a running save to end")
         self.dialog.close()
 
 
@@ -1609,3 +1618,531 @@ class TestAtlasControlledFrames:
 
         canyon.open(script)
         assert seen["go"] is False
+
+
+def _go_to_coordinates(canyon, lat: str, lon: str, item=None) -> None:
+    def script(dialog) -> None:
+        fill_coordinates(dialog, lat, lon)
+        dialog.go_button.click()
+
+    canyon.open(script, item)
+
+
+def _go_to_feature(canyon, layer, name: str) -> None:
+    def script(dialog) -> None:
+        choose_layer(dialog, layer)
+        search(dialog, name)
+        dialog.go_button.click()
+
+    canyon.open(script)
+
+
+def _page_pixel_at_frame_centre(world):
+    """The page as exported (QGIS's own layout renderer), at the main frame's middle."""
+    from qgis.core import QgsLayoutExporter
+    from qgis.PyQt.QtCore import QSize
+
+    width_px = 1200
+    page = world.layout.pageCollection().page(0).sizeWithUnits()
+    height_px = round(width_px * page.height() / page.width())
+    image = QgsLayoutExporter(world.layout).renderPageToImage(
+        0, QSize(width_px, height_px)
+    )
+    scale = width_px / page.width()
+    centre = world.main.sceneBoundingRect().center()
+    return image.pixelColor(round(centre.x() * scale), round(centre.y() * scale))
+
+
+class TestWhatFollowsTheNewView:
+    def test_the_exported_page_shows_the_new_area(self, canyon) -> None:
+        world = canyon.world
+        # Somewhere with nothing drawn: the middle of the page is blank.
+        _go_to_coordinates(canyon, "36.50", "-112.50")
+        blank = _page_pixel_at_frame_centre(world)
+        assert (blank.red(), blank.green(), blank.blue()) == (255, 255, 255)
+        # A viewpoint at the middle: the page now draws its marker there.
+        _go_to_feature(canyon, world.viewpoints, "Mather Point")
+        marker = _page_pixel_at_frame_centre(world)
+        assert (marker.red(), marker.green(), marker.blue()) != (255, 255, 255)
+
+    def test_the_saved_cartograph_carries_the_new_centre(
+        self,
+        canyon,
+        fake_runtime,  # noqa: F811
+    ) -> None:
+        import re
+
+        from nika_onlymap_exporter.core.cartograph_export import (
+            export_layout_to_cartograph,
+        )
+        from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+
+        world = canyon.world
+
+        def frame_view(item):
+            html = export_layout_to_cartograph(
+                world.layout, canyon.project, fake_runtime, FidelityReportBuilder()
+            )
+            frame = re.search(
+                rf'<om-frame id="frame_{item.id().lower().replace(" ", "_")}"[^>]*>',
+                html,
+            )
+            assert frame, html[:400]
+            centre = re.search(r'center="\[([-\d.]+), ([-\d.]+)\]"', frame.group(0))
+            zoom = re.search(r'zoom="([\d.]+)"', frame.group(0))
+            return float(centre.group(1)), float(centre.group(2)), float(zoom.group(1))
+
+        before = frame_view(world.main)
+        _go_to_coordinates(canyon, "36.20", "-112.20")
+        lon, lat, zoom = frame_view(world.main)
+        assert math.isclose(lon, -112.20, abs_tol=2e-3)
+        assert math.isclose(lat, 36.20, abs_tol=2e-3)
+        # The web zoom of a fixed ground scale drifts a little with latitude.
+        assert math.isclose(zoom, before[2], abs_tol=0.01), "the scale is kept"
+        assert (lon, lat) != before[:2]
+
+    def test_a_live_count_follows_the_frame(self, canyon) -> None:
+        from qgis.core import QgsLayoutItemLabel
+        from qgis.PyQt.QtCore import QRectF
+
+        from nika_onlymap_exporter.core import live_count as lc
+
+        world = canyon.world
+        number = QgsLayoutItemLabel(world.layout)
+        number.setId("Live count")
+        world.layout.addLayoutItem(number)
+        number.attemptSetSceneRect(QRectF(220, 10, 40, 14))
+        lc.write_spec(
+            number,
+            lc.CountSpec(
+                map_uuid=world.main.uuid(),
+                layer_id=world.viewpoints.id(),
+                layer_name=world.viewpoints.name(),
+                mode=lc.MODE_ALL,
+            ),
+        )
+
+        def inside() -> int:
+            box = world.main.extent()
+            total = 0
+            for feature in world.viewpoints.getFeatures():
+                if feature.hasGeometry():
+                    point = feature.geometry().asPoint()
+                    if box.contains(wgs_to_frame(point.x(), point.y())):
+                        total += 1
+            return total
+
+        wait_for(lambda: number.text() == str(inside()), what="the first count")
+        first = inside()
+        _go_to_feature(canyon, world.viewpoints, "Far Away Point")
+        assert inside() == 1 != first
+        wait_for(
+            lambda: number.text() == "1",
+            what=f"the count to follow the frame (reads {number.text()!r})",
+        )
+        canyon.stack.undo()
+        wait_for(lambda: number.text() == str(first), what="the count to follow Undo")
+
+    def test_the_cartograph_is_saved_again(self, canyon) -> None:
+        """The existing save/export mechanism is asked to run (an advisory check
+        of the mechanism; the exported centre above is the result)."""
+        canyon.cartograph._autosave_timer.stop()
+        _go_to_coordinates(canyon, "36.20", "-112.20")
+        assert canyon.cartograph._autosave_timer.isActive()
+
+    def test_a_pending_edit_view_gesture_cannot_overwrite_the_destination(
+        self, canyon
+    ) -> None:
+        world = canyon.world
+        preview = canyon.cartograph.page_preview
+        view = preview.view
+        viewport = view.viewport()
+        preview.edit_content(world.main)
+        QApplication.processEvents()
+        centre = view.mapFromScene(world.main.sceneBoundingRect().center())
+        QTest.mouseMove(viewport, centre)
+        QTest.mousePress(
+            viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centre
+        )
+        from qgis.PyQt.QtCore import QPoint
+
+        for step in range(1, 9):
+            QTest.mouseMove(
+                viewport, QPoint(centre.x() - 6 * step, centre.y() + 4 * step)
+            )
+            QApplication.processEvents()
+        assert preview.content_editor._dragging, "the drag is under way"
+        _go_to_coordinates(canyon, "36.20", "-112.20")
+        QTest.mouseRelease(
+            viewport,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            QPoint(centre.x() - 48, centre.y() + 32),
+        )
+        QApplication.processEvents()
+        assert _centre_is(world.main, -112.20, 36.20), "the old drag was applied on top"
+
+
+class TestLargeLayers:
+    def _watch_the_loop(self):
+        """A 10 ms ticker on the GUI thread; `longest()` is the biggest gap
+        between two ticks, i.e. how long the window was unresponsive."""
+        import time
+
+        from qgis.PyQt.QtCore import QTimer
+
+        state = {"last": time.monotonic(), "worst": 0.0}
+
+        def tick() -> None:
+            now = time.monotonic()
+            state["worst"] = max(state["worst"], now - state["last"])
+            state["last"] = now
+
+        timer = QTimer()
+        timer.setInterval(10)
+        timer.timeout.connect(tick)
+        timer.start()
+        return timer, state
+
+    def test_a_search_of_200000_features_keeps_the_window_responsive(
+        self, canyon, monkeypatch
+    ) -> None:
+        import time
+
+        from go_to_location_fixtures import many_points
+
+        from nika_onlymap_exporter.core import go_to_location as core
+
+        world = canyon.world
+        big = many_points(canyon.project, 200_000)
+        world.main.setLayers([world.viewpoints, big])
+        canyon.quiet()
+        jobs = []
+        real_start = core.start_search
+
+        def recording(layer, plan, generation):
+            job = real_start(layer, plan, generation)
+            jobs.append(job)
+            return job
+
+        monkeypatch.setattr(core, "start_search", recording)
+        seen = {}
+
+        def script(dialog) -> None:
+            choose_layer(dialog, big)
+            timer, state = self._watch_the_loop()
+            try:
+                # Rare text: the provider has to look at every row to say "none".
+                started = time.monotonic()
+                search(dialog, "no such site")
+                seen["rare_seconds"] = time.monotonic() - started
+                seen["rare_rows"] = dialog.results.count()
+                # Common text: thousands of matches, only the first page read.
+                search(dialog, "site 0012")
+                seen["common_rows"] = dialog.results.count()
+                seen["common_status"] = dialog.status_label.text()
+                # An exact name among 200 000.
+                search(dialog, "Site 123456")
+                seen["exact_rows"] = rows(dialog)
+            finally:
+                timer.stop()
+            seen["worst_gap"] = state["worst"]
+
+        canyon.open(script)
+        assert seen["rare_rows"] == 0
+        assert seen["common_rows"] == 50
+        assert (
+            seen["common_status"] == "Showing the first 50 matches. Refine your search."
+        )
+        assert seen["exact_rows"][0][0] == "Site 123456"
+        # The window kept answering while the provider scanned: no stall near
+        # a tenth of a second, however long the scan took.
+        assert seen["worst_gap"] < 0.25, seen
+        # And only a page of features was ever read: the rare query read none,
+        # the common one at most a limit's worth twice over.
+        rare, common, exact = jobs
+        assert rare.fetched == 0
+        assert common.fetched <= 2 * (core.MAX_SHOWN + 1)
+        assert exact.fetched <= 2 * (core.MAX_SHOWN + 1)
+        print(
+            "worst gap ms:",
+            round(seen["worst_gap"] * 1000),
+            "rare scan s:",
+            round(seen["rare_seconds"], 1),
+        )
+
+    def test_a_geopackage_layer_with_a_subset_filter(self, canyon, tmp_path) -> None:
+        from live_count_fixtures import on_disk
+
+        world = canyon.world
+        on_gpkg = on_disk(world.viewpoints, tmp_path)
+        canyon.project.addMapLayer(on_gpkg)
+        on_gpkg.setSubsetString("\"name\" != 'Mather Point'")
+        subset = on_gpkg.subsetString()
+        world.main.setLayers([on_gpkg])
+        seen = {}
+
+        def script(dialog) -> None:
+            choose_layer(dialog, on_gpkg)
+            search(dialog, "point")
+            seen["names"] = [r[0] for r in rows(dialog)]
+            search(dialog, "50%_off")
+            seen["literal"] = [r[0] for r in rows(dialog)]
+            choose_source(dialog, "QGIS feature ID")
+            search(dialog, "4")  # Mather Point is feature 4, but not in the subset
+            seen["hidden"] = (dialog.results.count(), dialog.status_label.text())
+
+        canyon.open(script)
+        assert "Mather Point" not in seen["names"] and "Lipan Point" in seen["names"]
+        assert seen["literal"] == ["Lookout 50%_off"]
+        assert seen["hidden"] == (0, "No matching features.")
+        assert on_gpkg.subsetString() == subset, "the layer's filter was not touched"
+
+
+class TestTheDialogsLook:
+    def test_accessible_names(self, canyon) -> None:
+        seen = {}
+
+        def script(dialog) -> None:
+            from qgis.PyQt.QtWidgets import QToolButton
+
+            seen["names"] = {
+                "change": dialog.crs_button.accessibleName(),
+                "latitude": dialog.first_edit.accessibleName(),
+                "longitude": dialog.second_edit.accessibleName(),
+                "layer": dialog.layer_combo.accessibleName(),
+                "search_in": dialog.source_combo.accessibleName(),
+                "search": dialog.search_button.accessibleName(),
+                "results": dialog.results.accessibleName(),
+                "fit": dialog.fit_check.accessibleName(),
+                "cancel": dialog.cancel_button.accessibleName(),
+                "go": dialog.go_button.accessibleName(),
+            }
+            seen["clear_query"] = [
+                b.accessibleName() for b in dialog.query_edit.findChildren(QToolButton)
+            ]
+            type_text(dialog.query_edit, "x")
+            seen["clear_query_after_typing"] = [
+                b.accessibleName() for b in dialog.query_edit.findChildren(QToolButton)
+            ]
+
+        canyon.open(script)
+        assert seen["names"] == {
+            "change": "Change coordinate system",
+            "latitude": "Latitude",
+            "longitude": "Longitude",
+            "layer": "Layer",
+            "search_in": "Search in",
+            "search": "Search",
+            "results": "Results",
+            "fit": "Fit whole feature",
+            "cancel": "Cancel",
+            "go": "Go",
+        }
+        assert "Clear search" in seen["clear_query"] + seen["clear_query_after_typing"]
+
+    def test_labels_sit_above_their_fields_in_the_specified_order(self, canyon) -> None:
+        seen = {}
+
+        def script(dialog) -> None:
+            def y(widget):
+                return widget.mapTo(dialog, widget.rect().topLeft()).y()
+
+            seen["coordinates"] = [
+                y(w)
+                for w in (
+                    dialog.crs_title,
+                    dialog.crs_value,
+                    dialog.first_label,
+                    dialog.first_edit,
+                    dialog.second_label,
+                    dialog.second_edit,
+                    dialog.coordinate_hint,
+                )
+            ]
+            dialog.tabs.setCurrentIndex(1)
+            QApplication.processEvents()
+            seen["feature"] = [
+                y(w)
+                for w in (
+                    dialog.layer_combo,
+                    dialog.source_combo,
+                    dialog.query_edit,
+                    dialog.status_label,
+                    dialog.results,
+                    dialog.fit_check,
+                    dialog.scope_hint,
+                )
+            ]
+            seen["footer"] = (
+                dialog.cancel_button.geometry().left()
+                < dialog.go_button.geometry().left(),
+                dialog.cancel_button.geometry().top()
+                == dialog.go_button.geometry().top(),
+            )
+            seen["margins"] = dialog.layout().contentsMargins().left()
+            seen["no_default_extras"] = sorted(
+                b.text() for b in dialog.findChildren(type(dialog.go_button))
+            )
+
+        canyon.open(script)
+        assert seen["coordinates"] == sorted(seen["coordinates"])
+        assert seen["feature"] == sorted(seen["feature"])
+        assert seen["footer"] == (True, True)
+        assert seen["margins"] == 16
+        # No Apply, Preview, Save or Reset buttons: only these.
+        assert seen["no_default_extras"] == ["Cancel", "Change…", "Go", "Search"]
+
+    def test_the_wheel_never_changes_a_closed_dropdown(self, canyon) -> None:
+        from qgis.PyQt.QtCore import QPoint, QPointF
+        from qgis.PyQt.QtGui import QWheelEvent
+
+        from nika_onlymap_exporter.ui.wheel_guard import (
+            install_wheel_guard,
+            remove_wheel_guard,
+        )
+
+        install_wheel_guard()
+        seen = {}
+        try:
+
+            def script(dialog) -> None:
+                dialog.tabs.setCurrentIndex(1)
+                choose_layer(dialog, canyon.world.viewpoints)
+                for name in ("layer_combo", "source_combo"):
+                    combo = getattr(dialog, name)
+                    combo.setCurrentIndex(1)
+                    before = combo.currentIndex()
+                    for delta in (-120, 120, -120):
+                        event = QWheelEvent(
+                            QPointF(8, 8),
+                            QPointF(combo.mapToGlobal(QPoint(8, 8))),
+                            QPoint(0, 0),
+                            QPoint(0, delta),
+                            Qt.MouseButton.NoButton,
+                            Qt.KeyboardModifier.NoModifier,
+                            Qt.ScrollPhase.NoScrollPhase,
+                            False,
+                        )
+                        QApplication.sendEvent(combo, event)
+                    seen[name] = (before, combo.currentIndex())
+                    # The keyboard still chooses.
+                    combo.setFocus()
+                    press(combo, Qt.Key.Key_Down)
+                    seen[name + "_key"] = combo.currentIndex()
+
+            canyon.open(script)
+        finally:
+            remove_wheel_guard()
+        assert seen["layer_combo"] == (1, 1) and seen["source_combo"] == (1, 1)
+        assert seen["layer_combo_key"] == 2 and seen["source_combo_key"] == 2
+
+    @pytest.mark.parametrize("scale", [1.0, 1.25, 1.6])
+    def test_text_is_never_clipped_at_larger_fonts(self, canyon, scale) -> None:
+        from qgis.PyQt.QtWidgets import QComboBox, QLineEdit, QPushButton
+
+        base = QApplication.font()
+        bigger = QApplication.font()
+        bigger.setPointSizeF(base.pointSizeF() * scale)
+        QApplication.setFont(bigger)
+        seen = {}
+        try:
+
+            def script(dialog) -> None:
+                for index in (0, 1):
+                    dialog.tabs.setCurrentIndex(index)
+                    QApplication.processEvents()
+                    squeezed = []
+                    for widget in dialog.findChildren(
+                        (QLineEdit, QComboBox, QPushButton)
+                    ):
+                        if (
+                            widget.isVisibleTo(dialog)
+                            and widget.parent() is not None
+                            and widget.height() < widget.sizeHint().height() - 1
+                        ):
+                            squeezed.append(
+                                (
+                                    widget.accessibleName(),
+                                    widget.height(),
+                                    widget.sizeHint().height(),
+                                )
+                            )
+                    seen[index] = squeezed
+                    seen[f"scroll{index}"] = (
+                        dialog.results.horizontalScrollBar().isVisible()
+                    )
+                    seen[f"fits{index}"] = [
+                        w.accessibleName()
+                        for w in dialog.findChildren(QPushButton)
+                        if w.isVisibleTo(dialog)
+                        and w.mapTo(dialog, w.rect().bottomRight()).x() > dialog.width()
+                    ]
+                seen["size"] = (dialog.width(), dialog.height())
+
+            canyon.open(script)
+        finally:
+            QApplication.setFont(base)
+        assert seen[0] == [] and seen[1] == [], seen
+        assert not seen["scroll0"] and not seen["scroll1"]
+        assert seen["fits0"] == [] and seen["fits1"] == []
+
+    def test_the_size_follows_the_open_tab(self, canyon) -> None:
+        seen = {}
+
+        def script(dialog) -> None:
+            seen["coordinates"] = (dialog.width(), dialog.height())
+            dialog.tabs.setCurrentIndex(1)
+            QApplication.processEvents()
+            seen["feature"] = (dialog.width(), dialog.height())
+            dialog.tabs.setCurrentIndex(0)
+            QApplication.processEvents()
+            seen["back"] = (dialog.width(), dialog.height())
+
+        canyon.open(script)
+        assert seen["coordinates"][0] == 620 == seen["feature"][0]
+        # About 430 and 570 px with the default font: not the taller tab's height twice.
+        assert 380 <= seen["coordinates"][1] <= 470, seen
+        assert 520 <= seen["feature"][1] <= 620, seen
+        # Back on the short tab it is short again (give or take a wrapped line).
+        assert seen["back"][0] == 620
+        assert abs(seen["back"][1] - seen["coordinates"][1]) <= 30, seen
+
+    def test_a_narrow_screen_and_long_names_never_widen_or_scroll_the_dialog(
+        self, canyon, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtCore import QSize
+
+        from nika_onlymap_exporter.ui.cartograph import go_to_location_dialog as module
+
+        monkeypatch.setattr(
+            module.GoToLocationDialog, "_screen_size", lambda self: QSize(400, 700)
+        )
+        long_name = "A very long map frame name " * 6
+        canyon.world.main.setId(long_name)
+        layer = _named_layer(canyon, ["An extraordinarily long feature name " * 6])
+        layer.setName("A layer with an extraordinarily long name " * 4)
+        seen = {}
+
+        def script(dialog) -> None:
+            dialog.tabs.setCurrentIndex(1)
+            choose_layer(dialog, layer)
+            search(dialog, "extraordinarily")
+            QApplication.processEvents()
+            seen["size"] = (dialog.width(), dialog.height())
+            seen["scroll"] = dialog.results.horizontalScrollBar().isVisible()
+            seen["tooltip"] = dialog.results.item(0).toolTip()
+            seen["context_tooltip"] = dialog.context_label.toolTip()
+            seen["inside"] = all(
+                w.mapTo(dialog, w.rect().bottomRight()).x() <= dialog.width()
+                for w in dialog.findChildren(QPushButton)
+                if w.isVisibleTo(dialog)
+            )
+
+        from qgis.PyQt.QtWidgets import QPushButton
+
+        canyon.open(script)
+        assert seen["size"][0] <= 360 and seen["size"][1] <= 660
+        assert seen["scroll"] is False and seen["inside"] is True
+        assert "extraordinarily long feature name" in seen["tooltip"]
+        assert seen["context_tooltip"] == long_name

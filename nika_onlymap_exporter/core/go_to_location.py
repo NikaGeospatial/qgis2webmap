@@ -540,7 +540,16 @@ class SearchPlan:
         """Each request with the tier it finds (None: not tiered)."""
         if self.source.kind == FEATURE_ID:
             assert self.whole_number is not None
-            return [(None, QgsFeatureRequest().setFilterFid(self.whole_number))]
+            # An expression, not setFilterFid: a fetch by ID would ignore the
+            # layer's own subset filter, which must hold here too.
+            return [
+                (
+                    None,
+                    QgsFeatureRequest().setFilterExpression(
+                        f"$id = {self.whole_number}"
+                    ),
+                )
+            ]
         if self.source.whole_number:
             column = QgsExpression.quotedColumnRef(self.source.field_name)
             request = QgsFeatureRequest().setFilterExpression(

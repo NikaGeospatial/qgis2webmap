@@ -247,6 +247,15 @@ class _ResultList(QListWidget):
 
     go_requested = pyqtSignal()
 
+    def sizeHint(self) -> QSize:  # noqa: N802
+        # Three rows, however the style sizes an empty list: the list takes
+        # the room the dialog has beyond that.
+        option = QStyleOptionViewItem()
+        option.font = self.font()
+        row = self.itemDelegate().sizeHint(option, QModelIndex())
+        height = 3 * row.height() + 2 * self.frameWidth()
+        return QSize(super().sizeHint().width(), height)
+
     def keyPressEvent(self, event: QKeyEvent | None) -> None:  # noqa: N802
         if event is not None and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             event.accept()
