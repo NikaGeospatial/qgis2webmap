@@ -430,7 +430,15 @@ class AsyncFrameRender(QObject):
                 map_item.setItemOpacity(1.0)
                 if rotation:
                     map_item.setItemRotation(0, True)
-                self._begin(size.width(), size.height())
+                try:
+                    self._begin(size.width(), size.height())
+                except BaseException:
+                    # Nothing half-built is kept: painters end before their
+                    # pictures are freed (Qt 5 crashes otherwise).
+                    self.cancel()
+                    self._job = self._image = self._layers_image = None
+                    self._done = False
+                    raise
             finally:
                 for item in others:
                     item.setVisible(previous_visibility[item.uuid()])
@@ -452,6 +460,30 @@ class AsyncFrameRender(QObject):
         smooth = bool(context.flags() & QgsLayoutRenderContext.Flag.FlagAntialiasing)
         pixel_size = QSize(*frame_pixel_size(width_mm, height_mm, dpi))
         check_frame_size(pixel_size.width(), pixel_size.height())
+        # Every size is checked before a picture or painter exists: an
+        # exception raised while a QPainter is still active makes Qt 5 free
+        # the painted QImage under it and crash.
+        mm_per_unit = _millimetres_per_layout_unit(layout)
+        forced_vector = (
+            context.rasterizedRenderingPolicy()
+            == Qgis.RasterizedRenderingPolicy.ForceVector
+        )
+        advanced_effects = map_item.containsAdvancedEffects() and not forced_vector
+        native_bounds = map_item.boundingRect()
+        bounds = QRectF(
+            native_bounds.x() * mm_per_unit,
+            native_bounds.y() * mm_per_unit,
+            native_bounds.width() * mm_per_unit,
+            native_bounds.height() * mm_per_unit,
+        )
+        layers_size = QSize()
+        if advanced_effects:
+            layers_size = QSize(
+                *working_pixel_size(
+                    width_mm, height_mm, bounds.width(), bounds.height(), dpi
+                )
+            )
+            check_frame_size(layers_size.width(), layers_size.height())
         image = QImage(pixel_size, QImage.Format.Format_ARGB32)
         image.fill(Qt.GlobalColor.transparent)
         # `QgsLayoutExporter.renderRegionToImage` takes the resolution from
@@ -462,6 +494,9 @@ class AsyncFrameRender(QObject):
         image.setDotsPerMeterX(_round_half_up(resolution / 25.4 * 1000))
         image.setDotsPerMeterY(_round_half_up(resolution / 25.4 * 1000))
         painter = QPainter(image)
+        # Held on the instance at once so a failure below can end it (see
+        # `start`) before the picture goes.
+        self._image, self._painter = image, painter
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, smooth)
         # `QGraphicsScene.render` keeps the region's aspect ratio and puts its
         # corner on the image's.
@@ -473,7 +508,6 @@ class AsyncFrameRender(QObject):
         # What QGIS reports in scene units (`pen()`, `boundingRect()`,
         # `mapUnitsToLayoutUnits()`) is in the layout's native units, but
         # this painter works in millimetres.
-        mm_per_unit = _millimetres_per_layout_unit(layout)
         if map_item.frameEnabled():
             frame_pen = QPen(map_item.pen())
             frame_pen.setWidthF(frame_pen.widthF() * mm_per_unit)
@@ -483,33 +517,17 @@ class AsyncFrameRender(QObject):
 
         extent = map_item.extent()
         map_to_mm = map_item.mapUnitsToLayoutUnits() * mm_per_unit
-        forced_vector = (
-            context.rasterizedRenderingPolicy()
-            == Qgis.RasterizedRenderingPolicy.ForceVector
-        )
-        if map_item.containsAdvancedEffects() and not forced_vector:
+        if advanced_effects:
             # A layer with a blend mode or effect has to meet the background
             # in one flat picture, which is then laid over the page.
-            native_bounds = map_item.boundingRect()
-            bounds = QRectF(
-                native_bounds.x() * mm_per_unit,
-                native_bounds.y() * mm_per_unit,
-                native_bounds.width() * mm_per_unit,
-                native_bounds.height() * mm_per_unit,
-            )
             dots_per_mm = ratio
             destination_dpi = ratio * 25.4
-            layers_size = QSize(
-                *working_pixel_size(
-                    width_mm, height_mm, bounds.width(), bounds.height(), dpi
-                )
-            )
-            check_frame_size(layers_size.width(), layers_size.height())
             layers_image = QImage(layers_size, QImage.Format.Format_ARGB32)
             layers_image.fill(Qt.GlobalColor.transparent)
             layers_image.setDotsPerMeterX(_round_half_up(1000 * destination_dpi / 25.4))
             layers_image.setDotsPerMeterY(_round_half_up(1000 * destination_dpi / 25.4))
             layers_painter = QPainter(layers_image)
+            self._layers_image, self._layers_painter = layers_image, layers_painter
             top_left = QPointF(-bounds.left(), -bounds.top())
             paint_rect = QRect(
                 _round_half_up(top_left.x() * dots_per_mm),
