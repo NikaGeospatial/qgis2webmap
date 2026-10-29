@@ -246,6 +246,13 @@ def _millimetre_copy(
     copy = QgsPrintLayout(project)
     copy.initializeDefaults()
     copy.renderContext().setFlags(layout.renderContext().flags())
+    # Atlas clipping cuts the map to the page's feature, which a layout knows
+    # from its report context: the copy is given the same layer and feature.
+    # (The same state the source layout has, so a layout not at an atlas page
+    # draws unclipped, as it does in the source.)
+    source_context = layout.reportContext()
+    copy.reportContext().setLayer(source_context.layer())
+    copy.reportContext().setFeature(source_context.feature())
     context = QgsReadWriteContext()
     clip_source = map_item.itemClippingSettings().sourceItem()
     copied: dict[str, QgsLayoutItem] = {}
