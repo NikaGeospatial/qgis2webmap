@@ -11,6 +11,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 import sys
 import time
 import types
@@ -20,6 +21,12 @@ import pytest
 
 qgis_core = pytest.importorskip("qgis.core")
 from qgis.PyQt.QtCore import QUrl  # noqa: E402
+
+
+def _page_text(path: Path) -> str:
+    """A saved cartograph's text without the ownership stamp the plugin adds
+    to the head, so a test can compare the page it fed the export."""
+    return re.sub(r'<meta name="qgis2webmap-layout"[^>]*>\n?', "", path.read_text())
 
 
 class FakeIface:
@@ -542,7 +549,7 @@ class TestAutosave:
             cartograph.file_edit.setText(str(target))
             cartograph._on_file_edited(str(target))
             assert _wait_for(qgis_app, lambda: target.exists())
-            first_content = target.read_text()
+            first_content = _page_text(target)
             assert first_content == fake_cartograph_export.html_text["value"]
             # No temp files left lying beside the target.
             assert list(tmp_path.glob("*.tmp")) == []
@@ -556,7 +563,7 @@ class TestAutosave:
                 qgis_app,
                 lambda: "Could not build" in cartograph.cartograph_status_label.text(),
             )
-            assert target.read_text() == first_content
+            assert _page_text(target) == first_content
             assert list(tmp_path.glob("*.tmp")) == []
         finally:
             dialog.close()
@@ -761,7 +768,7 @@ class TestBuildThreadsAndJobs:
             assert _wait_for(qgis_app, lambda: cartograph._job is None)
             cartograph._autosave_timer.stop()
 
-            assert a.read_text() == "<html>A again</html>"
+            assert _page_text(a) == "<html>A again</html>"
             assert not b_path.exists()
             assert cartograph._last_saved_at is None
             assert cartograph._last_summary is None
@@ -787,7 +794,7 @@ class TestBuildThreadsAndJobs:
             monkeypatch.setattr(
                 cartograph,
                 "_open_url",
-                lambda url: opened.append((url.query(), target.read_text())),
+                lambda url: opened.append((url.query(), _page_text(target))),
             )
             fake_cartograph_export.html_text["value"] = "<html>edited</html>"
             cartograph.schedule_autosave()  # an edit, still in its debounce
@@ -854,7 +861,7 @@ class TestBuildThreadsAndJobs:
             monkeypatch.setattr(
                 cartograph,
                 "_open_url",
-                lambda url: opened.append((url.query(), target.read_text())),
+                lambda url: opened.append((url.query(), _page_text(target))),
             )
             status = cartograph.cartograph_status_label
 
@@ -4346,7 +4353,14 @@ class TestRenamingALayout:
             opened = []
             monkeypatch.setattr(cartograph, "_open_url", opened.append)
             target = tmp_path / "second.html"
-            target.write_text("<html>earlier save</html>")
+            # The layout's own earlier save: a stamped page.
+            from nika_onlymap_exporter.core.cartograph_destination import (
+                stamp_for_layout,
+            )
+
+            target.write_text(
+                stamp_for_layout("<html>earlier save</html>", second, project)
+            )
             cartograph.file_edit.setText(str(target))
             cartograph._on_file_edited(str(target))
             cartograph._autosave_timer.stop()
