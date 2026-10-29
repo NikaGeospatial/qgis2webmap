@@ -757,7 +757,9 @@ def prepare_cartograph(
     for frame in reading.frames:
         if frame.mode == "static":
             dpi = frame_dpis.get(frame.map_item.uuid(), static_dpi)
-            dpi = _resolution_for(frame, dpi, export_dpi, report)
+            dpi = _resolution_for(
+                layout, frame, dpi, export_dpi, report, pending_static is not None
+            )
             items.append(
                 _build_static_frame(
                     layout, project, frame, dpi, raster_cache, pending_static
@@ -1289,26 +1291,47 @@ def _cartograph_id(layout: QgsPrintLayout) -> str:
 
 
 def _resolution_for(
+    layout: QgsPrintLayout,
     frame: MapFrameReading,
     frame_dpi: int,
     export_dpi: int | None,
     report: FidelityReportBuilder,
+    asynchronous: bool = False,
 ) -> int:
     """The resolution `frame`'s picture is drawn at: never lower than the
     frame's own choice or `export_dpi` (when the cartograph saves one), but
     within what a browser canvas and memory hold -- the frame's own choice
-    included -- and said when the frame is too large to reach it."""
-    resolution = frame_resolution(frame_dpi, export_dpi, frame.box.w, frame.box.h)
+    included -- and said when the frame is too large to reach it. A frame the
+    asynchronous job draws through a larger intermediate picture (a layer
+    with a blend mode or effect) keeps that picture within the limits too."""
+    working_bounds = (
+        AsyncFrameRender.working_bounds_mm(layout, frame.map_item)
+        if asynchronous and AsyncFrameRender.supports(layout, frame.map_item)
+        else None
+    )
+    resolution = frame_resolution(
+        frame_dpi, export_dpi, frame.box.w, frame.box.h, working_bounds
+    )
     if resolution.limited:
         width_px, height_px = frame_pixel_size(frame.box.w, frame.box.h, resolution.dpi)
-        report.approximated(
-            f"Map frame {frame.map_item.displayName()}",
-            tr(
+        if resolution.by_working_picture:
+            text = tr(
+                "Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} "
+                "pixels): at {wanted} dpi the picture this frame is drawn "
+                "through (its frame line included) would be larger than "
+                "memory can hold. Make the map smaller or ask for a lower "
+                "resolution."
+            )
+        else:
+            text = tr(
                 "Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} "
                 "pixels): at {wanted} dpi this frame's picture would be larger "
                 "than a browser can draw. Make the map smaller or ask for a "
                 "lower resolution."
-            ).format(
+            )
+        report.approximated(
+            f"Map frame {frame.map_item.displayName()}",
+            text.format(
                 wanted=resolution.wanted,
                 dpi=resolution.dpi,
                 width=width_px,

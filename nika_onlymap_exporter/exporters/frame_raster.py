@@ -73,7 +73,11 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPen, QTransform
 from qgis.PyQt.QtXml import QDomDocument
 
-from ..core.export_resolution import check_frame_size, frame_pixel_size
+from ..core.export_resolution import (
+    check_frame_size,
+    frame_pixel_size,
+    working_pixel_size,
+)
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -246,6 +250,13 @@ def _millimetre_copy(
     copy = QgsPrintLayout(project)
     copy.initializeDefaults()
     copy.renderContext().setFlags(layout.renderContext().flags())
+    # Atlas clipping cuts the map to the page's feature, which a layout knows
+    # from its report context: the copy is given the same layer and feature.
+    # (The same state the source layout has, so a layout not at an atlas page
+    # draws unclipped, as it does in the source.)
+    source_context = layout.reportContext()
+    copy.reportContext().setLayer(source_context.layer())
+    copy.reportContext().setFeature(source_context.feature())
     context = QgsReadWriteContext()
     clip_source = map_item.itemClippingSettings().sourceItem()
     copied: dict[str, QgsLayoutItem] = {}
@@ -366,6 +377,24 @@ class AsyncFrameRender(QObject):
             for item in layout.items()
         )
 
+    @staticmethod
+    def working_bounds_mm(
+        layout: QgsPrintLayout, map_item: QgsLayoutItemMap
+    ) -> tuple[float, float] | None:
+        """The size, in millimetres, of the intermediate picture the layers
+        are drawn onto (the item's bounding box, frame line included), or None
+        when the item is drawn straight onto the page and has none."""
+        context = layout.renderContext()
+        forced_vector = (
+            context.rasterizedRenderingPolicy()
+            == Qgis.RasterizedRenderingPolicy.ForceVector
+        )
+        if not map_item.containsAdvancedEffects() or forced_vector:
+            return None
+        mm_per_unit = _millimetres_per_layout_unit(layout)
+        bounds = map_item.boundingRect()
+        return (bounds.width() * mm_per_unit, bounds.height() * mm_per_unit)
+
     @property
     def done(self) -> bool:
         return self._done
@@ -471,8 +500,9 @@ class AsyncFrameRender(QObject):
             dots_per_mm = ratio
             destination_dpi = ratio * 25.4
             layers_size = QSize(
-                _round_half_up(bounds.width() / 25.4 * destination_dpi),
-                _round_half_up(bounds.height() / 25.4 * destination_dpi),
+                *working_pixel_size(
+                    width_mm, height_mm, bounds.width(), bounds.height(), dpi
+                )
             )
             check_frame_size(layers_size.width(), layers_size.height())
             layers_image = QImage(layers_size, QImage.Format.Format_ARGB32)

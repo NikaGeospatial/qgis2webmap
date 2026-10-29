@@ -14,6 +14,7 @@ from nika_onlymap_exporter.core.export_resolution import (
     check_frame_size,
     frame_pixel_size,
     frame_resolution,
+    working_pixel_size,
 )
 
 
@@ -190,3 +191,72 @@ def test_a_frame_too_large_at_any_resolution_is_not_called_reduced() -> None:
     # result must not claim a reduction (the guard refuses it later).
     result = frame_resolution(1, 1, 500_000.0, 10.0)
     assert result.dpi == result.wanted == 1 and not result.limited
+
+
+# A frame drawn through a larger working picture (its bounding box, frame line
+# included): both pictures have to be within the limits.
+BLEED_MM = 2.0
+
+
+def _both_within(width_mm: float, height_mm: float, dpi: int) -> bool:
+    bounds = (width_mm + BLEED_MM, height_mm + BLEED_MM)
+    return _within_limits(
+        *frame_pixel_size(width_mm, height_mm, dpi)
+    ) and _within_limits(*working_pixel_size(width_mm, height_mm, *bounds, dpi))
+
+
+def test_the_working_picture_is_a_little_larger_than_the_frame() -> None:
+    frame = frame_pixel_size(300.0, 200.0, 300)
+    working = working_pixel_size(300.0, 200.0, 300.0 + BLEED_MM, 200.0 + BLEED_MM, 300)
+    assert working[0] > frame[0] and working[1] > frame[1]
+    assert working == pytest.approx(
+        (frame[0] * (302 / 300), frame[1] * (202 / 200)), abs=2
+    )
+
+
+def test_a_frame_that_fits_but_whose_working_picture_does_not_is_reduced() -> None:
+    # The frame is 1 px inside the side limit; its working picture is over it.
+    width_mm = (MAX_FRAME_SIDE_PX - 1) / 600 * 25.4
+    height_mm = 100.0
+    assert _within_limits(*frame_pixel_size(width_mm, height_mm, 600))
+    bounds = (width_mm + BLEED_MM, height_mm + BLEED_MM)
+    assert not _within_limits(*working_pixel_size(width_mm, height_mm, *bounds, 600))
+    plain = frame_resolution(600, None, width_mm, height_mm)
+    assert plain.dpi == 600 and not plain.limited
+    result = frame_resolution(600, None, width_mm, height_mm, bounds)
+    assert result.limited and result.dpi < 600 and result.by_working_picture
+    assert _both_within(width_mm, height_mm, result.dpi)
+    # ...and it is the highest resolution for which both fit.
+    assert not _both_within(width_mm, height_mm, result.dpi + 1)
+
+
+def test_a_frame_over_the_limit_itself_is_not_blamed_on_the_working_picture() -> None:
+    result = frame_resolution(
+        300, None, 1189.0, 841.0, (1189.0 + BLEED_MM, 841.0 + BLEED_MM)
+    )
+    assert result.limited and not result.by_working_picture
+
+
+def test_no_working_picture_leaves_the_result_as_it_was() -> None:
+    assert frame_resolution(300, 150, 400.0, 300.0, None) == frame_resolution(
+        300, 150, 400.0, 300.0
+    )
+
+
+def test_the_working_picture_never_crosses_a_limit_after_rounding() -> None:
+    for tenth in range(0, 4000, 13):
+        height_mm = 1500.0 + tenth / 10
+        for width_mm in (299.9, 700.3, 1000.05):
+            for wanted in (299, 600, 1200):
+                result = frame_resolution(
+                    wanted,
+                    None,
+                    width_mm,
+                    height_mm,
+                    (width_mm + BLEED_MM, height_mm + BLEED_MM),
+                )
+                assert _both_within(width_mm, height_mm, result.dpi), (
+                    width_mm,
+                    height_mm,
+                    wanted,
+                )
