@@ -691,6 +691,22 @@ class TestTheSameStartTheSameResult:
         assert (_view(item), canyon.stack.index()) == before
 
 
+@pytest.fixture
+def roomy_screen(monkeypatch):
+    """A screen tall enough for the dialog's natural size.
+
+    Qt 5's offscreen screen is 800x600 and Qt 6's is 800x800; on the shorter
+    one the dialog is capped to the screen and its page scrolls, which is what
+    a small real screen does (covered by the small-screen test below) and not
+    what these tests are about.
+    """
+    from nika_onlymap_exporter.ui.cartograph import go_to_location_dialog as module
+
+    monkeypatch.setattr(
+        module.GoToLocationDialog, "_screen_size", lambda self: QSize(1024, 1000)
+    )
+
+
 class TestTheWindowStaysPut:
     def _geometry(self, dialog) -> dict[str, object]:
         def y(widget) -> int:
@@ -733,7 +749,7 @@ class TestTheWindowStaysPut:
         assert all(state == seen[0] for state in seen)
 
     def test_the_first_size_shows_about_three_results_once_a_search_has_answered(
-        self, canyon
+        self, canyon, roomy_screen
     ) -> None:
         layer = _named_layer(canyon, [f"Spot {i:02d}" for i in range(12)])
         seen = {}
@@ -755,7 +771,7 @@ class TestTheWindowStaysPut:
         assert seen["width"] == 620
         assert 2.5 <= seen["rows"] <= 4, seen
         assert seen["scrolls"] is False
-        assert seen["height"] < 700  # not the whole screen
+        assert seen["height"] < 800  # not the whole 1000 px screen
 
     def test_inputs_survive_switching_tabs(self, canyon) -> None:
         world = canyon.world
@@ -796,7 +812,7 @@ class TestTheWindowStaysPut:
             "fit": dialog.fit_check.isChecked(),
         }
 
-    def test_the_results_scroll_in_their_own_area(self, canyon) -> None:
+    def test_the_results_scroll_in_their_own_area(self, canyon, roomy_screen) -> None:
         layer = _named_layer(canyon, [f"Spot {i:02d}" for i in range(20)])
         seen = {}
 
