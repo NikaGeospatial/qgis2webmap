@@ -195,3 +195,21 @@ class TestCrashRecovery:
         folder_module._recover_interrupted(folder)
         assert _snapshot(folder) == before
         _assert_no_staging(folder)
+
+
+class TestPublishOrderMechanism:
+    """Checks the mechanism (advisory): a page is only swapped in after the assets
+    it points at, so a reader mid-swap never sees a page without its files."""
+
+    def test_index_html_is_moved_into_place_last(self, monkeypatch, tmp_path) -> None:
+        folder = tmp_path / "map"
+        landed: list[str] = []
+
+        def replace(src, dst):  # type: ignore[no-untyped-def]
+            if Path(dst).parent == folder and not Path(dst).name.startswith("."):
+                landed.append(Path(dst).name)
+            return _REAL_REPLACE(src, dst)
+
+        monkeypatch.setattr(os, "replace", replace)
+        _export(folder, raster=b"RASTER")
+        assert landed[-1] == "index.html"
