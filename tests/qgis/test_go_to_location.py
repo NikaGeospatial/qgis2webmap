@@ -1805,7 +1805,9 @@ class TestWhatFollowsTheNewView:
         seen = {}
 
         def script(dialog) -> None:
-            # An Edit view drag that began and has not been released yet.
+            # The frame is selected, Edit view is on, and a drag has begun and
+            # has not been released yet.
+            world.layout.setSelectedItem(world.main)
             preview.edit_content(world.main)
             QApplication.processEvents()
             centre = view.mapFromScene(world.main.sceneBoundingRect().center())
