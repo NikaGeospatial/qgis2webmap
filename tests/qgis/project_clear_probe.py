@@ -7,9 +7,9 @@ this script and reads its exit code and last output line. By hand:
     python project_clear_probe.py <scratch-dir> <scenario>
 
 Scenarios: clear_idle, clear_held_close, clear_during_build, read_other,
-remove_layout, remove_layout_held_close, remove_layout_with_other. Nothing here
-uses the suite's `close_open_dialogs_before_the_project_clears` fixture: the
-project is cleared with the dialog still open, as File > New does.
+remove_layout, remove_layout_held_close, remove_layout_with_other. No fixture
+closes the dialog ahead of the project clearing here: the project is cleared
+with the dialog still open, as File > New does.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later

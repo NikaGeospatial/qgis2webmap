@@ -186,27 +186,3 @@ def make_memory_layer(qgis_app):
     already provides.
     """
     return _build_memory_layer
-
-
-@pytest.fixture(autouse=True)
-def close_open_dialogs_before_the_project_clears(request):
-    """Let a test that leaves a shown dialog open end with it fully closed.
-
-    A shown dialog with cartograph changes still to save now finishes that save
-    before it closes, which takes a moment and leaves the window up. A test
-    that ends with one - nearly all of them, in a `finally: dialog.close()` -
-    would then clear the project underneath a dialog that is still watching its
-    layouts. Tests of closing itself wait for the save as they should; for the
-    rest, this closes whatever is left, without saving, before `project` clears.
-    """
-    if "project" not in request.fixturenames:
-        yield
-        return
-    request.getfixturevalue("project")
-    from qgis.PyQt.QtWidgets import QApplication
-
-    yield
-    for widget in QApplication.topLevelWidgets():
-        close = getattr(widget, "close_without_saving", None)
-        if close is not None and widget.isVisible():
-            close()
