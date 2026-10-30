@@ -34,6 +34,13 @@ from .export_ir import (
     PopupFieldMode,
 )
 from .layout_identity import KEY_PREFIX, LayoutKeys
+from .setting_values import (
+    parse_bool,
+    parse_enum,
+    parse_float,
+    parse_int,
+    parse_optional_bool,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsProject
@@ -181,10 +188,7 @@ class FrameChoice:
         mode = str(data.get("mode", "live"))
         if mode not in ("live", "static"):
             mode = "live"
-        try:
-            dpi = int(data.get("dpi", DEFAULT_STATIC_DPI))
-        except (TypeError, ValueError):
-            dpi = DEFAULT_STATIC_DPI
+        dpi = parse_int(data.get("dpi", DEFAULT_STATIC_DPI), DEFAULT_STATIC_DPI)
         return cls(mode=mode, dpi=dpi)
 
 
@@ -272,17 +276,16 @@ class LayerSettings:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LayerSettings:
-        hover = data.get("popupOnHover")
         highlight = data.get("highlightColor")
         return cls(
-            include=bool(data.get("include", True)),
-            popup=bool(data.get("popup", True)),
-            label=bool(data.get("label", True)),
+            include=parse_bool(data.get("include"), True),
+            popup=parse_bool(data.get("popup"), True),
+            label=parse_bool(data.get("label"), True),
             fields=_read_field_modes(data.get("fields")),
-            popup_on_hover=None if hover is None else bool(hover),
+            popup_on_hover=parse_optional_bool(data.get("popupOnHover")),
             highlight_color=None if highlight is None else str(highlight),
             quantize_precision=_read_layer_precision(data.get("quantizePrecision")),
-            cluster=bool(data.get("cluster", True)),
+            cluster=parse_bool(data.get("cluster"), True),
             name_field=str(data["nameField"]) if data.get("nameField") else None,
         )
 
@@ -313,10 +316,7 @@ def _read_layer_precision(raw: Any) -> int | None:
     """A per-layer precision override: None inherits, 0 means full precision."""
     if raw is None or isinstance(raw, bool):
         return None
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return None
+    value = parse_int(raw, -1)
     if value == PRECISION_FULL:
         return PRECISION_FULL
     if not MIN_PRECISION <= value <= MAX_PRECISION:
@@ -335,10 +335,7 @@ def _read_scale(raw: Any) -> float:
     value here would otherwise render the map controls unusably small or large,
     which is harder to recover from than simply ignoring it.
     """
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 1.0
+    value = parse_float(raw, 1.0)
     if not MIN_CHROME_SCALE <= value <= MAX_CHROME_SCALE:
         return 1.0
     return round(value, 2)
@@ -348,10 +345,7 @@ def _read_precision(raw: Any) -> int | None:
     """A persisted coordinate precision, or None for "maintain"."""
     if raw is None or isinstance(raw, bool):
         return None
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return None
+    value = parse_int(raw, -1)
     if not MIN_PRECISION <= value <= MAX_PRECISION:
         return None
     return value
@@ -630,6 +624,18 @@ class DialogState:
         )
 
 
+def _read_json_object(project: QgsProject, key: str) -> dict[Any, Any]:
+    """A saved JSON object; empty when absent, unparseable or not an object."""
+    text, ok = project.readEntry(SCOPE, key, "")
+    if not ok or not text:
+        return {}
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def load_state(project: QgsProject) -> DialogState:
     """Read settings from the project, tolerating anything malformed.
 
@@ -660,42 +666,41 @@ def load_state(project: QgsProject) -> DialogState:
         with contextlib.suppress(ValueError):
             state.output_mode = OutputMode(mode)
 
-    widgets_json, ok = project.readEntry(SCOPE, KEY_WIDGETS, "")
-    if ok and widgets_json:
-        try:
-            widgets = json.loads(widgets_json)
-            state.show_legend = bool(widgets.get("legend", True))
-            state.show_layer_switcher = bool(widgets.get("layerSwitcher", True))
-            state.show_zoom_controls = bool(widgets.get("zoomControls", True))
-            state.show_scale_bar = bool(widgets.get("scaleBar", True))
-            state.popup_on_hover = bool(widgets.get("popupOnHover", False))
-            # Defaults to on, matching `DialogState`. A project saved before the
-            # caption existed has no `showTitle` key at all, and should pick up
-            # the new default rather than be pinned to the old one by its silence.
-            state.show_title = bool(widgets.get("showTitle", True))
-            state.show_abstract = bool(widgets.get("showAbstract", False))
-            state.basemap = str(widgets.get("basemap", "none") or "none")
-            state.terrain = str(widgets.get("terrain", "none") or "none")
-            state.chrome_scale = _read_scale(widgets.get("chromeScale"))
-            state.widget_background = str(widgets.get("widgetBackground", "") or "")
-            state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
-            state.highlight_color = str(widgets.get("highlightColor", "") or "")
-            state.quantize_precision = _read_precision(widgets.get("quantizePrecision"))
-            with contextlib.suppress(ValueError):
-                state.title_corner = OverlayCorner(widgets.get("titleCorner"))
-            with contextlib.suppress(ValueError):
-                state.extent_source = ExtentSource(widgets.get("extentSource"))
-            state.clip_to_extent = bool(widgets.get("clipToExtent", False))
-        except (ValueError, AttributeError):
-            pass
+    widgets = _read_json_object(project, KEY_WIDGETS)
+    state.show_legend = parse_bool(widgets.get("legend"), state.show_legend)
+    state.show_layer_switcher = parse_bool(
+        widgets.get("layerSwitcher"), state.show_layer_switcher
+    )
+    state.show_zoom_controls = parse_bool(
+        widgets.get("zoomControls"), state.show_zoom_controls
+    )
+    state.show_scale_bar = parse_bool(widgets.get("scaleBar"), state.show_scale_bar)
+    state.popup_on_hover = parse_bool(widgets.get("popupOnHover"), state.popup_on_hover)
+    # Defaults to on, matching `DialogState`. A project saved before the
+    # caption existed has no `showTitle` key at all, and should pick up
+    # the new default rather than be pinned to the old one by its silence.
+    state.show_title = parse_bool(widgets.get("showTitle"), state.show_title)
+    state.show_abstract = parse_bool(widgets.get("showAbstract"), state.show_abstract)
+    state.basemap = str(widgets.get("basemap", "none") or "none")
+    state.terrain = str(widgets.get("terrain", "none") or "none")
+    state.chrome_scale = _read_scale(widgets.get("chromeScale"))
+    state.widget_background = str(widgets.get("widgetBackground", "") or "")
+    state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
+    state.highlight_color = str(widgets.get("highlightColor", "") or "")
+    state.quantize_precision = _read_precision(widgets.get("quantizePrecision"))
+    state.title_corner = parse_enum(
+        OverlayCorner, widgets.get("titleCorner"), state.title_corner
+    )
+    state.extent_source = parse_enum(
+        ExtentSource, widgets.get("extentSource"), state.extent_source
+    )
+    state.clip_to_extent = parse_bool(widgets.get("clipToExtent"), state.clip_to_extent)
 
-    layers_json, ok = project.readEntry(SCOPE, KEY_LAYERS, "")
-    if ok and layers_json:
-        try:
-            for layer_id, data in json.loads(layers_json).items():
-                state.layers[layer_id] = LayerSettings.from_dict(data)
-        except (ValueError, AttributeError):
-            pass
+    # Entry by entry: one malformed layer must not cost the layers after it
+    # (an excluded layer would silently come back as included).
+    for layer_id, data in _read_json_object(project, KEY_LAYERS).items():
+        if isinstance(layer_id, str) and isinstance(data, dict):
+            state.layers[layer_id] = LayerSettings.from_dict(data)
 
     output, ok = project.readEntry(SCOPE, KEY_OUTPUT, "")
     if ok and output:
@@ -706,46 +711,26 @@ def load_state(project: QgsProject) -> DialogState:
     if ok and layout_name:
         state.cartograph_layout = layout_name
 
-    files_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_FILES, "")
-    if ok and files_json:
-        try:
-            for name, path in json.loads(files_json).items():
-                if isinstance(name, str) and isinstance(path, str) and path:
-                    state.cartograph_files[name] = path
-        except (ValueError, AttributeError):
-            pass
+    for name, path in _read_json_object(project, KEY_CARTOGRAPH_FILES).items():
+        if isinstance(name, str) and isinstance(path, str) and path:
+            state.cartograph_files[name] = path
 
-    frames_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_FRAMES, "")
-    if ok and frames_json:
-        try:
-            for name, items in json.loads(frames_json).items():
-                if not isinstance(name, str) or not isinstance(items, dict):
-                    continue
-                state.cartograph_frames[name] = {
-                    item_id: FrameChoice.from_dict(data)
-                    for item_id, data in items.items()
-                    if isinstance(item_id, str) and isinstance(data, dict)
-                }
-        except (ValueError, AttributeError):
-            pass
+    for name, items in _read_json_object(project, KEY_CARTOGRAPH_FRAMES).items():
+        if not isinstance(name, str) or not isinstance(items, dict):
+            continue
+        state.cartograph_frames[name] = {
+            item_id: FrameChoice.from_dict(data)
+            for item_id, data in items.items()
+            if isinstance(item_id, str) and isinstance(data, dict)
+        }
 
-    page_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_PAGE, "")
-    if ok and page_json:
-        try:
-            for name, data in json.loads(page_json).items():
-                if isinstance(name, str) and isinstance(data, dict):
-                    state.cartograph_page[name] = PageChoice.from_dict(data)
-        except (ValueError, AttributeError):
-            pass
+    for name, data in _read_json_object(project, KEY_CARTOGRAPH_PAGE).items():
+        if isinstance(name, str) and isinstance(data, dict):
+            state.cartograph_page[name] = PageChoice.from_dict(data)
 
-    print_json, ok = project.readEntry(SCOPE, KEY_CARTOGRAPH_PRINT, "")
-    if ok and print_json:
-        try:
-            for name, text in json.loads(print_json).items():
-                if isinstance(name, str) and isinstance(text, str):
-                    state.cartograph_print[name] = text
-        except (ValueError, AttributeError):
-            pass
+    for name, text in _read_json_object(project, KEY_CARTOGRAPH_PRINT).items():
+        if isinstance(name, str) and isinstance(text, str):
+            state.cartograph_print[name] = text
 
     _name_the_layout_keys(project, state)
     return state
