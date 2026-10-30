@@ -1,8 +1,9 @@
-"""Map frames > Go to location...: the dialog, driven from the real ⋯ menu.
+"""Map frames > Go to location...: the dialog, driven like a user drives it.
 
-Every dialog test opens the dialog the way a user does - the Cartograph panel's
-frame card, its ⋯ menu, the "Go to location…" row - and then types, clicks and
-presses keys in the real widgets. What is asserted is what the user ends up
+The dialog tests build the dialog on a frame of the Canyon-like world (`canyon`)
+and type, click and press keys in the real widgets; the tests that depend on the
+Cartograph panel around it (`workflow`) open it the way a user does - the frame
+card, its ⋯ menu, the "Go to location…" row. What is asserted is what the user ends up
 with: where the frame looks, what the undo stack and the document did, what the
 dialog said.
 
@@ -96,8 +97,57 @@ class Setup:
         self.dialog.close()
 
 
+class DirectSetup:
+    """The Canyon-like world with the Go to location dialog built straight on a
+    `FrameTarget`, without the Cartograph panel around it.
+
+    For checks about the dialog itself - what it validates, says, enables, and
+    what it does to the frame and the layout's undo stack. What the panel adds
+    (the menu row, the autosave it asks for, a pending Edit view drag) is
+    covered through `Setup` by the `workflow` tests."""
+
+    def __init__(self, project, rotation: float = 0.0) -> None:
+        self.world = build_world(project, rotation)
+        self.project = project
+
+    @property
+    def stack(self):
+        return self.world.layout.undoStack().stack()
+
+    def open(self, script, item=None):
+        from nika_onlymap_exporter.core.go_to_location import FrameTarget
+        from nika_onlymap_exporter.ui.cartograph.go_to_location_dialog import (
+            GoToLocationDialog,
+        )
+
+        target = FrameTarget(self.world.layout, item or self.world.main, self.project)
+
+        class Opening:
+            @staticmethod
+            def trigger() -> None:
+                dialog = GoToLocationDialog(target)
+                dialog.exec()
+                dialog.deleteLater()
+
+        return open_dialog(Opening, script)
+
+    def quiet(self) -> None:
+        QApplication.processEvents()
+
+    def close(self) -> None:
+        pass
+
+
 @pytest.fixture
 def canyon(qgis_app, project):
+    made = DirectSetup(project)
+    yield made
+    made.close()
+
+
+@pytest.fixture
+def workflow(qgis_app, project):
+    """The Cartograph panel on the world: the real menu-to-dialog route."""
     made = Setup(project)
     yield made
     made.close()
@@ -114,18 +164,18 @@ def _geometry_state(item):
 
 
 class TestTheMenuRow:
-    def test_the_row_replaces_locate_on_page(self, canyon) -> None:
-        menu = canyon.card(canyon.world.main).actions_button.menu()
+    def test_the_row_replaces_locate_on_page(self, workflow) -> None:
+        menu = workflow.card(workflow.world.main).actions_button.menu()
         texts = [a.text() for a in menu.actions() if a.isVisible()]
         assert GO_TO_LOCATION in texts
         assert "Locate on page" not in texts
         # In the place the old row held: second, after Use canvas extent.
         assert texts[:2] == ["Use canvas extent", GO_TO_LOCATION]
-        assert go_action(canyon.card(canyon.world.main)).toolTip() == (
+        assert go_action(workflow.card(workflow.world.main)).toolTip() == (
             "Center this map on coordinates or find a feature."
         )
 
-    def test_the_dialog_names_the_map_of_the_card_it_came_from(self, canyon) -> None:
+    def test_the_dialog_names_the_map_of_the_card_it_came_from(self, workflow) -> None:
         seen = {}
 
         def script(dialog) -> None:
@@ -133,23 +183,35 @@ class TestTheMenuRow:
             seen["context"] = dialog.context_label.text()
             seen["tabs"] = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
 
-        canyon.open(script, canyon.world.inset)
+        workflow.open(script, workflow.world.inset)
         assert seen == {
             "title": "Go to location",
             "context": "Map: Locator",
             "tabs": ["Coordinates", "Feature"],
         }
 
-    def test_a_template_map_id_reads_as_words(self, canyon) -> None:
+    def test_a_template_map_id_reads_as_words(self, workflow) -> None:
         # Templates name their main frame `main`; the label says "Main map".
-        canyon.world.main.setId("main")
+        workflow.world.main.setId("main")
         seen = {}
 
         def script(dialog) -> None:
             seen["context"] = dialog.context_label.text()
 
-        canyon.open(script, canyon.world.main)
+        workflow.open(script, workflow.world.main)
         assert seen["context"] == "Map: Main map"
+
+    def test_going_through_the_menu_moves_the_frame_as_one_undo_step(
+        self, workflow
+    ) -> None:
+        main = workflow.world.main
+        start = _extent_state(main)
+        count = workflow.stack.count()
+        _go_to_coordinates(workflow, "36.20", "-112.20")
+        assert _centre_is(main, -112.20, 36.20)
+        assert workflow.stack.count() == count + 1
+        workflow.stack.undo()
+        assert _near(_extent_state(main), start, tolerance=0.01)
 
 
 def _extent_state(item):
@@ -216,7 +278,7 @@ class TestCoordinates:
     def test_a_rotated_map_keeps_its_rotation_and_scale(
         self, qgis_app, project
     ) -> None:
-        setup = Setup(project, rotation=30.0)
+        setup = DirectSetup(project, rotation=30.0)
         try:
             scale = setup.world.main.scale()
 
@@ -1036,7 +1098,7 @@ class TestNavigatingToAFeature:
     ) -> None:
         from qgis.core import QgsGeometry
 
-        setup = Setup(project, rotation=rotation)
+        setup = DirectSetup(project, rotation=rotation)
         try:
             world = setup.world
             scale_before = world.main.scale()
@@ -1755,13 +1817,13 @@ class TestWhatFollowsTheNewView:
         assert math.isclose(zoom, before[2], abs_tol=0.01), "the scale is kept"
         assert (lon, lat) != before[:2]
 
-    def test_a_live_count_follows_the_frame(self, canyon) -> None:
+    def test_a_live_count_follows_the_frame(self, workflow) -> None:
         from qgis.core import QgsLayoutItemLabel
         from qgis.PyQt.QtCore import QRectF
 
         from nika_onlymap_exporter.core import live_count as lc
 
-        world = canyon.world
+        world = workflow.world
         number = QgsLayoutItemLabel(world.layout)
         number.setId("Live count")
         world.layout.addLayoutItem(number)
@@ -1788,29 +1850,29 @@ class TestWhatFollowsTheNewView:
 
         wait_for(lambda: number.text() == str(inside()), what="the first count")
         first = inside()
-        _go_to_feature(canyon, world.viewpoints, "Far Away Point")
+        _go_to_feature(workflow, world.viewpoints, "Far Away Point")
         assert inside() == 1 != first
         wait_for(
             lambda: number.text() == "1",
             what=f"the count to follow the frame (reads {number.text()!r})",
         )
-        canyon.stack.undo()
+        workflow.stack.undo()
         wait_for(lambda: number.text() == str(first), what="the count to follow Undo")
 
-    def test_the_cartograph_is_saved_again(self, canyon) -> None:
+    def test_the_cartograph_is_saved_again(self, workflow) -> None:
         """The existing save/export mechanism is asked to run (an advisory check
         of the mechanism; the exported centre above is the result)."""
-        canyon.cartograph._autosave_timer.stop()
-        _go_to_coordinates(canyon, "36.20", "-112.20")
-        assert canyon.cartograph._autosave_timer.isActive()
+        workflow.cartograph._autosave_timer.stop()
+        _go_to_coordinates(workflow, "36.20", "-112.20")
+        assert workflow.cartograph._autosave_timer.isActive()
 
     def test_a_pending_edit_view_gesture_cannot_overwrite_the_destination(
-        self, canyon
+        self, workflow
     ) -> None:
         from qgis.PyQt.QtCore import QPoint
 
-        world = canyon.world
-        preview = canyon.cartograph.page_preview
+        world = workflow.world
+        preview = workflow.cartograph.page_preview
         view = preview.view
         viewport = view.viewport()
         seen = {}
@@ -1845,7 +1907,7 @@ class TestWhatFollowsTheNewView:
             )
             QApplication.processEvents()
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["dragging"], "the drag was under way"
         assert _centre_is(world.main, -112.20, 36.20), "the old drag moved the view"
 
@@ -1967,7 +2029,7 @@ class TestLargeLayers:
 
 
 class TestTheDialogsLook:
-    def test_accessible_names(self, canyon) -> None:
+    def test_accessible_names(self, workflow) -> None:
         seen = {}
 
         def script(dialog) -> None:
@@ -1993,7 +2055,7 @@ class TestTheDialogsLook:
                 b.accessibleName() for b in dialog.query_edit.findChildren(QToolButton)
             ]
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["names"] == {
             "change": "Change coordinate system",
             "latitude": "Latitude",
@@ -2008,7 +2070,9 @@ class TestTheDialogsLook:
         }
         assert "Clear search" in seen["clear_query"] + seen["clear_query_after_typing"]
 
-    def test_labels_sit_above_their_fields_in_the_specified_order(self, canyon) -> None:
+    def test_labels_sit_above_their_fields_in_the_specified_order(
+        self, workflow
+    ) -> None:
         seen = {}
 
         def script(dialog) -> None:
@@ -2052,7 +2116,7 @@ class TestTheDialogsLook:
                 b.text() for b in dialog.findChildren(type(dialog.go_button))
             )
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["coordinates"] == sorted(seen["coordinates"])
         assert seen["feature"] == sorted(seen["feature"])
         assert seen["footer"] == (True, True)
@@ -2060,7 +2124,7 @@ class TestTheDialogsLook:
         # No Apply, Preview, Save or Reset buttons: only these.
         assert seen["no_default_extras"] == ["Cancel", "Change…", "Go", "Search"]
 
-    def test_the_wheel_never_changes_a_closed_dropdown(self, canyon) -> None:
+    def test_the_wheel_never_changes_a_closed_dropdown(self, workflow) -> None:
         from qgis.PyQt.QtCore import QPoint, QPointF
         from qgis.PyQt.QtGui import QWheelEvent
 
@@ -2075,7 +2139,7 @@ class TestTheDialogsLook:
 
             def script(dialog) -> None:
                 dialog.tabs.setCurrentIndex(1)
-                choose_layer(dialog, canyon.world.viewpoints)
+                choose_layer(dialog, workflow.world.viewpoints)
                 for name in ("layer_combo", "source_combo"):
                     combo = getattr(dialog, name)
                     combo.setCurrentIndex(1)
@@ -2098,14 +2162,14 @@ class TestTheDialogsLook:
                     press(combo, Qt.Key.Key_Down)
                     seen[name + "_key"] = combo.currentIndex()
 
-            canyon.open(script)
+            workflow.open(script)
         finally:
             remove_wheel_guard()
         assert seen["layer_combo"] == (1, 1) and seen["source_combo"] == (1, 1)
         assert seen["layer_combo_key"] == 2 and seen["source_combo_key"] == 2
 
     @pytest.mark.parametrize("scale", [1.0, 1.25, 1.6])
-    def test_text_is_never_clipped_at_larger_fonts(self, canyon, scale) -> None:
+    def test_text_is_never_clipped_at_larger_fonts(self, workflow, scale) -> None:
         from qgis.PyQt.QtWidgets import QComboBox, QLineEdit, QPushButton
 
         base = QApplication.font()
@@ -2147,14 +2211,14 @@ class TestTheDialogsLook:
                     ]
                 seen["size"] = (dialog.width(), dialog.height())
 
-            canyon.open(script)
+            workflow.open(script)
         finally:
             QApplication.setFont(base)
         assert seen[0] == [] and seen[1] == [], seen
         assert not seen["scroll0"] and not seen["scroll1"]
         assert seen["fits0"] == [] and seen["fits1"] == []
 
-    def test_the_size_is_the_same_on_every_tab(self, canyon) -> None:
+    def test_the_size_is_the_same_on_every_tab(self, workflow) -> None:
         seen = {}
 
         def script(dialog) -> None:
@@ -2166,14 +2230,14 @@ class TestTheDialogsLook:
             QApplication.processEvents()
             seen["back"] = (dialog.width(), dialog.height())
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["coordinates"][0] == 620
         # Sized once for the taller Feature page, and never again.
         assert 450 <= seen["coordinates"][1] <= 720, seen
         assert seen["coordinates"] == seen["feature"] == seen["back"]
 
     def test_a_narrow_screen_and_long_names_never_widen_or_scroll_the_dialog(
-        self, canyon, monkeypatch
+        self, workflow, monkeypatch
     ) -> None:
         from qgis.PyQt.QtCore import QSize
 
@@ -2183,8 +2247,8 @@ class TestTheDialogsLook:
             module.GoToLocationDialog, "_screen_size", lambda self: QSize(400, 700)
         )
         long_name = "A very long map frame name " * 6
-        canyon.world.main.setId(long_name)
-        layer = _named_layer(canyon, ["An extraordinarily long feature name " * 6])
+        workflow.world.main.setId(long_name)
+        layer = _named_layer(workflow, ["An extraordinarily long feature name " * 6])
         layer.setName("A layer with an extraordinarily long name " * 4)
         seen = {}
 
@@ -2205,7 +2269,7 @@ class TestTheDialogsLook:
 
         from qgis.PyQt.QtWidgets import QPushButton
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["size"][0] <= 360 and seen["size"][1] <= 660
         assert seen["scroll"] is False and seen["inside"] is True
         assert "extraordinarily long feature name" in seen["tooltip"]

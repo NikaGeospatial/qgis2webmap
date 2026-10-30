@@ -31,7 +31,6 @@ from qgis.PyQt.QtXml import QDomDocument
 from test_cartograph_dialog import picked_template  # noqa: F401 - autouse fixture
 from test_cartograph_export import fake_runtime  # noqa: F401 - fixture
 from test_go_to_location import (  # noqa: F401 - fixtures the dialog tests share
-    Setup,
     canyon,
     fresh_session,
 )

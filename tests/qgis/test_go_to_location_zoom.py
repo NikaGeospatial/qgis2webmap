@@ -38,10 +38,12 @@ from qgis.PyQt.QtWidgets import QApplication
 from test_cartograph_dialog import picked_template  # noqa: F401 - autouse fixture
 from test_cartograph_export import fake_runtime  # noqa: F401 - fixture
 from test_go_to_location import (  # noqa: F401 - fixtures the dialog tests share
+    DirectSetup,
     Setup,
     _named_layer,
     canyon,
     fresh_session,
+    workflow,
 )
 
 BASELINE = 100_000  # the Canyon frame is 200 mm wide and shows 20 km
@@ -446,7 +448,7 @@ class TestGoAppliesThePlaceAndTheScaleTogether:
     def test_the_frames_rotation_and_place_on_the_page_are_kept(
         self, project, qgis_app
     ) -> None:
-        made = Setup(project, rotation=30.0)
+        made = DirectSetup(project, rotation=30.0)
         try:
             item = made.world.main
             page = (
@@ -721,7 +723,7 @@ class TestTheWindowStaysPut:
             "footer": (y(dialog.go_button), y(dialog.cancel_button)),
         }
 
-    def test_switching_tabs_changes_nothing_about_the_window(self, canyon) -> None:
+    def test_switching_tabs_changes_nothing_about_the_window(self, workflow) -> None:
         seen = []
 
         def script(dialog) -> None:
@@ -730,10 +732,10 @@ class TestTheWindowStaysPut:
                 QApplication.processEvents()
                 seen.append(self._geometry(dialog))
 
-        canyon.open(script)
+        workflow.open(script)
         assert all(state == seen[0] for state in seen), seen
 
-    def test_a_size_the_user_chose_is_kept_across_tabs(self, canyon) -> None:
+    def test_a_size_the_user_chose_is_kept_across_tabs(self, workflow) -> None:
         seen = []
 
         def script(dialog) -> None:
@@ -744,14 +746,14 @@ class TestTheWindowStaysPut:
                 QApplication.processEvents()
                 seen.append(self._geometry(dialog))
 
-        canyon.open(script)
+        workflow.open(script)
         assert all(state["size"] == (700, 680) for state in seen)
         assert all(state == seen[0] for state in seen)
 
     def test_the_first_size_shows_about_three_results_once_a_search_has_answered(
-        self, canyon, roomy_screen
+        self, workflow, roomy_screen
     ) -> None:
-        layer = _named_layer(canyon, [f"Spot {i:02d}" for i in range(12)])
+        layer = _named_layer(workflow, [f"Spot {i:02d}" for i in range(12)])
         seen = {}
 
         def script(dialog) -> None:
@@ -767,14 +769,14 @@ class TestTheWindowStaysPut:
             )
             seen["height"] = dialog.height()
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["width"] == 620
         assert 2.5 <= seen["rows"] <= 4, seen
         assert seen["scrolls"] is False
         assert seen["height"] < 800  # not the whole 1000 px screen
 
-    def test_inputs_survive_switching_tabs(self, canyon) -> None:
-        world = canyon.world
+    def test_inputs_survive_switching_tabs(self, workflow) -> None:
+        world = workflow.world
         seen = {}
 
         def script(dialog) -> None:
@@ -790,7 +792,7 @@ class TestTheWindowStaysPut:
                 QApplication.processEvents()
             seen["before"], seen["after"] = before, self._inputs(dialog)
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["before"] == seen["after"]
         assert seen["after"]["coords"] == ("400000", "4000000")
         assert seen["after"]["scale"] == ("25,000", 3)
@@ -812,8 +814,8 @@ class TestTheWindowStaysPut:
             "fit": dialog.fit_check.isChecked(),
         }
 
-    def test_the_results_scroll_in_their_own_area(self, canyon, roomy_screen) -> None:
-        layer = _named_layer(canyon, [f"Spot {i:02d}" for i in range(20)])
+    def test_the_results_scroll_in_their_own_area(self, workflow, roomy_screen) -> None:
+        layer = _named_layer(workflow, [f"Spot {i:02d}" for i in range(20)])
         seen = {}
 
         def script(dialog) -> None:
@@ -829,12 +831,12 @@ class TestTheWindowStaysPut:
                 dialog.tabs.currentWidget().verticalScrollBar().isVisible()
             )
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["size"] == seen["after"]
         assert seen["list_scrolls"] and not seen["page_scrolls"]
 
     def test_a_small_screen_scrolls_the_page_and_keeps_the_row_and_footer(
-        self, canyon, monkeypatch
+        self, workflow, monkeypatch
     ) -> None:
         from nika_onlymap_exporter.ui.cartograph import go_to_location_dialog as module
 
@@ -858,7 +860,7 @@ class TestTheWindowStaysPut:
             QApplication.processEvents()
             seen["same"] = dialog.height() == seen["height"]
 
-        canyon.open(script)
+        workflow.open(script)
         assert seen["height"] <= 520 - 40
         assert seen["scrolls"] and seen["same"]
         assert all(
