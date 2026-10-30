@@ -97,6 +97,9 @@ class Selection:
             ("browser", self.browser),
         ):
             lines.append(f"{title}: {len(mapping)} target(s)")
+            if self.broad and mapping:
+                lines.append("  (all of them, for the broad-fallback reason above)")
+                continue
             for target, reasons in sorted(mapping.items()):
                 lines.append(f"  {target}")
                 lines.extend(f"      why: {reason}" for reason in reasons[:4])
