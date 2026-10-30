@@ -38,8 +38,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     the project is saved. It only saves over a file that is its own earlier
     output, or one you chose with **Change...**: if the project names any other
     file, that file is left alone and the cartograph is saved beside it as
-    `name (2).html`, with the message under the file name saying where. Edits
-    to a layout you have switched away from still reach its file, and closing
+    `name (2).html`, with the message under the file name saying where. While
+    the window is open, every layout that has a file keeps it up to date, even
+    one you switched away from or are editing in the layout designer; closing
     the window first finishes any save in progress; if the save fails, you can
     try again, keep the window open, or choose **Close without saving**.
   - **New from template...** builds a print layout, named
