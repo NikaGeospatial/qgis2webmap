@@ -54,6 +54,31 @@ def _wait_for(qgis_app, check, what: str, seconds: float = 6.0):
     raise AssertionError(f"timed out waiting for {what}")
 
 
+def _idle(qgis_app, pane: PagePane, seconds: float = 5.0, strict: bool = True) -> None:
+    """Run the event loop until the page has nothing left to do by itself - its
+    fit and legend check have run and no count is waiting or running - instead
+    of sleeping a fixed time for it. Fails loudly when it never goes quiet,
+    unless `strict` is off (a test may end with a long count still running;
+    closing cancels it)."""
+    deadline = time.monotonic() + seconds
+    quiet = 0
+    while quiet < 3:
+        qgis_app.processEvents()
+        if (
+            pane.preview._fit_timer.isActive()
+            or pane._legend_refresh.isActive()
+            or pane.live_counts.busy()
+        ):
+            quiet = 0
+            if time.monotonic() > deadline:
+                if strict:
+                    raise AssertionError("the page never went quiet")
+                return
+        else:
+            quiet += 1
+        time.sleep(0.005)
+
+
 def _number_shows(qgis_app, number, text: str, seconds: float = 6.0) -> None:
     _wait_for(
         qgis_app,
@@ -84,9 +109,9 @@ def ui(qgis_app, project):
     pane.show_layout(page.layout)
     pane.controls.resize(420, 640)
     pane.controls.show()
-    _settle(qgis_app)
+    _idle(qgis_app, pane)
     yield page, pane
-    _settle(qgis_app, 0.2)
+    _idle(qgis_app, pane, seconds=0.5, strict=False)
     pane.live_counts.close()
     pane.close()
     pane.deleteLater()
@@ -102,7 +127,7 @@ def _add(qgis_app, pane, page, at=(170.0, 30.0), follow: str | None = None):
     else:
         _choose(pane, "Live count", f"Follow {follow}")
     _click_page(qgis_app, pane, *at)
-    _settle(qgis_app, 0.15)
+    _idle(qgis_app, pane)
     new = [n for n in _numbers(page.layout) if n.uuid() not in before]
     assert len(new) == 1
     return new[0]
@@ -599,7 +624,7 @@ class TestSavingAndReopening:
         pane.show()
         pane.show_layout(page.layout)
         pane.controls.show()
-        _settle(qgis_app)
+        _idle(qgis_app, pane)
         number = _add(qgis_app, pane, page)
         setup = _setup(pane)
         _pick(setup.layer_combo, page.sites.id())
@@ -627,7 +652,7 @@ class TestSavingAndReopening:
         again.show()
         again.show_layout(layout)
         again.controls.show()
-        _settle(qgis_app, 0.3)
+        _idle(qgis_app, again)
         assert reopened.text() == str(count_sites(status="Closed"))
         layout.deselectAll()
         reopened.parentGroup().setSelected(True)
@@ -737,7 +762,7 @@ class TestExistingFiguresAreUntouched:
         pane = PagePane()
         pane.show()
         pane.show_layout(layout)
-        _settle(qgis_app, 0.3)
+        _idle(qgis_app, pane)
         after = {
             i.id(): i.text()
             for i in _items_of(layout, QgsLayoutItemLabel)
@@ -896,7 +921,7 @@ class TestOneItemOnThePage:
         pane.show()
         pane.show_layout(page.layout)
         pane.controls.show()
-        _settle(qgis_app)
+        _idle(qgis_app, pane)
         number = _add(qgis_app, pane, page)
         _pick(_setup(pane).layer_combo, page.sites.id())
         _number_shows(qgis_app, number, "30")
