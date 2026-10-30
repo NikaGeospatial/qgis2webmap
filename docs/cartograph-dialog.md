@@ -354,6 +354,13 @@ does not exist - that file is left alone, the cartograph saves to a free name
 beside it (or in the default folder), and the message under the file name says
 where.
 
+While the dialog is open, every layout that has a cartograph file keeps it up
+to date - the one on screen, one you switched away from, and one you are
+editing in the QGIS layout designer. Closing the dialog first finishes any
+save still waiting; if one fails, the dialog says so and offers **Try again**,
+**Cancel closing** or **Close without saving**. Edits made while the dialog is
+closed reach a layout's file the next time you show that layout.
+
 A cartograph is always **one standalone HTML file**. There is no Share ZIP or
 Folder type as there is for the web map: the page, the pictures of its Image frames and the
 data of its interactive maps are all inside it.
