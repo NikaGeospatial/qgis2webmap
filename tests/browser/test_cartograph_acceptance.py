@@ -129,7 +129,10 @@ class TestSurveyCartograph:
         assert result["errors"] == []
         assert result["valid"] is True
 
-    def test_it_prints_at_true_a3_size(self, page, fixtures: Path, expected) -> None:
+    def test_it_prints_at_true_a3_size(
+        self, page, browser_name: str, fixtures: Path, expected
+    ) -> None:
+        _needs_pdf(browser_name)
         _open(page, fixtures / "survey-static.html")
         pdf = page.pdf(prefer_css_page_size=True, print_background=True)
         width, height = _pdf_page_size_mm(pdf)
@@ -494,6 +497,12 @@ def _colour_at(page, frame_id: str, lonlat: list[float]) -> list[int]:
         }""",
         [shot, x, y],
     )
+
+
+def _needs_pdf(browser_name: str) -> None:
+    """Skip where Playwright cannot print a page to PDF (Chromium only)."""
+    if browser_name != "chromium":
+        pytest.skip("Playwright's page.pdf() is only supported by Chromium")
 
 
 def _needs_webgl(page) -> None:
@@ -1182,8 +1191,9 @@ class TestPageFitsTheWindow:
         [("survey-static.html", "survey"), ("survey-a4-static.html", "survey_a4")],
     )
     def test_print_is_unscaled_in_a_small_window(
-        self, page, fixtures: Path, expected, name: str, key: str
+        self, page, browser_name: str, fixtures: Path, expected, name: str, key: str
     ) -> None:
+        _needs_pdf(browser_name)
         _fit_open(page, fixtures / name, (390, 844))
         assert page.evaluate(_SHEET_RECT)["kx"] < 1
         page.emulate_media(media="print")
