@@ -17,8 +17,112 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import gc
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
 
 import pytest
+
+# ---- Per-worker isolation (scripts/run_tests.py) --------------------------------
+#
+# The runner starts each test process ("worker") with its own HOME, XDG
+# directories, TMPDIR and pytest basetemp under one directory named by
+# Q2W_WORKER_DIR, and labels the process with Q2W_WORKER. A process started any
+# other way (plain `pytest`) has neither variable and none of this applies.
+#
+# Everything a test can leave behind is created under those: `tmp_path`
+# (basetemp), `tempfile` (TMPDIR - the live preview folder and the browser
+# fixture builders use it), the QGIS profile and QSettings (`tests/hermetic.py`
+# derives both from `tmp_path_factory`), the default save root, and HOME. The
+# preview server binds port 0, so no port is fixed. Two workers therefore share
+# no file and no port. If a worker was started without the variables the runner
+# sets, or something escaped its directory, the run fails here, loudly and
+# before a test writes into somebody else's files.
+
+
+def _worker_dir() -> Path | None:
+    value = os.environ.get("Q2W_WORKER_DIR")
+    return Path(value).resolve() if value else None
+
+
+def _inside(path: object, root: Path) -> bool:
+    try:
+        Path(str(path)).resolve().relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    root = _worker_dir()
+    if root is None:
+        return
+    tempfile.tempdir = None  # forget a directory cached before TMPDIR was read
+    problems = []
+    for what, value in (
+        ("HOME", Path.home()),
+        ("TMPDIR (tempfile.gettempdir())", tempfile.gettempdir()),
+        ("--basetemp", config.option.basetemp or ""),
+    ):
+        if not value or not _inside(value, root):
+            problems.append(f"{what} is {str(value)!r}, outside the worker dir {root}")
+    if problems:
+        raise pytest.UsageError(
+            "worker isolation is not in place (Q2W_WORKER="
+            f"{os.environ.get('Q2W_WORKER')!r}):\n  " + "\n  ".join(problems)
+        )
+
+
+@pytest.fixture(scope="session")
+def inside_worker():
+    """`inside_worker(path, what)`: fail if a worker wrote outside its own directory.
+
+    A no-op for a process the runner did not start.
+    """
+    root = _worker_dir()
+
+    def check(path: object, what: str) -> None:
+        if root is not None and path and not _inside(path, root):
+            pytest.fail(
+                f"{what} is {str(path)!r}, outside this worker's directory "
+                f"{root}: two workers could share it",
+                pytrace=False,
+            )
+
+    return check
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Record where this worker actually put things (isolation evidence)."""
+    root = _worker_dir()
+    if root is None:
+        return
+    settings_file = ""
+    core = sys.modules.get("qgis.PyQt.QtCore")
+    if core is not None:
+        try:
+            settings_file = core.QSettings().fileName()
+        except RuntimeError:
+            settings_file = ""
+    record = {
+        "worker": os.environ.get("Q2W_WORKER"),
+        "pid": os.getpid(),
+        "home": str(Path.home()),
+        "tmpdir": tempfile.gettempdir(),
+        "basetemp": str(session.config.option.basetemp or ""),
+        "qgis_profile": os.environ.get("QGIS_CUSTOM_CONFIG_PATH", ""),
+        "save_root": os.environ.get("QGIS2WEBMAP_SAVE_ROOT", ""),
+        "qsettings_file": settings_file,
+    }
+    record["all_inside_worker_dir"] = all(
+        _inside(value, root)
+        for key, value in record.items()
+        if key.endswith(("home", "tmpdir", "basetemp", "profile", "root", "file"))
+        and value
+    )
+    (root / "isolation.json").write_text(json.dumps(record, indent=1))
 
 
 @pytest.fixture(scope="session")
