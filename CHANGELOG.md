@@ -26,8 +26,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     resolution). Maps in EPSG:3857/4326, and other maps that draw in their own
     CRS, default to Interactive, others to Image, and a map the atlas turns is
     always Interactive; each map's card in **Map frames** switches it and
-    sets its DPI. A **⋯** menu on the card has **Use canvas extent**, **Locate
-    on page** and **Smooth when enlarged** for a continuous raster.
+    sets its DPI. A **⋯** menu on the card has **Use canvas extent**, **Go to
+    location...** and **Smooth when enlarged** for a continuous raster.
   - Grids, locator insets, legends, scale bars, north arrows, labels (with
     live `{{scale}}`, `{{title}}`, `{{date}}` and atlas tokens), shapes and
     pictures carry over, at the item opacity set in QGIS; the **Checks** tab
@@ -35,8 +35,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - **The file saves itself** about a second after each change - in the
     dialog, the layout, a layer's style or the Layers list - by default to
     `Documents/QGIS2WebMap/Cartographs/<project>-<layout>.html`, even before
-    the project is saved. Title, attribution and theme in the Layout tab's
-    Browser appearance section, which changes the web page only.
+    the project is saved. It only saves over a file that is its own earlier
+    output, or one you chose with **Change...**: if the project names any other
+    file, that file is left alone and the cartograph is saved beside it as
+    `name (2).html`, with the message under the file name saying where. Edits
+    to a layout you have switched away from still reach its file, and closing
+    the window first finishes any save in progress; if the save fails, you can
+    try again, keep the window open, or choose **Close without saving**.
   - **New from template...** builds a print layout, named
     `<Design> · <project title>`, from the map view in
     one of eleven **layout templates** - six quiet essentials (Daylight,
@@ -54,7 +59,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     ordinary text items you edit like any other text.
     The picker only chooses a design, page size, orientation and framing;
     change text sizes with **A-** / **A+** in the **Edit** tab. Legend text never drops below a readable size (8 pt): a legend that still cannot fit leaves
-    its last entries out, and the card and the **Checks** tab say how many.
+    its last entries out; the card and the **Checks** tab say how many, and a
+    bold warning beside the page offers **Adjust legend** or **New from
+    template...** to fix it.
     **Framing: fill the frame / whole view** sets how the canvas view fits, a
     card's **Preview** button (or **Space**) opens a large preview, and
     **Import cartograph...** turns a cartograph back into a QGIS layout.
@@ -76,19 +83,42 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
     **Remove inset**, **Use canvas extent**, rotation and Interactive/Image,
     the legend editor, a scale bar's or north arrow's map, a **Live count**'s
     layer, field and value, and **Delete**.
-    Double-clicking an item or adding one switches to it.
+    Double-clicking an item or adding one switches to it. A **Detail map**
+    inset also takes a centre latitude and longitude.
   - **Live count**: a number that counts what a map frame currently shows -
     a layer's features, or those with one field value, in the frame's displayed
     ground (rotation included) and as the frame draws them (layers, themes,
-    filters, switched-off categories and rules, scale limits). It follows the
+    filters, switched-off categories and rules, scale limits, and the area an
+    atlas page or a clipping setting cuts the map to). It follows the
     map by itself, shows **—** when it is not set up or its source is gone
     (with the reason in the **Edit** tab), and is fixed text in the exported
-    page. It replaces the typed-in statistic callout.
+    page. In a map series the PDF and **Print with QGIS** count each page for
+    itself. It replaces the typed-in statistic callout.
   - **Print PDF** (the PDF QGIS writes for CMYK and ICC) keeps text and
     shapes as vectors and rasterises only the transparent or blended layers.
-  - **Atlas**: one page per feature, set on the Atlas tab, with QGIS's
-    margin, fixed and predefined scales; every page as one PNG ZIP, or
-    printed together into one multi-page PDF.
+  - **Go to location...** (a map frame's **⋯** menu) shows another place
+    inside the frame without moving or resizing the frame. **Coordinates**
+    takes a latitude and longitude, or X and Y in a coordinate system you
+    choose with **Change...**; **Feature** searches a layer the map draws by
+    name, ID or a text or whole-number field, and can fit the whole feature.
+    A **Zoom** row (**½×**, **1×**, **2×**, **4×**, **8×**) and an exact
+    scale field set the scale. Each map remembers its own reference scale, so
+    **1×** always returns to it, however often the dialog is reopened. Nothing
+    changes until **Go**, which is one Undo step; **Cancel** or **Esc** leaves
+    the map alone.
+  - **Empty map frames**: a map whose layers you untick in **Layers** stays
+    empty, even after the last one, rather than falling back to drawing the
+    project's layers.
+  - **Create a map series** (the **Atlas** tab): one page per feature of a
+    layer, with QGIS's margin, fixed and predefined scales for the page
+    framing. Step through the pages with **Previous** and **Next**; **Export
+    series...** makes one PDF, a PNG ZIP or an interactive web page, and
+    **Print series...** prints every page in order through QGIS (or saves a
+    PDF to print when no printer is found), or from the web page. **Advanced
+    settings** holds **Include pages** (all features, **Matching a value**,
+    or a custom expression), **Page order**, **Page names** and **Export
+    filenames**; each optional field has a clear button. Printing a series
+    leaves a project that had no unsaved changes without any.
   - **Save PDF…** is a native QGIS action in the header (**Ctrl+P**): it saves
     every page of the selected layout, current edits included, from a copy of
     the layout, with no HTML file, browser or print dialog. Interactive frames
@@ -105,6 +135,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   - **Colour vision**: simulate protanopia, deuteranopia, tritanopia and
     achromatopsia on the QGIS canvas and the page, and list the legend
     classes that become indistinguishable.
+  - **Show in folder** selects the file in your file manager.
   - **Export as cartograph (HTML)...** in the layout designer's Layout menu,
     **Create cartograph...** in the Web menu, and the **Export print layout
     to cartograph (Beta)** Processing algorithm.
@@ -129,11 +160,26 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the folder for every new map.
 - **The dialog opens larger**, at 1152 × 768, still shrinking to fit the
   screen.
+- **The window closes when you start a new project or open another**, since
+  its settings, layers and files belong to the old one; reopen it to start from
+  the new project.
+- **Closed drop-downs pass the mouse wheel to the panel behind them**, so
+  scrolling the panel never changes a choice.
 - **Keyboard focus is visible on every control**, and in Arabic the
   dialog's directional styling - arrows, rounded ends, section chevrons - is
   mirrored along with its right-to-left layout.
+- **Popups show editor-widget descriptions.** A field with a Value Map or
+  Value Relation shows its descriptions in popups (a Value Relation's
+  multi-selection in QGIS's own order), while drawing, filtering, labels and
+  counting use the stored value, as QGIS does. When a layer's symbology hides
+  every feature, the report says so rather than blaming an empty source.
 
 ### Fixed
+- **Closing during slow work no longer crashes QGIS.** A background job that
+  outlasts the closing window is left to finish safely.
+- **A failed folder export keeps the previous export.** If a file cannot be
+  written (a full disk, say), the folder still holds the last working page and
+  its files, not a page that points at missing files.
 - **Symbol sizes and opacity.** Marker size, outline width and offset now follow
   their unit (pixels, points, millimetres, inches) instead of all being read as
   millimetres, and symbol opacity is applied to the exported colours once.
