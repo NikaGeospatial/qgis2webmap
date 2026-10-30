@@ -1457,6 +1457,12 @@ def final_report(
     if interrupted:
         verdict = f"{args.profile.upper()} INTERRUPTED: unfinished stages prove nothing"
         code = 130
+    elif all_passed and args.only:
+        verdict = (
+            f"PARTIAL RUN (--only {args.only}) passed on commit {cand.commit[:10]}: "
+            f"this is not a {args.profile} verdict"
+        )
+        code = 0
     elif all_passed:
         verdict = f"{args.profile.upper()} CHECKS PASSED on commit {cand.commit[:10]}"
         code = 0
