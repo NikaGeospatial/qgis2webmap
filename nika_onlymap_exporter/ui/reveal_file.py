@@ -186,7 +186,7 @@ def _string_array(qt_dbus, value: str):  # type: ignore[no-untyped-def]
         string_id = QMetaType.Type.QString.value
         element = QMetaType(string_id)
     except (AttributeError, TypeError):  # PyQt5
-        string_id = int(QMetaType.QString)
+        string_id = int(QMetaType.Type.QString)
         element = string_id
     argument = qt_dbus.QDBusArgument()
     argument.beginArray(element)

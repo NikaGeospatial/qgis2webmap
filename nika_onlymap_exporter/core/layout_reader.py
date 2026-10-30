@@ -615,8 +615,12 @@ def _box(item: QgsLayoutItem, converter: QgsLayoutMeasurementConverter) -> Box:
     the caller read them after building the layout rather than asking for
     the values it originally requested.
     """
-    pos = converter.convert(item.positionWithUnits(), QgsUnitTypes.LayoutMillimeters)
-    size = converter.convert(item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters)
+    pos = converter.convert(
+        item.positionWithUnits(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
+    )
+    size = converter.convert(
+        item.sizeWithUnits(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
+    )
     if item.itemRotation():
         # A rotated item's position is its *rotated* top-left corner (an item
         # at (10, 20), 100 x 50, rotated 20 degrees reads (21.57, 4.41)),
@@ -627,7 +631,9 @@ def _box(item: QgsLayoutItem, converter: QgsLayoutMeasurementConverter) -> Box:
         scene_centre = item.mapToScene(item.rect().center())
         centre = (
             item.layout()
-            .convertFromLayoutUnits(scene_centre, QgsUnitTypes.LayoutMillimeters)
+            .convertFromLayoutUnits(
+                scene_centre, QgsUnitTypes.LayoutUnit.LayoutMillimeters
+            )
             .toQPointF()
         )
         return Box(
@@ -1934,7 +1940,7 @@ def _read_legend(
     bg, color, stroke = _legend_style(item, label, report)
     font_size = None
     if item.customProperty(chosen_style_property("font-size")) is not None:
-        row_text = item.style(QgsLegendStyle.SymbolLabel).textFormat()
+        row_text = item.style(QgsLegendStyle.Style.SymbolLabel).textFormat()
         points_per_unit = _POINTS_PER_UNIT.get(int(row_text.sizeUnit()))
         if points_per_unit is not None and row_text.size() > 0:
             font_size = round(row_text.size() * points_per_unit, 2)
@@ -1958,10 +1964,10 @@ def _read_legend(
 #: The legend text levels `<om-legend color>` stands for, as the layout
 #: builder writes them.
 _LEGEND_TEXT_STYLES = (
-    QgsLegendStyle.Title,
-    QgsLegendStyle.Group,
-    QgsLegendStyle.Subgroup,
-    QgsLegendStyle.SymbolLabel,
+    QgsLegendStyle.Style.Title,
+    QgsLegendStyle.Style.Group,
+    QgsLegendStyle.Style.Subgroup,
+    QgsLegendStyle.Style.SymbolLabel,
 )
 
 
@@ -1996,7 +2002,7 @@ def _legend_style(
 
     colors = []
     for style in _LEGEND_TEXT_STYLES:
-        if style == QgsLegendStyle.Title and not item.title():
+        if style == QgsLegendStyle.Style.Title and not item.title():
             continue
         colors.append(QColor(item.style(style).textFormat().color()))
     ink = colors[-1]
@@ -2287,7 +2293,7 @@ def _segment_length_metres(item: QgsLayoutItemScaleBar) -> float | None:
     if not per_segment:
         return None
     factor = QgsUnitTypes.fromUnitToUnitFactor(
-        item.units(), QgsUnitTypes.DistanceMeters
+        item.units(), QgsUnitTypes.DistanceUnit.DistanceMeters
     )
     return per_segment * factor
 
@@ -2381,11 +2387,11 @@ def _read_scalebar(
 
     kind = _SCALEBAR_KIND_BY_STYLE.get(style_name, "single")
     units_map = {
-        QgsUnitTypes.DistanceMeters: "metric",
-        QgsUnitTypes.DistanceKilometers: "metric",
-        QgsUnitTypes.DistanceFeet: "imperial",
-        QgsUnitTypes.DistanceMiles: "imperial",
-        QgsUnitTypes.DistanceNauticalMiles: "nautical",
+        QgsUnitTypes.DistanceUnit.DistanceMeters: "metric",
+        QgsUnitTypes.DistanceUnit.DistanceKilometers: "metric",
+        QgsUnitTypes.DistanceUnit.DistanceFeet: "imperial",
+        QgsUnitTypes.DistanceUnit.DistanceMiles: "imperial",
+        QgsUnitTypes.DistanceUnit.DistanceNauticalMiles: "nautical",
     }
     units = units_map.get(item.units(), "metric")
 
@@ -2773,11 +2779,11 @@ _ALIGN_BY_FLAG = (
 
 #: Points per text-size unit QGIS can express without a map scale.
 _POINTS_PER_UNIT = {
-    int(QgsUnitTypes.RenderPoints): 1.0,
-    int(QgsUnitTypes.RenderMillimeters): 72.0 / 25.4,
-    int(QgsUnitTypes.RenderInches): 72.0,
+    int(QgsUnitTypes.RenderUnit.RenderPoints): 1.0,
+    int(QgsUnitTypes.RenderUnit.RenderMillimeters): 72.0 / 25.4,
+    int(QgsUnitTypes.RenderUnit.RenderInches): 72.0,
     # CSS reference pixel: 96 per inch.
-    int(QgsUnitTypes.RenderPixels): 72.0 / 96.0,
+    int(QgsUnitTypes.RenderUnit.RenderPixels): 72.0 / 96.0,
 }
 
 
@@ -2926,7 +2932,7 @@ def _label_expression_context(
         converter = QgsLayoutMeasurementConverter()
         converter.setDpi(layout.renderContext().dpi())
         size = converter.convert(
-            map_item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters
+            map_item.sizeWithUnits(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
         )
         pixels = QSizeF(size.width() / 25.4 * 96, size.height() / 25.4 * 96)
         settings = map_item.mapSettings(map_item.extent(), pixels, 96, False)
@@ -2961,7 +2967,7 @@ def _read_shape(
     fill_opacity = _shape_fill_opacity(item)
     stroke, stroke_width = _shape_stroke(item, report, label)
     radius = converter.convert(
-        item.cornerRadius(), QgsUnitTypes.LayoutMillimeters
+        item.cornerRadius(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
     ).length()
 
     return ShapeSpec(
@@ -3024,7 +3030,7 @@ def _shape_stroke(
         # attribute out gives the runtime's own 0.3 mm theme outline.
         return None, 0.0
     width = layer.strokeWidth()
-    if layer.strokeWidthUnit() != QgsUnitTypes.RenderMillimeters:
+    if layer.strokeWidthUnit() != QgsUnitTypes.RenderUnit.RenderMillimeters:
         report.approximated(
             label,
             "The outline width is not in millimetres, so it was exported at "

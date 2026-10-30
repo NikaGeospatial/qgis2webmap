@@ -47,7 +47,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 def _layout_units(layout: QgsPrintLayout, millimetres: float) -> float:
     return float(
         layout.convertToLayoutUnits(
-            QgsLayoutMeasurement(millimetres, QgsUnitTypes.LayoutMillimeters)
+            QgsLayoutMeasurement(millimetres, QgsUnitTypes.LayoutUnit.LayoutMillimeters)
         )
     )
 

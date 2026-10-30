@@ -728,7 +728,9 @@ def set_columns(
 
 
 def row_spacing_mm(legend: QgsLayoutItemLegend) -> float:
-    return float(legend.rstyle(QgsLegendStyle.Symbol).margin(QgsLegendStyle.Top))
+    return float(
+        legend.rstyle(QgsLegendStyle.Style.Symbol).margin(QgsLegendStyle.Side.Top)
+    )
 
 
 def set_row_spacing(
@@ -741,8 +743,8 @@ def set_row_spacing(
     if abs(row_spacing_mm(legend) - millimetres) < 0.005:
         return False
     with _command(layout, legend, undo_text):
-        for style_id in (QgsLegendStyle.Symbol, QgsLegendStyle.SymbolLabel):
-            legend.rstyle(style_id).setMargin(QgsLegendStyle.Top, millimetres)
+        for style_id in (QgsLegendStyle.Style.Symbol, QgsLegendStyle.Style.SymbolLabel):
+            legend.rstyle(style_id).setMargin(QgsLegendStyle.Side.Top, millimetres)
     return True
 
 

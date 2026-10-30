@@ -1540,7 +1540,7 @@ def _page_name(layout) -> str:  # QgsPrintLayout
     if pages.pageCount() == 0:
         return ""
     size = QgsLayoutMeasurementConverter().convert(
-        pages.page(0).pageSize(), QgsUnitTypes.LayoutMillimeters
+        pages.page(0).pageSize(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
     )
     width, height = size.width(), size.height()
     orientation = "landscape" if width >= height else "portrait"

@@ -112,10 +112,10 @@ def preview_mode_for(condition: Condition) -> object:
     from qgis.gui import QgsPreviewEffect
 
     return {
-        "protanopia": QgsPreviewEffect.PreviewProtanope,
-        "deuteranopia": QgsPreviewEffect.PreviewDeuteranope,
-        "tritanopia": QgsPreviewEffect.PreviewTritanope,
-        "achromatopsia": QgsPreviewEffect.PreviewGrayscale,
+        "protanopia": QgsPreviewEffect.PreviewMode.PreviewProtanope,
+        "deuteranopia": QgsPreviewEffect.PreviewMode.PreviewDeuteranope,
+        "tritanopia": QgsPreviewEffect.PreviewMode.PreviewTritanope,
+        "achromatopsia": QgsPreviewEffect.PreviewMode.PreviewGrayscale,
     }[condition]
 
 

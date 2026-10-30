@@ -30,10 +30,10 @@ MIN_POINTS = 4.0
 MAX_POINTS = 120.0
 
 _LEGEND_TEXT_STYLES = (
-    QgsLegendStyle.Title,
-    QgsLegendStyle.Group,
-    QgsLegendStyle.Subgroup,
-    QgsLegendStyle.SymbolLabel,
+    QgsLegendStyle.Style.Title,
+    QgsLegendStyle.Style.Group,
+    QgsLegendStyle.Style.Subgroup,
+    QgsLegendStyle.Style.SymbolLabel,
 )
 
 
@@ -43,7 +43,7 @@ def text_size_points(item: QgsLayoutItem) -> float | None:
     if isinstance(item, QgsLayoutItemLabel):
         text_format = item.textFormat()
     elif isinstance(item, QgsLayoutItemLegend):
-        text_format = item.style(QgsLegendStyle.SymbolLabel).textFormat()
+        text_format = item.style(QgsLegendStyle.Style.SymbolLabel).textFormat()
     else:
         return None
     per_unit = _POINTS_PER_UNIT.get(int(text_format.sizeUnit()))
@@ -80,7 +80,7 @@ def set_text_size(layout: QgsLayout, item: QgsLayoutItem, points: float) -> bool
         if isinstance(item, QgsLayoutItemLabel):
             text_format = item.textFormat()
             text_format.setSize(target)
-            text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+            text_format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderPoints)
             item.setTextFormat(text_format)
         elif isinstance(item, QgsLayoutItemLegend):
             _set_legend_size(item, target / current, target)

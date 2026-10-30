@@ -124,16 +124,16 @@ PREVIEW_LOCATOR_NO_CONTEXT_KEY = "locator-no-context"
 #: Only a bound for the search; the box's width stops it long before.
 _LEGEND_MAX_COLUMNS = 12
 _LEGEND_TEXT_STYLES = (
-    QgsLegendStyle.Title,
-    QgsLegendStyle.Group,
-    QgsLegendStyle.Subgroup,
-    QgsLegendStyle.SymbolLabel,
+    QgsLegendStyle.Style.Title,
+    QgsLegendStyle.Style.Group,
+    QgsLegendStyle.Style.Subgroup,
+    QgsLegendStyle.Style.SymbolLabel,
 )
 _LEGEND_SIDES = (
-    QgsLegendStyle.Top,
-    QgsLegendStyle.Bottom,
-    QgsLegendStyle.Left,
-    QgsLegendStyle.Right,
+    QgsLegendStyle.Side.Top,
+    QgsLegendStyle.Side.Bottom,
+    QgsLegendStyle.Side.Left,
+    QgsLegendStyle.Side.Right,
 )
 
 
@@ -863,7 +863,7 @@ def _wrap_headings(legend: QgsLayoutItemLegend, wrap: float) -> None:
     only the rows under it): the same words in the legend's own copy of
     the layer's title, marked so the export reads no rename."""
     context = QgsLayoutUtils.createRenderContextForLayout(legend.layout(), None)
-    text_format = legend.rstyle(QgsLegendStyle.Subgroup).textFormat()
+    text_format = legend.rstyle(QgsLegendStyle.Style.Subgroup).textFormat()
     per_mm = context.scaleFactor() or 1.0
 
     def width(text: str) -> float:

@@ -98,7 +98,7 @@ from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 WEB_MERCATOR = QgsCoordinateReferenceSystem("EPSG:3857")
-_MM = QgsUnitTypes.LayoutMillimeters
+_MM = QgsUnitTypes.LayoutUnit.LayoutMillimeters
 
 #: Same CSS pixel `core/cartograph_export.py` measures a live camera in.
 _CSS_PIXELS_PER_MM = 96.0 / 25.4
@@ -107,9 +107,9 @@ _EARTH_RADIUS = EQUATOR_METRES / (2 * math.pi)
 #: `<om-graticule kind>` -> QgsLayoutItemMapGrid.GridStyle; the inverse of
 #: the reader's `_GRID_KIND_BY_STYLE` (minus its zebra approximation).
 _GRID_STYLE_BY_KIND = {
-    "solid": QgsLayoutItemMapGrid.Solid,
-    "cross": QgsLayoutItemMapGrid.Cross,
-    "markers": QgsLayoutItemMapGrid.Markers,
+    "solid": QgsLayoutItemMapGrid.GridStyle.Solid,
+    "cross": QgsLayoutItemMapGrid.GridStyle.Cross,
+    "markers": QgsLayoutItemMapGrid.GridStyle.Markers,
 }
 
 #: `<om-scalebar kind>` -> QGIS scale bar style name; the inverse of the
@@ -131,10 +131,10 @@ _NORTH_ROSE_SVG = "arrows/NorthArrow_05.svg"
 
 #: The legend text levels `<om-legend color>` and `font-size` style.
 _LEGEND_TEXT_STYLES = (
-    QgsLegendStyle.Title,
-    QgsLegendStyle.Group,
-    QgsLegendStyle.Subgroup,
-    QgsLegendStyle.SymbolLabel,
+    QgsLegendStyle.Style.Title,
+    QgsLegendStyle.Style.Group,
+    QgsLegendStyle.Style.Subgroup,
+    QgsLegendStyle.Style.SymbolLabel,
 )
 
 #: How every atlas issue names its element.
@@ -629,9 +629,9 @@ class _Builder:
         if frame.atlas_fit is not None or frame.atlas_margin is not None:
             map_item.setAtlasDriven(True)
             map_item.setAtlasScalingMode(
-                QgsLayoutItemMap.Fixed
+                QgsLayoutItemMap.AtlasScalingMode.Fixed
                 if frame.atlas_fit == "fixed"
-                else QgsLayoutItemMap.Auto
+                else QgsLayoutItemMap.AtlasScalingMode.Auto
             )
             if frame.atlas_margin is not None:
                 # The runtime pads each side by the margin; QGIS scales the
@@ -890,19 +890,21 @@ class _Builder:
         else:
             grid.setAnnotationEnabled(True)
             position = (
-                QgsLayoutItemMapGrid.InsideMapFrame
+                QgsLayoutItemMapGrid.AnnotationPosition.InsideMapFrame
                 if item.labels == "inside"
-                else QgsLayoutItemMapGrid.OutsideMapFrame
+                else QgsLayoutItemMapGrid.AnnotationPosition.OutsideMapFrame
             )
             for side in (
-                QgsLayoutItemMapGrid.Left,
-                QgsLayoutItemMapGrid.Right,
-                QgsLayoutItemMapGrid.Top,
-                QgsLayoutItemMapGrid.Bottom,
+                QgsLayoutItemMapGrid.BorderSide.Left,
+                QgsLayoutItemMapGrid.BorderSide.Right,
+                QgsLayoutItemMapGrid.BorderSide.Top,
+                QgsLayoutItemMapGrid.BorderSide.Bottom,
             ):
                 grid.setAnnotationPosition(position, side)
         if item.format == "dms":
-            grid.setAnnotationFormat(QgsLayoutItemMapGrid.DegreeMinuteSecond)
+            grid.setAnnotationFormat(
+                QgsLayoutItemMapGrid.AnnotationFormat.DegreeMinuteSecond
+            )
         else:
             # As many decimals as the interval has, not QGIS's default three:
             # a 500 m grid reads "364500", a 0.2 degree one "103.8".
@@ -1001,7 +1003,7 @@ class _Builder:
         if item.font_size is not None and item.font_size > 0:
             # `font-size` is the rows' size; the headings keep QGIS's own
             # proportions to them (16/14/12 pt titles over 12 pt rows).
-            labels = legend.rstyle(QgsLegendStyle.SymbolLabel).textFormat()
+            labels = legend.rstyle(QgsLegendStyle.Style.SymbolLabel).textFormat()
             factor = item.font_size / labels.size() if labels.size() > 0 else 1.0
             for style in _LEGEND_TEXT_STYLES:
                 legend_style = legend.rstyle(style)
@@ -1051,13 +1053,15 @@ class _Builder:
             units, per_segment = _scalebar_units(item.units, item.segment_length)
             bar.setUnits(units)
             bar.setUnitsPerSegment(per_segment)
-            bar.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeFixed)
+            bar.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeMode.SegmentSizeFixed)
         else:
             # The runtime snaps an unset segment length to a 1-2-5 value that
             # fits the box; QGIS's fit-width mode is the same idea.
             units, _ = _scalebar_units(item.units, 1.0)
             bar.setUnits(units)
-            bar.setSegmentSizeMode(QgsScaleBarSettings.SegmentSizeFitWidth)
+            bar.setSegmentSizeMode(
+                QgsScaleBarSettings.SegmentSizeMode.SegmentSizeFitWidth
+            )
             bar.setMinimumBarWidth(item.box.w / 2)
             bar.setMaximumBarWidth(item.box.w)
         bar.setUnitLabel(QgsUnitTypes.toAbbreviatedString(units))
@@ -1083,7 +1087,7 @@ class _Builder:
             # QGIS-only: the labels' size in points (see `ScalebarSpec`).
             text_format = bar.textFormat()
             text_format.setSize(item.font_size)
-            text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+            text_format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderPoints)
             bar.setTextFormat(text_format)
         self._place(bar, item.box)
         if item.segment_length is None:
@@ -1115,10 +1119,12 @@ class _Builder:
     def _build_north(self, item: NorthSpec) -> QgsLayoutItem:
         picture = QgsLayoutItemPicture(self.layout)
         self.layout.addLayoutItem(picture)
-        picture.setResizeMode(QgsLayoutItemPicture.Zoom)
-        picture.setPicturePath(_north_svg(item.kind), QgsLayoutItemPicture.FormatSVG)
+        picture.setResizeMode(QgsLayoutItemPicture.ResizeMode.Zoom)
+        picture.setPicturePath(
+            _north_svg(item.kind), QgsLayoutItemPicture.Format.FormatSVG
+        )
         picture.setLinkedMap(self.maps[item.for_])
-        picture.setNorthMode(QgsLayoutItemPicture.GridNorth)
+        picture.setNorthMode(QgsLayoutItemPicture.NorthMode.GridNorth)
         if item.color is not None and (color := _color(item.color)) is not None:
             picture.setSvgFillColor(color)
             picture.setSvgStrokeColor(color)
@@ -1171,7 +1177,7 @@ class _Builder:
         text_format.setFont(font)
         if item.font_size is not None:
             text_format.setSize(item.font_size)
-            text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+            text_format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderPoints)
         if item.color is not None and (color := _color(item.color)) is not None:
             text_format.setColor(color)
         label.setTextFormat(text_format)
@@ -1196,9 +1202,9 @@ class _Builder:
         picture = QgsLayoutItemPicture(self.layout)
         self.layout.addLayoutItem(picture)
         if item.fit == "fill":
-            picture.setResizeMode(QgsLayoutItemPicture.Stretch)
+            picture.setResizeMode(QgsLayoutItemPicture.ResizeMode.Stretch)
         else:
-            picture.setResizeMode(QgsLayoutItemPicture.Zoom)
+            picture.setResizeMode(QgsLayoutItemPicture.ResizeMode.Zoom)
             if item.fit == "cover":
                 self.issue(
                     subject,
@@ -1221,9 +1227,9 @@ class _Builder:
             is_base64 = ";base64" in match.group(2).lower()
             payload = match.group(3)
             picture_format = (
-                QgsLayoutItemPicture.FormatSVG
+                QgsLayoutItemPicture.Format.FormatSVG
                 if mime == "image/svg+xml"
-                else QgsLayoutItemPicture.FormatRaster
+                else QgsLayoutItemPicture.Format.FormatRaster
             )
             try:
                 data = (
@@ -1257,14 +1263,14 @@ class _Builder:
                 ), picture_format
             return str(target), picture_format
         if re.match(r"^[a-z][a-z0-9+.-]*://", src, re.IGNORECASE):
-            return src, QgsLayoutItemPicture.FormatUnknown
+            return src, QgsLayoutItemPicture.Format.FormatUnknown
         path = Path(src)
         if not path.is_absolute() and self.source_dir is not None:
             path = self.source_dir / path
         if not path.exists():
             self.issue(subject, f"The picture {src!r} was not found; left out.")
             return None
-        return str(path), QgsLayoutItemPicture.FormatUnknown
+        return str(path), QgsLayoutItemPicture.Format.FormatUnknown
 
     def _build_shape(self, item: ShapeSpec) -> QgsLayoutItem:
         subject = _subject("shape", item.id)
@@ -1287,7 +1293,7 @@ class _Builder:
             }
             polyline.setSymbol(QgsLineSymbol.createSimple(properties))
             if item.kind == "arrow":
-                polyline.setEndMarker(QgsLayoutItemPolyline.ArrowHead)
+                polyline.setEndMarker(QgsLayoutItemPolyline.MarkerMode.ArrowHead)
             if item.fill is not None or item.radius:
                 self.issue(subject, "A line has no fill or corner radius; dropped.")
             return polyline
@@ -1295,9 +1301,9 @@ class _Builder:
         shape = QgsLayoutItemShape(self.layout)
         self.layout.addLayoutItem(shape)
         shape.setShapeType(
-            QgsLayoutItemShape.Ellipse
+            QgsLayoutItemShape.Shape.Ellipse
             if item.kind == "ellipse"
-            else QgsLayoutItemShape.Rectangle
+            else QgsLayoutItemShape.Shape.Rectangle
         )
         fill = _color(item.fill) if item.fill is not None else None
         if fill is not None and item.fill_opacity is not None:
@@ -1345,7 +1351,7 @@ class _Builder:
         map_item = self.maps[atlas_spec.for_]
         if not map_item.atlasDriven():
             map_item.setAtlasDriven(True)
-            map_item.setAtlasScalingMode(QgsLayoutItemMap.Auto)
+            map_item.setAtlasScalingMode(QgsLayoutItemMap.AtlasScalingMode.Auto)
         if coverage is None:
             self.issue(
                 subject,
@@ -1451,13 +1457,13 @@ def _scalebar_units(units: str, segment_metres: float) -> tuple[int, float]:
     runtime gives in metres -- in the unit a reader expects at that length."""
     if units == "imperial":
         if segment_metres >= 1609.344:
-            return QgsUnitTypes.DistanceMiles, segment_metres / 1609.344
-        return QgsUnitTypes.DistanceFeet, segment_metres / 0.3048
+            return QgsUnitTypes.DistanceUnit.DistanceMiles, segment_metres / 1609.344
+        return QgsUnitTypes.DistanceUnit.DistanceFeet, segment_metres / 0.3048
     if units == "nautical":
-        return QgsUnitTypes.DistanceNauticalMiles, segment_metres / 1852.0
+        return QgsUnitTypes.DistanceUnit.DistanceNauticalMiles, segment_metres / 1852.0
     if segment_metres >= 1000:
-        return QgsUnitTypes.DistanceKilometers, segment_metres / 1000.0
-    return QgsUnitTypes.DistanceMeters, segment_metres
+        return QgsUnitTypes.DistanceUnit.DistanceKilometers, segment_metres / 1000.0
+    return QgsUnitTypes.DistanceUnit.DistanceMeters, segment_metres
 
 
 def _north_svg(kind: str) -> str:

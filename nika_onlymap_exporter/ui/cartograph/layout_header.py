@@ -54,7 +54,7 @@ def layout_metadata(layout: object) -> str:
     if count:
         converter = layout.renderContext().measurementConverter()  # type: ignore[attr-defined]
         size = converter.convert(
-            pages.page(0).pageSize(), QgsUnitTypes.LayoutMillimeters
+            pages.page(0).pageSize(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
         )
         width, height = round(size.width(), 1), round(size.height(), 1)
         orientation = "landscape" if width >= height else "portrait"

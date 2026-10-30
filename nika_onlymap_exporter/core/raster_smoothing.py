@@ -49,7 +49,7 @@ def _classified(ramp: object) -> bool:
     classes = (
         (method.Discrete, method.Exact)
         if method is not None
-        else (QgsColorRampShader.Discrete, QgsColorRampShader.Exact)
+        else (QgsColorRampShader.Type.Discrete, QgsColorRampShader.Type.Exact)
     )
     return kind() in classes
 

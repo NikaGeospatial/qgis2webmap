@@ -308,7 +308,7 @@ def build_print_layout(
     if pages.pageCount() == 0:
         raise PrintPdfError(tr("The layout has no pages."))
 
-    mm = QgsUnitTypes.LayoutMillimeters
+    mm = QgsUnitTypes.LayoutUnit.LayoutMillimeters
     converter = copy.renderContext().measurementConverter()
     bleed_mm = settings.bleed_mm
     # Per page: the trim and the sheet, from the page's own size.
@@ -401,11 +401,15 @@ def _add_crop_marks(
             QPointF(
                 origin.x()
                 + to_layout(
-                    QgsLayoutMeasurement(x + bleed_mm, QgsUnitTypes.LayoutMillimeters)
+                    QgsLayoutMeasurement(
+                        x + bleed_mm, QgsUnitTypes.LayoutUnit.LayoutMillimeters
+                    )
                 ),
                 origin.y()
                 + to_layout(
-                    QgsLayoutMeasurement(y + bleed_mm, QgsUnitTypes.LayoutMillimeters)
+                    QgsLayoutMeasurement(
+                        y + bleed_mm, QgsUnitTypes.LayoutUnit.LayoutMillimeters
+                    )
                 ),
             )
             for x, y in ((x1, y1), (x2, y2))

@@ -129,8 +129,6 @@ from .stacked_scroll import StackedScrolling
 from .status import page_label, status_text
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from collections.abc import Sequence
-
     # QtWidgets on Qt 5, QtGui on Qt 6.
     from qgis.core import QgsPrintLayout, QgsProject
     from qgis.PyQt.QtGui import QUndoStack
@@ -3427,7 +3425,7 @@ class CartographController:
         converter = QgsLayoutMeasurementConverter()
         size = converter.convert(
             layout.pageCollection().page(0).sizeWithUnits(),
-            QgsUnitTypes.LayoutMillimeters,
+            QgsUnitTypes.LayoutUnit.LayoutMillimeters,
         )
         return (size.width(), size.height())
 

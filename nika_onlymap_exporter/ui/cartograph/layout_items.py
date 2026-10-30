@@ -151,7 +151,7 @@ def create_item(
             label.setText(tr("Text"))
             text_format = label.textFormat()
             text_format.setSize(_DEFAULT_TEXT_POINTS)
-            text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+            text_format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderPoints)
             label.setTextFormat(text_format)
             item = label
         elif kind is ItemKind.LEGEND:
@@ -165,9 +165,11 @@ def create_item(
             return group
         else:
             picture = QgsLayoutItemPicture(layout)
-            picture.setResizeMode(QgsLayoutItemPicture.Zoom)
-            picture.setPicturePath(_north_svg("arrow"), QgsLayoutItemPicture.FormatSVG)
-            picture.setNorthMode(QgsLayoutItemPicture.GridNorth)
+            picture.setResizeMode(QgsLayoutItemPicture.ResizeMode.Zoom)
+            picture.setPicturePath(
+                _north_svg("arrow"), QgsLayoutItemPicture.Format.FormatSVG
+            )
+            picture.setNorthMode(QgsLayoutItemPicture.NorthMode.GridNorth)
             item = picture
         layout.addLayoutItem(item)
         if map_item is not None and kind in LINKED_KINDS:
@@ -209,7 +211,7 @@ def _count_label(
     label.setText(text)
     text_format = label.textFormat()
     text_format.setSize(points)
-    text_format.setSizeUnit(QgsUnitTypes.RenderPoints)
+    text_format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderPoints)
     text_format.setColor(QColor(colour))
     font = text_format.font()
     font.setBold(bold)
@@ -239,13 +241,13 @@ def _create_live_count(
     item the user moves, selects and deletes). The caller's undo step is
     open."""
     scale = layout.convertToLayoutUnits(
-        QgsLayoutSize(1, 0, QgsUnitTypes.LayoutMillimeters)
+        QgsLayoutSize(1, 0, QgsUnitTypes.LayoutUnit.LayoutMillimeters)
     ).width()
     width = max(rect.width(), _COUNT_MIN_WIDTH_MM * scale)
     x, y = rect.x(), rect.y()
     name = _unique_count_name(layout)
     rule = QgsLayoutItemShape(layout)
-    rule.setShapeType(QgsLayoutItemShape.Rectangle)
+    rule.setShapeType(QgsLayoutItemShape.Shape.Rectangle)
     rule.setId(f"{name} rule")
     layout.addLayoutItem(rule)
     rule.attemptSetSceneRect(
@@ -320,7 +322,7 @@ def default_rect(layout: QgsLayout, kind: ItemKind, top_left: QPointF) -> QRectF
     """The box a click at `top_left` gives `kind`, in the layout's own units."""
     width, height = DEFAULT_SIZE_MM[kind]
     size = layout.convertToLayoutUnits(
-        QgsLayoutSize(width, height, QgsUnitTypes.LayoutMillimeters)
+        QgsLayoutSize(width, height, QgsUnitTypes.LayoutUnit.LayoutMillimeters)
     )
     return QRectF(top_left.x(), top_left.y(), size.width(), size.height())
 
@@ -414,10 +416,10 @@ def detail_rect(layout: QgsLayout, source: QgsLayoutItemMap) -> QRectF:
     """The detail frame's box (layout scene units): a corner of the source map,
     smaller than it, kept on the page."""
     margin = layout.convertToLayoutUnits(
-        QgsLayoutSize(_DETAIL_MARGIN_MM, 0, QgsUnitTypes.LayoutMillimeters)
+        QgsLayoutSize(_DETAIL_MARGIN_MM, 0, QgsUnitTypes.LayoutUnit.LayoutMillimeters)
     ).width()
     minimum = layout.convertToLayoutUnits(
-        QgsLayoutSize(_DETAIL_MIN_SIDE_MM, 0, QgsUnitTypes.LayoutMillimeters)
+        QgsLayoutSize(_DETAIL_MIN_SIDE_MM, 0, QgsUnitTypes.LayoutUnit.LayoutMillimeters)
     ).width()
     frame = source.sceneBoundingRect()
     width = min(max(frame.width() * _DETAIL_FRAME_SHARE, minimum), frame.width() * 0.8)
@@ -488,7 +490,9 @@ def create_detail_map(layout: QgsLayout, source: QgsLayoutItemMap) -> QgsLayoutI
         item.zoomToExtent(extent)
         item.setFrameEnabled(True)
         item.setFrameStrokeWidth(
-            QgsLayoutMeasurement(_DETAIL_FRAME_MM, QgsUnitTypes.LayoutMillimeters)
+            QgsLayoutMeasurement(
+                _DETAIL_FRAME_MM, QgsUnitTypes.LayoutUnit.LayoutMillimeters
+            )
         )
         item.setFrameStrokeColor(QColor("#444444"))
         item.setBackgroundEnabled(True)

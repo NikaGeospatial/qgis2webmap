@@ -185,7 +185,9 @@ def _render_region(
 ) -> bytes:
     converter = QgsLayoutMeasurementConverter()
     converter.setDpi(layout.renderContext().dpi())
-    size = converter.convert(map_item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters)
+    size = converter.convert(
+        map_item.sizeWithUnits(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
+    )
 
     # The raster is the item in its own local space, w x h; the cartograph
     # rotates the placed frame itself, so a rotated item rendered by its
@@ -216,7 +218,7 @@ def _render_region(
         # from a millimetre copy of the map item instead; the user's layout
         # is never converted.
         render_layout, render_item = layout, map_item
-        if layout.units() != QgsUnitTypes.LayoutMillimeters:
+        if layout.units() != QgsUnitTypes.LayoutUnit.LayoutMillimeters:
             render_layout, render_item = _millimetre_copy(layout, map_item)
         # `renderRegionToImage` takes its region in scene units, which are
         # the layout's own units, not necessarily millimetres.
@@ -288,7 +290,7 @@ def _millimetres_per_layout_unit(layout: QgsPrintLayout) -> float:
     """How many millimetres one of the layout's native units is: scene
     coordinates, pen widths and bounding boxes are all in those units."""
     return layout.convertFromLayoutUnits(
-        QSizeF(1.0, 1.0), QgsUnitTypes.LayoutMillimeters
+        QSizeF(1.0, 1.0), QgsUnitTypes.LayoutUnit.LayoutMillimeters
     ).width()
 
 
@@ -413,7 +415,7 @@ class AsyncFrameRender(QObject):
         converter = QgsLayoutMeasurementConverter()
         converter.setDpi(layout.renderContext().dpi())
         size = converter.convert(
-            map_item.sizeWithUnits(), QgsUnitTypes.LayoutMillimeters
+            map_item.sizeWithUnits(), QgsUnitTypes.LayoutUnit.LayoutMillimeters
         )
         rotation = map_item.itemRotation()
         original_position = map_item.positionWithUnits()
