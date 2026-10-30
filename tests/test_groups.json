@@ -1,0 +1,415 @@
+{
+  "_doc": [
+    "Maintained map used by scripts/run_tests.py (see CONTRIBUTING.md, 'Running the tests').",
+    "sources: which component groups a changed file belongs to. First matching rule wins.",
+    "  owner  = groups every change to the file selects.",
+    "  also   = groups selected only when a changed function/method name matches 'symbols'",
+    "           (all of them when the change cannot be tied to a function, e.g. imports).",
+    "  owner [] = an explicit 'unit tests are enough'. A path with NO rule is unknown and",
+    "           falls back to the broad (full primary suite) selection.",
+    "groups: tests = pytest targets (file or file::Class) that cover the component;",
+    "  integration = cross-component checks that must also run when the group is touched;",
+    "  browser = browser-tier files; zip_smoke = packaged-plugin smoke; data_loss = also pull",
+    "  in the data_loss_regressions list below.",
+    "compat344: the focused QGIS 3.44 suite (release profile; patch runs the entries whose",
+    "  groups were touched). 'covers' names the spec bullet each entry exists for.",
+    "tests/test_groups_check (tests/unit/test_run_tests_selection.py) fails when a test file",
+    "is in no group, a plugin file matches no rule, or a listed target does not exist."
+  ],
+  "version": 1,
+  "unit_always": true,
+  "data_loss_regressions": [
+    "tests/qgis/test_cartograph_destination.py",
+    "tests/qgis/test_switch_layout_saves.py",
+    "tests/qgis/test_watch_other_layouts.py",
+    "tests/qgis/test_close_lifecycle.py",
+    "tests/qgis/test_close_worker_lifetime.py",
+    "tests/qgis/test_project_clear_under_dialog.py",
+    "tests/unit/test_folder_export_transaction.py"
+  ],
+  "groups": {
+    "saving": {
+      "description": "Autosave, Save As, destination ownership, overwrite prompts, export writes",
+      "data_loss": true,
+      "tests": [
+        "tests/qgis/test_cartograph_destination.py",
+        "tests/qgis/test_switch_layout_saves.py",
+        "tests/qgis/test_watch_other_layouts.py",
+        "tests/qgis/test_cartograph_save_pdf.py",
+        "tests/qgis/test_cartograph_freshness.py",
+        "tests/qgis/test_layout_identity.py",
+        "tests/qgis/test_cartograph_dialog.py::TestAutosave",
+        "tests/qgis/test_cartograph_dialog.py::TestRealAutosave",
+        "tests/qgis/test_cartograph_dialog.py::TestWhereItSaves",
+        "tests/qgis/test_cartograph_dialog.py::TestSavesFollowTheProject",
+        "tests/qgis/test_cartograph_dialog.py::TestDesignerEditsAutosave",
+        "tests/qgis/test_legend_fit_autosave.py",
+        "tests/qgis/test_dialog.py::TestAutosaveIsGatedOnALiveSession",
+        "tests/qgis/test_dialog.py::TestDestinationField",
+        "tests/unit/test_folder_export_transaction.py",
+        "tests/unit/test_export_options.py"
+      ],
+      "integration": [
+        "tests/qgis/test_plugin_cartograph_entry.py",
+        "tests/qgis/test_cartograph_dialog.py::TestOutputSwitch"
+      ]
+    },
+    "recovery": {
+      "description": "Failed writes, retries, abandoned saves, crash and teardown safety",
+      "data_loss": true,
+      "tests": [
+        "tests/qgis/test_switch_layout_saves.py",
+        "tests/qgis/test_close_lifecycle.py",
+        "tests/qgis/test_close_worker_lifetime.py",
+        "tests/qgis/test_project_clear_under_dialog.py",
+        "tests/qgis/test_watch_other_layouts.py",
+        "tests/qgis/test_legend_editor_crash.py",
+        "tests/qgis/test_cartograph_dialog.py::TestBuildThreadsAndJobs",
+        "tests/unit/test_folder_export_transaction.py"
+      ],
+      "integration": [
+        "tests/qgis/test_cartograph_destination.py"
+      ]
+    },
+    "layout_session": {
+      "description": "Layout switching, pending saves, closing the dialog, project clearing, worker lifetime",
+      "data_loss": true,
+      "tests": [
+        "tests/qgis/test_switch_layout_saves.py",
+        "tests/qgis/test_watch_other_layouts.py",
+        "tests/qgis/test_close_lifecycle.py",
+        "tests/qgis/test_close_worker_lifetime.py",
+        "tests/qgis/test_project_clear_under_dialog.py",
+        "tests/qgis/test_layout_identity.py",
+        "tests/qgis/test_cartograph_dialog.py::TestBuildThreadsAndJobs",
+        "tests/qgis/test_cartograph_dialog.py::TestRenamingALayout",
+        "tests/qgis/test_cartograph_dialog.py::TestLayoutSelectorAndTemplates",
+        "tests/qgis/test_cartograph_dialog.py::TestWorkspace",
+        "tests/qgis/test_dialog.py::TestNothingOutlivesTheDialog"
+      ],
+      "integration": [
+        "tests/qgis/test_plugin_cartograph_entry.py"
+      ]
+    },
+    "atlas": {
+      "description": "Atlas series, filters, live counts, clipping",
+      "tests": [
+        "tests/qgis/test_atlas_clipping_native_units.py",
+        "tests/qgis/test_atlas_filter_and_clearing.py",
+        "tests/qgis/test_atlas_live_counts.py",
+        "tests/qgis/test_cartograph_atlas.py",
+        "tests/qgis/test_cartograph_series.py",
+        "tests/qgis/test_live_count_clipping.py",
+        "tests/qgis/test_live_count_engine.py",
+        "tests/qgis/test_live_count_ui.py",
+        "tests/qgis/test_cartograph_dialog.py::TestAtlasTab"
+      ],
+      "integration": [
+        "tests/qgis/test_cartograph_print_series.py",
+        "tests/qgis/test_print_series.py"
+      ]
+    },
+    "location_search": {
+      "description": "Go to location search, locator context",
+      "tests": [
+        "tests/qgis/test_go_to_location.py",
+        "tests/qgis/test_go_to_location_canyon.py",
+        "tests/qgis/test_go_to_location_reference.py",
+        "tests/qgis/test_go_to_location_zoom.py",
+        "tests/qgis/test_locator_context.py"
+      ],
+      "integration": [
+        "tests/qgis/test_plugin_cartograph_entry.py"
+      ]
+    },
+    "printing": {
+      "description": "Print settings, PDF/PNG/QPT output, series printing",
+      "tests": [
+        "tests/qgis/test_print_export.py",
+        "tests/qgis/test_print_series.py",
+        "tests/qgis/test_cartograph_print_series.py",
+        "tests/qgis/test_print_settings_dialog.py",
+        "tests/qgis/test_cartograph_save_pdf.py",
+        "tests/unit/test_print_settings.py"
+      ],
+      "integration": [
+        "tests/qgis/test_cartograph_series.py"
+      ]
+    },
+    "rendering": {
+      "description": "Layer/symbol/label/raster translation and frame rendering",
+      "tests": [
+        "tests/qgis/test_renderer_translator.py",
+        "tests/qgis/test_labeling_translator.py",
+        "tests/qgis/test_symbol_rasterizer.py",
+        "tests/qgis/test_raster_smoothing.py",
+        "tests/qgis/test_attribute_representation.py",
+        "tests/qgis/test_layer_reader.py",
+        "tests/qgis/test_project_reader.py",
+        "tests/qgis/test_elevation_translator_qgis.py",
+        "tests/qgis/test_cartograph_rasters.py",
+        "tests/qgis/test_frame_raster.py",
+        "tests/qgis/test_integer_matching.py",
+        "tests/qgis/test_signal_figures.py",
+        "tests/qgis/test_static_frame_async.py",
+        "tests/qgis/test_cartograph_projected_live.py",
+        "tests/qgis/test_dialog.py::TestRasterExports"
+      ],
+      "integration": [
+        "tests/fixtures/test_release_gates.py",
+        "tests/qgis/test_cartograph_export.py"
+      ],
+      "browser": [
+        "tests/browser/test_exported_map.py"
+      ]
+    },
+    "export_pipeline": {
+      "description": "Cartograph/web-map export, writers, manifest, fidelity reports",
+      "tests": [
+        "tests/qgis/test_cartograph_export.py",
+        "tests/qgis/test_cartograph_layer_capabilities.py",
+        "tests/qgis/test_cartograph_include_keeps_state.py",
+        "tests/qgis/test_cartograph_layer_membership.py",
+        "tests/qgis/test_canvas_cartograph.py",
+        "tests/qgis/test_template_inspection.py",
+        "tests/qgis/test_dialog.py::TestShareBuildsWhatItNeeds",
+        "tests/qgis/test_dialog.py::TestExportIsBack",
+        "tests/qgis/test_dialog.py::TestExportSummary",
+        "tests/qgis/test_dialog.py::TestOversizedSingleFileIsAWarningNotASwitch",
+        "tests/qgis/test_cartograph_dialog.py::TestCartographShareMenu",
+        "tests/qgis/test_cartograph_dialog.py::TestLayoutTemplateExport",
+        "tests/qgis/test_fidelity_panel.py",
+        "tests/qgis/test_fidelity_compact.py"
+      ],
+      "integration": [
+        "tests/fixtures/test_release_gates.py"
+      ],
+      "browser": [
+        "tests/browser/test_exported_map.py",
+        "tests/browser/test_cartograph_acceptance.py",
+        "tests/browser/test_cartograph_static.py",
+        "tests/browser/test_cartograph_text.py"
+      ]
+    },
+    "templates": {
+      "description": "Layout templates, layout building/reading, template picker",
+      "tests": [
+        "tests/qgis/test_layout_builder.py",
+        "tests/qgis/test_layout_header.py",
+        "tests/qgis/test_layout_native_units.py",
+        "tests/qgis/test_layout_reader.py",
+        "tests/qgis/test_layout_templates_build.py",
+        "tests/qgis/test_layout_translation.py",
+        "tests/qgis/test_template_designs_build.py",
+        "tests/qgis/test_template_fidelity.py",
+        "tests/qgis/test_template_framing.py",
+        "tests/qgis/test_template_picker.py",
+        "tests/qgis/test_template_picker_progress.py",
+        "tests/qgis/test_template_preview_limits.py",
+        "tests/qgis/test_template_requests.py",
+        "tests/qgis/test_template_title_fit.py",
+        "tests/qgis/test_cartograph_empty_frame.py",
+        "tests/qgis/test_frame_limits.py",
+        "tests/qgis/test_frame_limits_working_picture.py",
+        "tests/qgis/test_page_settings.py"
+      ],
+      "integration": [
+        "tests/fixtures/test_release_gates.py",
+        "tests/qgis/test_plugin_cartograph_entry.py"
+      ],
+      "zip_smoke": true
+    },
+    "legend": {
+      "description": "Legend editing and fitting",
+      "tests": [
+        "tests/qgis/test_legend_editor.py",
+        "tests/qgis/test_legend_editor_crash.py",
+        "tests/qgis/test_legend_edit.py",
+        "tests/qgis/test_legend_fit_autosave.py",
+        "tests/qgis/test_legend_fit_layout.py",
+        "tests/qgis/test_legend_overflow_warning.py",
+        "tests/qgis/test_dense_template_legend.py",
+        "tests/qgis/test_template_legend_dense.py"
+      ],
+      "integration": [],
+      "browser": [
+        "tests/browser/test_cartograph_legend_fit.py",
+        "tests/browser/test_cartograph_legend_fit_box.py"
+      ]
+    },
+    "ui_layout": {
+      "description": "Cartograph panel widgets, tabs, theme, keyboard, item editing, preview",
+      "tests": [
+        "tests/qgis/test_accessibility_dialog.py",
+        "tests/qgis/test_account_button.py",
+        "tests/qgis/test_add_item_on_top.py",
+        "tests/qgis/test_cartograph_bottom_row.py",
+        "tests/qgis/test_cartograph_dialog.py",
+        "tests/qgis/test_cartograph_frames_follow.py",
+        "tests/qgis/test_cartograph_panel_polish.py",
+        "tests/qgis/test_cartograph_panel_tabs.py",
+        "tests/qgis/test_cartograph_panel_widgets.py",
+        "tests/qgis/test_cartograph_smoothing_ui.py",
+        "tests/qgis/test_detail_map.py",
+        "tests/qgis/test_dialog_preview_state.py",
+        "tests/qgis/test_edit_tab_empty.py",
+        "tests/qgis/test_edit_tab_fit.py",
+        "tests/qgis/test_field_text_alignment.py",
+        "tests/qgis/test_frames_list.py",
+        "tests/qgis/test_handoff_dialog.py",
+        "tests/qgis/test_inset_view_editing.py",
+        "tests/qgis/test_keyboard_and_overflow.py",
+        "tests/qgis/test_preview_empty_space_pan.py",
+        "tests/qgis/test_preview_fit_and_overlay.py",
+        "tests/qgis/test_preview_item_editing.py",
+        "tests/qgis/test_preview_item_repaint.py",
+        "tests/qgis/test_reveal_file.py",
+        "tests/qgis/test_theme.py",
+        "tests/qgis/test_theme_focus_rtl.py",
+        "tests/qgis/test_wheel_guard.py"
+      ],
+      "integration": [
+        "tests/qgis/test_plugin_cartograph_entry.py",
+        "tests/qgis/test_cartograph_dialog.py::TestOutputSwitch"
+      ]
+    },
+    "main_dialog": {
+      "description": "The web-map dialog, live preview server, layer watcher",
+      "tests": [
+        "tests/qgis/test_dialog.py",
+        "tests/qgis/test_dialog_preview_state.py",
+        "tests/qgis/test_raster_smoothing.py"
+      ],
+      "integration": [
+        "tests/qgis/test_plugin_cartograph_entry.py"
+      ],
+      "browser": [
+        "tests/browser/test_exported_map.py"
+      ]
+    },
+    "i18n": {
+      "description": "Translations and language picker",
+      "tests": [
+        "tests/qgis/test_i18n.py"
+      ],
+      "integration": []
+    },
+    "plugin": {
+      "description": "Plugin loading, processing provider, runtime setup, packaging",
+      "tests": [
+        "tests/qgis/test_plugin_cartograph_entry.py",
+        "tests/qgis/test_plugin_shortcut.py",
+        "tests/qgis/test_runtime_setup.py",
+        "tests/qgis/test_processing.py",
+        "tests/qgis/test_processing_cartograph.py",
+        "tests/qgis/test_hermetic.py"
+      ],
+      "integration": [
+        "tests/fixtures/test_release_gates.py"
+      ],
+      "zip_smoke": true
+    },
+    "test_support": {
+      "description": "The test helpers themselves (hermetic.py, conftest) - broad by design",
+      "tests": [
+        "tests/qgis/test_hermetic.py"
+      ],
+      "integration": []
+    }
+  },
+  "sources": [
+    {"match": ["nika_onlymap_exporter/ui/cartograph/controller.py"],
+     "owner": ["ui_layout"],
+     "also": [
+       {"symbols": "save|autosave|_write|_safe_destination|_confirm_replace|_on_choose_file|_forget_last_save|_save_phase|_edits_saved|_destination_of|_kick_other_saves|_deliver|_file_exists|_current_path|_update_file_default",
+        "groups": ["saving", "recovery"]},
+       {"symbols": "switch|close|shutdown|release_project|_abandon|unsaved|_on_layout_about_to_be_removed|_forget_document|_run_other_saves|_sync_watches|_stop_watching|_on_other_layout_edited|refresh_layouts|_on_layouts_changed|_disconnect|_select_layout|on_project_content_changed|_refresh_current_layout|clear|rename|_on_layout_renamed|_document",
+        "groups": ["layout_session", "saving", "recovery"]},
+       {"symbols": "atlas|series|_open_all_pages|_open_series_pages",
+        "groups": ["atlas"]},
+       {"symbols": "print|pdf|png|qpt|_layout_page_mm",
+        "groups": ["printing"]},
+       {"symbols": "go_to_location",
+        "groups": ["location_search"]},
+       {"symbols": "_start_build|_continue_build|_on_build|_load_runtime|_static_render|_cancel_static|_is_current_build|import_cartograph|create_from_canvas|_run_autosave|schedule_autosave",
+        "groups": ["export_pipeline", "saving", "recovery"]},
+       {"symbols": "legend",
+        "groups": ["legend"]}
+     ]},
+    {"match": ["nika_onlymap_exporter/core/cartograph_destination.py", "nika_onlymap_exporter/core/save_folders.py", "nika_onlymap_exporter/core/layout_identity.py"],
+     "owner": ["saving", "layout_session", "recovery"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/atomic_write.py", "nika_onlymap_exporter/exporters/folder.py", "nika_onlymap_exporter/ui/background_job.py", "nika_onlymap_exporter/core/cancellation.py"],
+     "owner": ["recovery", "saving", "layout_session", "export_pipeline"], "also": []},
+    {"match": ["nika_onlymap_exporter/ui/layer_watcher.py"],
+     "owner": ["main_dialog", "layout_session"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/atlas_*.py", "nika_onlymap_exporter/core/live_count.py", "nika_onlymap_exporter/ui/cartograph/atlas_tab.py", "nika_onlymap_exporter/ui/cartograph/live_count*.py", "nika_onlymap_exporter/ui/cartograph/live_counts.py", "nika_onlymap_exporter/ui/cartograph/series_export_dialog.py"],
+     "owner": ["atlas"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/go_to_location.py", "nika_onlymap_exporter/core/locator_context.py", "nika_onlymap_exporter/ui/cartograph/go_to_location_dialog.py"],
+     "owner": ["location_search"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/print_settings.py", "nika_onlymap_exporter/exporters/print_*.py", "nika_onlymap_exporter/ui/cartograph/print_settings_dialog.py", "nika_onlymap_exporter/ui/cartograph/series_print_dialog.py"],
+     "owner": ["printing"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/legend_*.py", "nika_onlymap_exporter/core/runtime_legend*.py", "nika_onlymap_exporter/core/raster_legend.py", "nika_onlymap_exporter/ui/cartograph/legend_editor.py"],
+     "owner": ["legend"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/renderer_translator.py", "nika_onlymap_exporter/core/labeling_translator.py", "nika_onlymap_exporter/core/popup_translator.py", "nika_onlymap_exporter/core/elevation_translator.py", "nika_onlymap_exporter/core/symbol_*.py", "nika_onlymap_exporter/core/raster_*.py", "nika_onlymap_exporter/core/render_units.py", "nika_onlymap_exporter/core/layer_reader.py", "nika_onlymap_exporter/core/project_reader.py", "nika_onlymap_exporter/core/expression_tokens.py", "nika_onlymap_exporter/core/label_points.py", "nika_onlymap_exporter/core/declutter.py", "nika_onlymap_exporter/core/zoom_range.py", "nika_onlymap_exporter/core/cvd.py", "nika_onlymap_exporter/core/widget_colors.py", "nika_onlymap_exporter/exporters/frame_raster.py", "nika_onlymap_exporter/packaging/raster_*.py", "nika_onlymap_exporter/packaging/web_mercator_projjson.py"],
+     "owner": ["rendering", "export_pipeline"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/export_ir.py", "nika_onlymap_exporter/core/manifest_builder.py", "nika_onlymap_exporter/core/export_resolution.py", "nika_onlymap_exporter/core/cartograph_export.py", "nika_onlymap_exporter/core/cartograph_import.py", "nika_onlymap_exporter/core/cartograph_ir.py", "nika_onlymap_exporter/core/canvas_cartograph.py", "nika_onlymap_exporter/core/canvas_layout.py", "nika_onlymap_exporter/core/fidelity_*.py", "nika_onlymap_exporter/core/report_facts.py", "nika_onlymap_exporter/core/extent_math.py", "nika_onlymap_exporter/core/frame_layers.py", "nika_onlymap_exporter/core/handoff_prompt.py", "nika_onlymap_exporter/core/license_policy.py", "nika_onlymap_exporter/core/nika_desktop.py", "nika_onlymap_exporter/core/account.py", "nika_onlymap_exporter/writers/*.py", "nika_onlymap_exporter/exporters/*.py", "nika_onlymap_exporter/packaging/artifact_builder.py", "nika_onlymap_exporter/packaging/asset_embedder.py", "nika_onlymap_exporter/packaging/dependency_scanner.py", "nika_onlymap_exporter/ui/cartograph/frames.py", "nika_onlymap_exporter/ui/cartograph/frames_list.py", "nika_onlymap_exporter/ui/cartograph/layer_membership.py", "nika_onlymap_exporter/ui/cartograph/status.py"],
+     "owner": ["export_pipeline", "rendering"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/layout_*.py", "nika_onlymap_exporter/core/template_*.py", "nika_onlymap_exporter/core/page_*.py", "nika_onlymap_exporter/ui/cartograph/layout_*.py", "nika_onlymap_exporter/ui/cartograph/template_*.py", "nika_onlymap_exporter/ui/cartograph/item_*.py", "nika_onlymap_exporter/ui/cartograph/content_edit.py", "nika_onlymap_exporter/licenses/*"],
+     "owner": ["templates", "ui_layout"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/settings.py", "nika_onlymap_exporter/core/portable_names.py", "nika_onlymap_exporter/core/translatable.py"],
+     "owner": ["main_dialog", "ui_layout", "saving", "export_pipeline"], "also": []},
+    {"match": ["nika_onlymap_exporter/ui/cartograph/*.py", "nika_onlymap_exporter/ui/account_button.py", "nika_onlymap_exporter/ui/fidelity_panel.py", "nika_onlymap_exporter/ui/fitted_label.py", "nika_onlymap_exporter/ui/handoff_dialog.py", "nika_onlymap_exporter/ui/links.py", "nika_onlymap_exporter/ui/reveal_file.py", "nika_onlymap_exporter/ui/theme.py", "nika_onlymap_exporter/ui/wheel_guard.py", "nika_onlymap_exporter/icons/*"],
+     "owner": ["ui_layout"], "also": []},
+    {"match": ["nika_onlymap_exporter/ui/main_dialog.py", "nika_onlymap_exporter/ui/live_server.py", "nika_onlymap_exporter/ui/preview.py", "nika_onlymap_exporter/ui/output_switcher.py", "nika_onlymap_exporter/templates/*"],
+     "owner": ["main_dialog", "ui_layout", "saving"], "also": []},
+    {"match": ["nika_onlymap_exporter/ui/i18n.py", "nika_onlymap_exporter/ui/languages.py", "nika_onlymap_exporter/ui/language_picker.py", "nika_onlymap_exporter/i18n/*"],
+     "owner": ["i18n"], "also": []},
+    {"match": ["nika_onlymap_exporter/runtime/*"],
+     "owner": ["rendering", "export_pipeline", "plugin"], "also": []},
+    {"match": ["nika_onlymap_exporter/__init__.py", "nika_onlymap_exporter/plugin.py", "nika_onlymap_exporter/metadata.txt", "nika_onlymap_exporter/processing/*", "nika_onlymap_exporter/packaging/runtime_manager.py", "nika_onlymap_exporter/packaging/__init__.py", "nika_onlymap_exporter/ui/runtime_setup.py", "nika_onlymap_exporter/ui/__init__.py", "nika_onlymap_exporter/core/__init__.py", "nika_onlymap_exporter/exporters/__init__.py", "nika_onlymap_exporter/writers/__init__.py", "nika_onlymap_exporter/fonts/*", "scripts/zip_smoke.py", "scripts/package_plugin.py", "scripts/verify_package.py", "scripts/fetch_runtime.py", "scripts/lock_runtime.py", "scripts/check_runtime_updates.py"],
+     "owner": ["plugin"], "also": []},
+    {"match": ["tests/hermetic.py", "tests/conftest.py", "tests/qgis/conftest.py", "tests/fixtures/conftest.py", "tests/browser/conftest.py", "tests/q2w_report.py", "tests/atlas_filter_eval.py"],
+     "owner": ["test_support"], "also": []},
+    {"match": ["scripts/run_tests.py", "scripts/test_selection.py", "tests/test_groups.json", "tests/durations.json", "scripts/update_translations.py", "scripts/announce_release.py", "scripts/ping_indexnow.py", "scripts/configure_site.py", "scripts/annotate_screenshot.py", "scripts/visual_diff_runtimes.py", "docs/*", "*.md", "LICENSE", ".github/*", ".gitignore", "pyproject.toml", "tests/unit/*", "tests/fixtures/*.md", "tests/fixtures/*.json"],
+     "owner": [], "also": []}
+  ],
+  "compat344": [
+    {"target": "tests/qgis/test_plugin_cartograph_entry.py", "groups": ["plugin", "ui_layout", "templates"], "covers": "plugin loading and UI construction"},
+    {"target": "tests/qgis/test_plugin_shortcut.py", "groups": ["plugin"], "covers": "plugin loading"},
+    {"target": "tests/qgis/test_runtime_setup.py", "groups": ["plugin"], "covers": "plugin loading (runtime setup dialog)"},
+    {"target": "tests/qgis/test_dialog.py::TestDialogConstruction", "groups": ["main_dialog", "ui_layout"], "covers": "representative UI construction"},
+    {"target": "tests/qgis/test_cartograph_dialog.py::TestOutputSwitch", "groups": ["ui_layout", "main_dialog"], "covers": "representative UI construction"},
+    {"target": "tests/qgis/test_template_picker.py", "groups": ["templates"], "covers": "representative UI construction"},
+    {"target": "tests/qgis/test_handoff_dialog.py", "groups": ["ui_layout"], "covers": "Qt5 dialogs"},
+    {"target": "tests/qgis/test_fidelity_panel.py", "groups": ["export_pipeline", "ui_layout"], "covers": "Qt5 controls"},
+    {"target": "tests/qgis/test_accessibility_dialog.py", "groups": ["ui_layout"], "covers": "Qt5 dialogs"},
+    {"target": "tests/qgis/test_wheel_guard.py", "groups": ["ui_layout"], "covers": "Qt5 controls and signals"},
+    {"target": "tests/qgis/test_theme_focus_rtl.py", "groups": ["ui_layout"], "covers": "Qt5 controls (focus, RTL)"},
+    {"target": "tests/qgis/test_keyboard_and_overflow.py", "groups": ["ui_layout"], "covers": "Qt5 controls and signals"},
+    {"target": "tests/qgis/test_print_settings_dialog.py", "groups": ["printing", "ui_layout"], "covers": "Qt5 dialogs"},
+    {"target": "tests/qgis/test_cartograph_destination.py", "groups": ["saving", "recovery"], "covers": "Save As, destination ownership, overwrite cancellation"},
+    {"target": "tests/qgis/test_cartograph_dialog.py::TestWhereItSaves", "groups": ["saving"], "covers": "destination ownership"},
+    {"target": "tests/qgis/test_cartograph_dialog.py::TestAutosave", "groups": ["saving", "recovery"], "covers": "pending saves"},
+    {"target": "tests/qgis/test_cartograph_dialog.py::TestSavesFollowTheProject", "groups": ["saving", "layout_session"], "covers": "layout switching / saves"},
+    {"target": "tests/qgis/test_cartograph_dialog.py::TestBuildThreadsAndJobs", "groups": ["recovery", "layout_session"], "covers": "export recovery and worker lifetime"},
+    {"target": "tests/qgis/test_cartograph_save_pdf.py", "groups": ["saving", "printing"], "covers": "Save As (PDF) and printing"},
+    {"target": "tests/qgis/test_switch_layout_saves.py", "groups": ["saving", "layout_session", "recovery"], "covers": "layout switching, pending saves, failed-write recovery"},
+    {"target": "tests/qgis/test_watch_other_layouts.py", "groups": ["saving", "layout_session"], "covers": "pending saves of other layouts"},
+    {"target": "tests/qgis/test_close_lifecycle.py", "groups": ["layout_session", "recovery"], "covers": "closing"},
+    {"target": "tests/qgis/test_close_worker_lifetime.py", "groups": ["layout_session", "recovery"], "covers": "worker lifetime"},
+    {"target": "tests/qgis/test_project_clear_under_dialog.py", "groups": ["layout_session", "recovery"], "covers": "project clearing"},
+    {"target": "tests/qgis/test_cartograph_export.py::TestExportLayoutToCartograph", "groups": ["export_pipeline", "rendering"], "covers": "representative vector export"},
+    {"target": "tests/qgis/test_cartograph_export.py::TestPagePolish", "groups": ["export_pipeline", "templates"], "covers": "representative export"},
+    {"target": "tests/qgis/test_cartograph_rasters.py", "groups": ["rendering"], "covers": "representative raster export"},
+    {"target": "tests/qgis/test_dialog.py::TestRasterExports", "groups": ["rendering", "main_dialog"], "covers": "representative raster export"},
+    {"target": "tests/qgis/test_renderer_translator.py", "groups": ["rendering"], "covers": "representative vector export"},
+    {"target": "tests/qgis/test_labeling_translator.py", "groups": ["rendering"], "covers": "representative vector export"},
+    {"target": "tests/qgis/test_attribute_representation.py::TestValueRelationMatchesQgis", "groups": ["rendering"], "covers": "known cross-version regression: Value Relation ordering"},
+    {"target": "tests/qgis/test_cartograph_atlas.py", "groups": ["atlas"], "covers": "atlas"},
+    {"target": "tests/qgis/test_atlas_filter_and_clearing.py", "groups": ["atlas"], "covers": "atlas"},
+    {"target": "tests/qgis/test_print_export.py", "groups": ["printing"], "covers": "printing"},
+    {"target": "tests/qgis/test_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
+    {"target": "tests/qgis/test_cartograph_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
+    {"target": "tests/fixtures", "groups": ["export_pipeline", "rendering", "plugin", "templates"], "covers": "release gates on real fixture projects"}
+  ]
+}

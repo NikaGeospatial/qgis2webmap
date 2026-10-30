@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import itertools
+import os
 
 import pytest
 
@@ -74,7 +75,7 @@ def _build_memory_layer(
 
 
 @pytest.fixture(autouse=True)
-def isolated_settings(tmp_path_factory):
+def isolated_settings(tmp_path_factory, inside_worker):
     """Point `QSettings` at a scratch directory for the whole tier.
 
     The dialog stores the live-preview preference in `QSettings`, which is
@@ -97,6 +98,10 @@ def isolated_settings(tmp_path_factory):
     # itself as soon as the dialog shows one: without this, tests would write
     # into the developer's real Documents folder.
     isolate_settings(tmp_path_factory.mktemp("qsettings"))
+    # Under scripts/run_tests.py each worker has its own directory; a settings
+    # file or save root outside it would be shared with another worker.
+    inside_worker(QSettings().fileName(), "the QSettings file")
+    inside_worker(os.environ.get("QGIS2WEBMAP_SAVE_ROOT", ""), "the default save root")
     yield
     QSettings.setDefaultFormat(previous_format)
 

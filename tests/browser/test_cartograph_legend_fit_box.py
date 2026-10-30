@@ -47,6 +47,12 @@ _MEASURE = """
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    prebuilt = os.environ.get("LEGEND_FIT_FIXTURES_DIR")
+    if prebuilt:
+        directory = Path(prebuilt)
+        if not (directory / "qgis.json").exists():
+            pytest.fail(f"LEGEND_FIT_FIXTURES_DIR has no qgis.json: {directory}")
+        return directory
     qgis_python = os.environ.get("QGIS_PYTHON")
     if not qgis_python:
         pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixture")
