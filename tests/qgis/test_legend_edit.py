@@ -12,6 +12,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -583,10 +584,15 @@ class TestPersistence:
         assert "Named summits" in html  # drawn by the map frame, if not legended
 
 
-GRAND_CANYON = Path("/home/abhijay/Nika/demo-maps/carto-grand-canyon")
+# The demo projects are not in the repository: point Q2W_DEMO_MAPS at the folder
+# that holds them (see CONTRIBUTING); the class is skipped without it.
+GRAND_CANYON = Path(os.environ.get("Q2W_DEMO_MAPS", "")) / "carto-grand-canyon"
 
 
-@pytest.mark.skipif(not GRAND_CANYON.exists(), reason="the demo project is not here")
+@pytest.mark.skipif(
+    not os.environ.get("Q2W_DEMO_MAPS") or not GRAND_CANYON.exists(),
+    reason="set Q2W_DEMO_MAPS to the demo-maps folder to run the Grand Canyon case",
+)
 class TestGrandCanyon:
     def test_a_new_template_legend_leaves_the_hillshade_out_restorably(
         self, qgis_app, project, tmp_path

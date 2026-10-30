@@ -33,9 +33,9 @@ from nika_onlymap_exporter.exporters.frame_raster import (  # noqa: E402
     render_static_frame,
 )
 
-OUT_DIR = Path(
-    os.environ.get("W111_OUT", str(Path.home() / ".cache/q2w-review/out-w111"))
-)
+#: Where the diagnostic pictures go: `Q2W_TEST_OUT_DIR` if set, otherwise the
+#: test's own temporary folder (set per test by `_picture_folder`).
+OUT_DIR: Path | None = None
 
 DPI = 100
 WAIT_S = 60.0
@@ -325,7 +325,18 @@ def _draw_async(qgis_app, layout, item):
     return drawing.take_image().convertToFormat(QImage.Format.Format_ARGB32)
 
 
+@pytest.fixture(autouse=True)
+def _picture_folder(tmp_path):
+    global OUT_DIR
+    chosen = os.environ.get("Q2W_TEST_OUT_DIR")
+    OUT_DIR = Path(chosen) if chosen else tmp_path / "pictures"
+    yield
+    OUT_DIR = None
+
+
 def _save(image, name: str) -> None:
+    if OUT_DIR is None:
+        return
     try:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         image.save(str(OUT_DIR / f"{name}.png"))

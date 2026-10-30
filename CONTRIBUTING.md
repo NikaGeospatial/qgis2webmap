@@ -194,6 +194,8 @@ stage `SKIPPED`, which the verdict reports as INCOMPLETE):
 | `Q2W_BROWSER_PYTHON`, `PLAYWRIGHT_BROWSERS_PATH` | Python with pytest-playwright, and its browsers |
 | `Q2W_DOCKER_IMAGE` | image with QGIS 3.44 and pytest (default `q2w-qgis344:local`) |
 | `Q2W_SLOT_CMD` | wrapper that takes a machine-wide slot before a heavy worker starts |
+| `Q2W_DEMO_MAPS` | folder holding the demo projects (`carto-grand-canyon`, `volcanoes`); the tests that use them are skipped without it |
+| `Q2W_TEST_OUT_DIR` | keep the native-units test's diagnostic pictures here (default: the test's temporary folder) |
 | `Q2W_TEST_HOME` | state directory (default `~/.cache/q2w-tests`) |
 
 ## Running the tests that need the OnlyMap runtime

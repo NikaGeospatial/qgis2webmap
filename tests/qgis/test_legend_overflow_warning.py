@@ -9,6 +9,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -18,7 +19,9 @@ from test_cartograph_panel_widgets import pane as pane
 
 qgis_core = pytest.importorskip("qgis.core")
 
-DEMOS = Path("/home/abhijay/Nika/demo-maps")
+# The demo projects are not in the repository: point Q2W_DEMO_MAPS at the folder
+# that holds them (see CONTRIBUTING); the module is skipped without it.
+DEMOS = Path(os.environ.get("Q2W_DEMO_MAPS", ""))
 CASES = [
     # project folder, project file, template, orientation
     ("carto-grand-canyon", "carto-grand-canyon-dense.qgz", "dashboard", "landscape"),
@@ -26,7 +29,10 @@ CASES = [
     ("volcanoes", "volcanoes.qgz", "locator", "portrait"),
 ]
 
-pytestmark = pytest.mark.skipif(not DEMOS.exists(), reason="demo projects not here")
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("Q2W_DEMO_MAPS") or not DEMOS.exists(),
+    reason="set Q2W_DEMO_MAPS to the demo-maps folder to run these cases",
+)
 
 
 def _build(project, tmp_path, folder, name, template, orientation):
