@@ -147,7 +147,19 @@ jobs:
           if-no-files-found: error
       # `-rs` keeps any remaining skip visible. A skip here is a gate that did
       # not run, which must not read as a pass.
-      - run: python3 -m pytest tests/qgis tests/fixtures -q -rs --durations=25
+      #
+      # The seven unit modules listed here import Qt through the plugin, so the
+      # plain-Python `guards` job skips them (importorskip); they run here, where
+      # QGIS exists, so no coverage is lost.
+      - run: python3 -m pytest tests/qgis tests/fixtures
+             tests/unit/test_cartograph_dialog_pure.py
+             tests/unit/test_folder_export_transaction.py
+             tests/unit/test_packaging.py
+             tests/unit/test_preview_cleanup.py
+             tests/unit/test_preview_hook.py
+             tests/unit/test_raster_staging.py
+             tests/unit/test_terrain_zoom_clamp.py
+             -q -rs --durations=25
              --junitxml=reports/qgis.xml -o junit_duration_report=total
       - uses: actions/upload-artifact@v4
         if: always()

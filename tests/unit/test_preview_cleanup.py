@@ -14,6 +14,14 @@ from __future__ import annotations
 import os
 import time
 
+import pytest
+
+pytest.importorskip(
+    "qgis.PyQt",
+    reason="the plugin's export and preview modules import Qt through ui.i18n; "
+    "this file runs in the QGIS CI job (and any QGIS Python)",
+)
+
 from nika_onlymap_exporter.ui.preview import (
     preview_directory,
     prune_stale_previews,
