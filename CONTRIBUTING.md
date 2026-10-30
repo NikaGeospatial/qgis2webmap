@@ -129,6 +129,73 @@ still gets a green local run rather than a wall of import errors.
 > `discover_runtime_dir` in `packaging/runtime_manager.py` for the intended
 > shape (env override, then paths relative to the package).
 
+## Test profiles: `scripts/run_tests.py`
+
+One runner, three profiles. Each tests an immutable snapshot (`git archive` of one
+commit, made read-only), records the commit and the packaged ZIP's sha256, and
+prints a verdict that separates "ZIP built and verified" (the package has the
+right shape) from "release checks passed" (every required stage passed, none
+skipped or interrupted).
+
+```bash
+python3 scripts/run_tests.py patch                 # what changed since the upstream merge-base
+python3 scripts/run_tests.py patch --worktree      # include uncommitted edits (not approvable)
+python3 scripts/run_tests.py patch --dry-run       # print the selection and the reason for each test
+python3 scripts/run_tests.py release               # before tagging
+python3 scripts/run_tests.py full                  # both QGIS versions in full
+python3 scripts/run_tests.py release --serial      # one process, one worker: for diagnosing
+python3 scripts/run_tests.py stop                  # ends the running run's own workers only
+```
+
+- **patch** selects by component group (`tests/test_groups.json`: saving, recovery,
+  layout session, atlas, location search, printing, rendering, templates, legend,
+  UI layout, ...). A group lists its regression tests and the integration checks it
+  requires; a save/close path also pulls in the shared data-loss regression list.
+  For `controller.py` the changed *function* decides (a save path is not a colour
+  vision change). Changed test files always run, a changed helper runs its
+  importers, a changed conftest/hermetic runs the whole tier, and **a path with no
+  rule runs the whole primary suite** (`--full-suite` forces that). The unit tier
+  always runs. The matching QGIS 3.44 compatibility entries run in a container.
+  After adding a test file or a plugin file, run `python3 scripts/run_tests.py
+  groups-check` (also a unit test): it fails if a test is in no group or a source
+  file has no rule.
+- **release**: the whole QGIS 4.2 suite once (unit, qgis, fixtures, in two balanced
+  process shards), the *focused* QGIS 3.44 suite (`compat344` in the groups file:
+  plugin loading and UI construction, Qt5 controls/signals/dialogs, Save As and
+  destination ownership, layout switching/closing/project clear/worker lifetime,
+  representative vector and raster export, atlas, printing, Value Relation
+  ordering), the whole browser tier, translations, ruff, package + verify, and the
+  packaged-ZIP smoke on 4.2 and 3.44. Passing on 4.2 says nothing about 3.44.
+- **full**: as release, but the whole suite also runs on 3.44 (it contains the
+  focused list, which is therefore not run again).
+
+Sharding is by recorded per-file time (`tests/durations.json`, refreshed with
+`run_tests.py update-durations RUN_DIR` from a run's `observed-durations.json`).
+Every worker gets its own HOME, XDG dirs, TMPDIR, pytest basetemp, QGIS profile,
+QSettings and save root under `<state>/runs/<id>/workers/<name>/` (`Q2W_WORKER*`
+variables; `tests/conftest.py` fails a worker that escaped its directory and writes
+`isolation.json`). The preview server binds port 0, so no port is shared. At most
+two heavy workers run at once (`--max-workers`), and a worker starts only when
+`MemAvailable` covers its measured size; the summary reports slot/memory wait
+separately from execution time. Browser fixtures are built once per candidate,
+keyed by (plugin tree hash, fixture-builder hash, pinned runtime hash, QGIS
+version) in `<state>/fixtures/`, and only a builder that exited 0 and wrote its
+proof file is ever reused. If the machine is suspended mid-run the runner says so
+instead of calling the pause a hang.
+
+Environment (all optional except where a stage needs it; a missing one makes that
+stage `SKIPPED`, which the verdict reports as INCOMPLETE):
+
+| Variable | Meaning |
+|---|---|
+| `Q2W_QGIS42_PYTHON` | Python with PyQGIS 4.x (default: the interpreter running the script) |
+| `Q2W_QGIS42_ENV_SH` | shell script sourced to set up that Python's environment (`PYBIN`, `PYTHONPATH`; sourced with the snapshot as `$PWD`) |
+| `ONLYMAP_RUNTIME_DIR` | the pinned OnlyMap runtime (required for release/full) |
+| `Q2W_BROWSER_PYTHON`, `PLAYWRIGHT_BROWSERS_PATH` | Python with pytest-playwright, and its browsers |
+| `Q2W_DOCKER_IMAGE` | image with QGIS 3.44 and pytest (default `q2w-qgis344:local`) |
+| `Q2W_SLOT_CMD` | wrapper that takes a machine-wide slot before a heavy worker starts |
+| `Q2W_TEST_HOME` | state directory (default `~/.cache/q2w-tests`) |
+
 ## Running the tests that need the OnlyMap runtime
 
 The runtime is not vendored yet (see [`docs/architecture.md`](docs/architecture.md)).
