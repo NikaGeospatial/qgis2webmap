@@ -22,6 +22,7 @@ from close_lifecycle_fixtures import (
     LabelExport,
     add_survey_layout,
     edit_label,
+    make_folder_unwritable,
     open_saved_cartograph,
 )
 
@@ -83,7 +84,6 @@ def saved(qgis_app, project, export, tmp_path):
     )
     assert "Old" in target.read_text(encoding="utf-8")
     yield dialog, cartograph, layout, label, target
-    target.parent.chmod(0o700)  # a test may leave its folder unwritable
     dialog.close()
 
 
@@ -211,21 +211,21 @@ class TestCloseFinishesThePendingSave:
 
 
 class TestCloseWhenTheSaveFails:
-    @staticmethod
-    def _break_destination(target: Path) -> None:
+    def _break_destination(self, monkeypatch, target: Path) -> None:
         """A folder nothing can be written to. (A folder where the file
-        belongs is no longer a failure: the cartograph saves beside it.)"""
-        target.parent.chmod(0o500)
+        belongs is no longer a failure: the cartograph saves beside it. A
+        read-only folder is no failure for root, as in the QGIS CI container,
+        so the write is made to fail instead.)"""
+        self._repair = make_folder_unwritable(monkeypatch, target.parent)
 
-    @staticmethod
-    def _repair_destination(target: Path) -> None:
-        target.parent.chmod(0o700)
+    def _repair_destination(self, target: Path) -> None:
+        self._repair()
 
     def test_it_explains_and_a_retry_after_the_fix_closes_with_the_edit(
-        self, qgis_app, saved
+        self, qgis_app, saved, monkeypatch
     ) -> None:
         dialog, cartograph, layout, label, target = saved
-        self._break_destination(target)
+        self._break_destination(monkeypatch, target)
         edit_label(layout, label, "New")
         _click_close(dialog)
         assert _wait_for(qgis_app, lambda: _failure_box() is not None)
@@ -241,10 +241,10 @@ class TestCloseWhenTheSaveFails:
         assert "New" in target.read_text(encoding="utf-8")
 
     def test_the_status_never_says_saved_while_the_file_is_behind(
-        self, qgis_app, saved
+        self, qgis_app, saved, monkeypatch
     ) -> None:
         dialog, cartograph, layout, label, target = saved
-        self._break_destination(target)
+        self._break_destination(monkeypatch, target)
         seen: list[str] = []
         edit_label(layout, label, "New")
         _click_close(dialog)
@@ -257,10 +257,10 @@ class TestCloseWhenTheSaveFails:
         assert _answer(qgis_app, "Cancel closing")
 
     def test_cancelling_the_close_leaves_the_window_usable(
-        self, qgis_app, saved
+        self, qgis_app, saved, monkeypatch
     ) -> None:
         dialog, cartograph, layout, label, target = saved
-        self._break_destination(target)
+        self._break_destination(monkeypatch, target)
         edit_label(layout, label, "New")
         _click_close(dialog)
         assert _answer(qgis_app, "Cancel closing")
@@ -277,11 +277,11 @@ class TestCloseWhenTheSaveFails:
         assert _wait_for(qgis_app, lambda: not dialog.isVisible())
 
     def test_close_without_saving_closes_and_leaves_the_file_as_it_was(
-        self, qgis_app, saved
+        self, qgis_app, saved, monkeypatch
     ) -> None:
         dialog, _cartograph, layout, label, target = saved
         edit_label(layout, label, "New")
-        self._break_destination(target)
+        self._break_destination(monkeypatch, target)
         _click_close(dialog)
         assert _answer(qgis_app, "Close without saving")
         assert _wait_for(qgis_app, lambda: not dialog.isVisible())

@@ -20,6 +20,7 @@ from close_lifecycle_fixtures import (
     LabelExport,
     add_survey_layout,
     edit_label,
+    make_folder_unwritable,
 )
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -174,22 +175,23 @@ def test_the_closing_window_says_it_is_saving_for_the_other_layout(
     assert "EditedA" in _text(file_a)
 
 
-def test_a_failed_write_for_a_is_reported_and_a_retry_saves_it(qgis_app, two) -> None:
+def test_a_failed_write_for_a_is_reported_and_a_retry_saves_it(
+    qgis_app, two, monkeypatch
+) -> None:
     dialog, cartograph, (layout_a, label_a, file_a), (layout_b, _lb, file_b) = two
     _show(qgis_app, cartograph, layout_a)
     assert _wait_for(qgis_app, lambda: _settled(cartograph))
-    # Nothing can be written into a read-only folder. (A folder at A's path
-    # would not do: a destination that is not A's own file is not replaced,
-    # the cartograph is saved beside it instead.)
-    file_a.parent.chmod(0o500)
-    try:
-        edit_label(layout_a, label_a, "EditedA")
-        _show(qgis_app, cartograph, layout_b)
-        _click_close(dialog)
-        assert _wait_for(qgis_app, lambda: _failure_box() is not None)
-        assert dialog.isVisible()
-    finally:
-        file_a.parent.chmod(0o700)
+    # Nothing can be written into A's folder. (A folder at A's path would not
+    # do: a destination that is not A's own file is not replaced, the
+    # cartograph is saved beside it instead. A read-only folder would not do
+    # either: root, as in the QGIS CI container, writes into it anyway.)
+    repair = make_folder_unwritable(monkeypatch, file_a.parent)
+    edit_label(layout_a, label_a, "EditedA")
+    _show(qgis_app, cartograph, layout_b)
+    _click_close(dialog)
+    assert _wait_for(qgis_app, lambda: _failure_box() is not None)
+    assert dialog.isVisible()
+    repair()
     assert _answer(qgis_app, "Try again")
     assert _wait_for(qgis_app, lambda: not dialog.isVisible())
     assert "EditedA" in _text(file_a)
@@ -197,21 +199,19 @@ def test_a_failed_write_for_a_is_reported_and_a_retry_saves_it(qgis_app, two) ->
 
 
 def test_cancelling_after_a_failure_for_a_keeps_the_window_usable(
-    qgis_app, two
+    qgis_app, two, monkeypatch
 ) -> None:
     dialog, cartograph, (layout_a, label_a, file_a), (layout_b, _lb, _fb) = two
     _show(qgis_app, cartograph, layout_a)
     assert _wait_for(qgis_app, lambda: _settled(cartograph))
-    file_a.parent.chmod(0o500)  # nothing can be written into it
-    try:
-        edit_label(layout_a, label_a, "EditedA")
-        _show(qgis_app, cartograph, layout_b)
-        _click_close(dialog)
-        assert _answer(qgis_app, "Cancel closing")
-        qgis_app.processEvents()
-        assert dialog.isVisible() and dialog.close_button.isEnabled()
-    finally:
-        file_a.parent.chmod(0o700)
+    repair = make_folder_unwritable(monkeypatch, file_a.parent)
+    edit_label(layout_a, label_a, "EditedA")
+    _show(qgis_app, cartograph, layout_b)
+    _click_close(dialog)
+    assert _answer(qgis_app, "Cancel closing")
+    qgis_app.processEvents()
+    assert dialog.isVisible() and dialog.close_button.isEnabled()
+    repair()
     _click_close(dialog)
     assert _wait_for(qgis_app, lambda: not dialog.isVisible())
     assert "EditedA" in _text(file_a)

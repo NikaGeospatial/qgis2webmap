@@ -20,6 +20,7 @@ from close_lifecycle_fixtures import (
     LabelExport,
     add_survey_layout,
     edit_label,
+    make_folder_unwritable,
 )
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -157,16 +158,16 @@ def test_edits_to_two_layouts_then_close_saves_both(qgis_app, two) -> None:
     assert "DesignerB" in _text(file_b)
 
 
-def test_a_failed_background_save_of_a_is_reported_at_close(qgis_app, two) -> None:
+def test_a_failed_background_save_of_a_is_reported_at_close(
+    qgis_app, two, monkeypatch
+) -> None:
     dialog, _, (layout_a, label_a, file_a), _b = two
-    file_a.parent.chmod(0o500)
-    try:
-        edit_label(layout_a, label_a, "DesignerA")
-        _click_close(dialog)
-        assert _wait_for(qgis_app, lambda: _failure_box() is not None)
-        assert dialog.isVisible()
-    finally:
-        file_a.parent.chmod(0o700)
+    repair = make_folder_unwritable(monkeypatch, file_a.parent)
+    edit_label(layout_a, label_a, "DesignerA")
+    _click_close(dialog)
+    assert _wait_for(qgis_app, lambda: _failure_box() is not None)
+    assert dialog.isVisible()
+    repair()
     assert _answer(qgis_app, "Try again")
     assert _wait_for(qgis_app, lambda: not dialog.isVisible())
     assert "DesignerA" in _text(file_a)

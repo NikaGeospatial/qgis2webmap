@@ -15,6 +15,7 @@ import threading
 import time
 import types
 from pathlib import Path
+from typing import Callable
 
 
 class FakeIface:
@@ -181,3 +182,31 @@ def open_saved_cartograph(qgis_app, project, target: Path, wait_for, text="Old")
         ),
     )
     return dialog, cartograph, layout, label
+
+
+def make_folder_unwritable(monkeypatch, folder: Path) -> Callable[[], None]:
+    """Make every cartograph save into `folder` fail with PermissionError, until
+    the returned `repair()` is called; after that saves really write again.
+
+    This replaces `folder.chmod(0o500)`, which a root user (the QGIS CI
+    container) walks straight through, so the failure never happened. The
+    failure is injected at the controller's single file-write step, after the
+    destination ownership check, so everything the user sees - the failure
+    box, the status text, the retry - is the real code running.
+    """
+    from nika_onlymap_exporter.ui.cartograph.controller import CartographController
+
+    real_write = CartographController._write_atomic
+    state = {"broken": True}
+
+    def write(path: Path, content: str) -> None:
+        if state["broken"] and Path(path).parent == folder:
+            raise PermissionError(13, "Permission denied (injected)", str(path))
+        real_write(path, content)
+
+    monkeypatch.setattr(CartographController, "_write_atomic", staticmethod(write))
+
+    def repair() -> None:
+        state["broken"] = False
+
+    return repair
