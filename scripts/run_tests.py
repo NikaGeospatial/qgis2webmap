@@ -444,8 +444,10 @@ class Scheduler:
             for line in process.stdout:
                 log.write(line)
                 log.flush()
-                if line.startswith("Q2W|"):
-                    self.events.put((stage.name, line.rstrip("\n")))
+                # pytest's dots share the line when a report line arrives mid-row.
+                at = line.find("Q2W|")
+                if at >= 0:
+                    self.events.put((stage.name, line[at:].rstrip("\n")))
         self.events.put((stage.name, "EOF"))
 
     def terminate(self, stage: Stage, reason: str) -> None:
