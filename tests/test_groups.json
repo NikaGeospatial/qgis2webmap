@@ -186,7 +186,9 @@
       ],
       "browser": [
         "tests/browser/test_exported_map.py",
-        "tests/browser/test_cartograph_acceptance.py"
+        "tests/browser/test_cartograph_acceptance.py",
+        "tests/browser/test_cartograph_static.py",
+        "tests/browser/test_cartograph_text.py"
       ]
     },
     "templates": {
