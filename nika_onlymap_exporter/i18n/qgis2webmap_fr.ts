@@ -36,15 +36,14 @@
       <source>The Live counts were updated for {done} of {total} pages.</source>
       <translation>Les compteurs en direct ont été mis à jour pour {done} pages sur {total}.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/atlas_series.py" line="145" />
-      <source>{n} feature</source>
-      <translation>{n} entité</translation>
-    </message>
-    <message>
-      <location filename="../core/atlas_series.py" line="145" />
-      <source>{n} features</source>
-      <translation>{n} entités</translation>
+      <source>%n feature</source>
+      <extracomment>English plural: %n features</extracomment>
+      <translation>
+        <numerusform>%n entité</numerusform>
+        <numerusform>%n entités</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/atlas_series.py" line="265" />
@@ -66,35 +65,32 @@
       <source>This layer has no features, so there are no pages.</source>
       <translation>Cette couche n'a aucune entité, donc il n'y a aucune page.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/atlas_series.py" line="140" />
-      <source>{n} area</source>
-      <translation>{n} zone</translation>
+      <source>%n area</source>
+      <extracomment>English plural: %n areas</extracomment>
+      <translation>
+        <numerusform>%n zone</numerusform>
+        <numerusform>%n zones</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../core/atlas_series.py" line="140" />
-      <source>{n} areas</source>
-      <translation>{n} zones</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/atlas_series.py" line="142" />
-      <source>{n} location</source>
-      <translation>{n} emplacement</translation>
+      <source>%n location</source>
+      <extracomment>English plural: %n locations</extracomment>
+      <translation>
+        <numerusform>%n emplacement</numerusform>
+        <numerusform>%n emplacements</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../core/atlas_series.py" line="142" />
-      <source>{n} locations</source>
-      <translation>{n} emplacements</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/atlas_series.py" line="144" />
-      <source>{n} line</source>
-      <translation>{n} ligne</translation>
-    </message>
-    <message>
-      <location filename="../core/atlas_series.py" line="144" />
-      <source>{n} lines</source>
-      <translation>{n} lignes</translation>
+      <source>%n line</source>
+      <extracomment>English plural: %n lines</extracomment>
+      <translation>
+        <numerusform>%n ligne</numerusform>
+        <numerusform>%n lignes</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/atlas_series.py" line="217" />
@@ -155,15 +151,14 @@
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>La page contient {size} de données vectorielles, ce qui peut laisser la carte vide longtemps à l'ouverture, surtout sur un ordinateur sans carte graphique. Les plus lourdes : {layers}. Simplifiez la géométrie de ces couches, ou réglez le cadre sur Image dans Cadres de carte.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="557" />
-      <source>{n} thing changes</source>
-      <translation>{n} élément change</translation>
-    </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="557" />
-      <source>{n} things change</source>
-      <translation>{n} éléments changent</translation>
+      <source>%n thing changes</source>
+      <extracomment>English plural: %n things change</extracomment>
+      <translation>
+        <numerusform>%n élément change</numerusform>
+        <numerusform>%n éléments changent</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="632" />
@@ -176,35 +171,32 @@
       <source>Nothing to report.</source>
       <translation>Rien à signaler.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="437" />
-      <source>{n} layer and the whole map need attention</source>
-      <translation>{n} couche et toute la carte demandent votre attention</translation>
+      <source>%n layer and the whole map need attention</source>
+      <extracomment>English plural: %n layers and the whole map need attention</extracomment>
+      <translation>
+        <numerusform>%n couche et toute la carte demandent votre attention</numerusform>
+        <numerusform>%n couches et toute la carte demandent votre attention</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="437" />
-      <source>{n} layers and the whole map need attention</source>
-      <translation>{n} couches et toute la carte demandent votre attention</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="443" />
-      <source>{n} layer needs attention</source>
-      <translation>{n} couche demande votre attention</translation>
+      <source>%n layer needs attention</source>
+      <extracomment>English plural: %n layers need attention</extracomment>
+      <translation>
+        <numerusform>%n couche demande votre attention</numerusform>
+        <numerusform>%n couches demandent votre attention</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="443" />
-      <source>{n} layers need attention</source>
-      <translation>{n} couches demandent votre attention</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="447" />
-      <source>{n} needs attention</source>
-      <translation>{n} demande votre attention</translation>
-    </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="447" />
-      <source>{n} need attention</source>
-      <translation>{n} demandent votre attention</translation>
+      <source>%n needs attention</source>
+      <extracomment>English plural: %n need attention</extracomment>
+      <translation>
+        <numerusform>%n demande votre attention</numerusform>
+        <numerusform>%n demandent votre attention</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="449" />
@@ -213,7 +205,7 @@
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="603" />
-      <location filename="../ui/cartograph/controller.py" line="1174" />
+      <location filename="../ui/cartograph/controller.py" line="1172" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
       <source>Not checked yet.</source>
@@ -253,15 +245,14 @@
       <source>Review problems</source>
       <translation>Examiner les problèmes</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="369" />
-      <source>{n} layer</source>
-      <translation>{n} couche</translation>
-    </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="369" />
-      <source>{n} layers</source>
-      <translation>{n} couches</translation>
+      <source>%n layer</source>
+      <extracomment>English plural: %n layers</extracomment>
+      <translation>
+        <numerusform>%n couche</numerusform>
+        <numerusform>%n couches</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="369" />
@@ -273,15 +264,14 @@
       <source>everything is kept exactly</source>
       <translation>tout est conservé à l'identique</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="406" />
-      <source>{n} thing cannot be exported</source>
-      <translation>{n} élément ne peut pas être exporté</translation>
-    </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="406" />
-      <source>{n} things cannot be exported</source>
-      <translation>{n} éléments ne peuvent pas être exportés</translation>
+      <source>%n thing cannot be exported</source>
+      <extracomment>English plural: %n things cannot be exported</extracomment>
+      <translation>
+        <numerusform>%n élément ne peut pas être exporté</numerusform>
+        <numerusform>%n éléments ne peuvent pas être exportés</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="428" />
@@ -293,15 +283,14 @@
       <source>The check failed.</source>
       <translation>La vérification a échoué.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../core/fidelity_summary.py" line="414" />
-      <source>{n} layer cannot be exported</source>
-      <translation>{n} couche ne peut pas être exportée</translation>
-    </message>
-    <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
-      <source>{n} layers cannot be exported</source>
-      <translation>{n} couches ne peuvent pas être exportées</translation>
+      <source>%n layer cannot be exported</source>
+      <extracomment>English plural: %n layers cannot be exported</extracomment>
+      <translation>
+        <numerusform>%n couche ne peut pas être exportée</numerusform>
+        <numerusform>%n couches ne peuvent pas être exportées</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../core/fidelity_summary.py" line="608" />
@@ -818,7 +807,7 @@
       <translation>La mise en page n'a aucune page.</translation>
     </message>
     <message>
-      <location filename="../exporters/print_pdf.py" line="507" />
+      <location filename="../exporters/print_pdf.py" line="511" />
       <source>The PDF uses CMYK colours but is not PDF/X-4: there is no output profile. Choose Printer ICC profile..., or set a CMYK profile in Project Properties &gt; Styles.</source>
       <translation>Le PDF utilise des couleurs CMYK mais n'est pas au format PDF/X-4 : il n'y a pas de profil de sortie. Choisissez Profil ICC de l'imprimeur..., ou définissez un profil CMYK dans Propriétés du projet &gt; Styles.</translation>
     </message>
@@ -833,7 +822,7 @@
       <translation>Les couches transparentes ou fusionnées sont rastérisées dans le PDF, à {dpi} dpi ; le reste reste vectoriel.</translation>
     </message>
     <message>
-      <location filename="../exporters/print_pdf.py" line="445" />
+      <location filename="../exporters/print_pdf.py" line="449" />
       <source>{path} is not an ICC profile QGIS can use. Ask the print shop for an RGB or CMYK output profile (.icc).</source>
       <translation>{path} n'est pas un profil ICC que QGIS peut utiliser. Demandez à l'imprimeur un profil de sortie RVB ou CMYK (.icc).</translation>
     </message>
@@ -849,7 +838,7 @@
       <translation>QGIS n'a pas pu écrire {path} : {error}</translation>
     </message>
     <message>
-      <location filename="../exporters/print_pdf.py" line="438" />
+      <location filename="../exporters/print_pdf.py" line="442" />
       <source>Could not read the ICC profile {path}: {error}</source>
       <translation>Impossible de lire le profil ICC {path} : {error}</translation>
     </message>
@@ -929,7 +918,7 @@ Tout ce qui ne peut pas être traduit exactement est signalé dans le journal. S
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="108" />
-      <location filename="../ui/cartograph/controller.py" line="922" />
+      <location filename="../ui/cartograph/controller.py" line="920" />
       <source>Print layout</source>
       <translation>Mise en page d'impression</translation>
     </message>
@@ -1082,15 +1071,14 @@ Tout ce qui ne peut pas être repris exactement est signalé dans le journal au 
       <source>There is nothing to export. Add at least one vector or raster layer with data to the project.</source>
       <translation>Il n'y a rien à exporter. Ajoutez au projet au moins une couche vecteur ou raster contenant des données.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../processing/export_project.py" line="325" />
-      <source>Exporting anyway, as requested: {n} blocked item will be missing from the map.</source>
-      <translation>Export malgré tout, comme demandé : {n} élément bloqué manquera sur la carte.</translation>
-    </message>
-    <message>
-      <location filename="../processing/export_project.py" line="325" />
-      <source>Exporting anyway, as requested: {n} blocked items will be missing from the map.</source>
-      <translation>Export malgré tout, comme demandé : {n} éléments bloqués manqueront sur la carte.</translation>
+      <source>Exporting anyway, as requested: %n blocked item will be missing from the map.</source>
+      <extracomment>English plural: Exporting anyway, as requested: %n blocked items will be missing from the map.</extracomment>
+      <translation>
+        <numerusform>Export malgré tout, comme demandé : %n élément bloqué manquera sur la carte.</numerusform>
+        <numerusform>Export malgré tout, comme demandé : %n éléments bloqués manqueront sur la carte.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="165" />
@@ -1538,17 +1526,15 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <source>Only features for which this is true get a page. Blank: all.</source>
       <translation>Seules les entités pour lesquelles ceci est vrai reçoivent une page. Vide : toutes.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/atlas_tab.py" line="743" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="127" />
-      <source>Exports all {n} sheet.</source>
-      <translation>Exporte {n} feuille au total.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="743" />
-      <location filename="../ui/cartograph/series_export_dialog.py" line="127" />
-      <source>Exports all {n} sheets.</source>
-      <translation>Exporte {n} feuilles au total.</translation>
+      <source>Exports all %n sheet.</source>
+      <extracomment>English plural: Exports all %n sheets.</extracomment>
+      <translation>
+        <numerusform>Exporte %n feuille au total.</numerusform>
+        <numerusform>Exporte %n feuilles au total.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/atlas_tab.py" line="1060" />
@@ -1599,47 +1585,42 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <source>Preparing preview…</source>
       <translation>Préparation de l'aperçu…</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/atlas_tab.py" line="718" />
-      <source>{n} page ready ({sheets} sheets each)</source>
-      <translation>{n} page prête ({sheets} feuilles chacune)</translation>
+      <source>%n page ready ({sheets} sheets each)</source>
+      <extracomment>English plural: %n pages ready ({sheets} sheets each)</extracomment>
+      <translation>
+        <numerusform>%n page prête ({sheets} feuilles chacune)</numerusform>
+        <numerusform>%n pages prêtes ({sheets} feuilles chacune)</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="718" />
-      <source>{n} pages ready ({sheets} sheets each)</source>
-      <translation>{n} pages prêtes ({sheets} feuilles chacune)</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/atlas_tab.py" line="725" />
-      <source>{n} page ready</source>
-      <translation>{n} page prête</translation>
+      <source>%n page ready</source>
+      <extracomment>English plural: %n pages ready</extracomment>
+      <translation>
+        <numerusform>%n page prête</numerusform>
+        <numerusform>%n pages prêtes</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="725" />
-      <source>{n} pages ready</source>
-      <translation>{n} pages prêtes</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/atlas_tab.py" line="747" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="131" />
-      <source>Exports all {n} page.</source>
-      <translation>Exporte {n} page au total.</translation>
+      <source>Exports all %n page.</source>
+      <extracomment>English plural: Exports all %n pages.</extracomment>
+      <translation>
+        <numerusform>Exporte %n page au total.</numerusform>
+        <numerusform>Exporte %n pages au total.</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="747" />
-      <location filename="../ui/cartograph/series_export_dialog.py" line="131" />
-      <source>Exports all {n} pages.</source>
-      <translation>Exporte {n} pages au total.</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/atlas_tab.py" line="1350" />
-      <source>{n} page matches</source>
-      <translation>{n} page correspond</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/atlas_tab.py" line="1350" />
-      <source>{n} pages match</source>
-      <translation>{n} pages correspondent</translation>
+      <source>%n page matches</source>
+      <extracomment>English plural: %n pages match</extracomment>
+      <translation>
+        <numerusform>%n page correspond</numerusform>
+        <numerusform>%n pages correspondent</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/atlas_tab.py" line="1365" />
@@ -1689,213 +1670,213 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <translation>Déplacer le contenu de la carte</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="213" />
+      <location filename="../ui/cartograph/controller.py" line="211" />
       <location filename="../ui/main_dialog.py" line="478" />
       <source>Show in file manager</source>
       <translation>Afficher dans le gestionnaire de fichiers</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="191" />
+      <location filename="../ui/cartograph/controller.py" line="189" />
       <location filename="../ui/main_dialog.py" line="2717" />
       <location filename="../ui/main_dialog.py" line="2726" />
       <source>Default</source>
       <translation>Par défaut</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="192" />
+      <location filename="../ui/cartograph/controller.py" line="190" />
       <location filename="../ui/main_dialog.py" line="3590" />
       <source>Dark</source>
       <translation>Sombre</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="193" />
+      <location filename="../ui/cartograph/controller.py" line="191" />
       <source>Sepia</source>
       <translation>Sépia</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="194" />
+      <location filename="../ui/cartograph/controller.py" line="192" />
       <source>Blueprint</source>
       <translation>Plan bleu</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="195" />
+      <location filename="../ui/cartograph/controller.py" line="193" />
       <source>Minimal</source>
       <translation>Minimal</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="210" />
+      <location filename="../ui/cartograph/controller.py" line="208" />
       <location filename="../ui/main_dialog.py" line="475" />
       <source>Reveal in Finder</source>
       <translation>Afficher dans le Finder</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="212" />
+      <location filename="../ui/cartograph/controller.py" line="210" />
       <location filename="../ui/main_dialog.py" line="477" />
       <source>Show in Explorer</source>
       <translation>Afficher dans l'Explorateur</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="936" />
+      <location filename="../ui/cartograph/controller.py" line="934" />
       <source>New layout from template: pick a design and build another print layout from what the map canvas shows. The layout shown here is kept as it is.</source>
       <translation>Nouvelle mise en page à partir d'un modèle : choisissez un style et créez une autre mise en page d'impression à partir de ce que montre le canevas. La mise en page affichée ici reste telle quelle.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1001" />
+      <location filename="../ui/cartograph/controller.py" line="999" />
       <source>Shown wherever the layout uses the project title. Blank keeps it.</source>
       <translation>Affiché partout où la mise en page utilise le titre du projet. Vide le conserve.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1637" />
+      <location filename="../ui/cartograph/controller.py" line="1635" />
       <location filename="../ui/main_dialog.py" line="894" />
       <location filename="../ui/main_dialog.py" line="3226" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3487" />
+      <location filename="../ui/cartograph/controller.py" line="3485" />
       <location filename="../ui/cartograph/series_print_dialog.py" line="44" />
       <source>Print series</source>
       <translation>Imprimer la série</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3724" />
+      <location filename="../ui/cartograph/controller.py" line="3722" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>Décrivez la carte ici : ce qu'elle montre, d'où proviennent les données.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3725" />
+      <location filename="../ui/cartograph/controller.py" line="3723" />
       <source>Key figure</source>
       <translation>Chiffre clé</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3726" />
+      <location filename="../ui/cartograph/controller.py" line="3724" />
       <source>What the number means</source>
       <translation>Ce que signifie ce chiffre</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3727" />
+      <location filename="../ui/cartograph/controller.py" line="3725" />
       <source>Author</source>
       <translation>Auteur</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="950" />
+      <location filename="../ui/cartograph/controller.py" line="948" />
       <source>This project has no print layouts yet. Start from a template, or import a cartograph.</source>
       <translation>Ce projet n'a pas encore de mise en page d'impression. Partez d'un modèle ou importez une planche cartographique.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="987" />
+      <location filename="../ui/cartograph/controller.py" line="985" />
       <source>Page settings</source>
       <translation>Paramètres de la page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="990" />
+      <location filename="../ui/cartograph/controller.py" line="988" />
       <source>The page's title, attribution and colour theme. They are part of this layout and show in the preview, the web page and the PDF.</source>
       <translation>Le titre, l'attribution et le thème de couleurs de la page. Ils font partie de cette mise en page et s'affichent dans l'aperçu, la page web et le PDF.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1000" />
+      <location filename="../ui/cartograph/controller.py" line="998" />
       <source>The project title</source>
       <translation>Le titre du projet</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1006" />
+      <location filename="../ui/cartograph/controller.py" line="1004" />
       <location filename="../ui/cartograph/template_guide.py" line="98" />
       <location filename="../ui/cartograph/template_picker.py" line="1230" />
       <source>Title</source>
       <translation>Titre</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1008" />
+      <location filename="../ui/cartograph/controller.py" line="1006" />
       <source>Optional, e.g. data sources</source>
       <translation>Facultatif, par ex. les sources de données</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1010" />
+      <location filename="../ui/cartograph/controller.py" line="1008" />
       <source>Attribution</source>
       <translation>Attribution</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1015" />
+      <location filename="../ui/cartograph/controller.py" line="1013" />
       <location filename="../ui/main_dialog.py" line="3597" />
       <source>Theme</source>
       <translation>Thème</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1023" />
+      <location filename="../ui/cartograph/controller.py" line="1021" />
       <source>Map frames</source>
       <translation>Cadres de carte</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1025" />
+      <location filename="../ui/cartograph/controller.py" line="1023" />
       <location filename="../ui/main_dialog.py" line="961" />
       <location filename="../ui/main_dialog.py" line="3186" />
       <source>Layers</source>
       <translation>Couches</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1035" />
+      <location filename="../ui/cartograph/controller.py" line="1033" />
       <source>Layout</source>
       <translation>Mise en page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1039" />
-      <location filename="../ui/cartograph/controller.py" line="1201" />
+      <location filename="../ui/cartograph/controller.py" line="1037" />
+      <location filename="../ui/cartograph/controller.py" line="1199" />
       <source>Atlas</source>
       <translation>Atlas</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1045" />
-      <location filename="../ui/cartograph/controller.py" line="1175" />
-      <location filename="../ui/cartograph/controller.py" line="1178" />
+      <location filename="../ui/cartograph/controller.py" line="1043" />
+      <location filename="../ui/cartograph/controller.py" line="1173" />
+      <location filename="../ui/cartograph/controller.py" line="1176" />
       <source>Checks</source>
       <translation>Vérifications</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1049" />
+      <location filename="../ui/cartograph/controller.py" line="1047" />
       <source>Edit</source>
       <translation>Modifier</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1071" />
+      <location filename="../ui/cartograph/controller.py" line="1069" />
       <source>Choose where the cartograph is saved</source>
       <translation>Choisissez où la planche cartographique est enregistrée</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1341" />
-      <location filename="../ui/cartograph/controller.py" line="1371" />
-      <location filename="../ui/cartograph/controller.py" line="1354" />
+      <location filename="../ui/cartograph/controller.py" line="1339" />
+      <location filename="../ui/cartograph/controller.py" line="1369" />
+      <location filename="../ui/cartograph/controller.py" line="1352" />
       <source>Import cartograph</source>
       <translation>Importer une planche cartographique</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1347" />
+      <location filename="../ui/cartograph/controller.py" line="1345" />
       <source>Cartograph (*.html *.htm)</source>
       <translation>Planche cartographique (*.html *.htm)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1648" />
+      <location filename="../ui/cartograph/controller.py" line="1646" />
       <source>Save cartograph as</source>
       <translation>Enregistrer la planche cartographique sous</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1648" />
+      <location filename="../ui/cartograph/controller.py" line="1646" />
       <location filename="../ui/main_dialog.py" line="1718" />
       <source>Web page (*.html)</source>
       <translation>Page web (*.html)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1669" />
+      <location filename="../ui/cartograph/controller.py" line="1667" />
       <source>Replace existing file?</source>
       <translation>Remplacer le fichier existant ?</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1670" />
+      <location filename="../ui/cartograph/controller.py" line="1668" />
       <source>A file already exists at the final HTML destination:</source>
       <translation>Un fichier existe déjà à la destination HTML finale :</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1676" />
-      <location filename="../ui/cartograph/controller.py" line="3502" />
+      <location filename="../ui/cartograph/controller.py" line="1674" />
+      <location filename="../ui/cartograph/controller.py" line="3500" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3767" />
@@ -1904,49 +1885,49 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <translation>Annuler</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1677" />
+      <location filename="../ui/cartograph/controller.py" line="1675" />
       <source>Replace</source>
       <translation>Remplacer</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1946" />
+      <location filename="../ui/cartograph/controller.py" line="1944" />
       <source>Match QGIS canvas</source>
       <translation>Comme le canevas QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1980" />
+      <location filename="../ui/cartograph/controller.py" line="1978" />
       <source>Smooth raster when enlarged</source>
       <translation>Lisser le raster agrandi</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2541" />
+      <location filename="../ui/cartograph/controller.py" line="2539" />
       <source>The OnlyMap runtime is needed to save a cartograph. Nothing was written.</source>
       <translation>Le runtime OnlyMap est nécessaire pour enregistrer une planche cartographique. Rien n'a été écrit.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2952" />
+      <location filename="../ui/cartograph/controller.py" line="2950" />
       <source>Accessibility</source>
       <translation>Accessibilité</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2955" />
-      <location filename="../ui/cartograph/controller.py" line="2994" />
+      <location filename="../ui/cartograph/controller.py" line="2953" />
+      <location filename="../ui/cartograph/controller.py" line="2992" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>Vision des couleurs : la simuler et vérifier les couleurs de la légende</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2959" />
+      <location filename="../ui/cartograph/controller.py" line="2957" />
       <location filename="../ui/main_dialog.py" line="3333" />
       <source>Share</source>
       <translation>Partager</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3121" />
+      <location filename="../ui/cartograph/controller.py" line="3119" />
       <source>Saving the latest changes first - it opens when saved.</source>
       <translation>Enregistrement des dernières modifications d'abord - l'ouverture suivra.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3207" />
+      <location filename="../ui/cartograph/controller.py" line="3205" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="114" />
       <location filename="../ui/main_dialog.py" line="1255" />
       <location filename="../ui/main_dialog.py" line="3346" />
@@ -1954,463 +1935,460 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <translation>Exporter</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3210" />
+      <location filename="../ui/cartograph/controller.py" line="3208" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="317" />
       <source>Save PDF…</source>
       <translation>Enregistrer en PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3211" />
+      <location filename="../ui/cartograph/controller.py" line="3209" />
       <source>Save every page of this layout as a PDF (Ctrl+P)</source>
       <translation>Enregistrer toutes les pages de cette mise en page en PDF (Ctrl+P)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3217" />
+      <location filename="../ui/cartograph/controller.py" line="3215" />
       <source>Save atlas as PDF…</source>
       <translation>Enregistrer l'atlas en PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3218" />
+      <location filename="../ui/cartograph/controller.py" line="3216" />
       <source>One run of pages per atlas feature, in a single PDF</source>
       <translation>Une série de pages par entité de l'atlas, dans un seul PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3223" />
+      <location filename="../ui/cartograph/controller.py" line="3221" />
       <source>Export PNG…</source>
       <translation>Exporter en PNG…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3224" />
+      <location filename="../ui/cartograph/controller.py" line="3222" />
       <source>Image of the first page at the saved resolution</source>
       <translation>Image de la première page à la résolution enregistrée</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3229" />
+      <location filename="../ui/cartograph/controller.py" line="3227" />
       <source>Export QGIS layout template…</source>
       <translation>Exporter le modèle de mise en page QGIS…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3230" />
+      <location filename="../ui/cartograph/controller.py" line="3228" />
       <source>Round trip back into QGIS</source>
       <translation>Aller-retour vers QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3235" />
+      <location filename="../ui/cartograph/controller.py" line="3233" />
       <source>PDF settings…</source>
       <translation>Paramètres PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3236" />
+      <location filename="../ui/cartograph/controller.py" line="3234" />
       <source>Page size, bleed, crop marks and colour profile for Save PDF</source>
       <translation>Format de page, fond perdu, traits de coupe et profil colorimétrique pour Enregistrer en PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3240" />
+      <location filename="../ui/cartograph/controller.py" line="3238" />
       <source>HTML cartograph</source>
       <translation>Planche cartographique HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3243" />
+      <location filename="../ui/cartograph/controller.py" line="3241" />
       <source>Preview in browser</source>
       <translation>Aperçu dans le navigateur</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3244" />
+      <location filename="../ui/cartograph/controller.py" line="3242" />
       <source>Open the HTML cartograph to check interactive maps and browser behaviour.</source>
       <translation>Ouvrez la planche cartographique HTML pour vérifier les cartes interactives et le comportement du navigateur.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3254" />
+      <location filename="../ui/cartograph/controller.py" line="3252" />
       <source>Copy HTML file path</source>
       <translation>Copier le chemin du fichier HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3255" />
+      <location filename="../ui/cartograph/controller.py" line="3253" />
       <source>Copies the cartograph's path</source>
       <translation>Copie le chemin de la planche cartographique</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3260" />
+      <location filename="../ui/cartograph/controller.py" line="3258" />
       <source>Show HTML in folder</source>
       <translation>Afficher le HTML dans le dossier</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3261" />
+      <location filename="../ui/cartograph/controller.py" line="3259" />
       <source>Shows the cartograph in your file manager</source>
       <translation>Affiche la planche cartographique dans le gestionnaire de fichiers</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3270" />
+      <location filename="../ui/cartograph/controller.py" line="3268" />
       <location filename="../ui/main_dialog.py" line="3461" />
       <source>NIKA hand-off</source>
       <translation>Transmission à NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3273" />
+      <location filename="../ui/cartograph/controller.py" line="3271" />
       <location filename="../ui/main_dialog.py" line="3464" />
       <source>Prepare enhancement prompt...</source>
       <translation>Préparer une invite d'amélioration...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3274" />
+      <location filename="../ui/cartograph/controller.py" line="3272" />
       <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>Ouvre une invite pour améliorer cette planche cartographique, à copier dans NIKA ou un autre assistant IA. Rien n'est envoyé d'ici.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3282" />
+      <location filename="../ui/cartograph/controller.py" line="3280" />
       <location filename="../ui/main_dialog.py" line="3473" />
       <source>Prepare critique prompt...</source>
       <translation>Préparer une invite de critique...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3283" />
+      <location filename="../ui/cartograph/controller.py" line="3281" />
       <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>Ouvre une invite demandant une critique de cette planche cartographique, à copier dans NIKA ou un autre assistant IA. Rien n'est envoyé d'ici.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3502" />
+      <location filename="../ui/cartograph/controller.py" line="3500" />
       <source>Preparing the print…</source>
       <translation>Préparation de l'impression…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3520" />
+      <location filename="../ui/cartograph/controller.py" line="3518" />
       <source>Printing…</source>
       <translation>Impression…</translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3550" />
-      <source>Sent {n} sheet to {printer}.</source>
-      <translation>{n} feuille envoyée à {printer}.</translation>
+    <message numerus="yes">
+      <location filename="../ui/cartograph/controller.py" line="3548" />
+      <source>Sent %n sheet to {printer}.</source>
+      <extracomment>English plural: Sent %n sheets to {printer}.</extracomment>
+      <translation>
+        <numerusform>%n feuille envoyée à {printer}.</numerusform>
+        <numerusform>%n feuilles envoyées à {printer}.</numerusform>
+      </translation>
+    </message>
+    <message numerus="yes">
+      <location filename="../ui/cartograph/controller.py" line="3555" />
+      <source>Printed %n sheet to the file {printer}.</source>
+      <extracomment>English plural: Printed %n sheets to the file {printer}.</extracomment>
+      <translation>
+        <numerusform>%n feuille imprimée dans le fichier {printer}.</numerusform>
+        <numerusform>%n feuilles imprimées dans le fichier {printer}.</numerusform>
+      </translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3550" />
-      <source>Sent {n} sheets to {printer}.</source>
-      <translation>{n} feuilles envoyées à {printer}.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3557" />
-      <source>Printed {n} sheet to the file {printer}.</source>
-      <translation>{n} feuille imprimée dans le fichier {printer}.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3557" />
-      <source>Printed {n} sheets to the file {printer}.</source>
-      <translation>{n} feuilles imprimées dans le fichier {printer}.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3591" />
+      <location filename="../ui/cartograph/controller.py" line="3589" />
       <source>Save atlas as PDF</source>
       <translation>Enregistrer l'atlas en PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3591" />
+      <location filename="../ui/cartograph/controller.py" line="3589" />
       <source>Save PDF</source>
       <translation>Enregistrer en PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3593" />
+      <location filename="../ui/cartograph/controller.py" line="3591" />
       <source>Save the series as a PDF to print</source>
       <translation>Enregistrer la série en PDF pour l'imprimer</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3598" />
+      <location filename="../ui/cartograph/controller.py" line="3596" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3610" />
-      <location filename="../ui/cartograph/controller.py" line="3309" />
-      <location filename="../ui/cartograph/controller.py" line="3319" />
+      <location filename="../ui/cartograph/controller.py" line="3608" />
+      <location filename="../ui/cartograph/controller.py" line="3307" />
+      <location filename="../ui/cartograph/controller.py" line="3317" />
       <source>Saving PDF…</source>
       <translation>Enregistrement du PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3652" />
+      <location filename="../ui/cartograph/controller.py" line="3650" />
       <source>No printer found: nothing was printed. PDF to print: {name}</source>
       <translation>Aucune imprimante trouvée : rien n'a été imprimé. PDF à imprimer : {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3654" />
+      <location filename="../ui/cartograph/controller.py" line="3652" />
       <source>Saved PDF: {name}</source>
       <translation>PDF enregistré : {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3701" />
-      <location filename="../ui/cartograph/controller.py" line="3713" />
+      <location filename="../ui/cartograph/controller.py" line="3699" />
+      <location filename="../ui/cartograph/controller.py" line="3711" />
       <source>Save layout template as</source>
       <translation>Enregistrer le modèle de mise en page sous</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3703" />
+      <location filename="../ui/cartograph/controller.py" line="3701" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>Modèle de mise en page QGIS (*.qpt)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="523" />
+      <location filename="../ui/cartograph/controller.py" line="521" />
       <source>There is no map canvas to build from.</source>
       <translation>Il n'y a aucun canevas de carte à partir duquel construire.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1177" />
+      <location filename="../ui/cartograph/controller.py" line="1175" />
       <source>No differences from the QGIS layout.</source>
       <translation>Aucune différence avec la mise en page QGIS.</translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="1180" />
-      <source>{n} difference from the QGIS layout to review</source>
-      <translation>{n} différence avec la mise en page QGIS à vérifier</translation>
+    <message numerus="yes">
+      <location filename="../ui/cartograph/controller.py" line="1178" />
+      <source>%n difference from the QGIS layout to review</source>
+      <extracomment>English plural: %n differences from the QGIS layout to review</extracomment>
+      <translation>
+        <numerusform>%n différence avec la mise en page QGIS à vérifier</numerusform>
+        <numerusform>%n différences avec la mise en page QGIS à vérifier</numerusform>
+      </translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1180" />
-      <source>{n} differences from the QGIS layout to review</source>
-      <translation>{n} différences avec la mise en page QGIS à vérifier</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="1201" />
+      <location filename="../ui/cartograph/controller.py" line="1199" />
       <source>Atlas (on)</source>
       <translation>Atlas (activé)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1204" />
+      <location filename="../ui/cartograph/controller.py" line="1202" />
       <source>One page per feature: on</source>
       <translation>Une page par entité : activé</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1204" />
+      <location filename="../ui/cartograph/controller.py" line="1202" />
       <source>One page per feature: off</source>
       <translation>Une page par entité : désactivé</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1227" />
+      <location filename="../ui/cartograph/controller.py" line="1225" />
       <source>There is no map canvas to build a layout from.</source>
       <translation>Il n'y a aucun canevas de carte à partir duquel construire une mise en page.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1364" />
+      <location filename="../ui/cartograph/controller.py" line="1362" />
       <source>Imported as the print layout "{name}".</source>
       <translation>Importé en tant que mise en page d'impression « {name} ».</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1601" />
+      <location filename="../ui/cartograph/controller.py" line="1599" />
       <source>Edit this layout in QGIS's layout designer.</source>
       <translation>Modifiez cette mise en page dans le concepteur de mises en page de QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1603" />
+      <location filename="../ui/cartograph/controller.py" line="1601" />
       <source>Choose a print layout first.</source>
       <translation>Choisissez d'abord une mise en page d'impression.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1780" />
+      <location filename="../ui/cartograph/controller.py" line="1778" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="50" />
       <source>Switch to Interactive</source>
       <translation>Passer en Interactive</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2675" />
-      <location filename="../ui/cartograph/controller.py" line="2667" />
+      <location filename="../ui/cartograph/controller.py" line="2673" />
+      <location filename="../ui/cartograph/controller.py" line="2665" />
       <source>Could not build the cartograph: {message}</source>
       <translation>Impossible de générer la planche cartographique : {message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2732" />
+      <location filename="../ui/cartograph/controller.py" line="2730" />
       <source>The layout is gone; nothing was written.</source>
       <translation>La mise en page n'existe plus ; rien n'a été écrit.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2901" />
+      <location filename="../ui/cartograph/controller.py" line="2899" />
       <source>Choose a print layout first - there is nothing to check yet.</source>
       <translation>Choisissez d'abord une mise en page d'impression - il n'y a encore rien à vérifier.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3077" />
+      <location filename="../ui/cartograph/controller.py" line="3075" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
       <translation>Rien à prévisualiser pour l'instant - la planche cartographique n'a pas été enregistrée. Choisissez une mise en page dans le panneau.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3300" />
+      <location filename="../ui/cartograph/controller.py" line="3298" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>Disponible une fois la planche cartographique enregistrée - choisissez une mise en page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3304" />
+      <location filename="../ui/cartograph/controller.py" line="3302" />
       <source>Choose a print layout first</source>
       <translation>Choisissez d'abord une mise en page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3311" />
+      <location filename="../ui/cartograph/controller.py" line="3309" />
       <source>Choose or create a layout first</source>
       <translation>Choisissez ou créez d'abord une mise en page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3322" />
+      <location filename="../ui/cartograph/controller.py" line="3320" />
       <source>Not available for cartographs yet</source>
       <translation>Pas encore disponible pour les planches cartographiques</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3496" />
+      <location filename="../ui/cartograph/controller.py" line="3494" />
       <source>Printing cancelled. Nothing was sent to a printer.</source>
       <translation>Impression annulée. Rien n'a été envoyé à une imprimante.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3546" />
+      <location filename="../ui/cartograph/controller.py" line="3544" />
       <source>Printing cancelled. The rest of the series was not sent.</source>
       <translation>Impression annulée. Le reste de la série n'a pas été envoyé.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3658" />
+      <location filename="../ui/cartograph/controller.py" line="3656" />
       <source>Open PDF</source>
       <translation>Ouvrir le PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3659" />
+      <location filename="../ui/cartograph/controller.py" line="3657" />
       <location filename="../ui/cartograph/layout_page.py" line="1657" />
       <source>Show in folder</source>
       <translation>Afficher dans le dossier</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1195" />
+      <location filename="../ui/cartograph/controller.py" line="1193" />
       <source>{theme} theme</source>
       <translation>Thème {theme}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1325" />
+      <location filename="../ui/cartograph/controller.py" line="1323" />
       <source>Created the print layout "{name}" from the canvas. Edit it in the layout designer any time; the cartograph follows.</source>
       <translation>Mise en page d'impression « {name} » créée à partir du canevas. Modifiez-la à tout moment dans le concepteur de mise en page ; la planche cartographique suit.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1413" />
+      <location filename="../ui/cartograph/controller.py" line="1411" />
       <source>Renamed the print layout "{old}" to "{new}".</source>
       <translation>Mise en page d'impression « {old} » renommée en « {new} ».</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1501" />
+      <location filename="../ui/cartograph/controller.py" line="1499" />
       <source>Edit page title</source>
       <translation>Modifier le titre de la page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1503" />
+      <location filename="../ui/cartograph/controller.py" line="1501" />
       <source>Edit page attribution</source>
       <translation>Modifier l'attribution de la page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1505" />
+      <location filename="../ui/cartograph/controller.py" line="1503" />
       <source>Change page theme</source>
       <translation>Changer le thème de la page</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1541" />
+      <location filename="../ui/cartograph/controller.py" line="1539" />
       <source>The title on this page is an expression, which is kept. Edit it on the page; this field sets the project title the page reads.</source>
       <translation>Le titre de cette page est une expression, qui est conservée. Modifiez-le sur la page ; ce champ définit le titre du projet que la page lit.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1588" />
+      <location filename="../ui/cartograph/controller.py" line="1586" />
       <source>Based on {name}</source>
       <translation>Basé sur {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1674" />
+      <location filename="../ui/cartograph/controller.py" line="1672" />
       <source>Replacing it will overwrite its contents.</source>
       <translation>Le remplacer écrasera son contenu.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2713" />
+      <location filename="../ui/cartograph/controller.py" line="2711" />
       <source>{old} was left as it is: it is not this cartograph's own file, or cannot be saved to. Saved to {new} instead.</source>
       <translation>{old} a été laissé tel quel : ce n'est pas le fichier de cette planche cartographique, ou il ne peut pas être enregistré. Enregistré dans {new} à la place.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3141" />
+      <location filename="../ui/cartograph/controller.py" line="3139" />
       <source>This browser view will not follow later changes.</source>
       <translation>Cette vue du navigateur ne suivra pas les modifications ultérieures.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3337" />
-      <location filename="../ui/cartograph/controller.py" line="3672" />
+      <location filename="../ui/cartograph/controller.py" line="3335" />
+      <location filename="../ui/cartograph/controller.py" line="3670" />
       <location filename="../ui/main_dialog.py" line="4578" />
       <source>Copied {path}</source>
       <translation>Copié : {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3717" />
+      <location filename="../ui/cartograph/controller.py" line="3715" />
       <source>Saved {path}</source>
       <translation>Enregistré : {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="868" />
-      <location filename="../ui/cartograph/controller.py" line="859" />
+      <location filename="../ui/cartograph/controller.py" line="866" />
+      <location filename="../ui/cartograph/controller.py" line="857" />
       <source>The cartograph could not be saved. Nothing was written.</source>
       <translation>La planche cartographique n'a pas pu être enregistrée. Rien n'a été écrit.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1185" />
+      <location filename="../ui/cartograph/controller.py" line="1183" />
       <source>Checks ({n})</source>
       <translation>Vérifications ({n})</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1308" />
+      <location filename="../ui/cartograph/controller.py" line="1306" />
       <source>Untitled map</source>
       <translation>Carte sans titre</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1547" />
+      <location filename="../ui/cartograph/controller.py" line="1545" />
       <source>The attribution on this page is an expression, which is kept. Edit it on the page.</source>
       <translation>L'attribution de cette page est une expression, qui est conservée. Modifiez-la sur la page.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1847" />
-      <location filename="../ui/cartograph/controller.py" line="1819" />
+      <location filename="../ui/cartograph/controller.py" line="1845" />
+      <location filename="../ui/cartograph/controller.py" line="1817" />
       <source>Unknown CRS</source>
       <translation>CRS inconnu</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2554" />
+      <location filename="../ui/cartograph/controller.py" line="2552" />
       <source>The OnlyMap runtime could not be loaded, so nothing was written: {error}</source>
       <translation>Le runtime OnlyMap n'a pas pu être chargé, donc rien n'a été écrit : {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2590" />
-      <location filename="../ui/cartograph/controller.py" line="2581" />
+      <location filename="../ui/cartograph/controller.py" line="2588" />
+      <location filename="../ui/cartograph/controller.py" line="2579" />
       <source>Could not save the cartograph: {error}</source>
       <translation>Impossible d'enregistrer la planche cartographique : {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2738" />
+      <location filename="../ui/cartograph/controller.py" line="2736" />
       <source>{path} is not this cartograph's own file; not replaced.</source>
       <translation>{path} n'est pas le fichier de cette planche cartographique ; il n'a pas été remplacé.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3359" />
+      <location filename="../ui/cartograph/controller.py" line="3357" />
       <location filename="../ui/main_dialog.py" line="4591" />
       <source>Showing {name} in the file manager</source>
       <translation>Affichage de {name} dans le gestionnaire de fichiers</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3515" />
+      <location filename="../ui/cartograph/controller.py" line="3513" />
       <source>Preparing page {page} of {pages}…</source>
       <translation>Préparation de la page {page} sur {pages}…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3714" />
+      <location filename="../ui/cartograph/controller.py" line="3712" />
       <source>Could not save the layout template to {path}.</source>
       <translation>Impossible d'enregistrer le modèle de mise en page dans {path}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1313" />
+      <location filename="../ui/cartograph/controller.py" line="1311" />
       <source>Could not build a layout from the canvas: {error}</source>
       <translation>Impossible de construire une mise en page à partir du canevas : {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1374" />
+      <location filename="../ui/cartograph/controller.py" line="1372" />
       <source>Some parts could not be carried into QGIS:</source>
       <translation>Certaines parties n'ont pas pu être transposées dans QGIS :</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1552" />
+      <location filename="../ui/cartograph/controller.py" line="1550" />
       <source>This layout has no attribution text, so the attribution is for the web page only.</source>
       <translation>Cette mise en page n'a pas de texte d'attribution, l'attribution ne concerne donc que la page web.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2848" />
+      <location filename="../ui/cartograph/controller.py" line="2846" />
       <source>{message}
 
 The full error is in the QGIS message log. Nothing about the cartograph is known until a check finishes, so none of it is shown as a verdict.</source>
@@ -2419,55 +2397,53 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
 L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien de la planche cartographique tant qu'une vérification n'est pas terminée, donc rien n'est présenté comme un verdict.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3362" />
+      <location filename="../ui/cartograph/controller.py" line="3360" />
       <location filename="../ui/main_dialog.py" line="4595" />
       <source>Opened {path}</source>
       <translation>Ouvert : {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3366" />
+      <location filename="../ui/cartograph/controller.py" line="3364" />
       <source>Could not show the file in a file manager: {reason}.</source>
       <translation>Impossible d'afficher le fichier dans un gestionnaire de fichiers : {reason}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3372" />
+      <location filename="../ui/cartograph/controller.py" line="3370" />
       <source>Copy path</source>
       <translation>Copier le chemin</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3535" />
+      <location filename="../ui/cartograph/controller.py" line="3533" />
       <source>Could not print the series: {error}</source>
       <translation>Impossible d'imprimer la série : {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3624" />
+      <location filename="../ui/cartograph/controller.py" line="3622" />
       <source>Could not save the PDF: {error}</source>
       <translation>Impossible d'enregistrer le PDF : {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3134" />
+      <location filename="../ui/cartograph/controller.py" line="3132" />
       <source>Could not start the local preview server ({error}), so the cartograph opened from its file. If it does not print or download, check that local connections to {host} are allowed, then try again.</source>
       <translation>Impossible de démarrer le serveur local de prévisualisation ({error}) : la planche cartographique a été ouverte depuis son fichier. Si elle ne s'imprime pas ou ne se télécharge pas, vérifiez que les connexions locales vers {host} sont autorisées, puis réessayez.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/frames_list.py" line="517" />
-      <source>{n} interactive map</source>
-      <translation>{n} carte interactive</translation>
+      <source>%n interactive map</source>
+      <extracomment>English plural: %n interactive maps</extracomment>
+      <translation>
+        <numerusform>%n carte interactive</numerusform>
+        <numerusform>%n cartes interactives</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/cartograph/frames_list.py" line="517" />
-      <source>{n} interactive maps</source>
-      <translation>{n} cartes interactives</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/frames_list.py" line="518" />
-      <source>{n} image</source>
-      <translation>{n} image</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/frames_list.py" line="518" />
-      <source>{n} images</source>
-      <translation>{n} images</translation>
+      <source>%n image</source>
+      <extracomment>English plural: %n images</extracomment>
+      <translation>
+        <numerusform>%n image</numerusform>
+        <numerusform>%n images</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/frames_list.py" line="141" />
@@ -2537,15 +2513,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Image resolution</source>
       <translation>Résolution de l'image</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/frames_list.py" line="298" />
-      <source>{n} issue →</source>
-      <translation>{n} problème →</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/frames_list.py" line="298" />
-      <source>{n} issues →</source>
-      <translation>{n} problèmes →</translation>
+      <source>%n issue →</source>
+      <extracomment>English plural: %n issues →</extracomment>
+      <translation>
+        <numerusform>%n problème →</numerusform>
+        <numerusform>%n problèmes →</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/frames_list.py" line="365" />
@@ -2567,15 +2542,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>No maps</source>
       <translation>Aucune carte</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/frames_list.py" line="306" />
-      <source>{n} issue on {name}, show in Checks</source>
-      <translation>{n} problème sur {name}, voir dans Vérifications</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/frames_list.py" line="306" />
-      <source>{n} issues on {name}, show in Checks</source>
-      <translation>{n} problèmes sur {name}, voir dans Vérifications</translation>
+      <source>%n issue on {name}, show in Checks</source>
+      <extracomment>English plural: %n issues on {name}, show in Checks</extracomment>
+      <translation>
+        <numerusform>%n problème sur {name}, voir dans Vérifications</numerusform>
+        <numerusform>%n problèmes sur {name}, voir dans Vérifications</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/frames_list.py" line="257" />
@@ -2929,15 +2903,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>No matching features.</source>
       <translation>Aucune entité correspondante.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="1308" />
-      <source>{n} match</source>
-      <translation>{n} résultat</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/go_to_location_dialog.py" line="1308" />
-      <source>{n} matches</source>
-      <translation>{n} résultats</translation>
+      <source>%n match</source>
+      <extracomment>English plural: %n matches</extracomment>
+      <translation>
+        <numerusform>%n résultat</numerusform>
+        <numerusform>%n résultats</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="1344" />
@@ -3159,8 +3132,8 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
     </message>
     <message>
       <location filename="../ui/cartograph/item_controls.py" line="980" />
-      <location filename="../ui/cartograph/layout_items.py" line="404" />
-      <location filename="../ui/cartograph/layout_items.py" line="466" />
+      <location filename="../ui/cartograph/layout_items.py" line="406" />
+      <location filename="../ui/cartograph/layout_items.py" line="468" />
       <location filename="../ui/cartograph/layout_page.py" line="1492" />
       <location filename="../ui/cartograph/layout_page.py" line="1449" />
       <source>Detail map</source>
@@ -3168,7 +3141,7 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
     </message>
     <message>
       <location filename="../ui/cartograph/item_controls.py" line="981" />
-      <location filename="../ui/cartograph/layout_items.py" line="226" />
+      <location filename="../ui/cartograph/layout_items.py" line="228" />
       <location filename="../ui/cartograph/layout_items.py" line="89" />
       <source>Live count</source>
       <translation>Compteur en direct</translation>
@@ -3271,17 +3244,15 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Change text size</source>
       <translation>Modifier la taille du texte</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/layer_membership.py" line="410" />
       <location filename="../ui/main_dialog.py" line="4165" />
-      <source>{included} of {n} layer included</source>
-      <translation>{included} couche sur {n} incluse</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/layer_membership.py" line="410" />
-      <location filename="../ui/main_dialog.py" line="4165" />
-      <source>{included} of {n} layers included</source>
-      <translation>{included} couches sur {n} incluses</translation>
+      <source>{included} of %n layer included</source>
+      <extracomment>English plural: {included} of %n layers included</extracomment>
+      <translation>
+        <numerusform>{included} couche sur %n incluse</numerusform>
+        <numerusform>{included} couches sur %n incluses</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layer_membership.py" line="343" />
@@ -3328,15 +3299,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>The atlas still pages through {layer}; it is just not drawn on this map.</source>
       <translation>L'atlas parcourt toujours {layer} ; elle n'est simplement pas dessinée sur cette carte.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/layout_header.py" line="64" />
-      <source>{n} page</source>
-      <translation>{n} page</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/layout_header.py" line="64" />
-      <source>{n} pages</source>
-      <translation>{n} pages</translation>
+      <source>%n page</source>
+      <extracomment>English plural: %n pages</extracomment>
+      <translation>
+        <numerusform>%n page</numerusform>
+        <numerusform>%n pages</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layout_header.py" line="62" />
@@ -3432,23 +3402,23 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <translation>Actuelle</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_items.py" line="310" />
+      <location filename="../ui/cartograph/layout_items.py" line="312" />
       <source>Change linked map</source>
       <translation>Modifier la carte liée</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_items.py" line="334" />
+      <location filename="../ui/cartograph/layout_items.py" line="336" />
       <source>Delete items</source>
       <translation>Supprimer les éléments</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/layout_items.py" line="563" />
+      <location filename="../ui/cartograph/layout_items.py" line="567" />
       <source>Centre map</source>
       <translation>Centrer la carte</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layout_items.py" line="147" />
-      <location filename="../ui/cartograph/layout_items.py" line="466" />
+      <location filename="../ui/cartograph/layout_items.py" line="468" />
       <source>Add {item}</source>
       <translation>Ajouter {item}</translation>
     </message>
@@ -3527,15 +3497,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Choose another layout, page size or orientation</source>
       <translation>Choisir une autre mise en page, un autre format ou une autre orientation</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/layout_page.py" line="1347" />
-      <source>{n} change in the HTML</source>
-      <translation>{n} changement dans le HTML</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/layout_page.py" line="1347" />
-      <source>{n} changes in the HTML</source>
-      <translation>{n} changements dans le HTML</translation>
+      <source>%n change in the HTML</source>
+      <extracomment>English plural: %n changes in the HTML</extracomment>
+      <translation>
+        <numerusform>%n changement dans le HTML</numerusform>
+        <numerusform>%n changements dans le HTML</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layout_page.py" line="1450" />
@@ -3587,15 +3556,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>A layout needs a name.</source>
       <translation>Une mise en page a besoin d'un nom.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/layout_page.py" line="1358" />
-      <source>{n} legend entry does not fit.</source>
-      <translation>{n} entrée de légende ne tient pas.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/layout_page.py" line="1358" />
-      <source>{n} legend entries do not fit.</source>
-      <translation>{n} entrées de légende ne tiennent pas.</translation>
+      <source>%n legend entry does not fit.</source>
+      <extracomment>English plural: %n legend entries do not fit.</extracomment>
+      <translation>
+        <numerusform>%n entrée de légende ne tient pas.</numerusform>
+        <numerusform>%n entrées de légende ne tiennent pas.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layout_page.py" line="1467" />
@@ -3726,15 +3694,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Link the legend to another map</source>
       <translation>Lier la légende à une autre carte</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/legend_editor.py" line="328" />
       <source>{names} is left out as a support layer. Tick it to show it.</source>
-      <translation>{names} est exclue comme couche de support. Cochez-la pour l'afficher.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/legend_editor.py" line="328" />
-      <source>{names} are left out as support layers. Tick one to show it.</source>
-      <translation>{names} sont exclues comme couches de support. Cochez-en une pour l'afficher.</translation>
+      <extracomment>English plural: {names} are left out as support layers. Tick one to show it.</extracomment>
+      <translation>
+        <numerusform>{names} est exclue comme couche de support. Cochez-la pour l'afficher.</numerusform>
+        <numerusform>{names} sont exclues comme couches de support. Cochez-en une pour l'afficher.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/legend_editor.py" line="507" />
@@ -4178,15 +4145,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Print</source>
       <translation>Imprimer</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/series_print_dialog.py" line="86" />
-      <source>Prints all {n} sheet.</source>
-      <translation>Imprime {n} feuille au total.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/series_print_dialog.py" line="86" />
-      <source>Prints all {n} sheets.</source>
-      <translation>Imprime {n} feuilles au total.</translation>
+      <source>Prints all %n sheet.</source>
+      <extracomment>English plural: Prints all %n sheets.</extracomment>
+      <translation>
+        <numerusform>Imprime %n feuille au total.</numerusform>
+        <numerusform>Imprime %n feuilles au total.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/series_print_dialog.py" line="54" />
@@ -4208,15 +4174,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Opens the exported page, which your browser prints.</source>
       <translation>Ouvre la page exportée, que votre navigateur imprime.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/series_print_dialog.py" line="90" />
-      <source>Prints all {n} page.</source>
-      <translation>Imprime {n} page au total.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/series_print_dialog.py" line="90" />
-      <source>Prints all {n} pages.</source>
-      <translation>Imprime {n} pages au total.</translation>
+      <source>Prints all %n page.</source>
+      <extracomment>English plural: Prints all %n pages.</extracomment>
+      <translation>
+        <numerusform>Imprime %n page au total.</numerusform>
+        <numerusform>Imprime %n pages au total.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/template_guide.py" line="109" />
@@ -4297,15 +4262,14 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Preview</source>
       <translation>Aperçu</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/cartograph/template_picker.py" line="543" />
-      <source>Legend: {n} entry does not fit at a readable size. Try a larger page or shorter layer names.</source>
-      <translation>Légende : {n} entrée ne tient pas à une taille lisible. Essayez une page plus grande ou des noms de couche plus courts.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/template_picker.py" line="543" />
-      <source>Legend: {n} entries do not fit at a readable size. Try a larger page or shorter layer names.</source>
-      <translation>Légende : {n} entrées ne tiennent pas à une taille lisible. Essayez une page plus grande ou des noms de couche plus courts.</translation>
+      <source>Legend: %n entry does not fit at a readable size. Try a larger page or shorter layer names.</source>
+      <extracomment>English plural: Legend: %n entries do not fit at a readable size. Try a larger page or shorter layer names.</extracomment>
+      <translation>
+        <numerusform>Légende : %n entrée ne tient pas à une taille lisible. Essayez une page plus grande ou des noms de couche plus courts.</numerusform>
+        <numerusform>Légende : %n entrées ne tiennent pas à une taille lisible. Essayez une page plus grande ou des noms de couche plus courts.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/cartograph/template_picker.py" line="600" />
@@ -4596,23 +4560,22 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Export anyway</source>
       <translation>Exporter quand même</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/fidelity_panel.py" line="1130" />
       <source>You can export anyway and the map is made without it, or review the report first.</source>
-      <translation>Vous pouvez exporter quand même et la carte sera faite sans cet élément, ou vérifier d'abord le rapport.</translation>
+      <extracomment>English plural: You can export anyway and the map is made without them, or review the report first.</extracomment>
+      <translation>
+        <numerusform>Vous pouvez exporter quand même et la carte sera faite sans cet élément, ou vérifier d'abord le rapport.</numerusform>
+        <numerusform>Vous pouvez exporter quand même et la carte sera faite sans ces éléments, ou vérifier d'abord le rapport.</numerusform>
+      </translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="1134" />
-      <source>You can export anyway and the map is made without them, or review the report first.</source>
-      <translation>Vous pouvez exporter quand même et la carte sera faite sans ces éléments, ou vérifier d'abord le rapport.</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="1152" />
+      <location filename="../ui/fidelity_panel.py" line="1150" />
       <source>Part of this map will not work</source>
       <translation>Une partie de cette carte ne fonctionnera pas</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="1167" />
+      <location filename="../ui/fidelity_panel.py" line="1165" />
       <source>Review on the Fidelity tab</source>
       <translation>Vérifier dans l'onglet Fidélité</translation>
     </message>
@@ -4735,25 +4698,23 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
       <source>Nothing about this layer changes on the way out.</source>
       <translation>Rien dans cette couche ne change à l'export.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/fidelity_panel.py" line="930" />
-      <source>Show {n} more row</source>
-      <translation>Afficher {n} ligne de plus</translation>
+      <source>Show %n more row</source>
+      <extracomment>English plural: Show %n more rows</extracomment>
+      <translation>
+        <numerusform>Afficher %n ligne de plus</numerusform>
+        <numerusform>Afficher %n lignes de plus</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="930" />
-      <source>Show {n} more rows</source>
-      <translation>Afficher {n} lignes de plus</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="1155" />
-      <source>{n} thing cannot be carried into the map as set up in QGIS:</source>
-      <translation>{n} élément ne peut pas être repris dans la carte tel qu'il est configuré dans QGIS :</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="1155" />
-      <source>{n} things cannot be carried into the map as set up in QGIS:</source>
-      <translation>{n} éléments ne peuvent pas être repris dans la carte tels qu'ils sont configurés dans QGIS :</translation>
+    <message numerus="yes">
+      <location filename="../ui/fidelity_panel.py" line="1153" />
+      <source>%n thing cannot be carried into the map as set up in QGIS:</source>
+      <extracomment>English plural: %n things cannot be carried into the map as set up in QGIS:</extracomment>
+      <translation>
+        <numerusform>%n élément ne peut pas être repris dans la carte tel qu'il est configuré dans QGIS :</numerusform>
+        <numerusform>%n éléments ne peuvent pas être repris dans la carte tels qu'ils sont configurés dans QGIS :</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="567" />
@@ -4764,15 +4725,14 @@ The full error is in the QGIS message log. Nothing about the map is known until 
 
 L'erreur complète est dans le journal des messages de QGIS. On ne sait rien de la carte tant qu'une vérification n'est pas terminée, donc rien n'est présenté comme un verdict.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/fidelity_panel.py" line="675" />
-      <source>Filter - {n} row hidden</source>
-      <translation>Filtrer - {n} ligne masquée</translation>
-    </message>
-    <message>
-      <location filename="../ui/fidelity_panel.py" line="675" />
-      <source>Filter - {n} rows hidden</source>
-      <translation>Filtrer - {n} lignes masquées</translation>
+      <source>Filter - %n row hidden</source>
+      <extracomment>English plural: Filter - %n rows hidden</extracomment>
+      <translation>
+        <numerusform>Filtrer - %n ligne masquée</numerusform>
+        <numerusform>Filtrer - %n lignes masquées</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="677" />
@@ -4780,7 +4740,7 @@ L'erreur complète est dans le journal des messages de QGIS. On ne sait rien de 
       <translation>Filtrer - certaines lignes masquées</translation>
     </message>
     <message>
-      <location filename="../ui/fidelity_panel.py" line="1275" />
+      <location filename="../ui/fidelity_panel.py" line="1273" />
       <source>Applies to: {subjects}.</source>
       <translation>S'applique à : {subjects}.</translation>
     </message>
@@ -4975,15 +4935,14 @@ L'erreur complète est dans le journal des messages de QGIS. On ne sait rien de 
       <source>Hand off to NIKA</source>
       <translation>Transmettre à NIKA</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/handoff_dialog.py" line="493" />
-      <source>Left out 1 file outside {folder}.</source>
-      <translation>1 fichier hors de {folder} a été omis.</translation>
-    </message>
-    <message>
-      <location filename="../ui/handoff_dialog.py" line="493" />
-      <source>Left out {n} files outside {folder}.</source>
-      <translation>{n} fichiers hors de {folder} ont été omis.</translation>
+      <source>Left out %n file outside {folder}.</source>
+      <extracomment>English plural: Left out %n files outside {folder}.</extracomment>
+      <translation>
+        <numerusform>1 fichier hors de {folder} a été omis.</numerusform>
+        <numerusform>%n fichiers hors de {folder} ont été omis.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/handoff_dialog.py" line="140" />
@@ -5241,30 +5200,28 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
       <source>The current QGIS view</source>
       <translation>La vue QGIS actuelle</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="503" />
-      <source>{n} day ago</source>
-      <translation>il y a {n} jour</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="503" />
-      <source>{n} days ago</source>
-      <translation>il y a {n} jours</translation>
+      <source>%n day ago</source>
+      <extracomment>English plural: %n days ago</extracomment>
+      <translation>
+        <numerusform>il y a %n jour</numerusform>
+        <numerusform>il y a %n jours</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="494" />
       <source>just now</source>
       <translation>à l'instant</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="502" />
-      <source>{n} hour ago</source>
-      <translation>il y a {n} heure</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="502" />
-      <source>{n} hours ago</source>
-      <translation>il y a {n} heures</translation>
+      <source>%n hour ago</source>
+      <extracomment>English plural: %n hours ago</extracomment>
+      <translation>
+        <numerusform>il y a %n heure</numerusform>
+        <numerusform>il y a %n heures</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="614" />
@@ -5347,15 +5304,14 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
       <source>What a cartograph keeps</source>
       <translation>Ce qu'une planche cartographique conserve</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="1776" />
-      <source>{size} MB - {n} layer</source>
-      <translation>{size} Mo - {n} couche</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1776" />
-      <source>{size} MB - {n} layers</source>
-      <translation>{size} Mo - {n} couches</translation>
+      <source>{size} MB - %n layer</source>
+      <extracomment>English plural: {size} MB - %n layers</extracomment>
+      <translation>
+        <numerusform>{size} Mo - %n couche</numerusform>
+        <numerusform>{size} Mo - %n couches</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2026" />
@@ -5449,15 +5405,14 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
       <source>Coordinate precision</source>
       <translation>Précision des coordonnées</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="1490" />
-      <source>Export makes a zip to email or upload, carrying {n} layer.</source>
-      <translation>Exporter crée un ZIP à envoyer par e-mail ou téléverser, avec {n} couche.</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1490" />
-      <source>Export makes a zip to email or upload, carrying {n} layers.</source>
-      <translation>Exporter crée un ZIP à envoyer par e-mail ou téléverser, avec {n} couches.</translation>
+      <source>Export makes a zip to email or upload, carrying %n layer.</source>
+      <extracomment>English plural: Export makes a zip to email or upload, carrying %n layers.</extracomment>
+      <translation>
+        <numerusform>Exporter crée un ZIP à envoyer par e-mail ou téléverser, avec %n couche.</numerusform>
+        <numerusform>Exporter crée un ZIP à envoyer par e-mail ou téléverser, avec %n couches.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1720" />
@@ -5926,40 +5881,37 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
       <source>Leaves out everything outside the current QGIS view. This is the practical way to bring a very large layer under the free plan's 25,000-feature limit. The Fidelity tab reports how many features each layer loses.</source>
       <translation>Exclut tout ce qui est hors de la vue QGIS actuelle. C'est la façon pratique de faire tenir une très grande couche dans la limite de 25 000 entités du forfait gratuit. L'onglet Fidélité indique combien d'entités chaque couche perd.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="1397" />
-      <source>{n} decimal place</source>
-      <translation>{n} décimale</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1397" />
-      <source>{n} decimal places</source>
-      <translation>{n} décimales</translation>
+      <source>%n decimal place</source>
+      <extracomment>English plural: %n decimal places</extracomment>
+      <translation>
+        <numerusform>%n décimale</numerusform>
+        <numerusform>%n décimales</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1416" />
       <source>Rounding makes the file smaller and cannot be undone. 6 places is about 0.1 m at the equator.</source>
       <translation>Arrondir réduit le fichier et ne peut pas être annulé. 6 décimales correspondent à environ 0,1 m à l'équateur.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="1496" />
-      <source>Export makes a folder for a web server, carrying {n} layer.</source>
-      <translation>Exporter crée un dossier pour un serveur web, avec {n} couche.</translation>
+      <source>Export makes a folder for a web server, carrying %n layer.</source>
+      <extracomment>English plural: Export makes a folder for a web server, carrying %n layers.</extracomment>
+      <translation>
+        <numerusform>Exporter crée un dossier pour un serveur web, avec %n couche.</numerusform>
+        <numerusform>Exporter crée un dossier pour un serveur web, avec %n couches.</numerusform>
+      </translation>
     </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1496" />
-      <source>Export makes a folder for a web server, carrying {n} layers.</source>
-      <translation>Exporter crée un dossier pour un serveur web, avec {n} couches.</translation>
-    </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="1502" />
-      <source>Export makes one HTML file that opens by double-click, carrying {n} layer.</source>
-      <translation>Exporter crée un seul fichier HTML qui s'ouvre d'un double-clic, avec {n} couche.</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="1502" />
-      <source>Export makes one HTML file that opens by double-click, carrying {n} layers.</source>
-      <translation>Exporter crée un seul fichier HTML qui s'ouvre d'un double-clic, avec {n} couches.</translation>
+      <source>Export makes one HTML file that opens by double-click, carrying %n layer.</source>
+      <extracomment>English plural: Export makes one HTML file that opens by double-click, carrying %n layers.</extracomment>
+      <translation>
+        <numerusform>Exporter crée un seul fichier HTML qui s'ouvre d'un double-clic, avec %n couche.</numerusform>
+        <numerusform>Exporter crée un seul fichier HTML qui s'ouvre d'un double-clic, avec %n couches.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1712" />
@@ -6022,15 +5974,14 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
       <source>Popups: on click</source>
       <translation>Fenêtres : au clic</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="2334" />
-      <source>Precision: {n} decimal place</source>
-      <translation>Précision : {n} décimale</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="2334" />
-      <source>Precision: {n} decimal places</source>
-      <translation>Précision : {n} décimales</translation>
+      <source>Precision: %n decimal place</source>
+      <extracomment>English plural: Precision: %n decimal places</extracomment>
+      <translation>
+        <numerusform>Précision : %n décimale</numerusform>
+        <numerusform>Précision : %n décimales</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2618" />
@@ -6219,15 +6170,14 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
       <source>Tick at least one layer to include.</source>
       <translation>Cochez au moins une couche à inclure.</translation>
     </message>
-    <message>
+    <message numerus="yes">
       <location filename="../ui/main_dialog.py" line="4154" />
-      <source>{n} layer will be exported.</source>
-      <translation>{n} couche sera exportée.</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="4154" />
-      <source>{n} layers will be exported.</source>
-      <translation>{n} couches seront exportées.</translation>
+      <source>%n layer will be exported.</source>
+      <extracomment>English plural: %n layers will be exported.</extracomment>
+      <translation>
+        <numerusform>%n couche sera exportée.</numerusform>
+        <numerusform>%n couches seront exportées.</numerusform>
+      </translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="4457" />
