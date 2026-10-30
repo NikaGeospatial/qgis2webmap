@@ -264,18 +264,37 @@ class TestLiveFrameInWgs84:
             " (e) => window.__omChecks.push(e.detail), true);"
         )
         _open(page, checked)
-        landed = page.evaluate(
-            """([frameId, corners]) => {
-              const georef = document.getElementById(frameId).georef;
-              return corners.map((c) => {
-                const p = georef.project(c);
-                return p && [p.xMm, p.yMm];
-              });
-            }""",
-            [want["main_frame"], want["corners"]],
-        )
         w, h = want["size_mm"]
-        for got, wanted in zip(landed, ([0, 0], [w, 0], [w, h], [0, h])):
+        frame_corners = ([0, 0], [w, 0], [w, h], [0, h])
+
+        def corners_landed() -> list[list[float]]:
+            return page.evaluate(
+                """([frameId, corners]) => {
+                  const georef = document.getElementById(frameId).georef;
+                  return corners.map((c) => {
+                    const p = georef.project(c);
+                    return p && [p.xMm, p.yMm];
+                  });
+                }""",
+                [want["main_frame"], want["corners"]],
+            )
+
+        def on_the_corners(landed: list[list[float]]) -> bool:
+            return all(
+                got == pytest.approx(wanted, abs=0.05)
+                for got, wanted in zip(landed, frame_corners)
+            )
+
+        # A live frame reports a georeference as soon as its map has a camera,
+        # but only lands on QGIS's corners once the map has settled there. A
+        # slow software-GL browser takes seconds to get that far, so give it
+        # a bounded time instead of reading the first view.
+        landed = corners_landed()
+        deadline = time.monotonic() + 30
+        while not on_the_corners(landed) and time.monotonic() < deadline:
+            page.wait_for_timeout(250)
+            landed = corners_landed()
+        for got, wanted in zip(landed, frame_corners):
             assert got == pytest.approx(wanted, abs=0.05)
         assert page.evaluate(_VALIDATE, cartograph_source)["errors"] == []
         checks = page.evaluate("window.__omChecks")
