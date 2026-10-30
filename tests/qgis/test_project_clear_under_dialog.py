@@ -57,6 +57,12 @@ def test_the_window_survives_and_closes_when_the_project_goes(scenario, tmp_path
     assert code == 0, f"the process died ({code}) in {scenario}"
     assert result["file_unchanged"], result["file_text"]
     assert result["dialog_visible"] is False
+    if scenario in ("clear_held_close", "clear_during_build"):
+        # Guards the scenario itself: a probe that never got a build running
+        # would pass the outcome checks for no reason.
+        assert result["build_running_before"]
+    if scenario == "clear_held_close":
+        assert result["close_held_before"]
 
 
 @pytest.mark.parametrize("scenario", LAYOUT_GONE)
@@ -75,13 +81,3 @@ def test_a_held_close_whose_layout_is_deleted_ends_in_a_close_without_a_write(
     assert result["close_held_before"] and result["build_running_before"]
     assert result["file_unchanged"], result["file_text"]
     assert result["dialog_visible"] is False
-
-
-@pytest.mark.parametrize("scenario", ["clear_held_close", "clear_during_build"])
-def test_the_situations_really_had_a_save_in_flight(scenario, tmp_path):
-    """Guards the scenarios above: a probe that never got a build running would
-    pass them for no reason."""
-    code, result = _run(scenario, tmp_path)
-    assert code == 0
-    assert result["build_running_before"]
-    assert scenario != "clear_held_close" or result["close_held_before"]

@@ -20,7 +20,9 @@ from qgis.core import (
 )
 from qgis.PyQt.QtGui import QColor
 from test_cartograph_dialog import (
-    TestCanvasAndImport,
+    TestCanvasAndImport as _CanvasAndImportHelper,  # not collected twice here
+)
+from test_cartograph_dialog import (
     _add_layout,
     _choose_cartograph,
     _click_new_from_template,
@@ -283,7 +285,7 @@ class TestTheme:
 
 def _template_dialog(project, picked_template, template="classic"):
     picked_template.choice = (template, "A4", "landscape")
-    dialog, _canvas = TestCanvasAndImport()._canvas_dialog(project)
+    dialog, _canvas = _CanvasAndImportHelper()._canvas_dialog(project)
     _choose_cartograph(dialog)
     _click_new_from_template(dialog)
     cartograph = dialog._cartograph
