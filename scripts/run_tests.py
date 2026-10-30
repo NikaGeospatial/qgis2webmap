@@ -735,7 +735,8 @@ class Planner:
         if self._base_env_42 is None:
             base = dict(os.environ)
             if self.cfg.env42_sh:
-                base.update(sourced_environment(self.cfg.env42_sh, self.snap))
+                # Replace, not merge: the script may also unset variables.
+                base = sourced_environment(self.cfg.env42_sh, self.snap)
             py = [str(self.snap), str(self.snap / "tests")]
             if base.get("PYTHONPATH"):
                 py.append(base["PYTHONPATH"])
@@ -1191,8 +1192,8 @@ def build_plan(
                 [
                     "sh",
                     "-c",
-                    f"{ruff_cmd} check -q {files} && "
-                    f"{ruff_cmd} format --check -q {files}",
+                    f"{ruff_cmd} check --no-cache -q {files} && "
+                    f"{ruff_cmd} format --no-cache --check -q {files}",
                 ],
                 f"ruff on {len(changed_py)} changed file(s)",
             )
@@ -1229,7 +1230,12 @@ def build_plan(
     if ruff_cmd:
         planner.add_light(
             "ruff",
-            ["sh", "-c", f"{ruff_cmd} check -q . && {ruff_cmd} format --check -q ."],
+            [
+                "sh",
+                "-c",
+                f"{ruff_cmd} check --no-cache -q . && "
+                f"{ruff_cmd} format --no-cache --check -q .",
+            ],
             "ruff check and format on the whole tree",
         )
     else:
@@ -1496,6 +1502,14 @@ def command_run(args: argparse.Namespace) -> int:
     )
     try:
         planner = build_plan(args, cfg, cand, run_dir)
+        if args.only:
+            prefixes = tuple(args.only.split(","))
+            planner.stages = [s for s in planner.stages if s.name.startswith(prefixes)]
+            kept = {s.name for s in planner.stages}
+            for stage in planner.stages:
+                stage.depends = [d for d in stage.depends if d in kept]
+            planner.skipped = []
+            say(f"--only {args.only}: the verdict covers just these stages")
         if planner.selection is not None:
             print("\n".join(planner.selection.describe()))
             print(f"base: {planner.base}; changed files: {len(planner.changes)}")
@@ -1676,6 +1690,11 @@ def parser() -> argparse.ArgumentParser:
             type=int,
             default=HEAVY_WORKERS_DEFAULT,
             help="heavy workers at once (default 2)",
+        )
+        p.add_argument(
+            "--only",
+            help="comma-separated stage-name prefixes to run (benchmarks, reruns); "
+            "the verdict then covers only those stages",
         )
         p.add_argument("--dry-run", action="store_true", help="print the plan and exit")
         p.add_argument("--keep-snapshot", action="store_true")
