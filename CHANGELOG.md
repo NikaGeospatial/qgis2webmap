@@ -171,10 +171,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ### Fixed
 - **Closing during slow work no longer crashes QGIS.** A background job that
-  outlasts the closing window is left to finish safely, and a cartograph edit
-  made just before closing is saved first, instead of being lost.
-- **Switching layouts no longer loses edits.** A change to one layout that had
-  not been saved yet is still written to its file after you switch to another.
+  outlasts the closing window is left to finish safely.
 - **A failed folder export keeps the previous export.** If a file cannot be
   written (a full disk, say), the folder still holds the last working page and
   its files, not a page that points at missing files.
@@ -184,20 +181,6 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   multi-selection in QGIS's own order), while drawing, filtering and counting
   use the stored value, as QGIS does. When a layer's symbology hides every
   feature, the report now says so rather than blaming an empty source.
-- **Layouts in inches, centimetres or points export correctly.** Items are
-  placed, and Image and PDF maps drawn, at the same size and place as the
-  same layout in millimetres, including rotated labels and maps.
-- **Live counts follow atlas clipping.** A feature hidden because the page's
-  shape or a clipping setting cuts the map is no longer counted.
-- **Large whole-number IDs match exactly.** A Live count or an atlas **Matching
-  a value** filter on an ID such as 9007199254740993 no longer also matches
-  9007199254740992.
-- **Very large frames are drawn within size limits.** A frame is never drawn
-  larger than 16,000 pixels a side or 100 million pixels, whatever its
-  resolution setting, and the **Checks** message gives the requested and the
-  actual resolution.
-- **Two crashes on QGIS 3.44.** Dragging the **Edit** tab's text box height
-  grip, and a frame size near the limit above, no longer close QGIS.
 - **Symbol sizes and opacity.** Marker size, outline width and offset now follow
   their unit (pixels, points, millimetres, inches) instead of all being read as
   millimetres, and symbol opacity is applied to the exported colours once.
