@@ -188,8 +188,10 @@ class FolderExporter:
             # The backups in staging are all that is left of some previous
             # files; the next export puts them back (`_recover_interrupted`).
             raise OSError(
-                f"The export failed and the previous files could not all be "
-                f"restored; they are kept in {staging}"
+                tr(
+                    "The export failed and the previous files could not all be "
+                    "restored; they are kept in {path}"
+                ).format(path=staging)
             ) from incomplete.__cause__
         except BaseException:
             shutil.rmtree(staging, ignore_errors=True)
