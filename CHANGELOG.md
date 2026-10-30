@@ -168,6 +168,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Keyboard focus is visible on every control**, and in Arabic the
   dialog's directional styling - arrows, rounded ends, section chevrons - is
   mirrored along with its right-to-left layout.
+- **Popups show editor-widget descriptions.** A field with a Value Map or
+  Value Relation shows its descriptions in popups (a Value Relation's
+  multi-selection in QGIS's own order), while drawing, filtering, labels and
+  counting use the stored value, as QGIS does. When a layer's symbology hides
+  every feature, the report says so rather than blaming an empty source.
 
 ### Fixed
 - **Closing during slow work no longer crashes QGIS.** A background job that
@@ -175,12 +180,6 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **A failed folder export keeps the previous export.** If a file cannot be
   written (a full disk, say), the folder still holds the last working page and
   its files, not a page that points at missing files.
-- **Value Map and Value Relation fields keep their categories.** A categorized
-  or graduated layer whose field has one of these editor widgets no longer
-  loses every feature; popups show the descriptions (a Value Relation's
-  multi-selection in QGIS's own order), while drawing, filtering and counting
-  use the stored value, as QGIS does. When a layer's symbology hides every
-  feature, the report now says so rather than blaming an empty source.
 - **Symbol sizes and opacity.** Marker size, outline width and offset now follow
   their unit (pixels, points, millimetres, inches) instead of all being read as
   millimetres, and symbol opacity is applied to the exported colours once.
