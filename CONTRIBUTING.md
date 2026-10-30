@@ -172,7 +172,7 @@ python3 scripts/run_tests.py stop                  # ends the running run's own 
 Sharding is by recorded per-file time (`tests/durations.json`, refreshed with
 `run_tests.py update-durations RUN_DIR` from a run's `observed-durations.json`).
 Every worker gets its own HOME, XDG dirs, TMPDIR, pytest basetemp, QGIS profile,
-QSettings and save root under `<state>/runs/<id>/workers/<name>/` (`Q2W_WORKER*`
+QSettings and save root under `<state>/w/<run>-<name>/` (short on purpose: a unix socket path is limited to about 100 characters) (`Q2W_WORKER*`
 variables; `tests/conftest.py` fails a worker that escaped its directory and writes
 `isolation.json`). The preview server binds port 0, so no port is shared. At most
 two heavy workers run at once (`--max-workers`), and a worker starts only when

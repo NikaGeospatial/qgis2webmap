@@ -728,6 +728,7 @@ class Planner:
         self.zip_path: Path | None = None
         self.fixture_dirs: dict[str, str] = {}
         self.run_id = run_dir.name
+        self.cand_tag = run_dir.name.rsplit("-", 1)[1][:1]
         self.selection: selection.Selection | None = None
         self.base = ""
         self.changes: list[selection.Change] = []
@@ -756,7 +757,13 @@ class Planner:
             env["ONLYMAP_RUNTIME_DIR"] = self.cfg.runtime_dir
 
     def worker_dir(self, name: str) -> Path:
-        path = self.run_dir / "workers" / name
+        """A short path: a unix socket path is limited to about 100 characters and
+        some tests put one under pytest's tmp_path inside this directory."""
+        short = re.sub(
+            r"[^a-z0-9]", "", name.replace("shard", "s").replace("qgis", "q")
+        )
+        stamp = self.run_id.rsplit("-", 1)[0]
+        path = self.cfg.state_dir / "w" / f"{stamp}{self.cand_tag}-{short}"
         for sub in ("home", "tmp", "xdg-config", "xdg-data", "xdg-state", "xdg-cache"):
             (path / sub).mkdir(parents=True, exist_ok=True)
         return path
@@ -803,7 +810,7 @@ class Planner:
             "-o",
             "tmp_path_retention_policy=failed",
             "--basetemp",
-            f"{root}/pt",
+            f"{root}/p",
         ]
 
     # stage constructors

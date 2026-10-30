@@ -64,7 +64,9 @@ def pytest_configure(config: pytest.Config) -> None:
     for what, value in (
         ("HOME", Path.home()),
         ("TMPDIR (tempfile.gettempdir())", tempfile.gettempdir()),
-        ("--basetemp", config.option.basetemp or ""),
+        # A pytest the suite starts itself (a crash-isolation child) has no
+        # --basetemp; its default lives under the TMPDIR checked above.
+        ("--basetemp", config.option.basetemp or tempfile.gettempdir()),
     ):
         if not value or not _inside(value, root):
             problems.append(f"{what} is {str(value)!r}, outside the worker dir {root}")
