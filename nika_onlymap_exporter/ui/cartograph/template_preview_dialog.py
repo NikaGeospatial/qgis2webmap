@@ -181,13 +181,16 @@ class TemplatePreviewDialog(QDialog):
             self._show_result(result)
         else:
             self._pending = result
-            result.finished.connect(
-                lambda image, pending=result: self._finished(pending, image)
-            )
+            # A bound method of this dialog, not a closure: the render can
+            # finish after the dialog is gone, and Qt drops the connection then.
+            result.finished.connect(self._finished)
             self._deadline.start(PREVIEW_TIMEOUT_MS)
 
-    def _finished(self, pending: object, image: QImage | None) -> None:
-        if self._closed or self._pending is not pending:
+    def _finished(self, image: QImage | None) -> None:
+        if self._closed or self._pending is None:
+            return
+        emitter = self.sender()
+        if emitter is not None and emitter is not self._pending:
             return
         self._pending = None
         self._deadline.stop()

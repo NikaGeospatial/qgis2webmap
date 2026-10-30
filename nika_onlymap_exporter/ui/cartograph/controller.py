@@ -361,6 +361,20 @@ class _StaticRenders:
             frame.render.cancel()
 
 
+@dataclasses.dataclass
+class _BuildLanding:
+    """What a build's worker was started with, kept for when it reports back."""
+
+    job: BackgroundJob
+    path: Path
+    report: FidelityReportBuilder
+    built_for: str | None
+    build_number: int
+    edits: int
+    pending: list[cartograph_export.PendingStaticFrame]
+    pictures: dict[str, bytes]
+
+
 class CartographController:
     """Owns the Cartograph output's widgets, state and autosave job."""
 
@@ -447,6 +461,8 @@ class CartographController:
         self._listed_layouts: list[tuple[QgsPrintLayout, str]] = []
         self._renamed: dict[str, str] = {}
         self._shut_down = False
+        self._static_carry_on: Callable[[], None] | None = None
+        self._build_landing: _BuildLanding | None = None
         # Set while the window waits to close until the file is current: the
         # two ways that wait can end (saved, failed). See `start_close_save`.
         self._close_waiter: tuple[Callable[[], None], Callable[[str], None]] | None = (
@@ -680,6 +696,8 @@ class CartographController:
         is left owned by `background_job`, never destroyed with the dialog."""
         job, self._job = self._job, None
         self._job_document = None
+        self._static_carry_on = None
+        self._build_landing = None
         if isinstance(job, _StaticRenders):
             job.cancel()
         elif job is not None:
@@ -2409,11 +2427,20 @@ class CartographController:
             return
         phase = _StaticRenders(pending)
         self._job = phase
+        self._static_carry_on = carry_on
         self._update_status_label()
+        # A bound method, not a closure: a render can finish after this
+        # controller has shut down, and the method checks for that.
         for frame in pending:
-            frame.render.finished.connect(
-                lambda: self._static_render_finished(phase, carry_on)
-            )
+            frame.render.finished.connect(self._on_static_frame_drawn)
+        self._static_render_finished(phase, carry_on)
+
+    def _on_static_frame_drawn(self) -> None:
+        """A static frame's render finished: go on if it was the last one."""
+        phase = self._job
+        carry_on = self._static_carry_on
+        if self._shut_down or carry_on is None or not isinstance(phase, _StaticRenders):
+            return
         self._static_render_finished(phase, carry_on)
 
     def _static_render_finished(
@@ -2423,6 +2450,7 @@ class CartographController:
         if self._job is not phase or self._shut_down or not phase.all_done:
             return
         self._job = None
+        self._static_carry_on = None
         try:
             carry_on()
         except Exception as exc:
@@ -2510,21 +2538,53 @@ class CartographController:
         job = BackgroundJob(work)
         self._job = job
         self._builds_started += 1
-        build_number = self._builds_started
-
-        def succeeded(finished: cartograph_export.FinishedCartograph) -> None:
-            # The cache listens to layers, which only the GUI thread may do.
-            cartograph_export.remember_static_frames(pending, pictures)
-            self._on_build_succeeded(
-                path, finished, report, built_for, build_number, edits
-            )
-
-        job.succeeded.connect(succeeded)
-        job.failed.connect(
-            lambda message, details: self._on_build_failed(message, details, built_for)
+        self._build_landing = _BuildLanding(
+            job=job,
+            path=path,
+            report=report,
+            built_for=built_for,
+            build_number=self._builds_started,
+            edits=edits,
+            pending=pending,
+            pictures=pictures,
         )
+        # Bound methods, not closures: the job can outlive this controller, and
+        # both check `_shut_down` and that they answer the build still current.
+        job.succeeded.connect(self._on_build_job_succeeded)
+        job.failed.connect(self._on_build_job_failed)
         job.start()
         self._update_status_label()
+
+    def _current_landing(self) -> _BuildLanding | None:
+        """What the running build was started with, or `None` when a result
+        arriving now is not for the build in flight (or nothing is in flight)."""
+        landing, self._build_landing = self._build_landing, None
+        if landing is None or self._shut_down or landing.job is not self._job:
+            return None
+        return landing
+
+    def _on_build_job_succeeded(
+        self, finished: cartograph_export.FinishedCartograph
+    ) -> None:
+        landing = self._current_landing()
+        if landing is None:
+            return
+        # The cache listens to layers, which only the GUI thread may do.
+        cartograph_export.remember_static_frames(landing.pending, landing.pictures)
+        self._on_build_succeeded(
+            landing.path,
+            finished,
+            landing.report,
+            landing.built_for,
+            landing.build_number,
+            landing.edits,
+        )
+
+    def _on_build_job_failed(self, message: str, details: str) -> None:
+        landing = self._current_landing()
+        if landing is None:
+            return
+        self._on_build_failed(message, details, landing.built_for)
 
     def _load_runtime(self) -> RuntimeBundle | None:
         """The runtime's bytes, read once per runtime version.

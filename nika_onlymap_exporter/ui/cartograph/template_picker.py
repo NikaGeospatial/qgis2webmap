@@ -1438,9 +1438,9 @@ class TemplatePicker(QDialog):
         if result is not None and not isinstance(result, QImage):
             # Drawn in the background: the next one waits for this one.
             self._inflight = (template_id, key, result)
-            result.finished.connect(
-                lambda image, pending=result: self._on_pending_done(pending, image)
-            )
+            # A bound method of this dialog, not a closure: the render can
+            # finish after the picker is gone, and Qt drops the connection then.
+            result.finished.connect(self._on_pending_done)
             self._preview_deadline.start()
             self._show_state(template_id)
             return
@@ -1459,9 +1459,12 @@ class TemplatePicker(QDialog):
         self._show_state(template_id)
         self._relayout()
 
-    def _on_pending_done(self, pending: PendingPreview, image: QImage | None) -> None:
-        if self._closed or self._inflight is None or self._inflight[2] is not pending:
+    def _on_pending_done(self, image: QImage | None) -> None:
+        if self._closed or self._inflight is None:
             return  # cancelled while it finished
+        emitter = self.sender()
+        if emitter is not None and emitter is not self._inflight[2]:
+            return  # a page that was cancelled for this one
         template_id, key, _pending = self._inflight
         self._inflight = None
         self._preview_deadline.stop()

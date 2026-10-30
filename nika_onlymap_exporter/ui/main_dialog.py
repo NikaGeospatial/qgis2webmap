@@ -902,6 +902,7 @@ class MainDialog(QDialog):
         # two reads racing over the same layers is exactly the crash this
         # dialog's fourth rule exists to prevent.
         self._job: BackgroundJob | None = None
+        self._job_on_success: Callable[[object], None] | None = None
         self._cached_export = None
         self._cached_report = None
         self._cached_signature: str | None = None
@@ -3802,7 +3803,11 @@ class MainDialog(QDialog):
             self._on_job_failed_quietly if quiet else self._on_job_failed
         )
         job.cancelled.connect(self._on_job_cancelled)
-        job.succeeded.connect(lambda result: self._on_job_succeeded(result, on_success))
+        # A bound method, not a closure: the job outlives this dialog, and Qt
+        # drops a bound method's connection with the widget, where a lambda
+        # would stay connected and call into a deleted dialog.
+        self._job_on_success = on_success
+        job.succeeded.connect(self._on_job_result)
         # No parent and no `deleteLater` here: the job owns itself until its
         # thread has finished (see `background_job`), so closing this dialog
         # never destroys a thread that is still running.
@@ -3860,6 +3865,13 @@ class MainDialog(QDialog):
         self._job.cancel()
         self.cancel_button.setEnabled(False)
         self.progress_bar.setFormat(tr("Stopping..."))
+
+    def _on_job_result(self, result) -> None:
+        """The running job succeeded: hand its result to the stage that asked."""
+        on_success, self._job_on_success = self._job_on_success, None
+        if self._shut_down or on_success is None:
+            return
+        self._on_job_succeeded(result, on_success)
 
     def _on_job_succeeded(self, result, on_success) -> None:
         # Cleared *before* the callback, so a callback that starts the next
