@@ -402,6 +402,14 @@ class TestRasterInALiveFrame:
         assert page.evaluate("() => window.__printed === true") is False
 
 
+_NO_WEBGL_SCRIPT = """
+const realGetContext = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+  return /webgl/i.test(String(kind)) ? null : realGetContext.call(this, kind, ...rest);
+};
+"""
+
+
 class TestWithoutWebgl:
     """A browser without WebGL cannot draw a live frame, and the runtime then
     never settles it. The page turns the frame static by QGIS's own
@@ -409,12 +417,20 @@ class TestWithoutWebgl:
     would be, and its corners and scale tokens still read QGIS's map."""
 
     def test_the_live_frame_turns_static_by_qgis_georeference(
-        self, browser_type, fixtures: Path, expected
+        self, browser_type, browser_name: str, fixtures: Path, expected
     ) -> None:
         want = expected["survey_live"]
-        browser = browser_type.launch(args=["--disable-webgl", "--disable-3d-apis"])
+        if browser_name == "webkit":
+            # WebKit refuses unknown launch flags (it exits at once), and has
+            # no flag or pref that turns WebGL off, so it is taken away on the
+            # page: no canvas hands out a WebGL context.
+            browser = browser_type.launch()
+        else:
+            browser = browser_type.launch(args=["--disable-webgl", "--disable-3d-apis"])
         try:
             page = browser.new_page()
+            if browser_name == "webkit":
+                page.add_init_script(_NO_WEBGL_SCRIPT)
             page.goto((fixtures / "survey-live.html").as_uri())
             assert not page.evaluate(
                 "() => !!document.createElement('canvas').getContext('webgl2')"
