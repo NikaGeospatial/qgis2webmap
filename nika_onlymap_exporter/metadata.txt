@@ -46,7 +46,9 @@ changelog=0.3.0
     north arrows, labels with live scale and title tokens, shapes and
     pictures carry over, and the Fidelity tab lists anything that changes.
     The file saves itself as you work. Atlas layouts give one page per
-    feature, exported as one ZIP or printed as one multi-page PDF. Print
+    feature (Create a map series), exported as a PDF, a ZIP or a web page,
+    or printed through QGIS; Live counts follow each page. Go to location
+    centres a map frame on coordinates or a feature. Print
     settings add bleed, crop marks and a safe zone; CMYK and ICC PDFs go
     through QGIS. A Colour vision check simulates protanopia, deuteranopia,
     tritanopia and achromatopsia on the canvas and the page. Export as
