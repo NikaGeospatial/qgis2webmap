@@ -25,6 +25,8 @@ from close_lifecycle_fixtures import (
 )
 
 qgis_core = pytest.importorskip("qgis.core")
+from qgis.PyQt.QtCore import Qt  # noqa: E402
+from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QFileDialog  # noqa: E402
 
 PRECIOUS = b"my only copy of something"
@@ -368,6 +370,185 @@ class TestAnExplicitChoiceIsHonoured:
         assert Path(cartograph.file_edit.text()) == replaced
         assert "Old" in replaced.read_text(encoding="utf-8")
         assert not (tmp_path / "replace-me (2).html").exists()
+        dialog.close()
+
+
+class TestSaveAsNeverReplacesAnotherNameUnasked:
+    """The chooser confirms the name it was given; `report.txt` becomes
+    `report.html`, a different file nobody was asked about."""
+
+    BOX_TITLE = "Replace existing file?"
+
+    @staticmethod
+    def _choose(cartograph, monkeypatch, chosen: Path, answer: str | None):
+        """Run the real Save as with the chooser returning `chosen`. `answer`
+        is how the confirmation is answered (None: it must not appear).
+        Returns what each confirmation showed."""
+        from qgis.PyQt.QtCore import QTimer
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+
+        monkeypatch.setattr(
+            QFileDialog,
+            "getSaveFileName",
+            staticmethod(lambda *args, **kwargs: (str(chosen), "")),
+        )
+        seen: list[dict] = []
+        deadline = time.monotonic() + 15
+
+        def respond() -> None:
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QMessageBox) and widget.isVisible():
+                    seen.append(
+                        {
+                            "title": widget.windowTitle(),
+                            "text": widget.text(),
+                            "info": widget.informativeText(),
+                            "buttons": [
+                                b.text().replace("&", "") for b in widget.buttons()
+                            ],
+                            "default": widget.defaultButton().text(),
+                            "escape": widget.escapeButton().text(),
+                        }
+                    )
+                    if answer == "close":
+                        widget.close()
+                    elif answer == "escape":
+                        QTest.keyClick(widget, Qt.Key.Key_Escape)
+                    elif answer == "enter":
+                        QTest.keyClick(widget, Qt.Key.Key_Return)
+                    else:
+                        for button in widget.buttons():
+                            if button.text().replace("&", "") == answer:
+                                button.click()
+                    return
+            if time.monotonic() < deadline:
+                QTimer.singleShot(20, respond)
+
+        if answer is not None:
+            QTimer.singleShot(20, respond)
+        cartograph._on_choose_file()
+        deadline = 0.0  # stop polling once the call returned
+        return seen
+
+    def _state(self, qgis_app, project, tmp_path):
+        mine = tmp_path / "mine.html"
+        _project_pointing_at(project, tmp_path, mine)
+        dialog, cartograph, _layout = _open_cartograph(qgis_app, project)
+        report = tmp_path / "report.html"
+        report.write_bytes(FOREIGN_PAGE)
+        _pin_old_mtime(report)
+        return dialog, cartograph, report
+
+    @pytest.mark.parametrize("answer", ["Cancel", "escape", "close", "enter"])
+    def test_declining_leaves_the_other_file_and_the_destination_alone(
+        self, qgis_app, project, export, tmp_path, monkeypatch, answer
+    ) -> None:
+        from nika_onlymap_exporter.core.settings import load_state
+
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+        before = _fingerprint(report)
+        shown = cartograph.file_edit.text()
+
+        seen = self._choose(cartograph, monkeypatch, tmp_path / "report.txt", answer)
+        assert _settled(qgis_app, cartograph)
+        time.sleep(1.5)  # past the autosave debounce
+        assert _settled(qgis_app, cartograph)
+
+        assert len(seen) == 1
+        box = seen[0]
+        assert box["title"] == self.BOX_TITLE
+        assert "A file already exists at the final HTML destination:" in box["text"]
+        info = box["info"].replace("​", "")
+        assert str(report) in info
+        assert "Replacing it will overwrite its contents." in info
+        assert sorted(box["buttons"]) == ["Cancel", "Replace"]
+        assert box["default"] == "Cancel" and box["escape"] == "Cancel"
+        assert _fingerprint(report) == before
+        assert cartograph.file_edit.text() == shown
+        assert str(report) not in cartograph._approved_destinations
+        assert str(report) not in load_state(project).cartograph_files.values()
+        assert str(report) not in cartograph.state.cartograph_files.values()
+        dialog.close()
+
+    def test_replacing_approves_exactly_the_final_file_and_saves_there(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+
+        self._choose(cartograph, monkeypatch, tmp_path / "report.txt", "Replace")
+        assert _settled(qgis_app, cartograph)
+
+        assert Path(cartograph.file_edit.text()) == report
+        assert "Old" in report.read_text(encoding="utf-8")
+        assert str(report) in cartograph._approved_destinations
+        assert str(tmp_path / "report.txt") not in cartograph._approved_destinations
+        assert not (tmp_path / "report.txt").exists()
+        assert not (tmp_path / "report (2).html").exists()
+        dialog.close()
+
+    def test_a_name_without_an_extension_asks_too(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+        before = _fingerprint(report)
+
+        seen = self._choose(cartograph, monkeypatch, tmp_path / "report", "Cancel")
+        assert _settled(qgis_app, cartograph)
+        time.sleep(1.5)
+
+        assert len(seen) == 1
+        assert _fingerprint(report) == before
+        assert str(report) not in cartograph._approved_destinations
+        dialog.close()
+
+    def test_choosing_an_existing_html_is_not_asked_twice(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+
+        seen = self._choose(cartograph, monkeypatch, report, None)
+        assert _settled(qgis_app, cartograph)
+
+        assert seen == []
+        assert Path(cartograph.file_edit.text()) == report
+        assert "Old" in report.read_text(encoding="utf-8")
+        dialog.close()
+
+    def test_a_new_destination_needs_no_question(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+        before = _fingerprint(report)
+
+        seen = self._choose(cartograph, monkeypatch, tmp_path / "fresh.txt", None)
+        assert _settled(qgis_app, cartograph)
+
+        assert seen == []
+        fresh = tmp_path / "fresh.html"
+        assert Path(cartograph.file_edit.text()) == fresh
+        assert "Old" in fresh.read_text(encoding="utf-8")
+        assert _fingerprint(report) == before
+        dialog.close()
+
+    def test_cancelling_the_chooser_changes_nothing(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        dialog, cartograph, report = self._state(qgis_app, project, tmp_path)
+        before = _fingerprint(report)
+        shown = cartograph.file_edit.text()
+        approved = set(cartograph._approved_destinations)
+        monkeypatch.setattr(
+            QFileDialog,
+            "getSaveFileName",
+            staticmethod(lambda *args, **kwargs: ("", "")),
+        )
+
+        cartograph._on_choose_file()
+        assert _settled(qgis_app, cartograph)
+
+        assert cartograph.file_edit.text() == shown
+        assert cartograph._approved_destinations == approved
+        assert _fingerprint(report) == before
         dialog.close()
 
 
