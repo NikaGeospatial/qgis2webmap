@@ -1652,8 +1652,33 @@ class CartographController:
         path = Path(chosen)
         if path.suffix.lower() != ".html":
             path = path.with_suffix(".html")
+        # The chooser only confirmed replacing the name it was given. A name
+        # changed afterwards needs its own answer when that file exists.
+        if str(path) != chosen and path.exists() and not self._confirm_replace(path):
+            return
         self._approved_destinations.add(str(path))
         self.file_edit.choose(str(path))
+
+    def _confirm_replace(self, path: Path) -> bool:
+        """Ask whether to replace the existing file at `path`. Cancel is the
+        default and the Escape/close answer; only Replace returns True."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        box = QMessageBox(self.dialog)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("Replace existing file?"))
+        box.setText(tr("A file already exists at the final HTML destination:"))
+        # Zero-width spaces after separators let a long path wrap, not clip.
+        shown = str(path).replace("/", "/\u200b").replace("\\", "\\\u200b")
+        box.setInformativeText(
+            f"{shown}\n\n{tr('Replacing it will overwrite its contents.')}"
+        )
+        cancel = box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        replace = box.addButton(tr("Replace"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        box.exec()
+        return box.clickedButton() is replace
 
     # ---- Frames tab -----------------------------------------------------
 
