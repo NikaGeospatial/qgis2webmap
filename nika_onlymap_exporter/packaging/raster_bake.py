@@ -39,6 +39,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from ..core.dom_parse import parse_dom
 from ..core.export_ir import NoDataRule
 from ..core.raster_style import hue_saturation_active
 
@@ -76,7 +77,6 @@ def _qgis() -> Any:
         )
         from qgis.PyQt.QtCore import QSize
         from qgis.PyQt.QtGui import QColor, QImage, QPainter
-        from qgis.PyQt.QtXml import QDomDocument
     except ImportError as exc:  # pragma: no cover - QGIS is present in the plugin
         raise StyleBakeError(
             "QGIS itself is needed to render a raster's colours and could not "
@@ -96,24 +96,7 @@ def _qgis() -> Any:
         Size=QSize,
         RasterFileWriter=QgsRasterFileWriter,
         TransformContext=QgsCoordinateTransformContext,
-        Document=QDomDocument,
     )
-
-
-def _parsed(result: Any) -> bool:
-    """Whether `QDomDocument.setContent` succeeded, on either Qt.
-
-    Qt5 returns a bool. Qt6 returns a `ParseResult` named tuple - and a failed
-    parse is `(False, message, line, column)`, which is a NON-EMPTY tuple and
-    therefore truthy. So `if not document.setContent(...)` is not merely
-    imprecise on Qt6, it can never fire: a malformed style would sail past the
-    guard and reach `importNamedStyle` as an empty document, which applies
-    cleanly and renders the raster with no styling at all. Caught by the QGIS
-    test tier on 2026-09-18, which is the only tier that runs a real QDomDocument.
-    """
-    if isinstance(result, tuple):
-        return bool(result[0])
-    return bool(result)
 
 
 def _render_strips(qgis: Any, layer: Any, destination: str) -> None:
@@ -243,8 +226,8 @@ def bake(
             "layer is drawn from its values instead of its styling."
         )
 
-    document = qgis.Document()
-    if not _parsed(document.setContent(style_qml)):
+    document = parse_dom(style_qml)
+    if document is None:
         raise StyleBakeError(
             "The layer's saved styling could not be read back, so the layer is "
             "drawn from its values instead of its styling."

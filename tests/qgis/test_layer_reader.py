@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from nika_onlymap_exporter.core.dom_parse import parse_dom
 from nika_onlymap_exporter.core.export_ir import (
     AssetDisposition,
     FidelityStatus,
@@ -23,7 +24,6 @@ from nika_onlymap_exporter.core.layer_reader import (
     read_layer,
     read_raster,
 )
-from nika_onlymap_exporter.packaging.raster_bake import _parsed
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -428,7 +428,6 @@ class TestRasterColour:
         page still renders.
         """
         from qgis.core import QgsRasterLayer
-        from qgis.PyQt.QtXml import QDomDocument
 
         layer = make_raster_layer()
         export_layer = read_raster(layer, FidelityReportBuilder())
@@ -437,12 +436,12 @@ class TestRasterColour:
         assert qml is not None
 
         fresh = QgsRasterLayer(layer.source(), "fresh")
-        document = QDomDocument()
         # Via the production helper, not a bare truthiness check: on Qt6
         # `setContent` returns a ParseResult, and a FAILED parse is a non-empty
         # and therefore truthy tuple. Asserting on the raw return here would
         # pass against a document that never parsed.
-        assert _parsed(document.setContent(qml)) is True
+        document = parse_dom(qml)
+        assert document is not None
         applied, message = fresh.importNamedStyle(document)
         assert applied is True, message
 
