@@ -129,7 +129,10 @@ class TestSurveyCartograph:
         assert result["errors"] == []
         assert result["valid"] is True
 
-    def test_it_prints_at_true_a3_size(self, page, fixtures: Path, expected) -> None:
+    def test_it_prints_at_true_a3_size(
+        self, page, browser_name: str, fixtures: Path, expected
+    ) -> None:
+        _needs_pdf(browser_name)
         _open(page, fixtures / "survey-static.html")
         pdf = page.pdf(prefer_css_page_size=True, print_background=True)
         width, height = _pdf_page_size_mm(pdf)
@@ -261,18 +264,37 @@ class TestLiveFrameInWgs84:
             " (e) => window.__omChecks.push(e.detail), true);"
         )
         _open(page, checked)
-        landed = page.evaluate(
-            """([frameId, corners]) => {
-              const georef = document.getElementById(frameId).georef;
-              return corners.map((c) => {
-                const p = georef.project(c);
-                return p && [p.xMm, p.yMm];
-              });
-            }""",
-            [want["main_frame"], want["corners"]],
-        )
         w, h = want["size_mm"]
-        for got, wanted in zip(landed, ([0, 0], [w, 0], [w, h], [0, h])):
+        frame_corners = ([0, 0], [w, 0], [w, h], [0, h])
+
+        def corners_landed() -> list[list[float]]:
+            return page.evaluate(
+                """([frameId, corners]) => {
+                  const georef = document.getElementById(frameId).georef;
+                  return corners.map((c) => {
+                    const p = georef.project(c);
+                    return p && [p.xMm, p.yMm];
+                  });
+                }""",
+                [want["main_frame"], want["corners"]],
+            )
+
+        def on_the_corners(landed: list[list[float]]) -> bool:
+            return all(
+                got == pytest.approx(wanted, abs=0.05)
+                for got, wanted in zip(landed, frame_corners)
+            )
+
+        # A live frame reports a georeference as soon as its map has a camera,
+        # but only lands on QGIS's corners once the map has settled there. A
+        # slow software-GL browser takes seconds to get that far, so give it
+        # a bounded time instead of reading the first view.
+        landed = corners_landed()
+        deadline = time.monotonic() + 30
+        while not on_the_corners(landed) and time.monotonic() < deadline:
+            page.wait_for_timeout(250)
+            landed = corners_landed()
+        for got, wanted in zip(landed, frame_corners):
             assert got == pytest.approx(wanted, abs=0.05)
         assert page.evaluate(_VALIDATE, cartograph_source)["errors"] == []
         checks = page.evaluate("window.__omChecks")
@@ -380,6 +402,14 @@ class TestRasterInALiveFrame:
         assert page.evaluate("() => window.__printed === true") is False
 
 
+_NO_WEBGL_SCRIPT = """
+const realGetContext = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+  return /webgl/i.test(String(kind)) ? null : realGetContext.call(this, kind, ...rest);
+};
+"""
+
+
 class TestWithoutWebgl:
     """A browser without WebGL cannot draw a live frame, and the runtime then
     never settles it. The page turns the frame static by QGIS's own
@@ -387,12 +417,20 @@ class TestWithoutWebgl:
     would be, and its corners and scale tokens still read QGIS's map."""
 
     def test_the_live_frame_turns_static_by_qgis_georeference(
-        self, browser_type, fixtures: Path, expected
+        self, browser_type, browser_name: str, fixtures: Path, expected
     ) -> None:
         want = expected["survey_live"]
-        browser = browser_type.launch(args=["--disable-webgl", "--disable-3d-apis"])
+        if browser_name == "webkit":
+            # WebKit refuses unknown launch flags (it exits at once), and has
+            # no flag or pref that turns WebGL off, so it is taken away on the
+            # page: no canvas hands out a WebGL context.
+            browser = browser_type.launch()
+        else:
+            browser = browser_type.launch(args=["--disable-webgl", "--disable-3d-apis"])
         try:
             page = browser.new_page()
+            if browser_name == "webkit":
+                page.add_init_script(_NO_WEBGL_SCRIPT)
             page.goto((fixtures / "survey-live.html").as_uri())
             assert not page.evaluate(
                 "() => !!document.createElement('canvas').getContext('webgl2')"
@@ -494,6 +532,12 @@ def _colour_at(page, frame_id: str, lonlat: list[float]) -> list[int]:
         }""",
         [shot, x, y],
     )
+
+
+def _needs_pdf(browser_name: str) -> None:
+    """Skip where Playwright cannot print a page to PDF (Chromium only)."""
+    if browser_name != "chromium":
+        pytest.skip("Playwright's page.pdf() is only supported by Chromium")
 
 
 def _needs_webgl(page) -> None:
@@ -1182,8 +1226,9 @@ class TestPageFitsTheWindow:
         [("survey-static.html", "survey"), ("survey-a4-static.html", "survey_a4")],
     )
     def test_print_is_unscaled_in_a_small_window(
-        self, page, fixtures: Path, expected, name: str, key: str
+        self, page, browser_name: str, fixtures: Path, expected, name: str, key: str
     ) -> None:
+        _needs_pdf(browser_name)
         _fit_open(page, fixtures / name, (390, 844))
         assert page.evaluate(_SHEET_RECT)["kx"] < 1
         page.emulate_media(media="print")

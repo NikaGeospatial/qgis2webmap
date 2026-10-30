@@ -836,6 +836,9 @@ class TestPopupsDoNotStack:
                     box["y"] + box["height"] * gy / 22,
                 )
                 next_frames(page)
+                # The pick reads the GPU back, which WebKit answers a beat
+                # after the frames it painted.
+                page.wait_for_timeout(40)
                 count = len(self._visible(page))
                 opened = opened or count > 0
                 worst = max(worst, count)
@@ -864,6 +867,7 @@ class TestPopupsDoNotStack:
                     box["y"] + box["height"] * gy / 22,
                 )
                 next_frames(page)
+                page.wait_for_timeout(40)
                 if self._visible(page):
                     opened = True
                     break
