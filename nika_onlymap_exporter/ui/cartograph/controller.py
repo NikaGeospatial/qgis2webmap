@@ -319,6 +319,32 @@ class _DocumentRevisions:
     saved: int = 0
 
 
+class _OtherLayoutWatch:
+    """Reports the edits made to one layout the plugin is not showing - in its
+    designer, through the layout and its undo stack - to the controller. A
+    bound method of this object is what the layout's signals are connected to
+    (never a closure over the controller: the layout outlives the dialog)."""
+
+    def __init__(self, controller: CartographController, layout: QgsPrintLayout):
+        self.controller = controller
+        self.layout = layout
+        self.stack = layout.undoStack().stack()
+        layout.changed.connect(self.edited)
+        self.stack.indexChanged.connect(self.edited)
+
+    def edited(self, *_args: object) -> None:
+        if not sip.isdeleted(self.layout):
+            self.controller._on_other_layout_edited(self.layout)
+
+    def stop(self) -> None:
+        with contextlib.suppress(TypeError, RuntimeError):
+            if not sip.isdeleted(self.layout):
+                self.layout.changed.disconnect(self.edited)
+        with contextlib.suppress(TypeError, RuntimeError):
+            if not sip.isdeleted(self.stack):
+                self.stack.indexChanged.disconnect(self.edited)
+
+
 class _StaticRenders:
     """The build phase in which QGIS draws the static frames' pictures off the
     GUI thread. It stands in `CartographController._job` so that everything
@@ -444,6 +470,14 @@ class CartographController:
         self._other_saves_timer.setSingleShot(True)
         self._other_saves_timer.setInterval(0)
         self._other_saves_timer.timeout.connect(self._run_other_saves)
+        # Layouts the plugin is not showing but that already have a file are
+        # watched for edits made in the designer; a burst of them waits out
+        # the same debounce as the shown layout's before its save.
+        self._watches: list[_OtherLayoutWatch] = []
+        self._watched_edits_timer = QTimer(dialog)
+        self._watched_edits_timer.setSingleShot(True)
+        self._watched_edits_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
+        self._watched_edits_timer.timeout.connect(self._kick_other_saves)
         self._close_save_timer = QTimer(dialog)
         self._close_save_timer.setInterval(CLOSE_SAVE_POLL_MS)
         self._close_save_timer.timeout.connect(self._advance_close_save)
@@ -552,6 +586,47 @@ class CartographController:
                 dirty.append(name)
         return dirty
 
+    def _sync_watches(self) -> None:
+        """Watch exactly the layouts that are not on screen and already have a
+        file (never one without: nothing is created for it). Called wherever
+        that set can change: the selection, the manager's signals."""
+        if self._shut_down:
+            return
+        shown = self.state.cartograph_layout
+        wanted = [
+            layout
+            for layout in self.project.layoutManager().printLayouts()
+            if layout.name() != shown
+            and self._destination_of(layout.name()) is not None
+        ]
+        kept: list[_OtherLayoutWatch] = []
+        for watch in self._watches:
+            if any(watch.layout is layout for layout in wanted):
+                kept.append(watch)
+            else:
+                watch.stop()
+        for layout in wanted:
+            if not any(watch.layout is layout for watch in kept):
+                kept.append(_OtherLayoutWatch(self, layout))
+        self._watches = kept
+
+    def _stop_watching(self) -> None:
+        self._watched_edits_timer.stop()
+        for watch in self._watches:
+            watch.stop()
+        self._watches = []
+
+    def _on_other_layout_edited(self, layout: QgsPrintLayout) -> None:
+        """An edit to a layout that is not on screen: counted for it, saved to
+        its own file by the background machinery."""
+        if self._exporting or self._shut_down or sip.isdeleted(layout):
+            return
+        name = layout.name()
+        if name == self.state.cartograph_layout or self._destination_of(name) is None:
+            return
+        self._document_named(name).made += 1
+        self._watched_edits_timer.start()
+
     def _forget_document(self, name: str) -> None:
         """A layout is gone (or the project cleared): what was pending for it
         is dropped, and a build under way for it delivers nothing."""
@@ -583,6 +658,7 @@ class CartographController:
         self._close_save_timer.stop()
         self._autosave_timer.stop()
         self._other_saves_timer.stop()
+        self._stop_watching()
         self._refresh_timer.stop()
         self._thumbnail_timer.stop()
         self._status_timer.stop()
@@ -626,6 +702,7 @@ class CartographController:
         """
         self._autosave_timer.stop()
         self._other_saves_timer.stop()
+        self._stop_watching()
         self._refresh_timer.stop()
         self._thumbnail_timer.stop()
         self.stop_close_save()
@@ -663,6 +740,13 @@ class CartographController:
         if current is None or sip.isdeleted(current) or current.name() != name:
             # Not the one on screen, but it may have a save pending.
             self._forget_document(name)
+            for watch in [
+                w
+                for w in self._watches
+                if not sip.isdeleted(w.layout) and w.layout.name() == name
+            ]:
+                watch.stop()
+                self._watches.remove(watch)
             return
         self._forget_document(name)
         self._autosave_timer.stop()
@@ -2039,6 +2123,7 @@ class CartographController:
         self._update_share_enabled()
         self._update_section_summaries()
         save_state(self.project, self.state)
+        self._sync_watches()
         if switching:
             if self.state.output is DialogOutput.CARTOGRAPH:
                 self.show_fidelity()
