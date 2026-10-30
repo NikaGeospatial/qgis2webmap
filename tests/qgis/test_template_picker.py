@@ -1432,18 +1432,25 @@ class TestOpeningLeavesTheProject:
 
 class _Pending(QObject):
     """A page drawn in the background: reports after `delay_ms` of the event
-    loop running, the way `PendingPreview` does. Never blocks."""
+    loop running, the way `PendingPreview` does. Never blocks. With no delay
+    it is held: it reports only once `release()` is called."""
 
     finished = pyqtSignal(object)
 
-    def __init__(self, width_px: int, delay_ms: int) -> None:
+    def __init__(self, width_px: int, delay_ms: int | None) -> None:
         super().__init__()
         self.cancelled = False
         self._width = width_px
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._done)
-        self._timer.start(delay_ms)
+        if delay_ms is not None:
+            self._timer.start(delay_ms)
+
+    def release(self) -> None:
+        """Let a held page report on the next turn of the event loop."""
+        if not self.cancelled and not self._timer.isActive():
+            self._timer.start(0)
 
     def _done(self) -> None:
         image = QImage(
@@ -1458,7 +1465,8 @@ class _Pending(QObject):
 
 
 class _SlowRenderer:
-    def __init__(self, delay_ms: int = 150, only_first: bool = False) -> None:
+    def __init__(self, delay_ms: int | None = 150, only_first: bool = False) -> None:
+        #: `None` holds every page until `release()`.
         self.delay_ms = delay_ms
         #: Only the first page is slow; the rest draw at once.
         self.only_first = only_first
@@ -1468,10 +1476,17 @@ class _SlowRenderer:
     def __call__(self, template_id, page_size, orientation, width_px):
         self.started.append((template_id, page_size))
         pending = _Pending(
-            width_px, 10 if self.only_first and self.pending else self.delay_ms
+            width_px,
+            10 if self.only_first and self.pending else self.delay_ms,
         )
         self.pending.append(pending)
         return pending
+
+    def release(self) -> None:
+        """Stop holding: the pages waiting report now, later ones at once."""
+        self.delay_ms = 0
+        for pending in self.pending:
+            pending.release()
 
 
 class TestBackgroundPages:

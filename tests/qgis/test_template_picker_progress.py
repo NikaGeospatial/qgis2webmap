@@ -86,7 +86,9 @@ class _FailingFirst(_SlowRenderer):
 
 
 def test_a_card_walks_waiting_drawing_ready(qgis_app, tmp_path):
-    renderer = _SlowRenderer(delay_ms=150)
+    # Held until the states have been looked at: a timed stand-in could finish
+    # before the assertions ran on a loaded machine.
+    renderer = _SlowRenderer(delay_ms=None)
     picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
     try:
         # Landscape, as the stand-in renderer's pages are.
@@ -103,6 +105,7 @@ def test_a_card_walks_waiting_drawing_ready(qgis_app, tmp_path):
         assert not later[0].status.isHidden()
         assert not later[0].page.pixmap().isNull()  # the layout guide
         box = chosen.preview.size()
+        renderer.release()
         assert _until(qgis_app, lambda: _ready(chosen))
         assert chosen.preview.size() == box
     finally:
