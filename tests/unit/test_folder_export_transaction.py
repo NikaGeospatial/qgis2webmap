@@ -213,3 +213,124 @@ class TestPublishOrderMechanism:
         monkeypatch.setattr(os, "replace", replace)
         _export(folder, raster=b"RASTER")
         assert landed[-1] == "index.html"
+
+
+def _interrupt_publish(folder: Path, names: list[str]) -> Path:
+    """What a process killed mid-publish leaves: `names` moved into old/ of a
+    staging directory, and no replacement yet in the destination."""
+    stale = folder / f"{STAGING_PREFIX}dead"
+    (stale / "old").mkdir(parents=True)
+    (stale / "new").mkdir()
+    for name in names:
+        os.replace(folder / name, stale / "old" / name)
+    return stale
+
+
+def _fail_restoring(monkeypatch: pytest.MonkeyPatch, folder: Path, names: set[str]):
+    """Moving a backup back to one of `names` fails, as on a locked or
+    read-only file. Returns a switch that lifts the failure."""
+    state = {"broken": True}
+
+    def replace(src, dst):  # type: ignore[no-untyped-def]
+        if (
+            state["broken"]
+            and Path(dst).parent == folder
+            and Path(dst).name in names
+            and Path(src).parent.name == "old"
+        ):
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        return _REAL_REPLACE(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+    return lambda: state.update(broken=False)
+
+
+class TestFailedRecoveryKeepsTheBackup:
+    """A restore that fails must never cost the only copy of the previous page."""
+
+    def test_recovery_then_new_export_succeeds(self, previous) -> None:
+        folder, _ = previous
+        _interrupt_publish(folder, ["index.html", "onlymap.js"])
+        _export(folder, layers=2)
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+        _assert_page_loads(folder)
+        _assert_no_staging(folder)
+
+    @pytest.mark.skipif(
+        os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        reason="needs POSIX permissions and a non-root user",
+    )
+    def test_read_only_destination_keeps_backup_and_aborts(self, previous) -> None:
+        folder, _ = previous
+        stale = _interrupt_publish(folder, ["index.html"])
+        backup = stale / "old" / "index.html"
+        backup_bytes = backup.read_bytes()
+        folder.chmod(0o500)
+        try:
+            with pytest.raises(OSError) as raised:
+                _export(folder, layers=2, raster=b"RASTER")
+        finally:
+            folder.chmod(0o700)
+        assert backup.read_bytes() == backup_bytes
+        assert str(stale) in str(raised.value)
+        assert "could not be fully restored" in str(raised.value)
+        assert not (folder / "dem.tif").exists()
+        assert not (folder / "index.html").exists()
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+
+    def test_failed_restore_keeps_backup_names_it_and_publishes_nothing(
+        self, monkeypatch, previous
+    ) -> None:
+        folder, before = previous
+        stale = _interrupt_publish(folder, ["index.html"])
+        backup = stale / "old" / "index.html"
+        backup_bytes = backup.read_bytes()
+        _fail_restoring(monkeypatch, folder, {"index.html"})
+        with pytest.raises(OSError) as raised:
+            _export(folder, layers=2, raster=b"RASTER")
+        assert backup.read_bytes() == backup_bytes == before["index.html"]
+        assert str(stale) in str(raised.value)
+        assert "could not be fully restored" in str(raised.value)
+        assert not (folder / "dem.tif").exists()
+        assert not (folder / "index.html").exists()
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+
+    def test_some_restore_and_one_fails(self, monkeypatch, previous) -> None:
+        folder, before = previous
+        stale = _interrupt_publish(folder, ["index.html", "onlymap.js"])
+        _fail_restoring(monkeypatch, folder, {"onlymap.js"})
+        with pytest.raises(OSError):
+            _export(folder, layers=2)
+        assert (folder / "index.html").read_bytes() == before["index.html"]
+        assert not (stale / "old" / "index.html").exists()
+        assert (stale / "old" / "onlymap.js").read_bytes() == before["onlymap.js"]
+        assert stale.is_dir()
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+
+    def test_retry_after_the_problem_is_fixed_completes(
+        self, monkeypatch, previous
+    ) -> None:
+        folder, _ = previous
+        _interrupt_publish(folder, ["index.html", "onlymap.js"])
+        lift = _fail_restoring(monkeypatch, folder, {"onlymap.js"})
+        with pytest.raises(OSError):
+            _export(folder, layers=2)
+        lift()
+        _export(folder, layers=2, raster=b"RASTER")
+        assert (folder / "dem.tif").read_bytes() == b"RASTER"
+        assert (folder / "notes-from-me.txt").read_text() == "mine"
+        _assert_page_loads(folder)
+        _assert_no_staging(folder)
+
+    def test_recovery_alone_restores_everything_on_retry(
+        self, monkeypatch, previous
+    ) -> None:
+        folder, before = previous
+        _interrupt_publish(folder, ["index.html", "onlymap.js"])
+        lift = _fail_restoring(monkeypatch, folder, {"index.html"})
+        with pytest.raises(OSError):
+            folder_module._recover_interrupted(folder)
+        lift()
+        folder_module._recover_interrupted(folder)
+        assert _snapshot(folder) == before
+        _assert_no_staging(folder)

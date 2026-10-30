@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..core.atomic_write import write_text_atomic
 from ..core.export_ir import OutputMode
+from ..ui.i18n import tr
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
 
@@ -56,20 +57,52 @@ _NEW = "new"
 _OLD = "old"
 
 
+class RecoveryIncompleteError(OSError):
+    """Backups of the previous export could not be put back; they stay in
+    their staging directory, which a later export tries again."""
+
+
 def _recover_interrupted(destination: Path) -> None:
     """Undo what a crashed export left behind. A staging directory that still
     holds a `old/` copy died part-way through publishing: put those previous
     files back, then drop the directory. Only our own marker-named directories
-    are looked at."""
-    for stale in destination.glob(f"{STAGING_PREFIX}*"):
+    are looked at.
+
+    Each restore is a move, so a restored file leaves `old/` at once: a retry
+    after a partial failure only sees what is left and can never put a stale
+    copy over a file it already restored. A staging directory is removed only
+    when `old/` is empty; otherwise it is kept (minus `new/`, which holds only
+    files that were never published) and RecoveryIncompleteError names it."""
+    kept: list[Path] = []
+    for stale in sorted(destination.glob(f"{STAGING_PREFIX}*")):
         if not stale.is_dir():
             continue
         old_dir = stale / _OLD
         if old_dir.is_dir():
-            for backup in old_dir.iterdir():
-                with contextlib.suppress(OSError):
+            try:
+                backups = list(old_dir.iterdir())
+            except OSError:
+                kept.append(stale)
+                continue
+            unrestored = False
+            for backup in backups:
+                try:
                     os.replace(backup, destination / backup.name)
+                except OSError:
+                    unrestored = True
+            if unrestored:
+                kept.append(stale)
+                shutil.rmtree(stale / _NEW, ignore_errors=True)
+                continue
         shutil.rmtree(stale, ignore_errors=True)
+    if kept:
+        raise RecoveryIncompleteError(
+            tr(
+                "The previous export could not be fully restored. Its remaining "
+                "backups have been kept at {path}. Resolve the permission or "
+                "file-access problem and try again."
+            ).format(path=", ".join(str(k) for k in kept))
+        )
 
 
 def _publish(staging: Path, destination: Path, names: list[str]) -> None:
