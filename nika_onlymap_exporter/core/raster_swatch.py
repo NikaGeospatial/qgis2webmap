@@ -16,7 +16,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from dataclasses import dataclass
-from xml.etree import ElementTree
+
+# Parses QGIS's own style XML only, and refuses entity declarations first.
+from xml.etree import ElementTree  # nosec B405
 
 #: A grey ramp's swatch: the middle of black to white.
 MID_GREY = "#808080"
@@ -46,10 +48,12 @@ def raster_swatch(style_qml: str | None) -> RasterSwatch | None:
     classes, a pseudocolour renderer's classes (discrete or exact) or ramp
     (interpolated), a grey renderer's ramp. `None` for anything else (a
     multiband composite is its own colours) or an unreadable style."""
-    if not style_qml:
+    if not style_qml or "<!ENTITY" in style_qml:
+        # QGIS never writes entity declarations, so refusing them costs no
+        # real style and rules out entity expansion from a crafted project.
         return None
     try:
-        root = ElementTree.fromstring(style_qml)
+        root = ElementTree.fromstring(style_qml)  # nosec B314
     except ElementTree.ParseError:
         return None
     renderer = root.find(".//rasterrenderer")

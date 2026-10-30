@@ -1421,7 +1421,7 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
     background: {p.hover};
     border-color: {p.ink};
 }}
-/* The zoom bar's Select / Pan switch: the mode in use is the filled one. */
+/* The zoom bar's select-or-pan switch: the mode in use is the filled one. */
 {d} QToolButton[role="secondary"][hasMenu="false"][zoom="true"]:checked {{
     background: {p.accent_soft};
     border-color: {p.muted};

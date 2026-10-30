@@ -64,3 +64,14 @@ class TestRasterSwatch:
         assert raster_swatch(_qml('<rasterrenderer type="multibandcolor"/>')) is None
         assert raster_swatch(None) is None
         assert raster_swatch("not xml") is None
+
+    def test_a_style_declaring_entities_is_refused_unparsed(self) -> None:
+        # QGIS never writes entity declarations; a crafted project's style
+        # with one is not expanded (the "billion laughs" pattern).
+        laughs = (
+            '<!DOCTYPE qgis [<!ENTITY a "lol"><!ENTITY b "&a;&a;&a;">]>'
+            '<qgis><pipe><rasterrenderer type="paletted"><colorPalette>'
+            '<paletteEntry value="1" color="#00ff00" label="&b;" alpha="255"/>'
+            "</colorPalette></rasterrenderer></pipe></qgis>"
+        )
+        assert raster_swatch(laughs) is None

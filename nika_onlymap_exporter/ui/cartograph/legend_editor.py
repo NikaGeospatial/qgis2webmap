@@ -507,7 +507,7 @@ class LegendEditor(QWidget):
                     tr("Change a legend label"),
                 )
         except Exception:  # a slot must never raise into Qt
-            pass
+            return
 
     def _move(self, step: int) -> None:
         entry = self._selected_entry()

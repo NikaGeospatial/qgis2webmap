@@ -103,8 +103,10 @@ def fill_view(view, aspect, crs, layers, project, rotation=0.0):
                         )
                     )
         except Exception:  # an unavailable transform leaves normal view fitting
-            continue
-        if not all(math.isfinite(p.x()) and math.isfinite(p.y()) for p in ring):
+            ring = []
+        if not ring or not all(
+            math.isfinite(p.x()) and math.isfinite(p.y()) for p in ring
+        ):
             continue
         ring.append(ring[0])
         footprints.append(QgsGeometry.fromPolygonXY([ring]))

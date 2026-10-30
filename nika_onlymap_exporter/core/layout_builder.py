@@ -312,35 +312,35 @@ def label_text_from_tokens(
         return f"[% round({inner}) %]" if rounded else f"[% {inner} %]"
 
     def replace(match: re.Match[str]) -> str:
-        token = match.group(1)
+        key = match.group(1)
         result: str | None
-        if token == "title":
+        if key == "title":
             result = "[% @project_title %]" if title_is_project_title else title
-        elif token == "attribution":
+        elif key == "attribution":
             result = attribution
-        elif token == "notes":
+        elif key == "notes":
             result = notes
-        elif token == "date":
+        elif key == "date":
             result = "[% format_date(now(),'yyyy-MM-dd') %]"
-        elif token in ("scale", "crs"):
+        elif key in ("scale", "crs"):
             result = (
-                frame_expression(reference_frame_id, f"map_{token}", token == "scale")
+                frame_expression(reference_frame_id, f"map_{key}", key == "scale")
                 if reference_frame_id is not None
                 else None
             )
-        elif token.startswith("frame.") and token.count(".") >= 2:
-            frame_id, _, what = token[len("frame.") :].rpartition(".")
+        elif key.startswith("frame.") and key.count(".") >= 2:
+            frame_id, _, what = key[len("frame.") :].rpartition(".")
             result = (
                 frame_expression(frame_id, f"map_{what}", what == "scale")
                 if what in ("scale", "crs")
                 else None
             )
-        elif token == "atlas.index":
+        elif key == "atlas.index":
             result = "[% @atlas_featurenumber %]"
-        elif token == "atlas.count":
+        elif key == "atlas.count":
             result = "[% @atlas_totalfeatures %]"
-        elif token.startswith("atlas.") and len(token) > len("atlas."):
-            field_name = token[len("atlas.") :]
+        elif key.startswith("atlas.") and len(key) > len("atlas."):
+            field_name = key[len("atlas.") :]
             result = f"[% attribute(@atlas_feature, {_quote(field_name)}) %]"
         else:
             result = None
@@ -815,6 +815,8 @@ class _Builder:
             try:
                 layer_extent = transform.transformBoundingBox(layer.extent())
             except Exception:
+                layer_extent = None
+            if layer_extent is None:
                 continue
             if layer_extent.isFinite() and not layer_extent.isEmpty():
                 if extent.isNull():
@@ -1483,13 +1485,13 @@ def _pattern_expression(pattern: str, *, feature_fields: bool = False) -> str:
     for match in _TOKEN_RE.finditer(pattern):
         if match.start() > position:
             parts.append(_quote(pattern[position : match.start()]))
-        token = match.group(1)
-        if token == "atlas.index":
+        key = match.group(1)
+        if key == "atlas.index":
             parts.append("@atlas_featurenumber")
-        elif token == "atlas.count":
+        elif key == "atlas.count":
             parts.append("@atlas_totalfeatures")
-        elif token.startswith("atlas."):
-            name = token[len("atlas.") :]
+        elif key.startswith("atlas."):
+            name = key[len("atlas.") :]
             parts.append(
                 QgsExpression.quotedColumnRef(name)
                 if feature_fields

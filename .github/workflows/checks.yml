@@ -68,7 +68,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install bandit
-      - run: bandit -r nika_onlymap_exporter -ll
+      # All severities: plugins.qgis.org flags low-severity findings too.
+      - run: bandit -r nika_onlymap_exporter
 
   guards:
     # Enforces CONTRIBUTING.md rules 1 and 2. Implemented as pytest rather than
