@@ -167,7 +167,8 @@ jobs:
       options: --user 1001
     env:
       QT_QPA_PLATFORM: offscreen
-      PYTHONPATH: ${{ github.workspace }}
+      # Keep the image's own PYTHONPATH (PyQGIS): setting it here replaces it.
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
       # Relative to the workspace, which is the same path inside the container
       # and to actions/cache (an absolute host path would not be).
       ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
@@ -216,7 +217,7 @@ jobs:
       options: --user 1001
     env:
       QT_QPA_PLATFORM: offscreen
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
       ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -292,7 +293,7 @@ jobs:
       options: --user 1001
     env:
       QT_QPA_PLATFORM: offscreen
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
       ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
