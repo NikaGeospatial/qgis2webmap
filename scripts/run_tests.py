@@ -71,6 +71,11 @@ MEMORY_ESTIMATE_MB = {
 }
 MEMORY_RESERVE_MB = 600
 FIRST_WORKER_MIN_FREE_MB = 900
+#: How long a stage may wait on `Q2W_SLOT_CMD` for a machine-wide slot before it
+#: is given up on. Its own `timeout_s` only runs once it has a slot, so on a busy
+#: machine the queue is not charged to the stage; this cap is what still ends a
+#: run whose queue never moves.
+SLOT_WAIT_LIMIT_S = 4 * 3600.0
 SMOKE_SUBSET = "classic,map-only,poster,locator,dashboard,dark"
 BUILDERS = (
     ("cartograph", "CARTOGRAPH_FIXTURES_DIR", "expected.json"),
@@ -266,6 +271,9 @@ class Stage:
     reason: str = ""
     returncode: int | None = None
     ready_at: float | None = None
+    # Handed to the process; with a slot wrapper, `started_at` is later, when the
+    # wrapper let the command run, and stays None if it never did.
+    launched_at: float | None = None
     started_at: float | None = None
     ended_at: float | None = None
     waited_slot_s: float = 0.0
@@ -283,9 +291,11 @@ class Stage:
 
     @property
     def wait_s(self) -> float:
-        if self.ready_at is None or self.started_at is None:
+        # A stage stopped while still queued waited until it was stopped.
+        start = self.started_at if self.started_at is not None else self.ended_at
+        if self.ready_at is None or start is None:
             return 0.0
-        return max(0.0, self.started_at - self.ready_at)
+        return max(0.0, start - self.ready_at)
 
     @property
     def run_s(self) -> float:
@@ -383,6 +393,7 @@ class Scheduler:
         self._last_mono = time.monotonic()
         self._last_sample = 0.0
         self._last_notice: dict[str, float] = {}
+        self._marker_lock = threading.Lock()
 
     # -- process control ------------------------------------------------------------
 
@@ -416,7 +427,9 @@ class Scheduler:
             start_new_session=True,
         )
         launched = time.time()
-        stage.started_at = launched
+        stage.launched_at = launched
+        if not external_wait:
+            stage.started_at = launched
         stage.status = "running"
         stage.last_progress = time.monotonic()
         threading.Thread(
@@ -431,12 +444,21 @@ class Scheduler:
     def _watch_marker(self, stage: Stage, marker: Path) -> None:
         """With an external slot wrapper, execution starts when the trampoline runs."""
         while stage.process is not None and stage.process.poll() is None:
-            if marker.exists():
-                with contextlib.suppress(ValueError, OSError):
-                    stage.started_at = float(marker.read_text())
-                    stage.waited_slot_s += stage.started_at - (stage.ready_at or 0)
+            if self._read_marker(stage, marker):
                 return
             time.sleep(0.5)
+
+    def _read_marker(self, stage: Stage, marker: Path) -> bool:
+        # Both the watcher thread and `_reap` read it; count the wait once.
+        with self._marker_lock:
+            if stage.started_at is not None:
+                return True
+            if not marker.exists():
+                return False
+            with contextlib.suppress(ValueError, OSError):
+                stage.started_at = float(marker.read_text())
+                stage.waited_slot_s += stage.started_at - (stage.ready_at or 0)
+            return stage.started_at is not None
 
     def _pump(self, stage: Stage, process: subprocess.Popen[str]) -> None:
         assert process.stdout is not None
@@ -566,15 +588,28 @@ class Scheduler:
             )
 
     def _timeouts(self) -> None:
+        """A stage's timeout runs from when it started, not from when it queued.
+
+        With a slot wrapper the process is launched first and only *starts* once
+        the wrapper gets a slot, so timing it from the launch charged the queue to
+        the stage: on a busy machine it timed out without having run. Until it
+        starts, only `SLOT_WAIT_LIMIT_S` applies.
+        """
+        now = time.time()
         for stage in self.stages:
-            if (
-                stage.status == "running"
-                and stage.started_at
-                and not stage.killed_for
-                and time.time() - stage.started_at > stage.timeout_s
+            if stage.status != "running" or stage.killed_for:
+                continue
+            if stage.started_at is not None:
+                if now - stage.started_at > stage.timeout_s:
+                    say(f"TIMEOUT {stage.name} after {stage.timeout_s / 60:.0f} min")
+                    self.terminate(stage, "timeout")
+            elif (
+                stage.launched_at is not None
+                and now - stage.launched_at > SLOT_WAIT_LIMIT_S
             ):
-                say(f"TIMEOUT {stage.name} after {stage.timeout_s / 60:.0f} min")
-                self.terminate(stage, "timeout")
+                minutes = SLOT_WAIT_LIMIT_S / 60
+                say(f"TIMEOUT {stage.name}: no test slot after {minutes:.0f} min")
+                self.terminate(stage, f"timeout: no test slot after {minutes:.0f} min")
 
     def _sample(self) -> None:
         if time.monotonic() - self._last_sample < 2:
@@ -606,6 +641,8 @@ class Scheduler:
                 continue
             stage.returncode = code
             stage.ended_at = time.time()
+            # The watcher polls; a stage that finished between polls still started.
+            self._read_marker(stage, stage.log.with_suffix(".started"))
             if stage.slot_fd is not None:
                 self.slots.release(stage.slot_fd)
                 stage.slot_fd = None
