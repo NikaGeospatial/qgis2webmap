@@ -20,6 +20,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import functools
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -1038,6 +1040,19 @@ class ExportLayer:
         """The discriminator. Preferred over `geometry_kind is RASTER` at call
         sites, because it is the field that actually carries the pixels."""
         return self.raster is not None
+
+    @functools.cached_property
+    def geojson_text(self) -> str:
+        """`geojson` as the compact JSON the page carries, serialised once.
+
+        A layer is measured for the size warnings, the compression choice and
+        the Fidelity tab, then written into the page; serialising a large one
+        takes most of a second, and each of those used to pay it again. They
+        all read this instead. Safe to keep because `geojson` is never changed
+        in place once a layer is built: a changed layer is a new one, through
+        `dataclasses.replace`, and starts without it.
+        """
+        return json.dumps(self.geojson, separators=(",", ":"), ensure_ascii=False)
 
     def snapshot(self, include_geometry: bool = False) -> dict[str, Any]:
         """Snapshot the layer.

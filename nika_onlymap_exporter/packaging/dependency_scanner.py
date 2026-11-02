@@ -10,7 +10,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -146,11 +145,28 @@ def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
     for layer in project.exportable_layers:
         size = _raster_layer_bytes(layer)
         if layer.geojson is not None:
-            size += len(
-                json.dumps(layer.geojson, separators=(",", ":")).encode("utf-8")
-            )
+            size += ascii_json_bytes(layer.geojson_text)
         sizes[layer.layer_id] = size
     return sizes
+
+
+def ascii_json_bytes(text: str) -> int:
+    """The bytes `json.dumps(..., ensure_ascii=True)` would give, from the
+    `ensure_ascii=False` text of the same value.
+
+    The size has always been measured on the ASCII-escaped form, and the
+    compression choice and the size messages hang on that number, so it must
+    not move; the layer's text is serialised the other way, for the page. The
+    two differ only in how a string character is written, one character at a
+    time: below U+007F alike (quotes, backslashes and control characters are
+    escaped the same way in both), and from U+007F up `\\uXXXX` - six bytes - or
+    a surrogate pair of them, twelve, for one beyond U+FFFF.
+    """
+    if text.isascii() and "\x7f" not in text:
+        return len(text)
+    beyond_ascii = len(text) - len(text.encode("ascii", "ignore"))
+    units = len(text.encode("utf-16-le", "surrogatepass")) // 2
+    return len(text) + 5 * (beyond_ascii + text.count("\x7f")) + 6 * (units - len(text))
 
 
 def measure_data_bytes(project: ExportProject) -> int:

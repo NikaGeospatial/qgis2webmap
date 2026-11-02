@@ -444,7 +444,11 @@ def json_for_script(data: object) -> str:
     string. U+2028 and U+2029 are escaped too: they are valid in JSON strings but
     are line terminators in JavaScript source.
     """
-    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+    return script_safe(json.dumps(data, separators=(",", ":"), ensure_ascii=False))
+
+
+def script_safe(payload: str) -> str:
+    """`payload`, compact JSON text, escaped as `json_for_script` escapes it."""
     return (
         payload.replace("<", "\\u003c")
         .replace(">", "\\u003e")
@@ -1269,7 +1273,7 @@ def build_layer_element(
             )
         )
 
-    payload = json_for_script(layer.geojson)
+    payload = script_safe(layer.geojson_text)
 
     lines = [f"{indent}<om-layer"]
     lines.append(_attrs_to_string(attributes, inner))
