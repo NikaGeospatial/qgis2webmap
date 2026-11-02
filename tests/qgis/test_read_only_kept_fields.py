@@ -12,7 +12,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import html
 import json
+import re
 
 import pytest
 
@@ -325,3 +327,252 @@ def test_joins_value_relations_and_unsaved_edits_read_alike(
     shown = {f["properties"].get("kind_shown") for f in found.geojson["features"]}
     assert {"North", "South", "East"} <= shown
     layer.rollBack()
+
+
+def _saved_as_geopackage(layer, tmp_path, name: str):
+    path = str(tmp_path / f"{name}.gpkg")
+    options = qgis_core.QgsVectorFileWriter.SaveVectorOptions()
+    options.driverName = "GPKG"
+    error = qgis_core.QgsVectorFileWriter.writeAsVectorFormatV3(
+        layer, path, qgis_core.QgsCoordinateTransformContext(), options
+    )
+    assert error[0] == qgis_core.QgsVectorFileWriter.WriterError.NoError, error
+    saved = qgis_core.QgsVectorLayer(path, name, "ogr")
+    assert saved.isValid()
+    return saved
+
+
+@pytest.mark.parametrize("provider", ["memory", "ogr"])
+def test_unsaved_edits_through_joins_and_expression_fields_read_alike(
+    project, monkeypatch, tmp_path, provider
+) -> None:
+    """On a GeoPackage as well as in memory: edits not yet saved - to a kept
+    field, to hidden fields that expression fields are made of, to a join key
+    that is itself not kept, a feature added and one deleted - with expression
+    fields over a hidden field, over `attributes()` and over a joined field.
+    Each value comes through the layer's feature source, which fetches what it
+    depends on even when that is not itself kept."""
+    regions = _regions(project)
+    layer = _memory_layer()
+    if provider == "ogr":
+        regions = _saved_as_geopackage(regions, tmp_path, "regions")
+        project.addMapLayer(regions)
+        layer = _saved_as_geopackage(layer, tmp_path, "sites")
+    project.addMapLayer(layer)
+    join = qgis_core.QgsVectorLayerJoinInfo()
+    join.setJoinLayer(regions)
+    join.setJoinFieldName("code")
+    join.setTargetFieldName("kind")
+    join.setJoinFieldNamesSubset(["label"])
+    join.setPrefix("region_")
+    assert layer.addJoin(join)
+    for expression, name in (
+        ('upper("secret") || \' / \' || "wide3"', "shout"),
+        ("attributes()['secret']", "whisper"),
+        ("\"region_label\" || ' side'", "where"),
+    ):
+        layer.addExpressionField(
+            expression, qgis_core.QgsField(name, QMetaType.Type.QString)
+        )
+    layer.setSubsetString('"wide0" < 40')
+
+    assert layer.startEditing()
+    fields = layer.fields()
+    ids = {feature["name"]: feature.id() for feature in layer.getFeatures()}
+    for name, field, value in (
+        ("Site 0", "note", "edited, not saved"),
+        ("Site 0", "secret", "edited secret"),
+        ("Site 1", "kind", 3),
+        ("Site 2", "wide3", 999.5),
+    ):
+        assert layer.changeAttributeValue(ids[name], fields.indexOf(field), value)
+    assert layer.deleteFeature(ids["Site 5"])
+    added = qgis_core.QgsFeature(fields)
+    added["name"] = "Site new"
+    added["kind"] = 2
+    added["secret"] = "fresh"
+    added["wide0"] = 1.0
+    added.setGeometry(
+        qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(2.0e5, 5.1e6))
+    )
+    assert layer.addFeature(added)
+
+    # The join key and the fields the expressions are made of are not kept.
+    modes = {**FIELD_MODES, "kind": PopupFieldMode.HIDDEN.value}
+
+    def read():
+        return layer_reader.read_layer(
+            layer, FidelityReportBuilder(), field_modes=modes
+        )
+
+    real = layer_reader.snapshot_features
+
+    def every_field(layer, clip_extent, display_names=None, keep=None):
+        return real(layer, clip_extent, display_names)
+
+    try:
+        pending = layer_reader.prepare_layer(
+            layer, FidelityReportBuilder(), field_modes=modes
+        )
+        assert isinstance(pending, layer_reader.PendingLayer)
+        read_names = {
+            layer.fields().at(index).name()
+            for index in pending.features.attribute_indexes
+        }
+        assert read_names.isdisjoint({"kind", "secret", "wide3"})
+
+        with monkeypatch.context() as patch:
+            patch.setattr(layer_reader, "snapshot_features", every_field)
+            expected = read()
+        found = read()
+    finally:
+        layer.rollBack()
+
+    assert found == expected
+    assert json.dumps(found.geojson) == json.dumps(expected.geojson)
+    by_name = {
+        f["properties"]["name"]: f["properties"] for f in found.geojson["features"]
+    }
+    assert "Site 5" not in by_name and "Site 26" in by_name and "Site 27" not in by_name
+    edited = by_name["Site 0"]
+    assert edited["note"] == "edited, not saved"
+    assert edited["whisper"] == "edited secret"
+    assert edited["shout"].startswith("EDITED SECRET / ")
+    assert by_name["Site 2"]["shout"].endswith(" / 999.5")
+    assert by_name["Site 1"]["region_label"] == "East"
+    assert by_name["Site 1"]["where"] == "East side"
+    assert by_name["Site 3"]["region_label"] == "East"
+    assert by_name["Site 4"]["region_label"] is None
+    assert by_name["Site new"]["whisper"] == "fresh"
+    assert by_name["Site new"]["region_label"] == "South"
+    assert all("kind" not in p and "secret" not in p for p in by_name.values())
+
+
+def _hidden_in_the_attribute_table(layer, names: set[str]) -> None:
+    """Hide `names` in QGIS's attribute table, which leaves them out of the
+    exported data."""
+    config = layer.attributeTableConfig()
+    config.update(layer.fields())
+    columns = config.columns()
+    for column in columns:
+        if column.name in names:
+            column.hidden = True
+    config.setColumns(columns)
+    layer.setAttributeTableConfig(config)
+
+
+@pytest.mark.parametrize(
+    ("filter_expression", "sort", "page_name"),
+    [
+        ('"score" <> 1', None, None),
+        (None, ('"rank"', True), None),
+        (None, ('"score"', False), None),
+        ('"score" > 1 OR "rank" = \'a1\'', ('length("rank")', True), None),
+        ("\"lot\" <> 'p3'", ('"score"', True), None),
+        ('"rank" IS NOT NULL', ('"lot"', False), None),
+        ('"score" IS NULL OR "score" > 2', ('"rank"', False), '"rank"'),
+    ],
+    ids=[
+        "filter on a left-out field",
+        "sort on a left-out text field",
+        "sort on a left-out number field descending",
+        "both on left-out fields",
+        "filter on a kept field, sort on a left-out one",
+        "filter on a left-out field, sort on a kept one",
+        "page names from a left-out field",
+    ],
+)
+def test_an_atlas_on_fields_left_out_of_the_export(
+    project, monkeypatch, filter_expression, sort, page_name
+) -> None:
+    """An atlas whose filter, sort or page names read fields hidden in the
+    attribute table, which the export leaves out of the data and so no longer
+    reads. The cartograph comes out byte for byte as when every field was
+    read, and pages what QGIS's own atlas pages, in its order."""
+    from atlas_fixtures import (
+        build_atlas_layout,
+        qgis_atlas_page_ids,
+        use_ranked_parcels,
+    )
+
+    from nika_onlymap_exporter.core import cartograph_export
+    from nika_onlymap_exporter.core.cartograph_ir import ATLAS_ORDER_KEY
+    from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+    runtime = RuntimeBundle(
+        javascript=b"// core js placeholder",
+        css=b"/* core css placeholder */",
+        version="0.12.0",
+        sha256="0" * 64,
+        cartograph_javascript=b"// cartograph js placeholder",
+        cartograph_css=b"/* cartograph css placeholder */",
+    )
+    built = build_atlas_layout(project)
+    ranked = use_ranked_parcels(built)
+    _hidden_in_the_attribute_table(ranked, {"score", "rank"})
+    atlas = built.atlas
+    if filter_expression is not None:
+        atlas.setFilterFeatures(True)
+        atlas.setFilterExpression(filter_expression)
+    if sort is not None:
+        atlas.setSortFeatures(True)
+        atlas.setSortExpression(sort[0])
+        atlas.setSortAscending(sort[1])
+    if page_name is not None:
+        atlas.setPageNameExpression(page_name)
+
+    def export():
+        cartograph_export._DEFAULT_LIVE_CACHE.clear()
+        report = FidelityReportBuilder()
+        prepared = cartograph_export.prepare_cartograph(
+            built.layout, project, runtime, report, raster_cache=None
+        )
+        finished = cartograph_export.finish_cartograph_full(prepared, project, report)
+        return finished, [(i.status, i.subject, i.detail) for i in report.items]
+
+    real = layer_reader.snapshot_features
+
+    def every_field(layer, clip_extent, display_names=None, keep=None):
+        return real(layer, clip_extent, display_names)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(layer_reader, "snapshot_features", every_field)
+        expected, expected_rows = export()
+    found, rows = export()
+
+    assert found.html == expected.html
+    assert rows == expected_rows
+    (export_project,) = found.projects
+    (coverage,) = [
+        layer for layer in export_project.exportable_layers if layer.name == "ranked"
+    ]
+    features = coverage.geojson["features"]
+    assert all({"score", "rank"}.isdisjoint(f["properties"]) for f in features)
+    assert any("field 'rank'" in row[2] for row in rows) is (page_name is not None)
+
+    # The pages, by the runtime's rule: what the filter keeps, in the order
+    # carried on each feature.
+    from atlas_filter_eval import evaluate_filter
+
+    (element,) = re.findall(r"<om-atlas\b[^>]*>", found.html)
+    written_filter = re.search(r'\bfilter="([^"]*)"', element)
+    assert (written_filter is not None) is (filter_expression is not None)
+    ids = [feature["id"] for feature in features]
+    kept = (
+        ids
+        if written_filter is None
+        else [
+            i
+            for i, ok in zip(
+                ids, evaluate_filter(html.unescape(written_filter.group(1)), ids)
+            )
+            if ok
+        ]
+    )
+    places = {feature["id"]: feature.get(ATLAS_ORDER_KEY) for feature in features}
+    if f'sort="{ATLAS_ORDER_KEY}"' in element:
+        kept.sort(key=lambda i: (places[i] is None, places[i] or 0))
+    want = qgis_atlas_page_ids(built.layout)
+    if sort is None:
+        kept, want = sorted(kept), sorted(want)
+    assert kept == want
