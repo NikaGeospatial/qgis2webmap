@@ -150,12 +150,38 @@ class TestLicenceGate:
 
         assert not called, "the runtime was downloaded before the licence was shown"
 
-    def test_acceptance_is_recorded_per_version(self, tmp_path) -> None:
-        """New terms can ship with a new build, so consent does not carry over."""
+    def test_acceptance_carries_over_to_later_versions(self, tmp_path) -> None:
+        """The licence is asked for once, at the first download, not again
+        when a plugin update brings a new runtime."""
+        assert not rm.licence_accepted("1.0.0", tmp_path)
         rm.record_licence_acceptance("1.0.0", tmp_path)
 
         assert rm.licence_accepted("1.0.0", tmp_path)
-        assert not rm.licence_accepted("1.0.1", tmp_path)
+        assert rm.licence_accepted("1.0.1", tmp_path)
+
+    def test_an_upgraded_runtime_downloads_without_asking(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        js, css = b"// runtime", b"/* css */"
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.1",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(js)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(css)},
+                },
+            },
+        )
+        monkeypatch.setattr(
+            rm, "download_tarball", lambda *a, **k: npm_tarball(js, css)
+        )
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+
+        rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.1").load()
+
+        assert rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.1").is_cached()
 
     def test_the_recorded_marker_names_what_was_accepted(self, tmp_path) -> None:
         rm.record_licence_acceptance("1.0.0", tmp_path)
