@@ -94,7 +94,12 @@ class PanelSection(QFrame):
         stored = QSettings().value(
             f"{SETTINGS_PREFIX}/{key}", open_by_default, type=bool
         )
+        # Quietly: this is the state just read back, not a choice to write
+        # again (a settings write on every dialog opening is most of the cost
+        # of building the section).
+        self.header.blockSignals(True)
         self.header.setChecked(bool(stored))
+        self.header.blockSignals(False)
         self._show(bool(stored))
 
     def set_summary(self, text: str) -> None:

@@ -1016,7 +1016,6 @@ class MainDialog(QDialog):
         # Last, so the stylesheet meets every widget the tabs built. See
         # `theme` for why it is scoped to this dialog and never to QGIS.
         self.theme = theme.apply(self)
-        theme.recolour_document(self.help_browser.document(), self.theme)
         self.account_button.refresh()
         self._update_basemap_warning()
         self._update_terrain_warning()
@@ -3130,6 +3129,8 @@ class MainDialog(QDialog):
         return aside
 
     def _show_aside(self, page: QWidget) -> None:
+        if page is self._help_page:
+            self._render_help()
         self._aside_stack.setCurrentWidget(page)
         settings = page is self._settings_page
         self.aside_heading.setText(tr("Settings") if settings else tr("Help"))
@@ -3671,7 +3672,8 @@ class MainDialog(QDialog):
         """Restyle in place: colours are not baked into labels the way text is."""
         QSettings().setValue(theme.THEME_KEY, self.theme_picker.currentData())
         self.theme = theme.apply(self)
-        theme.recolour_document(self.help_browser.document(), self.theme)
+        if self._help_rendered:
+            theme.recolour_document(self.help_browser.document(), self.theme)
         self.account_button.refresh()
         self._update_basemap_warning()
         self._update_terrain_warning()
@@ -3682,8 +3684,10 @@ class MainDialog(QDialog):
         layout = QVBoxLayout(page)
         browser = _HelpBrowser(page)
         self.help_browser = browser
-        # Markdown keeps one source of truth: the same files the website serves.
-        browser.setDocument(render_help_document(browser))
+        # The guides themselves are rendered the first time Help is opened
+        # (`_render_help`): rendering and recolouring them is the slowest part
+        # of building the dialog, and most openings never show them.
+        self._help_rendered = False
         browser.setOpenLinks(False)
         browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
         layout.addWidget(browser)
@@ -3712,6 +3716,16 @@ class MainDialog(QDialog):
         )
         layout.addWidget(community_button)
         return page
+
+    def _render_help(self) -> None:
+        """Put the guides in the Help page, once; kept from then on, so the
+        page keeps its place between visits."""
+        if self._help_rendered:
+            return
+        self._help_rendered = True
+        # Markdown keeps one source of truth: the same files the website serves.
+        self.help_browser.setDocument(render_help_document(self.help_browser))
+        theme.recolour_document(self.help_browser.document(), self.theme)
 
     # ---- Buttons --------------------------------------------------------
 

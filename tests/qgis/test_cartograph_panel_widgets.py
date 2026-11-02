@@ -615,6 +615,66 @@ class TestPanelSectionDirection:
         parent.deleteLater()
 
 
+class TestPanelSectionState:
+    """A section opens as it was left, and only a person's click is kept."""
+
+    KEY = "state-test"
+
+    def _section(self, open_by_default=False):
+        from qgis.PyQt.QtWidgets import QWidget
+
+        from nika_onlymap_exporter.ui.cartograph.panel_section import PanelSection
+
+        parent = QWidget()
+        return parent, PanelSection(
+            self.KEY, "Page settings", parent, open_by_default=open_by_default
+        )
+
+    def _stored(self):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.cartograph.panel_section import (
+            SETTINGS_PREFIX,
+        )
+
+        return QSettings().value(f"{SETTINGS_PREFIX}/{self.KEY}")
+
+    @pytest.fixture(autouse=True)
+    def _forget(self):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.cartograph.panel_section import (
+            SETTINGS_PREFIX,
+        )
+
+        QSettings().remove(f"{SETTINGS_PREFIX}/{self.KEY}")
+        yield
+        QSettings().remove(f"{SETTINGS_PREFIX}/{self.KEY}")
+
+    def test_opening_by_default_writes_nothing_and_says_nothing(self, qgis_app) -> None:
+        parent, section = self._section(open_by_default=True)
+        heard = []
+        section.toggled.connect(heard.append)
+        assert section.is_open()
+        assert section.body.isVisibleTo(parent)
+        assert self._stored() is None
+        assert heard == []
+        parent.deleteLater()
+
+    def test_a_click_is_kept_and_read_back(self, qgis_app) -> None:
+        parent, section = self._section(open_by_default=True)
+        heard = []
+        section.toggled.connect(heard.append)
+        section.header.click()
+        assert heard == [False]
+        assert not section.body.isVisibleTo(parent)
+        parent.deleteLater()
+        parent, again = self._section(open_by_default=True)
+        assert not again.is_open()
+        assert not again.body.isVisibleTo(parent)
+        parent.deleteLater()
+
+
 class TestSelectedTextSize:
     @staticmethod
     def _select(qgis_app, layout, item) -> None:

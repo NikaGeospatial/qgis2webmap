@@ -653,6 +653,42 @@ class TestStaticFrameCache:
         self._prepare(survey, fake_runtime, cache)
         assert cache.render_count == 4
 
+    def test_an_uncommitted_attribute_edit_a_label_reads_rerenders(
+        self, survey, fake_runtime, cache
+    ) -> None:
+        """Left in the edit buffer, the way an edit sits while the user works."""
+        from qgis.core import (
+            QgsField,
+            QgsPalLayerSettings,
+            QgsVectorLayerSimpleLabeling,
+        )
+        from qgis.PyQt.QtCore import QVariant
+
+        layer = survey.parcels
+        layer.dataProvider().addAttributes([QgsField("note", QVariant.String)])
+        layer.updateFields()
+        settings = QgsPalLayerSettings()
+        settings.fieldName = "note"
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        self._prepare(survey, fake_runtime, cache)
+        layer.startEditing()
+        layer.changeAttributeValue(
+            next(layer.getFeatures()).id(), layer.fields().indexOf("note"), "x"
+        )
+        self._prepare(survey, fake_runtime, cache)
+        layer.rollBack()
+        assert cache.render_count == 4
+
+    def test_a_project_variable_rerenders(self, survey, fake_runtime, cache) -> None:
+        """A label can read it, and nothing on the layer or the item says so."""
+        from qgis.core import QgsExpressionContextUtils
+
+        self._prepare(survey, fake_runtime, cache)
+        QgsExpressionContextUtils.setProjectVariable(survey.project, "q2w_v", "1")
+        self._prepare(survey, fake_runtime, cache)
+        assert cache.render_count == 4
+
     def test_clear_forces_a_fresh_render(self, survey, fake_runtime, cache) -> None:
         self._prepare(survey, fake_runtime, cache)
         cache.clear()
@@ -707,6 +743,36 @@ class TestStaticFrameCache:
             )
             assert render.call_count == 4
         cartograph_export.clear_static_frame_cache()
+
+
+class TestStaticFrameBudget:
+    def _render(self, size: int):
+        from nika_onlymap_exporter.exporters.frame_raster import StaticFrameRender
+
+        return StaticFrameRender(
+            png_bytes=b"x" * size, corners=None, crs_authid="", crs_def=""
+        )
+
+    def test_rasters_past_the_byte_budget_push_the_oldest_out(self, qgis_app) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import StaticFrameCache
+
+        cache = StaticFrameCache(max_bytes=100)
+        cache.store((("layout", "a"), "ka"), self._render(60))
+        cache.store((("layout", "b"), "kb"), self._render(30))
+        assert cache._entries.get(("layout", "a"), "ka") is not None  # used: newest
+        cache.store((("layout", "c"), "kc"), self._render(30))
+        assert cache._entries.get(("layout", "b"), "kb") is None
+        assert cache._entries.get(("layout", "a"), "ka") is not None
+        assert cache._entries.get(("layout", "c"), "kc") is not None
+
+    def test_a_raster_bigger_than_the_budget_is_not_kept(self, qgis_app) -> None:
+        from nika_onlymap_exporter.core.cartograph_export import StaticFrameCache
+
+        cache = StaticFrameCache(max_bytes=100)
+        cache.store((("layout", "a"), "ka"), self._render(50))
+        cache.store((("layout", "a"), "kb"), self._render(500))
+        assert len(cache._entries) == 0
+        assert cache.render_count == 2
 
 
 class TestLiveCamera:

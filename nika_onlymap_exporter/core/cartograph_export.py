@@ -56,19 +56,22 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import math
 import os
 import re
 import tempfile
+import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
+    QgsExpressionContextUtils,
+    QgsFieldFormatter,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsMapLayer,
@@ -76,10 +79,12 @@ from qgis.core import (
     QgsPointXY,
     QgsPrintLayout,
     QgsProject,
+    QgsProviderRegistry,
     QgsReadWriteContext,
     QgsRectangle,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..exporters.frame_raster import (
@@ -97,6 +102,14 @@ from ..packaging.runtime_manager import RuntimeBundle
 from ..ui.i18n import tr
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
+from .build_cache import (
+    BoundedCache,
+    LayerGenerations,
+    ProjectFollower,
+    Special,
+    UnvouchedValueError,
+    value_digest,
+)
 from .cartograph_ir import (
     ATLAS_ORDER_KEY,
     AtlasCamera,
@@ -121,7 +134,7 @@ from .export_resolution import frame_pixel_size, frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
-from .layer_reader import PendingLayer
+from .layer_reader import LayerFeatures, PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -135,6 +148,7 @@ from .layout_reader import (
     read_layout,
 )
 from .legend_box_sync import apply_legend_changes
+from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
 from .project_reader import (
     PendingProject,
@@ -233,6 +247,10 @@ class PreparedCartograph:
     # One per live frame, in order, from `prepare_live_reads`; empty means
     # `finish_cartograph` reads the project itself, on its own thread.
     live_reads: tuple[PendingProject, ...] = ()
+    # Also from `prepare_live_reads`: the cache each frame's finished read is
+    # kept in, and its key there per frame (None: read it afresh).
+    live_cache: LiveFrameCache | None = None
+    live_keys: tuple[str | None, ...] = ()
 
     @property
     def items(self) -> tuple[CartographItem, ...]:
@@ -256,13 +274,23 @@ class FinishedCartograph:
     atlas_pages: tuple[int, ...] | None = None
 
 
+#: What each cache may hold, in bytes (a static frame's PNG, a raster set's
+#: converted bytes, a live frame's read as estimated by
+#: `_LIVE_READ_BYTES_PER_DATA_BYTE`). A single result over its budget is not
+#: kept: it is made again on the next save, as it was before any cache.
+STATIC_FRAME_CACHE_BYTES = 256 * 1024 * 1024
+RASTER_EMBED_CACHE_BYTES = 256 * 1024 * 1024
+LIVE_FRAME_CACHE_BYTES = 512 * 1024 * 1024
+
+
 class StaticFrameCache:
     """The last raster of each static frame, reused while it is still right.
 
     One entry per (layout, map item): a new render for the same frame
     replaces the old one, so memory stays at one raster per frame on screen
-    rather than growing with every edit. `max_frames` bounds it across
-    layouts too.
+    rather than growing with every edit. `max_frames` and `max_bytes` bound
+    it across layouts too, least recently used out first, and a project
+    being cleared (closed, or another one opened) empties it.
 
     Correctness rests on the key (`_static_frame_key`) plus a per-layer
     generation counter bumped by the layer's own change signals -- the
@@ -271,14 +299,19 @@ class StaticFrameCache:
     that can change the pixels is in one or the other.
     """
 
-    def __init__(self, max_frames: int = 32) -> None:
+    def __init__(
+        self,
+        max_frames: int = 32,
+        max_bytes: int = STATIC_FRAME_CACHE_BYTES,
+        on_project_cleared: Callable[[], None] | None = None,
+    ) -> None:
         self.max_frames = max_frames
         self.render_count = 0
-        self._entries: dict[tuple[str, str], tuple[str, StaticFrameRender]] = {}
-        self._generations: dict[str, int] = {}
-        self._watched: dict[
-            str, tuple[QgsMapLayer, Callable[..., None], Callable[..., None]]
-        ] = {}
+        self._entries: BoundedCache[StaticFrameRender] = BoundedCache(
+            max_frames, max_bytes
+        )
+        self._layers = LayerGenerations(_layer_change_signals)
+        self._projects = ProjectFollower(on_project_cleared or self.clear)
 
     def render(
         self,
@@ -305,14 +338,14 @@ class StaticFrameCache:
         slot and the digest of everything its pixels depend on - and the raster
         already held for it, if still right. A caller that draws the frame
         itself (see `AsyncFrameRender`) gives the entry back to `store`."""
+        self._projects.follow(project)
         for layer in rendered_layers(map_item):
-            self._watch(layer)
-        key = _static_frame_key(layout, map_item, dpi, project, self._generations)
+            self._layers.watch(layer)
+        key = _static_frame_key(
+            layout, map_item, dpi, project, self._layers.generations
+        )
         slot = (layout.name(), map_item.uuid())
-        cached = self._entries.get(slot)
-        if cached is not None and cached[0] == key:
-            return (slot, key), cached[1]
-        return (slot, key), None
+        return (slot, key), self._entries.get(slot, key)
 
     def store(
         self, entry: tuple[tuple[str, str], str], render: StaticFrameRender
@@ -320,45 +353,13 @@ class StaticFrameCache:
         """Keep `render` as the raster for the entry `lookup` gave."""
         slot, key = entry
         self.render_count += 1
-        self._entries.pop(slot, None)
-        self._entries[slot] = (key, render)
-        while len(self._entries) > self.max_frames:
-            del self._entries[next(iter(self._entries))]
+        self._entries.put(slot, key, render, len(render.png_bytes))
 
     def clear(self) -> None:
         """Forget every raster and stop listening to every layer."""
         self._entries.clear()
-        for layer, bump, forget in self._watched.values():
-            # A layer QGIS already deleted (a project closing deletes its
-            # layers before `cleared`) raises on any attribute, signals
-            # included; its connections went with it.
-            with contextlib.suppress(TypeError, RuntimeError):
-                connections = [
-                    (signal, bump) for signal in _layer_change_signals(layer)
-                ]
-                connections.append((layer.willBeDeleted, forget))
-                for signal, slot in connections:
-                    with contextlib.suppress(TypeError, RuntimeError):
-                        signal.disconnect(slot)
-        self._watched.clear()
-        self._generations.clear()
-
-    def _watch(self, layer: QgsMapLayer) -> None:
-        layer_id = layer.id()
-        if layer_id in self._watched:
-            return
-
-        def bump(*_args: object) -> None:
-            self._generations[layer_id] = self._generations.get(layer_id, 0) + 1
-
-        def forget(*_args: object) -> None:
-            bump()
-            self._watched.pop(layer_id, None)
-
-        for signal in _layer_change_signals(layer):
-            signal.connect(bump)
-        layer.willBeDeleted.connect(forget)
-        self._watched[layer_id] = (layer, bump, forget)
+        self._layers.clear()
+        self._projects.stop()
 
 
 def _layer_change_signals(layer: QgsMapLayer) -> list:
@@ -376,7 +377,365 @@ def _layer_change_signals(layer: QgsMapLayer) -> list:
     return signals
 
 
-_DEFAULT_CACHE = StaticFrameCache()
+def _live_layer_change_signals(layer: QgsMapLayer) -> list:
+    """`_layer_change_signals`, and every edit-buffer signal besides: a live
+    frame carries the attributes too, and an attribute edit asks for no
+    repaint when nothing draws by that attribute."""
+    signals = _layer_change_signals(layer)
+    if isinstance(layer, QgsVectorLayer):
+        signals.extend(
+            [
+                layer.layerModified,
+                layer.attributeValueChanged,
+                layer.geometryChanged,
+                layer.featureAdded,
+                layer.featureDeleted,
+                layer.attributeAdded,
+                layer.attributeDeleted,
+                layer.updatedFields,
+                layer.afterCommitChanges,
+                layer.afterRollBack,
+                layer.dataSourceChanged,
+            ]
+        )
+    return signals
+
+
+@dataclass
+class _LiveRead:
+    """One live frame's finished read, as `finish_project` left it, with the
+    Fidelity rows it wrote (replayed when it is reused) and what was worked
+    out from it since: each layer's measured data bytes and the `<om-map>`
+    markup, by the identity of the GeoJSON they were measured or rendered
+    from (`_LiveRead.project` owns those dicts, and nothing changes them)."""
+
+    project: ExportProject
+    rows: tuple[FidelityItem, ...]
+    data_bytes: dict[int, int] = field(default_factory=dict)
+    markup: dict[str, str] = field(default_factory=dict)
+
+
+class LiveFrameCache:
+    """The last read of each live frame's layers, reused while it is still
+    right -- the slow half of an autosave (every feature read, decluttered and
+    serialised), which most edits of a page do not change.
+
+    Keyed (`key`) by everything the read is made from: the snapshot
+    `prepare_project` took on the GUI thread (every layer's translated style,
+    labels, popup, source and settings, the project's values), what the frame
+    asks for (its layers in order, its extent, its plane), the Layers tab's
+    settings for those layers, each layer's data revision (its saved XML,
+    feature count, extent, filter, source file and generation counter from
+    its change signals), and the project's and QGIS's expression variables.
+    A frame with something the key cannot see -- a layer on a database, a web
+    service or in memory, an expression that reads the clock or another layer,
+    a value `value_digest` cannot encode -- gets no key and is read afresh. Bounded
+    like `StaticFrameCache`, and emptied the same way.
+    """
+
+    def __init__(
+        self,
+        max_frames: int = 16,
+        max_bytes: int = LIVE_FRAME_CACHE_BYTES,
+        on_project_cleared: Callable[[], None] | None = None,
+    ) -> None:
+        self.read_count = 0
+        self._entries: BoundedCache[_LiveRead] = BoundedCache(max_frames, max_bytes)
+        self._layers = LayerGenerations(_live_layer_change_signals)
+        self._projects = ProjectFollower(on_project_cleared or self.clear)
+        # Bumped by `clear`: a build that took its keys before a clear (the
+        # project was closed while it ran) cannot fill the cache afterwards
+        # with an entry a later key could match.
+        self._epoch = 0
+
+    def revisions(
+        self, project: QgsProject, source: LiveFrameSource
+    ) -> dict[str, object] | None:
+        """Each layer `source` reads, by id, at its data revision now (see
+        `_add_layer_token`), or None when one cannot be vouched for. Taken
+        before the frame's snapshot (`prepare_project`), so a change made
+        after it is counted against this revision. **GUI thread only.**"""
+        self._projects.follow(project)
+        tokens: dict[str, object] = {}
+        for layer_id in source.layer_order:
+            if not _add_layer_token(project, layer_id, tokens, self._layers):
+                return None
+        return tokens
+
+    def key(
+        self,
+        project: QgsProject,
+        source: LiveFrameSource,
+        pending: PendingProject,
+        layer_settings: Mapping[str, LayerSettings] | None,
+        tokens: Mapping[str, object] | None,
+    ) -> str | None:
+        """The digest `source`'s read from `pending` is valid for, or None
+        when it cannot be vouched for; `tokens` are its `revisions`, taken
+        before `pending`. **GUI thread only.**"""
+        if tokens is None:
+            return None
+        settings = layer_settings or {}
+        return value_digest(
+            (
+                self._epoch,
+                _project_session(project),
+                source,
+                tuple(
+                    (layer_id, settings.get(layer_id))
+                    for layer_id in source.layer_order
+                ),
+                tuple(sorted(tokens.items())),
+                _expression_variables(project),
+                pending,
+            ),
+            _qgis_values(tokens),
+        )
+
+    def get(self, slot: tuple[str, str], key: str) -> _LiveRead | None:
+        return self._entries.get(slot, key)
+
+    def store(self, slot: tuple[str, str], key: str, read: _LiveRead) -> None:
+        self._entries.put(slot, key, read, _live_read_bytes(read))
+
+    def clear(self) -> None:
+        """Forget every read and stop listening to every layer."""
+        self._epoch += 1
+        self._entries.clear()
+        self._layers.clear()
+        self._projects.stop()
+
+
+#: A layer read held in memory is GeoJSON as Python dicts, lists and floats,
+#: several times the size of its serialised text: 60 000 points, 4 000
+#: polygons and 3 000 lines read as 16.7 MB of JSON held 93.6 MB (5.6 bytes
+#: per byte, `tracemalloc`, 2026-11-02), rounded up.
+_LIVE_READ_BYTES_PER_DATA_BYTE = 6
+
+
+def _live_read_bytes(read: _LiveRead) -> int:
+    """`read`'s estimated size: its layers' data in memory, and its markup.
+    Each layer's data bytes are kept for `_data_bytes`, which then measures
+    nothing twice."""
+    for layer in read.project.layers:
+        if layer.geojson is not None and id(layer.geojson) not in read.data_bytes:
+            read.data_bytes[id(layer.geojson)] = _layer_data_bytes(read.project, layer)
+    return _LIVE_READ_BYTES_PER_DATA_BYTE * sum(read.data_bytes.values()) + sum(
+        len(markup) for markup in read.markup.values()
+    )
+
+
+def _layer_data_bytes(project: ExportProject, layer: ExportLayer) -> int:
+    """`layer`'s entry of `data_bytes_by_layer`, measuring that layer alone."""
+    return data_bytes_by_layer(replace(project, layers=(layer,))).get(layer.layer_id, 0)
+
+
+#: Providers whose data is in a local file, whose size and time are in the
+#: key. A database or a web service can change under the project with no
+#: signal and no file to stat; so can a memory layer, through its provider
+#: (`dataProvider().changeAttributeValues` says nothing, not even to the
+#: provider's own `dataChanged`, and moves no count or extent).
+_LOCAL_VECTOR_PROVIDERS = frozenset({"ogr", "delimitedtext", "spatialite", "gpx"})
+
+#: Files that hold part of a local layer's data beside the one its source
+#: names: a shapefile's attributes and index, an SQLite database's journal.
+_SIDECAR_SUFFIXES = {
+    ".shp": (".shx", ".dbf", ".prj", ".cpg", ".qix", ".sbn"),
+    ".gpkg": ("-wal",),
+    ".sqlite": ("-wal",),
+    ".db": ("-wal",),
+}
+
+#: Expression functions whose answer is not a function of the layer's own
+#: data and the key: the clock, chance, another layer, the environment. A
+#: layer whose saved XML calls one is read afresh every time.
+_UNKEYABLE_EXPRESSION_RE = re.compile(
+    r"\b(?:now|rand|randf|uuid|aggregate|relation_aggregate|get_feature"
+    r"|get_feature_by_id|overlay_\w+|layer_property|env"
+    r"|sqlite_fetch_and_increment)\s*\(|\$now\b|\$uuid\b",
+    re.IGNORECASE,
+)
+
+
+#: A filter or source that is a query of its own: it can read other tables,
+#: in other files, that no part of the key stands for.
+_SQL_QUERY_RE = re.compile(r"\bselect\b", re.IGNORECASE)
+
+
+def _add_layer_token(
+    project: QgsProject,
+    layer_id: str,
+    tokens: dict[str, object],
+    generations: LayerGenerations,
+) -> bool:
+    """Put `layer_id`'s data revision in `tokens`, and those of the layers its
+    joins read; False when it has one the key cannot see. A layer gone from
+    the project is a token too (`prepare_project` skips it)."""
+    if layer_id in tokens:
+        return True
+    layer = project.mapLayer(layer_id)
+    if layer is None:
+        tokens[layer_id] = None
+        return True
+    generations.watch(layer)
+    document = QDomDocument("live-frame-layer")
+    element = document.createElement("maplayer")
+    # Attached first, as for `_static_frame_key`.
+    document.appendChild(element)
+    layer.writeLayerXml(element, document, QgsReadWriteContext())
+    xml = document.toString()
+    if _UNKEYABLE_EXPRESSION_RE.search(xml):
+        return False
+    if isinstance(layer, QgsVectorLayer) and _SQL_QUERY_RE.search(
+        f"{layer.source()}\n{layer.subsetString()}"
+    ):
+        return False
+    files = _source_files(layer)
+    if files is None:
+        return False
+    parts: list[object] = [
+        generations.get(layer_id),
+        layer.isValid(),
+        xml,
+        layer.extent().toString(17),
+        files,
+    ]
+    if isinstance(layer, QgsVectorLayer):
+        parts.extend([layer.featureCount(), layer.subsetString()])
+    tokens[layer_id] = tuple(parts)
+    if isinstance(layer, QgsVectorLayer):
+        for join in layer.vectorJoins():
+            if not _add_layer_token(project, join.joinLayerId(), tokens, generations):
+                return False
+    return True
+
+
+def _source_files(layer: QgsMapLayer) -> tuple[tuple[str, int, int] | None, ...] | None:
+    """The size and modification time of each local file a layer's data is in;
+    `()` for a raster or tile layer whose data is not in a file of its own (a
+    tile service the page fetches itself), None for a vector layer on a
+    provider whose data can change unseen."""
+    provider = layer.providerType()
+    if isinstance(layer, QgsVectorLayer) and provider not in _LOCAL_VECTOR_PROVIDERS:
+        return None
+    path = (
+        QgsProviderRegistry.instance().decodeUri(provider, layer.source()).get("path")
+    )
+    if not path:
+        return None if isinstance(layer, QgsVectorLayer) else ()
+    main = Path(str(path))
+    if isinstance(layer, QgsVectorLayer) and not main.is_file():
+        return None
+    candidates = [main] + [
+        main.with_name(main.name + suffix)
+        if suffix.startswith("-")
+        else main.with_suffix(suffix)
+        for suffix in _SIDECAR_SUFFIXES.get(main.suffix.lower(), ())
+    ]
+    stats: list[tuple[str, int, int] | None] = []
+    for candidate in candidates:
+        try:
+            stat = candidate.stat()
+        except OSError:
+            stats.append(None)
+            continue
+        stats.append((str(candidate), stat.st_size, stat.st_mtime_ns))
+    return tuple(stats)
+
+
+def _project_session(project: QgsProject) -> str:
+    """A token for `project` the object, kept on it: two projects open at
+    once (a Processing run's own and the one on screen) never share keys."""
+    session = project.property(_SESSION_PROPERTY)
+    if not session:
+        session = uuid.uuid4().hex
+        project.setProperty(_SESSION_PROPERTY, session)
+    return str(session)
+
+
+_SESSION_PROPERTY = "nika_onlymap_cache_session"
+
+
+def _expression_variables(project: QgsProject) -> tuple[tuple[str, object], ...]:
+    """The global and project expression variables, which a layer's virtual
+    fields and filters may read, by name; a layer among them by its id."""
+
+    def plain(value: object) -> object:
+        if isinstance(value, QgsMapLayer):
+            return ("layer", value.id())
+        if isinstance(value, (list, tuple)):
+            return tuple(plain(item) for item in value)
+        return value
+
+    return tuple(
+        (f"{scope.name()}:{name}", plain(scope.variable(name)))
+        for scope in (
+            QgsExpressionContextUtils.globalScope(),
+            QgsExpressionContextUtils.projectScope(project),
+        )
+        for name in scope.variableNames()
+    )
+
+
+def _qgis_values(tokens: Mapping[str, object]) -> Special:
+    """`value_digest`'s encoding of the QGIS value types a `PendingProject`
+    carries. A feature source is the layer's data, so it is encoded as that
+    layer's token; any other QGIS object is refused."""
+
+    def special(part: object, add: Callable[[object], None]) -> bool:
+        if isinstance(part, LayerFeatures):
+            add("LayerFeatures")
+            for item in fields(part):
+                value = getattr(part, item.name)
+                add(item.name)
+                if item.name == "source":
+                    if part.layer_id not in tokens:
+                        raise UnvouchedValueError(
+                            "a feature source of a layer outside the key"
+                        )
+                    add(tokens[part.layer_id])
+                elif item.name == "formats_layer":
+                    # A private clone of the same layer, for its formatters.
+                    add(value is not None)
+                else:
+                    add(value)
+            return True
+        if isinstance(part, QgsCoordinateReferenceSystem):
+            add(("crs", part.authid(), part.toWkt(), part.toProj()))
+            return True
+        if isinstance(part, QgsCoordinateTransformContext):
+            document = QDomDocument("transform-context")
+            element = document.createElement("context")
+            document.appendChild(element)
+            part.writeXml(element, QgsReadWriteContext())
+            add(("transform-context", document.toString()))
+            return True
+        if isinstance(part, QgsRectangle):
+            add(
+                (
+                    "rectangle",
+                    part.xMinimum(),
+                    part.yMinimum(),
+                    part.xMaximum(),
+                    part.yMaximum(),
+                )
+            )
+            return True
+        if isinstance(part, QgsFieldFormatter):
+            add(("formatter", part.id()))
+            return True
+        if isinstance(part, (QDateTime, QDate, QTime)):
+            add((type(part).__name__, part.toString(Qt.DateFormat.ISODateWithMs)))
+            return True
+        return False
+
+    return special
+
+
+_DEFAULT_CACHE = StaticFrameCache(on_project_cleared=lambda: clear_cartograph_caches())
+_DEFAULT_LIVE_CACHE = LiveFrameCache(
+    on_project_cleared=lambda: clear_cartograph_caches()
+)
 
 
 def clear_static_frame_cache() -> None:
@@ -384,6 +743,16 @@ def clear_static_frame_cache() -> None:
     for a project being closed, or a caller that wants a guaranteed fresh
     render."""
     _DEFAULT_CACHE.clear()
+
+
+def clear_cartograph_caches() -> None:
+    """Drop everything the build keeps between saves: the static frames'
+    rasters, the converted rasters and the live frames' reads. What a project
+    being cleared (closed, or another one opened) calls, through each cache's
+    `ProjectFollower`."""
+    _DEFAULT_CACHE.clear()
+    _DEFAULT_LIVE_CACHE.clear()
+    _RASTER_EMBEDS.clear()
 
 
 def _static_frame_key(
@@ -407,6 +776,10 @@ def _static_frame_key(
       generation counter from the layer's change signals.
     - The map theme's own style overrides, when the item follows a theme:
       the item stores only the theme's name.
+    - The project's and QGIS's expression variables (a label or a
+      data-defined colour may read one) and the project's transform
+      context (which datum shift a layer is drawn through); a value that
+      cannot be encoded makes the key one that never matches.
     """
     digest = hashlib.sha256()
 
@@ -439,6 +812,10 @@ def _static_frame_key(
         for layer_id in sorted(overrides):
             add(layer_id)
             add(overrides[layer_id])
+    context = value_digest(
+        (_expression_variables(project), project.transformContext()), _qgis_values({})
+    )
+    add(context or uuid.uuid4().hex)
     return digest.hexdigest()
 
 
@@ -610,12 +987,22 @@ def prepare_live_reads(
     report: FidelityReportBuilder,
     *,
     layer_settings: Mapping[str, LayerSettings] | None = None,
+    live_cache: LiveFrameCache | None = _DEFAULT_LIVE_CACHE,
 ) -> PreparedCartograph:
     """Read each live frame's layers off the live project. **GUI thread only.**
 
     The result carries a `PendingProject` per frame, so `finish_cartograph` can
     run on a worker holding no project or layer.
+
+    `live_cache` lets `finish_cartograph` reuse a frame's finished read across
+    calls while nothing it is made from has changed (the module's shared cache
+    by default; see `LiveFrameCache`); `None` reads every frame afresh.
     """
+    revisions = (
+        [live_cache.revisions(project, source) for source in prepared.live_frames]
+        if live_cache is not None
+        else []
+    )
     reads = tuple(
         prepare_project(
             project,
@@ -628,7 +1015,17 @@ def prepare_live_reads(
         )
         for source in prepared.live_frames
     )
-    return replace(prepared, live_reads=reads)
+    keys = (
+        tuple(
+            live_cache.key(project, source, pending, layer_settings, tokens)
+            for source, pending, tokens in zip(
+                prepared.live_frames, reads, revisions, strict=True
+            )
+        )
+        if live_cache is not None
+        else ()
+    )
+    return replace(prepared, live_reads=reads, live_cache=live_cache, live_keys=keys)
 
 
 @dataclass
@@ -854,9 +1251,11 @@ def finish_cartograph_full(
     # is converted to the same bytes and carried once.
     embedded_rasters: dict[str, bytes] = {}
     reported_remote: set[str] = set()
+    measured: list[Mapping[str, int]] = []
     for index, source in enumerate(prepared.live_frames):
+        held: _LiveRead | None = None
         if prepared.live_reads:
-            export_project = finish_project(prepared.live_reads[index], report)
+            export_project, held = _finish_live_read(prepared, index, report)
         else:
             if project is None:
                 raise ValueError("a project is needed when no live reads were prepared")
@@ -885,6 +1284,7 @@ def finish_cartograph_full(
         if requirement is not None and requirement.frame_id == source.frame_id:
             export_project = _with_atlas_order(export_project, requirement)
         projects.append(export_project)
+        measured.append(_data_bytes(export_project, held))
         if (
             requirement is not None
             and requirement.frame_id == source.frame_id
@@ -914,8 +1314,8 @@ def finish_cartograph_full(
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
         _report_raster_swatches(spec, source.frame_id, rendered.layers, report)
         spec = fit_frame_legend_boxes(spec, source.frame_id, rendered.layers, report)
-        live_markup[source.frame_id] = writer.render_map_element(rendered, verdict)
-    _warn_when_inline_data_is_heavy(projects, report)
+        live_markup[source.frame_id] = _map_element(writer, rendered, verdict, held)
+    _warn_when_inline_data_is_heavy(projects, report, measured)
     requirement = prepared.atlas_requirement
     return FinishedCartograph(
         atlas_pages=(
@@ -933,6 +1333,104 @@ def finish_cartograph_full(
     )
 
 
+def _finish_live_read(
+    prepared: PreparedCartograph, index: int, report: FidelityReportBuilder
+) -> tuple[ExportProject, _LiveRead | None]:
+    """Frame `index`'s read finished (`finish_project`), or the cache's copy of
+    it when its key still holds, with the rows it wrote replayed: the report
+    and the project come out exactly as a fresh read leaves them. The
+    `_LiveRead` is None when the frame is not cached."""
+    pending = prepared.live_reads[index]
+    cache = prepared.live_cache
+    key = prepared.live_keys[index] if index < len(prepared.live_keys) else None
+    if cache is None or key is None:
+        return finish_project(pending, report), None
+    slot = (prepared.spec.cartograph_id, prepared.live_frames[index].frame_id)
+    held = cache.get(slot, key)
+    if held is None:
+        before = len(report)
+        cache.read_count += 1
+        held = _LiveRead(
+            project=finish_project(pending, report), rows=report.items[before:]
+        )
+        cache.store(slot, key, held)
+    else:
+        report.extend(held.rows)
+    return replace(held.project, fidelity=report.items), held
+
+
+def _data_bytes(project: ExportProject, held: _LiveRead | None) -> Mapping[str, int]:
+    """`data_bytes_by_layer(project)`, reusing what was measured of `held`'s
+    data before: a layer whose GeoJSON is still `held`'s own measures the
+    same."""
+    if held is None:
+        return data_bytes_by_layer(project)
+    sizes: dict[str, int] = {}
+    for layer in project.exportable_layers:
+        reusable = layer.raster is None and any(
+            layer.geojson is cached.geojson
+            for cached in held.project.layers
+            if cached.geojson is not None
+        )
+        size = held.data_bytes.get(id(layer.geojson)) if reusable else None
+        if size is None:
+            size = _layer_data_bytes(project, layer)
+            if reusable:
+                held.data_bytes[id(layer.geojson)] = size
+        sizes[layer.layer_id] = size
+    return sizes
+
+
+def _map_element(
+    writer: OnlyMapWriter,
+    rendered: ExportProject,
+    verdict: CapVerdict,
+    held: _LiveRead | None,
+) -> str:
+    """`writer.render_map_element(rendered, verdict)`, reused from `held` when
+    it rendered the same: the same layers in every other respect, carrying
+    `held`'s own GeoJSON. A frame whose data was changed after the read (an
+    atlas's page order) is rendered afresh. `fidelity` is left out of the
+    comparison: the element is built from the layers, settings and verdict
+    alone (`manifest_builder.build_manifest` never reads it)."""
+    tokens = {
+        id(layer.geojson): f"geojson:{place}"
+        for place, layer in enumerate(held.project.layers if held else ())
+        if layer.geojson is not None
+    }
+    key = (
+        value_digest((replace(rendered, fidelity=()), verdict), _held_geojson(tokens))
+        if held is not None
+        else None
+    )
+    if held is not None and key is not None and key in held.markup:
+        return held.markup[key]
+    markup = writer.render_map_element(rendered, verdict)
+    if held is not None and key is not None:
+        held.markup.clear()
+        held.markup[key] = markup
+    return markup
+
+
+def _held_geojson(tokens: Mapping[int, str]) -> Special:
+    """`value_digest`'s encoding of a `_LiveRead`'s own GeoJSON: by its place
+    in the read, which `_LiveRead` never changes. Any other GeoJSON is refused
+    rather than walked feature by feature."""
+
+    def special(part: object, add: Callable[[object], None]) -> bool:
+        if not isinstance(part, dict):
+            return False
+        token = tokens.get(id(part))
+        if token is not None:
+            add(token)
+            return True
+        if part.get("type") in ("FeatureCollection", "Feature"):
+            raise UnvouchedValueError("GeoJSON not from the cached read")
+        return False
+
+    return special
+
+
 #: Inline vector data past this makes the page hang before it draws: the
 #: browser parses all of it and builds every feature on the main thread. A
 #: 60 MB page (41 MB of dense polygons) kept a software-rendered browser busy
@@ -944,22 +1442,27 @@ _HEAVY_LAYERS_NAMED = 3
 
 
 def _warn_when_inline_data_is_heavy(
-    projects: list[ExportProject], report: FidelityReportBuilder
+    projects: list[ExportProject],
+    report: FidelityReportBuilder,
+    measured: Sequence[Mapping[str, int]] | None = None,
 ) -> None:
     """Warn when the page's inline vector data is large enough to hang it.
 
     The page carries each layer once however many frames draw it, so layers
-    are counted by id across the live frames.
+    are counted by id across the live frames. `measured` is
+    `data_bytes_by_layer` of each project, when the caller has it already.
     """
     sizes: dict[str, int] = {}
     names: dict[str, str] = {}
-    for project in projects:
+    if measured is None:
+        measured = [data_bytes_by_layer(project) for project in projects]
+    for project, project_sizes in zip(projects, measured, strict=True):
         vector_ids = {
             layer.layer_id
             for layer in project.exportable_layers
             if layer.geojson is not None
         }
-        for layer_id, size in data_bytes_by_layer(project).items():
+        for layer_id, size in project_sizes.items():
             if layer_id in vector_ids:
                 sizes[layer_id] = size
         names.update(
@@ -998,9 +1501,13 @@ class _EmbeddedRasters:
 #: The last conversions, most recent last. A cartograph autosaves on every
 #: edit, and converting a large raster to a COG takes long enough that redoing
 #: it each time would stall every save; the key holds everything that changes
-#: the bytes, so an entry is only reused while it is still right.
-_RASTER_EMBEDS: dict[tuple[object, ...], _EmbeddedRasters] = {}
+#: the bytes, so an entry is only reused while it is still right. Bounded by
+#: count and by `RASTER_EMBED_CACHE_BYTES`, and emptied with the other caches
+#: (`clear_cartograph_caches`).
 _RASTER_EMBEDS_MAX = 8
+_RASTER_EMBEDS: BoundedCache[_EmbeddedRasters] = BoundedCache(
+    _RASTER_EMBEDS_MAX, RASTER_EMBED_CACHE_BYTES
+)
 
 
 def _embed_rasters(
@@ -1016,7 +1523,7 @@ def _embed_rasters(
     if not rasters:
         return export_project, ()
     key = _raster_embed_key(rasters)
-    staged = _RASTER_EMBEDS.pop(key, None) if key is not None else None
+    staged = _RASTER_EMBEDS.get(key, key) if key is not None else None
     if staged is None:
         before = len(report)
         with tempfile.TemporaryDirectory(prefix="qgis2webmap-carto-") as work:
@@ -1032,12 +1539,12 @@ def _embed_rasters(
             embedded=result.embedded,
             rows=report.items[before:],
         )
+        if key is not None:
+            _RASTER_EMBEDS.put(
+                key, key, staged, sum(len(data) for _name, data in staged.embedded)
+            )
     else:
         report.extend(staged.rows)
-    if key is not None:
-        _RASTER_EMBEDS[key] = staged
-        while len(_RASTER_EMBEDS) > _RASTER_EMBEDS_MAX:
-            _RASTER_EMBEDS.pop(next(iter(_RASTER_EMBEDS)))
     layers = tuple(
         replace(layer, raster=staged.rasters[layer.layer_id])
         if layer.raster is not None and layer.layer_id in staged.rasters

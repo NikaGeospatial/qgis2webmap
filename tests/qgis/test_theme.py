@@ -156,6 +156,7 @@ class TestHelpPane:
     ):
         dialog = TestScope()._dialog(project, make_memory_layer)
         try:
+            dialog._show_tab("Help")
             document = dialog.help_browser.document()
             colours = set()
             block = document.begin()
@@ -169,6 +170,57 @@ class TestHelpPane:
                 block = block.next()
             assert colours == {dialog.theme.link}
         finally:
+            dialog.close()
+
+    def _link_colours(self, document) -> set[str]:
+        colours = set()
+        block = document.begin()
+        while block.isValid():
+            it = block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                if fragment.isValid() and fragment.charFormat().isAnchor():
+                    colours.add(fragment.charFormat().foreground().color().name())
+                it += 1
+            block = block.next()
+        return colours
+
+    def test_the_guides_are_rendered_on_first_opening_and_kept(
+        self, qgis_app, project, make_memory_layer
+    ):
+        """Rendering them is the slowest part of opening the dialog, and
+        most openings never show Help."""
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            assert dialog.help_browser.document().isEmpty()
+            dialog._show_tab("Help")
+            document = dialog.help_browser.document()
+            assert "Sharing a map" in document.toPlainText()
+            dialog._close_aside()
+            dialog._show_tab("Help")
+            assert dialog.help_browser.document() is document
+        finally:
+            dialog.close()
+
+    def test_a_theme_chosen_before_the_first_opening_colours_the_links(
+        self, qgis_app, project, make_memory_layer
+    ):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui import theme
+
+        dialog = TestScope()._dialog(project, make_memory_layer)
+        try:
+            picker = dialog.theme_picker
+            for name in ("dark", "light"):
+                picker.setCurrentIndex(picker.findData(name))
+                if dialog.help_browser.document().isEmpty():
+                    dialog._show_tab("Help")
+                assert self._link_colours(dialog.help_browser.document()) == {
+                    dialog.theme.link
+                }
+        finally:
+            QSettings().remove(theme.THEME_KEY)
             dialog.close()
 
 
