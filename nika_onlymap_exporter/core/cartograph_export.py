@@ -56,19 +56,22 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import math
 import os
 import re
 import tempfile
+import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
+    QgsExpressionContextUtils,
+    QgsFieldFormatter,
     QgsLayoutItemLegend,
     QgsLayoutItemMap,
     QgsMapLayer,
@@ -80,6 +83,7 @@ from qgis.core import (
     QgsRectangle,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..exporters.frame_raster import (
@@ -97,6 +101,14 @@ from ..packaging.runtime_manager import RuntimeBundle
 from ..ui.i18n import tr
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
+from .build_cache import (
+    BoundedCache,
+    LayerGenerations,
+    ProjectFollower,
+    Special,
+    UnvouchedValueError,
+    value_digest,
+)
 from .cartograph_ir import (
     ATLAS_ORDER_KEY,
     AtlasCamera,
@@ -121,7 +133,7 @@ from .export_resolution import frame_pixel_size, frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
-from .layer_reader import PendingLayer
+from .layer_reader import LayerFeatures, PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -256,13 +268,21 @@ class FinishedCartograph:
     atlas_pages: tuple[int, ...] | None = None
 
 
+#: What each cache may hold, in bytes (a static frame's PNG, a raster set's
+#: converted bytes). A single result over its budget is not kept: it is made
+#: again on the next save, as it was before any cache.
+STATIC_FRAME_CACHE_BYTES = 256 * 1024 * 1024
+RASTER_EMBED_CACHE_BYTES = 256 * 1024 * 1024
+
+
 class StaticFrameCache:
     """The last raster of each static frame, reused while it is still right.
 
     One entry per (layout, map item): a new render for the same frame
     replaces the old one, so memory stays at one raster per frame on screen
-    rather than growing with every edit. `max_frames` bounds it across
-    layouts too.
+    rather than growing with every edit. `max_frames` and `max_bytes` bound
+    it across layouts too, least recently used out first, and a project
+    being cleared (closed, or another one opened) empties it.
 
     Correctness rests on the key (`_static_frame_key`) plus a per-layer
     generation counter bumped by the layer's own change signals -- the
@@ -271,14 +291,19 @@ class StaticFrameCache:
     that can change the pixels is in one or the other.
     """
 
-    def __init__(self, max_frames: int = 32) -> None:
+    def __init__(
+        self,
+        max_frames: int = 32,
+        max_bytes: int = STATIC_FRAME_CACHE_BYTES,
+        on_project_cleared: Callable[[], None] | None = None,
+    ) -> None:
         self.max_frames = max_frames
         self.render_count = 0
-        self._entries: dict[tuple[str, str], tuple[str, StaticFrameRender]] = {}
-        self._generations: dict[str, int] = {}
-        self._watched: dict[
-            str, tuple[QgsMapLayer, Callable[..., None], Callable[..., None]]
-        ] = {}
+        self._entries: BoundedCache[StaticFrameRender] = BoundedCache(
+            max_frames, max_bytes
+        )
+        self._layers = LayerGenerations(_layer_change_signals)
+        self._projects = ProjectFollower(on_project_cleared or self.clear)
 
     def render(
         self,
@@ -305,14 +330,14 @@ class StaticFrameCache:
         slot and the digest of everything its pixels depend on - and the raster
         already held for it, if still right. A caller that draws the frame
         itself (see `AsyncFrameRender`) gives the entry back to `store`."""
+        self._projects.follow(project)
         for layer in rendered_layers(map_item):
-            self._watch(layer)
-        key = _static_frame_key(layout, map_item, dpi, project, self._generations)
+            self._layers.watch(layer)
+        key = _static_frame_key(
+            layout, map_item, dpi, project, self._layers.generations
+        )
         slot = (layout.name(), map_item.uuid())
-        cached = self._entries.get(slot)
-        if cached is not None and cached[0] == key:
-            return (slot, key), cached[1]
-        return (slot, key), None
+        return (slot, key), self._entries.get(slot, key)
 
     def store(
         self, entry: tuple[tuple[str, str], str], render: StaticFrameRender
@@ -320,45 +345,13 @@ class StaticFrameCache:
         """Keep `render` as the raster for the entry `lookup` gave."""
         slot, key = entry
         self.render_count += 1
-        self._entries.pop(slot, None)
-        self._entries[slot] = (key, render)
-        while len(self._entries) > self.max_frames:
-            del self._entries[next(iter(self._entries))]
+        self._entries.put(slot, key, render, len(render.png_bytes))
 
     def clear(self) -> None:
         """Forget every raster and stop listening to every layer."""
         self._entries.clear()
-        for layer, bump, forget in self._watched.values():
-            # A layer QGIS already deleted (a project closing deletes its
-            # layers before `cleared`) raises on any attribute, signals
-            # included; its connections went with it.
-            with contextlib.suppress(TypeError, RuntimeError):
-                connections = [
-                    (signal, bump) for signal in _layer_change_signals(layer)
-                ]
-                connections.append((layer.willBeDeleted, forget))
-                for signal, slot in connections:
-                    with contextlib.suppress(TypeError, RuntimeError):
-                        signal.disconnect(slot)
-        self._watched.clear()
-        self._generations.clear()
-
-    def _watch(self, layer: QgsMapLayer) -> None:
-        layer_id = layer.id()
-        if layer_id in self._watched:
-            return
-
-        def bump(*_args: object) -> None:
-            self._generations[layer_id] = self._generations.get(layer_id, 0) + 1
-
-        def forget(*_args: object) -> None:
-            bump()
-            self._watched.pop(layer_id, None)
-
-        for signal in _layer_change_signals(layer):
-            signal.connect(bump)
-        layer.willBeDeleted.connect(forget)
-        self._watched[layer_id] = (layer, bump, forget)
+        self._layers.clear()
+        self._projects.stop()
 
 
 def _layer_change_signals(layer: QgsMapLayer) -> list:
@@ -376,7 +369,83 @@ def _layer_change_signals(layer: QgsMapLayer) -> list:
     return signals
 
 
-_DEFAULT_CACHE = StaticFrameCache()
+def _expression_variables(project: QgsProject) -> tuple[tuple[str, object], ...]:
+    """The global and project expression variables, which a layer's virtual
+    fields and filters may read, by name; a layer among them by its id."""
+
+    def plain(value: object) -> object:
+        if isinstance(value, QgsMapLayer):
+            return ("layer", value.id())
+        if isinstance(value, (list, tuple)):
+            return tuple(plain(item) for item in value)
+        return value
+
+    return tuple(
+        (f"{scope.name()}:{name}", plain(scope.variable(name)))
+        for scope in (
+            QgsExpressionContextUtils.globalScope(),
+            QgsExpressionContextUtils.projectScope(project),
+        )
+        for name in scope.variableNames()
+    )
+
+
+def _qgis_values(tokens: Mapping[str, object]) -> Special:
+    """`value_digest`'s encoding of the QGIS value types a `PendingProject`
+    carries. A feature source is the layer's data, so it is encoded as that
+    layer's token; any other QGIS object is refused."""
+
+    def special(part: object, add: Callable[[object], None]) -> bool:
+        if isinstance(part, LayerFeatures):
+            add("LayerFeatures")
+            for item in fields(part):
+                value = getattr(part, item.name)
+                add(item.name)
+                if item.name == "source":
+                    if part.layer_id not in tokens:
+                        raise UnvouchedValueError(
+                            "a feature source of a layer outside the key"
+                        )
+                    add(tokens[part.layer_id])
+                elif item.name == "formats_layer":
+                    # A private clone of the same layer, for its formatters.
+                    add(value is not None)
+                else:
+                    add(value)
+            return True
+        if isinstance(part, QgsCoordinateReferenceSystem):
+            add(("crs", part.authid(), part.toWkt(), part.toProj()))
+            return True
+        if isinstance(part, QgsCoordinateTransformContext):
+            document = QDomDocument("transform-context")
+            element = document.createElement("context")
+            document.appendChild(element)
+            part.writeXml(element, QgsReadWriteContext())
+            add(("transform-context", document.toString()))
+            return True
+        if isinstance(part, QgsRectangle):
+            add(
+                (
+                    "rectangle",
+                    part.xMinimum(),
+                    part.yMinimum(),
+                    part.xMaximum(),
+                    part.yMaximum(),
+                )
+            )
+            return True
+        if isinstance(part, QgsFieldFormatter):
+            add(("formatter", part.id()))
+            return True
+        if isinstance(part, (QDateTime, QDate, QTime)):
+            add((type(part).__name__, part.toString(Qt.DateFormat.ISODateWithMs)))
+            return True
+        return False
+
+    return special
+
+
+_DEFAULT_CACHE = StaticFrameCache(on_project_cleared=lambda: clear_cartograph_caches())
 
 
 def clear_static_frame_cache() -> None:
@@ -384,6 +453,15 @@ def clear_static_frame_cache() -> None:
     for a project being closed, or a caller that wants a guaranteed fresh
     render."""
     _DEFAULT_CACHE.clear()
+
+
+def clear_cartograph_caches() -> None:
+    """Drop everything the build keeps between saves: the static frames'
+    rasters and the converted rasters. What a project
+    being cleared (closed, or another one opened) calls, through each cache's
+    `ProjectFollower`."""
+    _DEFAULT_CACHE.clear()
+    _RASTER_EMBEDS.clear()
 
 
 def _static_frame_key(
@@ -407,6 +485,10 @@ def _static_frame_key(
       generation counter from the layer's change signals.
     - The map theme's own style overrides, when the item follows a theme:
       the item stores only the theme's name.
+    - The project's and QGIS's expression variables (a label or a
+      data-defined colour may read one) and the project's transform
+      context (which datum shift a layer is drawn through); a value that
+      cannot be encoded makes the key one that never matches.
     """
     digest = hashlib.sha256()
 
@@ -439,6 +521,10 @@ def _static_frame_key(
         for layer_id in sorted(overrides):
             add(layer_id)
             add(overrides[layer_id])
+    context = value_digest(
+        (_expression_variables(project), project.transformContext()), _qgis_values({})
+    )
+    add(context or uuid.uuid4().hex)
     return digest.hexdigest()
 
 
@@ -998,9 +1084,13 @@ class _EmbeddedRasters:
 #: The last conversions, most recent last. A cartograph autosaves on every
 #: edit, and converting a large raster to a COG takes long enough that redoing
 #: it each time would stall every save; the key holds everything that changes
-#: the bytes, so an entry is only reused while it is still right.
-_RASTER_EMBEDS: dict[tuple[object, ...], _EmbeddedRasters] = {}
+#: the bytes, so an entry is only reused while it is still right. Bounded by
+#: count and by `RASTER_EMBED_CACHE_BYTES`, and emptied with the other caches
+#: (`clear_cartograph_caches`).
 _RASTER_EMBEDS_MAX = 8
+_RASTER_EMBEDS: BoundedCache[_EmbeddedRasters] = BoundedCache(
+    _RASTER_EMBEDS_MAX, RASTER_EMBED_CACHE_BYTES
+)
 
 
 def _embed_rasters(
@@ -1016,7 +1106,7 @@ def _embed_rasters(
     if not rasters:
         return export_project, ()
     key = _raster_embed_key(rasters)
-    staged = _RASTER_EMBEDS.pop(key, None) if key is not None else None
+    staged = _RASTER_EMBEDS.get(key, key) if key is not None else None
     if staged is None:
         before = len(report)
         with tempfile.TemporaryDirectory(prefix="qgis2webmap-carto-") as work:
@@ -1032,12 +1122,12 @@ def _embed_rasters(
             embedded=result.embedded,
             rows=report.items[before:],
         )
+        if key is not None:
+            _RASTER_EMBEDS.put(
+                key, key, staged, sum(len(data) for _name, data in staged.embedded)
+            )
     else:
         report.extend(staged.rows)
-    if key is not None:
-        _RASTER_EMBEDS[key] = staged
-        while len(_RASTER_EMBEDS) > _RASTER_EMBEDS_MAX:
-            _RASTER_EMBEDS.pop(next(iter(_RASTER_EMBEDS)))
     layers = tuple(
         replace(layer, raster=staged.rasters[layer.layer_id])
         if layer.raster is not None and layer.layer_id in staged.rasters
