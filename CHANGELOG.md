@@ -4,6 +4,29 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
+  The web map asks the service for Web Mercator (EPSG:3857) tiles itself,
+  whatever CRS the project uses, so a WMS layer needs an internet connection
+  and the service must allow web pages to load its images (CORS); if it does
+  not, only that layer stays empty, and the map page reports why on its
+  `om-validation-error` event. A WMS is exported when the capabilities QGIS
+  stored for it list EPSG:3857 (or the layer already uses it): exporting
+  never contacts the service. Needs the OnlyMap runtime 0.13.3.
+- **WMTS layers on a Web Mercator tile grid** (such as GoogleMapsCompatible)
+  export as live layers too.
+- **XYZ layers with a `{q}` quadkey** (Bing-style) export as live layers.
+
+### Changed
+- Clearer Fidelity rows for the map services that are still not exported,
+  each saying what to do: a WMS without Web Mercator, a WMTS on another tile
+  grid, a WMS-T layer that follows QGIS's time, a service that needs a login,
+  ArcGIS map services and WCS. An XYZ address with a token the map cannot
+  fill (such as `{s}`) is now refused with a reason instead of exported to
+  request the token literally.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

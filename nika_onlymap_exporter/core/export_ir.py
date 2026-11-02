@@ -848,15 +848,28 @@ class TileSpec:
     Kept as a reference, never embedded: the tiles are somebody else's and
     there are millions of them. `url` is the `{z}/{x}/{y}` template exactly as
     the runtime's `TileLayer` takes it, already free of any access key -
-    `layer_reader` refuses a keyed URL rather than shipping it.
+    `layer_reader` refuses a keyed URL rather than shipping it. A WMS or WMTS
+    layer is one too, its template filled by `{bbox-epsg-3857}`, `{width}`
+    and `{height}` or by `{z}`/`{x}`/`{y}` (`core.map_services`).
     """
 
     url: str
     min_zoom: int = 0
     max_zoom: int = 19
+    # The tiles' size in pixels, when it is known and matters: a WMTS grid's,
+    # or the size a WMS template asks for (`{width}`/`{height}`). `None`
+    # leaves the runtime's default.
+    tile_size: int | None = None
 
     def snapshot(self) -> dict[str, Any]:
-        return {"url": self.url, "minZoom": self.min_zoom, "maxZoom": self.max_zoom}
+        snapshot: dict[str, Any] = {
+            "url": self.url,
+            "minZoom": self.min_zoom,
+            "maxZoom": self.max_zoom,
+        }
+        if self.tile_size is not None:
+            snapshot["tileSize"] = self.tile_size
+        return snapshot
 
 
 # --------------------------------------------------------------------------

@@ -44,6 +44,7 @@ from .export_ir import (
     RasterSpec,
     RendererKind,
     RendererSpec,
+    SourceKind,
     SymbolSpec,
     TileSpec,
     uniform_ground_units,
@@ -1024,9 +1025,10 @@ def build_raster_layer_element(
 def build_tile_layer_element(
     layer: ExportLayer, tiles: TileSpec, indent: str = "    "
 ) -> str:
-    """One `<om-layer type="TileLayer">` on a live XYZ template.
+    """One `<om-layer type="TileLayer">` on a live XYZ, WMS or WMTS template.
 
-    The runtime draws image tiles from a `{z}/{x}/{y}` `data` template itself,
+    The runtime draws image tiles from a `{z}/{x}/{y}` `data` template itself
+    (or a WMS's `{bbox-epsg-3857}` one),
     so the element is all attributes: where to ask, between which zooms, and
     the universal opacity, visibility and zoom range.
     """
@@ -1039,6 +1041,8 @@ def build_tile_layer_element(
         ("min-zoom", str(tiles.min_zoom)),
         ("max-zoom", str(tiles.max_zoom)),
     ]
+    if tiles.tile_size is not None:
+        attributes.append(("tile-size", str(tiles.tile_size)))
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
     if not layer.visible:
@@ -2139,6 +2143,16 @@ def build_manifest(
     # export carries no diagnostic badge.
     if cap_verdict is not None and cap_verdict.needs_runtime_validation:
         attributes.append(("validate", ""))
+    elif any(
+        layer.tiles is not None and layer.source_kind is SourceKind.SERVICE
+        for layer in project.exportable_layers
+    ):
+        # A live WMS or WMTS layer can fail where no export can check it - a
+        # service that refuses web pages (CORS), an error the service answers
+        # instead of an image. The runtime reports each cause only while
+        # validating; `silent` fires `om-validation-error` and leaves the page
+        # as it is, so a map whose services all answer looks like any other.
+        attributes.append(("validate", "silent"))
 
     sections = [
         f"{indent}<om-map",

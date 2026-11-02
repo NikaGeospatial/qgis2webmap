@@ -347,8 +347,13 @@ class TestReadRaster:
         assert exported.tiles is not None
         assert exported.raster is None
 
-    def test_a_wms_service_is_refused_with_a_reason(self, qgis_app) -> None:
-        """A WMS asks for each image by map extent; the runtime cannot."""
+    def test_a_wms_service_qgis_knows_nothing_about_is_refused_with_a_reason(
+        self, qgis_app
+    ) -> None:
+        """A WMS is exported as Web Mercator tiles only when QGIS's stored
+        capabilities say the service offers EPSG:3857; this one was never
+        reached, so there is nothing to go on. The exported cases are in
+        `test_map_service_layers.py`."""
         layer = qgis_core.QgsRasterLayer(
             "crs=EPSG:4326&format=image/png&layers=x&styles&url=https://example.invalid/wms",
             "wms service",
@@ -358,6 +363,7 @@ class TestReadRaster:
         assert read_raster(layer, report) is None
         details = " ".join(item.detail for item in report.items)
         assert "WMS" in details
+        assert "EPSG:3857" in details
 
     def test_a_raster_reaches_read_raster_through_read_layer(
         self, qgis_app, make_raster_layer
