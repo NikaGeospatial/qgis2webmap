@@ -64,6 +64,7 @@ from ..core.handoff_prompt import (
     build_prompt,
 )
 from ..core.nika_desktop import DOWNLOAD_URL, NOT_FOUND, DesktopApp, detect
+from ..qt_compat import detached_started
 from . import theme
 from .fitted_label import FittedLabel
 from .i18n import plural, tr
@@ -113,9 +114,9 @@ def launch(app: DesktopApp) -> bool:
     if not app.found or app.path is None:
         return False
     if app.path.suffix.lower() not in (".app", ".exe") and app.command:
-        started = QProcess.startDetached(app.command[0], list(app.command[1:]))
-        # PyQt5 returns a bool; PyQt6 returns (bool, pid).
-        return bool(started[0] if isinstance(started, tuple) else started)
+        return detached_started(
+            QProcess.startDetached(app.command[0], list(app.command[1:]))
+        )
     return QDesktopServices.openUrl(QUrl.fromLocalFile(str(app.path)))
 
 

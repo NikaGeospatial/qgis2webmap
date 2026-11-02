@@ -64,6 +64,7 @@ from ...core.cvd import (
     parse_colour,
     simulate,
 )
+from ...qt_compat import enum_value
 from ..fitted_label import FittedLabel
 from ..i18n import N_, tr
 
@@ -117,12 +118,6 @@ def preview_mode_for(condition: Condition) -> object:
         "tritanopia": QgsPreviewEffect.PreviewMode.PreviewTritanope,
         "achromatopsia": QgsPreviewEffect.PreviewMode.PreviewGrayscale,
     }[condition]
-
-
-def _enum_number(mode: object) -> int:
-    """A preview mode's number: a sip enum (Qt 5) is an int already, a Python
-    enum (Qt 6) carries it as `.value`."""
-    return int(getattr(mode, "value", mode))  # type: ignore[call-overload]
 
 
 def stored_condition() -> Condition | None:
@@ -472,7 +467,7 @@ class AccessibilityDialog(QDialog):
             original = (canvas.previewModeEnabled(), canvas.previewMode())
             canvas.setProperty(
                 CANVAS_ORIGINAL_PROPERTY,
-                f"{int(original[0])}:{_enum_number(original[1])}",
+                f"{int(original[0])}:{enum_value(original[1])}",
             )
         self._canvas_original = original
         canvas.setPreviewModeEnabled(True)

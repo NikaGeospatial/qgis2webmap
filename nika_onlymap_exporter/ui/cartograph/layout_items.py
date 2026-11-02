@@ -19,7 +19,6 @@ from collections.abc import Iterator
 from enum import Enum
 
 from qgis.core import (
-    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
@@ -53,6 +52,7 @@ from ...core.layout_builder import _north_svg
 from ...core.legend_edit import apply_template_defaults
 from ...core.locator_context import is_locator
 from ...core.page_style import DAYLIGHT
+from ...qt_compat import set_legend_manual
 from ..i18n import tr
 
 
@@ -291,10 +291,7 @@ def _list_map_layers(legend: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) ->
     """Give a new legend what a template legend gets: the layers its map
     draws, not every layer of the project, with the technical support
     layers (hillshade, basemap) left out and units in colour-ramp headings."""
-    if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
-        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
-    else:  # QGIS 3: the same switch, deprecated in 4.0
-        legend.setAutoUpdateModel(False)
+    set_legend_manual(legend)
     root = legend.model().rootGroup()
     root.removeAllChildren()
     for layer in rendered_layers(map_item):
@@ -538,10 +535,7 @@ def recentre_map(item: QgsLayoutItemMap, latitude: float, longitude: float) -> b
     if not (-180.0 <= longitude <= 180.0):
         return False
     crs = item.crs()
-    try:
-        bounds = crs.bounds()
-    except AttributeError:  # older QGIS without a bounds accessor
-        bounds = QgsRectangle()
+    bounds = crs.bounds()
     if (
         bounds is not None
         and not bounds.isEmpty()

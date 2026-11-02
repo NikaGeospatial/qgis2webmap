@@ -34,7 +34,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from qgis.core import (
-    Qgis,
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
     QgsLayoutItemLegend,
@@ -48,6 +47,8 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import Qt
 
+from ..qt_compat import legend_is_manual as is_manual
+from ..qt_compat import set_legend_manual
 from .frame_layers import rendered_layers
 from .raster_legend import ramp_range
 
@@ -107,23 +108,6 @@ class LegendEntry:
     support: bool = False
 
 
-# ---- Sync mode -----------------------------------------------------------
-
-
-def is_manual(legend: QgsLayoutItemLegend) -> bool:
-    sync_mode = getattr(legend, "syncMode", None)
-    if sync_mode is not None:  # QGIS >= 4.0
-        return bool(sync_mode() == Qgis.LegendSyncMode.Manual)
-    return not legend.autoUpdateModel()
-
-
-def _set_manual(legend: QgsLayoutItemLegend) -> None:
-    if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
-        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
-    else:
-        legend.setAutoUpdateModel(False)
-
-
 def _scope_layers(
     legend: QgsLayoutItemLegend, project: QgsProject
 ) -> list[QgsMapLayer]:
@@ -143,7 +127,7 @@ def _ensure_manual(legend: QgsLayoutItemLegend, project: QgsProject) -> None:
     editing it makes it manual, holding the map's layers."""
     if is_manual(legend):
         return
-    _set_manual(legend)
+    set_legend_manual(legend)
     keep = {layer.id() for layer in _scope_layers(legend, project)}
     for node in legend.model().rootGroup().findLayers():
         if node.layerId() not in keep and node.parent() is not None:
@@ -357,9 +341,8 @@ def _command(
 
 def _redraw(legend: QgsLayoutItemLegend) -> None:
     legend.invalidateCache()
-    adjust = getattr(legend, "adjustBoxSize", None)
-    if adjust is not None and legend.resizeToContents():
-        adjust()
+    if legend.resizeToContents():
+        legend.adjustBoxSize()
     legend.refresh()
 
 

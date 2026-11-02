@@ -39,7 +39,6 @@ from pathlib import Path
 from urllib.parse import unquote_to_bytes
 
 from qgis.core import (
-    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsExpression,
@@ -73,6 +72,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QFile, QPointF, Qt
 from qgis.PyQt.QtGui import QColor, QPolygonF
 
+from ..qt_compat import set_legend_manual
 from .canvas_layout import nice_interval, page_dimensions
 from .cartograph_export import plane_view_width
 from .cartograph_import import RoundTripIssue, read_cartograph_file
@@ -960,10 +960,7 @@ class _Builder:
         legend.setResizeToContents(False)
         layers = self.frame_layers.get(item.for_)
         if layers is not None:
-            if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
-                legend.setSyncMode(Qgis.LegendSyncMode.Manual)
-            else:  # QGIS 3: the same switch, deprecated in 4.0
-                legend.setAutoUpdateModel(False)
+            set_legend_manual(legend)
             root = legend.model().rootGroup()
             root.removeAllChildren()
             for layer in layers:

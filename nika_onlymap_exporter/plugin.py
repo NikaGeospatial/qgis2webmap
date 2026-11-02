@@ -186,8 +186,8 @@ class Qgis2WebMapPlugin:
         # designer window, since each names the layout it is open on.
         #
         # Wrapped like `initProcessing`: an `iface` too minimal to carry this
-        # signal (an older QGIS, or a test double) must still let the rest of
-        # the plugin load, rather than taking `initGui` down with it.
+        # signal (a test double) must still let the rest of the plugin load,
+        # rather than taking `initGui` down with it.
         try:
             self.iface.layoutDesignerOpened.connect(self._on_layout_designer_opened)
             self.iface.layoutDesignerWillBeClosed.connect(

@@ -40,7 +40,6 @@ from dataclasses import dataclass
 from datetime import date
 
 from qgis.core import (
-    Qgis,
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
@@ -68,6 +67,7 @@ from qgis.gui import QgsMapCanvas
 from qgis.PyQt.QtCore import QObject, QRectF, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
+from ..qt_compat import set_legend_manual
 from . import layout_templates
 from .cartograph_import import RoundTripIssue
 from .cartograph_ir import Box, CartographSpec, FrameSpec, LegendSpec
@@ -840,10 +840,7 @@ def legend_headings_wrap() -> bool:
     layout = QgsPrintLayout(project)
     legend = QgsLayoutItemLegend(layout)
     layout.addLayoutItem(legend)
-    if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
-        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
-    else:  # QGIS 3
-        legend.setAutoUpdateModel(False)
+    set_legend_manual(legend)
     root = legend.model().rootGroup()
     root.removeAllChildren()
     root.addLayer(layer)

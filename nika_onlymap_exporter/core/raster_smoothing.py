@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from qgis.core import (
     Qgis,
-    QgsColorRampShader,
     QgsLayoutItemMap,
     QgsMapLayer,
     QgsMapLayerStyle,
@@ -45,13 +44,8 @@ def _classified(ramp: object) -> bool:
     kind = getattr(ramp, "colorRampType", None)
     if not callable(kind):
         return False
-    method = getattr(Qgis, "ShaderInterpolationMethod", None)
-    classes = (
-        (method.Discrete, method.Exact)
-        if method is not None
-        else (QgsColorRampShader.Type.Discrete, QgsColorRampShader.Type.Exact)
-    )
-    return kind() in classes
+    method = Qgis.ShaderInterpolationMethod
+    return kind() in (method.Discrete, method.Exact)
 
 
 def is_continuous_raster(layer: QgsMapLayer) -> bool:

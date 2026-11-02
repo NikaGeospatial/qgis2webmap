@@ -226,9 +226,7 @@ def _export(
                     warnings.extend(page_counts.warnings())
             else:
                 result = exporter.exportToPdf(str(staged), export_settings)
-                detail = (
-                    exporter.errorMessage() if hasattr(exporter, "errorMessage") else ""
-                )
+                detail = exporter.errorMessage()
             if result != QgsLayoutExporter.ExportResult.Success:
                 raise PrintPdfError(
                     tr("QGIS could not write {path}: {error}").format(

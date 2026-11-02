@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from qgis.core import Qgis, QgsLayoutItemLegend, QgsLayoutItemMap
+from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QWheelEvent
@@ -42,6 +42,7 @@ from ...core.legend_edit import (
     park_layer,
     unpark_layer,
 )
+from ...qt_compat import legend_is_manual, set_legend_manual
 from ..fitted_label import FittedLabel
 from ..i18n import plural, tr
 
@@ -84,20 +85,6 @@ def layout_legends(
         if linked is not None and linked.uuid() == uuid:
             legends.append(item)
     return legends
-
-
-def _is_manual(legend: QgsLayoutItemLegend) -> bool:
-    sync_mode = getattr(legend, "syncMode", None)
-    if sync_mode is not None:  # QGIS >= 4.0
-        return bool(sync_mode() == Qgis.LegendSyncMode.Manual)
-    return not legend.autoUpdateModel()
-
-
-def _make_manual(legend: QgsLayoutItemLegend) -> None:
-    if hasattr(legend, "setSyncMode"):  # QGIS >= 4.0
-        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
-    else:
-        legend.setAutoUpdateModel(False)
 
 
 def _position_for(
@@ -228,8 +215,8 @@ def _sync_legend(
     if not included:
         if not _legend_layer_nodes(legend, layer.id()):
             return
-        if not _is_manual(legend):
-            _make_manual(legend)
+        if not legend_is_manual(legend):
+            set_legend_manual(legend)
             root = legend.model().rootGroup()
             for node in root.findLayers():
                 if node.layerId() not in final_ids and node.parent() is not None:
@@ -237,7 +224,7 @@ def _sync_legend(
         # Its heading, class labels, left-out classes and place are kept.
         park_layer(legend, layer.id())
     else:
-        if not _is_manual(legend) or _legend_layer_nodes(legend, layer.id()):
+        if not legend_is_manual(legend) or _legend_layer_nodes(legend, layer.id()):
             return
         # A layer the legend listed when its map dropped it comes back as it
         # was; one left out of the legend stays out; any other is new to it.

@@ -130,11 +130,9 @@ def read_attribution(layer: QgsVectorLayer) -> str | None:
     can record a credit, so both are checked - a missing attribution on a
     licensed dataset is a legal problem, not a cosmetic one.
     """
-    server_properties = getattr(layer, "serverProperties", None)
-    if server_properties is not None:
-        attribution = (server_properties().attribution() or "").strip()
-        if attribution:
-            return attribution
+    attribution = (layer.serverProperties().attribution() or "").strip()
+    if attribution:
+        return attribution
 
     rights = [r.strip() for r in (layer.metadata().rights() or []) if r.strip()]
     if rights:

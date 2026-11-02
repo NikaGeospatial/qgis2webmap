@@ -52,6 +52,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import QApplication, QGraphicsRectItem, QLabel, QWidget
 
+from ...qt_compat import event_point
 from ..i18n import tr
 
 #: Wheel steps closer together than this are one undo step.
@@ -67,13 +68,6 @@ _HANDLE_REACH_PX = 10
 _HANDLES_Z = 10000.0
 #: First merge id of the wheel bursts; QGIS's own item commands use small ids.
 _BURST_ID_BASE = 0x4E4B0000
-
-
-def _local(event: QMouseEvent | QWheelEvent) -> QPoint:
-    # Qt 6 has `position()`; Qt 5 (QGIS 3) only `pos()`.
-    if hasattr(event, "position"):
-        return event.position().toPoint()
-    return event.pos()
 
 
 class _Banner(QLabel):
@@ -337,7 +331,7 @@ class ContentEditor(QObject):
 
     def _mouse(self, event: QMouseEvent) -> bool:
         kind = event.type()
-        at = _local(event)
+        at = event_point(event)
         if self._dragging:
             if kind == QEvent.Type.MouseMove:
                 self._drag_to(at)
@@ -466,7 +460,7 @@ class ContentEditor(QObject):
 
     def _wheel(self, event: QWheelEvent) -> bool:
         item, layout = self._map, self._view.currentLayout()
-        at = _local(event)
+        at = event_point(event)
         if item is None or layout is None or not self._on_frame(at):
             return False
         steps = _wheel_steps(event)

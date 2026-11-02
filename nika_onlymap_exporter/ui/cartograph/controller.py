@@ -54,11 +54,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-try:  # QtGui on Qt 6 (QGIS 4), QtWidgets on Qt 5 (QGIS 3).
-    from qgis.PyQt.QtGui import QUndoCommand
-except ImportError:  # pragma: no cover - QGIS 3
-    from qgis.PyQt.QtWidgets import QUndoCommand  # type: ignore[attr-defined,no-redef]
-
 from ...core import cartograph_destination, cartograph_export
 from ...core.atomic_write import write_text_atomic
 from ...core.canvas_cartograph import (
@@ -101,6 +96,7 @@ from ...packaging.runtime_manager import (
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
+from ...qt_compat import QUndoCommand
 from ..background_job import BackgroundJob, retire
 from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr

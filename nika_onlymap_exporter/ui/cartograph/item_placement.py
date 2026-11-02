@@ -20,17 +20,11 @@ from qgis.PyQt.QtCore import QEvent, QObject, QPoint, QRect, QRectF, Qt, pyqtSig
 from qgis.PyQt.QtGui import QKeyEvent, QMouseEvent
 from qgis.PyQt.QtWidgets import QRubberBand
 
+from ...qt_compat import event_point
 from .layout_items import ItemKind, create_item, default_rect
 
 #: A drag shorter than this many pixels is a click.
 _CLICK_SLOP = 6
-
-
-def _local(event: QMouseEvent) -> QPoint:
-    # Qt 6 has `position()`; Qt 5 (QGIS 3) only `pos()`.
-    if hasattr(event, "position"):
-        return event.position().toPoint()
-    return event.pos()
 
 
 class ItemPlacer(QObject):
@@ -100,7 +94,7 @@ class ItemPlacer(QObject):
         kind = event.type()
         if kind == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton:
-                self._start = _local(event)
+                self._start = event_point(event)
                 self._band = QRubberBand(
                     QRubberBand.Shape.Rectangle, self._view.viewport()
                 )
@@ -109,13 +103,13 @@ class ItemPlacer(QObject):
             return True
         if kind == QEvent.Type.MouseMove:
             if self._start is not None and self._band is not None:
-                box = QRect(self._start, _local(event)).normalized()
+                box = QRect(self._start, event_point(event)).normalized()
                 self._band.setGeometry(box)
                 self._band.show()
             return True
         if kind == QEvent.Type.MouseButtonRelease:
             if self._start is not None and event.button() == Qt.MouseButton.LeftButton:
-                self._finish(self._start, _local(event))
+                self._finish(self._start, event_point(event))
             return True
         return kind == QEvent.Type.MouseButtonDblClick
 

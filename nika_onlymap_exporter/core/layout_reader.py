@@ -105,6 +105,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QFile, QIODevice, QSizeF, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QTextDocument
 
+from ..qt_compat import enum_value, legend_is_manual
 from .cartograph_ir import (
     ATLAS_ORDER_KEY,
     SMALLEST_ATLAS_MARGIN,
@@ -2096,18 +2097,6 @@ def _legend_left_out(item: QgsLayoutItemLegend, map_item: QgsLayoutItemMap) -> i
     return left_out
 
 
-def _legend_is_manual(item: QgsLayoutItemLegend) -> bool:
-    """Whether the user edits this legend's content by hand.
-
-    QGIS 4 replaced `autoUpdateModel()` with `syncMode()` (deprecated, still
-    present); QGIS 3.44 only has the former.
-    """
-    sync_mode = getattr(item, "syncMode", None)
-    if sync_mode is not None:
-        return sync_mode() == Qgis.LegendSyncMode.Manual
-    return not item.autoUpdateModel()
-
-
 def _live_legend_rows(
     item: QgsLayoutItemLegend,
     map_item: QgsLayoutItemMap,
@@ -2131,7 +2120,7 @@ def _live_legend_rows(
     reported as approximated.
     """
     layers_by_id = {layer.id(): layer for layer in rendered_layers(map_item)}
-    if not _legend_is_manual(item):
+    if not legend_is_manual(item):
         ordered = [layer_id for layer_id in layers_by_id if layer_id in dom_ids]
         return tuple(
             LegendRowSpec(layer=dom_ids[layer_id], order=index)
@@ -2332,7 +2321,7 @@ def _scalebar_label_changes(item: QgsLayoutItemScaleBar, units: str) -> list[str
     """
     notes = []
     placement = item.labelVerticalPlacement()
-    if int(getattr(placement, "value", placement)) == 0:  # above the segment
+    if enum_value(placement) == 0:  # above the segment
         notes.append("The browser draws the bar's labels below it, not above.")
     segment_metres = _segment_length_metres(item)
     segments = item.numberOfSegments()
@@ -2806,16 +2795,10 @@ def _label_style(
         )
 
     weight = _css_font_weight(font)
-    if (
-        getattr(text_format, "forcedBold", None) is not None
-        and text_format.forcedBold()
-    ):
+    if text_format.forcedBold():
         weight = "bold"
 
-    if font.italic() or (
-        getattr(text_format, "forcedItalic", None) is not None
-        and text_format.forcedItalic()
-    ):
+    if font.italic() or text_format.forcedItalic():
         report.approximated(
             label, "The text is italic in QGIS; the cartograph has no italic text."
         )
@@ -2872,7 +2855,7 @@ def _css_font_weight(font: QFont) -> str | None:
     Compared against `QFont.Weight` members rather than raw numbers: Qt 5
     numbers them 0-99 (Normal 50, Bold 75), Qt 6 100-900 like CSS.
     """
-    weight = _weight_value(font.weight())
+    weight = enum_value(font.weight())
     steps = (
         (QFont.Weight.Black, "900"),
         (QFont.Weight.ExtraBold, "800"),
@@ -2884,14 +2867,9 @@ def _css_font_weight(font: QFont) -> str | None:
         (QFont.Weight.ExtraLight, "200"),
     )
     for threshold, css in steps:
-        if weight >= _weight_value(threshold):
+        if weight >= enum_value(threshold):
             return css
     return "100"
-
-
-def _weight_value(weight: QFont.Weight | int) -> int:
-    value = getattr(weight, "value", weight)
-    return int(value)
 
 
 def _css_color(color: QColor) -> str | None:

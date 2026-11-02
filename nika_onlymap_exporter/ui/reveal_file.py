@@ -34,6 +34,7 @@ from pathlib import Path
 from qgis.PyQt.QtCore import QProcess, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 
+from ..qt_compat import detached_started
 from .i18n import tr
 
 FILE_MANAGER_SERVICE = "org.freedesktop.FileManager1"
@@ -239,9 +240,7 @@ def _ask_file_manager(
 
 
 def _start_detached(program: str, arguments: list[str]) -> bool:
-    started = QProcess.startDetached(program, arguments)
-    # PyQt5 returns a bool; PyQt6 returns (bool, pid).
-    return bool(started[0] if isinstance(started, tuple) else started)
+    return detached_started(QProcess.startDetached(program, arguments))
 
 
 def _open_folder(folder: Path) -> bool:

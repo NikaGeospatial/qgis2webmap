@@ -33,6 +33,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from ..qt_compat import enum_value
 from .export_ir import MM_TO_PIXELS, GroundSize
 
 # Screen pixels per unit, at the 96 dpi CSS assumes. `Qgis.RenderUnit` by
@@ -88,7 +89,7 @@ class MapUnitScale:
 def unit_key(unit: Any) -> int | None:
     """`unit` as the integer value of `Qgis.RenderUnit`, or `None` if unreadable."""
     try:
-        return int(getattr(unit, "value", unit))
+        return enum_value(unit)
     except (TypeError, ValueError):
         return None
 

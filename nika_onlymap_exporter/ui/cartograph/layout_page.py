@@ -78,6 +78,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import live_count as lc
 from ...core.layout_reader import legend_left_out
+from ...qt_compat import event_global_point, event_point
 from ..i18n import plural, tr
 from .content_edit import ContentEditor
 from .item_controls import ContextControls
@@ -249,19 +250,6 @@ def new_layout_button(parent: QWidget, role: str) -> tuple[QToolButton, QAction]
     button.setMenu(menu)
     button.setAccessibleName(tr("New from template"))
     return button, import_action
-
-
-def _local_point(event: QMouseEvent) -> QPoint:
-    # Qt 6 has `position()`; Qt 5 (QGIS 3) only `pos()`.
-    if hasattr(event, "position"):
-        return event.position().toPoint()
-    return event.pos()
-
-
-def _global_point(event: QMouseEvent) -> QPointF:
-    if hasattr(event, "globalPosition"):
-        return QPointF(event.globalPosition())
-    return QPointF(event.globalPos())
 
 
 # How far the pointer must travel from a press on the page before it is a drag:
@@ -771,14 +759,14 @@ class LayoutPreview(QStackedWidget):
             kind == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
         ):
-            self._pan_from = _local_point(event)
+            self._pan_from = event_point(event)
             self._user_zoomed = True
             viewport.setCursor(Qt.CursorShape.ClosedHandCursor)
             return True
         if self._pan_from is None:
             return None
         if kind == QEvent.Type.MouseMove:
-            self._pan_to(_local_point(event))
+            self._pan_to(event_point(event))
             return True
         if kind == QEvent.Type.MouseButtonRelease:
             self._pan_from = None
@@ -830,7 +818,7 @@ class LayoutPreview(QStackedWidget):
             return None
         kind = event.type()
         viewport = self.view.viewport()
-        at = _local_point(event)
+        at = event_point(event)
         if kind == QEvent.Type.MouseButtonPress:
             if (
                 event.button() != Qt.MouseButton.LeftButton
@@ -889,7 +877,7 @@ class LayoutPreview(QStackedWidget):
         if not isinstance(event, QMouseEvent):
             return
         kind = event.type()
-        at = _local_point(event)
+        at = event_point(event)
         if (
             kind == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
@@ -901,7 +889,7 @@ class LayoutPreview(QStackedWidget):
             hover = QMouseEvent(
                 QEvent.Type.MouseMove,
                 QPointF(at),
-                _global_point(event),
+                event_global_point(event),
                 Qt.MouseButton.NoButton,
                 Qt.MouseButton.NoButton,
                 event.modifiers(),
@@ -918,7 +906,7 @@ class LayoutPreview(QStackedWidget):
         kind = event.type()
         if kind == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton and not self._reaching:
-                self._press_at = _local_point(event)
+                self._press_at = event_point(event)
             return False
         if kind == QEvent.Type.MouseButtonRelease:
             self._press_at = None
@@ -929,7 +917,7 @@ class LayoutPreview(QStackedWidget):
             or not event.buttons() & Qt.MouseButton.LeftButton
         ):
             return False
-        away = _local_point(event) - self._press_at
+        away = event_point(event) - self._press_at
         if abs(away.x()) + abs(away.y()) > _DRAG_THRESHOLD_PX:
             self._press_at = None  # a real drag from here on
             return False
@@ -1002,7 +990,7 @@ class LayoutPreview(QStackedWidget):
             and isinstance(event, QMouseEvent)
             and self.select_mode()
         ):
-            self._announce_double_click(_local_point(event))
+            self._announce_double_click(event_point(event))
         if (
             event is not None
             and watched is self.view.viewport()
@@ -1010,7 +998,7 @@ class LayoutPreview(QStackedWidget):
             and isinstance(event, QMouseEvent)
             and self.select_mode()
         ):
-            legend = self._legend_at(_local_point(event))
+            legend = self._legend_at(event_point(event))
             if legend is not None:
                 self.legend_edit_requested.emit(legend)
         if (
@@ -1147,7 +1135,7 @@ class LayoutPreview(QStackedWidget):
             box = self._selection_view_rect()
             if box is None:
                 return False
-            at = _local_point(event)
+            at = event_point(event)
             reach = _EDGE_REACH
             if not box.adjusted(-reach, -reach, reach, reach).contains(
                 at
@@ -1163,7 +1151,7 @@ class LayoutPreview(QStackedWidget):
             shifted = QMouseEvent(
                 event.type(),
                 QPointF(moved),
-                _global_point(event) + QPointF(moved - at),
+                event_global_point(event) + QPointF(moved - at),
                 event.button(),
                 event.buttons(),
                 event.modifiers(),

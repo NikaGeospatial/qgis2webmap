@@ -796,7 +796,7 @@ def markdown_features():
     straight in: PyQt rejects a bare `int` for this argument. The flags are
     reached through their enum scope so this works on PyQt5 and PyQt6 alike.
     """
-    feature = getattr(QTextDocument, "MarkdownFeature", QTextDocument)
+    feature = QTextDocument.MarkdownFeature
     return QTextDocument.MarkdownFeatures(
         feature.MarkdownDialectGitHub | feature.MarkdownNoHTML
     )

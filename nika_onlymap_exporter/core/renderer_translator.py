@@ -79,7 +79,7 @@ _CLASSIFICATION_BY_ID = {
     "Pretty": ClassificationMethod.PRETTY_BREAKS,
 }
 
-# Fallback for QGIS 3.22-3.24, where `classificationMethod()` does not exist.
+# Fallback for a classification method that gives no id.
 _CLASSIFICATION_BY_MODE = {
     QgsGraduatedSymbolRenderer.Mode.EqualInterval: ClassificationMethod.EQUAL_INTERVAL,
     QgsGraduatedSymbolRenderer.Mode.Quantile: ClassificationMethod.QUANTILE,
@@ -90,21 +90,19 @@ _CLASSIFICATION_BY_MODE = {
 
 
 def classification_of(renderer: QgsGraduatedSymbolRenderer) -> ClassificationMethod:
-    """Read the classification method across the QGIS versions we support.
+    """Read the classification method.
 
-    Prefers the modern object API; falls back to the deprecated enum on older
-    QGIS. A method we do not recognise is `UNKNOWN` rather than an error - the
+    Prefers the method object's id; falls back to the deprecated enum when it
+    has none. A method we do not recognise is `UNKNOWN` rather than an error - the
     class breaks are exported exactly as QGIS computed them either way, so an
     unrecognised method costs a legend caption, not correctness.
     """
-    method = getattr(renderer, "classificationMethod", None)
-    if method is not None:
-        try:
-            method_id = method().id()
-        except (AttributeError, TypeError):
-            method_id = None
-        if method_id:
-            return _CLASSIFICATION_BY_ID.get(method_id, ClassificationMethod.UNKNOWN)
+    try:
+        method_id = renderer.classificationMethod().id()
+    except (AttributeError, TypeError):
+        method_id = None
+    if method_id:
+        return _CLASSIFICATION_BY_ID.get(method_id, ClassificationMethod.UNKNOWN)
 
     try:
         return _CLASSIFICATION_BY_MODE.get(
@@ -504,12 +502,9 @@ def read_cap_rounded(symbol_layer: Any) -> bool:
     style = _safe(symbol_layer, "penCapStyle")
     if style is None:
         return False
-    try:
-        from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtCore import Qt
 
-        return bool(style == Qt.PenCapStyle.RoundCap)
-    except (ImportError, AttributeError):  # pragma: no cover
-        return False
+    return bool(style == Qt.PenCapStyle.RoundCap)
 
 
 def read_join_rounded(symbol_layer: Any) -> bool:
@@ -517,12 +512,9 @@ def read_join_rounded(symbol_layer: Any) -> bool:
     style = _safe(symbol_layer, "penJoinStyle")
     if style is None:
         return False
-    try:
-        from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtCore import Qt
 
-        return bool(style == Qt.PenJoinStyle.RoundJoin)
-    except (ImportError, AttributeError):  # pragma: no cover
-        return False
+    return bool(style == Qt.PenJoinStyle.RoundJoin)
 
 
 def _offset(
@@ -666,11 +658,11 @@ def read_marker_shape(symbol_layer: Any) -> str | None:
     shape = _safe(symbol_layer, "shape")
     if shape is None:
         return None
-    try:
-        from qgis.core import QgsSimpleMarkerSymbolLayerBase
+    from qgis.core import QgsSimpleMarkerSymbolLayerBase
 
+    try:
         return str(QgsSimpleMarkerSymbolLayerBase.encodeShape(shape))
-    except (ImportError, AttributeError, TypeError):  # pragma: no cover
+    except TypeError:  # pragma: no cover
         return None
 
 
@@ -1228,13 +1220,8 @@ class _RuleClass:
 
 
 def _binary_equals(node: Any) -> bool:
-    """Whether a binary operator node is `=`; the enum is scoped on QGIS 4."""
-    operators = getattr(
-        QgsExpressionNodeBinaryOperator,
-        "BinaryOperator",
-        QgsExpressionNodeBinaryOperator,
-    )
-    return bool(node.op() == operators.boEQ)
+    """Whether a binary operator node is `=`."""
+    return bool(node.op() == QgsExpressionNodeBinaryOperator.BinaryOperator.boEQ)
 
 
 def _rule_value_filter(

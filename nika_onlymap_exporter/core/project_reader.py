@@ -186,14 +186,8 @@ def extent_from_canvas(canvas: object) -> Extent | None:
 
 
 def _project_terrain_kind(project: QgsProject) -> str | None:
-    """The project's own terrain source, or `None` if the ground is flat.
-
-    Guarded rather than called directly: `elevationProperties()` and its
-    `terrainProvider()` arrived in different QGIS releases, and the plugin
-    supports back to 3.22, where neither exists.
-    """
-    properties = getattr(project, "elevationProperties", lambda: None)()
-    provider = getattr(properties, "terrainProvider", lambda: None)()
+    """The project's own terrain source, or `None` if the ground is flat."""
+    provider = project.elevationProperties().terrainProvider()
     kind = getattr(provider, "type", lambda: None)()
     if not isinstance(kind, str) or kind == "flat":
         return None
@@ -807,11 +801,10 @@ class ScaleBasis:
     @classmethod
     def of(cls, project: QgsProject) -> ScaleBasis:
         """**GUI thread only.**"""
-        method = getattr(project, "scaleMethod", None)
         return cls(
             crs=project.crs(),
             transform_context=project.transformContext(),
-            method=method() if method is not None else None,
+            method=project.scaleMethod(),
         )
 
 
