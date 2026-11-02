@@ -15,7 +15,12 @@ from pathlib import Path
 import pytest
 
 from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, TextSpec
-from nika_onlymap_exporter.packaging.runtime_manager import discover_runtime_dir
+from nika_onlymap_exporter.packaging.runtime_manager import (
+    RUNTIME_CARTOGRAPH_CSS,
+    RUNTIME_CARTOGRAPH_JS,
+    discover_runtime_dir,
+    read_runtime_file,
+)
 from nika_onlymap_exporter.writers.cartograph_writer import (
     CartographRuntimeBundle,
     write_cartograph_html,
@@ -32,11 +37,16 @@ _LINES = ("Roads: 94.5 km", "Trails: 372.1 km", "Viewpoints: 29")
 @pytest.fixture(scope="module")
 def text_page(tmp_path_factory: pytest.TempPathFactory) -> Path:
     directory = discover_runtime_dir()
-    if directory is None or not (directory / "cartograph.standalone.js").exists():
+    cartograph_js = (
+        read_runtime_file(directory, RUNTIME_CARTOGRAPH_JS) if directory else None
+    )
+    if cartograph_js is None:
         pytest.skip("OnlyMap runtime with a cartograph build not available")
     runtime = CartographRuntimeBundle(
-        cartograph_js=(directory / "cartograph.standalone.js").read_bytes(),
-        cartograph_css=(directory / "cartograph.css").read_text(encoding="utf-8"),
+        cartograph_js=cartograph_js,
+        cartograph_css=read_runtime_file(directory, RUNTIME_CARTOGRAPH_CSS).decode(
+            "utf-8"
+        ),
     )
     items = (
         TextSpec(id="broken", box=Box(10, 10, 120, 40), body="\n".join(_LINES)),

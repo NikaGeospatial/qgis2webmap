@@ -34,14 +34,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
 import sys
 import tarfile
 import tempfile
 import urllib.error
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
+
+from .asset_embedder import adopt_stored_gzip, gzip_bytes, gzip_probe
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PACKAGE_ROOT / "runtime"
@@ -61,6 +66,27 @@ RUNTIME_CARTOGRAPH_CSS = "cartograph.css"
 # the test suite's attribute-contract checks and AI-assisted editing both read
 # it, so it is cached beside the runtime when the package ships it.
 RUNTIME_SCHEMA = "onlymapjs.html-data.json"
+
+# **A fetched cache keeps the four pinned files gzipped**, as `<name>.gz`: 9.4 MB
+# on disk becomes 2.6 MB. Every reader goes through `stored_path` and
+# `read_runtime_file`, which take either form, so a cache written before this,
+# `ONLYMAP_RUNTIME_DIR` pointing at a package's plain `dist/`, and a fetched
+# cache all load the same way; integrity is always checked on the uncompressed
+# bytes, against the same `runtime-lock.json` hashes. The licence and the schema
+# stay plain: people and tools read them directly.
+GZIP_SUFFIX = ".gz"
+STORED_GZIPPED = (
+    RUNTIME_JS,
+    RUNTIME_CSS,
+    RUNTIME_CARTOGRAPH_JS,
+    RUNTIME_CARTOGRAPH_CSS,
+)
+# Beside the gzipped files: the `gzip_probe` of each script a single-file export
+# embeds gzipped (the stylesheets go in plain), so the export may embed the
+# stored stream instead of compressing the runtime again. Never an integrity
+# record - a missing or wrong one only means compressing as before.
+COMPRESSION_RECORD = "compression.json"
+EMBEDDED_GZIPPED = (RUNTIME_JS, RUNTIME_CARTOGRAPH_JS)
 
 # npm is the canonical channel: the same one the library's own users install
 # from, so the plugin never becomes a second, staler distribution path. The
@@ -130,6 +156,10 @@ class RuntimeDownloadError(RuntimeUnavailableError):
     """The download failed, or produced bytes that are not the pinned build."""
 
 
+class CorruptRuntimeFileError(RuntimeUnavailableError):
+    """A gzipped runtime file is truncated, fails its CRC, or is oversized."""
+
+
 @dataclass(frozen=True)
 class RuntimeBundle:
     """Everything an artifact needs from the runtime."""
@@ -170,6 +200,93 @@ def sha256_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def stored_path(directory: Path, name: str) -> Path | None:
+    """Where one runtime file is on disk: plain, or gzipped beside its name.
+
+    Plain wins when both are present: it is the form a person put there.
+    """
+    for candidate in (directory / name, directory / (name + GZIP_SUFFIX)):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _gunzip_bounded(stored: bytes, limit: int | None = None) -> bytes | None:
+    """One complete gzip member's contents, or `None` if it is not exactly that.
+
+    Bounded, so a crafted file cannot expand past `limit`; `wbits=31` makes zlib
+    check the trailer's CRC-32 and length, so a flipped bit is refused rather
+    than loaded. A stream that ends early, or carries anything after its one
+    member, is refused too: neither is something this module wrote.
+    """
+    limit = MAX_MEMBER_BYTES if limit is None else limit
+    decoder = zlib.decompressobj(wbits=31)
+    try:
+        data = decoder.decompress(stored, limit + 1)
+    except zlib.error:
+        return None
+    if len(data) > limit or not decoder.eof or decoder.unused_data:
+        return None
+    return data
+
+
+# SHA-256 of each gzipped file's contents, keyed by what `os.stat` says about the
+# file it was read from. An export asks `is_cached` up to three times before it
+# loads; decompressing 9 MB for each would add 0.17 s to every export, so a file
+# whose size, inode and times have not moved since it was last decompressed is
+# not decompressed again just to be hashed. Any rewrite moves its ctime.
+_GZIP_DIGESTS: dict[tuple[str, int, int, int, int, int], str] = {}
+
+
+def _stat_key(path: Path) -> tuple[str, int, int, int, int, int]:
+    info = path.stat()
+    return (
+        str(path),
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+        info.st_ino,
+        info.st_dev,
+    )
+
+
+def _read_stored(path: Path) -> tuple[bytes, bytes | None]:
+    """A runtime file's bytes, and the gzip they came from when it was stored so."""
+    if path.name.endswith(GZIP_SUFFIX):
+        key = _stat_key(path)
+        if key[1] > MAX_MEMBER_BYTES:
+            raise CorruptRuntimeFileError(f"{path} is larger than any runtime file.")
+        stored = path.read_bytes()
+        data = _gunzip_bounded(stored)
+        if data is None:
+            raise CorruptRuntimeFileError(
+                f"{path} is damaged (truncated, corrupt or oversized)."
+            )
+        _GZIP_DIGESTS[key] = sha256_of(data)
+        return data, stored
+    return path.read_bytes(), None
+
+
+def _stored_digest(path: Path) -> str:
+    """SHA-256 of a runtime file's uncompressed contents."""
+    if path.name.endswith(GZIP_SUFFIX):
+        known = _GZIP_DIGESTS.get(_stat_key(path))
+        if known is not None:
+            return known
+    return sha256_of(_read_stored(path)[0])
+
+
+def read_runtime_file(directory: Path, name: str) -> bytes | None:
+    """One runtime file's uncompressed bytes, plain or gzipped; `None` if absent.
+
+    For callers outside this module - tests, scripts - that need one file
+    rather than a whole `RuntimeBundle`. Raises `CorruptRuntimeFileError` for a
+    damaged gzipped file rather than returning bytes it could not verify.
+    """
+    path = stored_path(directory, name)
+    return None if path is None else _read_stored(path)[0]
+
+
 def discover_runtime_dir() -> Path | None:
     """Find a directory containing the runtime's `dist` files.
 
@@ -189,14 +306,14 @@ def discover_runtime_dir() -> Path | None:
     override = os.environ.get("ONLYMAP_RUNTIME_DIR")
     if override:
         path = Path(override)
-        return path if (path / RUNTIME_JS).exists() else None
+        return path if stored_path(path, RUNTIME_JS) is not None else None
 
     candidates = [
         RUNTIME_DIR,
         Path("node_modules/@nika-js/onlymap/dist"),
         PACKAGE_ROOT.parent / "node_modules/@nika-js/onlymap/dist",
     ]
-    return next((c for c in candidates if (c / RUNTIME_JS).exists()), None)
+    return next((c for c in candidates if stored_path(c, RUNTIME_JS) is not None), None)
 
 
 def default_cache_dir() -> Path:
@@ -229,7 +346,8 @@ def cached_runtime_dir(version: str, cache_dir: Path | None = None) -> Path:
 
     Keyed by version so a runtime bump downloads alongside the old one rather
     than overwriting it - a half-written replacement would otherwise leave the
-    machine with no working runtime at all.
+    machine with no working runtime at all. The old one goes only once the new
+    one is in place and verified (`prune_superseded_runtimes`).
     """
     return (cache_dir or default_cache_dir()) / version
 
@@ -285,21 +403,25 @@ class LocalRuntime:
                 f"{RUNTIME_JS}, or install the runtime with the plugin."
             )
 
-        js_path = directory / RUNTIME_JS
-        css_path = directory / RUNTIME_CSS
+        js_path = stored_path(directory, RUNTIME_JS)
+        css_path = stored_path(directory, RUNTIME_CSS)
 
-        if not js_path.exists():
-            raise RuntimeUnavailableError(f"{js_path} is missing.")
-        if not css_path.exists():
+        if js_path is None:
+            raise RuntimeUnavailableError(f"{directory / RUNTIME_JS} is missing.")
+        if css_path is None:
             raise RuntimeUnavailableError(
-                f"{css_path} is missing. The stylesheet is required, not optional: "
-                "the no-JavaScript fallback is gated by a pure-CSS rule, so without "
-                "it a mail preview shows a blank frame instead of an explanation."
+                f"{directory / RUNTIME_CSS} is missing. The stylesheet is required, "
+                "not optional: the no-JavaScript fallback is gated by a pure-CSS "
+                "rule, so without it a mail preview shows a blank frame instead of "
+                "an explanation."
             )
 
-        javascript = js_path.read_bytes()
-        css = css_path.read_bytes()
-        cartograph_javascript, cartograph_css = _read_cartograph_files(directory)
+        reads = {RUNTIME_JS: _read_stored(js_path), RUNTIME_CSS: _read_stored(css_path)}
+        reads.update(_read_cartograph_stored(directory))
+        _offer_stored_gzip(directory, reads)
+        javascript = reads[RUNTIME_JS][0]
+        css = reads[RUNTIME_CSS][0]
+        cartograph_javascript, cartograph_css = _cartograph_pair(reads)
         return RuntimeBundle(
             javascript=javascript,
             css=css,
@@ -505,11 +627,72 @@ def _read_cartograph_files(directory: Path) -> tuple[bytes | None, bytes | None]
     usable cartograph runtime, and reporting it as "half present" would just
     push the same judgement call onto every caller.
     """
-    js_path = directory / RUNTIME_CARTOGRAPH_JS
-    css_path = directory / RUNTIME_CARTOGRAPH_CSS
-    if js_path.is_file() and css_path.is_file():
-        return js_path.read_bytes(), css_path.read_bytes()
-    return None, None
+    return _cartograph_pair(_read_cartograph_stored(directory))
+
+
+def _read_cartograph_stored(
+    directory: Path,
+) -> dict[str, tuple[bytes, bytes | None]]:
+    js_path = stored_path(directory, RUNTIME_CARTOGRAPH_JS)
+    css_path = stored_path(directory, RUNTIME_CARTOGRAPH_CSS)
+    if js_path is None or css_path is None:
+        return {}
+    return {
+        RUNTIME_CARTOGRAPH_JS: _read_stored(js_path),
+        RUNTIME_CARTOGRAPH_CSS: _read_stored(css_path),
+    }
+
+
+def _cartograph_pair(
+    reads: dict[str, tuple[bytes, bytes | None]],
+) -> tuple[bytes | None, bytes | None]:
+    if RUNTIME_CARTOGRAPH_JS not in reads:
+        return None, None
+    return reads[RUNTIME_CARTOGRAPH_JS][0], reads[RUNTIME_CARTOGRAPH_CSS][0]
+
+
+def _store_gzipped(directory: Path) -> None:
+    """Replace each plain pinned file in `directory` with its gzipped form.
+
+    Each stream is decompressed and compared with the bytes it was made from
+    before the plain file goes, so what is published is what was verified.
+    """
+    probes: dict[str, str] = {}
+    for name in STORED_GZIPPED:
+        plain = directory / name
+        if not plain.is_file():
+            continue
+        data = plain.read_bytes()
+        stored = gzip_bytes(data)
+        if _gunzip_bounded(stored) != data:  # pragma: no cover - defensive
+            raise RuntimeDownloadError(f"{name} did not survive compression.")
+        (directory / (name + GZIP_SUFFIX)).write_bytes(stored)
+        plain.unlink()
+        if name in EMBEDDED_GZIPPED:
+            probes[name] = gzip_probe(data)
+    (directory / COMPRESSION_RECORD).write_text(
+        json.dumps({"probes": probes}), encoding="utf-8"
+    )
+
+
+def _offer_stored_gzip(
+    directory: Path, reads: dict[str, tuple[bytes, bytes | None]]
+) -> None:
+    """Hand the embedder each gzipped file it may reuse; see `adopt_stored_gzip`."""
+    if not any(stored is not None for _, stored in reads.values()):
+        return
+    try:
+        record = json.loads((directory / COMPRESSION_RECORD).read_text("utf-8"))
+        probes = record["probes"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if not isinstance(probes, dict):
+        return
+    for name in EMBEDDED_GZIPPED:
+        data, stored = reads.get(name, (b"", None))
+        probe = probes.get(name)
+        if stored is not None and isinstance(probe, str):
+            adopt_stored_gzip(data, stored, probe)
 
 
 def _read_version(directory: Path) -> str:
@@ -598,14 +781,10 @@ class FetchingRuntime:
             for name in (RUNTIME_CARTOGRAPH_JS, RUNTIME_CARTOGRAPH_CSS)
             if name in pinned
         ]
-        for name in required:
-            path = directory / name
-            if not path.is_file():
-                return False
-            expected = (pinned.get(name) or {}).get("sha256")
-            if expected and sha256_of(path.read_bytes()) != expected:
-                return False
-        return True
+        return all(
+            _file_intact(directory, name, (pinned.get(name) or {}).get("sha256"))
+            for name in required
+        )
 
     def licence_text(self) -> str | None:
         """The licence as published with the runtime, if it has been fetched."""
@@ -648,6 +827,27 @@ class FetchingRuntime:
 
         return LocalRuntime(self.cached_dir()).load()
 
+    def _install_complete(self, directory: Path) -> bool:
+        """Whether `directory` holds every file the lock pins for this version.
+
+        Stricter than `is_cached` and than `lock_mismatches`, which both let an
+        unpinned or absent optional file pass: this is what authorises deleting
+        other versions, so a lock that does not pin this version, or any pinned
+        file missing or different, says no.
+        """
+        lock = read_lock()
+        if lock.get("version") != self._version:
+            return False
+        files = lock.get("files") or {}
+        if not {RUNTIME_JS, RUNTIME_CSS} <= set(files):
+            return False
+        return all(
+            isinstance(entry, dict)
+            and bool(entry.get("sha256"))
+            and _file_intact(directory, name, entry["sha256"])
+            for name, entry in files.items()
+        )
+
     def fetch(
         self,
         on_progress: ProgressCallback | None = None,
@@ -688,17 +888,109 @@ class FetchingRuntime:
                 "was tested against, so it has not been installed:\n\n"
                 + "\n".join(mismatches)
             )
+        _store_gzipped(staging)
 
         if destination.exists():  # a re-fetch of an incomplete or corrupt cache
             _remove_tree(destination)
         staging.rename(destination)
+
+        # Only once this version is wholly in place and verified, and never in a
+        # root someone filled by hand (`ONLYMAP_RUNTIME_CACHE`).
+        if self._install_complete(destination) and not (
+            self._cache_dir is None and os.environ.get("ONLYMAP_RUNTIME_CACHE")
+        ):
+            prune_superseded_runtimes(destination.parent, self._version)
         return destination
 
 
 def _remove_tree(path: Path) -> None:
-    import shutil
-
     shutil.rmtree(path, ignore_errors=True)
+
+
+def _file_intact(directory: Path, name: str, expected: str | None) -> bool:
+    """Whether one runtime file is present, readable and, if pinned, matches."""
+    path = stored_path(directory, name)
+    if path is None:
+        return False
+    if not expected and not path.name.endswith(GZIP_SUFFIX):
+        return True  # nothing to compare a plain file against
+    try:
+        digest = _stored_digest(path)
+    except (OSError, CorruptRuntimeFileError):
+        return False
+    return not expected or digest == expected
+
+
+# A cache entry this module wrote: a release version's directory, holding only
+# files it writes. Pre-release names (`1.0.0-rc.1`) are never recognised, so
+# they are never pruned.
+_RELEASE_VERSION = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)")
+_OWNED_FILES = frozenset(
+    {
+        RUNTIME_JS,
+        RUNTIME_CSS,
+        RUNTIME_LICENCE,
+        RUNTIME_SCHEMA,
+        RUNTIME_CARTOGRAPH_JS,
+        RUNTIME_CARTOGRAPH_CSS,
+        COMPRESSION_RECORD,
+        *(name + GZIP_SUFFIX for name in STORED_GZIPPED),
+    }
+)
+
+
+def _release(name: str) -> tuple[int, int, int] | None:
+    match = _RELEASE_VERSION.fullmatch(name)
+    if match is None:
+        return None
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch)
+
+
+def _owned_runtime_dir(path: Path) -> bool:
+    if path.is_symlink() or not path.is_dir():
+        return False
+    return all(
+        child.name in _OWNED_FILES and not child.is_symlink() and child.is_file()
+        for child in path.iterdir()
+    )
+
+
+def prune_superseded_runtimes(cache_dir: Path, installed: str) -> list[Path]:
+    """Delete cached runtime versions older than `installed`; return what went.
+
+    Called by `fetch` after `installed` is in place and fully verified. Only
+    directories named for an *older* release and holding nothing but files this
+    module writes are removed: never `installed` itself, a newer version
+    (another QGIS on this machine may run a newer plugin from the same cache),
+    a `.partial` install in progress, a licence marker, a symlink, or anything
+    else. An older plugin that still needs its version downloads it again; an
+    exported map carries its own copy of the runtime and is unaffected.
+
+    Best effort by design: a directory another process is reading (Windows
+    refuses to delete an open file), or one that vanished meanwhile, is left
+    and skipped, and a failure here never fails the install that called it.
+    """
+    current = _release(installed)
+    if current is None:
+        return []
+    removed: list[Path] = []
+    try:
+        entries = sorted(cache_dir.iterdir())
+    except OSError:
+        return removed
+    for entry in entries:
+        version = _release(entry.name)
+        if version is None or version >= current:
+            continue
+        try:
+            if not _owned_runtime_dir(entry):
+                continue
+            shutil.rmtree(entry)
+        except OSError:
+            continue
+        removed.append(entry)
+    return removed
 
 
 def default_provider(

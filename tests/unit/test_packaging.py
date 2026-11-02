@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gzip
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,6 +39,7 @@ from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.portable_names import avoid_windows_reserved
 from nika_onlymap_exporter.exporters.folder import FolderExporter
 from nika_onlymap_exporter.exporters.share_zip import ShareZipExporter, archive_root
+from nika_onlymap_exporter.packaging import asset_embedder, runtime_manager
 from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
 from nika_onlymap_exporter.packaging.asset_embedder import (
     DATA_COMPRESSION_THRESHOLD_BYTES,
@@ -53,7 +55,11 @@ from nika_onlymap_exporter.packaging.dependency_scanner import (
     scan,
     standalone_ineligible_reason,
 )
-from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle, sha256_of
+from nika_onlymap_exporter.packaging.runtime_manager import (
+    LocalRuntime,
+    RuntimeBundle,
+    sha256_of,
+)
 from nika_onlymap_exporter.writers.onlymap_writer import (
     ArtifactResult,
     ExportBlockedError,
@@ -430,6 +436,70 @@ class TestExporters:
         with pytest.raises(ExportBlockedError):
             build_artifact(make_project(layers=[]), destination, writer=self._writer())
         assert not destination.exists()
+
+
+class TestGzippedRuntimeCache:
+    """A runtime stored gzipped exports exactly what a plain one does.
+
+    The cache keeps its files gzipped; an artifact must not be able to tell.
+    The folder tier writes the runtime as a plain file the browser loads, and
+    the single-file tier, which reuses the stored gzip, must come out
+    byte-for-byte as when it compressed the runtime itself.
+    """
+
+    WHEN = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+
+    @pytest.fixture
+    def runtime_dirs(self, tmp_path) -> tuple[Path, Path]:
+        plain, packed = tmp_path / "plain", tmp_path / "packed"
+        script = "\n".join(
+            f"globalThis.__om{i} = {i * 7919 % 104729};" for i in range(20_000)
+        ).encode()
+        for directory in (plain, packed):
+            directory.mkdir()
+            (directory / runtime_manager.RUNTIME_JS).write_bytes(script)
+            (directory / runtime_manager.RUNTIME_CSS).write_bytes(
+                b"om-map:not(:defined) om-fallback { display: block; }"
+            )
+        runtime_manager._store_gzipped(packed)
+        assert not (packed / runtime_manager.RUNTIME_JS).exists()
+        return plain, packed
+
+    def _write(self, directory: Path, out: Path, mode: OutputMode) -> Path:
+        asset_embedder._GZIP_CACHE.clear()
+        writer = OnlyMapWriter(runtime_provider=LocalRuntime(directory))
+        return writer.write(
+            make_project(),
+            out,
+            mode=mode,
+            when=self.WHEN,
+            unbundle=mode is OutputMode.FOLDER,
+        ).entry_path.parent
+
+    def test_a_folder_export_writes_the_plain_runtime(
+        self, runtime_dirs, tmp_path
+    ) -> None:
+        plain, packed = runtime_dirs
+        from_plain = self._write(plain, tmp_path / "a", OutputMode.FOLDER)
+        from_packed = self._write(packed, tmp_path / "b", OutputMode.FOLDER)
+
+        assert (from_packed / "onlymap.js").read_bytes() == (
+            plain / runtime_manager.RUNTIME_JS
+        ).read_bytes()
+        assert (from_packed / "index.html").read_bytes() == (
+            from_plain / "index.html"
+        ).read_bytes()
+
+    def test_a_single_file_export_is_byte_identical(
+        self, runtime_dirs, tmp_path
+    ) -> None:
+        plain, packed = runtime_dirs
+        from_plain = self._write(plain, tmp_path / "a", OutputMode.STANDALONE_HTML)
+        from_packed = self._write(packed, tmp_path / "b", OutputMode.STANDALONE_HTML)
+
+        assert (from_packed / "index.html").read_bytes() == (
+            from_plain / "index.html"
+        ).read_bytes()
 
 
 def _staged_result(directory: Path, files: dict[str, bytes]) -> ArtifactResult:

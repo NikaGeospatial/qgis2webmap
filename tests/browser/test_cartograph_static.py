@@ -54,7 +54,12 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     FrameSpec,
     ScalebarSpec,
 )
-from nika_onlymap_exporter.packaging.runtime_manager import discover_runtime_dir
+from nika_onlymap_exporter.packaging.runtime_manager import (
+    RUNTIME_CARTOGRAPH_CSS,
+    RUNTIME_CARTOGRAPH_JS,
+    discover_runtime_dir,
+    read_runtime_file,
+)
 from nika_onlymap_exporter.writers.cartograph_writer import (
     CartographRuntimeBundle,
     write_cartograph_html,
@@ -124,7 +129,7 @@ def runtime_dir() -> Path:
     directory = discover_runtime_dir()
     if directory is None:
         pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
-    if not (directory / "cartograph.standalone.js").exists():
+    if read_runtime_file(directory, RUNTIME_CARTOGRAPH_JS) is None:
         pytest.skip("this runtime copy has no cartograph build")
     return directory
 
@@ -151,8 +156,10 @@ def static_cartograph(
         items=(frame, bar),
     )
     runtime = CartographRuntimeBundle(
-        cartograph_js=(runtime_dir / "cartograph.standalone.js").read_bytes(),
-        cartograph_css=(runtime_dir / "cartograph.css").read_text(encoding="utf-8"),
+        cartograph_js=read_runtime_file(runtime_dir, RUNTIME_CARTOGRAPH_JS),
+        cartograph_css=read_runtime_file(runtime_dir, RUNTIME_CARTOGRAPH_CSS).decode(
+            "utf-8"
+        ),
     )
     html = write_cartograph_html(spec, runtime)
 
@@ -189,9 +196,9 @@ class TestStaticCartographInABrowser:
         page.goto(static_cartograph.as_uri())
         page.wait_for_selector("#main", timeout=30_000)
 
-        cartograph_source = (runtime_dir / "cartograph.standalone.js").read_text(
-            encoding="utf-8"
-        )
+        cartograph_source = read_runtime_file(
+            runtime_dir, RUNTIME_CARTOGRAPH_JS
+        ).decode("utf-8")
         result = page.evaluate(_CHECK_SCRIPT % list(_TEST_LONLAT), cartograph_source)
 
         assert result["errors"] == []
