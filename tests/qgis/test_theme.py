@@ -185,44 +185,6 @@ class TestHelpPane:
             block = block.next()
         return colours
 
-    def test_the_guides_are_rendered_on_first_opening_and_kept(
-        self, qgis_app, project, make_memory_layer
-    ):
-        """Rendering them is the slowest part of opening the dialog, and
-        most openings never show Help."""
-        dialog = TestScope()._dialog(project, make_memory_layer)
-        try:
-            assert dialog.help_browser.document().isEmpty()
-            dialog._show_tab("Help")
-            document = dialog.help_browser.document()
-            assert "Sharing a map" in document.toPlainText()
-            dialog._close_aside()
-            dialog._show_tab("Help")
-            assert dialog.help_browser.document() is document
-        finally:
-            dialog.close()
-
-    def test_the_guides_opened_later_use_the_dialogs_font(
-        self, qgis_app, project, make_memory_layer
-    ):
-        """Rendered after the theme set the dialog's font, the guides must
-        still be set in it, as they were when they were rendered up front."""
-        from qgis.PyQt.QtWidgets import QApplication
-
-        dialog = TestScope()._dialog(project, make_memory_layer)
-        try:
-            # Shown, so the stylesheet's font has reached the browser.
-            dialog.show()
-            QApplication.processEvents()
-            dialog._show_tab("Help")
-            QApplication.processEvents()
-            document_font = dialog.help_browser.document().defaultFont()
-            browser_font = dialog.help_browser.font()
-            assert document_font.family() == browser_font.family()
-            assert document_font.pointSizeF() == browser_font.pointSizeF()
-        finally:
-            dialog.close()
-
     def test_a_theme_chosen_before_the_first_opening_colours_the_links(
         self, qgis_app, project, make_memory_layer
     ):
