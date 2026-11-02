@@ -340,8 +340,8 @@ def select(
             sel.broad.append(
                 f"shared test support {path} changed (affects {', '.join(tiers)})"
             )
-            for tier in tiers:
-                for target in list_test_files(repo, tier):
+            for support_tier in tiers:
+                for target in list_test_files(repo, support_tier):
                     sel.add_test(target, f"shared test support {path} changed")
             continue
 

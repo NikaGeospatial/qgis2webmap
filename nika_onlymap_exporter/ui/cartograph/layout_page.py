@@ -761,7 +761,7 @@ class LayoutPreview(QStackedWidget):
         ):
             self._pan_from = event_point(event)
             self._user_zoomed = True
-            viewport.setCursor(Qt.CursorShape.ClosedHandCursor)
+            viewport.setCursor(Qt.CursorShape.ClosedHandCursor)  # type: ignore[union-attr]
             return True
         if self._pan_from is None:
             return None
@@ -770,7 +770,7 @@ class LayoutPreview(QStackedWidget):
             return True
         if kind == QEvent.Type.MouseButtonRelease:
             self._pan_from = None
-            viewport.setCursor(Qt.CursorShape.OpenHandCursor)
+            viewport.setCursor(Qt.CursorShape.OpenHandCursor)  # type: ignore[union-attr]
             return True
         return None
 
@@ -1438,7 +1438,7 @@ class PagePane(QWidget):
             tr("Show a closer view of an area.")
         )
 
-    def _fill_live_count_entry(self, menu, layout, maps) -> None:  # type: ignore[no-untyped-def]
+    def _fill_live_count_entry(self, menu, layout, maps) -> None:
         """Live count: follows the one map, else the selected map frame, else
         a choice of which (never an arbitrary one)."""
         title = kind_title(ItemKind.LIVE_COUNT)

@@ -13,6 +13,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from qgis.PyQt.QtCore import QSize, Qt, QTimer
 from qgis.PyQt.QtGui import QGuiApplication, QImage, QPixmap
@@ -101,7 +102,7 @@ class TemplatePreviewDialog(QDialog):
         self.setWindowTitle(title)
         self.setModal(True)
         self._render = render
-        self._pending = None
+        self._pending: Any = None
         self._closed = False
         self._deadline = QTimer(self)
         self._deadline.setSingleShot(True)
@@ -173,6 +174,7 @@ class TemplatePreviewDialog(QDialog):
         width = round(
             min(1400, max(960, self.width())) * max(1.0, self.devicePixelRatioF())
         )
+        result: Any
         try:
             result = self._render(width)
         except Exception:

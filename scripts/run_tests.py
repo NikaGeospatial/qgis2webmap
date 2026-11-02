@@ -47,9 +47,12 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 REPO = Path(__file__).resolve().parent.parent
+
+if TYPE_CHECKING:
+    import test_selection
 
 _spec = importlib.util.spec_from_file_location(
     "q2w_test_selection", REPO / "scripts" / "test_selection.py"
@@ -729,9 +732,9 @@ class Planner:
         self.fixture_dirs: dict[str, str] = {}
         self.run_id = run_dir.name
         self.cand_tag = run_dir.name.rsplit("-", 1)[1][:1]
-        self.selection: selection.Selection | None = None
+        self.selection: test_selection.Selection | None = None
         self.base = ""
-        self.changes: list[selection.Change] = []
+        self.changes: list[test_selection.Change] = []
 
     # environments
     def env42(self) -> dict[str, str]:
@@ -851,11 +854,11 @@ class Planner:
                         name=name,
                         kind="heavy",
                         resource="shard42",
-                        command=lambda items=items, wdir=wdir: [
+                        command=lambda items=items, wdir=wdir: [  # type: ignore[misc]
                             self.python42(),
                             *self.pytest_args(wdir, items),
                         ],
-                        env=lambda name=name: self.worker_env(self.env42(), name),
+                        env=lambda name=name: self.worker_env(self.env42(), name),  # type: ignore[misc]
                         cwd=self.snap,
                         log=self.log(name),
                         pytest_report=wdir / "report.json",

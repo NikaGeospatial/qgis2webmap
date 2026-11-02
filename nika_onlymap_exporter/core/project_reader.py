@@ -146,7 +146,7 @@ def _highlight_text(color: Color | None) -> str:
     return f"#{color.r:02x}{color.g:02x}{color.b:02x}{alpha:02x}"
 
 
-def extent_from_canvas(canvas: object) -> Extent | None:
+def extent_from_canvas(canvas: Any) -> Extent | None:
     """The QGIS canvas rectangle, reprojected to WGS84.
 
     Lives here rather than in the dialog so the Processing algorithm can reach

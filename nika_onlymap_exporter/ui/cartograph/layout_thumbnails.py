@@ -47,10 +47,10 @@ def grab_page(view: object, layout: object) -> QImage | None:
     then would keep a half-drawn page)."""
     if view.currentLayout() is not layout:  # type: ignore[attr-defined]
         return None
-    pages = layout.pageCollection()  # type: ignore[attr-defined]
+    pages = layout.pageCollection()
     if not pages.pageCount():
         return None
-    for item in layout.items():  # type: ignore[attr-defined]
+    for item in layout.items():
         is_drawing = getattr(item, "isDrawing", None)
         if callable(is_drawing) and is_drawing():
             return None

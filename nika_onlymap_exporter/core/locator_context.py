@@ -210,7 +210,7 @@ def _main_map(locator: QgsLayoutItemMap) -> QgsLayoutItemMap | None:
     for overview in locator.overviews().asList():
         linked = overview.linkedMap()
         if linked is not None:
-            return linked  # type: ignore[no-any-return]
+            return linked
     return None
 
 

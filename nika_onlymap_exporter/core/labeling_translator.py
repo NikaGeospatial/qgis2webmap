@@ -39,7 +39,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 ASCII_PRINTABLE = frozenset(string.printable)
 
 
-def _color_from_qcolor(qcolor: object) -> Color | None:
+def _color_from_qcolor(qcolor: Any) -> Color | None:
     if qcolor is None or not getattr(qcolor, "isValid", lambda: False)():
         return None
     return Color(r=qcolor.red(), g=qcolor.green(), b=qcolor.blue(), a=qcolor.alphaF())

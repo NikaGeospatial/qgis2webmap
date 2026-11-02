@@ -283,7 +283,7 @@ def _millimetre_copy(
     if clip_source is not None and clip_source.uuid() in copied:
         clipping = copied_map.itemClippingSettings()
         clipping.setSourceItem(copied[clip_source.uuid()])
-    return copy, copied_map  # type: ignore[return-value]  # a map item, copied as one
+    return copy, copied_map  # a map item, copied as one
 
 
 def _millimetres_per_layout_unit(layout: QgsPrintLayout) -> float:

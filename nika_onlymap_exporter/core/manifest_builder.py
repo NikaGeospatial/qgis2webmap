@@ -1402,8 +1402,8 @@ def build_label_element(
         and baseline == "center"
         and not (offset_x or offset_y)
     ):
-        radius = layer.renderer.representative_symbol
-        radius = (radius.radius if radius is not None else None) or 4.0
+        symbol = layer.renderer.representative_symbol
+        radius = (symbol.radius if symbol is not None else None) or 4.0
         baseline = "bottom"
         offset_y = -(radius + 2.0)
 

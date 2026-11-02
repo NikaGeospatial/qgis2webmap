@@ -392,7 +392,7 @@ def detail_source(layout: QgsLayout) -> QgsLayoutItemMap | None:
         return None
     reference = layout.referenceMap()
     if reference is not None and not is_locator(reference):
-        return reference  # type: ignore[no-any-return]
+        return reference
     main = [m for m in maps if not is_locator(m)] or maps
     return max(main, key=lambda m: m.rect().width() * m.rect().height())
 

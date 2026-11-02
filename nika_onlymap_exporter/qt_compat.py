@@ -18,7 +18,7 @@ from qgis.PyQt.QtCore import QPoint, QPointF
 try:  # QtGui on Qt 6 (QGIS 4), QtWidgets on Qt 5 (QGIS 3).
     from qgis.PyQt.QtGui import QUndoCommand
 except ImportError:  # pragma: no cover - QGIS 3
-    from qgis.PyQt.QtWidgets import QUndoCommand  # type: ignore[attr-defined,no-redef]
+    from qgis.PyQt.QtWidgets import QUndoCommand
 
 __all__ = [
     "QUndoCommand",

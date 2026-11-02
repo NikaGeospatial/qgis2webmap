@@ -311,7 +311,7 @@ class ContentEditor(QObject):
         if QApplication.activePopupWidget() is not None:
             return False
         widget = watched if hasattr(watched, "window") else None
-        if widget is not None and widget.window() is not self._view.window():  # type: ignore[attr-defined]
+        if widget is not None and widget.window() is not self._view.window():
             return False
         self.finish()
         return True

@@ -1281,14 +1281,13 @@ class TemplatePicker(QDialog):
         order = ([chosen] if chosen else []) + self.visible_ids() + self.near_ids()
         order += shown
         seen: set[str] = set()
-        return [
-            t
-            for t in order
-            if t in self._templates
-            and t not in seen
-            and not seen.add(t)
-            and not self._is_planned(t)
-        ]
+        wanted: list[str] = []
+        for t in order:
+            if t in self._templates and t not in seen:
+                seen.add(t)
+                if not self._is_planned(t):
+                    wanted.append(t)
+        return wanted
 
     def _plan_turn(self) -> None:
         """Plan cards for a short while, then let the window breathe: each

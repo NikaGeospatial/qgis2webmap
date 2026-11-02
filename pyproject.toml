@@ -30,7 +30,9 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 testpaths = ["tests/unit"]
 
 [tool.mypy]
-python_version = "3.9"
+# The closest target the pinned mypy accepts (it refuses 3.9); the plugin's
+# floor stays `requires-python` above.
+python_version = "3.10"
 warn_unused_ignores = true
 # PyQGIS ships no stubs; do not fail on its untyped surface.
 ignore_missing_imports = true

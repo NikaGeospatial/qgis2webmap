@@ -34,6 +34,7 @@ import functools
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from typing import cast
 
 from .canvas_layout import (
     ORIENTATION_CHOICES,
@@ -1402,7 +1403,9 @@ def _dashboard(page: _Page) -> _Layout:
             key = next((i for i in option[1] if isinstance(i, LegendSpec)), None)
             if key is None:
                 return (True, legend_pt, _fit_area(aspect, option[0]))
-            _, _, need = _legend_fit(page, key.font_size, key.box.w, key.box.h)
+            _, _, need = _legend_fit(
+                page, cast(float, key.font_size), key.box.w, key.box.h
+            )
             complete = need <= key.box.h + 1e-6
             readability = key.font_size if complete else key.box.h / max(need, 1.0)
             return (complete, readability, _fit_area(aspect, option[0]))
@@ -2261,7 +2264,7 @@ def _band_layout(
 
 def _legend(
     page: _Page, box: Box, palette: PagePalette, font_pt: float, *, z: int
-) -> list[CartographItem]:
+) -> list[LegendSpec]:
     """The legend in `box` -- in the fewest columns its rows fit down, its
     long rows wrapped to the columns' width (`_legend_plan`) -- or nothing
     for no layers or a box too small."""

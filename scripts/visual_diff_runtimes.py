@@ -35,6 +35,7 @@ import struct
 import sys
 import zlib
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -175,7 +176,7 @@ ICON_ATLAS = IconAtlasSpec(
 
 
 def _points_layer(**kwargs) -> ExportLayer:
-    base = dict(
+    base: dict[str, Any] = dict(
         layer_id="points",
         name="Points",
         geometry_kind=GeometryKind.POINT,

@@ -1229,7 +1229,7 @@ class ContextControls(QFrame):
             self.legend_slot.addWidget(self._legend_editor)
         editor = self._legend_editor
         if editor is not None and not sip.isdeleted(editor):
-            editor.set_legend(legend)  # type: ignore[attr-defined]  # the factory's contract
+            editor.set_legend(legend)  # the factory's contract
             editor.setVisible(legend is not None)
 
     # ---- edits (each one undo step, applied once per gesture) -------------

@@ -1221,11 +1221,7 @@ class AtlasTab(QWidget):
         combo.blockSignals(True)
         try:
             combo.clear()
-            kind = (
-                field_kind(layer, field)  # type: ignore[arg-type]
-                if layer is not None and field
-                else None
-            )
+            kind = field_kind(layer, field) if layer is not None and field else None
             combo.setEditable(kind != "bool")
             # A new editable box has a new line edit.
             align_embedded_edits(combo)
@@ -1244,7 +1240,7 @@ class AtlasTab(QWidget):
                 combo.addItem(tr("Yes"), TRUE_TEXT)
                 combo.addItem(tr("No"), FALSE_TEXT)
             else:
-                for text in unique_values(layer, field, VALUE_SUGGESTIONS):  # type: ignore[arg-type]
+                for text in unique_values(layer, field, VALUE_SUGGESTIONS):
                     combo.addItem(text, text)
             if match is None:
                 combo.setCurrentIndex(-1)
@@ -1331,7 +1327,7 @@ class AtlasTab(QWidget):
             if complete:
                 try:
                     expression = condition_expression(
-                        layer,  # type: ignore[arg-type]
+                        layer,
                         field,
                         value,
                         self._filter_value_is_null,

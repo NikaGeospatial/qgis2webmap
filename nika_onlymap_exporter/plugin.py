@@ -33,6 +33,8 @@ from .ui.i18n import N_
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.gui import QgisInterface, QgsLayoutDesignerInterface
 
+    from .processing.provider import Qgis2WebMapProvider
+
 LOG_TAG = "QGIS2WebMap"
 MENU_TITLE = "&QGIS2WebMap by NIKA"
 # Marked for the catalogue here, translated in `initGui`.
@@ -66,7 +68,7 @@ class Qgis2WebMapPlugin:
         self.action: QAction | None = None
         self.cartograph_action: QAction | None = None
         self.dialog = None
-        self.provider = None
+        self.provider: Qgis2WebMapProvider | None = None
         # One "Export as cartograph..." action per open layout designer,
         # keyed by the designer itself - a project can have several open at
         # once, each needing its own action naming its own layout.

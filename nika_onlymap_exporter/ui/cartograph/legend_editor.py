@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from qgis.core import QgsLayoutItemLegend, QgsLayoutItemMap
 from qgis.PyQt import sip
@@ -201,7 +202,7 @@ class LegendEditor(QWidget):
         form.addRow(tr("Row spacing"), self.spacing_spin)
         column.addLayout(form)
 
-        self._stack = None
+        self._stack: Any = None
         # A change made elsewhere (Ctrl+Z, the layout designer) re-lists once
         # the stack settles, not once per command of a macro.
         self._refresh_timer = QTimer(self)

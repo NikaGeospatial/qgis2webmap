@@ -96,6 +96,7 @@ class TestEnsureRuntime:
         assert provider is not None
         assert isinstance(provider, rm.LocalRuntime)
 
+
     def test_a_runtime_upgrade_does_not_ask_for_the_licence_again(
         self, qgis_app, tmp_path, monkeypatch
     ):
@@ -123,7 +124,6 @@ class TestEnsureRuntime:
         assert provider is not None
         assert downloads == [provider.version]
         assert provider.version != "0.0.1"
-
 
 class TestQgisDownloader:
     def test_a_cancelled_feedback_aborts(self, qgis_app) -> None:

@@ -387,7 +387,7 @@ class OnlyMapWriter:
         # dialog. `verdict.violations` still reaches the Fidelity report through
         # `report_verdict`, and the caps are documented in the README and in
         # `docs/supported-features.md` for anyone who does publish to a server.
-        warnings = []
+        warnings: list[str] = []
         # An unexpected runtime build is worth saying out loud: the artifact is
         # still written, but "it worked on my machine" usually starts here.
         warnings.extend(runtime.lock_warnings)

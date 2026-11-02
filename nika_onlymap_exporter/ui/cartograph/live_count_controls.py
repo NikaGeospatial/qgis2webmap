@@ -263,7 +263,7 @@ class LiveCountSetup(QWidget):
         combo = self.value_combo
         combo.clear()
         kind = (
-            lc.field_kind(layer, spec.field)  # type: ignore[arg-type]
+            lc.field_kind(layer, spec.field)
             if lc.is_countable(layer) and spec.field
             else None
         )
@@ -280,7 +280,7 @@ class LiveCountSetup(QWidget):
         suggestions: list[str] = (
             [tr("Yes"), tr("No")]
             if kind == "bool"
-            else list(lc.unique_values(layer, spec.field, VALUE_SUGGESTIONS))  # type: ignore[arg-type]
+            else list(lc.unique_values(layer, spec.field, VALUE_SUGGESTIONS))
         )
         for text in suggestions:
             combo.addItem(text, text)
@@ -335,7 +335,7 @@ class LiveCountSetup(QWidget):
         if focus is not None and self.isAncestorOf(focus):
             project = layout.project()
             layers = lc.countable_layers(project) if project is not None else []
-            self._show_message(layers)  # type: ignore[arg-type]
+            self._show_message(layers)
             return
         self._loading = True
         try:

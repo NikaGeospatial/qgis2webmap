@@ -167,7 +167,7 @@ def _platform() -> str:
     return sys.platform
 
 
-def dbus_module():  # type: ignore[no-untyped-def]  # a Qt module, absent on some builds
+def dbus_module():  # a Qt module, absent on some builds
     """QtDBus from whichever binding QGIS runs on: `qgis.PyQt` re-exports it
     only for PyQt5, so PyQt6 is imported by its own name."""
     for name in ("qgis.PyQt.QtDBus", "PyQt6.QtDBus", "PyQt5.QtDBus"):
@@ -178,7 +178,7 @@ def dbus_module():  # type: ignore[no-untyped-def]  # a Qt module, absent on som
     raise ImportError("QtDBus")
 
 
-def _string_array(qt_dbus, value: str):  # type: ignore[no-untyped-def]
+def _string_array(qt_dbus, value: str):
     """`[value]` as a D-Bus `as`. A plain Python list would go out as `av`, which
     the file-manager service rejects."""
     from qgis.PyQt.QtCore import QMetaType
@@ -196,7 +196,7 @@ def _string_array(qt_dbus, value: str):  # type: ignore[no-untyped-def]
     return argument
 
 
-def _session_bus():  # type: ignore[no-untyped-def]  # a QDBusConnection
+def _session_bus():  # a QDBusConnection
     return dbus_module().QDBusConnection.sessionBus()
 
 

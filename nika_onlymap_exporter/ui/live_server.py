@@ -114,7 +114,7 @@ class _PreviewHTTPServer(ThreadingHTTPServer):
                 while not self._stop_requested.is_set():
                     for key, _events in selector.select():
                         if key.fileobj is self and not self._stop_requested.is_set():
-                            self._handle_request_noblock()
+                            self._handle_request_noblock()  # type: ignore[attr-defined]
                     self.service_actions()
         finally:
             self._stopped.set()
@@ -247,7 +247,7 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def send_head(self):  # type: ignore[no-untyped-def]  # stdlib signature
+    def send_head(self):  # stdlib signature
         """Answer a single byte range with 206, the way a raster needs.
 
         A raster preview is a Cloud-Optimized GeoTIFF, and the runtime reads one

@@ -310,7 +310,7 @@ class LiveCounts(QObject):
             self._outcomes.pop(uuid, None)
             return
         self._outcomes[uuid] = outcome
-        changed = lc.apply_outcome(number, outcome)  # type: ignore[arg-type]
+        changed = lc.apply_outcome(number, outcome)
         self.outcome_changed.emit(uuid)
         if changed and outcome.state is not lc.CountState.PENDING:
             self.content_changed.emit()

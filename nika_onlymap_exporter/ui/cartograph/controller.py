@@ -133,6 +133,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from ...core.export_ir import ExportProject
     from ...core.fidelity_report import FidelityReportBuilder
     from ...core.layout_builder import BuiltLayout
+    from ...core.layout_reading import FrameMode
     from ..main_dialog import MainDialog
     from .accessibility_dialog import AccessibilityDialog
 
@@ -2341,7 +2342,10 @@ class CartographController:
         path = self._safe_destination(destination, layout, name)
         project = self.project
         choices = dict(self.state.frame_choices(name))
-        frame_modes = {item_id: choice.mode for item_id, choice in choices.items()}
+        frame_modes = cast(
+            "dict[str, FrameMode]",
+            {item_id: choice.mode for item_id, choice in choices.items()},
+        )
         frame_dpis = {item_id: choice.dpi for item_id, choice in choices.items()}
 
         from ...core.fidelity_report import FidelityReportBuilder

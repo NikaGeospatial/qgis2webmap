@@ -242,7 +242,7 @@ class BackgroundJob(QThread):
         """
         self._detached = True
 
-    def start(self, *args: Any) -> None:  # type: ignore[override]
+    def start(self, *args: Any) -> None:
         # Owned before it runs, so there is no moment a running thread has no
         # owner.
         _RUNNING.add(self)

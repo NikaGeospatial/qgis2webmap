@@ -34,7 +34,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from html import escape as escape_html
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     Qgis,
@@ -687,7 +687,7 @@ class MainDialog(QDialog):
         self._fidelity_state = ReportState.NOT_CHECKED
         self._fidelity_error = ""
         self._fidelity_summary: ReportSummary | None = None
-        self._data_bytes_cache = None
+        self._data_bytes_cache: tuple[Any, dict[str, int]] | None = None
 
         layout = QVBoxLayout(self)
         if active_language() in languages.RIGHT_TO_LEFT:
@@ -1022,7 +1022,12 @@ class MainDialog(QDialog):
         for mode, label in MODE_LABELS.items():
             button = QRadioButton(tr(label), destination_box)
             button.setChecked(mode is self.state.output_mode)
-            button.toggled.connect(lambda on, m=mode: on and self._on_mode_selected(m))
+
+            def chosen(on: bool, m: OutputMode = mode) -> None:
+                if on:
+                    self._on_mode_selected(m)
+
+            button.toggled.connect(chosen)
             self.mode_group.addButton(button)
             destination_layout.addWidget(button)
             self.mode_buttons[mode] = button
@@ -2282,7 +2287,9 @@ class MainDialog(QDialog):
         from ..core.layout_reader import default_mode_for_map
 
         item = membership.map_item()
-        choice = self.state.frame_choices(self.state.cartograph_layout).get(item.uuid())
+        choice = self.state.frame_choices(self.state.cartograph_layout).get(
+            item.uuid()  # type: ignore[union-attr]
+        )
         return str(choice.mode) if choice is not None else default_mode_for_map(item)
 
     def _sync_layer_capabilities(self) -> None:
@@ -2583,14 +2590,14 @@ class MainDialog(QDialog):
             with contextlib.suppress(ValueError):
                 self.state.title_corner = OverlayCorner(value)
 
-    def _on_widget_color(self, attribute: str, color: object) -> None:
+    def _on_widget_color(self, attribute: str, color: Any) -> None:
         """A null colour means "leave the runtime's own default alone"."""
         if color is None or not color.isValid() or color.alpha() == 0:
             setattr(self.state, attribute, "")
             return
         setattr(self.state, attribute, color.name())
 
-    def _on_highlight_color(self, color: object) -> None:
+    def _on_highlight_color(self, color: Any) -> None:
         """Kept in CSS order with alpha last, the form the manifest emits.
 
         A fully transparent pick is a real choice here - "no visible highlight" -

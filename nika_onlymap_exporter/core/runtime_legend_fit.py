@@ -31,6 +31,7 @@ from __future__ import annotations
 import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
+from typing import cast
 
 from .cartograph_ir import (
     Box,
@@ -211,11 +212,15 @@ def _layer_entries(
     if runtime is None or runtime.kind not in ("classes", "categories"):
         return []
     qgis = qgis_class_labels(layer)
-    labels = [
-        (qgis[i] if i < len(qgis) and qgis[i] else runtime_label)
-        for i, runtime_label in enumerate(runtime.labels)
-        if runtime_label not in hidden and not (i < len(qgis) and qgis[i] is None)
-    ]
+    # A row QGIS hides (None) is filtered out, so every label is a string.
+    labels = cast(
+        "list[str]",
+        [
+            (qgis[i] if i < len(qgis) and qgis[i] else runtime_label)
+            for i, runtime_label in enumerate(runtime.labels)
+            if runtime_label not in hidden and not (i < len(qgis) and qgis[i] is None)
+        ],
+    )
     if runtime.kind == "categories":
         if len(labels) > RUNTIME_MAX_CATEGORIES:
             more = len(labels) - RUNTIME_MAX_CATEGORIES

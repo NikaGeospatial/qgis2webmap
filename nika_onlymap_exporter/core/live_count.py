@@ -42,6 +42,7 @@ import re
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from qgis.core import (
     Qgis,
@@ -72,6 +73,9 @@ from qgis.PyQt.QtCore import QMetaType, QSizeF
 from ..translation import tr
 from .dom_parse import read_dom
 from .frame_layers import rendered_layers
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from typing import TypeGuard
 
 #: On the number label: marks it as a Live count.
 MARKER_PROPERTY = "nika/live-count"
@@ -172,7 +176,7 @@ def count_in_group(item: object) -> QgsLayoutItemLabel | None:
         return None
     for member in item.items():
         if is_count_number(member):
-            return member  # type: ignore[no-any-return]
+            return member
     return None
 
 
@@ -197,7 +201,7 @@ def live_counts(layout: QgsLayout) -> list[QgsLayoutItemLabel]:
 def owner_of(layout: QgsLayout, item: QgsLayoutItem) -> QgsLayoutItemLabel | None:
     """The number label of the counter `item` belongs to."""
     if is_count_number(item):
-        return item  # type: ignore[return-value]
+        return item
     grouped = count_in_group(item)
     if grouped is not None:
         return grouped
@@ -205,7 +209,7 @@ def owner_of(layout: QgsLayout, item: QgsLayoutItem) -> QgsLayoutItemLabel | Non
     if not uuid:
         return None
     found = layout.itemByUuid(str(uuid))
-    return found if is_count_number(found) else None  # type: ignore[return-value]
+    return found if is_count_number(found) else None
 
 
 def parts_of(layout: QgsLayout, number: QgsLayoutItem) -> list[QgsLayoutItem]:
@@ -283,7 +287,7 @@ def write_spec(item: QgsLayoutItem, spec: CountSpec) -> None:
 # -- the layers a counter can count -------------------------------------------
 
 
-def is_countable(layer: object) -> bool:
+def is_countable(layer: object) -> TypeGuard[QgsVectorLayer]:
     """A valid vector layer with geometry: the only thing a counter counts."""
     return (
         isinstance(layer, QgsVectorLayer)
@@ -430,7 +434,7 @@ def _parse_bool(text: str) -> bool | None:
     return None
 
 
-def _matcher(layer: QgsVectorLayer, spec: CountSpec):  # type: ignore[no-untyped-def]
+def _matcher(layer: QgsVectorLayer, spec: CountSpec):
     """A function `(feature) -> bool` for the field and value, or a
     `CountOutcome` saying why there is none."""
     if not spec.field:
@@ -559,7 +563,7 @@ class Prepared:
         area: QgsGeometry,
         renderer: QgsFeatureRenderer,
         context: QgsRenderContext,
-        matches,  # type: ignore[no-untyped-def]
+        matches,
         match_field: str | None = None,
     ) -> None:
         self.layer = layer
