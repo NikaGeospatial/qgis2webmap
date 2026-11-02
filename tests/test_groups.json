@@ -370,7 +370,7 @@
      "owner": ["plugin"], "also": []},
     {"match": ["tests/hermetic.py", "tests/conftest.py", "tests/qgis/conftest.py", "tests/fixtures/conftest.py", "tests/browser/conftest.py", "tests/q2w_report.py", "tests/atlas_filter_eval.py"],
      "owner": ["test_support"], "also": []},
-    {"match": ["scripts/run_tests.py", "scripts/test_selection.py", "tests/test_groups.json", "tests/durations.json", "scripts/update_translations.py", "scripts/announce_release.py", "scripts/ping_indexnow.py", "scripts/configure_site.py", "scripts/annotate_screenshot.py", "scripts/visual_diff_runtimes.py", "scripts/scan_package.py", "scripts/ci_shard.py", "scripts/check_qt6.py", "docs/*", "*.md", "LICENSE", ".github/*", ".gitignore", "pyproject.toml", "tests/unit/*", "tests/fixtures/*.md", "tests/fixtures/*.json"],
+    {"match": ["scripts/run_tests.py", "scripts/test_selection.py", "tests/test_groups.json", "tests/durations.json", "scripts/update_translations.py", "scripts/announce_release.py", "scripts/ping_indexnow.py", "scripts/configure_site.py", "scripts/annotate_screenshot.py", "scripts/visual_diff_runtimes.py", "scripts/scan_package.py", "scripts/ci_shard.py", "scripts/verify_tag_packs.py", "scripts/check_qt6.py", "docs/*", "*.md", "LICENSE", ".github/*", ".gitignore", "pyproject.toml", "tests/unit/*", "tests/fixtures/*.md", "tests/fixtures/*.json"],
      "owner": [], "also": []}
   ],
   "compat344": [
