@@ -82,11 +82,6 @@ class LayoutKeys:
         return {name: self.key_for(name) for name in names}
 
 
-def layout_id(project: QgsProject, name: str) -> str:
-    """The id of the layout called `name` (written into it if it has none)."""
-    return LayoutKeys(project).key_for(name)
-
-
 def existing_key(layout: object) -> str | None:
     """The id already written into `layout`, or None - never creates one."""
     key = layout.customProperty(LAYOUT_ID_PROPERTY)  # type: ignore[attr-defined]

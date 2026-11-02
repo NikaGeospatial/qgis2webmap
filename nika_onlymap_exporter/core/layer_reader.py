@@ -209,32 +209,6 @@ def _report_clip(
     )
 
 
-def clip_request(
-    layer: QgsVectorLayer,
-    extent: Any,
-    transform_context: QgsCoordinateTransformContext | None = None,
-) -> Any:
-    """A feature request limited to `extent`, in the layer's own CRS.
-
-    The extent arrives in WGS84 because that is what the rest of the model
-    speaks, but a filter rect is compared against the layer's *source*
-    coordinates - so it has to be transformed back, not forward. Getting this
-    the wrong way round silently returns nothing, which looks exactly like an
-    empty layer.
-
-    Membership is exact: the provider's spatial index pre-filters by bounding
-    box, then `ExactIntersect` keeps only features whose geometry really meets
-    the rectangle. Without it a diagonal line or a polygon around a hole
-    survives on its bounding box alone. Features are kept or dropped whole;
-    nothing is cut.
-
-    Only the layer's CRS is read from `layer`, so the request can be built from
-    a `LayerFeatures` snapshot on a worker thread; `transform_context` defaults
-    to the running project's, as it always did.
-    """
-    return _clip_request(layer.crs(), extent, transform_context)
-
-
 def _clip_request(
     target: QgsCoordinateReferenceSystem,
     extent: Any,

@@ -8,8 +8,8 @@ reorder, and "Restore removed" puts back everything that was left out. Every
 change is one undo step on the layout's stack, so Ctrl+Z in the page or the
 layout designer undoes it, and the list follows the stack.
 
-It is a plain widget so a panel can host it: the page preview opens it in a
-small window on a double-click of a legend (`LegendEditorWindow`).
+It is a plain widget so a panel can host it: the item controls' legend slot
+(`item_controls.set_legend_editor_factory`).
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -573,14 +573,3 @@ class LegendEditor(QWidget):
         finally:
             stack.endCommand()
         self._done()
-
-
-class LegendEditorWindow(LegendEditor):
-    """A `LegendEditor` as a small tool window, for the page preview to open
-    next to a legend; it follows the legend until closed."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowFlag(Qt.WindowType.Tool, True)
-        self.setWindowTitle(tr("Legend"))
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)

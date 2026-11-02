@@ -25,7 +25,6 @@ import dataclasses
 import functools
 import html
 import re
-import sys
 import time
 import traceback
 from collections.abc import Callable, Sequence
@@ -198,17 +197,6 @@ _THEME_LABELS = (
 _PDF_OPEN_LINK = "open-pdf"
 _PDF_SHOW_LINK = "show-pdf"
 _COPY_PATH_LINK = "copy-path"
-
-
-def _reveal_label() -> str:
-    """What "show me this file" is called here. Duplicated from
-    `main_dialog._reveal_label` rather than imported: that module imports this
-    package to build the switch, so importing back would be circular."""
-    if sys.platform == "darwin":
-        return tr("Reveal in Finder")
-    if sys.platform.startswith("win"):
-        return tr("Show in Explorer")
-    return tr("Show in file manager")
 
 
 def default_cartograph_path(

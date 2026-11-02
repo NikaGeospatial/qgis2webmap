@@ -233,14 +233,6 @@ def sites_part_zoom(
     return None if zoom is None else max(0, zoom - 1)
 
 
-def has_stacks(layer: ExportLayer) -> bool:
-    """Whether some of a point layer's points share one spot exactly."""
-    positions = _point_positions(layer.geojson)
-    if not positions:
-        return False
-    return len(set(_spots(positions))) < len(positions)
-
-
 def _spots(points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
     """Each point's spot: its position as finely as stacks are told apart."""
     return [(round(lon, 7), round(lat, 7)) for lon, lat in points]
@@ -279,8 +271,8 @@ def declutter_noting_stacks(
     layer: ExportLayer, default_font_px: float
 ) -> tuple[ExportLayer, bool]:
     """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in, and
-    whether it clusters points of which some share one spot - `has_stacks`,
-    from the positions already read rather than a second pass over them.
+    whether it clusters points of which some share one spot, from the
+    positions already read rather than a second pass over them.
 
     Labels of a clustered layer wait until bubbles stop merging separate
     sites: a count bubble over several places wearing one place's name would

@@ -80,7 +80,6 @@ LOCATOR_FRAME_ID = "locator"
 LOCATOR_ZOOM_OUT = 8.0
 
 _MARGIN = 10.0
-_GAP = 4.0
 # Colours for the designs that set their own look come from the named
 # palettes in `core/page_style.py`: plain colour values rather than a theme,
 # since the page is a QGIS layout the user goes on editing, and these are the

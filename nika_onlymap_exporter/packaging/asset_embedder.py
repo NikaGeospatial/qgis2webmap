@@ -167,13 +167,6 @@ def should_compress_data(total_data_bytes: int) -> bool:
     return total_data_bytes >= DATA_COMPRESSION_THRESHOLD_BYTES
 
 
-def compression_ratio(original: bytes) -> float:
-    """How much smaller the embedded form is, base64 overhead included."""
-    if not original:
-        return 1.0
-    return len(gzip_base64(original)) / len(original)
-
-
 # Inflating the DATA blocks, and nothing else. Split out from the runtime
 # bootstrap below because the two are needed in different combinations and were
 # once welded together, with consequences: the folder tier writes the runtime as
@@ -238,13 +231,3 @@ def build_bootstrap(runtime_base64: str) -> str:
     body = DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
     body += RUNTIME_INFLATE_TEMPLATE.format()
     return f'      const RUNTIME_GZ = "{runtime_base64}";\n{body}'
-
-
-def plain_runtime_script(runtime_source: str) -> str:
-    """The uncompressed alternative.
-
-    Kept as a real option, not dead code: if the bootstrap ever proves unreliable
-    on a browser we must support, this is the fallback, and it still produces a
-    working single file - just a larger one.
-    """
-    return runtime_source

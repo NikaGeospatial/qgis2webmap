@@ -1376,7 +1376,6 @@ def _read_atlas(
 
 
 #: `QgsLayoutItemMap.AtlasScalingMode` values (stable across QGIS 3 and 4).
-_ATLAS_FIXED = 0
 _ATLAS_PREDEFINED = 1
 _ATLAS_AUTO = 2
 

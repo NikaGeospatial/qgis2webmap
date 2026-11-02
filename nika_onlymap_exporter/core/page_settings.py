@@ -27,7 +27,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
 import traceback
@@ -744,14 +743,6 @@ def _merge_back(present: Style, applied: Style, original: Style) -> Style:
                 value if present.get(name) == applied.get(name) else present[name]
             )
     return merged
-
-
-def forget_theme(layout: Any) -> None:
-    """Drop the theme record without touching any colour (used when a layout is
-    rebuilt from scratch)."""
-    layout.setCustomProperty(THEME_PROPERTY, "default")
-    with contextlib.suppress(Exception):
-        layout.removeCustomProperty(ORIGIN_PROPERTY)
 
 
 __all__ = [
