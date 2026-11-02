@@ -40,18 +40,18 @@ HELP_DOCS = _load_packager().HELP_DOCS
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
-# `strip_images` lives in `ui/main_dialog.py`, which imports PyQGIS - unavailable
+# `strip_images` lives in `ui/help_page.py`, which imports PyQGIS - unavailable
 # on this tier. Its source is executed in isolation rather than reimplemented
 # here: a second copy of the regexes would pass while the real one was broken,
 # which is precisely the drift the tests above exist to catch.
 def _load_strip_images():
-    source = (REPO_ROOT / "nika_onlymap_exporter" / "ui" / "main_dialog.py").read_text(
+    source = (REPO_ROOT / "nika_onlymap_exporter" / "ui" / "help_page.py").read_text(
         encoding="utf-8"
     )
     start = source.index("_IMAGE_LINE = re.compile")
     end = source.index("def load_help_markdown")
     namespace: dict = {"re": re}
-    exec(compile(source[start:end], "main_dialog:strip_images", "exec"), namespace)
+    exec(compile(source[start:end], "help_page:strip_images", "exec"), namespace)
     return namespace["strip_images"]
 
 
@@ -160,7 +160,7 @@ class TestPackagedHelp:
     def test_help_loader_lists_only_files_that_ship(self) -> None:
         """The dialog's page list and the packager's list must not diverge."""
         source = (
-            REPO_ROOT / "nika_onlymap_exporter" / "ui" / "main_dialog.py"
+            REPO_ROOT / "nika_onlymap_exporter" / "ui" / "help_page.py"
         ).read_text(encoding="utf-8")
         referenced = set(re.findall(r'"([a-z-]+\.md)"', source))
         assert referenced, "the Help tab references no guides"
