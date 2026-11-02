@@ -488,3 +488,79 @@ class TestOnlyWhatTheCountReadsIsFetched:
         outcome, asked = _counted_recording_requests(page, add_counter(page))
         _ok(outcome, count_sites(status="Closed"))
         assert [_names_read(page, request) for request in asked] == [None]
+
+
+class _Watched:
+    """The prepared renderer, delegated to, with its start and stop calls
+    noted; `discovery` stands in for its `usedAttributes` when set."""
+
+    def __init__(self, renderer, discovery=None) -> None:
+        self._renderer = renderer
+        self._discovery = discovery
+        self.calls: list[str] = []
+
+    def startRender(self, context, fields) -> None:  # noqa: N802 - QGIS's name
+        self.calls.append("start")
+        self._renderer.startRender(context, fields)
+
+    def stopRender(self, context) -> None:  # noqa: N802 - QGIS's name
+        self.calls.append("stop")
+        self._renderer.stopRender(context)
+
+    def usedAttributes(self, context):  # noqa: N802 - QGIS's name
+        if self._discovery is not None:
+            return self._discovery()
+        return self._renderer.usedAttributes(context)
+
+    def willRenderFeature(self, feature, context) -> bool:  # noqa: N802
+        return self._renderer.willRenderFeature(feature, context)
+
+
+class TestTheRendererIsAlwaysStopped:
+    """A started renderer is stopped however the count ends, and a renderer
+    that cannot name the fields it reads is counted as before it was asked:
+    on every field."""
+
+    def test_a_renderer_whose_attribute_discovery_fails(self, page) -> None:
+        number = add_counter(page, mode=lc.MODE_VALUE, field="status", value="Active")
+        prepared = lc.prepare(page.layout, number)
+        assert isinstance(prepared, lc.Prepared)
+
+        def fails():
+            raise RuntimeError("cannot say")
+
+        watched = _Watched(prepared.renderer, fails)
+        prepared.renderer = watched
+        layer, asked = prepared.layer, []
+
+        class Recording:
+            def fields(self):
+                return layer.fields()
+
+            def getFeatures(self, request):  # noqa: N802 - QGIS's name
+                asked.append(QgsFeatureRequest(request))
+                return layer.getFeatures(request)
+
+        prepared.layer = Recording()
+        _ok(lc.run(prepared), count_sites(status="Active"))
+        assert [_names_read(page, request) for request in asked] == [None]
+        assert watched.calls == ["start", "stop"]
+
+    def test_a_layer_that_fails_to_answer(self, page) -> None:
+        prepared = lc.prepare(page.layout, add_counter(page))
+        assert isinstance(prepared, lc.Prepared)
+        watched = _Watched(prepared.renderer)
+        prepared.renderer = watched
+        layer = prepared.layer
+
+        class Failing:
+            def fields(self):
+                return layer.fields()
+
+            def getFeatures(self, request):  # noqa: N802 - QGIS's name
+                raise RuntimeError("the source went away")
+
+        prepared.layer = Failing()
+        outcome = lc.run(prepared)
+        assert outcome.state is lc.CountState.UNAVAILABLE
+        assert watched.calls == ["start", "stop"]

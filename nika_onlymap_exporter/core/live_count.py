@@ -50,6 +50,7 @@ from qgis.core import (
     QgsExpressionContextUtils,
     QgsFeatureRenderer,
     QgsFeatureRequest,
+    QgsFields,
     QgsGeometry,
     QgsLayout,
     QgsLayoutItem,
@@ -582,18 +583,17 @@ class Prepared:
         engine.prepareGeometry()
         fields = self.layer.fields()
         self.renderer.startRender(self.context, fields)
-        # Only the fields the renderer and the match read, asked for the way
-        # QGIS's own drawing asks for them: a wide table's other columns are
-        # never fetched. A renderer that cannot say (an expression reading
-        # every attribute) answers with QGIS's all-attributes marker, which
-        # leaves the request reading them all.
-        used = set(self.renderer.usedAttributes(self.context))
-        if self.match_field:
-            used.add(self.match_field)
-        request = QgsFeatureRequest(self.request)
-        request.setSubsetOfAttributes(used, fields)
-        iterator = self.layer.getFeatures(request)
+        # From here on the renderer is stopped however the count ends, its
+        # attribute discovery and the layer's first answer included.
+        iterator = None
         try:
+            # Only the fields the renderer and the match read, asked for the way
+            # QGIS's own drawing asks for them: a wide table's other columns are
+            # never fetched. A renderer that cannot say (an expression reading
+            # every attribute) answers with QGIS's all-attributes marker, which
+            # leaves the request reading them all.
+            request = self._reading_only_used_fields(fields)
+            iterator = self.layer.getFeatures(request)
             seen = 0
             for feature in iterator:
                 seen += 1
@@ -611,9 +611,24 @@ class Prepared:
                     continue
                 total += 1
         finally:
-            iterator.close()
+            if iterator is not None:
+                iterator.close()
             self.renderer.stopRender(self.context)
         return total
+
+    def _reading_only_used_fields(self, fields: QgsFields) -> QgsFeatureRequest:
+        """`request` narrowed to the fields the count reads. A renderer whose
+        attribute discovery fails leaves it reading every field, as a count
+        read before it asked."""
+        try:
+            used = set(self.renderer.usedAttributes(self.context))
+        except Exception:
+            return self.request
+        if self.match_field:
+            used.add(self.match_field)
+        request = QgsFeatureRequest(self.request)
+        request.setSubsetOfAttributes(used, fields)
+        return request
 
 
 def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Prepared:
