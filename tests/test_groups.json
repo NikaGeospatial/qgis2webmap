@@ -170,6 +170,7 @@
       "description": "Cartograph/web-map export, writers, manifest, fidelity reports",
       "tests": [
         "tests/qgis/test_cartograph_export.py",
+        "tests/qgis/test_live_frame_cache.py",
         "tests/qgis/test_cartograph_layer_capabilities.py",
         "tests/qgis/test_cartograph_include_keeps_state.py",
         "tests/qgis/test_cartograph_layer_membership.py",
