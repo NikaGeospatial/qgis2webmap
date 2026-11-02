@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -345,7 +346,8 @@ def cached_runtime_dir(version: str, cache_dir: Path | None = None) -> Path:
 
     Keyed by version so a runtime bump downloads alongside the old one rather
     than overwriting it - a half-written replacement would otherwise leave the
-    machine with no working runtime at all.
+    machine with no working runtime at all. The old one goes only once the new
+    one is in place and verified (`prune_superseded_runtimes`).
     """
     return (cache_dir or default_cache_dir()) / version
 
@@ -825,6 +827,27 @@ class FetchingRuntime:
 
         return LocalRuntime(self.cached_dir()).load()
 
+    def _install_complete(self, directory: Path) -> bool:
+        """Whether `directory` holds every file the lock pins for this version.
+
+        Stricter than `is_cached` and than `lock_mismatches`, which both let an
+        unpinned or absent optional file pass: this is what authorises deleting
+        other versions, so a lock that does not pin this version, or any pinned
+        file missing or different, says no.
+        """
+        lock = read_lock()
+        if lock.get("version") != self._version:
+            return False
+        files = lock.get("files") or {}
+        if not {RUNTIME_JS, RUNTIME_CSS} <= set(files):
+            return False
+        return all(
+            isinstance(entry, dict)
+            and bool(entry.get("sha256"))
+            and _file_intact(directory, name, entry["sha256"])
+            for name, entry in files.items()
+        )
+
     def fetch(
         self,
         on_progress: ProgressCallback | None = None,
@@ -870,6 +893,13 @@ class FetchingRuntime:
         if destination.exists():  # a re-fetch of an incomplete or corrupt cache
             _remove_tree(destination)
         staging.rename(destination)
+
+        # Only once this version is wholly in place and verified, and never in a
+        # root someone filled by hand (`ONLYMAP_RUNTIME_CACHE`).
+        if self._install_complete(destination) and not (
+            self._cache_dir is None and os.environ.get("ONLYMAP_RUNTIME_CACHE")
+        ):
+            prune_superseded_runtimes(destination.parent, self._version)
         return destination
 
 
@@ -889,6 +919,78 @@ def _file_intact(directory: Path, name: str, expected: str | None) -> bool:
     except (OSError, CorruptRuntimeFileError):
         return False
     return not expected or digest == expected
+
+
+# A cache entry this module wrote: a release version's directory, holding only
+# files it writes. Pre-release names (`1.0.0-rc.1`) are never recognised, so
+# they are never pruned.
+_RELEASE_VERSION = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)")
+_OWNED_FILES = frozenset(
+    {
+        RUNTIME_JS,
+        RUNTIME_CSS,
+        RUNTIME_LICENCE,
+        RUNTIME_SCHEMA,
+        RUNTIME_CARTOGRAPH_JS,
+        RUNTIME_CARTOGRAPH_CSS,
+        COMPRESSION_RECORD,
+        *(name + GZIP_SUFFIX for name in STORED_GZIPPED),
+    }
+)
+
+
+def _release(name: str) -> tuple[int, int, int] | None:
+    match = _RELEASE_VERSION.fullmatch(name)
+    if match is None:
+        return None
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch)
+
+
+def _owned_runtime_dir(path: Path) -> bool:
+    if path.is_symlink() or not path.is_dir():
+        return False
+    return all(
+        child.name in _OWNED_FILES and not child.is_symlink() and child.is_file()
+        for child in path.iterdir()
+    )
+
+
+def prune_superseded_runtimes(cache_dir: Path, installed: str) -> list[Path]:
+    """Delete cached runtime versions older than `installed`; return what went.
+
+    Called by `fetch` after `installed` is in place and fully verified. Only
+    directories named for an *older* release and holding nothing but files this
+    module writes are removed: never `installed` itself, a newer version
+    (another QGIS on this machine may run a newer plugin from the same cache),
+    a `.partial` install in progress, a licence marker, a symlink, or anything
+    else. An older plugin that still needs its version downloads it again; an
+    exported map carries its own copy of the runtime and is unaffected.
+
+    Best effort by design: a directory another process is reading (Windows
+    refuses to delete an open file), or one that vanished meanwhile, is left
+    and skipped, and a failure here never fails the install that called it.
+    """
+    current = _release(installed)
+    if current is None:
+        return []
+    removed: list[Path] = []
+    try:
+        entries = sorted(cache_dir.iterdir())
+    except OSError:
+        return removed
+    for entry in entries:
+        version = _release(entry.name)
+        if version is None or version >= current:
+            continue
+        try:
+            if not _owned_runtime_dir(entry):
+                continue
+            shutil.rmtree(entry)
+        except OSError:
+            continue
+        removed.append(entry)
+    return removed
 
 
 def default_provider(

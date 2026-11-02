@@ -25,6 +25,7 @@ import io
 import json
 import os
 import tarfile
+from pathlib import Path
 
 import pytest
 
@@ -854,6 +855,169 @@ class TestGzippedCache:
         assert asset_embedder.gzip_base64(javascript) == base64.b64encode(
             gzip.compress(javascript, 6, mtime=0)
         ).decode("ascii")
+
+
+class TestSupersededVersionsArePruned:
+    """A verified install deletes the older versions it replaces, and only those."""
+
+    @pytest.fixture(autouse=True)
+    def no_cache_override(self, monkeypatch):
+        monkeypatch.delenv("ONLYMAP_RUNTIME_CACHE", raising=False)
+        rm._GZIP_DIGESTS.clear()
+
+    def old_version(self, root, version: str, gzipped: bool = False):
+        """A cache entry as an earlier plugin left it."""
+        directory = root / version
+        directory.mkdir(parents=True)
+        for name, data in _PINNED_FILES.items():
+            if gzipped:
+                (directory / (name + rm.GZIP_SUFFIX)).write_bytes(gzip.compress(data))
+            else:
+                (directory / name).write_bytes(data)
+        (directory / rm.RUNTIME_LICENCE).write_bytes(b"# Licence")
+        rm.record_licence_acceptance(version, root)
+        return directory
+
+    def provider(self, root, monkeypatch, tarball=None, version="1.0.0", lock=None):
+        pinned = _PINNED_FILES if lock is None else lock
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": version,
+                "files": {
+                    name: {"sha256": rm.sha256_of(data)}
+                    for name, data in pinned.items()
+                },
+            },
+        )
+        if tarball is None:
+            tarball = npm_tarball_with_cartograph(*_PINNED_FILES.values())
+        monkeypatch.setattr(rm, "download_tarball", lambda *a, **k: tarball)
+        rm.record_licence_acceptance(version, root)
+        return rm.FetchingRuntime(cache_dir=root, version=version)
+
+    def test_older_versions_are_deleted_after_a_verified_install(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        plain = self.old_version(tmp_path, "0.9.0")
+        packed = self.old_version(tmp_path, "0.10.2", gzipped=True)
+        before = sum(f.stat().st_size for f in tmp_path.rglob("*") if f.is_file())
+        provider = self.provider(tmp_path, monkeypatch)
+
+        provider.load()
+
+        assert not plain.exists()
+        assert not packed.exists()
+        assert provider.is_cached()
+        after = sum(f.stat().st_size for f in tmp_path.rglob("*") if f.is_file())
+        assert after < before
+        # what the user agreed to outlives the bytes it covered
+        assert rm.licence_accepted("0.9.0", tmp_path)
+        assert rm.licence_accepted("0.10.2", tmp_path)
+
+    def test_a_refused_download_deletes_nothing(self, tmp_path, monkeypatch) -> None:
+        old = self.old_version(tmp_path, "0.9.0")
+        provider = self.provider(
+            tmp_path, monkeypatch, tarball=npm_tarball_with_cartograph(b"// EVIL")
+        )
+
+        with pytest.raises(rm.RuntimeDownloadError):
+            provider.load()
+
+        assert old.is_dir()
+        assert rm.LocalRuntime(old).load().javascript == _PINNED_FILES[rm.RUNTIME_JS]
+
+    def test_an_install_missing_a_pinned_file_deletes_nothing(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """`lock_mismatches` passes a pinned file that is absent; pruning must not."""
+        old = self.old_version(tmp_path, "0.9.0")
+        without_cartograph = npm_tarball(
+            _PINNED_FILES[rm.RUNTIME_JS], _PINNED_FILES[rm.RUNTIME_CSS]
+        )
+        provider = self.provider(tmp_path, monkeypatch, tarball=without_cartograph)
+
+        provider.fetch()
+
+        assert provider.cached_dir().is_dir()
+        assert old.is_dir()
+
+    def test_a_lock_for_another_version_deletes_nothing(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        old = self.old_version(tmp_path, "0.9.0")
+        provider = self.provider(tmp_path, monkeypatch)
+        pinned_elsewhere = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.1")
+        rm.record_licence_acceptance("1.0.1", tmp_path)
+
+        pinned_elsewhere.fetch()
+
+        assert old.is_dir()
+        assert not provider.cached_dir().exists()
+
+    def test_only_older_plugin_owned_versions_are_touched(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        newer = self.old_version(tmp_path, "1.2.0")  # another QGIS, newer plugin
+        prerelease = self.old_version(tmp_path, "0.9.0-rc.1")
+        in_progress = self.old_version(tmp_path, "0.9.1.partial")
+        foreign = self.old_version(tmp_path, "0.9.2")
+        (foreign / "notes.txt").write_text("mine")
+        nested = self.old_version(tmp_path, "0.9.3")
+        (nested / "sub").mkdir()
+        not_a_dir = tmp_path / "0.9.4"
+        not_a_dir.write_text("a file")
+        elsewhere = self.old_version(tmp_path / "elsewhere", "0.9.5")
+        link = tmp_path / "0.9.5"
+        link.symlink_to(elsewhere, target_is_directory=True)
+        inner_link = self.old_version(tmp_path, "0.9.6")
+        (inner_link / rm.RUNTIME_SCHEMA).symlink_to(elsewhere / rm.RUNTIME_LICENCE)
+        unrelated = tmp_path / "keep-me"
+        unrelated.mkdir()
+        (unrelated / rm.RUNTIME_JS).write_bytes(b"//")
+
+        self.provider(tmp_path, monkeypatch).load()
+
+        for kept in (newer, prerelease, in_progress, foreign, nested, inner_link):
+            assert kept.is_dir(), kept
+        assert not_a_dir.is_file()
+        assert link.is_symlink()
+        assert (elsewhere / rm.RUNTIME_JS).is_file()
+        assert (unrelated / rm.RUNTIME_JS).is_file()
+
+    def test_a_failed_deletion_does_not_fail_the_install(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Windows refuses to delete a file another process has open."""
+        old = self.old_version(tmp_path, "0.9.0")
+        provider = self.provider(tmp_path, monkeypatch)
+
+        real_rmtree = rm.shutil.rmtree
+
+        def refuse(path, *args, **kwargs):
+            if Path(path) == old:
+                raise PermissionError(f"{path} is in use")
+            return real_rmtree(path, *args, **kwargs)
+
+        monkeypatch.setattr(rm.shutil, "rmtree", refuse)
+        bundle = provider.load()
+
+        assert bundle.javascript == _PINNED_FILES[rm.RUNTIME_JS]
+        assert provider.is_cached()
+        assert old.is_dir()
+
+    def test_a_root_filled_by_hand_is_never_pruned(self, tmp_path, monkeypatch) -> None:
+        """`ONLYMAP_RUNTIME_CACHE` names a runtime pack someone installed."""
+        old = self.old_version(tmp_path, "0.9.0")
+        monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+        self.provider(tmp_path, monkeypatch)
+        provider = rm.FetchingRuntime(version="1.0.0")
+
+        provider.load()
+
+        assert provider.cached_dir().parent == tmp_path
+        assert old.is_dir()
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ONLYMAP_NETWORK_TESTS=1 to run")
