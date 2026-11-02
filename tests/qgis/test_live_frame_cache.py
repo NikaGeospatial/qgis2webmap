@@ -519,6 +519,18 @@ class TestWhatIsNeverReused:
         assert cache.read_count == 0
         _same_as_fresh(world, again)
 
+    def test_a_filter_that_queries_a_table_is_read_every_time(
+        self, world, cache
+    ) -> None:
+        """The table it reads may be in another file the key does not see."""
+        assert world.sites.setSubsetString(
+            '"fid" IN (SELECT "fid" FROM "sites" WHERE "pop" > 15)'
+        )
+        _build(world, cache)
+        again = _build(world, cache)
+        assert cache.read_count == 0
+        _same_as_fresh(world, again)
+
     def test_a_layer_on_a_query_of_other_layers_is_read_every_time(
         self, world, cache
     ) -> None:

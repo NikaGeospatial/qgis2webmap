@@ -557,6 +557,11 @@ _UNKEYABLE_EXPRESSION_RE = re.compile(
 )
 
 
+#: A filter or source that is a query of its own: it can read other tables,
+#: in other files, that no part of the key stands for.
+_SQL_QUERY_RE = re.compile(r"\bselect\b", re.IGNORECASE)
+
+
 def _add_layer_token(
     project: QgsProject,
     layer_id: str,
@@ -580,6 +585,10 @@ def _add_layer_token(
     layer.writeLayerXml(element, document, QgsReadWriteContext())
     xml = document.toString()
     if _UNKEYABLE_EXPRESSION_RE.search(xml):
+        return False
+    if isinstance(layer, QgsVectorLayer) and _SQL_QUERY_RE.search(
+        f"{layer.source()}\n{layer.subsetString()}"
+    ):
         return False
     files = _source_files(layer)
     if files is None:
