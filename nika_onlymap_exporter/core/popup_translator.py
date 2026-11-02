@@ -37,7 +37,12 @@ def hidden_field_names(layer: QgsVectorLayer) -> frozenset[str]:
     the author's audience can read.
     """
     hidden: set[str] = set()
-    for column in layer.attributeTableConfig().columns():
+    try:
+        config = layer.attributeTableConfig()
+    except AttributeError:  # a layer with no attribute table, such as a raster
+        return frozenset()
+
+    for column in config.columns():
         if getattr(column, "hidden", False) and getattr(column, "name", None):
             hidden.add(column.name)
     return frozenset(hidden)
