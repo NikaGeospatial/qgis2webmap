@@ -321,7 +321,8 @@
     "test_support": {
       "description": "The test helpers themselves (hermetic.py, conftest) - broad by design",
       "tests": [
-        "tests/qgis/test_hermetic.py"
+        "tests/qgis/test_hermetic.py",
+        "tests/qgis/test_waiting.py"
       ],
       "integration": []
     }
