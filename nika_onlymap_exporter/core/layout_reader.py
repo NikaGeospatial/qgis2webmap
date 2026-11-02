@@ -60,21 +60,17 @@ from __future__ import annotations
 
 import base64
 import binascii
-import contextlib
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
 
 from qgis.core import (
-    Qgis,
     QgsCategorizedSymbolRenderer,
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
-    QgsFeature,
     QgsGraduatedSymbolRenderer,
     QgsLayerTreeLayer,
     QgsLayoutItem,
@@ -89,7 +85,6 @@ from qgis.core import (
     QgsLayoutItemShape,
     QgsLayoutMeasurementConverter,
     QgsLayoutObject,
-    QgsLayoutSize,
     QgsLegendStyle,
     QgsMapLayer,
     QgsMapLayerLegendUtils,
@@ -97,7 +92,6 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
     QgsRasterLayer,
-    QgsRectangle,
     QgsSimpleFillSymbolLayer,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -106,11 +100,19 @@ from qgis.PyQt.QtCore import QFile, QIODevice, QSizeF, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QTextDocument
 
 from ..qt_compat import enum_value, legend_is_manual
+from .atlas_reader import ATLAS_SUBJECT as ATLAS_SUBJECT
+from .atlas_reader import (
+    _atlas_fields_used,
+    _read_atlas,
+    _reads_atlas_feature,
+    _reads_only_atlas,
+)
+from .atlas_reader import _MapState as _MapState
+from .atlas_reader import atlas_page_count as atlas_page_count
+from .atlas_reader import expression_error as expression_error
+from .atlas_reader import layout_state_restored as layout_state_restored
 from .cartograph_ir import (
-    ATLAS_ORDER_KEY,
-    SMALLEST_ATLAS_MARGIN,
     TEXT_KINDS,
-    AtlasSpec,
     Box,
     CartographItem,
     GraticuleSpec,
@@ -126,21 +128,21 @@ from .cartograph_ir import (
     live_layer_dom_ids,
 )
 from .expression_tokens import (
-    atlas_id_filter,
-    translate_atlas_pattern,
     translate_label,
 )
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
+from .layout_contrast import _record_low_contrast_text
+from .layout_reading import AtlasRequirement as AtlasRequirement
+from .layout_reading import FrameMode as FrameMode
+from .layout_reading import LayoutReading as LayoutReading
+from .layout_reading import MapFrameReading as MapFrameReading
+from .layout_reading import _name
 from .legend_edit import support_left_out
 from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
-
-#: The Fidelity subject of every row about the layout's atlas, so the Atlas
-#: tab can find why an atlas will not page.
-ATLAS_SUBJECT = "Layout item 'Atlas'"
 
 #: A label's cartograph text kind, stored on the item by
 #: `core/layout_builder.py` so a layout built from a cartograph reads back
@@ -180,8 +182,6 @@ def _was_chosen(item: QgsLayoutItem, role: str, color: QColor) -> bool:
 _ITEM_TOKENS: ContextVar[dict[str, str] | None] = ContextVar(
     "cartograph_item_tokens", default=None
 )
-
-FrameMode = Literal["live", "static"]
 
 #: QgsLayoutItemMapGrid.GridStyle -> `<om-graticule kind>`. `Markers` is the
 #: runtime's own name too. `FrameAndAnnotationsOnly` (the "zebra" border grid)
@@ -224,85 +224,6 @@ _IMAGE_MIME_BY_SUFFIX = {
     ".webp": "image/webp",
     ".bmp": "image/bmp",
 }
-
-
-@dataclass(frozen=True)
-class MapFrameReading:
-    """A `QgsLayoutItemMap`, with its placement and mode already decided.
-
-    `map_item` is the live PyQGIS object, not a serialised copy: both
-    `exporters/frame_raster.py` (static) and `core/project_reader.py` /
-    `writers/onlymap_writer.py` (live, via `layersToRender()`) need the real
-    object, and copying its state into a pure dataclass here would just be a
-    second, driftable representation of the same thing.
-    """
-
-    frame_id: str
-    map_item: QgsLayoutItemMap
-    box: Box
-    rotation: float
-    mode: FrameMode
-    z: int | None
-    locked: bool
-    hidden: bool
-    opacity: float
-    overview_of: str | None
-    # Set on a live frame the atlas refits (`<om-frame atlas-fit atlas-margin>`).
-    atlas_fit: str | None = None
-    atlas_margin: float | None = None
-    # The atlas moves this frame as QGIS's own atlas does, page by page
-    # (`atlas_fit` is then "fixed"): fixed and predefined scales, and points.
-    atlas_cameras_from_qgis: bool = False
-    # Live frames only: `(QGIS layer id, <om-layer id>)` for every layer the
-    # frame draws -- see `cartograph_ir.live_layer_dom_ids` for why the two
-    # can differ -- and the layers to export hidden (the atlas coverage layer
-    # under "Hide coverage layer"). Both are empty for a static frame.
-    layer_dom_ids: tuple[tuple[str, str], ...] = ()
-    hidden_layer_ids: tuple[str, ...] = ()
-    # `<om-frame frame-bg>`: the map item's background colour, when it is one
-    # QGIS does not give every map by default (see `_map_background`).
-    frame_bg: str | None = None
-    # `<om-frame frame-stroke>`: the map item's frame colour, when it draws
-    # one QGIS's default does not (see `_map_frame_stroke`).
-    frame_stroke: str | None = None
-
-
-@dataclass(frozen=True)
-class AtlasRequirement:
-    """What the written atlas relies on in the *exported* coverage layer,
-    which only `finish_cartograph` can check -- it is the one that reads the
-    layer: the layer must reach `frame_id`'s `<om-map>` at all, and `fields`
-    (named by the filter, sort, filename, page name and `{{atlas.*}}`
-    labels) must survive the export's field pruning."""
-
-    frame_id: str
-    layer_id: str
-    layer_name: str
-    fields: tuple[str, ...] = ()
-    # The coverage layer's feature ids in the order QGIS pages them, when the
-    # atlas sorts: `finish_cartograph` writes each feature's place into it.
-    page_order: tuple[int, ...] = ()
-    # The coverage layer's feature ids that get a page, in page order: what
-    # the written atlas will page, whatever the atlas sorts or filters by.
-    page_ids: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True)
-class LayoutReading:
-    """Everything `core/cartograph_export.py` needs to assemble a
-    `CartographSpec`, short of the two things that need a render:
-    `frames` still need their raster or their `<om-map>` markup."""
-
-    page_width: float
-    page_height: float
-    orientation: str
-    frames: tuple[MapFrameReading, ...]
-    furniture: tuple[CartographItem, ...]
-    atlas: AtlasSpec | None = None
-    atlas_requirement: AtlasRequirement | None = None
-    # `<om-cartograph bg>`: page 1's background colour, when it is not QGIS's
-    # default white (see `_page_background`).
-    bg: str | None = None
 
 
 def layout_item_tokens(layout: QgsPrintLayout) -> dict[str, str]:
@@ -592,12 +513,6 @@ def _read_layout(
     )
 
 
-def _name(item: QgsLayoutItem) -> str:
-    """An item's name as the layout designer's Items panel shows it, quoted
-    the way every other fidelity subject quotes a layer name."""
-    return f"'{item.displayName()}'"
-
-
 def _with_overview_of(mf: MapFrameReading, overview_of: str) -> MapFrameReading:
     return replace(mf, overview_of=overview_of)
 
@@ -862,24 +777,6 @@ def _assign_layer_dom_ids(frames: list[MapFrameReading]) -> list[MapFrameReading
 # Page and frame backgrounds, and text contrast against them
 # --------------------------------------------------------------------------
 
-#: What the runtime's default theme paints where nothing else does
-#: (`cartograph.css`: `--om-carto-bg`, `--om-carto-frame-bg`,
-#: `--om-carto-legend-bg`, `--om-carto-shape-fill`). The cartograph is always
-#: written in that theme, so these are what a page without its own colours
-#: shows in the browser.
-_THEME_PAGE_BG = "#fbf8fb"
-_THEME_FRAME_BG = "#f1ebf1"
-_THEME_LEGEND_BG = "#fbf8fb"
-_THEME_SHAPE_FILL = "#f0d9a5"
-
-#: WCAG 2 contrast minimums: large text (18 pt, or 14 pt bold) and body text.
-_LARGE_TEXT_CONTRAST = 3.0
-_BODY_TEXT_CONTRAST = 4.5
-
-_HEX_COLOR_RE = re.compile(r"#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
-
-_RGBA = tuple[float, float, float, float]
-
 
 def _is_default_white(color: QColor) -> bool:
     return color.alpha() == 255 and color.rgb() & 0xFFFFFF == 0xFFFFFF
@@ -972,761 +869,6 @@ def _map_frame_stroke(item: QgsLayoutItemMap) -> str | None:
     if _is_default_black(color) and not _was_chosen(item, "frame-stroke", color):
         return None
     return _css_color(color)
-
-
-def _parse_hex(css: str | None) -> _RGBA | None:
-    """`#rgb`, `#rrggbb` or `#rrggbbaa` (the forms this reader writes) as
-    0-1 floats; `None` for anything else, which the contrast check skips."""
-    if css is None:
-        return None
-    match = _HEX_COLOR_RE.fullmatch(css.strip())
-    if match is None:
-        return None
-    digits = match.group(1)
-    if len(digits) == 3:
-        digits = "".join(ch * 2 for ch in digits)
-    if len(digits) == 6:
-        digits += "ff"
-    r, g, b, a = (int(digits[i : i + 2], 16) / 255 for i in range(0, 8, 2))
-    return (r, g, b, a)
-
-
-def _over(top: _RGBA, below: _RGBA, opacity: float = 1.0) -> _RGBA:
-    """`top` painted at `opacity` over an opaque `below`."""
-    alpha = top[3] * opacity
-    return (
-        top[0] * alpha + below[0] * (1 - alpha),
-        top[1] * alpha + below[1] * (1 - alpha),
-        top[2] * alpha + below[2] * (1 - alpha),
-        1.0,
-    )
-
-
-def _luminance(color: _RGBA) -> float:
-    """WCAG 2 relative luminance."""
-
-    def channel(value: float) -> float:
-        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
-
-    r, g, b = (channel(value) for value in color[:3])
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def _contrast(a: _RGBA, b: _RGBA) -> float:
-    lighter, darker = sorted((_luminance(a), _luminance(b)), reverse=True)
-    return (lighter + 0.05) / (darker + 0.05)
-
-
-def _contains_centre(box: Box, of: Box) -> bool:
-    cx, cy = of.x + of.w / 2, of.y + of.h / 2
-    return box.x <= cx <= box.x + box.w and box.y <= cy <= box.y + box.h
-
-
-def _text_background(
-    text: TextSpec,
-    below: Sequence[CartographItem | MapFrameReading],
-    page_bg: str | None,
-) -> tuple[_RGBA, str] | None:
-    """The colour the browser shows behind `text`, and what paints it
-    (`page`, `frame`, `shape`, `legend`, `text`), or `None` when that is a
-    picture (an image or a static frame's raster) no colour check can judge.
-
-    `below` is every item drawn before `text`, bottom first. Each one whose
-    box holds the text's centre paints over the colour so far. A live frame
-    counts as its `frame-bg` -- what it shows before its map draws, or in a
-    browser that cannot draw it -- which is the very case where light text
-    over a map ends up on a pale box.
-    """
-    color = _parse_hex(page_bg or _THEME_PAGE_BG)
-    if color is None:
-        return None
-    color = _over(color, (1.0, 1.0, 1.0, 1.0))
-    surface = "page"
-    for item in below:
-        if getattr(item, "hidden", False) or not _contains_centre(item.box, text.box):
-            continue
-        if isinstance(item, MapFrameReading):
-            if item.mode == "static":
-                return None
-            fill = _parse_hex(item.frame_bg or _THEME_FRAME_BG)
-            if fill is None:
-                return None
-            color, surface = _over(fill, color), "frame"
-        elif isinstance(item, ImageSpec):
-            return None
-        elif isinstance(item, ShapeSpec) and item.kind in ("rect", "ellipse"):
-            opacity = 1.0 if item.fill_opacity is None else item.fill_opacity
-            fill = _parse_hex(item.fill or _THEME_SHAPE_FILL)
-            if fill is None:
-                return None
-            if opacity > 0 and fill[3] > 0:
-                color, surface = _over(fill, color, opacity), "shape"
-        elif isinstance(item, LegendSpec):
-            fill = _parse_hex(item.bg or _THEME_LEGEND_BG)
-            if fill is None:
-                return None
-            color, surface = _over(fill, color), "legend"
-        elif isinstance(item, TextSpec) and item.bg is not None:
-            fill = _parse_hex(item.bg)
-            if fill is None:
-                return None
-            color, surface = _over(fill, color), "text"
-    if text.bg is not None:
-        fill = _parse_hex(text.bg)
-        if fill is None:
-            return None
-        if fill[3] > 0:
-            color, surface = _over(fill, color), "own"
-    return color, surface
-
-
-def _is_large_text(text: TextSpec) -> bool:
-    """WCAG's large text: 18 pt, or 14 pt bold. A title without its own size
-    takes the theme's title size, which is large."""
-    if text.font_size is None:
-        return text.kind == "title"
-    bold = text.weight == "bold" or (
-        text.weight is not None and text.weight.isdigit() and int(text.weight) >= 700
-    )
-    return text.font_size >= 18 or (bold and text.font_size >= 14)
-
-
-#: Where low-contrast text sits -> how the sentence names it, and the fix,
-#: with `{tone}` filled in as "dark" or "light".
-_CONTRAST_WORDING = {
-    "page": ("page", "Give the page a {tone} background, or {verb} the text."),
-    "frame": (
-        "map frame background",
-        "Give the map item a {tone} background, or {verb} the text.",
-    ),
-    "shape": ("shape", "Give the shape behind it a {tone} fill, or {verb} the text."),
-    "legend": ("legend", "Give the legend a {tone} background, or {verb} the text."),
-    "text": (
-        "text box behind it",
-        "Give that text box a {tone} background, or {verb} the text.",
-    ),
-    "own": ("background", "Give it a {tone} background, or {verb} the text."),
-}
-
-
-def _record_low_contrast_text(
-    text_subjects: Mapping[str, str],
-    frames: Sequence[MapFrameReading],
-    furniture: Sequence[CartographItem],
-    page_bg: str | None,
-    report: FidelityReportBuilder,
-) -> None:
-    """Warn about a label whose colour is hard to read against what it sits
-    on in the HTML: under WCAG's 3:1 for large text, 4.5:1 for body text.
-
-    A warning, never a change: light text on a dark page is as valid as dark
-    on light, and only the user knows which they meant. Items are taken in
-    the order `core/cartograph_export.py` writes them -- by z, a frame first
-    at its own z -- so "behind" means what the page draws first.
-    """
-    order: list[CartographItem | MapFrameReading] = sorted(
-        [*furniture, *frames],
-        key=lambda item: (
-            item.z if item.z is not None else 0,
-            0 if isinstance(item, MapFrameReading) else 1,
-        ),
-    )
-    for index, item in enumerate(order):
-        if not isinstance(item, TextSpec) or item.id not in text_subjects:
-            continue
-        if item.hidden or not item.body.strip():
-            continue
-        ink = _parse_hex(item.color)
-        behind = _text_background(item, order[:index], page_bg)
-        if ink is None or behind is None:
-            continue
-        background, surface = behind
-        ink = _over(ink, background)
-        ratio = _contrast(ink, background)
-        minimum = _LARGE_TEXT_CONTRAST if _is_large_text(item) else _BODY_TEXT_CONTRAST
-        if ratio >= minimum:
-            continue
-        # Light or dark by whichever of black and white text would read
-        # better on it; the text is near the same, or it would not be here.
-        light = _contrast(background, (0.0, 0.0, 0.0, 1.0)) >= _contrast(
-            background, (1.0, 1.0, 1.0, 1.0)
-        )
-        tone = "light" if light else "dark"
-        where, fix = _CONTRAST_WORDING[surface]
-        noun = {"title": "The title", "attribution": "The attribution"}.get(
-            item.kind, "The text"
-        )
-        body = " ".join(item.body.split())
-        if "{{" not in body:
-            body = body if len(body) <= 40 else body[:39].rstrip() + "…"
-            noun = f'{noun} "{body}"'
-        when = (
-            " wherever the map has not drawn (while it loads, or in a browser "
-            "that cannot show it)"
-            if surface == "frame"
-            else ""
-        )
-        report.approximated(
-            text_subjects[item.id],
-            f"{noun} is {tone} text on a {tone} {where} in the HTML (contrast "
-            f"{ratio:.1f}:1), so it is hard to read{when}. "
-            + fix.format(
-                tone="dark" if light else "light",
-                verb="darken" if light else "lighten",
-            ),
-        )
-
-
-# --------------------------------------------------------------------------
-# Atlas -> AtlasSpec
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class _AtlasPlan:
-    frames: tuple[MapFrameReading, ...]
-    spec: AtlasSpec | None = None
-    requirement: AtlasRequirement | None = None
-
-
-def _draws_layer(frame: MapFrameReading, layer_id: str) -> bool:
-    return any(layer.id() == layer_id for layer in rendered_layers(frame.map_item))
-
-
-def _without_atlas_fit(frames: Sequence[MapFrameReading]) -> list[MapFrameReading]:
-    """`frames` with no atlas refit: with no `<om-atlas>` nothing would refit
-    them, so the attributes go rather than leave the validator a dangling
-    atlas-fit."""
-    return [
-        replace(mf, atlas_fit=None, atlas_margin=None, atlas_cameras_from_qgis=False)
-        for mf in frames
-    ]
-
-
-def _read_atlas(
-    layout: QgsPrintLayout,
-    frames: Sequence[MapFrameReading],
-    report: FidelityReportBuilder,
-) -> _AtlasPlan:
-    """The layout's atlas -> an `AtlasSpec`, and each atlas-driven frame's
-    refit, per the runtime's three hard rules (`docs/cartograph.md`
-    "Atlas"):
-
-    - pages are turned by a **live** frame (`for=`) -- a static frame is a
-      picture, with no features to page and a camera that cannot move;
-    - the coverage layer must be **in that frame's map** with local rows
-      (every vector layer the plugin exports is inline, so "in the map" is
-      the condition left to check here; whether it actually survived the
-      export is checked by `finish_cartograph` against `AtlasRequirement`);
-    - the `filter` is the runtime's own expression language.
-
-    When the first two cannot be met, nothing is written: an `<om-atlas>`
-    that pages nothing would be worse than none. The reason and the remedy
-    go in a Blocked row instead.
-    """
-    atlas = layout.atlas()
-    if atlas is None or not atlas.enabled():
-        return _AtlasPlan(frames=tuple(frames))
-    coverage = atlas.coverageLayer()
-    if coverage is None or not coverage.isValid():
-        report.blocked(
-            ATLAS_SUBJECT,
-            "The atlas is turned on but has no coverage layer, so no atlas "
-            "pages were exported. Choose a coverage layer in the layout's "
-            "Atlas panel, or turn the atlas off.",
-        )
-        return _AtlasPlan(frames=tuple(frames))
-    coverage_id = coverage.id()
-    coverage_name = coverage.name()
-
-    updated = list(frames)
-    driven_live: list[MapFrameReading] = []
-    driven_static: list[MapFrameReading] = []
-    for index, mf in enumerate(frames):
-        if not mf.map_item.atlasDriven():
-            continue
-        if mf.mode == "static":
-            driven_static.append(mf)
-            report.blocked(
-                f"Map frame {_name(mf.map_item)}",
-                "This map follows the atlas, but it is an image frame: its "
-                "picture is rendered once, so it would show the same place on "
-                "every page. Set the atlas map to Interactive in Map frames.",
-                item_id=mf.map_item.uuid(),
-            )
-            continue
-        fit, margin = _atlas_fit(mf.map_item, coverage, report)
-        updated[index] = replace(
-            mf,
-            atlas_fit=fit,
-            atlas_margin=margin,
-            atlas_cameras_from_qgis=fit == "fixed",
-        )
-        driven_live.append(updated[index])
-
-    driver = next(
-        (mf for mf in driven_live if _draws_layer(mf, coverage_id)), None
-    ) or next(
-        (mf for mf in updated if mf.mode == "live" and _draws_layer(mf, coverage_id)),
-        None,
-    )
-    if (
-        driver is None
-        and driven_live
-        and layout.project().mapLayer(coverage_id) is not None
-    ):
-        # QGIS pages an atlas through a coverage layer its map does not draw,
-        # and so does the cartograph: the layer travels with the atlas frame,
-        # hidden, and the frame's own layer list is left alone.
-        first = driven_live[0]
-        position = next(
-            i for i, mf in enumerate(updated) if mf.frame_id == first.frame_id
-        )
-        updated[position] = replace(
-            first, hidden_layer_ids=(*first.hidden_layer_ids, coverage_id)
-        )
-        driver = updated[position]
-        report.preserved(
-            ATLAS_SUBJECT,
-            f"The atlas still pages through '{coverage_name}'; it is just not "
-            f"drawn on map {_name(first.map_item)}.",
-        )
-    if driver is None:
-        if driven_live:
-            remedy = (
-                f"Add the coverage layer '{coverage_name}' to map "
-                f"{_name(driven_live[0].map_item)}'s layers (tick \"Hide "
-                'coverage layer" in the Atlas panel if it should not be '
-                "drawn)."
-            )
-        elif driven_static:
-            remedy = "Set the atlas map to Interactive in Map frames."
-        else:
-            remedy = (
-                f"Show the coverage layer '{coverage_name}' in a map that is "
-                "Interactive in Map frames."
-            )
-        report.blocked(
-            ATLAS_SUBJECT,
-            "No atlas pages were exported: the cartograph turns atlas pages "
-            "with an interactive map that carries the coverage layer "
-            f"'{coverage_name}', and this layout has none. {remedy}",
-        )
-        return _AtlasPlan(frames=tuple(_without_atlas_fit(updated)))
-
-    pages = _AtlasPages.of(layout, atlas, coverage)
-    if pages.blocked is not None:
-        # An atlas whose filter or sort cannot be applied must not page
-        # every feature instead: nothing is written, and the rows say why.
-        report.blocked(ATLAS_SUBJECT, pages.blocked)
-        return _AtlasPlan(frames=tuple(_without_atlas_fit(updated)))
-    for detail in pages.preserved:
-        report.preserved(ATLAS_SUBJECT, detail)
-
-    if atlas.hideCoverage():
-        for index, mf in enumerate(updated):
-            if not _draws_layer(mf, coverage_id):
-                continue
-            if mf.mode == "live":
-                updated[index] = replace(
-                    mf, hidden_layer_ids=(*mf.hidden_layer_ids, coverage_id)
-                )
-            else:
-                report.approximated(
-                    f"Map frame {_name(mf.map_item)}",
-                    f"QGIS hides the atlas coverage layer '{coverage_name}' on "
-                    "atlas pages, but this image frame's picture is rendered "
-                    "outside an atlas page, so it shows the layer.",
-                    item_id=mf.map_item.uuid(),
-                )
-    limit_render = getattr(atlas, "limitCoverageLayerRenderToCurrentFeature", None)
-    if limit_render is not None and limit_render():
-        report.approximated(
-            ATLAS_SUBJECT,
-            "QGIS draws only the current feature of the coverage layer on each "
-            "page; the cartograph draws all of them.",
-        )
-
-    spec = AtlasSpec(
-        for_=driver.frame_id,
-        layer=coverage_id,  # swapped for its <om-layer id> by read_layout
-        filter=pages.filter,
-        sort=ATLAS_ORDER_KEY if pages.order else None,
-        filename=_atlas_filename(atlas, report),
-        page_name=_atlas_page_name(atlas, coverage, report),
-        filter_source=pages.filter_source,
-        sort_source=pages.sort_source,
-        sort_ascending=atlas.sortAscending(),
-    )
-    report.preserved(
-        ATLAS_SUBJECT,
-        f"One page per feature of '{coverage_name}', turned with the arrow "
-        "keys or the on-sheet pager, and exported page by page.",
-    )
-    return _AtlasPlan(
-        frames=tuple(updated),
-        spec=spec,
-        requirement=AtlasRequirement(
-            frame_id=driver.frame_id,
-            layer_id=coverage_id,
-            layer_name=coverage_name,
-            page_order=pages.order,
-            page_ids=pages.ids,
-        ),
-    )
-
-
-#: `QgsLayoutItemMap.AtlasScalingMode` values (stable across QGIS 3 and 4).
-_ATLAS_PREDEFINED = 1
-_ATLAS_AUTO = 2
-
-
-def _atlas_fit(
-    map_item: QgsLayoutItemMap,
-    coverage: QgsVectorLayer,
-    report: FidelityReportBuilder,
-) -> tuple[str, float | None]:
-    """An atlas-driven live map -> `atlas-fit`, `atlas-margin`.
-
-    QGIS Auto over lines or polygons is the runtime's own `feature` fit. The
-    margin is halved, not copied. Both are fractions, but QGIS scales the
-    fitted extent by `1 + margin` about its centre (a 10% margin pads each
-    side by 5% -- verified headlessly: a 1000 x 500 m feature at margin 0.10
-    gives a 550 m tall map), whereas the runtime pads *each side* by
-    `margin` (`padBounds`). So QGIS's `m` is the runtime's `m / 2`.
-
-    QGIS Fixed scale keeps the scale and recentres, Predefined scales picks
-    one of the project's scales, and over points even Auto keeps the scale
-    and recentres; the runtime can do none of these. Those frames become
-    `fixed`, which the runtime never moves, and the export pages QGIS's own
-    atlas for where each page puts the map (`AtlasCamera`).
-    """
-    label = f"Map frame {_name(map_item)}"
-    mode = int(map_item.atlasScalingMode())
-    over_points = coverage.geometryType() == Qgis.GeometryType.Point
-    if mode == _ATLAS_AUTO and not over_points:
-        report.preserved(
-            label,
-            "Refits to each atlas feature, with QGIS's margin.",
-            item_id=map_item.uuid(),
-        )
-        margin = max(map_item.atlasMargin() / 2.0, SMALLEST_ATLAS_MARGIN)
-        return "feature", round(margin, 6)
-    if mode == _ATLAS_PREDEFINED:
-        detail = (
-            "Shows each atlas feature at the predefined scale QGIS picks for "
-            "it, centred as in QGIS."
-        )
-    else:
-        detail = "Keeps the map's scale and centres each atlas feature, as QGIS does."
-    report.preserved(label, detail, item_id=map_item.uuid())
-    return "fixed", None
-
-
-def _count_features(layer: QgsVectorLayer, expression: str | None) -> int:
-    """Features of `layer` matching `expression` (all of them when `None`),
-    respecting the layer's own subset filter -- what QGIS's atlas pages."""
-    from qgis.core import QgsFeatureRequest
-
-    request = QgsFeatureRequest()
-    request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
-    request.setNoAttributes()
-    if expression:
-        request.setFilterExpression(expression)
-        context = QgsExpressionContext()
-        context.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
-        request.setExpressionContext(context)
-    return sum(1 for _ in layer.getFeatures(request))
-
-
-def atlas_page_count(layout: QgsPrintLayout) -> int | None:
-    """How many pages the layout's atlas has in QGIS, or `None` when the
-    atlas is off, has no coverage layer or has a filter QGIS cannot evaluate.
-    For the Atlas tab's page count.
-
-    Counted without touching the atlas itself (`QgsLayoutAtlas.updateFeatures`
-    would move the layout designer's atlas preview): the coverage layer's
-    features, through its subset filter and the atlas filter when that is
-    on. The cartograph can page fewer: the runtime also skips features the
-    exported map does not draw (a switched-off category), per its "the map's
-    own filtering applies" rule.
-    """
-    atlas = layout.atlas()
-    if atlas is None or not atlas.enabled():
-        return None
-    coverage = atlas.coverageLayer()
-    if coverage is None or not coverage.isValid():
-        return None
-    expression = atlas.filterExpression() if atlas.filterFeatures() else None
-    if expression and expression_error(expression, coverage) is not None:
-        # An expression QGIS cannot evaluate gives no count, not every feature.
-        return None
-    return _count_features(coverage, expression or None)
-
-
-@contextlib.contextmanager
-def layout_state_restored(layout: QgsPrintLayout) -> Iterator[None]:
-    """Leave the layout as it was found, whatever the body does or raises.
-
-    Paging the atlas moves *every* atlas-driven map -- including the ones
-    that are not being read, such as a static frame's -- and can resize them
-    to the new extent's aspect; it also leaves the atlas on its last page
-    with the report context pointing at that feature. The authored maps,
-    the atlas's preview page and the report context all go back.
-    """
-    atlas = layout.atlas()
-    context = layout.reportContext()
-    enabled = atlas.enabled()
-    previewed = atlas.currentFeatureNumber()
-    feature = QgsFeature(context.feature())
-    context_layer = context.layer()
-    coverage = atlas.coverageLayer()
-    subset = coverage.subsetString() if coverage is not None else ""
-    maps = [
-        (map_item, _MapState.of(map_item))
-        for map_item in layout.items()
-        if isinstance(map_item, QgsLayoutItemMap)
-    ]
-    try:
-        yield
-    finally:
-        if atlas.enabled() != enabled:
-            atlas.setEnabled(enabled)
-        # `seekTo` is what moves the atlas's page; -1 (no page yet) is
-        # reached by asking for it, which QGIS answers with False.
-        atlas.seekTo(previewed)
-        context.setFeature(feature)
-        context.setLayer(context_layer)
-        if coverage is not None and coverage.subsetString() != subset:
-            coverage.setSubsetString(subset)
-        # Last: seeking a page moves the atlas's maps again.
-        for map_item, state in maps:
-            state.restore(map_item)
-
-
-@dataclass(frozen=True)
-class _MapState:
-    """What paging an atlas can change about a map item."""
-
-    extent: QgsRectangle
-    size: QgsLayoutSize
-    rotation: float
-    atlas_driven: bool
-    scaling_mode: QgsLayoutItemMap.AtlasScalingMode
-    margin: float
-
-    @classmethod
-    def of(cls, map_item: QgsLayoutItemMap) -> _MapState:
-        return cls(
-            extent=QgsRectangle(map_item.extent()),
-            size=QgsLayoutSize(map_item.sizeWithUnits()),
-            rotation=map_item.mapRotation(),
-            atlas_driven=map_item.atlasDriven(),
-            scaling_mode=map_item.atlasScalingMode(),
-            margin=map_item.atlasMargin(),
-        )
-
-    def restore(self, map_item: QgsLayoutItemMap) -> None:
-        map_item.setAtlasDriven(self.atlas_driven)
-        map_item.setAtlasScalingMode(self.scaling_mode)
-        map_item.setAtlasMargin(self.margin)
-        self.restore_view(map_item)
-
-    def restore_view(self, map_item: QgsLayoutItemMap) -> None:
-        """Only what the map shows (extent, size, rotation), not how the atlas
-        drives it: for putting a map back after an atlas preview while the
-        atlas settings may have been edited since."""
-        map_item.setMapRotation(self.rotation)
-        # `setExtent` resizes the item to the extent's aspect, so the size
-        # goes back afterwards, and the extent is fitted to it once more.
-        map_item.setExtent(self.extent)
-        if map_item.sizeWithUnits() != self.size:
-            map_item.attemptResize(self.size)
-            map_item.zoomToExtent(self.extent)
-
-
-@dataclass(frozen=True)
-class _AtlasPages:
-    """Which features QGIS's atlas pages, and in what order -- asked of QGIS
-    itself, so the cartograph pages exactly those.
-
-    The runtime's own filter and sort cannot be trusted to agree with QGIS's:
-    a comparison with NULL is NULL in QGIS (so a filter drops the feature)
-    but `true` or `false` in JavaScript, QGIS puts NULL first in an
-    ascending sort where the runtime puts it last, and text sorts by
-    different rules. So the filter is written as a test on the ids QGIS keeps
-    and the order as each feature's place in QGIS's own (`ATLAS_ORDER_KEY`).
-    """
-
-    filter: str | None = None
-    filter_source: str | None = None
-    order: tuple[int, ...] = ()
-    sort_source: str | None = None
-    # The ids that get a page, in page order.
-    ids: tuple[int, ...] = ()
-    # Set when the filter or sort cannot be applied: why, and so why no atlas
-    # is written. Paging every feature instead would be a different atlas.
-    blocked: str | None = None
-    preserved: tuple[str, ...] = ()
-
-    @classmethod
-    def of(
-        cls,
-        layout: QgsPrintLayout,
-        atlas,
-        coverage: QgsVectorLayer,
-    ) -> _AtlasPages:
-        filter_expression = (
-            atlas.filterExpression().strip() if atlas.filterFeatures() else ""
-        )
-        sort_expression = atlas.sortExpression().strip() if atlas.sortFeatures() else ""
-        for expression, what in (
-            (filter_expression, "filter"),
-            (sort_expression, "sort"),
-        ):
-            error = expression_error(expression, coverage) if expression else None
-            if error is not None:
-                return cls(
-                    blocked=(
-                        f"No atlas pages were exported: the atlas {what} "
-                        f"`{expression}` is not a valid QGIS expression "
-                        f"({error}), and paging every feature of "
-                        f"'{coverage.name()}' instead would not be the atlas "
-                        f"you asked for. Correct the {what} in the Atlas "
-                        "panel, or clear it."
-                    )
-                )
-        every = _feature_ids(coverage)
-        if not filter_expression and not sort_expression:
-            return cls(ids=tuple(every))
-        pages = _qgis_page_ids(layout)
-        if pages is None or len(set(every)) != len(every):
-            return cls(
-                blocked=(
-                    "No atlas pages were exported: the atlas filter or sort of "
-                    f"'{coverage.name()}' could not be carried over (QGIS could "
-                    "not page the layer, or its features have no ids of their "
-                    "own to name them by), and paging every feature instead "
-                    "would not be the atlas you asked for."
-                )
-            )
-        filter_js: str | None = None
-        preserved: list[str] = []
-        if filter_expression:
-            filter_js = atlas_id_filter(pages, every)
-            preserved.append(
-                f"Atlas filter `{filter_expression}` kept: {len(pages)} of "
-                f"{len(every)} features get a page, as QGIS evaluates it."
-            )
-        if sort_expression:
-            preserved.append(
-                f"Pages are sorted by `{sort_expression}`, in the order QGIS puts them."
-            )
-        return cls(
-            filter=filter_js,
-            filter_source=filter_expression or None,
-            order=tuple(pages) if sort_expression else (),
-            sort_source=sort_expression or None,
-            ids=tuple(pages),
-            preserved=tuple(preserved),
-        )
-
-
-def expression_error(expression: str, layer: QgsVectorLayer | None) -> str | None:
-    """Why QGIS cannot evaluate `expression` over `layer`'s features (a syntax
-    error, an unknown field or function), or `None` when it can."""
-    parsed = QgsExpression(expression)
-    if parsed.hasParserError():
-        return parsed.parserErrorString().strip() or "syntax error"
-    context = QgsExpressionContext()
-    if layer is not None:
-        context.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
-        context.setFields(layer.fields())
-    if not parsed.prepare(context):
-        return parsed.evalErrorString().strip() or "it cannot be evaluated"
-    return None
-
-
-def _feature_ids(layer: QgsVectorLayer) -> list[int]:
-    """The ids of every feature of `layer`, through the layer's own subset
-    filter."""
-    from qgis.core import QgsFeatureRequest
-
-    request = QgsFeatureRequest()
-    request.setFlags(QgsFeatureRequest.Flag.NoGeometry)
-    request.setNoAttributes()
-    return [feature.id() for feature in layer.getFeatures(request)]
-
-
-def _qgis_page_ids(layout: QgsPrintLayout) -> list[int] | None:
-    """The ids of the features QGIS's own atlas makes pages of, in page
-    order: the atlas is asked, not re-implemented, because its filter, its
-    NULL handling and its text order are QGIS's. `None` if it cannot start."""
-    atlas = layout.atlas()
-    ids: list[int] = []
-    with layout_state_restored(layout):
-        if not atlas.beginRender():
-            # An atlas with no pages at all does not begin either.
-            return [] if atlas.count() == 0 else None
-        try:
-            for index in range(atlas.count()):
-                if atlas.seekTo(index):
-                    ids.append(int(layout.reportContext().feature().id()))
-        finally:
-            atlas.endRender()
-    return ids
-
-
-def _atlas_filename(atlas, report: FidelityReportBuilder) -> str | None:
-    expression = atlas.filenameExpression().strip()
-    if not expression:
-        return None
-    translated = translate_atlas_pattern(expression)
-    if translated is None:
-        report.approximated(
-            ATLAS_SUBJECT,
-            f"The page file names `{expression}` could not be translated; "
-            "exported pages are named page-1, page-2, ... instead.",
-        )
-    return translated
-
-
-def _atlas_page_name(
-    atlas, coverage: QgsVectorLayer, report: FidelityReportBuilder
-) -> str | None:
-    expression = atlas.pageNameExpression().strip()
-    if not expression:
-        return None
-    # The Atlas panel stores a plain field choice as the bare field name,
-    # which may need quoting to read as an expression (spaces, keywords).
-    if coverage.fields().indexOf(expression) >= 0:
-        expression = '"' + expression.replace('"', '""') + '"'
-    translated = translate_atlas_pattern(expression)
-    if translated is None:
-        report.approximated(
-            ATLAS_SUBJECT,
-            f"The page names `{atlas.pageNameExpression()}` could not be "
-            "translated; the pager shows each page's number instead.",
-        )
-    return translated
-
-
-_ATLAS_TOKEN_RE = re.compile(r"\{\{\s*atlas\.([A-Za-z0-9_]+)\s*\}\}")
-
-
-def _atlas_fields_used(
-    atlas: AtlasSpec, furniture: Sequence[CartographItem]
-) -> tuple[str, ...]:
-    """Every coverage-layer field the written atlas reads, in first-use
-    order: `{{atlas.<field>}}` in the filename, page name and text. (The
-    filter and sort read feature ids and `ATLAS_ORDER_KEY`, not fields.)"""
-    names: list[str] = []
-    texts = [atlas.filename or "", atlas.page_name or ""]
-    texts += [item.body for item in furniture if isinstance(item, TextSpec)]
-    for text in texts:
-        names += _ATLAS_TOKEN_RE.findall(text)
-    reserved = {"index", "count"}
-    return tuple(name for name in dict.fromkeys(names) if name and name not in reserved)
 
 
 # --------------------------------------------------------------------------
@@ -2696,30 +1838,6 @@ def _read_label(
         rotation=item.itemRotation(),
         z=round(item.zValue()),
     )
-
-
-def _reads_only_atlas(expression: QgsExpression) -> bool:
-    """Whether `expression` reads atlas variables and nothing else: no
-    fields, no other variables."""
-    variables = {name.lower() for name in expression.referencedVariables()}
-    return (
-        bool(variables)
-        and all(name.startswith("atlas_") for name in variables)
-        and not expression.referencedColumns()
-    )
-
-
-def _reads_atlas_feature(expression: QgsExpression, layout: QgsPrintLayout) -> bool:
-    """Whether a frozen expression would change from page to page in QGIS:
-    it reads an `@atlas_*` variable or a field of the coverage layer."""
-    variables = {name.lower() for name in expression.referencedVariables()}
-    if any(name.startswith("atlas_") for name in variables):
-        return True
-    coverage = layout.atlas().coverageLayer()
-    if coverage is None:
-        return False
-    fields = {field.name() for field in coverage.fields()}
-    return bool(set(expression.referencedColumns()) & fields)
 
 
 #: Words in an item's id or name that say which `<om-text kind>` it is.
