@@ -11,7 +11,8 @@ the way `scripts/run_tests.py` splits it for a local run - the same function,
 prints. The split is a partition: every file is in exactly one shard.
 
 `--compat344` prints instead the focused QGIS 3.44 suite (`compat344` in
-`tests/test_groups.json`), which is not sharded.
+`tests/test_groups.json`): whole, or with `--shards` and `--index` split the
+same way.
 
 Needs nothing beyond the standard library. Prints one path per line; the shard's
 estimated seconds go to stderr.
@@ -47,17 +48,21 @@ def main() -> int:
         "--compat344", action="store_true", help="print the focused 3.44 suite"
     )
     args = ap.parse_args()
-    if args.compat344:
+    if args.compat344 and args.shards is None and args.index is None:
         entries = selection.load_groups(REPO)["compat344"]
         print("\n".join(entry["target"] for entry in entries))
         return 0
     if args.shards is None or args.index is None:
-        ap.error("--shards and --index are required unless --compat344 is given")
+        ap.error("--shards and --index are required unless --compat344 is given alone")
     if not 1 <= args.index <= args.shards:
         print(f"error: --index must be 1..{args.shards}", file=sys.stderr)
         return 2
 
-    targets = selection.all_primary_tests(REPO)
+    if args.compat344:
+        entries = selection.load_groups(REPO)["compat344"]
+        targets = [entry["target"] for entry in entries]
+    else:
+        targets = selection.all_primary_tests(REPO)
     durations = selection.load_durations(REPO)
     files, estimate = selection.balance(targets, args.shards, durations)[args.index - 1]
     print(

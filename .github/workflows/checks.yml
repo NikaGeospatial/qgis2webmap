@@ -20,6 +20,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Qt formats numbers by the locale (25,000 vs 25000) and the tests expect a
+  # developer's English locale; the container images set none.
+  LANG: en_US.UTF-8
+
 concurrency:
   # A newer push supersedes an older run, but the run that gates a release must
   # never be cancelled by one: on a tag ref it is left alone.
@@ -165,6 +170,10 @@ jobs:
       # qgis/qgis:4.2 (QGIS 4.2.3)
       image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
       options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
     env:
       QT_QPA_PLATFORM: offscreen
       # Keep the image's own PYTHONPATH (PyQGIS): setting it here replaces it.
@@ -215,6 +224,10 @@ jobs:
       # qgis/qgis:4.2 (QGIS 4.2.3)
       image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
       options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
@@ -262,6 +275,10 @@ jobs:
       # qgis/qgis:4.2 (QGIS 4.2.3)
       image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
       options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
     env:
       QT_QPA_PLATFORM: offscreen
       ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
@@ -287,10 +304,18 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     container:
       # qgis/qgis:3.44 (QGIS 3.44.15)
       image: qgis/qgis:3.44@sha256:9c4afddd8eb4d03275e161b732d57ea402a1a5237eb5766957427530fd38afe0
       options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
@@ -313,17 +338,18 @@ jobs:
       - name: Focused 3.44 compatibility suite
         shell: bash
         run: |
-          mapfile -t targets < <(python3 scripts/ci_shard.py --compat344)
+          mapfile -t targets < <(python3 scripts/ci_shard.py --compat344 --shards 2 --index "${{ matrix.shard }}")
           python3 -m pytest "${targets[@]}" -q -rs --durations=25 \
-            --junitxml=reports/compat344.xml -o junit_duration_report=total
+            --junitxml="reports/compat344-${{ matrix.shard }}.xml" -o junit_duration_report=total
       - name: Packaged zip smoke on 3.44
+        if: matrix.shard == 1
         env:
           SMOKE_TEMPLATES: classic,map-only,poster,locator,dashboard,dark
         run: python3 scripts/zip_smoke.py dist/*.zip "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: junit-compat344
+          name: junit-compat344-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
 
