@@ -134,6 +134,7 @@ from .export_resolution import frame_pixel_size, frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
+from .keyable_expressions import has_unkeyable_expression
 from .layer_reader import LayerFeatures, PendingLayer
 from .layout_reader import (
     ATLAS_SUBJECT,
@@ -431,6 +432,11 @@ class LiveFrameCache:
     service or in memory, an expression that reads the clock or another layer,
     a value `value_digest` cannot encode -- gets no key and is read afresh. Bounded
     like `StaticFrameCache`, and emptied the same way.
+
+    An expression is taken to read something the key cannot see unless every
+    function it calls and variable it reads is on `keyable_expressions`' lists:
+    a function registered from Python, an aggregate or a lookup in another
+    layer, whatever its name, means the frame is read afresh.
     """
 
     def __init__(
@@ -586,6 +592,12 @@ def _add_layer_token(
     xml = document.toString()
     if _UNKEYABLE_EXPRESSION_RE.search(xml):
         return False
+    if has_unkeyable_expression(
+        xml,
+        _keyed_variables(project, layer),
+        layer.subsetString() if isinstance(layer, QgsVectorLayer) else "",
+    ):
+        return False
     if isinstance(layer, QgsVectorLayer) and _SQL_QUERY_RE.search(
         f"{layer.source()}\n{layer.subsetString()}"
     ):
@@ -608,6 +620,23 @@ def _add_layer_token(
             if not _add_layer_token(project, join.joinLayerId(), tokens, generations):
                 return False
     return True
+
+
+def _keyed_variables(project: QgsProject, *scoped: object) -> frozenset[str]:
+    """The names of the expression variables a key holds the values of: the
+    global and project ones (`_expression_variables`), and those of each of
+    `scoped` (a layer, whose own variables are in its saved XML, or a map
+    item, whose are in its)."""
+    scopes = [
+        QgsExpressionContextUtils.globalScope(),
+        QgsExpressionContextUtils.projectScope(project),
+    ]
+    for item in scoped:
+        if isinstance(item, QgsMapLayer):
+            scopes.append(QgsExpressionContextUtils.layerScope(item))
+        elif isinstance(item, QgsLayoutItemMap):
+            scopes.append(QgsExpressionContextUtils.layoutItemScope(item))
+    return frozenset(name for scope in scopes for name in scope.variableNames())
 
 
 def _source_files(layer: QgsMapLayer) -> tuple[tuple[str, int, int] | None, ...] | None:
@@ -780,6 +809,10 @@ def _static_frame_key(
       data-defined colour may read one) and the project's transform
       context (which datum shift a layer is drawn through); a value that
       cannot be encoded makes the key one that never matches.
+    - Nothing else an expression reads: one in the item, a layer's style or
+      filter, or a theme's override that calls a function or reads a
+      variable outside `keyable_expressions`' lists makes the key one that
+      never matches too.
     """
     digest = hashlib.sha256()
 
@@ -797,11 +830,21 @@ def _static_frame_key(
     document.appendChild(element)
     map_item.writeXml(element, document, QgsReadWriteContext())
     add(document.toString())
+    # An expression the key cannot vouch for (see `has_unkeyable_expression`)
+    # in the item or a layer it draws: the key is made one that never matches.
+    unkeyable = has_unkeyable_expression(
+        document.toString(), _keyed_variables(project, map_item)
+    )
     for layer in rendered_layers(map_item):
         style = QgsMapLayerStyle()
         style.readFromLayer(layer)
         add(layer.id())
         add(style.xmlData())
+        unkeyable = unkeyable or has_unkeyable_expression(
+            style.xmlData(),
+            _keyed_variables(project, layer),
+            layer.subsetString() if isinstance(layer, QgsVectorLayer) else "",
+        )
         add(str(generations.get(layer.id(), 0)))
         if isinstance(layer, QgsVectorLayer):
             add(str(layer.featureCount()))
@@ -812,6 +855,12 @@ def _static_frame_key(
         for layer_id in sorted(overrides):
             add(layer_id)
             add(overrides[layer_id])
+            unkeyable = unkeyable or has_unkeyable_expression(
+                overrides[layer_id],
+                _keyed_variables(project, project.mapLayer(layer_id)),
+            )
+    if unkeyable:
+        add(uuid.uuid4().hex)
     context = value_digest(
         (_expression_variables(project), project.transformContext()), _qgis_values({})
     )
