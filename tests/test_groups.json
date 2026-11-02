@@ -85,7 +85,8 @@
         "tests/qgis/test_cartograph_dialog.py::TestRenamingALayout",
         "tests/qgis/test_cartograph_dialog.py::TestLayoutSelectorAndTemplates",
         "tests/qgis/test_cartograph_dialog.py::TestWorkspace",
-        "tests/qgis/test_dialog.py::TestNothingOutlivesTheDialog"
+        "tests/qgis/test_dialog.py::TestNothingOutlivesTheDialog",
+        "tests/qgis/test_late_render_results.py"
       ],
       "integration": [
         "tests/qgis/test_plugin_cartograph_entry.py"
@@ -102,7 +103,8 @@
         "tests/qgis/test_live_count_clipping.py",
         "tests/qgis/test_live_count_engine.py",
         "tests/qgis/test_live_count_ui.py",
-        "tests/qgis/test_cartograph_dialog.py::TestAtlasTab"
+        "tests/qgis/test_cartograph_dialog.py::TestAtlasTab",
+        "tests/qgis/test_dom_parse.py"
       ],
       "integration": [
         "tests/qgis/test_cartograph_print_series.py",
@@ -153,7 +155,8 @@
         "tests/qgis/test_signal_figures.py",
         "tests/qgis/test_static_frame_async.py",
         "tests/qgis/test_cartograph_projected_live.py",
-        "tests/qgis/test_dialog.py::TestRasterExports"
+        "tests/qgis/test_dialog.py::TestRasterExports",
+        "tests/qgis/test_dom_parse.py"
       ],
       "integration": [
         "tests/fixtures/test_release_gates.py",
@@ -211,7 +214,8 @@
         "tests/qgis/test_cartograph_empty_frame.py",
         "tests/qgis/test_frame_limits.py",
         "tests/qgis/test_frame_limits_working_picture.py",
-        "tests/qgis/test_page_settings.py"
+        "tests/qgis/test_page_settings.py",
+        "tests/qgis/test_late_render_results.py"
       ],
       "integration": [
         "tests/fixtures/test_release_gates.py",
@@ -278,7 +282,9 @@
       "tests": [
         "tests/qgis/test_dialog.py",
         "tests/qgis/test_dialog_preview_state.py",
-        "tests/qgis/test_raster_smoothing.py"
+        "tests/qgis/test_raster_smoothing.py",
+        "tests/qgis/test_settings_robustness.py",
+        "tests/qgis/test_late_render_results.py"
       ],
       "integration": [
         "tests/qgis/test_plugin_cartograph_entry.py"
@@ -290,7 +296,8 @@
     "i18n": {
       "description": "Translations and language picker",
       "tests": [
-        "tests/qgis/test_i18n.py"
+        "tests/qgis/test_i18n.py",
+        "tests/qgis/test_plural_forms.py"
       ],
       "integration": []
     },
@@ -356,7 +363,9 @@
      "owner": ["export_pipeline", "rendering"], "also": []},
     {"match": ["nika_onlymap_exporter/core/layout_*.py", "nika_onlymap_exporter/core/template_*.py", "nika_onlymap_exporter/core/page_*.py", "nika_onlymap_exporter/ui/cartograph/layout_*.py", "nika_onlymap_exporter/ui/cartograph/template_*.py", "nika_onlymap_exporter/ui/cartograph/item_*.py", "nika_onlymap_exporter/ui/cartograph/content_edit.py", "nika_onlymap_exporter/licenses/*"],
      "owner": ["templates", "ui_layout"], "also": []},
-    {"match": ["nika_onlymap_exporter/core/settings.py", "nika_onlymap_exporter/core/portable_names.py", "nika_onlymap_exporter/core/translatable.py"],
+    {"match": ["nika_onlymap_exporter/core/dom_parse.py"],
+     "owner": ["rendering", "atlas"], "also": []},
+    {"match": ["nika_onlymap_exporter/core/settings.py", "nika_onlymap_exporter/core/setting_values.py", "nika_onlymap_exporter/core/portable_names.py", "nika_onlymap_exporter/core/translatable.py"],
      "owner": ["main_dialog", "ui_layout", "saving", "export_pipeline"], "also": []},
     {"match": ["nika_onlymap_exporter/ui/cartograph/*.py", "nika_onlymap_exporter/ui/account_button.py", "nika_onlymap_exporter/ui/fidelity_panel.py", "nika_onlymap_exporter/ui/fitted_label.py", "nika_onlymap_exporter/ui/handoff_dialog.py", "nika_onlymap_exporter/ui/links.py", "nika_onlymap_exporter/ui/reveal_file.py", "nika_onlymap_exporter/ui/theme.py", "nika_onlymap_exporter/ui/wheel_guard.py", "nika_onlymap_exporter/icons/*"],
      "owner": ["ui_layout"], "also": []},
