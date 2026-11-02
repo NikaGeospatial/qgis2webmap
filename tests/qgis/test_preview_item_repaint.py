@@ -11,14 +11,19 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _maps_drawn, _quiet
 from test_preview_item_editing import _items_of, _place, one_map  # noqa: F401
 
 qgis_core = pytest.importorskip("qgis.core")
 
 
 def _picture(qgis_app, pane):
-    _settle(qgis_app, 0.15)
+    from qgis.core import QgsLayoutItemMap
+
+    _quiet(qgis_app, pane)
+    _maps_drawn(
+        qgis_app, _items_of(pane.preview.view.currentLayout(), QgsLayoutItemMap)
+    )
     return pane.preview.view.viewport().grab().toImage()
 
 

@@ -18,7 +18,8 @@ from test_cartograph_dialog import (  # noqa: F401
     fake_cartograph_export,
     picked_template,
 )
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _quiet
+from waiting import wait_until
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -29,7 +30,7 @@ def _controls(qgis_app):
     controls = ContextControls()
     controls.resize(420, 900)
     controls.show()
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app)
     return controls
 
 
@@ -164,7 +165,7 @@ class TestSaveBlockInTheBottomRow:
         dialog = _cartograph_dialog(project)
         try:
             dialog.show()
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             cartograph = dialog._cartograph
             bar = cartograph.save_bar
             assert not cartograph.workspace.isAncestorOf(bar)
@@ -188,7 +189,7 @@ class TestSaveBlockInTheBottomRow:
         dialog = _cartograph_dialog(project)
         try:
             dialog.show()
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             cartograph = dialog._cartograph
             scroll = cartograph.panel_scroll
             bottom = scroll.mapTo(dialog, scroll.rect().bottomLeft()).y()
@@ -209,16 +210,16 @@ class TestSaveBlockInTheBottomRow:
         dialog = _cartograph_dialog(project)
         try:
             dialog.show()
-            _settle(qgis_app, 0.1)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             bar = dialog._cartograph.save_bar
             assert bar.isVisible()
             for _ in range(2):
                 _choose_web(dialog)
-                _settle(qgis_app, 0.05)
+                _quiet(qgis_app, dialog._cartograph.page_pane)
                 assert not bar.isVisible()
                 assert dialog.status_label.isVisible()
                 _choose_cartograph(dialog)
-                _settle(qgis_app, 0.05)
+                _quiet(qgis_app, dialog._cartograph.page_pane)
                 assert bar.isVisible()
         finally:
             dialog.close()
@@ -238,7 +239,7 @@ class TestSaveBlockInTheBottomRow:
             name = "carto-grand-canyon-dense-labels-Access-water-terrain.html"
             edit.setText(f"/home/someone/Documents/QGIS2WebMap/Cartographs/{name}")
             dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             assert edit.label.text() != name and "…" in edit.label.text()
             assert name in edit.label.toolTip()
             for button in (edit.change_button, edit.reveal_button):
@@ -262,7 +263,7 @@ class TestSaveBlockInTheBottomRow:
         dialog = _cartograph_dialog(project)
         try:
             dialog.show()
-            _settle(qgis_app, 0.1)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             edit = dialog._cartograph.file_edit
             chain = []
             widget = edit.change_button
@@ -319,7 +320,7 @@ class TestSaveLocationWrapsBeforeClipping:
                 "Could not save the cartograph: permission denied for this folder"
             )
             dialog.resize(MINIMUM_DIALOG_WIDTH, MINIMUM_DIALOG_HEIGHT)
-            _settle(qgis_app, 0.3)
+            _quiet(qgis_app, dialog._cartograph.page_pane)
             # The name is still read whole, not squeezed out by the status.
             assert edit.label.text() == name
             assert edit.label.isVisible()
@@ -355,8 +356,24 @@ class TestWorkspaceFillsTheWindowHeight:
         _choose_cartograph(dialog)
         dialog.resize(*size)
         dialog.show()
-        _settle(qgis_app, 1.0)
+        self._saved_and_quiet(qgis_app, dialog)
         return dialog
+
+    @staticmethod
+    def _saved_and_quiet(qgis_app, dialog) -> None:
+        """Until the first autosave has run, so the status beside the file name
+        reads what it keeps reading, and the page has refitted."""
+        cartograph = dialog._cartograph
+        wait_until(
+            qgis_app,
+            lambda: (
+                cartograph._job is None and not cartograph._autosave_timer.isActive()
+            ),
+            "the cartograph's autosave to finish",
+            30.0,
+            passes=3,
+        )
+        _quiet(qgis_app, cartograph.page_pane)
 
     @staticmethod
     def _vertical(widget, dialog) -> tuple[int, int]:
@@ -396,7 +413,7 @@ class TestWorkspaceFillsTheWindowHeight:
             viewport = pane.preview.view.viewport()
             short = viewport.height()
             dialog.resize(760, 1020)
-            _settle(qgis_app, 1.0)
+            self._saved_and_quiet(qgis_app, dialog)
             assert viewport.height() >= short + 300
             page = pane.preview.view.mapFromScene(
                 pane.preview._current_page_rect()

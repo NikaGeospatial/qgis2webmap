@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _quiet
 
 pytest.importorskip("qgis.core")
 
@@ -93,7 +93,7 @@ class TestEditTabFits:
     def test_no_sideways_scrolling(self, qgis_app, signal_layout, kind, width) -> None:
         scroll, controls = shown_controls(signal_layout, kind, width)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             viewport = scroll.viewport().width()
             assert not scroll.horizontalScrollBar().isVisible()
             assert controls.width() <= viewport
@@ -108,7 +108,7 @@ class TestEditTabFits:
 
         scroll, controls = shown_controls(signal_layout, kind, width)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             limit = scroll.viewport().width()
             for child in controls.findChildren(QWidget):
                 if not child.isVisibleTo(controls):
@@ -126,7 +126,7 @@ class TestEditTabFits:
 
         scroll, controls = shown_controls(signal_layout, kind, width)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             for button in controls.findChildren(QAbstractButton):
                 if not button.isVisibleTo(controls) or not button.text():
                     continue
@@ -145,7 +145,7 @@ def test_a_map_has_no_gap_between_its_button_row_and_rotation(
     """Spare room in the panel goes below the rows, not into a gap inside."""
     scroll, controls = shown_controls(signal_layout, "map", width)
     try:
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app)
         buttons = controls.canvas_button
         rotation = controls.rotation_spin
         bottom = buttons.mapTo(controls, buttons.rect().bottomLeft()).y()

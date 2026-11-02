@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _quiet
 from test_cartograph_panel_widgets import pane as pane
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -63,7 +63,7 @@ def _pane(qgis_app, layout):
     widget.resize(900, 700)
     widget.show()
     widget.show_layout(layout)
-    _settle(qgis_app)
+    _quiet(qgis_app, widget)
     return widget
 
 
@@ -117,7 +117,7 @@ def test_a_warning_follows_the_legend_and_goes_when_entries_are_back(
         before = built.legend_left_out
         # Putting entries back is the user's act; the count then shrinks.
         le.restore_removed(built.layout, legend, project)
-        _settle(qgis_app, 0.5)
+        _quiet(qgis_app, pane)
         assert pane.legend_warning.isHidden()
         assert before > 0
     finally:

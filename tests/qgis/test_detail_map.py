@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from test_cartograph_panel_widgets import _a4_layout, _settle
+from test_cartograph_panel_widgets import _a4_layout, _maps_drawn, _quiet
 from test_locator_context import _region
 from test_preview_item_editing import _choose, _items_of, _map
 
@@ -24,6 +24,7 @@ from qgis.core import (  # noqa: E402
     QgsProject,
     QgsRectangle,
 )
+from qgis.PyQt import sip  # noqa: E402
 from qgis.PyQt.QtCore import QPoint, QPointF, QRectF, QSize, Qt  # noqa: E402
 from qgis.PyQt.QtGui import QWheelEvent  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
@@ -59,7 +60,7 @@ def _near_far_pane(qgis_app, project, template_id):
     pane.show_layout(result.layout)
     pane.controls.resize(420, 640)
     pane.controls.show()
-    _settle(qgis_app)
+    _quiet(qgis_app, pane)
     return pane, result.layout
 
 
@@ -87,9 +88,10 @@ def page(request, qgis_app, project):
         pane.show_layout(layout)
         pane.controls.resize(420, 640)
         pane.controls.show()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
     yield pane, layout
-    _settle(qgis_app, 0.4)
+    maps = [] if sip.isdeleted(layout) else _items_of(layout, QgsLayoutItemMap)
+    _maps_drawn(qgis_app, maps)
     pane.close()
     pane.deleteLater()
 
@@ -101,7 +103,7 @@ def _detail_maps(layout):
 def _add_detail(qgis_app, pane, layout):
     before = {m.uuid() for m in _items_of(layout, QgsLayoutItemMap)}
     _choose(pane, DETAIL)
-    _settle(qgis_app, 0.5)
+    _quiet(qgis_app, pane)
     new = [m for m in _items_of(layout, QgsLayoutItemMap) if m.uuid() not in before]
     assert len(new) == 1
     return new[0]
@@ -171,7 +173,7 @@ class TestAddingADetailMap:
         moved = QgsRectangle(new.extent())
         moved.scale(0.5)
         new.zoomToExtent(moved)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert new.extent().width() == pytest.approx(moved.width(), rel=0.02)
         for m in sources:
             assert m.extent() == before[m.uuid()]
@@ -181,7 +183,7 @@ class TestAddingADetailMap:
         new = _add_detail(qgis_app, pane, layout)
         rect = new.sceneBoundingRect()
         new.attemptSetSceneRect(QRectF(rect.x() - 10, rect.y() - 5, 60, 45))
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert new.sceneBoundingRect().width() == pytest.approx(60, abs=0.5)
         assert new.extent().width() > 0
 
@@ -255,7 +257,8 @@ class TestSavedAndExported:
         path = tmp_path / "saved.qgz"
         project = QgsProject.instance()
         assert project.write(str(path))
-        _settle(qgis_app, 0.3)
+        _maps_drawn(qgis_app, _items_of(layout, QgsLayoutItemMap))
+        _quiet(qgis_app, pane)
         project.clear()
         assert project.read(str(path))
         reopened = project.layoutManager().layouts()[0]
@@ -318,7 +321,7 @@ def _type(qgis_app, edit, text: str, press=Qt.Key.Key_Return) -> None:
     edit.selectAll()
     QTest.keyClicks(edit, text)
     QTest.keyClick(edit, press)
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app)
 
 
 def _centre_of(item) -> tuple[float, float]:
@@ -356,7 +359,7 @@ class TestCentreFields:
         )
         layout.deselectAll()
         plain.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         c = pane.controls
         assert not c.latitude_edit.isVisibleTo(c)
         assert not c.longitude_edit.isVisibleTo(c)
@@ -365,7 +368,7 @@ class TestCentreFields:
         if label is not None:
             layout.deselectAll()
             label.setSelected(True)
-            _settle(qgis_app, 0.1)
+            _quiet(qgis_app, pane)
             assert not c.latitude_edit.isVisibleTo(c)
 
     def test_entering_a_point_recentres_keeping_scale_and_source(
@@ -411,7 +414,7 @@ class TestCentreFields:
         assert _centre_of(new)[0] == pytest.approx(lat0 + 0.004, abs=2e-6)
         assert _centre_of(new)[1] == pytest.approx(lon0 + 0.004, abs=2e-6)
         stack.undo()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert _centre_of(new) == pytest.approx((lat0, lon0), abs=2e-6)
         assert float(pane.controls.latitude_edit.text()) == pytest.approx(
             lat0, abs=1e-5
@@ -426,7 +429,7 @@ class TestCentreFields:
         c = pane.controls
         before = _centre_of(new)
         c.edit_view_button.click()
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         start = frame_centre(pane, new)
         _drag(qgis_app, pane, start, start + QPoint(-30, 20))
         after = _centre_of(new)
@@ -479,7 +482,7 @@ class TestCentreFields:
         _add_detail(qgis_app, pane, layout)
         c = pane.controls
         c.resize(c.minimumSizeHint().width(), 640)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         for edit in (c.latitude_edit, c.longitude_edit):
             text = edit.text()
             event = QWheelEvent(

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _quiet
 from test_edit_tab_fit import _item_of
 
 from nika_onlymap_exporter.ui.theme import PANEL_PANE_GAP
@@ -56,7 +56,7 @@ def pane(qgis_app, parcels, project):
     pane.controls.show()
     layout.deselectAll()
     pane.controls.refresh()
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app, pane)
     yield pane, layout
     pane.close()
     pane.deleteLater()
@@ -134,7 +134,7 @@ def figure_pane(qgis_app, parcels, project):
     pane.controls.show()
     layout.deselectAll()
     pane.controls.refresh()
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app, pane)
     yield pane, layout
     pane.close()
     pane.deleteLater()
@@ -152,7 +152,7 @@ class TestSignalFiguresAreOrdinaryText:
         value = layout.itemById("figure-0")
         value.setSelected(True)
         controls.refresh()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert controls.selected_item() is value
         assert _visible(controls, controls.text_edit)
         assert controls.text_edit.toPlainText() == "214"
@@ -171,7 +171,7 @@ class TestSignalFiguresAreOrdinaryText:
             layout.deselectAll()
             layout.itemById(item_id).setSelected(True)
             controls.refresh()
-            _settle(qgis_app, 0.02)
+            _quiet(qgis_app, pane)
             assert controls.heading.text()
 
     def test_delete_removes_only_the_selected_item(self, qgis_app, figure_pane) -> None:
@@ -180,7 +180,7 @@ class TestSignalFiguresAreOrdinaryText:
         layout.itemById("figure-0").setSelected(True)
         controls.refresh()
         controls.delete_button.click()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert layout.itemById("figure-0") is None
         for kept in ("figure-0-label", "rule-figure-0", "figure-1", "figure-1-label"):
             assert layout.itemById(kept) is not None, kept
@@ -191,7 +191,7 @@ class TestSignalFiguresAreOrdinaryText:
         from qgis.PyQt.QtTest import QTest
 
         QTest.keyClick(pane.preview.view, Qt.Key.Key_Delete)
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert layout.itemById("rule-figure-1") is None
         assert layout.itemById("figure-1") is not None
         assert layout.itemById("figure-1-label") is not None
@@ -240,7 +240,7 @@ def map_tab(qgis_app, parcels, project):
     layout = _layout(parcels, project)
     scroll, controls = shown_controls(layout, "map", 340)
     controls.dpi_combo.clear()
-    _settle(qgis_app, 0.2)
+    _quiet(qgis_app)
     yield scroll, controls
     scroll.close()
 
@@ -260,7 +260,7 @@ class TestSelectedItemHeader:
 
         scroll, controls = shown_controls(_layout(parcels, project), kind, 340)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             # The panel's pane adds its own band above the scrolling page.
             assert _top_in(scroll, controls.head_row) + PANEL_PANE_GAP == 16
         finally:
@@ -303,10 +303,10 @@ class TestMapControls:
 
         scroll, controls = shown_controls(_layout(parcels, project), "map", width)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             for editing in (False, True):
                 controls.set_editing(editing)
-                _settle(qgis_app, 0.1)
+                _quiet(qgis_app)
                 first, second = controls.canvas_button, controls.edit_view_button
                 assert first is not second
                 assert first.height() == second.height()
@@ -356,7 +356,7 @@ class TestMapControls:
             )
             controls.bind_frames(frames)
             controls.refresh()
-            _settle(qgis_app, 0.1)
+            _quiet(qgis_app)
             assert controls.dpi_combo.isVisibleTo(controls) is shown
             assert controls.dpi_label.isVisibleTo(controls) is shown
         finally:
@@ -370,7 +370,7 @@ class TestMapControls:
 
         scroll, controls = shown_controls(_layout(parcels, project), "map", width)
         try:
-            _settle(qgis_app, 0.2)
+            _quiet(qgis_app)
             assert not scroll.horizontalScrollBar().isVisible()
             for label in controls._field_labels:
                 if label.isVisibleTo(controls):
@@ -408,7 +408,7 @@ class TestInspectorFollowsSelection:
 
         viewport = pane.preview.view.viewport()
         QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=QPoint(*point))
-        _settle(qgis_app, 0.15)
+        _quiet(qgis_app, pane)
 
     def test_a_click_on_bare_page_empties_the_tab(self, qgis_app, pane) -> None:
         pane, layout = pane
@@ -436,7 +436,7 @@ class TestInspectorFollowsSelection:
             try:
                 pane.show()
                 pane.show_layout(layout)
-                _settle(qgis_app, 0.1)
+                _quiet(qgis_app, pane)
                 assert layout.selectedLayoutItems() == []
                 assert pane.controls.selected_item() is None
                 assert pane.controls.heading.text() == NO_ITEM_TEXT
@@ -449,9 +449,9 @@ class TestInspectorFollowsSelection:
         pane, layout = pane
         item = _item_of(layout, "text")
         item.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert pane.controls.selected_item() is item
         pane.show_layout(_layout(parcels, project, "classic"))
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert pane.controls.selected_item() is None
         assert pane.controls.heading.text() == NO_ITEM_TEXT

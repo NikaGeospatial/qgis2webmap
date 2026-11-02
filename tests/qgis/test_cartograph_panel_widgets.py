@@ -11,20 +11,46 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
+from waiting import wait_until
 
 qgis_core = pytest.importorskip("qgis.core")
 
 
-def _settle(qgis_app, seconds: float = 0.2) -> None:
-    """Let the page's zero-delay fit timers and any resize run."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        qgis_app.processEvents()
-        time.sleep(0.01)
+def _quiet(qgis_app, pane=None, seconds: float = 10.0) -> None:
+    """Run the event loop until the page has nothing left to do by itself - its
+    fit and legend check have run and no live count is waiting or running - for
+    three passes in a row, so the zero-delay timers those passes start (a
+    resize, a refit, a selection's follow-up) have run too. Without a page,
+    the three passes alone: what is left to run is all zero-delay."""
+
+    def calm() -> bool:
+        return pane is None or not (
+            pane.preview._fit_timer.isActive()
+            or pane._legend_refresh.isActive()
+            or pane.live_counts.busy()
+        )
+
+    wait_until(qgis_app, calm, "the page to go quiet", seconds, passes=3)
+
+
+def _maps_drawn(qgis_app, maps, seconds: float = 40.0) -> None:
+    """Run the event loop until none of `maps` is drawing its picture in the
+    background or about to start (QGIS queues that on a timer of the map's
+    own), three passes in a row. A map already deleted is done."""
+    from qgis.PyQt import sip
+    from qgis.PyQt.QtCore import QTimer
+
+    def drawn() -> bool:
+        return not any(
+            item.isDrawing() or any(t.isActive() for t in item.findChildren(QTimer))
+            for item in maps
+            if not sip.isdeleted(item)
+        )
+
+    wait_until(qgis_app, drawn, "the maps to finish drawing", seconds, passes=3)
 
 
 def _a4_layout(project):
@@ -47,7 +73,7 @@ def pane(qgis_app, project):
     widget.resize(600, 500)
     widget.show()
     widget.show_layout(_a4_layout(project))
-    _settle(qgis_app)
+    _quiet(qgis_app, widget)
     yield widget
     widget.close()
     widget.deleteLater()
@@ -91,7 +117,7 @@ class TestPagePane:
         self, qgis_app, pane
     ) -> None:
         pane.show_layout(None)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert not pane.preview.showing_page()
         assert pane.caption.isHidden()
         assert not pane.add_button.isVisible()
@@ -106,22 +132,22 @@ class TestPagePane:
     def test_the_wheel_zooms_the_page_in_and_out(self, qgis_app, pane) -> None:
         fitted = _scale(pane)
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         zoomed_in = _scale(pane)
         assert zoomed_in > fitted
         _wheel_zoom(pane, -120)
         _wheel_zoom(pane, -120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) < zoomed_in
         assert _scale(pane) < fitted
 
     def test_fit_page_refits_after_the_user_zoomed(self, qgis_app, pane) -> None:
         fitted = _scale(pane)
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) > fitted * 1.05
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         # The same fit as before the zoom: refitted once the zoomed page's
         # scroll bars have gone, which took 2.4% off the first fit.
         assert _scale(pane) == pytest.approx(fitted, rel=0.002)
@@ -131,7 +157,7 @@ class TestPagePane:
         not the user zooming, so the page fits the new size."""
         small = _scale(pane)
         pane.resize(1000, 800)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) > small * 1.2
 
     def test_the_wheel_is_a_user_zoom_that_stays(self, qgis_app, pane) -> None:
@@ -155,7 +181,7 @@ class TestPagePane:
         # Their zoom stays through a resize.
         kept = _scale(pane)
         pane.resize(1000, 800)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) == pytest.approx(kept, rel=0.01)
 
 
@@ -174,7 +200,7 @@ def _framed_pane(qgis_app, project):
     widget.resize(700, 600)
     widget.show()
     widget.show_layout(layout)
-    _settle(qgis_app)
+    _quiet(qgis_app, widget)
     return widget, layout, frame
 
 
@@ -224,7 +250,7 @@ def _drag(qgis_app, pane, start, end, buttons=None) -> None:
         _move_held(viewport, point)
         qgis_app.processEvents()
     QTest.mouseRelease(viewport, button, Qt.KeyboardModifier.NoModifier, end)
-    _settle(qgis_app, 0.05)
+    _quiet(qgis_app, pane)
 
 
 class TestEditingThePage:
@@ -316,7 +342,7 @@ class TestEditingThePage:
         _drag(qgis_app, pane, centre, centre)
         small = _scale(pane)
         pane.resize(1000, 800)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) > small * 1.1
 
 
@@ -392,7 +418,7 @@ def page(qgis_app, project):
     widget.resize(900, 650)
     widget.show()
     widget.show_layout(layout)
-    _settle(qgis_app)
+    _quiet(qgis_app, widget)
     yield widget, layout, items
     widget.close()
     widget.deleteLater()
@@ -403,14 +429,14 @@ class TestResizingInThePage:
     def _select(qgis_app, layout, item) -> None:
         layout.deselectAll()
         item.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app)
 
     @pytest.mark.parametrize("size", [(900, 650), (480, 420)])
     @pytest.mark.parametrize("name", ["map", "title", "legend"])
     def test_the_handles_sit_on_the_item(self, qgis_app, page, name, size) -> None:
         pane, layout, items = page
         pane.resize(*size)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         item = items[name]
         self._select(qgis_app, layout, item)
         view = pane.preview.view
@@ -680,7 +706,7 @@ class TestSelectedTextSize:
     def _select(qgis_app, layout, item) -> None:
         layout.deselectAll()
         item.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app)
 
     def test_the_control_shows_only_for_text_items(self, qgis_app, page) -> None:
         pane, layout, items = page
@@ -696,7 +722,7 @@ class TestSelectedTextSize:
         self._select(qgis_app, layout, items["map"])
         assert pane.controls.text_size_row.isHidden()
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert pane.controls.text_size_row.isHidden()
 
     def test_a_step_is_one_undo_and_keeps_box_zoom_and_scroll(
@@ -711,7 +737,7 @@ class TestSelectedTextSize:
         box, scale, steps = title.sceneBoundingRect(), _scale(pane), stack.count()
         scroll = (view.horizontalScrollBar().value(), view.verticalScrollBar().value())
         pane.controls.text_bigger_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert title.textFormat().size() == pytest.approx(base + 1)
         assert pane.controls.text_size_label.text() == f"{base + 1:g} pt"
         assert stack.count() == steps + 1
@@ -767,7 +793,7 @@ class TestSelectedTextSize:
         theme.apply(pane)
         self._select(qgis_app, layout, title)
         pane.resize(300, 500)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         for button in (pane.fit_button, pane.add_button):
             assert button.toolTip().startswith(button.accessibleName())
         strip = pane.preview._strip
@@ -821,7 +847,7 @@ def _held_moves(qgis_app, pane, start, end, button) -> None:
         )
         qgis_app.processEvents()
     QTest.mouseRelease(viewport, button, Qt.KeyboardModifier.NoModifier, end)
-    _settle(qgis_app, 0.05)
+    _quiet(qgis_app, pane)
 
 
 class TestThePageIsAlwaysInSelectMode:
@@ -833,7 +859,7 @@ class TestThePageIsAlwaysInSelectMode:
     def _zoomed(qgis_app, pane) -> None:
         _wheel_zoom(pane, 120)
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
 
     @staticmethod
     def _scroll(pane) -> tuple[int, int]:
@@ -859,7 +885,7 @@ class TestThePageIsAlwaysInSelectMode:
         self._zoomed(qgis_app, pane)
         frame = items["map"]
         frame.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         before, count = frame.pos(), layout.undoStack().stack().count()
         scroll = self._scroll(pane)
         box = pane.preview.view.mapFromScene(frame.sceneBoundingRect()).boundingRect()
@@ -883,7 +909,7 @@ class TestThePageIsAlwaysInSelectMode:
         self._zoomed(qgis_app, pane)
         frame = items["map"]
         frame.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         before, count = frame.pos(), layout.undoStack().stack().count()
         scroll = self._scroll(pane)
         view = pane.preview.view
@@ -895,7 +921,7 @@ class TestThePageIsAlwaysInSelectMode:
             qgis_app, pane, start, start + QPoint(-60, -40), Qt.MouseButton.LeftButton
         )
         QTest.keyRelease(view, Qt.Key.Key_Space)
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert self._scroll(pane) != scroll
         assert frame.pos() == before
         assert layout.undoStack().stack().count() == count
@@ -928,7 +954,7 @@ class TestSelectingDoesNotDisturbThePage:
 
         pane, layout, items = page
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         item = items[name]
         before, count = item.sceneBoundingRect(), layout.undoStack().stack().count()
         viewport = pane.preview.view.viewport().size()
@@ -944,7 +970,7 @@ class TestSelectingDoesNotDisturbThePage:
     def test_a_pure_click_adds_no_undo_step(self, qgis_app, page, name) -> None:
         pane, layout, items = page
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         item = items[name]
         stack = layout.undoStack().stack()
         count = stack.count()
@@ -969,7 +995,7 @@ class TestSelectingDoesNotDisturbThePage:
 
         pane, layout, items = page
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         item = items[name]
         stack = layout.undoStack().stack()
         count, before = stack.count(), item.sceneBoundingRect()
@@ -982,7 +1008,7 @@ class TestSelectingDoesNotDisturbThePage:
             _move_held(viewport, centre + QPoint(jitter, 0))
             qgis_app.processEvents()
         QTest.mouseRelease(viewport, button, none, centre + QPoint(jitter, 0))
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert item.isSelected()
         assert item.sceneBoundingRect() == before
         assert stack.count() == count, [
@@ -1019,7 +1045,7 @@ class TestFloatingControls:
         self, qgis_app, pane, size
     ) -> None:
         pane.resize(*size)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         rects = _control_rects(pane)
         viewport = pane.preview.view.viewport()
         assert rects["add"].width() == rects["fit"].width()
@@ -1054,11 +1080,11 @@ class TestFloatingControls:
         before = {n: r for n, r in _control_rects(pane).items()}
         for _ in range(4):
             _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         for to_end in (False, True):
             for bar in (view.horizontalScrollBar(), view.verticalScrollBar()):
                 bar.setValue(bar.maximum() if to_end else bar.minimum())
-            _settle(qgis_app)
+            _quiet(qgis_app, pane)
             now = _control_rects(pane)
             for name, rect in before.items():
                 assert now[name].size() == rect.size()
@@ -1103,7 +1129,7 @@ class TestFloatingControls:
         layout.addLayoutItem(shape)
         for _ in range(3):  # zoomed in: the map fills the view
             _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         strip = pane.preview._strip
         image = strip.grab().toImage()
         assert image.pixelColor(2, 2).name() == "#dfe4e1"
@@ -1116,10 +1142,10 @@ class TestFloatingControls:
         self, qgis_app, pane, size
     ) -> None:
         pane.resize(*size)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _wheel_zoom(pane, 120)
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         viewport = pane.preview.view.viewport()
         page = _page_px(pane)
         assert viewport.rect().contains(page)
@@ -1149,16 +1175,16 @@ class TestFloatingControls:
         second.setPageSize("A4", QgsLayoutItemPage.Orientation.Landscape)
         layout.pageCollection().addPage(second)
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         viewport = view.viewport().rect()
         first_page = _page_px(pane, 0)
         assert viewport.contains(first_page)
         assert not viewport.contains(_page_px(pane, 1))
         # Move to the second page and fit again: it is the one fitted now.
         view.centerOn(layout.pageCollection().page(1).sceneBoundingRect().center())
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert viewport.contains(_page_px(pane, 1))
         assert not viewport.contains(_page_px(pane, 0))
         assert _page_px(pane, 1).width() == pytest.approx(first_page.width(), abs=3)
@@ -1171,10 +1197,10 @@ class TestFloatingControls:
         _wheel_zoom(pane, 120)
         bar = view.horizontalScrollBar()
         bar.setValue(bar.minimum())
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         kept = (view.transform().m11(), bar.value())
         pane.resize(700, 560)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert view.transform().m11() == pytest.approx(kept[0])
         from qgis.core import QgsPrintLayout
 
@@ -1183,7 +1209,7 @@ class TestFloatingControls:
         other.setName("Other")
         project.layoutManager().addLayout(other)
         pane.show_layout(other)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         page = _page_px(pane)
         assert view.viewport().rect().contains(page)
 
@@ -1216,7 +1242,7 @@ class TestControlsAndColourSimulation:
 
         pane.setObjectName("PagePaneUnderTest")
         theme.apply(pane)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         view = pane.preview.view
 
         def button_pixels() -> list[str]:
@@ -1230,5 +1256,5 @@ class TestControlsAndColourSimulation:
         plain = button_pixels()
         view.setPreviewModeEnabled(True)
         view.setPreviewMode(QgsPreviewEffect.PreviewMode.PreviewGrayscale)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert button_pixels() == plain

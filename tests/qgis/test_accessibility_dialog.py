@@ -16,6 +16,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
+from test_cartograph_panel_widgets import _quiet
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -120,7 +121,7 @@ def page(qgis_app, project):
     pane.resize(700, 500)
     pane.show()
     pane.show_layout(layout)
-    settle(qgis_app)
+    _quiet(qgis_app, pane)
     yield pane, layout
     pane.close()
     pane.deleteLater()
@@ -180,11 +181,11 @@ class TestPreviewBeforeApply:
         assert normal == SHAPE_COLOUR
         for condition in ("protanopia", "deuteranopia", "tritanopia", "achromatopsia"):
             dialog.set_condition(condition)
-            settle(qgis_app, 0.05)
+            _quiet(qgis_app, pane)
             assert preview_colour(pane) != normal, condition
             assert not canvas.previewModeEnabled(), condition
         dialog.set_condition(None)
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == normal
 
     def test_apply_enables_only_with_an_unapplied_change(
@@ -241,7 +242,7 @@ class TestPreviewBeforeApply:
         simulated = preview_colour(pane)
         assert simulated != normal
         dialog.set_condition("tritanopia")
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) not in (normal, simulated)
 
         if how == "close_button":
@@ -250,7 +251,7 @@ class TestPreviewBeforeApply:
             QTest.keyClick(dialog.mode_combo, Qt.Key.Key_Escape)
         else:
             dialog.close()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert not dialog.isVisible()
         assert preview_colour(pane) == simulated
         assert canvas.previewModeEnabled()
@@ -266,7 +267,7 @@ class TestPreviewBeforeApply:
         dialog.show()
         dialog.set_condition("protanopia")
         dialog.close()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == SHAPE_COLOUR
         assert not canvas.previewModeEnabled()
 
@@ -302,7 +303,7 @@ class TestPreviewBeforeApply:
         dialog.set_condition("deuteranopia")
         dialog.apply_button.click()
         dialog.reset_canvas()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert not canvas.previewModeEnabled()
         assert preview_colour(pane) == SHAPE_COLOUR
 
@@ -349,7 +350,7 @@ class TestWhereApplyGoes:
         dialog.show()
         dialog.set_condition("deuteranopia")
         dialog.apply_button.click()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) != SHAPE_COLOUR
         assert not canvas.previewModeEnabled()
 
@@ -364,7 +365,7 @@ class TestWhereApplyGoes:
         dialog.canvas_check.setChecked(True)
         dialog.set_condition("tritanopia")
         dialog.apply_button.click()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) != SHAPE_COLOUR
         assert canvas.previewModeEnabled()
         assert canvas.previewMode() == QgsPreviewEffect.PreviewTritanope
@@ -383,7 +384,7 @@ class TestWhereApplyGoes:
         dialog.canvas_check.setChecked(False)
         assert dialog.apply_button.isEnabled()  # the box alone is a change
         dialog.apply_button.click()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert not canvas.previewModeEnabled()
         assert preview_colour(pane) != SHAPE_COLOUR  # the previews keep it
 
@@ -416,7 +417,7 @@ class TestRemembered:
         dialog.apply_button.click()
         simulated = preview_colour(pane)
         dialog.close()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == simulated != SHAPE_COLOUR
         dialog = make_dialog_with_preview()  # closing destroys the window
         dialog.show()
@@ -435,10 +436,10 @@ class TestRemembered:
         other = layout.clone()
         other.setName("Other")
         pane.show_layout(other)
-        settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == simulated
         pane.show_layout(layout)
-        settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == simulated
 
     def test_a_new_dialog_starts_where_the_last_one_left_off(
@@ -451,12 +452,12 @@ class TestRemembered:
         simulated = preview_colour(pane)
         # A restart: the preview is plain again, and a fresh dialog is built.
         first.reset_canvas()
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert preview_colour(pane) == SHAPE_COLOUR
         seen = Recorder()
         second = make_dialog_with_preview()
         second.mode_changed.connect(seen)
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert second.applied_condition() == "protanopia"
         assert second.current_condition() == "protanopia"
         assert preview_colour(pane) == simulated
@@ -555,7 +556,7 @@ class TestInputIsNeverLeftBlocked:
         clicks = []
         behind.clicked.connect(lambda: clicks.append(1))
         try:
-            settle(qgis_app, 0.1)
+            _quiet(qgis_app)
             # Chosen with the keyboard: no list pop-up opens (the cases below
             # click through the window system, as a real click arrives).
             dialog.mode_combo.setFocus()
@@ -572,7 +573,7 @@ class TestInputIsNeverLeftBlocked:
                 pos=behind.mapTo(host, QPoint(5, 5)),
                 delay=30,
             )
-            settle(qgis_app, 0.1)
+            _quiet(qgis_app)
             assert clicks == [1]
             assert QWidget.mouseGrabber() is None
             assert QWidget.keyboardGrabber() is None
@@ -602,7 +603,7 @@ class TestLeavingKeepsTheOneWindow:
         dialog = make_dialog(parent=host)
         dialog.show()
         dialog.set_condition("deuteranopia")  # chosen, not applied
-        settle(qgis_app, 0.05)
+        _quiet(qgis_app)
         if how == "close":
             dialog.close()
         elif how == "close_button":
@@ -611,7 +612,7 @@ class TestLeavingKeepsTheOneWindow:
             QTest.keyClick(dialog, Qt.Key.Key_Escape)
         else:
             dialog.hide()
-        settle(qgis_app, 0.1)
+        _quiet(qgis_app)
         try:
             assert not dialog.isVisible()
             assert dialog.current_condition() is None
@@ -637,7 +638,7 @@ class TestLeavingKeepsTheOneWindow:
         try:
             for _press in range(3):
                 dialog.present()
-                settle(qgis_app, 0.05)
+                _quiet(qgis_app)
                 assert dialog.isVisible()
                 assert dialog.current_condition() == "tritanopia"
             assert dialog.applied_condition() is None
@@ -656,6 +657,7 @@ class TestLeavingKeepsTheOneWindow:
         QApplication.sendEvent(
             QApplication.instance(), QEvent(QEvent.Type.ApplicationDeactivate)
         )
+        # Not hidden later either: a bounded wait, as nothing is due to happen.
         settle(qgis_app, 0.1)
         assert dialog.isVisible()
 

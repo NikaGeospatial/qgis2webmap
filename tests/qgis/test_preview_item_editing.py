@@ -14,7 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-from test_cartograph_panel_widgets import _a4_layout, _drag, _scale, _settle
+from test_cartograph_panel_widgets import _a4_layout, _drag, _quiet, _scale
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -45,7 +45,7 @@ def _pane(qgis_app, project, maps=1, size=(900, 650)):
     # The Edit tab's body, which the dialog seats in its panel.
     pane.controls.resize(420, 640)
     pane.controls.show()
-    _settle(qgis_app)
+    _quiet(qgis_app, pane)
     return pane, layout, frames
 
 
@@ -85,7 +85,7 @@ def _click_page(qgis_app, pane, x_mm: float, y_mm: float) -> None:
     QTest.mouseClick(
         viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point
     )
-    _settle(qgis_app, 0.05)
+    _quiet(qgis_app, pane)
 
 
 def _items_of(layout, cls):
@@ -148,7 +148,7 @@ class TestAddMenu:
         pane.setObjectName("PagePaneUnderTest")
         theme.apply(pane)
         pane.resize(300, 500)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert pane.add_button.text() == "Add item"
         assert pane.add_button.toolTip()
         # Where it is seen: the button's box in the preview's own coordinates.
@@ -278,14 +278,14 @@ class TestPlacing:
         pane, layout, _frames = one_map
         view = pane.preview.view
         pane.preview.zoom_in()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         scale = _scale(pane)
         view.horizontalScrollBar().setValue(view.horizontalScrollBar().maximum() // 2)
         scroll = (view.horizontalScrollBar().value(), view.verticalScrollBar().value())
         _choose(pane, "Text")
         centre = view.mapToScene(view.viewport().rect().center())
         _click_page(qgis_app, pane, centre.x(), centre.y())
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         assert _items_of(layout, QgsLayoutItemLabel)
         assert _scale(pane) == pytest.approx(scale)
         assert (
@@ -334,10 +334,10 @@ class TestTextControls:
         editor.setMinimumHeight(600)
         controls.legend_slot.addWidget(editor)
         controls.pages.setCurrentWidget(controls.legend_page)
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert controls.sizeHint().height() > before + 100
         controls.pages.setCurrentWidget(controls.text_page)
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert controls.sizeHint().height() == before
 
     def test_enter_applies_the_words_as_one_undo_step(self, qgis_app, text) -> None:
@@ -469,7 +469,7 @@ class TestTextControls:
         pane, layout, _label = text
         assert pane.controls.heading.text() == "Selected: Text"
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         controls = pane.controls
         assert controls.body.isHidden()
         assert controls.delete_button.isHidden()
@@ -562,7 +562,7 @@ class TestLinkedAndLegendControls:
         legend = _items_of(layout, QgsLayoutItemLegend)[0]
         assert Editor.shown is legend
         layout.deselectAll()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert Editor.shown is None
 
     @pytest.mark.parametrize("title", ["Scale bar", "North arrow"])
@@ -613,7 +613,7 @@ class TestMapControls:
         pane.controls.bind_frames(listing)
         layout.deselectAll()
         frames[0].setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         yield pane, layout, frames[0], listing
         listing.deleteLater()
 
@@ -733,7 +733,7 @@ class TestWhatAddingMakesSurvives:
         pane.resize(900, 650)
         pane.show()
         pane.show_layout(layout)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         yield pane, layout, project
         pane.close()
         pane.deleteLater()
@@ -757,7 +757,7 @@ class TestWhatAddingMakesSurvives:
         # Select the label again to edit its words.
         layout.deselectAll()
         label.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         pane.controls.text_edit.selectAll()
         QTest.keyClicks(pane.controls.text_edit, "Lake survey")
         QTest.keyClick(pane.controls.text_edit, Qt.Key.Key_Return)
