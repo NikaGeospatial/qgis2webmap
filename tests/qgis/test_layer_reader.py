@@ -347,8 +347,13 @@ class TestReadRaster:
         assert exported.tiles is not None
         assert exported.raster is None
 
-    def test_a_wms_service_is_refused_with_a_reason(self, qgis_app) -> None:
-        """A WMS asks for each image by map extent; the runtime cannot."""
+    def test_a_wms_service_qgis_knows_nothing_about_is_refused_with_a_reason(
+        self, qgis_app
+    ) -> None:
+        """A WMS is exported as Web Mercator tiles only when QGIS's stored
+        capabilities say the service offers EPSG:3857; this one was never
+        reached, so there is nothing to go on. The exported cases are in
+        `test_map_service_layers.py`."""
         layer = qgis_core.QgsRasterLayer(
             "crs=EPSG:4326&format=image/png&layers=x&styles&url=https://example.invalid/wms",
             "wms service",
@@ -358,6 +363,7 @@ class TestReadRaster:
         assert read_raster(layer, report) is None
         details = " ".join(item.detail for item in report.items)
         assert "WMS" in details
+        assert "EPSG:3857" in details
 
     def test_a_raster_reaches_read_raster_through_read_layer(
         self, qgis_app, make_raster_layer
@@ -695,10 +701,22 @@ class TestTileServices:
         assert "SENTINEL" not in repr(dependency)
 
     def test_a_template_the_web_map_cannot_fill_is_reported(self, qgis_app) -> None:
-        layer = self._xyz("https://tiles.example.com/{q}.png")
+        """`{q}` used to be the example; since runtime 0.13.3 it is filled
+        (below), so a token nothing fills stands in."""
+        layer = self._xyz("https://tiles.example.com/{z}/{x}/{y}/{s}.png")
         report = FidelityReportBuilder()
         assert read_layer(layer, report) is None
         assert any(i.status is FidelityStatus.UNSUPPORTED for i in report.items)
+
+    def test_a_quadkey_is_the_runtimes_quadkey(self, qgis_app) -> None:
+        """QGIS's Bing-style `{q}` is filled by the runtime as `{quadkey}`."""
+        exported = read_layer(
+            self._xyz("https://tiles.example.com/a{q}.jpeg?g=1"),
+            FidelityReportBuilder(),
+        )
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url == "https://tiles.example.com/a{quadkey}.jpeg?g=1"
 
 
 def _write_raster(path, bands: int, crs: str | None, west=500000.0, north=5700000.0):

@@ -1147,48 +1147,12 @@ def _is_key_parameter(name: str) -> bool:
     return name.lower().replace("-", "").replace("_", "") in _KEY_PARAMETERS
 
 
-def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
-    """The parameters of an XYZ source, or `None` for any other `wms` layer.
+def _live_dependency(url: str, name: str) -> tuple[str, AssetDependency]:
+    """`url` without any access key, and the dependency a live layer on it is.
 
-    QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
-    URL-encoded source string; a real WMS has no `type`.
-    """
-    from urllib.parse import parse_qsl
-
-    fields = dict(parse_qsl(layer.source() or "", keep_blank_values=True))
-    return fields if fields.get("type") == "xyz" and fields.get("url") else None
-
-
-def read_tile_service(
-    layer: QgsRasterLayer,
-    report: FidelityReportBuilder,
-    group_path: tuple[str, ...] = (),
-    visible: bool = True,
-) -> ExportLayer | None:
-    """Read an XYZ tile layer as a live reference the web map fetches itself.
-
-    Nothing is embedded - the tiles are the server's - so the map needs a
-    connection to draw this layer, and the scanner says so. Two refusals: a
-    template the runtime cannot fill (it takes `{z}`, `{x}`, `{y}` and `{-y}`;
-    QGIS also allows `{q}` quadkeys), and a URL carrying an access key, which
-    would be published to everyone the file reaches.
+    A keyed address blocks the export: the key would travel with the map.
     """
     from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
-    layer_id = layer.id()
-    name = layer.name()
-    fields = xyz_template(layer) or {}
-    url = fields.get("url", "")
-
-    if not ("{z}" in url and "{x}" in url and ("{y}" in url or "{-y}" in url)):
-        report.unsupported(
-            f"Layer '{name}'",
-            "This tile layer's address uses a pattern the web map cannot fill "
-            "(it understands {z}, {x}, {y} and {-y} only). The layer is omitted "
-            "from the map.",
-            layer_id,
-        )
-        return None
 
     parts = urlsplit(url)
     pairs = parse_qsl(parts.query, keep_blank_values=True)
@@ -1216,6 +1180,63 @@ def read_tile_service(
             else None
         ),
     )
+    return url, dependency
+
+
+def _source_type(layer: QgsRasterLayer) -> str:
+    """The `type=` of a `wms` provider source: `xyz`, `mbtiles`, `wmst`,
+    `wmts`, or `""` for a plain WMS (or a WMTS saved without one)."""
+    from .map_services import source_pairs, value
+
+    return value(source_pairs(layer.source()), "type")
+
+
+def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
+    """The parameters of an XYZ source, or `None` for any other `wms` layer.
+
+    QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
+    URL-encoded source string; a real WMS has no `type`.
+    """
+    from urllib.parse import parse_qsl
+
+    fields = dict(parse_qsl(layer.source() or "", keep_blank_values=True))
+    return fields if fields.get("type") == "xyz" and fields.get("url") else None
+
+
+def read_tile_service(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read an XYZ tile layer as a live reference the web map fetches itself.
+
+    Nothing is embedded - the tiles are the server's - so the map needs a
+    connection to draw this layer, and the scanner says so. Two refusals: a
+    template the runtime cannot fill (it takes `{z}`, `{x}`, `{y}` and `{-y}`,
+    and QGIS's `{q}` quadkey as its `{quadkey}`), and a URL carrying an access
+    key, which would be published to everyone the file reaches.
+    """
+    layer_id = layer.id()
+    name = layer.name()
+    fields = xyz_template(layer) or {}
+    # QGIS's Bing-style quadkey token is the runtime's `{quadkey}`.
+    url = fields.get("url", "").replace("{q}", "{quadkey}")
+
+    tokens = set(re.findall(r"\{(-?[A-Za-z][\w-]*)\}", url))
+    if not (
+        ({"z", "x"} <= tokens and tokens & {"y", "-y"}) or "quadkey" in tokens
+    ) or not tokens <= {"z", "x", "y", "-y", "quadkey"}:
+        report.unsupported(
+            f"Layer '{name}'",
+            "This tile layer's address uses a pattern the web map cannot fill "
+            "(it understands {z}, {x}, {y}, {-y} and {q} only). The layer is "
+            "omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    url, dependency = _live_dependency(url, name)
 
     def _zoom(field: str, default: int) -> int:
         try:
@@ -1240,6 +1261,287 @@ def read_tile_service(
         attribution=read_attribution(layer),
         group_path=group_path,
         dependencies=(dependency,),
+    )
+
+
+# Source-string keys that carry a login QGIS sends with every request. A web
+# page cannot send it without publishing it, and without it the service
+# refuses, so such a layer cannot be drawn by the exported map at all.
+_LOGIN_KEYS = ("username", "password", "authcfg", "referer")
+
+
+def _cached_capabilities(url: str) -> bytes | None:
+    """The capabilities QGIS fetched from `url`, from its network cache.
+
+    Read from the cache's files only: the load control never reaches the
+    network, so an export made offline reads exactly what one made online
+    does. `None` when QGIS kept no copy.
+    """
+    from qgis.core import QgsNetworkAccessManager
+    from qgis.PyQt.QtCore import QUrl
+
+    cache = QgsNetworkAccessManager.instance().cache()
+    if cache is None:
+        return None
+    device = cache.data(QUrl(url))
+    if device is None:
+        return None
+    try:
+        return bytes(device.readAll())
+    finally:
+        device.close()
+
+
+def _map_service_layer(
+    layer: QgsRasterLayer,
+    tiles: TileSpec,
+    dependency: AssetDependency,
+    group_path: tuple[str, ...],
+    visible: bool,
+) -> ExportLayer:
+    return ExportLayer(
+        layer_id=layer.id(),
+        name=layer.name(),
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.SERVICE,
+        visible=visible,
+        opacity=float(layer.opacity()),
+        scale_range=scale_range(layer),
+        renderer=RendererSpec(
+            kind=RendererKind.UNSUPPORTED,
+            unsupported_reason="Tile layers carry no vector symbology.",
+        ),
+        popup=PopupSpec(enabled=False),
+        tiles=tiles,
+        attribution=read_attribution(layer),
+        group_path=group_path,
+        dependencies=(dependency,),
+    )
+
+
+def read_map_service(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read a WMS or WMTS layer as a live tile layer, or refuse it with a reason.
+
+    The web map asks the service itself, tile by tile, in Web Mercator - see
+    `core.map_services`, which builds the request from the layer's source
+    string and the capabilities QGIS keeps in its network cache. Like an XYZ
+    layer, nothing is embedded and a keyed address blocks the export. Refused
+    with a row saying what to do: a login, a format that is not an image, a
+    time the layer takes from QGIS's temporal controls, a WMS without Web
+    Mercator and a WMTS on another tile grid.
+    """
+    from urllib.parse import urlsplit
+
+    from . import map_services
+
+    layer_id = layer.id()
+    name = layer.name()
+    subject = f"Layer '{name}'"
+    pairs = map_services.source_pairs(layer.source())
+    url = map_services.value(pairs, "url")
+    is_wmts = any(key == "tileMatrixSet" for key, _ in pairs)
+    kind = "WMTS" if is_wmts else "WMS"
+
+    if any(key in _LOGIN_KEYS or key.startswith("http-header:") for key, _ in pairs):
+        report.unsupported(
+            subject,
+            f"This {kind} service needs a login or a custom request header "
+            "that QGIS sends for you. A web page cannot send it without "
+            "publishing it, and the service refuses requests without it. The "
+            "layer is omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    image_format = map_services.value(pairs, "format")
+    if not image_format.lower().startswith("image/"):
+        report.unsupported(
+            subject,
+            f"This {kind} layer is requested as '{image_format}', not as images, "
+            "and the web map can only draw image tiles. Choose an image format "
+            "such as image/png for the layer in the Data Source Manager. The "
+            "layer is omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    if map_services.value(pairs, "type") == "wmst" and map_services.value(
+        pairs, "allowTemporalUpdates"
+    ).lower() not in ("false", "0"):
+        report.unsupported(
+            subject,
+            "This WMS layer has a time dimension, and QGIS asks it for the time "
+            "set in the layer's temporal settings or the project's temporal "
+            "controls, which the web map does not have. To export the service's "
+            "default time, set the layer's Static WMS-T Temporal Range to "
+            "Server default in its properties. The layer is omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    capabilities = _cached_capabilities(map_services.capabilities_url(url))
+    if is_wmts:
+        matrix_set = map_services.value(pairs, "tileMatrixSet")
+        found = map_services.wmts_tiles(
+            capabilities,
+            layer=(map_services.values(pairs, "layers") or [""])[0],
+            style=(map_services.values(pairs, "styles") or [""])[0],
+            image_format=image_format,
+            matrix_set=matrix_set,
+            dimensions=map_services.parse_tile_dimensions(
+                map_services.value(pairs, "tileDimensions")
+            ),
+        )
+        if isinstance(found, map_services.WmtsRefusal):
+            report.unsupported(
+                subject, _wmts_refusal(found.reason, matrix_set), layer_id
+            )
+            return None
+        template, dependency = _live_dependency(found.template, name)
+        host = urlsplit(template).netloc
+        tiles = TileSpec(template, found.min_zoom, found.max_zoom, found.tile_size)
+        report.approximated(
+            subject,
+            f"Exported as a live WMTS layer: the web map loads its tiles from "
+            f"{host} on the Web Mercator tile grid '{matrix_set}', as QGIS does. "
+            + _CORS_NOTE,
+            layer_id,
+        )
+        return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+    parsed = map_services.parse_wms_capabilities(capabilities)
+    layers = map_services.values(pairs, "layers")
+    source_crs = map_services.value(pairs, "crs")
+    request_crs = map_services.web_mercator_code(source_crs) or (
+        parsed.offered_web_mercator(layers) if parsed is not None else None
+    )
+    if request_crs is None:
+        report.unsupported(
+            subject,
+            _wms_refusal(parsed is not None),
+            layer_id,
+        )
+        return None
+
+    # What QGIS itself speaks to the service, when the layer loaded.
+    provider = layer.dataProvider()
+    provider_metadata = getattr(provider, "metadata", None)
+    metadata = provider_metadata() if callable(provider_metadata) else None
+    known = metadata.get("WmsVersion") if isinstance(metadata, dict) else None
+    version = (
+        known
+        or (parsed.version if parsed is not None else "")
+        or map_services.value(pairs, "Version")
+        or map_services.value(pairs, "version")
+        or "1.3.0"
+    )
+    # QGIS asks the GetMap address the capabilities name, unless the layer
+    # is set to ignore it (`QgsWmsProvider::getMapUrl`).
+    get_map = url
+    if (
+        parsed is not None
+        and parsed.get_map_url
+        and "IgnoreGetMapUrl" not in (key for key, _ in pairs)
+    ):
+        get_map = parsed.get_map_url
+    extra = [
+        (key.upper(), ",".join(map_services.values(pairs, key)))
+        for key in ("filter", "opacities")
+        if map_services.values(pairs, key)
+    ]
+    template = map_services.wms_get_map_template(
+        map_services.prepare_url(get_map).rstrip("?&"),
+        version,
+        layers,
+        map_services.values(pairs, "styles"),
+        image_format,
+        request_crs,
+        extra,
+    )
+    template, dependency = _live_dependency(template, name)
+    host = urlsplit(template).netloc
+    tiles = TileSpec(template, 0, 19, map_services.WMS_TILE_SIZE)
+    projection = (
+        ""
+        if map_services.web_mercator_code(source_crs)
+        else f" rather than the {source_crs} QGIS asks for, so text and symbols "
+        "the service draws may sit or scale slightly differently"
+    )
+    report.approximated(
+        subject,
+        f"Exported as a live WMS layer: the web map asks {host} for each tile "
+        f"in Web Mercator (EPSG:3857){projection}. " + _CORS_NOTE,
+        layer_id,
+    )
+    return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+
+# The one condition of a live service that nothing in QGIS can check: QGIS is
+# not a web page, so a service that refuses web pages works there.
+_CORS_NOTE = (
+    "The service must allow web pages to load its images (CORS), or this "
+    "layer stays empty while the rest of the map draws; a refused request "
+    "shows in the browser's developer tools."
+)
+
+
+def _wms_refusal(has_capabilities: bool) -> str:
+    if has_capabilities:
+        return (
+            "This WMS does not offer Web Mercator (EPSG:3857), the only "
+            "projection the web map can ask a WMS for. If the provider also "
+            "publishes the layer as XYZ or WMTS tiles in Web Mercator, add that "
+            "instead, or save the layer as a GeoTIFF (Export > Save As...) and "
+            "add the file. The layer is omitted from the map."
+        )
+    return (
+        "QGIS has no stored copy of this WMS's capabilities, so the export "
+        "cannot tell whether it offers Web Mercator (EPSG:3857), and exporting "
+        "never contacts the service to find out. Add the layer again from the "
+        "Data Source Manager with EPSG:3857 as its coordinate reference system "
+        "if the service lists it, and export again. The layer is omitted from "
+        "the map."
+    )
+
+
+def _wmts_refusal(reason: str, matrix_set: str) -> str:
+    if reason == "grid":
+        return (
+            f"This WMTS layer uses the tile grid '{matrix_set}', and the web map "
+            "can only draw tiles on the Web Mercator grid (such as "
+            "GoogleMapsCompatible, EPSG:3857). If the service offers that grid, "
+            "add the layer again choosing it in the Data Source Manager. The "
+            "layer is omitted from the map."
+        )
+    if reason == "time":
+        return (
+            "This WMTS layer has a time dimension, and QGIS asks it for the time "
+            "set in its temporal controls, which the web map does not have. The "
+            "layer is omitted from the map."
+        )
+    if reason == "not imagery":
+        return (
+            "This WMTS layer's tile address has no image file extension or "
+            "format parameter, so the web map would read its tiles as data "
+            "rather than draw them as images. If the service offers a "
+            "key-value (KVP) tile address, or an address ending in .png or "
+            ".jpg, add the layer that way. The layer is omitted from the map."
+        )
+    if reason == "no capabilities":
+        return (
+            "QGIS has no stored copy of this WMTS's capabilities, which say "
+            "where its tiles are, and exporting never contacts the service to "
+            "find out. Open the project once while online so QGIS reloads the "
+            "service, and export again. The layer is omitted from the map."
+        )
+    return (
+        "The service's capabilities give no tile address the web map can fill "
+        "for this WMTS layer. The layer is omitted from the map."
     )
 
 
@@ -1284,15 +1586,28 @@ def read_raster(
 
     if provider_key == "wms" and xyz_template(layer) is not None:
         return read_tile_service(layer, report, group_path=group_path, visible=visible)
+    if provider_key == "wms" and _source_type(layer) in ("", "wmst", "wmts"):
+        return read_map_service(layer, report, group_path=group_path, visible=visible)
+
+    if provider_key == "arcgismapserver":
+        report.unsupported(
+            f"Layer '{name}'",
+            "ArcGIS map services are not exported to the web map. If the "
+            "service also publishes a WMS, or XYZ or WMTS tiles in Web Mercator, "
+            "add the layer that way and it exports as a live layer; or save it "
+            "as a GeoTIFF (Export > Save As...) and add the file. The layer is "
+            "omitted from the map.",
+            layer_id,
+        )
+        return None
 
     if provider_key not in _RASTER_FILE_PROVIDERS or provider is None:
         report.unsupported(
             f"Layer '{name}'",
-            "This is a live map service the web map cannot request: it draws "
-            "XYZ tiles, but a WMS, WCS or ArcGIS service asks for each image by "
-            "its map extent, which it has no way to do. Use the service's XYZ "
-            "or WMTS tile address instead if it has one, or save the layer to a "
-            "GeoTIFF. The layer is omitted from the map.",
+            "This raster source is not a file the web map can carry, nor a "
+            "WMS, WMTS or XYZ service it can ask for tiles. Save the layer as "
+            "a GeoTIFF (Export > Save As...) and add the file instead. The "
+            "layer is omitted from the map.",
             layer_id,
         )
         return None

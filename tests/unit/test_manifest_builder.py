@@ -2420,6 +2420,46 @@ class TestTileLayer:
         legend = build_legend_widget(project)
         assert "omni-swatch-raster" in legend
 
+    WMS = (
+        "https://example.org/wms?map=a&SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap"
+        "&LAYERS=a,b&STYLES=,&FORMAT=image/png&TRANSPARENT=TRUE&CRS=EPSG:3857"
+        "&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}"
+    )
+
+    def wms_layer(self):
+        from nika_onlymap_exporter.core.export_ir import TileSpec
+
+        return self.tile_layer(tiles=TileSpec(self.WMS, 0, 19, tile_size=512))
+
+    def test_a_wms_template_travels_escaped_with_its_tile_size(self) -> None:
+        """The `&`s are the attribute's to escape; the tokens stay literal,
+        since the runtime fills only `{bbox-epsg-3857}` exactly as written."""
+        import html
+
+        markup = build_layer_element(self.wms_layer())
+        assert 'tile-size="512"' in markup
+        (data,) = re.findall(r'data="([^"]*)"', markup)
+        assert html.unescape(data) == self.WMS
+        assert "&amp;BBOX={bbox-epsg-3857}" in data
+
+    def test_an_xyz_layer_leaves_the_tile_size_to_the_runtime(self) -> None:
+        """Unchanged markup for the XYZ layers exported before WMS."""
+        assert "tile-size" not in build_layer_element(self.tile_layer())
+        assert "tileSize" not in json.dumps(self.tile_layer().snapshot())
+
+    def test_the_tile_size_is_in_the_runtime_schema(self, known_attributes) -> None:
+        assert "tile-size" in known_attributes["om-layer"]
+
+    def test_a_live_service_makes_the_map_report_tile_failures(self) -> None:
+        """Without `validate` the runtime keeps a CORS refusal to itself;
+        `silent` reports it on `om-validation-error` with no on-page panel."""
+        service = replace(self.wms_layer(), source_kind=SourceKind.SERVICE)
+        assert 'validate="silent"' in build_manifest(make_project(layers=(service,)))
+
+    def test_an_xyz_map_is_unchanged(self) -> None:
+        markup = build_manifest(make_project(layers=(self.tile_layer(),)))
+        assert "validate" not in markup
+
 
 class TestDeclutter:
     """Clusters and held-back labels, as `core.declutter` decided them."""

@@ -159,7 +159,7 @@ The reason is printed beside the button. The three you will meet:
 
 | The reason says | What to do |
 |---|---|
-| *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only WMS services or attribute tables |
+| *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only ArcGIS map services or attribute tables |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
 | Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
 
@@ -279,6 +279,18 @@ Your site's **Content Security Policy**. The map's styling is driven by
 expressions the runtime evaluates at draw time, so a policy without
 `'unsafe-eval'` in `script-src` stops it rendering — not partly, entirely. See
 [hosting](hosting.md#if-your-site-sets-a-content-security-policy).
+
+### A WMS or WMTS layer is empty in the map
+
+The rest of the map draws, but the service's layer stays blank. The map asks
+the service for its images itself, from the reader's browser, and a browser
+only draws images a service allows web pages to load: the service must send an
+`Access-Control-Allow-Origin` header (`*` for a map opened from a file). QGIS is
+not a web page, so a service can work there and not here. The browser's
+developer tools (Console) show the refused request, and the map page reports
+the cause on its `om-validation-error` event; only the service's provider can
+allow access. A service on
+`http://` is also blocked inside a map served over `https://`.
 
 ### Basemap tiles do not load for the recipient
 

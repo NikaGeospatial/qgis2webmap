@@ -26,8 +26,10 @@ Where that line falls differently from the established plugin's is set out in
 | Layer visibility and opacity | Yes |
 | Scale-dependent visibility | Yes - converted to the matching web zoom levels; the Fidelity tab shows the zooms, and how far they drift towards the edges of a tall map |
 | Rasters from a file on disk (GeoTIFF) | Yes - inside a single HTML file up to 100 MB of imagery, or in Folder and Share ZIP. Colours are drawn in as QGIS shows them |
-| XYZ / WMTS tile layers (`{z}/{x}/{y}`) | Yes - as live layers that need an internet connection. An address carrying an access key is refused rather than published |
-| WMS, WCS and ArcGIS map services | Not exported - the web map cannot request images by extent. Use the service's XYZ address if it has one |
+| XYZ tile layers (`{z}/{x}/{y}`, and `{q}` quadkeys) | Yes - as live layers that need an internet connection. An address carrying an access key is refused rather than published |
+| WMS layers | Yes, when the service offers Web Mercator (EPSG:3857) - as live layers the map asks for Web Mercator tiles, whatever CRS the project uses. They need an internet connection, and the service must allow web pages to load its images (CORS), or the layer stays empty. Whether it offers EPSG:3857 is read from what QGIS stored when it loaded the layer; exporting never contacts the service. Not exported: a service without EPSG:3857, a layer that needs a login, and a time-enabled (WMS-T) layer that follows QGIS's time - set its Static WMS-T Temporal Range to **Server default** to export it |
+| WMTS layers | Yes, on a Web Mercator tile grid (such as GoogleMapsCompatible) - as live layers, with the same internet and CORS conditions as WMS. A layer on another grid is not exported; add it again on a Web Mercator grid if the service offers one |
+| WCS and ArcGIS map services | Not exported. Add the service's WMS, WMTS or XYZ address if it has one, or save the layer as a GeoTIFF (Export > Save As...) |
 | Attribute-only tables | Not exported - nothing to draw |
 
 Data in any CRS is reprojected to WGS84 on the way out.

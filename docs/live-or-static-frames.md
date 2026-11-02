@@ -71,7 +71,7 @@ map:
   QGIS draws it: one scale in degrees on both axes;
 - is not rotated;
 - carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
-  or `.webp` tiles).
+  or `.webp` tiles, or a WMS or WMTS layer).
 
 The Checks tab then marks the frame **Kept**. An interactive frame has no basemap in
 a projected CRS; add an XYZ layer to the map for one.

@@ -84,8 +84,9 @@ def _has_tile_layer(project: QgsProject) -> bool:
     """Does the project carry an XYZ/WMS backdrop of its own?
 
     Detected by provider name rather than layer class: `wms` is what QGIS uses
-    for XYZ tile layers as well as real WMS, and both are backdrops we do not
-    export. Anything unexpected is treated as "no", because a false warning
+    for XYZ tile layers as well as real WMS, and both are backdrops. Whether
+    one was exported is the caller's question (`layer.tiles`). Anything
+    unexpected is treated as "no", because a false warning
     about a missing basemap is worse than a missing one.
     """
     tile_providers = {"wms", "xyz", "arcgismapserver", "arcgisrest"}

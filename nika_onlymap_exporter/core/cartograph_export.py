@@ -150,6 +150,7 @@ from .layout_reader import (
 from .legend_box_sync import apply_legend_changes
 from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
+from .map_services import is_image_tile_template
 from .project_reader import (
     PendingProject,
     finish_project,
@@ -1614,12 +1615,8 @@ def _draws_in_plane(
 
 
 #: The runtime's own test for tiles it warps onto a plane
-#: (`data-layer.ts`'s `isImageTileTemplate`).
-_IMAGE_TILE_RE = re.compile(r"\.(png|jpe?g|webp|gif|avif)(\?|$)", re.IGNORECASE)
-
-
-def is_image_tile_template(url: str) -> bool:
-    return _IMAGE_TILE_RE.search(url) is not None
+#: (`data-layer.ts`'s `isImageTileTemplate`) is `is_image_tile_template`,
+#: kept in `core.map_services` beside the WMS and WMTS templates it judges.
 
 
 def _with_exported_feature_ids(
