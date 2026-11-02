@@ -1147,48 +1147,12 @@ def _is_key_parameter(name: str) -> bool:
     return name.lower().replace("-", "").replace("_", "") in _KEY_PARAMETERS
 
 
-def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
-    """The parameters of an XYZ source, or `None` for any other `wms` layer.
+def _live_dependency(url: str, name: str) -> tuple[str, AssetDependency]:
+    """`url` without any access key, and the dependency a live layer on it is.
 
-    QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
-    URL-encoded source string; a real WMS has no `type`.
-    """
-    from urllib.parse import parse_qsl
-
-    fields = dict(parse_qsl(layer.source() or "", keep_blank_values=True))
-    return fields if fields.get("type") == "xyz" and fields.get("url") else None
-
-
-def read_tile_service(
-    layer: QgsRasterLayer,
-    report: FidelityReportBuilder,
-    group_path: tuple[str, ...] = (),
-    visible: bool = True,
-) -> ExportLayer | None:
-    """Read an XYZ tile layer as a live reference the web map fetches itself.
-
-    Nothing is embedded - the tiles are the server's - so the map needs a
-    connection to draw this layer, and the scanner says so. Two refusals: a
-    template the runtime cannot fill (it takes `{z}`, `{x}`, `{y}` and `{-y}`;
-    QGIS also allows `{q}` quadkeys), and a URL carrying an access key, which
-    would be published to everyone the file reaches.
+    A keyed address blocks the export: the key would travel with the map.
     """
     from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
-    layer_id = layer.id()
-    name = layer.name()
-    fields = xyz_template(layer) or {}
-    url = fields.get("url", "")
-
-    if not ("{z}" in url and "{x}" in url and ("{y}" in url or "{-y}" in url)):
-        report.unsupported(
-            f"Layer '{name}'",
-            "This tile layer's address uses a pattern the web map cannot fill "
-            "(it understands {z}, {x}, {y} and {-y} only). The layer is omitted "
-            "from the map.",
-            layer_id,
-        )
-        return None
 
     parts = urlsplit(url)
     pairs = parse_qsl(parts.query, keep_blank_values=True)
@@ -1216,6 +1180,55 @@ def read_tile_service(
             else None
         ),
     )
+    return url, dependency
+
+
+def xyz_template(layer: QgsRasterLayer) -> dict[str, str] | None:
+    """The parameters of an XYZ source, or `None` for any other `wms` layer.
+
+    QGIS keeps XYZ tile layers under the `wms` provider with `type=xyz` in a
+    URL-encoded source string; a real WMS has no `type`.
+    """
+    from urllib.parse import parse_qsl
+
+    fields = dict(parse_qsl(layer.source() or "", keep_blank_values=True))
+    return fields if fields.get("type") == "xyz" and fields.get("url") else None
+
+
+def read_tile_service(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...] = (),
+    visible: bool = True,
+) -> ExportLayer | None:
+    """Read an XYZ tile layer as a live reference the web map fetches itself.
+
+    Nothing is embedded - the tiles are the server's - so the map needs a
+    connection to draw this layer, and the scanner says so. Two refusals: a
+    template the runtime cannot fill (it takes `{z}`, `{x}`, `{y}` and `{-y}`,
+    and QGIS's `{q}` quadkey as its `{quadkey}`), and a URL carrying an access
+    key, which would be published to everyone the file reaches.
+    """
+    layer_id = layer.id()
+    name = layer.name()
+    fields = xyz_template(layer) or {}
+    # QGIS's Bing-style quadkey token is the runtime's `{quadkey}`.
+    url = fields.get("url", "").replace("{q}", "{quadkey}")
+
+    tokens = set(re.findall(r"\{(-?[A-Za-z][\w-]*)\}", url))
+    if not (
+        ({"z", "x"} <= tokens and tokens & {"y", "-y"}) or "quadkey" in tokens
+    ) or not tokens <= {"z", "x", "y", "-y", "quadkey"}:
+        report.unsupported(
+            f"Layer '{name}'",
+            "This tile layer's address uses a pattern the web map cannot fill "
+            "(it understands {z}, {x}, {y}, {-y} and {q} only). The layer is "
+            "omitted from the map.",
+            layer_id,
+        )
+        return None
+
+    url, dependency = _live_dependency(url, name)
 
     def _zoom(field: str, default: int) -> int:
         try:

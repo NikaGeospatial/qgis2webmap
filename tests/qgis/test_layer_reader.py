@@ -695,10 +695,22 @@ class TestTileServices:
         assert "SENTINEL" not in repr(dependency)
 
     def test_a_template_the_web_map_cannot_fill_is_reported(self, qgis_app) -> None:
-        layer = self._xyz("https://tiles.example.com/{q}.png")
+        """`{q}` used to be the example; since runtime 0.13.3 it is filled
+        (below), so a token nothing fills stands in."""
+        layer = self._xyz("https://tiles.example.com/{z}/{x}/{y}/{s}.png")
         report = FidelityReportBuilder()
         assert read_layer(layer, report) is None
         assert any(i.status is FidelityStatus.UNSUPPORTED for i in report.items)
+
+    def test_a_quadkey_is_the_runtimes_quadkey(self, qgis_app) -> None:
+        """QGIS's Bing-style `{q}` is filled by the runtime as `{quadkey}`."""
+        exported = read_layer(
+            self._xyz("https://tiles.example.com/a{q}.jpeg?g=1"),
+            FidelityReportBuilder(),
+        )
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url == "https://tiles.example.com/a{quadkey}.jpeg?g=1"
 
 
 def _write_raster(path, bands: int, crs: str | None, west=500000.0, north=5700000.0):
