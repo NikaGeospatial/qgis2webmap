@@ -60,7 +60,12 @@ def largest_longitude_gap(longitudes: Sequence[float]) -> tuple[float, float, fl
     With fewer than two distinct longitudes there is no meaningful gap, so the
     result is a zero-width arc at that longitude.
     """
-    values = sorted({normalize_longitude(lon) for lon in longitudes})
+    return _largest_gap(sorted({normalize_longitude(lon) for lon in longitudes}))
+
+
+def _largest_gap(values: Sequence[float]) -> tuple[float, float, float]:
+    """`largest_longitude_gap` of longitudes already normalised, sorted and
+    distinct."""
     if len(values) < 2:
         only = values[0] if values else 0.0
         return (only, only, 0.0)
@@ -93,10 +98,15 @@ def extent_from_longitudes_latitudes(
     south = min(latitudes)
     north = max(latitudes)
 
-    gap_start, gap_end, gap_width = largest_longitude_gap(longitudes)
+    # Normalised once for the gap and both naive edges. In range - nearly
+    # every longitude - is returned untouched, so it skips the call.
+    normalized = [
+        lon if -180.0 <= lon < 180.0 else normalize_longitude(lon) for lon in longitudes
+    ]
+    gap_start, gap_end, gap_width = _largest_gap(sorted(set(normalized)))
 
-    naive_west = min(normalize_longitude(lon) for lon in longitudes)
-    naive_east = max(normalize_longitude(lon) for lon in longitudes)
+    naive_west = min(normalized)
+    naive_east = max(normalized)
     naive_width = naive_east - naive_west
 
     # The wrapped extent is the complement of the empty arc.
@@ -212,16 +222,35 @@ def extent_from_geojson(feature_collection: dict) -> Extent | None:
     longitudes: list[float] = []
     latitudes: list[float] = []
 
+    step = MIN_MEANINGFUL_GAP_DEGREES / 2.0
     for feature in feature_collection.get("features") or ():
         geometry = feature.get("geometry")
         if not geometry:
             continue
+        if isinstance(geometry, dict) and geometry.get("type") == "Point":
+            # A point is one vertex and no edge: what `iter_coordinate_runs`
+            # makes of it, without the generators, for the layers with tens of
+            # thousands of them.
+            coords = geometry.get("coordinates")
+            if (
+                "geometries" not in geometry
+                and isinstance(coords, (list, tuple))
+                and len(coords) >= 2
+                and isinstance(coords[0], (int, float))
+                and isinstance(coords[1], (int, float))
+            ):
+                longitudes.append(float(coords[0]))
+                latitudes.append(float(coords[1]))
+                continue
         for run in iter_coordinate_runs(geometry):
             for lon, lat in run:
                 longitudes.append(lon)
                 latitudes.append(lat)
             for (lon_a, _), (lon_b, _) in zip(run, run[1:]):
-                longitudes.extend(_edge_longitudes(lon_a, lon_b))
+                # Ends closer than one sample apart have nothing between them
+                # to sample; most edges are, so most skip the call.
+                if not abs(lon_b - lon_a) < step:
+                    longitudes.extend(_edge_longitudes(lon_a, lon_b))
 
     return extent_from_longitudes_latitudes(longitudes, latitudes)
 
