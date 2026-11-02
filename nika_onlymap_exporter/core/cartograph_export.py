@@ -65,6 +65,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
+from typing import TypeVar, cast
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -134,8 +135,8 @@ from .export_resolution import frame_pixel_size, frame_resolution
 from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
-from .keyable_expressions import has_unkeyable_expression
-from .layer_reader import LayerFeatures, PendingLayer
+from .keyable_expressions import has_unkeyable_expression, is_unkeyable_expression
+from .layer_reader import LayerFeatures, PendingLayer, RelationTable
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -282,6 +283,10 @@ class FinishedCartograph:
 STATIC_FRAME_CACHE_BYTES = 256 * 1024 * 1024
 RASTER_EMBED_CACHE_BYTES = 256 * 1024 * 1024
 LIVE_FRAME_CACHE_BYTES = 512 * 1024 * 1024
+#: The live frames' preparation scans (`LayerScans`): label character sets and
+#: Value Relation tables, as estimated by `_character_set_bytes` and
+#: `_relation_table_bytes`.
+LAYER_SCAN_CACHE_BYTES = 64 * 1024 * 1024
 
 
 class StaticFrameCache:
@@ -444,6 +449,8 @@ class LiveFrameCache:
         max_frames: int = 16,
         max_bytes: int = LIVE_FRAME_CACHE_BYTES,
         on_project_cleared: Callable[[], None] | None = None,
+        max_scans: int = 256,
+        scan_bytes: int = LAYER_SCAN_CACHE_BYTES,
     ) -> None:
         self.read_count = 0
         self._entries: BoundedCache[_LiveRead] = BoundedCache(max_frames, max_bytes)
@@ -453,6 +460,10 @@ class LiveFrameCache:
         # project was closed while it ran) cannot fill the cache afterwards
         # with an entry a later key could match.
         self._epoch = 0
+        # `LayerScans`' results, each in a 1-tuple: a character set of None
+        # (all ASCII) is a result too.
+        self.scan_count = 0
+        self._scans: BoundedCache[tuple[object]] = BoundedCache(max_scans, scan_bytes)
 
     def revisions(
         self, project: QgsProject, source: LiveFrameSource
@@ -498,6 +509,16 @@ class LiveFrameCache:
             _qgis_values(tokens),
         )
 
+    def scans(
+        self, project: QgsProject, tokens: Mapping[str, object] | None
+    ) -> LayerScans:
+        """What `prepare_project` reuses its whole-layer scans through for one
+        frame of `project`; `tokens` are the frame's `revisions`, which it
+        looks layers up in before taking their revision again. **GUI thread
+        only.**"""
+        self._projects.follow(project)
+        return LayerScans(self, project, tokens)
+
     def get(self, slot: tuple[str, str], key: str) -> _LiveRead | None:
         return self._entries.get(slot, key)
 
@@ -508,8 +529,155 @@ class LiveFrameCache:
         """Forget every read and stop listening to every layer."""
         self._epoch += 1
         self._entries.clear()
+        self._scans.clear()
         self._layers.clear()
         self._projects.stop()
+
+
+_Scanned = TypeVar("_Scanned")
+
+
+class LayerScans:
+    """The two reads of a whole layer `prepare_project` makes on the GUI
+    thread whatever a frame's own read is -- every value of a label field
+    (`collect_character_set`) and a Value Relation's other layer
+    (`_value_relation_table`) -- reused from a `LiveFrameCache` while what
+    they read is unchanged. **GUI thread only.**
+
+    Each result is keyed by the revision (`_add_layer_token`) of every layer
+    it reads, and of the layers those join: the saved XML (filter, label
+    settings, field and widget configuration, virtual fields), the edit
+    buffer through the generation counter, the feature count, extent and
+    files; and by its own inputs and the expression variables. A layer whose
+    revision cannot be vouched for, a layer not in the project, a widget
+    filter with an expression the key cannot see or an input `value_digest`
+    cannot encode gets no key, and the layer is scanned afresh.
+    """
+
+    def __init__(
+        self,
+        cache: LiveFrameCache,
+        project: QgsProject,
+        tokens: Mapping[str, object] | None,
+    ) -> None:
+        self._cache = cache
+        self._project = project
+        self._known = tokens or {}
+        self._variables: tuple[tuple[str, object], ...] | None = None
+
+    def character_set(
+        self,
+        layer: QgsVectorLayer,
+        field_name: str,
+        capitalization: str,
+        scan: Callable[[QgsVectorLayer, str, str], str | None],
+    ) -> str | None:
+        """`scan(layer, field_name, capitalization)`, or the result it gave
+        while nothing it reads has changed since."""
+        return self._recall(
+            ("character-set", layer.id()),
+            (layer,),
+            (field_name, capitalization),
+            lambda: scan(layer, field_name, capitalization),
+            _character_set_bytes,
+        )
+
+    def relation_table(
+        self,
+        layer: QgsVectorLayer,
+        index: int,
+        formatter: QgsFieldFormatter,
+        config: dict[str, object],
+        read: Callable[
+            [QgsVectorLayer, int, QgsFieldFormatter, dict[str, object]],
+            RelationTable,
+        ],
+    ) -> RelationTable:
+        """`read(layer, index, formatter, config)`, the Value Relation table
+        of `layer`'s field `index`, or the table it gave while the related
+        layer and the widget's configuration are unchanged."""
+        from qgis.core import QgsValueRelationFieldFormatter
+
+        def fresh() -> RelationTable:
+            return read(layer, index, formatter, config)
+
+        related = QgsValueRelationFieldFormatter.resolveLayer(
+            config, QgsProject.instance()
+        )
+        if related is None:
+            return fresh()
+        field = layer.fields().at(index)
+        return self._recall(
+            ("relation", layer.id(), field.name()),
+            (related,),
+            (index, field.name(), field.typeName(), formatter.id(), config),
+            fresh,
+            _relation_table_bytes,
+            expression=str(config.get("FilterExpression") or ""),
+        )
+
+    def _recall(
+        self,
+        slot: tuple[str, ...],
+        layers: tuple[QgsVectorLayer, ...],
+        inputs: object,
+        compute: Callable[[], _Scanned],
+        size: Callable[[_Scanned], int],
+        expression: str = "",
+    ) -> _Scanned:
+        key = self._key(layers, inputs, expression)
+        if key is not None:
+            held = self._cache._scans.get(slot, key)
+            if held is not None:
+                return cast(_Scanned, held[0])
+        self._cache.scan_count += 1
+        value = compute()
+        if key is not None:
+            self._cache._scans.put(slot, key, (value,), size(value))
+        return value
+
+    def _key(
+        self, layers: tuple[QgsVectorLayer, ...], inputs: object, expression: str
+    ) -> str | None:
+        project = self._project
+        tokens: dict[str, object] = {}
+        for layer in layers:
+            if project.mapLayer(layer.id()) is not layer:
+                return None
+            if layer.id() in self._known and not layer.vectorJoins():
+                tokens[layer.id()] = self._known[layer.id()]
+            elif not _add_layer_token(project, layer.id(), tokens, self._cache._layers):
+                return None
+        # A widget's filter is evaluated in the scopes of the layer it reads.
+        if expression and is_unkeyable_expression(
+            expression, _keyed_variables(project, *layers)
+        ):
+            return None
+        # A join to a layer that is not in the project (an auxiliary storage)
+        # has no revision to key by.
+        if any(token is None for token in tokens.values()):
+            return None
+        if self._variables is None:
+            self._variables = _expression_variables(project)
+        return value_digest(
+            (
+                self._cache._epoch,
+                _project_session(project),
+                tuple(sorted(tokens.items())),
+                self._variables,
+                inputs,
+            ),
+            _qgis_values(tokens),
+        )
+
+
+def _character_set_bytes(characters: str | None) -> int:
+    return 64 + 4 * len(characters or "")
+
+
+def _relation_table_bytes(table: RelationTable) -> int:
+    """About what `table`'s rows hold in memory: two strings and a tuple each."""
+    return 64 + sum(160 + 4 * (len(key) + len(text)) for key, text in table.items)
 
 
 #: A layer read held in memory is GeoJSON as Python dicts, lists and floats,
@@ -1046,6 +1214,8 @@ def prepare_live_reads(
     `live_cache` lets `finish_cartograph` reuse a frame's finished read across
     calls while nothing it is made from has changed (the module's shared cache
     by default; see `LiveFrameCache`); `None` reads every frame afresh.
+    It also keeps the label and Value Relation scans the snapshot itself makes
+    (`LayerScans`), which a frame read afresh reuses too.
     """
     revisions = (
         [live_cache.revisions(project, source) for source in prepared.live_frames]
@@ -1061,8 +1231,13 @@ def prepare_live_reads(
             layer_settings=layer_settings,
             settings=_LIVE_FRAME_SETTINGS,
             report_map_title=False,
+            scans=(
+                live_cache.scans(project, revisions[index])
+                if live_cache is not None
+                else None
+            ),
         )
-        for source in prepared.live_frames
+        for index, source in enumerate(prepared.live_frames)
     )
     keys = (
         tuple(

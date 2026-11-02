@@ -33,6 +33,8 @@ from .render_units import to_pixels
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
 
+    from .cartograph_export import LayerScans
+
 # What the runtime's default atlas already covers.
 ASCII_PRINTABLE = frozenset(string.printable)
 
@@ -155,8 +157,11 @@ def _single_rule_settings(
 def translate_labeling(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
+    scans: LayerScans | None = None,
 ) -> LabelingSpec:
-    """Translate a layer's labelling, or record why it cannot be."""
+    """Translate a layer's labelling, or record why it cannot be. `scans`
+    (from a cartograph's `LiveFrameCache`) reuses the character set of an
+    earlier call while the label values are unchanged."""
     layer_id = layer.id()
     subject = f"Labels on '{layer.name()}'"
 
@@ -246,7 +251,13 @@ def translate_labeling(
     # those labels would render blank: present, positioned, invisible.
     capitalization = read_capitalization(text_format)
 
-    character_set = collect_character_set(layer, field_name, capitalization)
+    character_set = (
+        collect_character_set(layer, field_name, capitalization)
+        if scans is None
+        else scans.character_set(
+            layer, field_name, capitalization, collect_character_set
+        )
+    )
     if character_set:
         report.preserved(
             subject,

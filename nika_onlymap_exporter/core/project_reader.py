@@ -67,6 +67,8 @@ from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsLayerTreeNode, QgsProject
 
+    from .cartograph_export import LayerScans
+
 DEFAULT_TITLE = "Untitled map"
 
 
@@ -348,6 +350,7 @@ def prepare_project(
     canvas_extent: Extent | None = None,
     layer_order: Sequence[str] | None = None,
     report_map_title: bool = True,
+    scans: LayerScans | None = None,
 ) -> PendingProject:
     """Read a whole project up to its features. **GUI thread only.**
 
@@ -374,6 +377,10 @@ def prepare_project(
     `layer_settings` carries the dialog's per-layer popup and label checkboxes,
     keyed by layer id. A layer absent from the mapping keeps the defaults, so a
     caller with no dialog (the Processing algorithm, a test) can omit it.
+
+    `scans`, from a cartograph's `LiveFrameCache`, reuses the label and Value
+    Relation scans of an earlier call while what they read is unchanged;
+    `None` scans every layer afresh.
     """
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
@@ -464,6 +471,7 @@ def prepare_project(
             clip_extent=clip_extent,
             name_field=per_layer.name_field,
             cluster=per_layer.cluster,
+            scans=scans,
         )
         entries.append((map_layer.name(), prepared))
 

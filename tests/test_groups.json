@@ -172,6 +172,7 @@
       "tests": [
         "tests/qgis/test_cartograph_export.py",
         "tests/qgis/test_live_frame_cache.py",
+        "tests/qgis/test_layer_scan_cache.py",
         "tests/qgis/test_unkeyable_expressions.py",
         "tests/qgis/test_cartograph_layer_capabilities.py",
         "tests/qgis/test_cartograph_include_keeps_state.py",
@@ -417,6 +418,7 @@
     {"target": "tests/qgis/test_renderer_translator.py", "groups": ["rendering"], "covers": "representative vector export"},
     {"target": "tests/qgis/test_labeling_translator.py", "groups": ["rendering"], "covers": "representative vector export"},
     {"target": "tests/qgis/test_attribute_representation.py::TestValueRelationMatchesQgis", "groups": ["rendering"], "covers": "known cross-version regression: Value Relation ordering"},
+    {"target": "tests/qgis/test_layer_scan_cache.py", "groups": ["export_pipeline", "rendering"], "covers": "build cache invalidation: label and Value Relation scans"},
     {"target": "tests/qgis/test_unkeyable_expressions.py", "groups": ["export_pipeline", "rendering"], "covers": "build cache invalidation: expressions a key cannot see"},
     {"target": "tests/qgis/test_cartograph_atlas.py", "groups": ["atlas"], "covers": "atlas"},
     {"target": "tests/qgis/test_atlas_filter_and_clearing.py", "groups": ["atlas"], "covers": "atlas"},
