@@ -11,12 +11,14 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Sequence
 from typing import Any
 
 import pytest
 
+from nika_onlymap_exporter.core import extent_math
 from nika_onlymap_exporter.core.export_ir import Extent
 from nika_onlymap_exporter.core.extent_math import (
     _edge_longitudes,
@@ -61,6 +63,11 @@ def _old_extent_from_longitudes_latitudes(
 
 
 def _old_extent_from_geojson(feature_collection: dict) -> Extent | None:
+    return _old_extent_from_longitudes_latitudes(*_old_walk(feature_collection))
+
+
+def _old_walk(feature_collection: dict) -> tuple[list[float], list[float]]:
+    """The longitudes and latitudes the original walk handed on."""
     longitudes: list[float] = []
     latitudes: list[float] = []
     for feature in feature_collection.get("features") or ():
@@ -73,7 +80,7 @@ def _old_extent_from_geojson(feature_collection: dict) -> Extent | None:
                 latitudes.append(lat)
             for (lon_a, _), (lon_b, _) in zip(run, run[1:]):
                 longitudes.extend(_edge_longitudes(lon_a, lon_b))
-    return _old_extent_from_longitudes_latitudes(longitudes, latitudes)
+    return longitudes, latitudes
 
 
 def _exactly(extent: Extent | None) -> tuple[str, ...] | None:
@@ -331,3 +338,156 @@ def _old_union(extent: Extent | None) -> Extent | None:
     return _old_extent_from_longitudes_latitudes(
         longitudes, [extent.south, extent.north] * 2
     )
+
+
+# --- One float either side of every boundary --------------------------------
+
+
+def _ulps(value: float, count: int = 2) -> list[float]:
+    """`value` and the `count` floats next to it on each side, in order."""
+    below, above = [value], [value]
+    for _ in range(count):
+        below.append(math.nextafter(below[-1], -math.inf))
+        above.append(math.nextafter(above[-1], math.inf))
+    return [*reversed(below[1:]), value, *above[1:]]
+
+
+def _walked_alike(monkeypatch: pytest.MonkeyPatch, collection: dict[str, Any]) -> None:
+    """The quicker walk hands on the very longitudes and latitudes the
+    original did, in order and sign, not merely ones giving the same extent:
+    a skipped edge must be one that had nothing to sample."""
+    handed: list[tuple[list[float], list[float]]] = []
+    real = extent_math.extent_from_longitudes_latitudes
+
+    def recording(
+        longitudes: Sequence[float], latitudes: Sequence[float]
+    ) -> Extent | None:
+        handed.append((list(longitudes), list(latitudes)))
+        return real(longitudes, latitudes)
+
+    monkeypatch.setattr(extent_math, "extent_from_longitudes_latitudes", recording)
+    extent = extent_from_geojson(collection)
+    monkeypatch.undo()
+    longitudes, latitudes = _old_walk(collection)
+    assert [list(map(repr, part)) for part in handed[0]] == [
+        list(map(repr, longitudes)),
+        list(map(repr, latitudes)),
+    ]
+    assert _exactly(extent) == _exactly(_old_extent_from_geojson(collection))
+
+
+def _edge(west: float, east: float) -> dict[str, Any]:
+    return {
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[west, 0.0], [east, 1.0]],
+                },
+                "properties": {},
+            }
+        ]
+    }
+
+
+# Edge ends one sampling step apart. The last pair's difference rounds to
+# exactly one step though the true one is a little more, and its one sample
+# lies just inside the far end: an edge exactly one step long cannot be
+# skipped.
+ONE_STEP_EDGES = [
+    (0.0, 1.0),
+    (10.25, 11.25),
+    (-0.5, 0.5),
+    (-180.0, -179.0),
+    (179.0, 180.0),
+    (-0.625 - 2**-53, 0.375),
+]
+
+# Edge ends where the edge starts to be taken the short way across the
+# antimeridian, 270 degrees apart, and ends whose way across is one step.
+WRAPPING_EDGES = [
+    (-135.0, 135.0),
+    (-180.0, 90.0),
+    (-90.0, 180.0),
+    (179.5, -179.5),
+    (-180.0, 180.0),
+]
+
+
+def test_an_edge_of_exactly_one_step_can_carry_a_sample() -> None:
+    low, high = ONE_STEP_EDGES[-1]
+    assert high - low == extent_math.MIN_MEANINGFUL_GAP_DEGREES / 2.0
+    assert _edge_longitudes(low, high) == [high - 2**-53]
+
+
+@pytest.mark.parametrize("backwards", [False, True], ids=["eastward", "westward"])
+@pytest.mark.parametrize(("start", "end"), ONE_STEP_EDGES + WRAPPING_EDGES, ids=repr)
+def test_edges_a_float_from_a_boundary_walk_alike(
+    monkeypatch: pytest.MonkeyPatch, start: float, end: float, backwards: bool
+) -> None:
+    """Each edge with its far end moved up to two floats either way: just
+    short of one step, the edges the quicker walk skips, and just past it;
+    either side of where an edge is taken across the antimeridian."""
+    for moved in _ulps(end):
+        ends = (moved, start) if backwards else (start, moved)
+        _walked_alike(monkeypatch, _edge(*ends))
+
+
+def test_the_wrap_boundary_is_live() -> None:
+    """Up to 270 degrees an edge covers the longitudes between its ends: one
+    float further its span still rounds to 270 and only gains the sample its
+    far end moved past. Two floats further it goes the other way round."""
+    ends = _ulps(135.0)[2:]
+    assert [len(_edge_longitudes(-135.0, end)) for end in ends] == [269, 270, 89]
+
+
+POINT_COORDINATES: list[object] = [
+    [10, 20],
+    [10.0, 20.0],
+    [-0, 0],
+    [2**53 + 1, -(2**53) - 1],
+    [True, False],
+    (10.5, 20.5),
+    [1.0, 2.0, 3.0, 4.0],
+    *([lon, 0.0] for lon in _ulps(-180.0)),
+    *([lon, 0.0] for lon in _ulps(180.0)),
+    *([lon, 0.0] for lon in _ulps(0.0)),
+    [1.0, "2"],
+    ["1", 2.0],
+    [1.0, None],
+    [1.0],
+    [[1.0, 2.0]],
+    [[1.0, 2.0], [3.0, 4.0]],
+]
+
+
+@pytest.mark.parametrize("coordinates", POINT_COORDINATES, ids=repr)
+def test_point_coordinates_walk_alike(
+    monkeypatch: pytest.MonkeyPatch, coordinates: object
+) -> None:
+    """The Point shortcut on every kind of coordinate it may meet: integers
+    and bools (converted as the walker converts them), a tuple, extra
+    dimensions, longitudes a float either side of the ends of the range and
+    of zero, and coordinates it must leave to the walker. Alone, and beside
+    a point at the far side of the world, so the range ends decide the gap."""
+    point = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": coordinates},
+    }
+    far = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [-90.0, 0.0]},
+    }
+    _walked_alike(monkeypatch, {"features": [point]})
+    _walked_alike(monkeypatch, {"features": [point, far]})
+
+
+def test_a_coordinate_past_any_float_fails_alike() -> None:
+    collection = {
+        "features": [{"geometry": {"type": "Point", "coordinates": [10**400, 0]}}]
+    }
+    with pytest.raises(OverflowError):
+        _old_extent_from_geojson(collection)
+    with pytest.raises(OverflowError):
+        extent_from_geojson(collection)

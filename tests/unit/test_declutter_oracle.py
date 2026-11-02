@@ -468,3 +468,192 @@ def test_the_clash_budget_is_the_share_rule_exactly() -> None:
         allowed = _clashes_allowed(count)
         assert (count - allowed) / count >= FIT_SHARE, count
         assert allowed == count or (count - allowed - 1) / count < FIT_SHARE, count
+
+
+# --- One float either side of every boundary --------------------------------
+
+
+def _ulps(value: float, count: int = 2) -> list[float]:
+    """`value` and the `count` floats next to it on each side, in order."""
+    below, above = [value], [value]
+    for _ in range(count):
+        below.append(math.nextafter(below[-1], -math.inf))
+        above.append(math.nextafter(above[-1], math.inf))
+    return [*reversed(below[1:]), value, *above[1:]]
+
+
+@pytest.mark.parametrize("backwards", [False, True], ids=["forwards", "backwards"])
+@pytest.mark.parametrize("vertical", [False, True], ids=["row", "column"])
+def test_boxes_one_float_from_touching_decide_alike(
+    vertical: bool, backwards: bool
+) -> None:
+    """Two boxes exactly touching, then the second one float closer or
+    further: one float closer clashes, touching or further does not. In a row
+    the pair shares a grid cell, in a column it straddles two. Pixels sit in
+    one binade and the scale is a power of two, so every edge is exact."""
+    scale = 256.0 * 2**2
+    side, height = 12.0, 20.0
+    first = (1000.25, 1000.25)
+    touching = first[1] + height if vertical else first[0] + side
+    verdicts = []
+    for along in _ulps(touching):
+        second = (first[0], along) if vertical else (along, first[1])
+        pixels = [second, first] if backwards else [first, second]
+        boxes = [(x, y, side, height) for x, y in pixels]
+        expected = _old_share_that_fits(boxes) >= FIT_SHARE
+        units = [(x / scale, y / scale) for x, y in pixels]
+        halves = [(side / 2, height / 2)] * 2
+        assert _enough_fit(units, halves, scale, height) is expected, along
+        verdicts.append(expected)
+    assert verdicts == [False, False, True, True, True]
+
+
+@pytest.mark.parametrize("vertical", [False, True], ids=["row", "column"])
+@pytest.mark.parametrize(
+    ("boundary", "scale"),
+    [(12.0 * 50, 256.0 * 2**2), (12.0 * 5_000_000, 256.0 * 2**18)],
+    ids=["zoom 2", "zoom 18"],
+)
+def test_boxes_around_grid_cell_edges_decide_alike(
+    vertical: bool, boundary: float, scale: float
+) -> None:
+    """Every pair of positions within two floats of a cell edge, or of a box
+    side either way of it: pairs in one cell, in neighbouring cells and two
+    apart, a float short of touching, touching and a float past it. One cell
+    is one box side, so a clash across an edge is only found through the
+    neighbouring cell's key, at zoom 18's pixel range as much as at zoom 2's."""
+    side = 12.0
+    across = 300.5 * scale / 1024
+    places = [
+        *_ulps(boundary - side),
+        *_ulps(boundary - side / 2),
+        *_ulps(boundary),
+        *_ulps(boundary + side),
+    ]
+    verdicts = set()
+    clashes_across_an_edge = 0
+    for a in places:
+        for b in places:
+            pixels = (
+                [(across, a), (across, b)] if vertical else [(a, across), (b, across)]
+            )
+            boxes = [(x, y, side, side) for x, y in pixels]
+            expected = _old_share_that_fits(boxes) >= FIT_SHARE
+            units = [(x / scale, y / scale) for x, y in pixels]
+            halves = [(side / 2, side / 2)] * 2
+            assert _enough_fit(units, halves, scale, side) is expected, (a, b)
+            verdicts.add(expected)
+            if not expected and a // side != b // side:
+                clashes_across_an_edge += 1
+    assert verdicts == {True, False}
+    assert clashes_across_an_edge
+
+
+def _on_seventh_decimals(count: int) -> list[float]:
+    """Longitudes 0.001 apart, each exactly the float `round(_, 7)` gives."""
+    return [round(10.0 + index * 0.001, 7) for index in range(count)]
+
+
+def _rounding_layers() -> list[tuple[str, list[tuple[float, float]], bool]]:
+    """Point layers whose positions are, or are a float or two off, what
+    rounding to seven decimals gives - whether the sites are the points
+    themselves turns on exactly that. The flag is whether they are."""
+    lons = _on_seventh_decimals(150)
+    halfway = [float(f"{lon:.7f}5") for lon in _on_seventh_decimals(30)]
+    return [
+        ("on the seventh decimal", [(lon, 5.0) for lon in lons], True),
+        (
+            "a float above",
+            [(math.nextafter(lon, math.inf), 5.0) for lon in lons],
+            False,
+        ),
+        (
+            "a float below",
+            [(math.nextafter(lon, -math.inf), 5.0) for lon in lons],
+            False,
+        ),
+        (
+            "one point a float off",
+            [(math.nextafter(lons[0], math.inf), 5.0)] + [(x, 5.0) for x in lons[1:]],
+            False,
+        ),
+        (
+            "latitude a float off",
+            [(lon, math.nextafter(5.0, -math.inf)) for lon in lons],
+            False,
+        ),
+        (
+            "stacks a float apart",
+            [
+                point
+                for lon in lons[:75]
+                for point in ((lon, 5.0), (math.nextafter(lon, math.inf), 5.0))
+            ],
+            False,
+        ),
+        (
+            "either side of half-way",
+            [(lon, 5.0) for middle in halfway for lon in _ulps(middle)],
+            False,
+        ),
+    ]
+
+
+ROUNDING_LAYERS = _rounding_layers()
+
+
+@pytest.mark.parametrize(
+    ("name", "points", "sites_are_points"),
+    ROUNDING_LAYERS,
+    ids=[name for name, _, _ in ROUNDING_LAYERS],
+)
+def test_sites_a_float_from_the_seventh_decimal_match(
+    name: str, points: list[tuple[float, float]], sites_are_points: bool
+) -> None:
+    """The site search is skipped only when rounding to seven decimals leaves
+    every point where it is; a float either way, or a pair one float apart
+    or either side of a half-way, must still come out as the original."""
+    assert (declutter._spots(points) == points) is sites_are_points
+    if name == "either side of half-way":
+        # Each five floats round to two spots, so a stack is two piles.
+        assert len(set(declutter._spots(points))) == 2 * len(points) // 5
+    for overrides in (
+        {},
+        {"labeling": LabelingSpec(enabled=True, field_name="name", font_size=1)},
+    ):
+        layer = _layer(points, **overrides)
+        result, stacked = declutter_noting_stacks(layer, 12.0)
+        assert result == _old_declutter_layer(layer, 12.0), (name, overrides)
+        assert result.cluster_max_zoom is not None, name
+        assert stacked is _old_has_stacks(result), (name, overrides)
+
+
+@pytest.mark.parametrize("count", [10, 11, 19, 20, 99, 100, 101, 1000])
+@pytest.mark.parametrize("where", ["first", "last", "spread"])
+def test_one_clash_either_side_of_the_budget_decides_alike(
+    count: int, where: str
+) -> None:
+    """Exactly the clashes the share allows fit; one more does not, wherever
+    in the order the clashing boxes come."""
+    allowed = _clashes_allowed(count)
+    scale = 256.0 * 2**12
+    side = 12.0
+    for clashes in (allowed - 1, allowed, allowed + 1):
+        if not 0 <= clashes < count:
+            continue
+        apart = [(100.0 + 100.0 * index, 100.0) for index in range(count - clashes)]
+        repeats = [apart[0]] * clashes
+        if where == "first":
+            pixels = [apart[0], *repeats, *apart[1:]]
+        elif where == "last":
+            pixels = [*apart, *repeats]
+        else:
+            pixels = list(apart)
+            for number, repeat in enumerate(repeats):
+                pixels.insert(1 + number * 2, repeat)
+        boxes = [(x, y, side, side) for x, y in pixels]
+        expected = _old_share_that_fits(boxes) >= FIT_SHARE
+        assert expected is (clashes <= allowed)
+        units = [(x / scale, y / scale) for x, y in pixels]
+        halves = [(side / 2, side / 2)] * len(pixels)
+        assert _enough_fit(units, halves, scale, side) is expected, (count, clashes)
