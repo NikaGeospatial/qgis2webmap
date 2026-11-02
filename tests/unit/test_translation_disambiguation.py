@@ -115,7 +115,8 @@ class TestTheGenerator:
             ("Caption", ""): ["a.py:1", "a.py:6"],
             ("Caption", "template name"): ["a.py:2"],
             ("Note", "by keyword"): ["a.py:3"],
-            ("%n map", ""): ["a.py:4"],
+            ("{n} map", ""): ["a.py:4"],
+            ("{n} maps", ""): ["a.py:4"],
         }
 
     def test_the_disambiguation_is_written_as_qt_s_comment(
@@ -221,60 +222,3 @@ class TestTheShippedCatalogues:
         assert set(captions) == {"", report.name.disambiguation}
         assert captions[""] and captions[report.name.disambiguation]
         assert captions[""] != captions[report.name.disambiguation]
-
-
-class TestPluralEntries:
-    """`plural()` and `N_plural()` pairs are Qt numerus entries."""
-
-    SOURCE = (
-        'plural(n, "{n} map", "{n} maps")\n'
-        'WORDS = N_plural("It is gone.", "They are gone.")\n'
-        'plural(n, "{n} map", "{n} maps")\n'
-    )
-
-    def test_one_numerus_entry_per_pair(
-        self, generator: ModuleType, tmp_path: Path
-    ) -> None:
-        (tmp_path / "a.py").write_text(self.SOURCE, encoding="utf-8")
-        sources, plurals = generator.scan()
-        assert list(sources) == [("%n map", ""), ("It is gone.", "")]
-        assert plurals == {
-            ("%n map", ""): "%n maps",
-            ("It is gone.", ""): "They are gone.",
-        }
-
-    @pytest.mark.parametrize(
-        ("language", "forms"),
-        [("ar", 6), ("zh_CN", 1), ("fr", 2), ("es", 2), ("pt_BR", 2), ("hi", 2)],
-    )
-    def test_an_untranslated_plural_has_its_languages_form_count(
-        self, generator: ModuleType, tmp_path: Path, language: str, forms: int
-    ) -> None:
-        (tmp_path / "a.py").write_text(self.SOURCE, encoding="utf-8")
-        sources, plurals = generator.scan()
-        root = ET.fromstring(
-            generator.render(language, sources, {}, plurals).split("\n", 2)[2]
-        )
-        message = root.find(".//message")
-        assert message is not None and message.get("numerus") == "yes"
-        assert len(message.findall(".//numerusform")) == forms
-        assert message.findtext("extracomment") == "English plural: %n maps"
-
-    def test_translated_forms_are_read_back(
-        self, generator: ModuleType, tmp_path: Path
-    ) -> None:
-        (tmp_path / "a.py").write_text(self.SOURCE, encoding="utf-8")
-        sources, plurals = generator.scan()
-        ts = tmp_path / "qgis2webmap_fr.ts"
-        known = {("%n map", ""): ["%n carte", "%n cartes"]}
-        ts.write_text(generator.render("fr", sources, known, plurals), encoding="utf-8")
-        assert generator.read_existing(ts) == known
-
-    def test_a_text_both_plural_and_plain_is_refused(
-        self, generator: ModuleType, tmp_path: Path
-    ) -> None:
-        (tmp_path / "a.py").write_text(
-            'plural(n, "{n} map", "{n} maps")\ntr("%n map")\n', encoding="utf-8"
-        )
-        with pytest.raises(SystemExit):
-            generator.scan()

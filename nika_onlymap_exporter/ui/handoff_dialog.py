@@ -492,7 +492,7 @@ class HandoffDialog(QDialog):
             self.files_note.setText(
                 plural(
                     outside,
-                    "Left out {n} file outside {folder}.",
+                    "Left out 1 file outside {folder}.",
                     "Left out {n} files outside {folder}.",
                     folder=self._folder,
                 )

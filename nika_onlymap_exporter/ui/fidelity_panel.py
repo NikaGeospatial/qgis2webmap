@@ -75,7 +75,7 @@ from ..core.fidelity_summary import (
     Topic,
 )
 from ..core.report_facts import Fact, ReportFacts, facts_line, facts_lines
-from .i18n import N_, N_plural, plural, tr
+from .i18n import N_, plural, tr
 from .theme import qgis_icon
 
 # QGIS theme icons, by resource name. Verified present in QGIS 4.2's compiled
@@ -1127,11 +1127,13 @@ class Proceed(Enum):
 ANYWAY_WORDS = {
     "Export": (
         N_("Export anyway"),
-        N_plural(
+        N_(
             "You can export anyway and the map is made without it, or review "
-            "the report first.",
+            "the report first."
+        ),
+        N_(
             "You can export anyway and the map is made without them, or review "
-            "the report first.",
+            "the report first."
         ),
     ),
 }
@@ -1158,8 +1160,8 @@ def problems_box(
         + "\n\n"
         + "\n".join(f"- {item.subject}: {item.detail}" for item in items)
     )
-    button, without = ANYWAY_WORDS[action]
-    box.setInformativeText(plural(count, *without))
+    button, without_it, without_them = ANYWAY_WORDS[action]
+    box.setInformativeText(plural(count, without_it, without_them))
     anyway = box.addButton(tr(button), QMessageBox.ButtonRole.AcceptRole)
     review = box.addButton(
         tr("Review on the Fidelity tab"), QMessageBox.ButtonRole.ActionRole

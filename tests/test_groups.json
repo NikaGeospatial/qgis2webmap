@@ -298,8 +298,7 @@
     "i18n": {
       "description": "Translations and language picker",
       "tests": [
-        "tests/qgis/test_i18n.py",
-        "tests/qgis/test_plural_forms.py"
+        "tests/qgis/test_i18n.py"
       ],
       "integration": []
     },
