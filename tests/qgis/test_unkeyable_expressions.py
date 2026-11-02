@@ -23,8 +23,8 @@ from nika_onlymap_exporter.core.cartograph_export import (
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.keyable_expressions import (
-    KEYABLE_DOLLAR_NAMES,
     KEYABLE_FUNCTIONS,
+    _builtins,
     has_unkeyable_expression,
 )
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
@@ -194,14 +194,22 @@ class TestAPythonFunction:
 
 
 class TestTheLists:
-    def test_every_listed_function_is_built_into_this_qgis(self) -> None:
-        """A name this QGIS does not have could be a Python function here;
-        `_builtins` drops such a name, and this says which ones it would."""
-        from qgis.core import QgsExpression
+    def test_only_names_built_into_this_qgis_are_trusted(self) -> None:
+        """A listed name this QGIS does not have (a function added in a later
+        version) could be a Python function here, so it is not trusted; on
+        QGIS 4.2, which the lists were made from, every name is built in."""
+        from qgis.core import Qgis, QgsExpression
 
         built_in = {name.lower() for name in QgsExpression.BuiltinFunctions()}
-        assert KEYABLE_FUNCTIONS - built_in == set()
-        assert {f"${name}" for name in KEYABLE_DOLLAR_NAMES} - built_in == set()
+        functions, dollars = _builtins()
+        assert functions == KEYABLE_FUNCTIONS & built_in
+        assert {f"${name}" for name in dollars} <= built_in
+        missing = sorted(KEYABLE_FUNCTIONS - built_in)
+        if Qgis.QGIS_VERSION_INT >= 40200:
+            assert missing == []
+        for name in missing:
+            call = f"{name}()"
+            assert has_unkeyable_expression(_as_layer_xml(call), set), call
 
     @pytest.mark.parametrize(
         "expression",
