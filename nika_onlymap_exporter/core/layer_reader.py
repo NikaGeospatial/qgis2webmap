@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransformContext,
+    QgsFeatureRequest,
     QgsJsonExporter,
     QgsMapLayerType,
     QgsReadWriteContext,
@@ -64,7 +65,7 @@ from .renderer_translator import (
 from .symbol_rasterizer import build_icon_atlas
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from qgis.core import (
         QgsFeature,
@@ -331,6 +332,10 @@ class LayerFeatures:
     # A private clone for the formatters to be called with, never the project's
     # layer. Made only when `formats` is not empty.
     formats_layer: QgsVectorLayer | None = None
+    # The indexes of the fields the export keeps, the only ones read from the
+    # source: a wide table's other columns would be fetched and serialised
+    # only to be stripped (see `keep_only_fields`). `None` reads every field.
+    attribute_indexes: tuple[int, ...] | None = None
 
     def display_values(self, features: list[QgsFeature]) -> list[dict[str, Any]]:
         """Per feature, each formatted field's shown value under its display name."""
@@ -621,15 +626,24 @@ def snapshot_features(
     layer: QgsVectorLayer,
     clip_extent: Any | None,
     display_names: Mapping[str, str] | None = None,
+    keep: Iterable[str] | None = None,
 ) -> LayerFeatures:
     """Copy out what `export_geojson_from` needs. **GUI thread only.**
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
-    copy of, which is none for a caller that has no popup.
+    copy of, which is none for a caller that has no popup. `keep` is the names
+    of the fields the export keeps, which are then the only ones read; `None`
+    reads them all.
     """
     from qgis.core import QgsProject
 
     formats = _field_formats(layer, display_names or {})
+    attribute_indexes = None
+    if keep is not None:
+        fields = layer.fields()
+        attribute_indexes = tuple(
+            sorted({i for i in map(fields.indexOf, keep) if i >= 0})
+        )
     return LayerFeatures(
         source=QgsVectorLayerFeatureSource(layer),
         layer_id=layer.id(),
@@ -639,6 +653,7 @@ def snapshot_features(
         total=layer.featureCount() if clip_extent is not None else -1,
         formats=formats,
         formats_layer=layer.clone() if formats else None,
+        attribute_indexes=attribute_indexes,
     )
 
 
@@ -691,12 +706,20 @@ def export_geojson_from(
 
     try:
         if clip_extent is None:
-            collected = list(features.source.getFeatures())
+            request = QgsFeatureRequest()
         else:
             request = _clip_request(
                 features.crs, clip_extent, features.transform_context
             )
-            collected = list(features.source.getFeatures(request))
+        indexes = features.attribute_indexes
+        if indexes is not None:
+            request.setSubsetOfAttributes(list(indexes))
+            # And only those written, rather than every other column as a
+            # null. With none read, the empty list means every field: they
+            # are written as nulls and stripped, as before.
+            exporter.setAttributes(list(indexes))
+        collected = list(features.source.getFeatures(request))
+        if clip_extent is not None:
             _report_clip(report, subject, layer_id, len(collected), features.total)
         collection = json.loads(exporter.exportFeatures(collected))
         if features.formats:
@@ -1687,7 +1710,6 @@ def prepare_layer(
     # under the field's own name for everything that draws or filters.
     display_names = popup_display_names(layer, popup)
     popup = popup_reading_display(popup, display_names)
-    features = snapshot_features(layer, clip_extent, display_names)
 
     # The primary-key check reads the live layer, so it is made here; the strip
     # it guards happens in `PendingLayer.finish`.
@@ -1696,6 +1718,7 @@ def prepare_layer(
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
+    features = snapshot_features(layer, clip_extent, display_names, keep)
 
     base = ExportLayer(
         layer_id=layer_id,

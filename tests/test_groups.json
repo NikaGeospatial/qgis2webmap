@@ -147,6 +147,7 @@
         "tests/qgis/test_raster_smoothing.py",
         "tests/qgis/test_attribute_representation.py",
         "tests/qgis/test_layer_reader.py",
+        "tests/qgis/test_read_only_kept_fields.py",
         "tests/qgis/test_project_reader.py",
         "tests/qgis/test_elevation_translator_qgis.py",
         "tests/qgis/test_cartograph_rasters.py",
