@@ -116,7 +116,7 @@ The Fidelity tab lists exactly which layers were included.
 
 The plugin itself makes exactly one network request in its entire life: the
 first time you build a map, it downloads the OnlyMap runtime from npm — about
-5.6 MB, once per computer, after showing you the licence and asking. See
+5.7 MB, once per computer, after showing you the licence and asking. See
 [installation](installation.md).
 
 That request sends nothing about you or your data. It is an anonymous download
