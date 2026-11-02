@@ -365,15 +365,24 @@ def licence_marker(version: str, cache_dir: Path | None = None) -> Path:
 
 
 def licence_accepted(version: str, cache_dir: Path | None = None) -> bool:
-    return licence_marker(version, cache_dir).is_file()
+    """Whether the user has accepted the runtime licence, for any version.
+
+    Asked once, at the first download: a runtime upgrade that comes with a
+    plugin update downloads without asking again.
+    """
+    if licence_marker(version, cache_dir).is_file():
+        return True
+    try:
+        return any(
+            marker.is_file()
+            for marker in (cache_dir or default_cache_dir()).glob(".licence-accepted-*")
+        )
+    except OSError:
+        return False
 
 
 def record_licence_acceptance(version: str, cache_dir: Path | None = None) -> None:
-    """Record that the user accepted this version's licence.
-
-    Per version, deliberately: a new runtime can carry new terms, and an
-    acceptance recorded against 0.5.3 says nothing about 0.6.0.
-    """
+    """Record that the user accepted the licence, naming the version they saw."""
     marker = licence_marker(version, cache_dir)
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(

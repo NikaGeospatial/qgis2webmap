@@ -97,6 +97,34 @@ class TestEnsureRuntime:
         assert isinstance(provider, rm.LocalRuntime)
 
 
+    def test_a_runtime_upgrade_does_not_ask_for_the_licence_again(
+        self, qgis_app, tmp_path, monkeypatch
+    ):
+        """Accepted once at the first download; a plugin update that pins a
+        newer runtime downloads it without showing the licence again."""
+        from nika_onlymap_exporter.ui import runtime_setup
+
+        monkeypatch.setattr(runtime_setup, "discover_runtime_dir", lambda: None)
+        monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+        rm.record_licence_acceptance("0.0.1", tmp_path)
+
+        def no_dialog(*args, **kwargs):
+            raise AssertionError("the licence was shown again")
+
+        downloads = []
+        monkeypatch.setattr(runtime_setup, "RuntimeLicenceDialog", no_dialog)
+        monkeypatch.setattr(
+            runtime_setup,
+            "_download_with_progress",
+            lambda provider, parent: downloads.append(provider.version) or provider,
+        )
+
+        provider = ensure_runtime()
+
+        assert provider is not None
+        assert downloads == [provider.version]
+        assert provider.version != "0.0.1"
+
 class TestQgisDownloader:
     def test_a_cancelled_feedback_aborts(self, qgis_app) -> None:
         """Cancel has to work even though no byte progress is reported."""

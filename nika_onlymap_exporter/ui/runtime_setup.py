@@ -42,6 +42,7 @@ from ..packaging.runtime_manager import (
     RuntimeUnavailableError,
     default_provider,
     discover_runtime_dir,
+    licence_accepted,
     record_licence_acceptance,
     tarball_url,
 )
@@ -206,6 +207,9 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
             ),
         )
         return None
+
+    if licence_accepted(provider.version):
+        return _download_with_progress(provider, parent)
 
     dialog = RuntimeLicenceDialog(provider.version, bundled_licence_text(), parent)
     # `exec()`, not `exec_()`: PyQt6 removed the trailing-underscore alias, and
