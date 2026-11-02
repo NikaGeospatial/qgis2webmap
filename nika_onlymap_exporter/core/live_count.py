@@ -563,6 +563,7 @@ class Prepared:
         renderer: QgsFeatureRenderer,
         context: QgsRenderContext,
         matches,  # type: ignore[no-untyped-def]
+        match_field: str | None = None,
     ) -> None:
         self.layer = layer
         self.request = request
@@ -570,6 +571,8 @@ class Prepared:
         self.renderer = renderer
         self.context = context
         self.matches = matches
+        # The field `matches` reads, the one the renderer may not.
+        self.match_field = match_field
 
     def steps(self) -> Generator[None, None, int]:
         """Count the qualifying features, yielding every `BATCH` features so
@@ -579,7 +582,17 @@ class Prepared:
         engine.prepareGeometry()
         fields = self.layer.fields()
         self.renderer.startRender(self.context, fields)
-        iterator = self.layer.getFeatures(self.request)
+        # Only the fields the renderer and the match read, asked for the way
+        # QGIS's own drawing asks for them: a wide table's other columns are
+        # never fetched. A renderer that cannot say (an expression reading
+        # every attribute) answers with QGIS's all-attributes marker, which
+        # leaves the request reading them all.
+        used = set(self.renderer.usedAttributes(self.context))
+        if self.match_field:
+            used.add(self.match_field)
+        request = QgsFeatureRequest(self.request)
+        request.setSubsetOfAttributes(used, fields)
+        iterator = self.layer.getFeatures(request)
         try:
             seen = 0
             for feature in iterator:
@@ -692,7 +705,15 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
             CountState.UNAVAILABLE,
             tr("The count could not be calculated: {reason}").format(reason=exc),
         )
-    return Prepared(layer, request, area, renderer, context, matches)
+    return Prepared(
+        layer,
+        request,
+        area,
+        renderer,
+        context,
+        matches,
+        spec.field if matches is not None else None,
+    )
 
 
 def _map_settings(map_item: QgsLayoutItemMap) -> QgsMapSettings:

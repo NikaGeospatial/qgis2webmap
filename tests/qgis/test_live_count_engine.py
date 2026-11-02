@@ -24,6 +24,7 @@ from live_count_fixtures import (
 
 pytest.importorskip("qgis.core")
 from qgis.core import (
+    QgsFeatureRequest,
     QgsLayerTreeModel,
     QgsLayoutExporter,
     QgsLayoutItemMap,
@@ -411,3 +412,79 @@ class TestRefreshingAPage:
         outcomes = lc.refresh_live_counts(page.layout)
         assert a.text() == "30" and b.text() == str(count_sites(status="Closed"))
         assert set(outcomes) == {a.uuid(), b.uuid()}
+
+
+def _counted_recording_requests(page, number):
+    """The outcome, and every request the count made of the layer."""
+    prepared = lc.prepare(page.layout, number)
+    assert isinstance(prepared, lc.Prepared)
+    layer, asked = prepared.layer, []
+
+    class Recording:
+        def fields(self):
+            return layer.fields()
+
+        def getFeatures(self, request):  # noqa: N802 - QGIS's name
+            asked.append(QgsFeatureRequest(request))
+            return layer.getFeatures(request)
+
+    prepared.layer = Recording()
+    return lc.run(prepared), asked
+
+
+def _names_read(page, request) -> list[str] | None:
+    """The fields `request` reads, or `None` when it reads every one."""
+    if not request.flags() & QgsFeatureRequest.Flag.SubsetOfAttributes:
+        return None
+    fields = page.sites.fields()
+    return sorted(fields.at(index).name() for index in request.subsetOfAttributes())
+
+
+class TestOnlyWhatTheCountReadsIsFetched:
+    """A wide table is counted without fetching its other columns: only what
+    the renderer draws with - categories, rules, data-defined sizes - and the
+    field a value is matched on. The counts are the hand-worked ones, on a
+    GeoPackage as well, whose driver really leaves the other columns out (a
+    memory layer hands every value over whatever it is asked)."""
+
+    @pytest.fixture(params=["memory", "geopackage"])
+    def page(self, request, project, tmp_path):
+        folder = tmp_path if request.param == "geopackage" else None
+        return build_page(project, folder=folder)
+
+    def test_a_category_field_and_a_matched_field(self, page) -> None:
+        number = add_counter(page, mode=lc.MODE_VALUE, field="cap", value="10")
+        outcome, asked = _counted_recording_requests(page, number)
+        _ok(outcome, count_sites(cap=10))
+        assert [_names_read(page, request) for request in asked] == [["cap", "status"]]
+
+    def test_rule_filters_and_a_data_defined_size(self, page) -> None:
+        from qgis.core import QgsProperty, QgsSymbolLayer
+
+        symbol = QgsMarkerSymbol.createSimple({})
+        symbol.symbolLayer(0).setDataDefinedProperty(
+            QgsSymbolLayer.Property.Size,
+            QgsProperty.fromExpression('length("name")'),
+        )
+        root = QgsRuleBasedRenderer.Rule(None)
+        root.appendChild(QgsRuleBasedRenderer.Rule(symbol, 0, 0, '"cap" = 10', "big"))
+        page.sites.setRenderer(QgsRuleBasedRenderer(root))
+        outcome, asked = _counted_recording_requests(page, add_counter(page))
+        _ok(outcome, count_sites(cap=10))
+        assert [_names_read(page, request) for request in asked] == [["cap", "name"]]
+
+    def test_a_rule_reading_every_attribute_reads_them_all(self, page) -> None:
+        root = QgsRuleBasedRenderer.Rule(None)
+        root.appendChild(
+            QgsRuleBasedRenderer.Rule(
+                QgsMarkerSymbol.createSimple({}),
+                0,
+                0,
+                "attributes()['status'] = 'Closed'",
+                "closed",
+            )
+        )
+        page.sites.setRenderer(QgsRuleBasedRenderer(root))
+        outcome, asked = _counted_recording_requests(page, add_counter(page))
+        _ok(outcome, count_sites(status="Closed"))
+        assert [_names_read(page, request) for request in asked] == [None]
