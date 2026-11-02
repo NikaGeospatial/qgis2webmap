@@ -616,7 +616,8 @@ class TestPanelSectionDirection:
 
 
 class TestPanelSectionState:
-    """A section opens as it was left, and only a person's click is kept."""
+    """A section opens as it was left; an open one stores itself as open
+    (`True`), exactly as 0.3.0 did, and a closed one writes nothing."""
 
     KEY = "state-test"
 
@@ -651,14 +652,51 @@ class TestPanelSectionState:
         yield
         QSettings().remove(f"{SETTINGS_PREFIX}/{self.KEY}")
 
-    def test_opening_by_default_writes_nothing_and_says_nothing(self, qgis_app) -> None:
+    def _store(self, value):
+        from qgis.PyQt.QtCore import QSettings
+
+        from nika_onlymap_exporter.ui.cartograph.panel_section import (
+            SETTINGS_PREFIX,
+        )
+
+        QSettings().setValue(f"{SETTINGS_PREFIX}/{self.KEY}", value)
+
+    def test_opening_by_default_stores_true_as_in_030(self, qgis_app) -> None:
         parent, section = self._section(open_by_default=True)
-        heard = []
-        section.toggled.connect(heard.append)
         assert section.is_open()
         assert section.body.isVisibleTo(parent)
+        assert self._stored() is True
+        parent.deleteLater()
+
+    def test_closed_by_default_stores_nothing(self, qgis_app) -> None:
+        parent, section = self._section(open_by_default=False)
+        assert not section.is_open()
         assert self._stored() is None
-        assert heard == []
+        parent.deleteLater()
+
+    @pytest.mark.parametrize(
+        ("value", "opens", "stored_after"),
+        [
+            # What 0.3.0 left stored after building the section.
+            ("true", True, True),
+            ("junk", True, True),
+            (True, True, True),
+            (1, True, True),
+            ("false", False, "false"),
+            (False, False, False),
+            (0, False, 0),
+            ("", False, ""),
+        ],
+    )
+    def test_a_stored_value_is_left_as_030_left_it(
+        self, qgis_app, value, opens, stored_after
+    ) -> None:
+        self._store(value)
+        parent, section = self._section(open_by_default=True)
+        assert section.is_open() is opens
+        stored = self._stored()
+        assert stored == stored_after
+        assert type(stored) is type(stored_after)
         parent.deleteLater()
 
     def test_a_click_is_kept_and_read_back(self, qgis_app) -> None:

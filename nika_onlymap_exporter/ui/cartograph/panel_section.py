@@ -91,16 +91,20 @@ class PanelSection(QFrame):
         self.body_layout.setSpacing(6)
         column.addWidget(self.body)
 
-        stored = QSettings().value(
-            f"{SETTINGS_PREFIX}/{key}", open_by_default, type=bool
-        )
-        # Quietly: this is the state just read back, not a choice to write
-        # again (a settings write on every dialog opening is most of the cost
-        # of building the section).
+        settings = QSettings()
+        name = f"{SETTINGS_PREFIX}/{key}"
+        stored = settings.value(name, open_by_default, type=bool)
+        # Quietly: this is the state just read back, not a click.
         self.header.blockSignals(True)
         self.header.setChecked(bool(stored))
         self.header.blockSignals(False)
         self._show(bool(stored))
+        # An open section stores itself as open (`True`), as 0.3.0 did, but
+        # skips the write when that is already what is stored: a settings
+        # write on every dialog opening is most of the cost of building the
+        # section.
+        if stored and settings.value(name) is not True:
+            settings.setValue(name, True)
 
     def set_summary(self, text: str) -> None:
         self._summary_text = text
