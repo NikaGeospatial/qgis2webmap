@@ -76,6 +76,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
         QgsVectorLayer,
     )
 
+    from .cartograph_export import LayerScans
+
 WGS84 = "EPSG:4326"
 
 # Full double precision is meaningless for a web map and inflates the artifact
@@ -580,7 +582,9 @@ def popup_reading_display(popup: PopupSpec, names: Mapping[str, str]) -> PopupSp
 
 
 def _field_formats(
-    layer: QgsVectorLayer, display_names: Mapping[str, str]
+    layer: QgsVectorLayer,
+    display_names: Mapping[str, str],
+    scans: LayerScans | None = None,
 ) -> tuple[FieldFormat, ...]:
     """The formatters of the fields in `display_names`. **GUI thread only.**"""
     from qgis.core import QgsApplication
@@ -604,7 +608,13 @@ def _field_formats(
                     formatter,
                     config,
                     None,
-                    _value_relation_table(layer, index, formatter, config),
+                    (
+                        _value_relation_table(layer, index, formatter, config)
+                        if scans is None
+                        else scans.relation_table(
+                            layer, index, formatter, config, _value_relation_table
+                        )
+                    ),
                     QgsApplication.nullRepresentation(),
                 )
             )
@@ -627,17 +637,18 @@ def snapshot_features(
     clip_extent: Any | None,
     display_names: Mapping[str, str] | None = None,
     keep: Iterable[str] | None = None,
+    scans: LayerScans | None = None,
 ) -> LayerFeatures:
     """Copy out what `export_geojson_from` needs. **GUI thread only.**
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
     copy of, which is none for a caller that has no popup. `keep` is the names
     of the fields the export keeps, which are then the only ones read; `None`
-    reads them all.
+    reads them all. `scans` as for `prepare_layer`.
     """
     from qgis.core import QgsProject
 
-    formats = _field_formats(layer, display_names or {})
+    formats = _field_formats(layer, display_names or {}, scans)
     attribute_indexes = None
     if keep is not None:
         fields = layer.fields()
@@ -1934,6 +1945,7 @@ def prepare_layer(
     clip_extent: Any | None = None,
     name_field: str | None = None,
     cluster: bool = True,
+    scans: LayerScans | None = None,
 ) -> ExportLayer | PendingLayer | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2002,7 +2014,9 @@ def prepare_layer(
     )
     report_ground_sizes(renderer, icon_atlas is not None, kind, report, name, layer_id)
 
-    labeling = translate_labeling(layer, report) if with_labels else LabelingSpec()
+    labeling = (
+        translate_labeling(layer, report, scans) if with_labels else LabelingSpec()
+    )
     if (
         name_field
         and kind is GeometryKind.POINT
@@ -2036,7 +2050,7 @@ def prepare_layer(
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
-    features = snapshot_features(layer, clip_extent, display_names, keep)
+    features = snapshot_features(layer, clip_extent, display_names, keep, scans)
 
     base = ExportLayer(
         layer_id=layer_id,
