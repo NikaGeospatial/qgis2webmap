@@ -294,6 +294,29 @@ class TestTheStyleTheFrameDrawsWith:
         assert _frame_shows_marks(page)
         _ok(count_of(page, number), 30)
 
+    def test_a_kept_style_with_junk_after_it_is_read_as_far_as_it_goes(
+        self, page
+    ) -> None:
+        # As 0.3.0 read it: everything before the junk is the style.
+        number = add_counter(page)
+        _keep_style(page, _style_with_opacity(page.sites, 0.0) + "junk")
+        _ok(count_of(page, number), 0)
+
+    def test_the_scale_range_of_a_kept_style_with_junk_after_it_applies(
+        self, page
+    ) -> None:
+        number = add_counter(page)
+        scale = page.frame.scale()
+        page.sites.setScaleBasedVisibility(True)
+        page.sites.setMaximumScale(scale * 10)  # visible only when zoomed in
+        page.sites.setMinimumScale(scale * 100)
+        style = QgsMapLayerStyle()
+        style.readFromLayer(page.sites)
+        page.sites.setScaleBasedVisibility(False)
+        _ok(count_of(page, number), 30)
+        _keep_style(page, style.xmlData() + "<extra/>")
+        _ok(count_of(page, number), 0)
+
     def test_a_map_theme_decides_the_opacity_both_ways(self, page, project) -> None:
         root = project.layerTreeRoot()
         root.findLayer(page.squares.id()).setItemVisibilityChecked(False)

@@ -28,7 +28,7 @@ from qgis.core import (
     QgsSingleBandPseudoColorRenderer,
 )
 
-from .dom_parse import parse_dom
+from .dom_parse import read_dom
 from .frame_layers import rendered_layers, set_frame_layers
 
 NEAREST = "nearestNeighbour"
@@ -86,9 +86,7 @@ def style_xml(map_item: QgsLayoutItemMap, layer: QgsMapLayer) -> str:
 
 
 def _resampling(xml: str) -> str:
-    document = parse_dom(xml)
-    if document is None:
-        return NEAREST
+    document = read_dom(xml)
     nodes = document.elementsByTagName(_ELEMENT)
     for index in range(nodes.count()):
         element = nodes.at(index).toElement()
@@ -108,9 +106,7 @@ def smoothing_on(map_item: QgsLayoutItemMap, layer: QgsMapLayer) -> bool:
 def _with_resampling(xml: str, method: str) -> str | None:
     """`xml` with the zoomed-in resampling method set; `None` when the style
     has no provider resampling element to set."""
-    document = parse_dom(xml)
-    if document is None:
-        return None
+    document = read_dom(xml)
     nodes = document.elementsByTagName(_ELEMENT)
     if nodes.count() == 0:
         return None
