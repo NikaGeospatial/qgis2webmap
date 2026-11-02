@@ -43,28 +43,51 @@ _LINE_HEIGHT = 1.3
 _PADDING_PX = 4.0
 
 
-def _pixel(lon: float, lat: float, zoom: int) -> tuple[float, float]:
-    """Web Mercator pixel position at `zoom`, 256-px tiles."""
-    scale = 256.0 * (2**zoom)
+def _unit(lon: float, lat: float) -> tuple[float, float]:
+    """Web Mercator position on a 1 x 1 world; times `256 * 2**zoom` it is the
+    pixel position at `zoom`, 256-px tiles.
+
+    The sine and logarithm do not depend on the zoom, so a layer pays for them
+    once rather than once per zoom tried. Scaling afterwards is the same
+    arithmetic in the same order as working each zoom out from scratch, so
+    the pixels are exactly the ones that would give.
+    """
     lat = max(-85.05112878, min(85.05112878, lat))
-    x = (lon + 180.0) / 360.0 * scale
+    x = (lon + 180.0) / 360.0
     sin = math.sin(math.radians(lat))
-    y = (0.5 - math.log((1 + sin) / (1 - sin)) / (4 * math.pi)) * scale
+    y = 0.5 - math.log((1 + sin) / (1 - sin)) / (4 * math.pi)
     return x, y
 
 
-def _share_that_fits(
-    boxes: Sequence[tuple[float, float, float, float]],
-) -> float:
+def _clashes_allowed(count: int) -> int:
+    """The most of `count` boxes that may be left out with `FIT_SHARE` still kept.
+
+    Found with the very comparison the share is judged by, so stopping one
+    clash past it can never disagree with placing every box and dividing.
+    """
+    allowed = min(count, int(count * (1 - FIT_SHARE)) + 1)
+    while allowed > 0 and (count - allowed) / count < FIT_SHARE:
+        allowed -= 1
+    return allowed
+
+
+def _enough_fit(
+    units: Sequence[tuple[float, float]],
+    sizes: Sequence[tuple[float, float]],
+    scale: float,
+    cell: float,
+) -> bool:
     """Greedy placement, as a labeller does it: each box in turn, kept unless it
-    overlaps one already kept. Returns the share kept. Spatially hashed so a
-    25,000-point layer is still quick."""
-    if not boxes:
-        return 1.0
-    cell = max(max(w for _, _, w, _ in boxes), max(h for _, _, _, h in boxes), 1.0)
+    overlaps one already kept. Whether `FIT_SHARE` of them are kept. Spatially
+    hashed so a 25,000-point layer is still quick, and stopped at the first
+    clash too many: the boxes after it cannot bring the share back."""
+    if not units:
+        return True
+    allowed = _clashes_allowed(len(units))
     grid: dict[tuple[int, int], list[tuple[float, float, float, float]]] = {}
-    kept = 0
-    for x, y, w, h in boxes:
+    clashes = 0
+    for (ux, uy), (w, h) in zip(units, sizes):
+        x, y = ux * scale, uy * scale
         left, top, right, bottom = x - w / 2, y - h / 2, x + w / 2, y + h / 2
         gx, gy = int(x // cell), int(y // cell)
         clash = False
@@ -78,10 +101,13 @@ def _share_that_fits(
                     break
             if clash:
                 break
-        if not clash:
+        if clash:
+            clashes += 1
+            if clashes > allowed:
+                return False
+        else:
             grid.setdefault((gx, gy), []).append((left, top, right, bottom))
-            kept += 1
-    return kept / len(boxes)
+    return True
 
 
 def _distinct(
@@ -97,8 +123,7 @@ def _distinct(
     other with nothing saying how many.
     """
     boxes: dict[tuple[float, float], tuple[float, float]] = {}
-    for (lon, lat), (w, h) in zip(points, sizes):
-        key = (round(lon, 7), round(lat, 7))
+    for key, (w, h) in zip(_spots(points), sizes):
         kept = boxes.get(key)
         boxes[key] = (w, h) if kept is None else (max(kept[0], w), max(kept[1], h))
     return list(boxes), list(boxes.values())
@@ -114,11 +139,15 @@ def _first_zoom_that_fits(
     a 25,000-point layer under a second on a live-preview rebuild.
     """
 
+    units = [_unit(lon, lat) for lon, lat in points]
+    cell = max(
+        max((w for w, _ in sizes), default=0.0),
+        max((h for _, h in sizes), default=0.0),
+        1.0,
+    )
+
     def fits(zoom: int) -> bool:
-        boxes = [
-            (*_pixel(lon, lat, zoom), w, h) for (lon, lat), (w, h) in zip(points, sizes)
-        ]
-        return _share_that_fits(boxes) >= FIT_SHARE
+        return _enough_fit(units, sizes, 256.0 * (2**zoom), cell)
 
     if fits(0):
         return None
@@ -195,7 +224,12 @@ def has_stacks(layer: ExportLayer) -> bool:
     positions = _point_positions(layer.geojson)
     if not positions:
         return False
-    return len({(round(x, 7), round(y, 7)) for x, y in positions}) < len(positions)
+    return len(set(_spots(positions))) < len(positions)
+
+
+def _spots(points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Each point's spot: its position as finely as stacks are told apart."""
+    return [(round(lon, 7), round(lat, 7)) for lon, lat in points]
 
 
 def _point_positions(
@@ -221,6 +255,19 @@ def _point_positions(
 def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
     """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in.
 
+    See `declutter_noting_stacks`, which also says whether the clustered
+    points include stacks.
+    """
+    return declutter_noting_stacks(layer, default_font_px)[0]
+
+
+def declutter_noting_stacks(
+    layer: ExportLayer, default_font_px: float
+) -> tuple[ExportLayer, bool]:
+    """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in, and
+    whether it clusters points of which some share one spot - `has_stacks`,
+    from the positions already read rather than a second pass over them.
+
     Labels of a clustered layer wait until bubbles stop merging separate
     sites: a count bubble over several places wearing one place's name would
     be wrong. A stack at one spot never splits, and does not hold them back.
@@ -229,10 +276,11 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
     the map, so it is left out rather than reported.
     """
     if layer.raster is not None or layer.tiles is not None or not layer.geojson:
-        return layer
+        return layer, False
 
     clusters: int | None = None
     sites: int | None = None
+    stacked = False
     if layer.geometry_kind is GeometryKind.POINT and layer.cluster_allowed:
         positions = _point_positions(layer.geojson)
         if positions is not None:
@@ -243,7 +291,14 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
                 radius = (symbol.radius if symbol is not None else 0.0) or 4.0
             clusters = cluster_max_zoom(positions, radius)
             if clusters is not None:
-                sites = sites_part_zoom(positions, radius)
+                spots = _spots(positions)
+                stacked = len(set(spots)) < len(positions)
+                if not stacked and spots == positions:
+                    # Every point is its own site, at exactly its own position:
+                    # the search over the sites is the one just made.
+                    sites = clusters
+                else:
+                    sites = sites_part_zoom(positions, radius)
 
     labels: int | None = None
     labeling = layer.labeling
@@ -274,5 +329,8 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
                 labels = None
 
     if clusters is None and labels is None:
-        return layer
-    return dataclasses.replace(layer, cluster_max_zoom=clusters, label_min_zoom=labels)
+        return layer, stacked
+    return (
+        dataclasses.replace(layer, cluster_max_zoom=clusters, label_min_zoom=labels),
+        stacked,
+    )

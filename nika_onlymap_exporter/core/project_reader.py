@@ -38,7 +38,7 @@ from qgis.core import (
     QgsScaleCalculator,
 )
 
-from .declutter import declutter_layer, has_stacks
+from .declutter import declutter_noting_stacks
 from .export_ir import (
     Color,
     ExportLayer,
@@ -736,7 +736,7 @@ def _declutter(
     """
     decluttered: list[ExportLayer] = []
     for layer in layers:
-        layer = declutter_layer(layer, DEFAULT_LABEL_SIZE)
+        layer, stacked = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
         if layer.cluster_max_zoom is not None:
             report.approximated(
                 f"Markers of '{layer.name}'",
@@ -748,7 +748,7 @@ def _declutter(
                 + (
                     " Points at exactly the same spot stay one bubble at every "
                     "zoom, showing how many there are."
-                    if has_stacks(layer)
+                    if stacked
                     else ""
                 ),
                 layer.layer_id,
