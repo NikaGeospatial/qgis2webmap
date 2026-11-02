@@ -54,6 +54,7 @@ def main() -> int:
     from qgis.core import QgsProject
     from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
     from qgis.PyQt.QtTest import QTest
+    from waiting import wait_until
 
     import nika_onlymap_exporter
     import nika_onlymap_exporter.ui.cartograph.controller as controller_module
@@ -93,8 +94,10 @@ def main() -> int:
     else:
         plugin.run()
         dialog = plugin.dialog
+        working = threading.Event()
 
         def slow_work(_progress):
+            working.set()
             try:
                 time.sleep(SLOW_S)
                 return "late result"
@@ -105,7 +108,7 @@ def main() -> int:
             slow_work, lambda result: callbacks.append(result), "Slow"
         )
         assert started, "the job did not start"
-        spin(app, 0.2)
+        wait_until(app, working.is_set, "the slow job to be running")
 
     if scenario == "close_button":
         QTest.mouseClick(dialog.close_button, Qt.MouseButton.LeftButton)
@@ -132,7 +135,11 @@ def main() -> int:
         app.processEvents()
 
     if scenario == "language":
-        spin(app, 0.3)
+        wait_until(
+            app,
+            lambda: plugin.dialog is not None and plugin.dialog is not dialog,
+            "the dialog to be rebuilt",
+        )
         assert plugin.dialog is not None, "the dialog was not rebuilt"
         plugin.dialog.close()
 

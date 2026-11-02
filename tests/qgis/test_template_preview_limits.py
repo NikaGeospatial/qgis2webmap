@@ -8,6 +8,7 @@ from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication
 from test_template_picker import _Pending, _Renderer, _settings, _shown, _SlowRenderer
+from waiting import wait_until
 
 from nika_onlymap_exporter.ui.cartograph import (
     template_preview_dialog,
@@ -95,7 +96,11 @@ def test_inspection_timeout_can_retry_and_old_completion_cannot_replace_it(
     try:
         window.show()
         window.start()
-        QTest.qWait(100)
+        wait_until(
+            qgis_app,
+            lambda: first.cancelled and window.retry_button.isVisible(),
+            "the preview to time out with a Retry",
+        )
         assert first.cancelled
         assert window.page.image is None
         assert window.retry_button.isVisible()

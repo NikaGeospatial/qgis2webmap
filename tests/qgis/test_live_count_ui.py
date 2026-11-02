@@ -19,8 +19,9 @@ from live_count_fixtures import (
     build_page,
     count_sites,
 )
-from test_cartograph_panel_widgets import _settle
+from test_cartograph_panel_widgets import _quiet
 from test_preview_item_editing import _choose, _click_page, _items_of
+from waiting import wait_until
 
 pytest.importorskip("qgis.core")
 from qgis.core import (
@@ -44,14 +45,7 @@ DASH = "\N{EM DASH}"
 
 def _wait_for(qgis_app, check, what: str, seconds: float = 6.0):
     """Run the event loop until `check()` is truthy; fail loudly otherwise."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        qgis_app.processEvents()
-        value = check()
-        if value:
-            return value
-        time.sleep(0.01)
-    raise AssertionError(f"timed out waiting for {what}")
+    return wait_until(qgis_app, check, what, seconds)
 
 
 def _idle(qgis_app, pane: PagePane, seconds: float = 5.0, strict: bool = True) -> None:
@@ -60,23 +54,11 @@ def _idle(qgis_app, pane: PagePane, seconds: float = 5.0, strict: bool = True) -
     of sleeping a fixed time for it. Fails loudly when it never goes quiet,
     unless `strict` is off (a test may end with a long count still running;
     closing cancels it)."""
-    deadline = time.monotonic() + seconds
-    quiet = 0
-    while quiet < 3:
-        qgis_app.processEvents()
-        if (
-            pane.preview._fit_timer.isActive()
-            or pane._legend_refresh.isActive()
-            or pane.live_counts.busy()
-        ):
-            quiet = 0
-            if time.monotonic() > deadline:
-                if strict:
-                    raise AssertionError("the page never went quiet")
-                return
-        else:
-            quiet += 1
-        time.sleep(0.005)
+    try:
+        _quiet(qgis_app, pane, seconds)
+    except AssertionError:
+        if strict:
+            raise
 
 
 def _number_shows(qgis_app, number, text: str, seconds: float = 6.0) -> None:
@@ -177,7 +159,7 @@ class TestCreating:
         detail.attemptSetSceneRect(QRectF(140, 60, 40, 40))
         detail.setCrs(page.frame.crs())
         detail.zoomToExtent(QgsRectangle(-0.5, -0.5, 4.5, 4.5))
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         page.layout.deselectAll()
         pane._fill_add_menu()
         entry = next(a for a in pane.add_menu.actions() if a.text() == "Live count")
@@ -194,7 +176,7 @@ class TestCreating:
         number = None
         entry.trigger()
         _click_page(qgis_app, pane, 200.0, 150.0)
-        _settle(qgis_app, 0.15)
+        _quiet(qgis_app, pane)
         number = _numbers(page.layout)[0]
         assert lc.read_spec(number).map_uuid == detail.uuid()
         assert _setup(pane).following_label.isVisibleTo(pane.controls) is True
@@ -238,7 +220,7 @@ class TestCreating:
         }
         before = {i.uuid() for i in _items_of(page.layout, QgsLayoutItem)}
         pane.controls.delete_selected()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert _numbers(page.layout) == []
         after = {i.uuid() for i in _items_of(page.layout, QgsLayoutItem)}
         assert before - after == counter
@@ -809,7 +791,7 @@ def _drag_on_page(qgis_app, pane, start_mm, end_mm, steps: int = 14) -> None:
     QTest.mouseRelease(
         viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last
     )
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app, pane)
 
 
 def _corner(item) -> tuple[float, float]:
@@ -893,7 +875,7 @@ class TestOneItemOnThePage:
         # One drag, one undo step: undoing it puts every part back.
         assert stack.count() == steps + 1
         stack.undo()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert {p.uuid(): _corner(p) for p in parts} == before
 
     def test_dragging_the_caption_moves_the_whole_counter_too(

@@ -18,6 +18,8 @@ import types
 from pathlib import Path
 
 import pytest
+from test_cartograph_panel_widgets import _quiet
+from waiting import wait_until
 
 qgis_core = pytest.importorskip("qgis.core")
 from qgis.PyQt.QtCore import QUrl  # noqa: E402
@@ -2221,7 +2223,12 @@ class TestColourVisionInTheCartograph:
             first = cartograph._colour_vision
             first.set_condition("deuteranopia")  # chosen, not applied
             first.close()
-            _wait_for(qgis_app, lambda: False, timeout=0.1)
+            wait_until(
+                qgis_app,
+                lambda: not first.isVisible(),
+                "the Colour vision window to hide",
+                passes=3,
+            )
             assert not first.isVisible()
             # The Cartograph dialog still takes clicks, and the button shows
             # the window again, at normal vision (nothing was applied).
@@ -3551,7 +3558,12 @@ class TestPanel:
         try:
             dialog.show()
             dialog.activateWindow()
-            _wait_for(qgis_app, lambda: False, timeout=0.2)
+            wait_until(
+                qgis_app,
+                lambda: dialog.views.hasFocus() or dialog.focusWidget() is dialog.views,
+                "the focus to rest on the screen",
+                passes=3,
+            )
             assert dialog.views.hasFocus() or dialog.focusWidget() is dialog.views
         finally:
             dialog.close()
@@ -4121,9 +4133,7 @@ class TestDesignerEditsAutosave:
             view = cartograph.page_pane.preview.view
             viewport = view.viewport()
             # Let the page finish fitting before aiming at the map on it.
-            for _ in range(20):
-                qgis_app.processEvents()
-                time.sleep(0.01)
+            _quiet(qgis_app, cartograph.page_pane)
             centre = view.mapFromScene(map_item.sceneBoundingRect().center())
             before = map_item.pos()
             stack = layout.undoStack().stack()

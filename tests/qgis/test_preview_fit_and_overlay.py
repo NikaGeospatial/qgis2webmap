@@ -16,8 +16,8 @@ from qgis.PyQt.QtCore import QRect
 from test_cartograph_panel_widgets import (
     _a4_layout,
     _drag,
+    _quiet,
     _scale,
-    _settle,
     _wheel_zoom,
 )
 
@@ -32,7 +32,7 @@ def pane(qgis_app, project):
     widget.resize(700, 560)
     widget.show()
     widget.show_layout(_a4_layout(project))
-    _settle(qgis_app)
+    _quiet(qgis_app, widget)
     yield widget
     widget.close()
     widget.deleteLater()
@@ -87,7 +87,7 @@ class TestFirstView:
         layout.pageCollection().page(0).setPageSize(
             QgsLayoutSize(210, 297, QgsUnitTypes.LayoutMillimeters)
         )
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _assert_fitted(pane)
         box = _page_box(pane)
         assert box.height() > box.width()
@@ -101,9 +101,9 @@ class TestFirstView:
         widget.resize(30, 20)
         widget.show()
         widget.show_layout(_a4_layout(project))
-        _settle(qgis_app)
+        _quiet(qgis_app, widget)
         widget.resize(900, 650)
-        _settle(qgis_app)
+        _quiet(qgis_app, widget)
         _assert_fitted(widget)
         widget.close()
 
@@ -116,7 +116,7 @@ class TestFirstView:
         widget.resize(800, 600)
         widget.show_layout(_a4_layout(project))
         widget.show()
-        _settle(qgis_app)
+        _quiet(qgis_app, widget)
         _assert_fitted(widget)
         widget.close()
 
@@ -125,7 +125,7 @@ class TestStaysFitted:
     def test_resizing_refits(self, qgis_app, pane) -> None:
         for size in ((1000, 760), (420, 400), (800, 520)):
             pane.resize(*size)
-            _settle(qgis_app)
+            _quiet(qgis_app, pane)
             _assert_fitted(pane)
 
     def test_selecting_an_item_then_resizing_still_refits(
@@ -140,14 +140,14 @@ class TestStaysFitted:
         label = QgsLayoutItemLabel(layout)
         label.attemptSetSceneRect(QRectF(20, 20, 80, 20))
         layout.addLayoutItem(label)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         box = pane.preview.view.mapFromScene(label.sceneBoundingRect()).boundingRect()
         start = box.center()
         _drag(qgis_app, pane, start, start + QPoint(3, 2))
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         small = _scale(pane)
         pane.resize(1100, 850)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) > small * 1.2
         _assert_fitted(pane)
 
@@ -156,13 +156,13 @@ class TestStaysFitted:
     ) -> None:
         _wheel_zoom(pane, 120)
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         zoomed = _scale(pane)
         pane.resize(900, 700)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert _scale(pane) == pytest.approx(zoomed, rel=0.01)
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _assert_fitted(pane)
 
     def test_another_page_size_fits_again_even_after_a_zoom(
@@ -171,12 +171,12 @@ class TestStaysFitted:
         from qgis.core import QgsLayoutSize, QgsUnitTypes
 
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         layout = pane.preview.view.currentLayout()
         layout.pageCollection().page(0).setPageSize(
             QgsLayoutSize(297, 420, QgsUnitTypes.LayoutMillimeters)
         )
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _assert_fitted(pane)
 
 
@@ -205,17 +205,17 @@ class TestOverlay:
         before = snapshot()
         for _ in range(3):
             _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         view = pane.preview.view
         _drag(qgis_app, pane, QPoint(200, 200), QPoint(120, 150))
         view.horizontalScrollBar().setValue(view.horizontalScrollBar().value() + 40)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert snapshot() == before
 
     def test_the_buttons_keep_clear_of_scroll_bars(self, qgis_app, pane) -> None:
         for _ in range(4):
             _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         view = pane.preview.view
         assert view.verticalScrollBar().isVisible()
         bar = view.horizontalScrollBar()
@@ -235,7 +235,7 @@ class TestOverlay:
             Qt.KeyboardModifier.NoModifier,
             pane.fit_button.rect().center(),
         )
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         assert view.currentLayout().selectedLayoutItems() == []
         assert (_scale(pane), view.mapToScene(QPoint(0, 0))) == before
 
@@ -254,7 +254,7 @@ class TestOverlay:
         from qgis.PyQt.QtWidgets import QApplication
 
         _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         button = pane.fit_button
         at = button.mapToGlobal(button.rect().center())
         target = QApplication.widgetAt(at)
@@ -264,7 +264,7 @@ class TestOverlay:
             Qt.KeyboardModifier.NoModifier,
             target.mapFromGlobal(at),
         )
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _assert_fitted(pane)
 
     def test_the_buttons_are_not_in_a_page_render(self, pane) -> None:
@@ -300,7 +300,7 @@ class TestPageClearOfTheStrip:
         layout.pageCollection().page(0).setPageSize(
             QgsLayoutSize(width, height, QgsUnitTypes.LayoutMillimeters)
         )
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
 
     @pytest.mark.parametrize("sheet", [(297, 210), (210, 297)])
     def test_portrait_and_landscape_pages_open_clear_of_the_controls(
@@ -316,7 +316,7 @@ class TestPageClearOfTheStrip:
         self._set_size(qgis_app, pane, *sheet)
         for size in ((320, 520), (480, 360), (1100, 500), (700, 560)):
             pane.resize(*size)  # a sidebar drag changes the pane's width
-            _settle(qgis_app)
+            _quiet(qgis_app, pane)
             _clear_of_strip(pane)
 
     @pytest.mark.parametrize("sheet", [(297, 210), (210, 297)])
@@ -326,9 +326,9 @@ class TestPageClearOfTheStrip:
         self._set_size(qgis_app, pane, *sheet)
         for _ in range(3):
             _wheel_zoom(pane, 120)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         pane.fit_button.click()
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         _clear_of_strip(pane)
 
     def test_the_strip_is_compact(self, pane) -> None:

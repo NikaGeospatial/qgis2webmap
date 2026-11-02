@@ -86,13 +86,16 @@ def main() -> int:
         export.hold_workers()
         edit_label(layout, label, "New")
         QTest.mouseClick(dialog.close_button, Qt.MouseButton.LeftButton)
-        spin(app, 0.2)
+        wait_for(
+            app,
+            lambda: dialog._close_result is not None and cartograph._job is not None,
+        )
         close_held = dialog._close_result is not None
         building = cartograph._job is not None
     elif scenario == "clear_during_build":
         export.hold_workers()
         edit_label(layout, label, "New")
-        spin(app, 1.0)
+        wait_for(app, lambda: cartograph._job is not None)
         building = cartograph._job is not None
     else:
         spin(app, 0.2)

@@ -17,8 +17,9 @@ import time
 
 import pytest
 from cartograph_fixtures import UTM, build_parcels_layer
-from test_cartograph_panel_widgets import _a4_layout, _settle
+from test_cartograph_panel_widgets import _a4_layout, _maps_drawn, _quiet
 from test_locator_context import _region
+from waiting import wait_until
 
 qgis_core = pytest.importorskip("qgis.core")
 from qgis.core import QgsLayoutItemMap, QgsRectangle  # noqa: E402
@@ -67,13 +68,14 @@ def near_far(qgis_app, project):
     pane.resize(1000, 760)
     pane.show()
     pane.show_layout(layout)
-    _settle(qgis_app)
+    _quiet(qgis_app, pane)
     main = layout.itemById("main")
     inset = layout.itemById("locator")
     yield pane, layout, main, inset, region
     # Background renders still queued for the page's maps finish while the
     # layout is alive (an item taken off it by a test is drawn once more).
-    _settle(qgis_app, 0.4)
+    maps = [i for i in layout.items() if isinstance(i, QgsLayoutItemMap)]
+    _maps_drawn(qgis_app, [main, inset, *maps])
     pane.close()
     pane.deleteLater()
 
@@ -81,7 +83,7 @@ def near_far(qgis_app, project):
 def _select(qgis_app, pane, layout, item) -> None:
     layout.deselectAll()
     item.setSelected(True)
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app, pane)
 
 
 def _centre(pane, item) -> QPoint:
@@ -110,7 +112,7 @@ def _drag(qgis_app, pane, start: QPoint, end: QPoint) -> None:
     QTest.mouseRelease(
         viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end
     )
-    _settle(qgis_app, 0.05)
+    _quiet(qgis_app, pane)
 
 
 def _wheel(qgis_app, pane, at: QPoint, notches: int) -> None:
@@ -161,7 +163,7 @@ def _geometry(item) -> tuple[float, float, float, float]:
 def _edit_on(qgis_app, pane, layout, item) -> None:
     _select(qgis_app, pane, layout, item)
     pane.controls.edit_view_button.click()
-    _settle(qgis_app, 0.05)
+    _quiet(qgis_app, pane)
     assert pane.preview.content_editor.active
 
 
@@ -381,7 +383,7 @@ class TestTheDragIsLive:
 
         pane, layout, main, _inset, _region = near_far
         main.setItemRotation(rotation)
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         _edit_on(qgis_app, pane, layout, main)
         offsets = self._spy(monkeypatch, main)
         extent = QgsRectangle(main.extent())
@@ -409,7 +411,7 @@ class TestTheDragIsLive:
             Qt.KeyboardModifier.NoModifier,
             start + QPoint(40, 22),
         )
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         assert main.extent() != extent
         assert _index(layout) == index + 1
         assert layout.undoStack().stack().undoText() == "Pan map content"
@@ -420,7 +422,7 @@ class TestTheDragIsLive:
     ) -> None:
         pane, layout, main, _inset, _region = near_far
         main.setItemRotation(rotation)
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         _edit_on(qgis_app, pane, layout, main)
         view = pane.preview.view
         start = _centre(pane, main)
@@ -456,10 +458,7 @@ class TestTheDragIsLive:
 
     @staticmethod
     def _wait_rendered(qgis_app, item) -> None:
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline and item.isDrawing():
-            _settle(qgis_app, 0.05)
-        _settle(qgis_app, 0.2)
+        _maps_drawn(qgis_app, [item], 20)
 
     def test_the_picture_follows_the_pointer_mid_drag(self, qgis_app, near_far) -> None:
         """What is on screen mid-drag: the map picture is the one from before
@@ -479,7 +478,7 @@ class TestTheDragIsLive:
             _move_held(view.viewport(), point)
             qgis_app.processEvents()
         shift = QPoint(36, 24)
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         mid = self._frame(pane)
         # A patch well inside the part of the old picture that is still shown.
         patch = QRect(
@@ -525,7 +524,7 @@ class TestTheDragIsLive:
             Qt.KeyboardModifier.NoModifier,
             end,
         )
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         delta = main.mapFromScene(view.mapToScene(end)) - main.mapFromScene(
             view.mapToScene(start)
         )
@@ -553,7 +552,7 @@ class TestTheDragIsLive:
         QTest.mouseRelease(
             view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
         )
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert not pane.preview.content_editor.active
         assert main.extent() == extent
         assert _index(layout) == index
@@ -570,7 +569,7 @@ class TestTheDragIsLive:
         under = _map_point_at(pane, main, at)
         for _ in range(4):
             _wheel(qgis_app, pane, at, 1)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert _index(layout) == index + 1
         assert main.extent().width() == pytest.approx(width / 1.2**4, rel=1e-6)
         assert _map_point_at(pane, main, at) == pytest.approx(under, abs=width * 0.002)
@@ -584,7 +583,7 @@ class TestTheModeIsClear:
         _select(qgis_app, pane, layout, inset)
         assert pane.controls.edit_view_button.text() == "Edit inset view"
         pane.controls.edit_view_button.click()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert pane.controls.edit_view_button.isChecked()
         banner = pane.preview.content_editor._banner
         assert not banner.isHidden()
@@ -605,7 +604,7 @@ class TestTheModeIsClear:
             pane.controls.delete_button.click()
         else:
             pane.show_layout(_a4_layout(layout.project()))
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert not pane.preview.content_editor.active
         assert not pane.controls.edit_view_button.isChecked()
         assert pane.preview.content_editor._banner.isHidden()
@@ -622,7 +621,7 @@ class TestTheModeIsClear:
             Qt.KeyboardModifier.NoModifier,
             point,
         )
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert not pane.preview.content_editor.active
         assert layout.selectedLayoutItems() == [main]
 
@@ -663,7 +662,7 @@ class TestSelectModeStillMovesAndResizes:
         pane, layout, _main, inset, _region = near_far
         _edit_on(qgis_app, pane, layout, inset)
         _escape(pane)
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         before = _geometry(inset)
         extent = QgsRectangle(inset.extent())
         start = _centre(pane, inset)
@@ -678,7 +677,7 @@ class TestSelectModeStillMovesAndResizes:
         pane, layout, _main, inset, _region = near_far
         _edit_on(qgis_app, pane, layout, inset)
         _escape(pane)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         before = _geometry(inset)
         box = pane.preview.view.mapFromScene(inset.sceneBoundingRect()).boundingRect()
         corner = box.bottomLeft() + QPoint(2, -2)
@@ -720,7 +719,7 @@ class TestLinkedItemsFollow:
         scale = main.scale()
         at = _centre(pane, main)
         _wheel(qgis_app, pane, at, 2)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert main.scale() < scale
         assert bar.linkedMap() is main
         assert bar.mapScale() if hasattr(bar, "mapScale") else True
@@ -819,7 +818,7 @@ class TestInsetControls:
         pane.resize(1000, 760)
         pane.show()
         pane.show_layout(result.layout)
-        _settle(qgis_app)
+        _quiet(qgis_app, pane)
         try:
             inset = result.layout.itemById("locator")
             _select(qgis_app, pane, result.layout, inset)
@@ -846,7 +845,7 @@ class TestInsetControls:
         _select(qgis_app, pane, layout, inset)
         index = _index(layout)
         pane.controls.remove_inset_button.click()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert inset not in layout.items()
         assert _index(layout) == index + 1
         layout.undoStack().stack().undo()
@@ -1020,12 +1019,13 @@ def _frame_has_rendered_map(pane, item) -> bool:
 
 
 def _wait_for_rendered_map(qgis_app, pane, item, seconds: float = 40.0) -> None:
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        _settle(qgis_app, 0.2)
-        if not item.isDrawing() and _frame_has_rendered_map(pane, item):
-            return
-    pytest.fail("the map never finished rendering real pixels on the page")
+    _maps_drawn(qgis_app, [item], seconds)
+    wait_until(
+        qgis_app,
+        lambda: not item.isDrawing() and _frame_has_rendered_map(pane, item),
+        "the map to finish rendering real pixels on the page",
+        seconds,
+    )
 
 
 def _richest_patch(image, box: QRect, size: int = 24) -> QRect:
@@ -1081,7 +1081,7 @@ class TestAFastDragStaysSmooth:
         if simulate:
             view.setPreviewModeEnabled(True)
             view.setPreviewMode(QgsPreviewEffect.PreviewMode.PreviewDeuteranope)
-        _settle(qgis_app, 0.5)
+        _quiet(qgis_app, pane)
         _wait_for_rendered_map(qgis_app, pane, main)
         _edit_on(qgis_app, pane, layout, main)
         # Edit view is really on: its button says so and the banner shows.
@@ -1133,14 +1133,14 @@ class TestAFastDragStaysSmooth:
         _move_held(viewport, end)
         qgis_app.processEvents()
         heart.stop()
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         # What is on screen: the window as composed, the viewport's part of it.
         spot = viewport.mapTo(pane, QPoint(0, 0))
         mid = pane.grab().toImage().copy(QRect(spot, viewport.size()))
         QTest.mouseRelease(
             viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end
         )
-        _settle(qgis_app, 0.2)
+        _quiet(qgis_app, pane)
         per_move.sort()
         median = per_move[len(per_move) // 2]
         assert median < self.MOVE_BUDGET_MS, per_move

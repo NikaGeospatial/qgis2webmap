@@ -16,7 +16,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-from test_cartograph_panel_widgets import _drag, _settle, _wheel_zoom
+from test_cartograph_panel_widgets import _drag, _quiet, _wheel_zoom
 from test_cartograph_panel_widgets import page as page
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -29,9 +29,9 @@ def _zoomed(qgis_app, pane, centre_mm=(190.0, 130.0)) -> None:
     """Zoomed in, with room to pan every way, centred on bare paper."""
     _wheel_zoom(pane, 120)
     _wheel_zoom(pane, 120)
-    _settle(qgis_app)
+    _quiet(qgis_app, pane)
     pane.preview.view.centerOn(QPointF(*centre_mm))
-    _settle(qgis_app, 0.1)
+    _quiet(qgis_app, pane)
 
 
 def _page_origin(pane) -> QPoint:
@@ -100,11 +100,11 @@ class TestDragFromEmptySpacePans:
         start = pane.preview.view.mapFromScene(QPointF(190.0, 130.0))  # bare paper
         _drag(qgis_app, pane, start, start + QPoint(-30, -20))
         pane.resize(1100, 850)
-        _settle(qgis_app, 0.3)
+        _quiet(qgis_app, pane)
         # Panned by the user: a bigger window does not refit the page.
         assert pane.preview.view.transform().m11() == pytest.approx(fitted)
         pane.fit_button.click()
-        _settle(qgis_app, 0.3)
+        _quiet(qgis_app, pane)
         assert pane.preview.view.transform().m11() > fitted * 1.1
 
     def test_the_pointer_is_a_closed_hand_while_panning(self, qgis_app, page) -> None:
@@ -136,7 +136,7 @@ class TestClickOnEmptySpace:
     ) -> None:
         pane, layout, items = page
         items["title"].setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         assert not pane.controls.body.isHidden()
         _zoomed(qgis_app, pane)
         origin = _page_origin(pane)
@@ -152,7 +152,7 @@ class TestClickOnEmptySpace:
     def test_a_drag_keeps_the_selection(self, qgis_app, page) -> None:
         pane, layout, items = page
         items["title"].setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         _zoomed(qgis_app, pane)
         centre = _centre(pane)
         _drag(qgis_app, pane, centre, centre + QPoint(-40, -30))
@@ -164,7 +164,7 @@ class TestClickOnEmptySpace:
     ) -> None:
         pane, layout, items = page
         items["map"].setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         _zoomed(qgis_app, pane)
         origin = _page_origin(pane)
         centre = _centre(pane)
@@ -255,9 +255,9 @@ class TestOtherModesAreUnchanged:
         frame.setExtent(QgsRectangle(0, 0, 1500, 1000))
         layout.deselectAll()
         frame.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         pane.controls.edit_view_button.click()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert pane.preview.content_editor.active
         origin = _page_origin(pane)
         extent = frame.extent().center()
@@ -278,9 +278,9 @@ class TestOtherModesAreUnchanged:
         frame.setExtent(QgsRectangle(0, 0, 1500, 1000))
         layout.deselectAll()
         frame.setSelected(True)
-        _settle(qgis_app, 0.1)
+        _quiet(qgis_app, pane)
         pane.controls.edit_view_button.click()
-        _settle(qgis_app, 0.05)
+        _quiet(qgis_app, pane)
         assert pane.preview.content_editor.active
         extent = frame.extent().center()
         outside = pane.preview.view.mapFromScene(QPointF(270.0, 190.0))

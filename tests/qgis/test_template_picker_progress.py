@@ -180,8 +180,13 @@ def test_a_stalled_card_is_given_up_alone(qgis_app, tmp_path, monkeypatch):
     picker = TemplatePicker(renderer, qsettings=_settings(tmp_path))
     try:
         _shown(qgis_app, picker)
-        QTest.qWait(500)
         first = picker.rows[picker.template_id]
+        assert _until(
+            qgis_app,
+            lambda: (
+                _unavailable(first) and any(_ready(r) for r in picker.rows.values())
+            ),
+        )
         assert _unavailable(first)
         assert any(_ready(r) for r in picker.rows.values())
         renderer.pending[0]._done()  # arrives after the timeout
@@ -294,7 +299,8 @@ def test_the_large_preview_waits_for_a_cancelled_page_to_let_go(
         QTest.qWait(250)
         assert drawn == []
         busy[0] = False
-        QTest.qWait(250)
+        # Drawn, and no recheck left to draw it again.
+        assert _until(qgis_app, lambda: drawn and not window._slot_wait.isActive())
         assert len(drawn) == 1
     finally:
         _close(window, parent)
