@@ -71,42 +71,55 @@ def _clashes_allowed(count: int) -> int:
     return allowed
 
 
+# Cell (gx, gy) is filed under one integer, gx * _ROW + gy, and its eight
+# neighbours are fixed offsets from it - no key tuple to build per lookup. Two
+# cells could share a key only far beyond any map's pixel range, and even then
+# only extra boxes would be looked at: a box overlapping another always lies
+# in a neighbouring cell, so a far one never clashes.
+_ROW = 1 << 32
+_NEIGHBOURS = tuple(dx * _ROW + dy for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+
+
 def _enough_fit(
     units: Sequence[tuple[float, float]],
-    sizes: Sequence[tuple[float, float]],
+    halves: Sequence[tuple[float, float]],
     scale: float,
     cell: float,
 ) -> bool:
     """Greedy placement, as a labeller does it: each box in turn, kept unless it
     overlaps one already kept. Whether `FIT_SHARE` of them are kept. Spatially
     hashed so a 25,000-point layer is still quick, and stopped at the first
-    clash too many: the boxes after it cannot bring the share back."""
+    clash too many: the boxes after it cannot bring the share back.
+
+    `halves` is each box's half width and half height, worked out once for
+    every zoom tried."""
     if not units:
         return True
     allowed = _clashes_allowed(len(units))
-    grid: dict[tuple[int, int], list[tuple[float, float, float, float]]] = {}
+    grid: dict[int, list[tuple[float, float, float, float]]] = {}
+    filed = grid.get
     clashes = 0
-    for (ux, uy), (w, h) in zip(units, sizes):
+    for (ux, uy), (half_w, half_h) in zip(units, halves):
         x, y = ux * scale, uy * scale
-        left, top, right, bottom = x - w / 2, y - h / 2, x + w / 2, y + h / 2
-        gx, gy = int(x // cell), int(y // cell)
-        clash = False
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for ol, ot, orr, ob in grid.get((gx + dx, gy + dy), ()):
-                    if left < orr and right > ol and top < ob and bottom > ot:
-                        clash = True
-                        break
-                if clash:
+        left, top, right, bottom = x - half_w, y - half_h, x + half_w, y + half_h
+        key = int(x // cell) * _ROW + int(y // cell)
+        for neighbour in _NEIGHBOURS:
+            for ol, ot, orr, ob in filed(key + neighbour, ()):
+                if left < orr and right > ol and top < ob and bottom > ot:
                     break
-            if clash:
-                break
-        if clash:
-            clashes += 1
-            if clashes > allowed:
-                return False
+            else:
+                continue
+            break
         else:
-            grid.setdefault((gx, gy), []).append((left, top, right, bottom))
+            kept = filed(key)
+            if kept is None:
+                grid[key] = [(left, top, right, bottom)]
+            else:
+                kept.append((left, top, right, bottom))
+            continue
+        clashes += 1
+        if clashes > allowed:
+            return False
     return True
 
 
@@ -140,6 +153,7 @@ def _first_zoom_that_fits(
     """
 
     units = [_unit(lon, lat) for lon, lat in points]
+    halves = [(w / 2, h / 2) for w, h in sizes]
     cell = max(
         max((w for w, _ in sizes), default=0.0),
         max((h for _, h in sizes), default=0.0),
@@ -147,7 +161,7 @@ def _first_zoom_that_fits(
     )
 
     def fits(zoom: int) -> bool:
-        return _enough_fit(units, sizes, 256.0 * (2**zoom), cell)
+        return _enough_fit(units, halves, 256.0 * (2**zoom), cell)
 
     if fits(0):
         return None

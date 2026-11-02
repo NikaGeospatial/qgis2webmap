@@ -327,10 +327,11 @@ class TestEveryZoomDecidesAlike:
         units = [_unit(lon, lat) for lon, lat in points]
         for side in (12.0, 64.0):
             sizes = [(side, side)] * len(points)
+            halves = [(side / 2, side / 2)] * len(points)
             for zoom in range(MAX_ZOOM + 1):
                 expected = _old_fits(points, sizes, zoom)
                 assert (
-                    _enough_fit(units, sizes, 256.0 * (2**zoom), max(side, 1.0))
+                    _enough_fit(units, halves, 256.0 * (2**zoom), max(side, 1.0))
                     is expected
                 ), (name, side, zoom)
 
@@ -342,12 +343,52 @@ class TestEveryZoomDecidesAlike:
         sizes = [(rng.uniform(4, 120), rng.uniform(8, 40)) for _ in points]
         units = [_unit(lon, lat) for lon, lat in points]
         cell = max([1.0, *(w for w, _ in sizes), *(h for _, h in sizes)])
+        halves = [(w / 2, h / 2) for w, h in sizes]
         for zoom in range(MAX_ZOOM + 1):
             expected = _old_fits(points, sizes, zoom)
-            assert _enough_fit(units, sizes, 256.0 * (2**zoom), cell) is expected, (
+            assert _enough_fit(units, halves, 256.0 * (2**zoom), cell) is expected, (
                 name,
                 zoom,
             )
+
+
+@pytest.mark.parametrize("backwards", [False, True], ids=["forwards", "backwards"])
+@pytest.mark.parametrize("vertical", [False, True], ids=["row", "column"])
+@pytest.mark.parametrize("gap", [0.0, -1e-9, 1e-9], ids=["touching", "over", "apart"])
+def test_boxes_that_just_touch_decide_alike(
+    vertical: bool, gap: float, backwards: bool
+) -> None:
+    """Where the comparison itself decides: a row (or column) of boxes exactly
+    one box apart touches without overlapping, and a hair closer every other
+    one clashes - placed in either direction, so each edge is the one met.
+    Positions on exact binary fractions, so nothing rounds."""
+    scale = 256.0 * 2**10
+    side, height = 12.0, 20.0
+    step = (height if vertical else side) + gap
+    units = [
+        (0.25, 0.25 + i * step / scale) if vertical else (0.25 + i * step / scale, 0.25)
+        for i in range(200)
+    ]
+    if backwards:
+        units.reverse()
+    boxes = [(ux * scale, uy * scale, side, height) for ux, uy in units]
+    expected = _old_share_that_fits(boxes) >= FIT_SHARE
+    assert expected is (gap >= 0.0)
+    halves = [(side / 2, height / 2)] * len(units)
+    assert _enough_fit(units, halves, scale, height) is expected
+
+
+@pytest.mark.parametrize("gap", [0, -1, 1], ids=["touching", "over", "apart"])
+def test_markers_that_just_touch_cluster_alike(gap: int) -> None:
+    """The same edge case through the whole search: on the equator, at
+    longitudes on exact binary fractions of the world, markers 12 px apart at
+    zoom 10 just touch there, a 2**-20 of a pixel closer they overlap."""
+    step = 12 * 2**20 + gap  # in 2**-20 px at zoom 10, of 2**38 per world
+    points = [(-180.0 + 360.0 * (2**30 + i * step) / 2**38, 0.0) for i in range(150)]
+    assert cluster_max_zoom(points, 4.0) == _old_cluster_max_zoom(points, 4.0)
+    assert sites_part_zoom(points, 4.0) == _old_sites_part_zoom(points, 4.0)
+    labels = [(lon, lat, "Twelve px") for lon, lat in points]
+    assert label_min_zoom(labels, 1.0) == _old_label_min_zoom(labels, 1.0)
 
 
 @pytest.mark.parametrize(("name", "points"), POINT_SETS, ids=IDS)
