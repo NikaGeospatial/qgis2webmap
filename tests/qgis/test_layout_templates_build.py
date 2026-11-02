@@ -24,7 +24,7 @@ from nika_onlymap_exporter.core.cartograph_export import (
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layout_builder import import_cartograph_file
 from nika_onlymap_exporter.core.layout_reader import read_layout
-from nika_onlymap_exporter.core.layout_templates import template_ids
+from nika_onlymap_exporter.core.template_registry import template_ids
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")
@@ -654,7 +654,7 @@ class TestPicker:
     def test_each_row_names_its_design_and_the_chosen_one_is_ticked(
         self, qgis_app, tmp_path
     ) -> None:
-        from nika_onlymap_exporter.core.layout_templates import get_template
+        from nika_onlymap_exporter.core.template_registry import get_template
 
         calls: list[tuple[str, str, str]] = []
         picker, _settings = self._picker(qgis_app, tmp_path, calls)
@@ -721,10 +721,8 @@ class TestPicker:
     def test_the_filter_shows_one_category_and_keeps_a_shown_choice(
         self, qgis_app, tmp_path
     ) -> None:
-        from nika_onlymap_exporter.core.layout_templates import (
-            CATEGORIES,
-            get_template,
-        )
+        from nika_onlymap_exporter.core.layout_templates import CATEGORIES
+        from nika_onlymap_exporter.core.template_registry import get_template
 
         calls: list[tuple[str, str, str]] = []
         picker, _settings = self._picker(qgis_app, tmp_path, calls)
@@ -753,7 +751,7 @@ class TestPicker:
     def test_selecting_a_row_updates_the_selected_line(
         self, qgis_app, tmp_path
     ) -> None:
-        from nika_onlymap_exporter.core.layout_templates import get_template
+        from nika_onlymap_exporter.core.template_registry import get_template
 
         calls: list[tuple[str, str, str]] = []
         picker, _settings = self._picker(qgis_app, tmp_path, calls)

@@ -203,7 +203,7 @@ class TestTranslating:
 
 
 def _report_figure():
-    from nika_onlymap_exporter.core.layout_templates import TEMPLATES
+    from nika_onlymap_exporter.core.template_registry import TEMPLATES
     from nika_onlymap_exporter.core.translatable import MarkedText
 
     report = next(t for t in TEMPLATES if t.id == "report-figure")

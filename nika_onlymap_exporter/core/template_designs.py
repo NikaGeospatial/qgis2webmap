@@ -4,8 +4,8 @@ Marginalia, Atlas Ledger, Town Hall and Wayfinder.
 They sit beside the ten in `core/layout_templates.py` and are planned the
 same way -- arithmetic only, millimetre boxes out, no `qgis` or Qt import --
 from the same helpers and the named page palettes in `core/page_style.py`.
-`layout_templates` adds `NEW_TEMPLATES` to its `TEMPLATES` at the end of its
-own module, so `get_template()` and the picker see all fifteen.
+`core/template_registry.py` lists `NEW_TEMPLATES` after those ten, so
+`get_template()` and the picker see all fifteen.
 
 Each design picks its page and map-frame colours explicitly, so the HTML
 page keeps them whatever theme it opens in, and nothing here touches the
@@ -20,7 +20,6 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
-from . import layout_templates as _layout_templates
 from .cartograph_ir import (
     Box,
     CartographItem,
@@ -1179,15 +1178,6 @@ NEW_TEMPLATES: tuple[LayoutTemplate, ...] = (
         includes=(N_("legend strip"), N_("distance scale"), N_("source line")),
     ),
 )
-
-
-# Join the collection: `layout_templates` imports this module at its end, so
-# `TEMPLATES`, `get_template()` and `template_ids()` list these five after
-# its ten, whichever of the two modules was imported first.
-if not any(
-    template.id == NEW_TEMPLATES[0].id for template in _layout_templates.TEMPLATES
-):
-    _layout_templates.TEMPLATES = _layout_templates.TEMPLATES + NEW_TEMPLATES
 
 
 __all__ = ["ATLAS_SHEET_EXPRESSION", "NEW_TEMPLATES"]

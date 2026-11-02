@@ -68,7 +68,7 @@ from qgis.PyQt.QtCore import QObject, QRectF, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from ..qt_compat import set_legend_manual
-from . import layout_templates
+from . import template_registry
 from .cartograph_import import RoundTripIssue
 from .cartograph_ir import Box, CartographSpec, FrameSpec, LegendSpec
 from .layer_reader import read_attribution
@@ -85,7 +85,6 @@ from .layout_templates import (
     TemplateInput,
     TemplatePlan,
     TextSizes,
-    get_template,
     plan_template,
     template_spec,
     text_percent,
@@ -99,6 +98,7 @@ from .locator_context import (
     locator_view,
     mark_context,
 )
+from .template_registry import get_template
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
@@ -1250,7 +1250,7 @@ def preview_state_key(
         project.metadata().author(),
         repr(project_text_sizes(project)),
         date.today().isoformat(),
-        repr(tuple(template.id for template in layout_templates.TEMPLATES)),
+        repr(tuple(template.id for template in template_registry.TEMPLATES)),
     ]
     for layer in layers:
         style = QgsMapLayerStyle()

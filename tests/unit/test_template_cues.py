@@ -30,10 +30,8 @@ from nika_onlymap_exporter.core.cartograph_ir import (
 )
 from nika_onlymap_exporter.core.layout_templates import (
     MAIN_FRAME_ID,
-    TEMPLATES,
     TemplateInput,
     TemplatePlan,
-    get_template,
     plan_template,
 )
 from nika_onlymap_exporter.core.template_cues import (
@@ -42,6 +40,7 @@ from nika_onlymap_exporter.core.template_cues import (
     declared_cues,
     plan_cues,
 )
+from nika_onlymap_exporter.core.template_registry import TEMPLATES, get_template
 
 NOTES = "Parcels surveyed in September by the field team."
 FIGURES = (("214", "parcels surveyed"), ("12 km", "of channel"), ("3", "teams"))

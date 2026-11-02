@@ -6,12 +6,9 @@ from pathlib import Path
 import pytest
 
 from nika_onlymap_exporter.core.cartograph_ir import ShapeSpec, TextSpec
-from nika_onlymap_exporter.core.layout_templates import (
-    TemplateInput,
-    plan_template,
-    starter_templates,
-)
+from nika_onlymap_exporter.core.layout_templates import TemplateInput, plan_template
 from nika_onlymap_exporter.core.page_style import contrast_ratio, parse_color
+from nika_onlymap_exporter.core.template_registry import starter_templates
 
 
 def test_starters_have_distinct_jobs_without_cosmetic_variants():

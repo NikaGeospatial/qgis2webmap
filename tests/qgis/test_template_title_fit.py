@@ -14,7 +14,7 @@ from qgis.PyQt.QtCore import QRectF, Qt
 from qgis.PyQt.QtGui import QFontMetricsF
 
 from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
-from nika_onlymap_exporter.core.layout_templates import starter_templates
+from nika_onlymap_exporter.core.template_registry import starter_templates
 
 PICKER_DESIGNS = tuple(t.id for t in starter_templates())
 #: Titles that wrap to several lines in a narrow title block.

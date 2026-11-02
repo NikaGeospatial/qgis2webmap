@@ -23,7 +23,7 @@ from types import ModuleType
 
 import pytest
 
-from nika_onlymap_exporter.core.layout_templates import TEMPLATES
+from nika_onlymap_exporter.core.template_registry import TEMPLATES
 from nika_onlymap_exporter.core.translatable import N_, MarkedText
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

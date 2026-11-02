@@ -34,8 +34,8 @@ from nika_onlymap_exporter.core.layout_reader import (
     LEGEND_LEFT_OUT_PROPERTY,
     read_layout,
 )
-from nika_onlymap_exporter.core.layout_templates import template_ids
 from nika_onlymap_exporter.core.page_style import AUBERGINE, MINIMUM_TYPE, spacing_for
+from nika_onlymap_exporter.core.template_registry import template_ids
 from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
 
 qgis_core = pytest.importorskip("qgis.core")

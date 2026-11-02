@@ -82,7 +82,7 @@ def main() -> int:
         app.processEvents()
     print("dialog open:", plugin.dialog is not None and plugin.dialog.isVisible())
 
-    from nika_onlymap_exporter.core import layout_templates
+    from nika_onlymap_exporter.core import template_registry
     from nika_onlymap_exporter.core.canvas_cartograph import (
         cartograph_from_view,
         template_preview,
@@ -94,7 +94,7 @@ def main() -> int:
     from nika_onlymap_exporter.packaging.runtime_manager import LocalRuntime
     from nika_onlymap_exporter.ui.cartograph.template_picker import TemplatePicker
 
-    ids = layout_templates.template_ids()
+    ids = template_registry.template_ids()
     print("templates:", len(ids))
     assert len(ids) == 15, ids
 

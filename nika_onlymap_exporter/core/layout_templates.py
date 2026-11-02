@@ -360,31 +360,12 @@ class LayoutTemplate:
 # --------------------------------------------------------------------------
 
 
-def template_ids() -> tuple[str, ...]:
-    return tuple(template.id for template in TEMPLATES)
-
-
-def starter_templates() -> tuple[LayoutTemplate, ...]:
-    """One starter per useful composition, without cosmetic near-duplicates.
-
-    The complete registry is also used by the template geometry and fidelity
-    probes; the picker is deliberately a smaller, task-oriented collection.
-    """
-    omitted = {"story-map", "marginalia", "atlas-ledger", "town-hall"}
-    return tuple(template for template in TEMPLATES if template.id not in omitted)
-
-
-def get_template(template_id: str) -> LayoutTemplate:
-    for template in TEMPLATES:
-        if template.id == template_id:
-            return template
-    raise ValueError(f"template {template_id!r} is not one of {template_ids()}")
-
-
 def plan_template(template_id: str, data: TemplateInput) -> TemplatePlan:
     """Plan `data`'s page in the template `template_id`. Raises `ValueError`
     for an unknown template, page size or orientation, or an empty or
     non-finite extent."""
+    from .template_registry import get_template
+
     template = get_template(template_id)
     for name in ("extent_width", "extent_height"):
         value = getattr(data, name)
@@ -1518,7 +1499,7 @@ def _dark(page: _Page) -> _Layout:
     )
 
 
-TEMPLATES: tuple[LayoutTemplate, ...] = (
+BASE_TEMPLATES: tuple[LayoutTemplate, ...] = (
     LayoutTemplate(
         "classic",
         N_("Daylight"),
@@ -3216,27 +3197,16 @@ def _unique(credits: Sequence[str]) -> list[str]:
 
 
 __all__ = [
+    "BASE_TEMPLATES",
     "LOCATOR_FRAME_ID",
     "MAIN_FRAME_ID",
     "MAP_MIN_SHARE",
     "PAGE_SIZE_ORDER",
-    "TEMPLATES",
     "FrameSlot",
     "LayoutTemplate",
     "TemplateInput",
     "TemplatePlan",
-    "get_template",
     "legend_room_cap",
     "plan_template",
-    "template_ids",
     "template_spec",
 ]
-
-
-# --------------------------------------------------------------------------
-# The newer designs
-# --------------------------------------------------------------------------
-# `core/template_designs.py` plans five more designs with the helpers above
-# and appends them to `TEMPLATES` as it loads; importing it last, once all
-# of them are defined, keeps either module safe to import first.
-from . import template_designs  # noqa: E402, F401

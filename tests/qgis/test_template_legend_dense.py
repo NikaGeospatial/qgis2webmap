@@ -20,7 +20,7 @@ from qgis.core import (
 
 from nika_onlymap_exporter.core.canvas_cartograph import cartograph_from_view
 from nika_onlymap_exporter.core.layout_reader import LEGEND_LEFT_OUT_PROPERTY
-from nika_onlymap_exporter.core.layout_templates import starter_templates
+from nika_onlymap_exporter.core.template_registry import starter_templates
 
 #: Designs that draw a legend at all.
 LEGEND_DESIGNS = tuple(

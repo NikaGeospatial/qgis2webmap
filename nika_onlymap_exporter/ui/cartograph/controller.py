@@ -68,7 +68,6 @@ from ...core.fidelity_summary import (
     summarise,
 )
 from ...core.layout_identity import existing_key, layout_key
-from ...core.layout_templates import get_template
 from ...core.page_settings import (
     adopt_theme,
     apply_theme,
@@ -90,6 +89,7 @@ from ...core.settings import (
     FrameChoice,
     save_state,
 )
+from ...core.template_registry import get_template
 from ...exporters.frame_raster import encode_png
 from ...packaging.runtime_manager import (
     RuntimeBundle,
@@ -1218,7 +1218,8 @@ class CartographController:
             template_preview_async,
             view_input,
         )
-        from ...core.layout_templates import get_template, plan_template
+        from ...core.layout_templates import plan_template
+        from ...core.template_registry import get_template
         from .template_picker import ask_template
 
         canvas = self._map_canvas()

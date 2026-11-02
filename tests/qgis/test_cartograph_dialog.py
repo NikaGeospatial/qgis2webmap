@@ -1864,8 +1864,8 @@ class TestCanvasAndImport:
         """The planner the controller passes lays out the page from the
         canvas and project, as the preview does: Marginalia includes its
         notes once the project has an abstract."""
-        from nika_onlymap_exporter.core.layout_templates import get_template
         from nika_onlymap_exporter.core.template_cues import plan_cues
+        from nika_onlymap_exporter.core.template_registry import get_template
 
         picked_template.choice = None
         dialog, _canvas = self._canvas_dialog(project)

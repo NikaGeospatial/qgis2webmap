@@ -31,13 +31,10 @@ from nika_onlymap_exporter.core.layout_templates import (
     LOCATOR_FRAME_ID,
     MAIN_FRAME_ID,
     PAGE_SIZE_ORDER,
-    TEMPLATES,
     TITLE_LINE_HEIGHT,
     TemplateInput,
     TemplatePlan,
-    get_template,
     plan_template,
-    template_ids,
     template_spec,
     text_lines,
 )
@@ -51,6 +48,11 @@ from nika_onlymap_exporter.core.page_style import (
 from nika_onlymap_exporter.core.template_designs import (
     ATLAS_SHEET_EXPRESSION,
     NEW_TEMPLATES,
+)
+from nika_onlymap_exporter.core.template_registry import (
+    TEMPLATES,
+    get_template,
+    template_ids,
 )
 
 NEW_IDS = ("night-desk", "marginalia", "atlas-ledger", "town-hall", "wayfinder")
@@ -223,11 +225,11 @@ class TestRegistry:
         ],
     )
     def test_either_module_may_be_imported_first(self, first: str) -> None:
-        """The two modules import each other; whichever loads first, the
-        collection lists all fifteen, once each."""
+        """Whichever template module loads first, the collection lists all
+        fifteen, once each."""
         code = (
             f"import {first}\n"
-            "from nika_onlymap_exporter.core import layout_templates as lt\n"
+            "from nika_onlymap_exporter.core import template_registry as lt\n"
             "ids = lt.template_ids()\n"
             "print(len(ids), len(set(ids)), lt.get_template('wayfinder').name)\n"
         )

@@ -25,7 +25,6 @@ from nika_onlymap_exporter.core.layout_templates import (
     LOCATOR_FRAME_ID,
     MAIN_FRAME_ID,
     PAGE_SIZE_ORDER,
-    TEMPLATES,
     TEXT_LINE_HEIGHT,
     TITLE_LINE_HEIGHT,
     FrameSlot,
@@ -33,13 +32,13 @@ from nika_onlymap_exporter.core.layout_templates import (
     TemplatePlan,
     TextSizes,
     plan_template,
-    template_ids,
     template_spec,
     text_height,
     text_percent,
 )
 from nika_onlymap_exporter.core.page_style import MINIMUM_TYPE, parse_color
 from nika_onlymap_exporter.core.template_designs import ATLAS_SHEET_EXPRESSION
+from nika_onlymap_exporter.core.template_registry import TEMPLATES, template_ids
 
 SHAPES = {
     "wide": (4000.0, 1500.0),

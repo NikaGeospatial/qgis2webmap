@@ -221,7 +221,7 @@ class TestWhatTheInsetDraws:
         assert image.width() == 300
 
     def test_every_design_with_a_locator_builds_one(self, project, parcels) -> None:
-        from nika_onlymap_exporter.core.layout_templates import template_ids
+        from nika_onlymap_exporter.core.template_registry import template_ids
 
         built = 0
         for template_id in template_ids():

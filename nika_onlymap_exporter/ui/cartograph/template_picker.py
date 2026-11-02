@@ -103,7 +103,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ...core import layout_templates
+from ...core import layout_templates, template_registry
 from ...core.canvas_cartograph import (
     PREVIEW_LEGEND_LEFT_OUT_KEY,
     PREVIEW_LOCATOR_NO_CONTEXT_KEY,
@@ -832,7 +832,7 @@ class TemplatePicker(QDialog):
         self._templates: dict[str, LayoutTemplate] = {
             t.id: t
             for t in sorted(
-                layout_templates.starter_templates(),
+                template_registry.starter_templates(),
                 key=lambda t: (t.id in _DARK_TEMPLATES, t.category != ESSENTIAL),
             )
         }

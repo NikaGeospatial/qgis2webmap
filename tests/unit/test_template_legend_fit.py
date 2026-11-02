@@ -26,9 +26,9 @@ from nika_onlymap_exporter.core.layout_templates import (
     legend_wrap_width,
     plan_template,
     scalebar_height,
-    template_ids,
 )
 from nika_onlymap_exporter.core.page_style import MINIMUM_TYPE, type_size
+from nika_onlymap_exporter.core.template_registry import template_ids
 
 SHAPES = {"wide": (14000.0, 3500.0), "square": (5000.0, 5000.0)}
 SOIL = ("Clay", "Silty clay", "Loam", "Sandy loam", "Sand", "Peat", "Fill", "Laterite")

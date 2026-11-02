@@ -40,7 +40,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nika_onlymap_exporter.core import layout_templates
+from nika_onlymap_exporter.core import layout_templates, template_registry
 from nika_onlymap_exporter.core.canvas_cartograph import PREVIEW_LEGEND_LEFT_OUT_KEY
 from nika_onlymap_exporter.core.layout_templates import CHARACTERFUL, ESSENTIAL
 from nika_onlymap_exporter.ui.cartograph import template_picker
@@ -68,7 +68,7 @@ def fifteen(monkeypatch):
     """The registry as it will be: fifteen designs, six essentials and nine
     characterful, all but one listing what they include. Classic is moved
     off the top, so the default is chosen by id, not by position."""
-    base = list(layout_templates.TEMPLATES)[:10]
+    base = list(template_registry.TEMPLATES)[:10]
     designs = [
         dataclasses.replace(
             base[0],
@@ -87,9 +87,9 @@ def fifteen(monkeypatch):
         for t in base[1:] + designs + base[:1]
     ]
     assert len(templates) == 15
-    monkeypatch.setattr(layout_templates, "TEMPLATES", tuple(templates))
+    monkeypatch.setattr(template_registry, "TEMPLATES", tuple(templates))
     monkeypatch.setattr(
-        layout_templates, "starter_templates", lambda: layout_templates.TEMPLATES
+        template_registry, "starter_templates", lambda: template_registry.TEMPLATES
     )
     return {t.id: t for t in templates}
 
@@ -369,7 +369,7 @@ class TestTheCards:
         try:
             _shown(qgis_app, picker, QSize(700, 480))
             _drain(qgis_app, picker)
-            line = layout_templates.get_template("classic").best_for
+            line = template_registry.get_template("classic").best_for
             assert line and line in picker._items["classic"].toolTip()
         finally:
             picker.reject()
@@ -1108,7 +1108,7 @@ def _planner(data, calls: list | None = None):
 def all_designs(monkeypatch):
     """Exercise content cues independently of the curated starter subset."""
     monkeypatch.setattr(
-        layout_templates, "starter_templates", lambda: layout_templates.TEMPLATES
+        template_registry, "starter_templates", lambda: template_registry.TEMPLATES
     )
 
 
@@ -1171,7 +1171,7 @@ class TestTheCues:
             planner=_planner(_PROJECT, calls),
         )
         try:
-            count = len(layout_templates.TEMPLATES)
+            count = len(template_registry.TEMPLATES)
             _planned(qgis_app, picker)
             assert len(calls) == count
             assert {c[1] for c in calls} == {"A4"}
