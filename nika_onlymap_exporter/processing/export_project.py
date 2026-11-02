@@ -32,13 +32,14 @@ from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy, report_verdict
 from ..core.project_reader import PendingProject, finish_project, prepare_project
 from ..core.settings import resolve_license_key
+from ..core.translatable import N_
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.runtime_manager import (
     RUNTIME_DOWNLOAD_SIZE,
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
-from ..ui.i18n import N_, plural, tr
+from ..translation import plural, tr
 from ..writers.onlymap_writer import ExportBlockedError, OnlyMapWriter
 
 # Where the progress bar stands when reading ends and when the finished artifact

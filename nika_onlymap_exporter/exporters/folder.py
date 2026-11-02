@@ -18,7 +18,7 @@ from pathlib import Path
 
 from ..core.atomic_write import write_text_atomic
 from ..core.export_ir import OutputMode
-from ..ui.i18n import tr
+from ..translation import tr
 from ..writers.onlymap_writer import ArtifactResult
 from .base import ExportOutcome
 

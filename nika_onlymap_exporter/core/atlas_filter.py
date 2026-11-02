@@ -30,7 +30,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from ..ui.i18n import tr
+from ..translation import tr
 from .live_count import field_kind, is_integer_field, parse_field_number
 
 #: What a yes/no field's value is called, as the filter keeps it.

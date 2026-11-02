@@ -101,7 +101,7 @@ from ..packaging.dependency_scanner import (
 )
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
-from ..ui.i18n import tr
+from ..translation import tr
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
 from .build_cache import (

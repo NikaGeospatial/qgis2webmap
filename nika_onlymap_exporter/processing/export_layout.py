@@ -39,11 +39,12 @@ from ..core.settings import (
     DEFAULT_STATIC_DPI,
     resolve_license_key,
 )
+from ..core.translatable import N_
 from ..packaging.runtime_manager import (
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
 )
-from ..ui.i18n import N_, tr
+from ..translation import tr
 from ..writers.onlymap_writer import OnlyMapWriter
 from .export_project import ExportProjectAlgorithm
 

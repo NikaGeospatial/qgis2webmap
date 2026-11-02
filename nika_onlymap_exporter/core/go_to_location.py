@@ -486,7 +486,7 @@ def searchable_layers(item: QgsLayoutItemMap) -> list[QgsVectorLayer]:
 
 def search_sources(layer: QgsVectorLayer) -> list[SearchSource]:
     """Display name, QGIS feature ID, then the text and integer fields in order."""
-    from ..ui.i18n import tr
+    from ..translation import tr
 
     sources = [
         SearchSource(DISPLAY, tr("Display name")),

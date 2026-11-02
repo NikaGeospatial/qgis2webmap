@@ -382,6 +382,8 @@
      "owner": ["main_dialog", "ui_layout", "saving"], "also": []},
     {"match": ["nika_onlymap_exporter/ui/i18n.py", "nika_onlymap_exporter/ui/languages.py", "nika_onlymap_exporter/ui/language_picker.py", "nika_onlymap_exporter/i18n/*"],
      "owner": ["i18n"], "also": []},
+    {"match": ["nika_onlymap_exporter/translation.py"],
+     "owner": ["i18n", "export_pipeline", "atlas", "plugin"], "also": []},
     {"match": ["nika_onlymap_exporter/runtime/*"],
      "owner": ["rendering", "export_pipeline", "plugin"], "also": []},
     {"match": ["nika_onlymap_exporter/__init__.py", "nika_onlymap_exporter/plugin.py", "nika_onlymap_exporter/metadata.txt", "nika_onlymap_exporter/processing/*", "nika_onlymap_exporter/packaging/runtime_manager.py", "nika_onlymap_exporter/packaging/__init__.py", "nika_onlymap_exporter/ui/runtime_setup.py", "nika_onlymap_exporter/ui/__init__.py", "nika_onlymap_exporter/core/__init__.py", "nika_onlymap_exporter/exporters/__init__.py", "nika_onlymap_exporter/writers/__init__.py", "nika_onlymap_exporter/fonts/*", "scripts/zip_smoke.py", "scripts/package_plugin.py", "scripts/verify_package.py", "scripts/fetch_runtime.py", "scripts/lock_runtime.py", "scripts/check_runtime_updates.py"],

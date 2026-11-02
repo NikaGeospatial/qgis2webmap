@@ -72,7 +72,7 @@ from ..core.print_settings import (
     qt_supports_colour_management,
 )
 from ..core.settings import PageChoice
-from ..ui.i18n import tr
+from ..translation import tr
 
 #: Crop-mark stroke, matching the runtime's `stroke-width="0.15"` in mm.
 CROP_MARK_WIDTH_MM = 0.15

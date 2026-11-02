@@ -38,7 +38,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
-from ..ui.i18n import plural, tr
+from ..translation import plural, tr
 from .atlas_live_counts import follows_atlas_page
 from .layout_reader import atlas_page_count, expression_error
 

@@ -1,7 +1,7 @@
 """Marking text for the translation catalogue, without Qt.
 
 `N_()` marks a literal for `scripts/update_translations.py` and hands it back
-untranslated; the UI translates it with `ui/i18n.tr()` where it is shown.
+untranslated; `translation.tr()` translates it where it is shown.
 It lives here because core modules must not import Qt, and `ui/i18n.py`
 re-exports it, so the plugin has one marker.
 

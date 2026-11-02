@@ -69,7 +69,7 @@ from qgis.core import (
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QMetaType, QSizeF
 
-from ..ui.i18n import tr
+from ..translation import tr
 from .dom_parse import read_dom
 from .frame_layers import rendered_layers
 

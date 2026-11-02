@@ -30,7 +30,7 @@ from qgis.core import (
     QgsLayoutItemMap,
 )
 
-from ..ui.i18n import tr
+from ..translation import tr
 from .live_count import (
     CountState,
     live_counts,

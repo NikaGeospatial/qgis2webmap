@@ -29,7 +29,7 @@ from qgis.core import Qgis, QgsFeature, QgsFeedback, QgsLayout, QgsLayoutExporte
 from qgis.PyQt.QtPrintSupport import QPrinter
 
 from ..core.atlas_live_counts import AtlasPageCounts, follow_maps_in_copy
-from ..ui.i18n import tr
+from ..translation import tr
 from .print_pdf import PrintPdfError, _require_atlas, _result_name
 
 #: Why a print could not start or finish; the message is user-facing.

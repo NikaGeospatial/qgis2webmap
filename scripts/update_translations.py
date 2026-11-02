@@ -7,7 +7,7 @@
 
 **Why not `pylupdate6`.** It finds `self.tr()` on QObject subclasses and works
 out a context per class. This plugin uses one context and module-level
-`tr()` / `N_()` / `plural()` helpers (see `ui/i18n.py`), which it does not
+`tr()` / `N_()` / `plural()` helpers (see `translation.py`), which it does not
 recognise. Reading the literals out of the syntax tree is a few lines and
 finds exactly what the helpers will look up - adjacent string literals are
 already joined by the parser, so a sentence split across lines is one entry.
