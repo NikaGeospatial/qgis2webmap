@@ -221,3 +221,107 @@ def test_the_source_is_asked_for_those_fields_only(wide_layer) -> None:
     expected = sorted(pending.features.attribute_indexes)
     assert asked == [(True, expected), (True, expected)]
     assert len(expected) < len(wide_layer.fields()) - 30
+
+
+def test_a_layer_keeping_no_field_reads_and_writes_none(qgis_app, monkeypatch) -> None:
+    """Nothing drawn from a field and no popup: no field is kept, so none is
+    read - and the exporter, for which no list means every field, writes none."""
+    layer = _memory_layer()
+    expected = _read_every_field(layer, monkeypatch, with_popup=False)
+    pending = layer_reader.prepare_layer(
+        layer, FidelityReportBuilder(), with_popup=False
+    )
+    assert isinstance(pending, layer_reader.PendingLayer)
+    assert pending.features.attribute_indexes == ()
+    found = pending.finish(FidelityReportBuilder())
+    assert found == expected
+    assert json.dumps(found.geojson) == json.dumps(expected.geojson)
+    assert all(f["properties"] == {} for f in found.geojson["features"])
+
+
+def _regions(project):
+    regions = qgis_core.QgsVectorLayer(
+        "None?field=code:integer&field=label:string&field=unused:string",
+        "regions",
+        "memory",
+    )
+    rows = []
+    for code, label in ((1, "North"), (2, "South"), (3, "East")):
+        row = qgis_core.QgsFeature(regions.fields())
+        row.setAttributes([code, label, "x"])
+        rows.append(row)
+    regions.dataProvider().addFeatures(rows)
+    project.addMapLayer(regions)
+    return regions
+
+
+def test_joins_value_relations_and_unsaved_edits_read_alike(
+    project, monkeypatch
+) -> None:
+    """A joined column, a Value Relation shown in the popup and an edit not
+    yet saved: each comes through the layer's feature source, which fetches
+    what they depend on (the join key, the stored key) even when that is not
+    itself kept."""
+    regions = _regions(project)
+    layer = _memory_layer()
+    project.addMapLayer(layer)
+    join = qgis_core.QgsVectorLayerJoinInfo()
+    join.setJoinLayer(regions)
+    join.setJoinFieldName("code")
+    join.setTargetFieldName("kind")
+    join.setJoinFieldNamesSubset(["label"])
+    join.setPrefix("region_")
+    assert layer.addJoin(join)
+    layer.setEditorWidgetSetup(
+        layer.fields().indexOf("kind"),
+        qgis_core.QgsEditorWidgetSetup(
+            "ValueRelation",
+            {
+                "Layer": regions.id(),
+                "Key": "code",
+                "Value": "label",
+                "AllowNull": True,
+            },
+        ),
+    )
+    assert layer.startEditing()
+    first = next(layer.getFeatures())
+    assert layer.changeAttributeValue(
+        first.id(), layer.fields().indexOf("note"), "edited, not saved"
+    )
+    # The join key is shown only through the join: hidden itself.
+    modes = {**FIELD_MODES, "kind": PopupFieldMode.HIDDEN.value}
+
+    def read(**kwargs):
+        return layer_reader.read_layer(
+            layer, FidelityReportBuilder(), field_modes=modes, **kwargs
+        )
+
+    real = layer_reader.snapshot_features
+
+    def every_field(layer, clip_extent, display_names=None, keep=None):
+        return real(layer, clip_extent, display_names)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(layer_reader, "snapshot_features", every_field)
+        expected = read()
+    found = read()
+
+    assert found == expected
+    assert json.dumps(found.geojson) == json.dumps(expected.geojson)
+    properties = [f["properties"] for f in found.geojson["features"]]
+    assert "kind" not in properties[0]
+    assert {p["region_label"] for p in properties} >= {"North", "South", "East"}
+    assert properties[0]["note"] == "edited, not saved"
+
+    # And the Value Relation's text, with its key kept for the popup.
+    del modes["kind"]
+    with monkeypatch.context() as patch:
+        patch.setattr(layer_reader, "snapshot_features", every_field)
+        expected = read()
+    found = read()
+    assert found == expected
+    assert json.dumps(found.geojson) == json.dumps(expected.geojson)
+    shown = {f["properties"].get("kind_shown") for f in found.geojson["features"]}
+    assert {"North", "South", "East"} <= shown
+    layer.rollBack()

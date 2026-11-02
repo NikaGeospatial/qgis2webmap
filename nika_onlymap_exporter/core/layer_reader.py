@@ -715,9 +715,12 @@ def export_geojson_from(
         if indexes is not None:
             request.setSubsetOfAttributes(list(indexes))
             # And only those written, rather than every other column as a
-            # null. With none read, the empty list means every field: they
-            # are written as nulls and stripped, as before.
-            exporter.setAttributes(list(indexes))
+            # null. With none kept none is written: an empty list here would
+            # mean every field.
+            if indexes:
+                exporter.setAttributes(list(indexes))
+            else:
+                exporter.setIncludeAttributes(False)
         collected = list(features.source.getFeatures(request))
         if clip_extent is not None:
             _report_clip(report, subject, layer_id, len(collected), features.total)
