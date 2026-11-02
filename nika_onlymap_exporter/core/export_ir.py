@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from .read_only_json import read_only
+
 # Bumped when the shape of a snapshot changes, so stored snapshots stay
 # comparable and a stale fixture fails loudly instead of subtly.
 SCHEMA_VERSION = 2
@@ -1035,6 +1037,12 @@ class ExportLayer:
     # `PopupSpec.on_hover` - qgis2web#132, open since 2015.
     highlight_color: Color | None = None
 
+    def __post_init__(self) -> None:
+        # Read-only all the way down (`core.read_only_json`), so the text kept
+        # by `geojson_text`, and a cached read handed to a later build, can
+        # never fall behind the data.
+        object.__setattr__(self, "geojson", read_only(self.geojson))
+
     @property
     def is_raster(self) -> bool:
         """The discriminator. Preferred over `geometry_kind is RASTER` at call
@@ -1048,9 +1056,10 @@ class ExportLayer:
         A layer is measured for the size warnings, the compression choice and
         the Fidelity tab, then written into the page; serialising a large one
         takes most of a second, and each of those used to pay it again. They
-        all read this instead. Safe to keep because `geojson` is never changed
-        in place once a layer is built: a changed layer is a new one, through
-        `dataclasses.replace`, and starts without it.
+        all read this instead. Safe to keep because `geojson` cannot be changed
+        in place once a layer is built (it is read-only, see `__post_init__`):
+        a changed layer is a new one, through `dataclasses.replace`, and
+        starts without it.
         """
         return json.dumps(self.geojson, separators=(",", ":"), ensure_ascii=False)
 

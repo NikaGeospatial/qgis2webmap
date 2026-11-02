@@ -125,14 +125,14 @@ def test_the_page_carries_the_same_data() -> None:
 def test_one_layer_is_serialised_once(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[object] = []
     real_dumps = json.dumps
+    layer = _layer(GEOJSON)
 
     def counting_dumps(value: object, *args: Any, **kwargs: Any) -> str:
-        if value is GEOJSON:
+        if value is layer.geojson:
             calls.append(value)
         return real_dumps(value, *args, **kwargs)
 
     monkeypatch.setattr(export_ir.json, "dumps", counting_dumps)
-    layer = _layer(GEOJSON)
     project = ExportProject(title="Peaks", layers=(layer,))
     data_bytes_by_layer(project)
     data_bytes_by_layer(project)
