@@ -130,10 +130,14 @@ def _page(runtime: LocalRuntime, directory: Path, *, fit: bool) -> Path:
 
 @pytest.fixture(scope="module")
 def pages(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
-    from nika_onlymap_exporter.packaging.runtime_manager import discover_runtime_dir
+    from nika_onlymap_exporter.packaging.runtime_manager import (
+        RUNTIME_CARTOGRAPH_JS,
+        discover_runtime_dir,
+        stored_path,
+    )
 
     directory = discover_runtime_dir()
-    if directory is None or not (directory / "cartograph.standalone.js").exists():
+    if directory is None or stored_path(directory, RUNTIME_CARTOGRAPH_JS) is None:
         pytest.skip("OnlyMap runtime with a cartograph build not available")
     runtime = LocalRuntime(directory)
     out = tmp_path_factory.mktemp("legend-fit")

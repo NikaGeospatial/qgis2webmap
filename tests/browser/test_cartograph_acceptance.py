@@ -33,7 +33,11 @@ from pathlib import Path
 
 import pytest
 
-from nika_onlymap_exporter.packaging.runtime_manager import discover_runtime_dir
+from nika_onlymap_exporter.packaging.runtime_manager import (
+    RUNTIME_CARTOGRAPH_JS,
+    discover_runtime_dir,
+    read_runtime_file,
+)
 
 pytest.importorskip(
     "playwright.sync_api",
@@ -81,7 +85,9 @@ def expected(fixtures: Path) -> dict:
 def cartograph_source() -> str:
     directory = discover_runtime_dir()
     assert directory is not None
-    return (directory / "cartograph.standalone.js").read_text(encoding="utf-8")
+    source = read_runtime_file(directory, RUNTIME_CARTOGRAPH_JS)
+    assert source is not None
+    return source.decode("utf-8")
 
 
 _VALIDATE = """

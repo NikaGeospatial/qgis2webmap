@@ -18,6 +18,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
+import gzip
+import hashlib
 import io
 import json
 import os
@@ -25,6 +28,7 @@ import tarfile
 
 import pytest
 
+from nika_onlymap_exporter.packaging import asset_embedder
 from nika_onlymap_exporter.packaging import runtime_manager as rm
 
 NETWORK = os.environ.get("ONLYMAP_NETWORK_TESTS") == "1"
@@ -567,7 +571,7 @@ class TestIncompleteCacheIsRepaired:
         bundle = provider.load()
 
         assert bundle.css == css
-        assert (provider.cached_dir() / rm.RUNTIME_CSS).read_bytes() == css
+        assert rm.read_runtime_file(provider.cached_dir(), rm.RUNTIME_CSS) == css
         assert provider.is_cached()
 
     def test_a_cache_with_a_corrupt_file_is_repaired_on_load(
@@ -605,6 +609,251 @@ class TestIncompleteCacheIsRepaired:
         (cache / rm.RUNTIME_CSS).write_bytes(b"/* anything */")
 
         assert provider.is_cached()
+
+
+def _compressible(label: str, size: int = 400_000) -> bytes:
+    """Script-like bytes longer than `gzip_probe` reads, varied enough that deflate
+    has real choices to make."""
+    lines = [f"var {label}{i} = {i * 7919 % 104729};" for i in range(size // 20)]
+    return "\n".join(lines).encode()[:size]
+
+
+_PINNED_FILES = {
+    rm.RUNTIME_JS: _compressible("core"),
+    rm.RUNTIME_CSS: b"om-map:not(:defined) om-fallback { display: block; }" * 50,
+    rm.RUNTIME_CARTOGRAPH_JS: _compressible("carto"),
+    rm.RUNTIME_CARTOGRAPH_CSS: b"om-cartograph { display: block; }" * 50,
+}
+
+
+class TestGzippedCache:
+    """A fetched cache keeps the pinned files gzipped, verified on their contents.
+
+    Every reader takes a plain file or its `.gz` alike: an old plain cache, a
+    package's `dist/` named by `ONLYMAP_RUNTIME_DIR`, and a new gzipped cache
+    all load. A damaged gzip is not cached, so `load()` repairs it.
+    """
+
+    @pytest.fixture(autouse=True)
+    def empty_gzip_caches(self):
+        rm._GZIP_DIGESTS.clear()
+        asset_embedder._GZIP_CACHE.clear()
+        yield
+        rm._GZIP_DIGESTS.clear()
+        asset_embedder._GZIP_CACHE.clear()
+
+    def pin(self, monkeypatch, version: str = "1.0.0") -> None:
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": version,
+                "files": {
+                    name: {"sha256": rm.sha256_of(data)}
+                    for name, data in _PINNED_FILES.items()
+                },
+            },
+        )
+
+    def install(self, tmp_path, monkeypatch, version: str = "1.0.0"):
+        self.pin(monkeypatch, version)
+        tarball = npm_tarball_with_cartograph(*_PINNED_FILES.values())
+        monkeypatch.setattr(rm, "download_tarball", lambda *a, **k: tarball)
+        rm.record_licence_acceptance(version, tmp_path)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version=version)
+        provider.load()
+        return provider
+
+    def test_a_fetch_stores_the_pinned_files_gzipped(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        provider = self.install(tmp_path, monkeypatch)
+        cache = provider.cached_dir()
+
+        for name, data in _PINNED_FILES.items():
+            assert not (cache / name).exists(), f"{name} was left plain"
+            stored = (cache / (name + rm.GZIP_SUFFIX)).read_bytes()
+            assert gzip.decompress(stored) == data
+            assert len(stored) < len(data)
+        # people and tools read these directly
+        assert (cache / rm.RUNTIME_LICENCE).read_bytes() == b"# Licence"
+
+    def test_a_gzipped_cache_loads_the_uncompressed_bytes(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        provider = self.install(tmp_path, monkeypatch)
+
+        bundle = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0").load()
+
+        assert bundle.javascript == _PINNED_FILES[rm.RUNTIME_JS]
+        assert bundle.css == _PINNED_FILES[rm.RUNTIME_CSS]
+        assert bundle.cartograph_javascript == _PINNED_FILES[rm.RUNTIME_CARTOGRAPH_JS]
+        assert bundle.cartograph_css == _PINNED_FILES[rm.RUNTIME_CARTOGRAPH_CSS]
+        assert bundle.sha256 == rm.sha256_of(_PINNED_FILES[rm.RUNTIME_JS])
+        assert bundle.lock_warnings == ()
+        assert provider.is_cached()
+
+    def test_runtime_dir_may_name_a_gzipped_cache(self, tmp_path, monkeypatch) -> None:
+        """CI points `ONLYMAP_RUNTIME_DIR` at what `fetch_runtime.py` printed."""
+        provider = self.install(tmp_path, monkeypatch)
+        monkeypatch.setenv("ONLYMAP_RUNTIME_DIR", str(provider.cached_dir()))
+
+        assert rm.discover_runtime_dir() == provider.cached_dir()
+        bundle = rm.default_provider().load()
+        assert bundle.javascript == _PINNED_FILES[rm.RUNTIME_JS]
+
+    def test_a_plain_cache_from_an_older_plugin_still_counts(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        self.pin(monkeypatch)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        cache = provider.cached_dir()
+        cache.mkdir(parents=True)
+        for name, data in _PINNED_FILES.items():
+            (cache / name).write_bytes(data)
+
+        def explode(*args, **kwargs):  # pragma: no cover - must not run
+            raise AssertionError("a plain cache must not be fetched again")
+
+        monkeypatch.setattr(rm, "download_tarball", explode)
+        assert provider.is_cached()
+        assert provider.load().javascript == _PINNED_FILES[rm.RUNTIME_JS]
+
+    def test_a_mixed_directory_loads(self, tmp_path, monkeypatch) -> None:
+        self.pin(monkeypatch)
+        for index, (name, data) in enumerate(_PINNED_FILES.items()):
+            if index % 2:
+                (tmp_path / (name + rm.GZIP_SUFFIX)).write_bytes(gzip.compress(data))
+            else:
+                (tmp_path / name).write_bytes(data)
+
+        bundle = rm.LocalRuntime(tmp_path).load()
+
+        assert bundle.css == _PINNED_FILES[rm.RUNTIME_CSS]
+        assert bundle.cartograph_css == _PINNED_FILES[rm.RUNTIME_CARTOGRAPH_CSS]
+        assert bundle.lock_warnings == ()
+
+    def test_a_gzipped_cartograph_half_counts_as_absent(self, tmp_path) -> None:
+        (tmp_path / (rm.RUNTIME_JS + rm.GZIP_SUFFIX)).write_bytes(gzip.compress(b"//"))
+        (tmp_path / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+        (tmp_path / (rm.RUNTIME_CARTOGRAPH_JS + rm.GZIP_SUFFIX)).write_bytes(
+            gzip.compress(b"// cg")
+        )
+
+        bundle = rm.LocalRuntime(tmp_path).load()
+
+        assert bundle.javascript == b"//"
+        assert bundle.cartograph_javascript is None
+
+    def test_a_cache_missing_a_gzipped_cartograph_file_is_refetched(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        provider = self.install(tmp_path, monkeypatch)
+        (provider.cached_dir() / (rm.RUNTIME_CARTOGRAPH_CSS + rm.GZIP_SUFFIX)).unlink()
+
+        assert not provider.is_cached()
+        bundle = provider.load()
+        assert bundle.cartograph_css == _PINNED_FILES[rm.RUNTIME_CARTOGRAPH_CSS]
+
+    @pytest.mark.parametrize(
+        "damage",
+        ["flipped-byte", "bad-crc", "truncated", "trailing-data", "not-gzip"],
+    )
+    def test_a_damaged_gzip_is_not_cached_and_is_repaired(
+        self, tmp_path, monkeypatch, damage
+    ) -> None:
+        provider = self.install(tmp_path, monkeypatch)
+        assert provider.is_cached()  # and its digest is now remembered
+        path = provider.cached_dir() / (rm.RUNTIME_JS + rm.GZIP_SUFFIX)
+        stored = bytearray(path.read_bytes())
+        if damage == "flipped-byte":
+            stored[len(stored) // 2] ^= 0x01
+        elif damage == "bad-crc":
+            stored[-8] ^= 0xFF
+        elif damage == "truncated":
+            del stored[-100:]
+        elif damage == "trailing-data":
+            stored += gzip.compress(b"// more")
+        else:
+            stored = bytearray(_PINNED_FILES[rm.RUNTIME_JS])
+        path.write_bytes(bytes(stored))
+
+        assert not provider.is_cached()
+        with pytest.raises(rm.CorruptRuntimeFileError):
+            rm.LocalRuntime(provider.cached_dir()).load()
+
+        bundle = provider.load()
+        assert bundle.javascript == _PINNED_FILES[rm.RUNTIME_JS]
+        assert provider.is_cached()
+
+    def test_a_gzip_expanding_past_the_limit_is_refused(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A decompression bomb is refused before it is expanded in full."""
+        monkeypatch.setattr(rm, "MAX_MEMBER_BYTES", 1024)
+        (tmp_path / (rm.RUNTIME_JS + rm.GZIP_SUFFIX)).write_bytes(
+            gzip.compress(b"x" * 1025)
+        )
+        (tmp_path / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+
+        with pytest.raises(rm.CorruptRuntimeFileError):
+            rm.LocalRuntime(tmp_path).load()
+        assert rm._gunzip_bounded(gzip.compress(b"x" * 1024)) == b"x" * 1024
+
+    def test_a_cache_without_a_lock_still_needs_a_readable_gzip(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(rm, "read_lock", lambda: {})
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        cache = provider.cached_dir()
+        cache.mkdir(parents=True)
+        (cache / (rm.RUNTIME_JS + rm.GZIP_SUFFIX)).write_bytes(b"not gzip")
+        (cache / rm.RUNTIME_CSS).write_bytes(b"/* css */")
+
+        assert not provider.is_cached()
+
+    def test_the_embedded_runtime_reuses_the_stored_gzip(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Same bytes as compressing afresh, without the 0.4 s it takes."""
+        provider = self.install(tmp_path, monkeypatch)
+        asset_embedder._GZIP_CACHE.clear()
+        javascript = _PINNED_FILES[rm.RUNTIME_JS]
+        stored = (provider.cached_dir() / (rm.RUNTIME_JS + rm.GZIP_SUFFIX)).read_bytes()
+
+        provider.load()
+        compressed = []
+        monkeypatch.setattr(
+            asset_embedder,
+            "gzip_bytes",
+            lambda data: compressed.append(data) or gzip.compress(data, 6, mtime=0),
+        )
+        embedded = asset_embedder.gzip_base64(javascript)
+
+        assert compressed == [], "the stored gzip was not reused"
+        assert base64.b64decode(embedded) == stored
+        assert embedded == base64.b64encode(
+            gzip.compress(javascript, asset_embedder.GZIP_LEVEL, mtime=0)
+        ).decode("ascii")
+
+    def test_a_gzip_from_another_compressor_is_not_reused(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Another zlib could compress differently; then compress as before."""
+        provider = self.install(tmp_path, monkeypatch)
+        record = provider.cached_dir() / rm.COMPRESSION_RECORD
+        probes = json.loads(record.read_text())["probes"]
+        assert set(probes) == {rm.RUNTIME_JS, rm.RUNTIME_CARTOGRAPH_JS}
+        record.write_text(json.dumps({"probes": {name: "0" * 64 for name in probes}}))
+        asset_embedder._GZIP_CACHE.clear()
+
+        provider.load()
+        javascript = _PINNED_FILES[rm.RUNTIME_JS]
+        key = (hashlib.sha256(javascript).digest(), len(javascript), 6)
+        assert asset_embedder._GZIP_CACHE.get(key) is None
+        assert asset_embedder.gzip_base64(javascript) == base64.b64encode(
+            gzip.compress(javascript, 6, mtime=0)
+        ).decode("ascii")
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ONLYMAP_NETWORK_TESTS=1 to run")

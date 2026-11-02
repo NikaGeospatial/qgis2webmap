@@ -1595,7 +1595,12 @@ def command_fixtures(args: argparse.Namespace) -> int:
     lock = json.loads(
         (snap / "nika_onlymap_exporter/runtime/runtime-lock.json").read_text()
     )
-    runtime_files = [Path(runtime_dir) / name for name in sorted(lock["files"])]
+    # Plain in a package's dist/, gzipped in a fetched cache: hash whichever is there.
+    runtime_files = [
+        Path(runtime_dir) / stored
+        for name in sorted(lock["files"])
+        for stored in (name, name + ".gz")
+    ]
     runtime_hash = selection.file_digest([p for p in runtime_files if p.exists()])
     builder_files = sorted(
         [

@@ -92,8 +92,13 @@ class _CompressionCache:
 _GZIP_CACHE = _CompressionCache(max_bytes=32 * 1024 * 1024)
 
 
-def gzip_base64(data: bytes) -> str:
-    """Compress and base64-encode. Base64 costs 33%; gzip saves far more.
+# How much of a file `gzip_probe` compresses. Enough to pass the deflate window
+# and block-splitting points many times over, small enough to cost milliseconds.
+GZIP_PROBE_BYTES = 256 * 1024
+
+
+def gzip_bytes(data: bytes) -> bytes:
+    """The gzip stream `gzip_base64` embeds, before base64.
 
     `mtime=0` is load-bearing, not tidiness. The gzip header carries a modified
     time, and `gzip.compress` defaults it to *now* - so the same project
@@ -102,14 +107,60 @@ def gzip_base64(data: bytes) -> str:
     in `ArtifactResult`, makes a diff between two exports unreadable, and leaks
     the export time into a file whose whole point is that it carries no
     incidental data about its author.
+
+    The runtime cache stores its files with this same function, so a stored
+    file can stand in for compressing the runtime again (`adopt_stored_gzip`).
     """
-    key = (hashlib.sha256(data).digest(), len(data), GZIP_LEVEL)
+    return gzip.compress(data, GZIP_LEVEL, mtime=0)
+
+
+def gzip_probe(data: bytes) -> str:
+    """A digest of how this interpreter's `gzip_bytes` compresses `data`'s start.
+
+    Deflate output is not fixed by the format: the same input at the same level
+    comes out differently from another zlib release or build (zlib-ng, a SIMD
+    fork), and Python versions disagree on one header byte. Recorded when a file
+    is stored and compared before the stored stream is reused, so an embedded
+    runtime is the bytes this machine would have produced itself.
+    """
+    return hashlib.sha256(gzip_bytes(data[:GZIP_PROBE_BYTES])).hexdigest()
+
+
+def _cache_key(data: bytes) -> tuple[bytes, int, int]:
+    return (hashlib.sha256(data).digest(), len(data), GZIP_LEVEL)
+
+
+def gzip_base64(data: bytes) -> str:
+    """Compress and base64-encode. Base64 costs 33%; gzip saves far more.
+
+    See `gzip_bytes` for why the output is deterministic.
+    """
+    key = _cache_key(data)
     cached = _GZIP_CACHE.get(key)
     if cached is not None:
         return cached
-    encoded = base64.b64encode(gzip.compress(data, GZIP_LEVEL, mtime=0)).decode("ascii")
+    encoded = base64.b64encode(gzip_bytes(data)).decode("ascii")
     _GZIP_CACHE.put(key, encoded)
     return encoded
+
+
+def adopt_stored_gzip(data: bytes, stored: bytes, probe: str) -> bool:
+    """Let `gzip_base64(data)` reuse `stored`, a `gzip_bytes(data)` kept on disk.
+
+    The caller vouches that `stored` decompresses to `data` (the runtime loader
+    has just decompressed it). Adopted only when `probe` - recorded beside the
+    file when it was written - matches this interpreter's own `gzip_probe`, so a
+    cache written by another zlib or Python cannot change the exported bytes;
+    otherwise `gzip_base64` compresses as it always has. Compressing the 9 MB
+    map runtime is about 0.4 s of a first single-file export.
+    """
+    key = _cache_key(data)
+    if _GZIP_CACHE.get(key) is not None:
+        return True
+    if gzip_probe(data) != probe:
+        return False
+    _GZIP_CACHE.put(key, base64.b64encode(stored).decode("ascii"))
+    return True
 
 
 def should_compress_data(total_data_bytes: int) -> bool:
