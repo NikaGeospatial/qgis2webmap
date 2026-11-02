@@ -52,10 +52,10 @@ per-renderer string-generation modules; see
 
 | Tier | Needs | Runs in CI |
 |---|---|---|
-| `tests/unit` | nothing | yes, every push |
-| `tests/qgis` | PyQGIS | yes, in the `qgis/qgis:ltr` container |
-| `tests/fixtures` | PyQGIS + the OnlyMap runtime | yes, where the runtime is available |
-| `tests/browser` | Playwright + the OnlyMap runtime | yes, on chromium/firefox/webkit |
+| `tests/unit` | nothing for most; PyQGIS for the modules that import Qt (they skip without it) | yes, in the `qgis/qgis:4.2` container with the QGIS tiers |
+| `tests/qgis` | PyQGIS | yes, in the `qgis/qgis:4.2` container (the focused `compat344` list also on `qgis/qgis:3.44`) |
+| `tests/fixtures` | PyQGIS + the OnlyMap runtime | yes, in the `qgis/qgis:4.2` container, with the runtime fetched first |
+| `tests/browser` | Playwright + the OnlyMap runtime | yes, one job per browser; Chromium gates, Firefox and WebKit are advisory |
 
 Every tier skips cleanly when its dependency is absent, so a partial local setup
 gives a green run rather than a wall of errors. **Read the skip count**: a green
@@ -71,7 +71,7 @@ everywhere.
 ```bash
 docker run --rm -v "$PWD":/work -w /work \
   -e QT_QPA_PLATFORM=offscreen -e PYTHONPATH=/work \
-  qgis/qgis:ltr python3 -m pytest tests/qgis
+  qgis/qgis:4.2 python3 -m pytest tests/qgis
 ```
 
 **With QGIS installed locally**, run against its bundled interpreter:
@@ -84,14 +84,16 @@ docker run --rm -v "$PWD":/work -w /work \
 
 ### Qt6 / QGIS 4
 
-`qgis/qgis:ltr` is a **Qt5** build, so the container tier alone never exercises
-Qt6. QGIS 4.0 moved the application to Qt6 and plugins.qgis.org runs an
-automatic Qt6 check on upload, so a Qt6 run is worth doing before a release:
+QGIS 4 / Qt6 is the primary target: plugins.qgis.org runs an automatic Qt6 check
+on upload, and CI runs the whole suite on `qgis/qgis:4.2`. `qgis/qgis:3.44` is a
+**Qt5** build, kept as a focused compatibility job (CI pins `3.44`, not `ltr`,
+because the `ltr` tag is due to move to a 4.x release). The `latest` tag is
+neither of these; do not use it for the Qt6 run.
 
 ```bash
 docker run --rm -v "$PWD":/work -w /work \
   -e QT_QPA_PLATFORM=offscreen -e PYTHONPATH=/work \
-  qgis/qgis:latest python3 -m pytest tests/qgis
+  qgis/qgis:4.2 python3 -m pytest tests/qgis
 ```
 
 **Verified green on QGIS 4.0.3 "Norrköping" / Qt 6.11.1 / Python 3.14 on
@@ -197,6 +199,33 @@ stage `SKIPPED`, which the verdict reports as INCOMPLETE):
 | `Q2W_DEMO_MAPS` | folder holding the demo projects (`carto-grand-canyon`, `volcanoes`); the tests that use them are skipped without it |
 | `Q2W_TEST_OUT_DIR` | keep the native-units test's diagnostic pictures here (default: the test's temporary folder) |
 | `Q2W_TEST_HOME` | state directory (default `~/.cache/q2w-tests`) |
+
+## CI: `.github/workflows/checks.yml`
+
+Runs on every push to `main`, every pull request, and (as a called workflow) on a
+release tag, where a red job stops the release.
+
+- `lint`, `compile`: ruff, translation catalogues, byte-compile. `mypy` is
+  advisory (it reports, it does not block).
+- `build`: the zip, `verify_package.py`, and a second build that must be
+  byte-identical to the first (the packager stamps a fixed date, from
+  `SOURCE_DATE_EPOCH` or the commit time, and normalised modes).
+- `upload-scans`, `qt6-check`: what plugins.qgis.org runs on an upload, on the
+  built zip. `scripts/scan_package.py` runs Bandit, detect-secrets and flake8 with
+  the site's rule set; `scripts/check_qt6.py` runs the site's Qt6 checker image
+  and fails on its log regex (the checker itself exits 0 whatever it finds). To
+  reproduce locally: build the zip, then `python scripts/scan_package.py dist/*.zip`.
+- `qgis42`: the unit, qgis and fixtures tiers on QGIS 4.2, in three shards from
+  `scripts/ci_shard.py` (the split `run_tests.py` uses), as a non-root user.
+  `zip-smoke42` installs the built zip and exports every template.
+- `compat344`: the `compat344` list in `tests/test_groups.json` plus a zip smoke
+  on QGIS 3.44.
+- `fixtures42` then `browser`: fixtures built on QGIS 4.2, then the browser tier
+  once per browser.
+
+Pins: third-party actions are commit SHAs with the release in a comment, Python
+tools are in `requirements-ci.txt`, and container images are digests with the tag
+in a comment. Moving one is a deliberate edit.
 
 ## Running the tests that need the OnlyMap runtime
 
@@ -309,7 +338,10 @@ curl -s http://127.0.0.1:4000/share-qgis-map-without-qgis.html | grep -o 'href="
 
 ## Releasing, and how the announcement works
 
-Tagging `v<version>` builds the zip and cuts a GitHub release. Uploading that
+Tagging `v<version>` first checks that the tagged commit is on `main`, that the
+tag matches `metadata.txt`, that the tag carries the language packs `packs.json`
+pins (the zip holds none; the plugin downloads them from the tag), and that the
+full `checks` workflow passes; then it builds the zip and cuts a GitHub release. Uploading that
 zip to plugins.qgis.org is still a manual step, and the repository holds new
 uploads in a review queue.
 
@@ -341,6 +373,7 @@ python -m pytest tests/unit
 python -m pytest tests/qgis          # if you have QGIS - see above
 python scripts/package_plugin.py
 python scripts/verify_package.py dist/qgis2webmap-*.zip
+python scripts/scan_package.py dist/qgis2webmap-*.zip   # needs requirements-ci.txt
 ```
 
 Commit messages: concise, imperative one-liners.

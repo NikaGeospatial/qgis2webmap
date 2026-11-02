@@ -8,13 +8,28 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  guard:
+    # Cheap refusals first, before the checks spend their time.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The ancestry check below needs main's history.
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+
+      - name: Tag commit must be on main
+        # A tag on an unreviewed branch would publish code that never went
+        # through main's checks.
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $GITHUB_REF_NAME ($GITHUB_SHA) is not an ancestor of origin/main"
+            exit 1
+          fi
 
       - name: Tag must match metadata.txt version
         run: |
@@ -25,11 +40,31 @@ jobs:
             exit 1
           fi
 
-      - run: python scripts/package_plugin.py
+      - name: Tag must carry the language packs packs.json pins
+        # The zip holds no .qm; the plugin downloads each from this tag.
+        run: python scripts/verify_tag_packs.py "$GITHUB_SHA"
+
+  checks:
+    # The same jobs that gate main, on the tagged commit. A red one stops the
+    # release.
+    needs: guard
+    uses: ./.github/workflows/checks.yml
+
+  release:
+    needs: [guard, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - run: python scripts/package_plugin.py --no-update-check
       - name: Verify zip
         run: python scripts/verify_package.py dist/*.zip
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: dist/*.zip
           generate_release_notes: true

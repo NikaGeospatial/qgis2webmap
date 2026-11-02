@@ -18,7 +18,10 @@ from __future__ import annotations
 import argparse
 import configparser
 import contextlib
+import os
+import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -81,6 +84,46 @@ def should_include(path: Path) -> bool:
     return path.name not in EXCLUDE_NAMES
 
 
+# The earliest date a zip entry can carry. Used when neither SOURCE_DATE_EPOCH nor
+# a git commit says when the source was made (an exported tree without .git).
+ZIP_EPOCH_FLOOR = 315532800  # 1980-01-01T00:00:00Z
+#: Permission bits stored for every entry: nothing in the plugin is executable.
+ENTRY_MODE = 0o644
+
+ZipStamp = tuple[int, int, int, int, int, int]
+
+
+def source_timestamp() -> ZipStamp:
+    """The fixed modification time stamped on every zip entry.
+
+    A zip that records file mtimes and filesystem modes is different bytes on
+    every build of the same commit, so its checksum proves nothing. The
+    reproducible-builds convention is SOURCE_DATE_EPOCH; without it the commit
+    time is the next best statement of "when this source was made".
+    """
+    epoch = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
+    if not epoch:
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            epoch = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "log", "-1", "--format=%ct"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+    seconds = max(int(epoch), ZIP_EPOCH_FLOOR) if epoch.isdigit() else ZIP_EPOCH_FLOOR
+    t = time.gmtime(seconds)
+    return (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+
+
+def add_entry(zf: zipfile.ZipFile, source: Path, arcname: str, stamp: ZipStamp) -> None:
+    """Write `source` as `arcname` with a fixed date and a normalised mode."""
+    info = zipfile.ZipInfo(arcname, date_time=stamp)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.create_system = 3  # Unix, whatever platform builds it
+    info.external_attr = ENTRY_MODE << 16
+    zf.writestr(info, source.read_bytes())
+
+
 def build(outdir: Path) -> Path:
     version = read_version()
     outdir.mkdir(parents=True, exist_ok=True)
@@ -92,18 +135,19 @@ def build(outdir: Path) -> Path:
     if not files:
         raise SystemExit(f"error: no files found under {PACKAGE_DIR}")
 
+    stamp = source_timestamp()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in files:
             # arcname keeps the required single top-level directory.
-            zf.write(path, path.relative_to(REPO_ROOT))
+            add_entry(zf, path, path.relative_to(REPO_ROOT).as_posix(), stamp)
         # Ship the licence inside the zip -- the plugin is redistributed on its own.
-        zf.write(REPO_ROOT / "LICENSE", f"{PACKAGE_NAME}/LICENSE")
+        add_entry(zf, REPO_ROOT / "LICENSE", f"{PACKAGE_NAME}/LICENSE", stamp)
 
         for name in HELP_DOCS:
             source = REPO_ROOT / "docs" / name
             if not source.exists():
                 raise SystemExit(f"error: missing help document docs/{name}")
-            zf.write(source, f"{PACKAGE_NAME}/help/{name}")
+            add_entry(zf, source, f"{PACKAGE_NAME}/help/{name}", stamp)
 
     size_kb = target.stat().st_size / 1024
     total = len(files) + 1 + len(HELP_DOCS)

@@ -1,50 +1,93 @@
 name: checks
 
+# QGIS 4 / Qt6 is the primary target (it is what plugins.qgis.org checks), so the
+# whole suite runs on QGIS 4.2. QGIS 3.44 (Qt5) is a focused compatibility job.
+#
+# Third-party actions are pinned to a commit with the release in a comment, tool
+# versions are in requirements-ci.txt, and container images are pinned by digest
+# with the tag in a comment. Moving any of them is a deliberate edit: look up the
+# new digest (`docker buildx imagetools inspect <image>:<tag>`) or SHA
+# (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>*`).
+#
+# `workflow_call` lets release.yml run the same checks on a release tag.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
+env:
+  # Qt formats numbers by the locale (25,000 vs 25000) and the tests expect a
+  # developer's English locale; the container images set none.
+  LANG: en_US.UTF-8
+
 concurrency:
+  # A newer push supersedes an older run, but the run that gates a release must
+  # never be cancelled by one: on a tag ref it is left alone.
   group: checks-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
-      - run: pip install ruff
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install -r requirements-ci.txt
       - run: ruff check .
       - run: ruff format --check .
+      # Catalogues current, and packs.json matching the compiled packs. Needs no
+      # Qt: it reads the .ts files and the committed .qm bytes.
+      - run: python scripts/update_translations.py --check
 
   compile:
     # Byte-compiles every module. PyQGIS is unavailable on the runner, so this
-    # catches syntax errors, not import errors — cheap and worth having before
-    # a QGIS-in-Docker tier arrives with the project reader.
-    runs-on: ubuntu-latest
+    # catches syntax errors, not import errors; the qgis jobs import everything.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - run: python -m compileall -q nika_onlymap_exporter scripts
 
-  package:
-    runs-on: ubuntu-latest
+  mypy:
+    # Advisory: the tree has known findings. The job reports them without
+    # blocking; make it gating once it is clean.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install -r requirements-ci.txt
+      - run: mypy nika_onlymap_exporter scripts
+
+  build:
+    # The zip every later job inspects or installs. Built once, here.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - name: Build plugin zip
-        run: python scripts/package_plugin.py
+        run: python scripts/package_plugin.py --no-update-check
       - name: Verify zip shape against QGIS repository requirements
         # Globbed on the extension, not the product name, so a rename in the
         # packager cannot silently stop matching. `dist/` is built fresh in this
@@ -52,187 +95,338 @@ jobs:
         run: |
           zip=$(ls dist/*.zip)
           python scripts/verify_package.py "$zip"
-      - uses: actions/upload-artifact@v4
+      - name: Building twice gives the same bytes
+        # The zip stamps a fixed date and normalised modes (package_plugin.py),
+        # so one commit is one checksum. A difference means something
+        # nondeterministic got into the packager.
+        run: |
+          python scripts/package_plugin.py --no-update-check --outdir dist-again
+          sha256sum dist/*.zip dist-again/*.zip
+          cmp "$(ls dist/*.zip)" "$(ls dist-again/*.zip)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plugin-zip
           path: dist/*.zip
           if-no-files-found: error
 
-  security:
-    # Static security scan. The QGIS plugin repository runs its own scanner at
-    # submission; failing here first is cheaper than failing there.
-    runs-on: ubuntu-latest
+  upload-scans:
+    # What plugins.qgis.org runs on an upload (Bandit, detect-secrets, flake8),
+    # on the built zip and with the site's rule set. See scripts/scan_package.py.
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install bandit
-      # All severities: plugins.qgis.org flags low-severity findings too.
-      - run: bandit -r nika_onlymap_exporter
-
-  guards:
-    # Enforces CONTRIBUTING.md rules 1 and 2. Implemented as pytest rather than
-    # grep because a text search cannot tell a forbidden call from a docstring
-    # explaining why it is forbidden — see tests/unit/test_metadata.py.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: .github/workflows/checks.yml
-      - run: pip install pytest
-      # Build first: some tests inspect the packaged zip (that the help guides
-      # ship, for instance) and would otherwise skip silently in CI.
-      - run: python scripts/package_plugin.py
-      # JUnit durations are setup + call + teardown, so slow fixtures show up
-      # as well as slow tests; `--durations` prints the slowest in the log.
-      - run: python -m pytest tests/unit -q --durations=25
-             --junitxml=reports/unit.xml -o junit_duration_report=total
-      - uses: actions/upload-artifact@v4
-        if: always()
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install -r requirements-ci.txt
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: junit-unit
-          path: reports/
-          if-no-files-found: ignore
+          name: plugin-zip
+          path: dist
+      - run: python scripts/scan_package.py dist/*.zip
 
-  qgis:
-    # The PyQGIS tiers, in QGIS's own container so no PyQGIS install is needed.
-    # `tests/fixtures` runs every fixture project through issue #29's release
-    # gates. Those gates need the real runtime to export anything, so the fetch
-    # step below is what makes them assert rather than skip.
-    runs-on: ubuntu-latest
-    container: qgis/qgis:ltr
+  qt6-check:
+    # The site's Qt6 compatibility check, in the image the site runs it in.
+    # `--dry_run` exits 0 even with findings; scripts/check_qt6.py applies the
+    # site's log regex and fails on a match. The image tracks `main-ubuntu` on
+    # the site; refresh the digest below now and then so this does not drift.
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      # ghcr.io/qgis/pyqgis4-checker:main-ubuntu
+      image: ghcr.io/qgis/pyqgis4-checker@sha256:c96df111845eb0c86ad56364fb792d35fa6931e01d3d629d2b1bc6388ed43ece
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plugin-zip
+          path: dist
+      - run: python3 scripts/check_qt6.py dist/*.zip
+
+  qgis42:
+    # The whole primary suite (unit + qgis + fixtures) on QGIS 4.2 in three
+    # shards balanced by tests/durations.json (scripts/ci_shard.py, the same
+    # split run_tests.py uses). Running the unit tier here, with PyQGIS, is what
+    # lets the modules that import Qt run instead of skipping.
+    #
+    # Non-root, like a developer's machine: root ignores directory permissions,
+    # so a test that makes a directory unwritable to force a failed save cannot
+    # fail the save. `tests/fixtures` runs every fixture project through the release
+    # gates, which need the real OnlyMap runtime, so the fetch step below is
+    # what makes them assert rather than skip.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    container:
+      # qgis/qgis:4.2 (QGIS 4.2.3)
+      image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
+      options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
     env:
       QT_QPA_PLATFORM: offscreen
-      PYTHONPATH: ${{ github.workspace }}
+      # Keep the image's own PYTHONPATH (PyQGIS): setting it here replaces it.
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
       # Relative to the workspace, which is the same path inside the container
       # and to actions/cache (an absolute host path would not be).
       ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: QGIS and PyQGIS versions
         run: python3 -c "import qgis.core; print(qgis.core.Qgis.version())"
       # Keyed on the pin, so a runtime bump downloads afresh. The browser job
-      # below still fetches uncached on purpose: it exercises the plugin's own
+      # still fetches uncached on purpose: it exercises the plugin's own
       # download-and-verify path.
-      - uses: actions/cache@v4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/onlymap-runtime
           key: onlymap-runtime-${{ hashFiles('nika_onlymap_exporter/runtime/runtime-lock.json') }}
       - name: Fetch the pinned OnlyMap runtime
         run: |
-          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> $GITHUB_ENV
-      # The browser job has no QGIS, so the real-QGIS Cartograph acceptance
-      # fixtures (and what QGIS says the browser must show) are built here once
-      # and handed over as an artifact. Before the tests so a failing test does
-      # not also take the browser tier's input down with it.
+          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
+      # Some tests inspect the packaged zip (that the help guides ship, for
+      # instance) and would otherwise skip.
+      - run: python3 scripts/package_plugin.py --no-update-check
+      # `-rs` keeps any skip visible. A skip here is a gate that did not run,
+      # which must not read as a pass.
+      - name: Run this shard
+        shell: bash
+        run: |
+          mapfile -t files < <(python3 scripts/ci_shard.py --shards 3 --index "${{ matrix.shard }}")
+          python3 -m pytest "${files[@]}" -q -rs --durations=25 \
+            --junitxml="reports/qgis42-${{ matrix.shard }}.xml" \
+            -o junit_duration_report=total
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit-qgis42-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+
+  fixtures42:
+    # The browser job has no QGIS, so the real-QGIS fixtures (what QGIS says the
+    # browser must show) are built here, in a short job of their own, and handed
+    # over as artifacts: the browser tier does not wait behind the test shards.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      # qgis/qgis:4.2 (QGIS 4.2.3)
+      image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
+      options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
+      ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/onlymap-runtime
+          key: onlymap-runtime-${{ hashFiles('nika_onlymap_exporter/runtime/runtime-lock.json') }}
+      - name: Fetch the pinned OnlyMap runtime
+        run: |
+          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
       - name: Build the Cartograph browser-acceptance fixtures
         run: python3 tests/browser/cartograph_fixture_builder.py cartograph-fixtures
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cartograph-fixtures
           path: cartograph-fixtures/
           if-no-files-found: error
-      # The same hand-over for the ground-size browser test: what QGIS draws
-      # for a 100 m marker at two zooms, and the exported maps.
+      # What QGIS draws for a 100 m marker at two zooms, and the exported maps.
       - name: Build the ground-size browser fixtures
         run: python3 tests/browser/ground_size_fixture_builder.py ground-size-fixtures
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ground-size-fixtures
           path: ground-size-fixtures/
           if-no-files-found: error
-      # `-rs` keeps any remaining skip visible. A skip here is a gate that did
-      # not run, which must not read as a pass.
-      #
-      # The seven unit modules listed here import Qt through the plugin, so the
-      # plain-Python `guards` job skips them (importorskip); they run here, where
-      # QGIS exists, so no coverage is lost.
-      - run: python3 -m pytest tests/qgis tests/fixtures
-             tests/unit/test_cartograph_dialog_pure.py
-             tests/unit/test_folder_export_transaction.py
-             tests/unit/test_packaging.py
-             tests/unit/test_preview_cleanup.py
-             tests/unit/test_preview_hook.py
-             tests/unit/test_raster_staging.py
-             tests/unit/test_terrain_zoom_clamp.py
-             -q -rs --durations=25
-             --junitxml=reports/qgis.xml -o junit_duration_report=total
-      - uses: actions/upload-artifact@v4
+      # Where QGIS puts each legend item's box, for the legend-fit browser test.
+      - name: Build the legend-fit browser fixtures
+        run: python3 tests/browser/legend_fit_fixture_builder.py legend-fit-fixtures
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: legend-fit-fixtures
+          path: legend-fit-fixtures/
+          if-no-files-found: error
+
+  zip-smoke42:
+    # The built zip installed into a throwaway plugins folder and used for real
+    # (every template exported with the real runtime), never the source tree.
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      # qgis/qgis:4.2 (QGIS 4.2.3)
+      image: qgis/qgis:4.2@sha256:5aae850e0204da0cc60421dce614f8030791e46ec7a31836bf45909761c9b839
+      options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
+    env:
+      QT_QPA_PLATFORM: offscreen
+      ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plugin-zip
+          path: dist
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/onlymap-runtime
+          key: onlymap-runtime-${{ hashFiles('nika_onlymap_exporter/runtime/runtime-lock.json') }}
+      - name: Fetch the pinned OnlyMap runtime
+        run: |
+          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
+      - run: python3 scripts/zip_smoke.py dist/*.zip "$GITHUB_WORKSPACE"
+
+  compat344:
+    # QGIS 3.44 (Qt5) is the secondary target: the focused compatibility list
+    # (`compat344` in tests/test_groups.json) plus a zip smoke, not the whole
+    # suite. Pinned to 3.44 rather than `ltr`, which will move to a 4.x release.
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    container:
+      # qgis/qgis:3.44 (QGIS 3.44.15)
+      image: qgis/qgis:3.44@sha256:9c4afddd8eb4d03275e161b732d57ea402a1a5237eb5766957427530fd38afe0
+      options: --user 1001
+      # uid 1001 is the runner user; without an account for it D-Bus refuses
+      # the connection (tests/qgis/test_reveal_file.py runs a private bus).
+      volumes:
+        - /etc/passwd:/etc/passwd:ro
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: ${{ github.workspace }}:/usr/share/qgis/python
+      ONLYMAP_RUNTIME_CACHE: .ci-cache/onlymap-runtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: QGIS and PyQGIS versions
+        run: python3 -c "import qgis.core; print(qgis.core.Qgis.version())"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plugin-zip
+          path: dist
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/onlymap-runtime
+          key: onlymap-runtime-${{ hashFiles('nika_onlymap_exporter/runtime/runtime-lock.json') }}
+      - name: Fetch the pinned OnlyMap runtime
+        run: |
+          echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
+      - name: Focused 3.44 compatibility suite
+        shell: bash
+        run: |
+          mapfile -t targets < <(python3 scripts/ci_shard.py --compat344 --shards 2 --index "${{ matrix.shard }}")
+          python3 -m pytest "${targets[@]}" -q -rs --durations=25 \
+            --junitxml="reports/compat344-${{ matrix.shard }}.xml" -o junit_duration_report=total
+      - name: Packaged zip smoke on 3.44
+        if: matrix.shard == 1
+        env:
+          SMOKE_TEMPLATES: classic,map-only,poster,locator,dashboard,dark
+        run: python3 scripts/zip_smoke.py dist/*.zip "$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: junit-qgis
+          name: junit-compat344-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
 
   browser:
     # The release gates that are only true if a browser says so: the map mounts,
     # it makes no network request, and the credit component is reachable by
-    # keyboard without covering the map controls.
+    # keyboard without covering the map controls. One job per browser.
+    # Chromium gates; Firefox and WebKit are advisory (continue-on-error) until
+    # their known differences are triaged.
     #
     # Needs the OnlyMap runtime to mount a real map. It is not vendored (see
-    # docs/architecture.md), so the job fetches the pinned build from the
-    # registry first - through the plugin's own download-and-verify path, not a
-    # curl, so the code that reaches the network on a user's machine is exercised
-    # here too.
+    # docs/architecture.md), so the job fetches the pinned build first - through
+    # the plugin's own download-and-verify path, not a curl, so the code that
+    # reaches the network on a user's machine is exercised here too.
     #
-    # The Cartograph acceptance tests need real-QGIS output. This job has no QGIS,
-    # so it runs them against the fixtures the qgis job built and uploaded
-    # (CARTOGRAPH_FIXTURES_DIR) rather than skipping them.
-    needs: qgis
-    # Still run when a qgis test failed (the fixtures are uploaded before the
-    # tests); the download below fails loudly if they are missing.
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    # The Cartograph, ground-size and legend-fit tests need real-QGIS output.
+    # This job has no QGIS, so it runs them against the fixtures fixtures42 built
+    # (CARTOGRAPH_FIXTURES_DIR and friends) rather than skipping them.
+    needs: fixtures42
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: ${{ matrix.browser != 'chromium' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: .github/workflows/checks.yml
-      - uses: actions/download-artifact@v4
+          cache-dependency-path: requirements-ci.txt
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: cartograph-fixtures
           path: cartograph-fixtures
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ground-size-fixtures
           path: ground-size-fixtures
-      - run: pip install pytest pytest-playwright
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: legend-fit-fixtures
+          path: legend-fit-fixtures
+      - run: pip install -r requirements-ci.txt
       # Browser builds are tied to the Playwright release that downloads them,
-      # so its version is the cache key. System libraries are not cached:
-      # `install-deps` still runs on a hit.
+      # so its version (and the browser) is the cache key. System libraries are
+      # not cached: `install-deps` still runs on a hit.
       - id: playwright
         run: echo "version=$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
       - id: browsers
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
       - if: steps.browsers.outputs.cache-hit != 'true'
-        run: playwright install --with-deps chromium firefox webkit
+        run: playwright install --with-deps ${{ matrix.browser }}
       - if: steps.browsers.outputs.cache-hit == 'true'
-        run: playwright install-deps chromium firefox webkit
+        run: playwright install-deps ${{ matrix.browser }}
       - name: Fetch the pinned OnlyMap runtime
         run: |
-          echo "ONLYMAP_RUNTIME_DIR=$(python scripts/fetch_runtime.py)" >> $GITHUB_ENV
+          echo "ONLYMAP_RUNTIME_DIR=$(python scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
       # `-rs` keeps skips visible. Firefox skips the WebGL2 tests where the
       # runner has no WebGL2; that is an environment limit, not a pass.
       - run: python -m pytest tests/browser -q -rs
-             --browser chromium --browser firefox --browser webkit
-             --durations=25 --junitxml=reports/browser.xml
+             --browser ${{ matrix.browser }}
+             --durations=25 --junitxml=reports/browser-${{ matrix.browser }}.xml
              -o junit_duration_report=total
         env:
           PYTHONPATH: ${{ github.workspace }}
           CARTOGRAPH_FIXTURES_DIR: ${{ github.workspace }}/cartograph-fixtures
           GROUND_SIZE_FIXTURES_DIR: ${{ github.workspace }}/ground-size-fixtures
-      - uses: actions/upload-artifact@v4
+          LEGEND_FIT_FIXTURES_DIR: ${{ github.workspace }}/legend-fit-fixtures
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: junit-browser
+          name: junit-browser-${{ matrix.browser }}
           path: reports/
           if-no-files-found: ignore

@@ -74,9 +74,11 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 def _measure(page, built: Path) -> dict:
     page.goto((built / "page.html").as_uri())
-    page.wait_for_selector("om-legend", timeout=30_000)
+    # Before the wait: without WebGL2 the live frame never draws, so the legend
+    # stays hidden and the wait would time out instead of skipping.
     if not page.evaluate(_WEBGL2):
         pytest.skip("no WebGL2 context in this browser/environment")
+    page.wait_for_selector("om-legend", timeout=30_000)
     page.wait_for_function(f"({_MEASURE})() !== null", timeout=60_000)
     return page.evaluate(_MEASURE)
 
@@ -120,9 +122,9 @@ class TestRasterSwatch:
     ) -> None:
         expected = json.loads((built / "raster.json").read_text())
         page.goto((built / "raster.html").as_uri())
-        page.wait_for_selector("om-legend", timeout=30_000)
         if not page.evaluate(_WEBGL2):
             pytest.skip("no WebGL2 context in this browser/environment")
+        page.wait_for_selector("om-legend", timeout=30_000)
         page.wait_for_function(f"({_SWATCHES})() !== null", timeout=60_000)
         swatch = page.evaluate(_SWATCHES)
         assert "Elevation bands" in swatch["text"]

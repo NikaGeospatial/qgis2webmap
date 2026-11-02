@@ -13,6 +13,8 @@ Checks:
   5. No development detritus (`__pycache__`, `.pyc`, `.gitkeep`).
   6. No absolute or parent-escaping paths.
   7. The licence text ships with the plugin.
+  8. The plugins.qgis.org file analysis: no executable bit on any entry, no
+     suspicious or binary file types, no stray dotfiles.
 
 Usage:
     python scripts/verify_package.py dist/qgis2webmap-0.1.2.zip
@@ -44,6 +46,27 @@ REQUIRED_KEYS = (
     "repository",
     "license",
 )
+# The plugin repository's FILE_SUSPICIOUS list (a critical, non-skippable finding
+# on upload), plus the binary types its FILE_BINARY rule is about.
+SUSPICIOUS_EXTENSIONS = (".exe", ".dll", ".so", ".dylib", ".bat", ".sh", ".ps1", ".cmd")
+BINARY_EXTENSIONS = (
+    ".pyd",
+    ".a",
+    ".o",
+    ".bin",
+    ".jar",
+    ".class",
+    ".msi",
+    ".com",
+    ".scr",
+    ".apk",
+    ".deb",
+    ".rpm",
+    ".whl",
+    ".zip",
+)
+# Tool configuration the repository's scanner reads and therefore expects.
+ALLOWED_DOTFILES = {".bandit", ".secrets.baseline", ".flake8"}
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([-+].+)?$")
 
 failures: list[str] = []
@@ -90,6 +113,29 @@ def verify(zip_path: Path) -> None:
 
         # 7. licence present
         check(f"{PACKAGE_NAME}/LICENSE" in names, "LICENSE missing from zip")
+
+        # 8. the repository's file analysis, run here so a failure is ours first
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            name = info.filename
+            base = PurePosixPath(name).name
+            check(
+                not (info.external_attr >> 16) & 0o111,
+                f"executable bit set (FILE_EXECUTABLE): {name}",
+            )
+            check(
+                not name.lower().endswith(SUSPICIOUS_EXTENSIONS),
+                f"suspicious file type (FILE_SUSPICIOUS): {name}",
+            )
+            check(
+                not name.lower().endswith(BINARY_EXTENSIONS),
+                f"binary file type (FILE_BINARY): {name}",
+            )
+            check(
+                not base.startswith(".") or base in ALLOWED_DOTFILES,
+                f"stray dotfile: {name}",
+            )
 
         # 3. metadata contents
         meta_name = f"{PACKAGE_NAME}/metadata.txt"

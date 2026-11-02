@@ -24,7 +24,7 @@ docker run --rm -v "$PWD":/work -w /work \
   -e QT_QPA_PLATFORM=offscreen -e PYTHONPATH=/work \
   -e ONLYMAP_RUNTIME_DIR=/runtime \
   -v /path/to/@nika-js/onlymap/dist:/runtime:ro \
-  qgis/qgis:ltr python3 -m pytest tests/fixtures
+  qgis/qgis:4.2 python3 -m pytest tests/fixtures
 ```
 
 Exporting a real artifact needs the OnlyMap runtime, so without
