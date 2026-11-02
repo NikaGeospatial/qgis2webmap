@@ -2118,6 +2118,7 @@ class TestHelpTab:
 
         dialog = TestTabCorner()._dialog(project, make_memory_layer)
         try:
+            dialog._show_tab("Help")
             gc.collect()
             document = dialog.help_browser.document()
             assert document.parent() is dialog.help_browser
@@ -2146,6 +2147,7 @@ class TestHelpTab:
 
         project.addMapLayer(make_memory_layer("pts", features=[("a", [1.0, 2.0])]))
         dialog = MainDialog(FakeIface(), None)
+        dialog._show_tab("Help")
         browser = dialog._help_page.findChild(QTextBrowser)
 
         text = browser.toPlainText()
