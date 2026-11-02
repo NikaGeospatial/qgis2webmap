@@ -29,6 +29,7 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import QCoreApplication, QTranslator
 
 from ..core.translatable import N_ as N_
+from ..core.translatable import N_plural as N_plural
 
 CONTEXT = "qgis2webmap"
 
@@ -48,12 +49,19 @@ def tr(text: str, disambiguation: str = "") -> str:
 def plural(count: int, singular: str, many: str, **fields: object) -> str:
     """`singular` or `many` by `count`, translated, with `{n}` and `fields` filled in.
 
-    Both forms go into the catalogue as separate entries, and the singular
-    is chosen for exactly one. That is English's rule, not every shipped
-    language's: French and Hindi also use the singular for zero, and Arabic
-    has more forms. Moving to Qt's numerus entries would fix both.
+    The catalogue holds one Qt numerus entry per pair, keyed by `singular`
+    with `{n}` written `%n`, and the language's own plural rule picks the form
+    (Arabic has six, Chinese one, French also counts zero as singular).
+    English is built in: with no translation the pair is chosen by
+    `count == 1`.
     """
-    return tr(singular if count == 1 else many).format(n=count, **fields)
+    key = singular.replace("{n}", "%n")
+    shown = max(count, 0)
+    text = QCoreApplication.translate(CONTEXT, key, "", shown)
+    if text == key.replace("%n", str(shown)):
+        # No translation (English, or a string a pack does not have yet).
+        text = singular if count == 1 else many
+    return text.format(n=count, **fields)
 
 
 _active: QTranslator | None = None

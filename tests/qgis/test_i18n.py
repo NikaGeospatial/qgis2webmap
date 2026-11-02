@@ -465,14 +465,15 @@ class TestCatalogueFiles:
     def _messages(self):
         for ts in sorted(I18N_DIR.glob("*.ts")):
             for message in ET.parse(ts).getroot().iter("message"):
-                yield (
-                    ts.name,
-                    message.findtext("source"),
-                    message.findtext("translation"),
-                )
+                forms = [f.text or "" for f in message.iter("numerusform")]
+                # A plural has one translation per form; each must keep the
+                # placeholders (the number itself may be left out, as in "one
+                # layer"; Qt fills `%n`).
+                for translation in forms or [message.findtext("translation")]:
+                    yield ts.name, message.findtext("source"), translation
 
     def test_every_placeholder_survives_translation(self):
-        """A dropped `{n}` would print the brace; a renamed one would raise."""
+        """A dropped `{name}` would print the brace; a renamed one would raise."""
         broken = [
             (name, source)
             for name, source, translation in self._messages()

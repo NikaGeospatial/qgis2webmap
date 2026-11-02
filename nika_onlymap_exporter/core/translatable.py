@@ -24,6 +24,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 
 class MarkedText(str):
     """A `str` that carries the disambiguation it was marked with.
@@ -50,3 +52,19 @@ def N_(text: str, disambiguation: str = "") -> str:  # noqa: N802 - gettext's na
     a string literal, so the catalogue script can read it.
     """
     return MarkedText(text, disambiguation) if disambiguation else text
+
+
+class PluralPair(NamedTuple):
+    """The English singular and plural of a marked text, as `plural()` takes them."""
+
+    one: str
+    many: str
+
+
+def N_plural(one: str, many: str) -> PluralPair:  # noqa: N802 - gettext's name
+    """Mark a singular/plural pair for the catalogue, like `plural()` would.
+
+    For a pair chosen at one place and counted at another: pass the result on
+    as `plural(count, *pair)`. Both texts must be literals.
+    """
+    return PluralPair(one, many)
