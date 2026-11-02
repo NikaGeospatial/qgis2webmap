@@ -225,7 +225,7 @@ class TestTheLists:
     def test_an_expression_reading_outside_the_key_is_unkeyable(
         self, expression
     ) -> None:
-        assert has_unkeyable_expression(_as_layer_xml(expression), set())
+        assert has_unkeyable_expression(_as_layer_xml(expression), set)
 
     @pytest.mark.parametrize(
         "expression",
@@ -238,4 +238,6 @@ class TestTheLists:
         ],
     )
     def test_a_pure_expression_is_keyable(self, expression) -> None:
-        assert not has_unkeyable_expression(_as_layer_xml(expression), {"q2w_keyed"})
+        assert not has_unkeyable_expression(
+            _as_layer_xml(expression), lambda: {"q2w_keyed"}
+        )

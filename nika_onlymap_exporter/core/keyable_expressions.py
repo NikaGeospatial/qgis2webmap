@@ -29,7 +29,7 @@ import re
 import threading
 import xml.etree.ElementTree as ElementTree
 from collections import OrderedDict
-from collections.abc import Collection, Iterator
+from collections.abc import Callable, Collection, Iterator
 
 #: QGIS's built-in functions (and their aliases) that answer from their
 #: arguments and the feature alone, lower-cased: QGIS matches names without
@@ -599,12 +599,13 @@ _MEMO = _ReadsMemo()
 
 
 def has_unkeyable_expression(
-    xml: str, keyed_variables: Collection[str], extra: str = ""
+    xml: str, keyed_variables: Callable[[], Collection[str]], extra: str = ""
 ) -> bool:
     """True when an expression in `xml`, or in the expression text `extra`
     (a layer's filter), calls a function or reads a variable a key cannot
-    vouch for. `keyed_variables` are the names whose values the key holds
-    (the global, project and layer variables)."""
+    vouch for. `keyed_variables` gives the names whose values the key holds
+    (the global, project and layer variables); it is called only when an
+    expression reads a variable the drawing does not set itself."""
     reads = _MEMO.reads(xml)
     if reads is None:
         return True
@@ -613,7 +614,9 @@ def has_unkeyable_expression(
     return _unkeyable(functions, dollars, variables, keyed_variables)
 
 
-def is_unkeyable_expression(expression: str, keyed_variables: Collection[str]) -> bool:
+def is_unkeyable_expression(
+    expression: str, keyed_variables: Callable[[], Collection[str]]
+) -> bool:
     """`has_unkeyable_expression` for one expression's text (a widget's
     filter)."""
     functions: set[str] = set()
@@ -645,14 +648,15 @@ def _unkeyable(
     functions: set[str],
     dollars: set[str],
     variables: set[str],
-    keyed_variables: Collection[str],
+    keyed_variables: Callable[[], Collection[str]],
 ) -> bool:
     keyable_functions, keyable_dollars = _builtins()
     if not functions - _KEYWORDS <= keyable_functions or not dollars <= keyable_dollars:
         return True
-    return any(
-        name not in keyed_variables
-        and name not in KEYABLE_CONTEXT_VARIABLES
-        and not name.startswith(KEYABLE_CONTEXT_PREFIXES)
+    others = {
+        name
         for name in variables
-    )
+        if name not in KEYABLE_CONTEXT_VARIABLES
+        and not name.startswith(KEYABLE_CONTEXT_PREFIXES)
+    }
+    return bool(others) and not others <= set(keyed_variables())

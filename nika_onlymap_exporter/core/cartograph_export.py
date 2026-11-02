@@ -56,6 +56,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import math
 import os
@@ -650,7 +651,7 @@ class LayerScans:
                 return None
         # A widget's filter is evaluated in the scopes of the layer it reads.
         if expression and is_unkeyable_expression(
-            expression, _keyed_variables(project, *layers)
+            expression, functools.partial(_keyed_variables, project, *layers)
         ):
             return None
         # A join to a layer that is not in the project (an auxiliary storage)
@@ -762,7 +763,7 @@ def _add_layer_token(
         return False
     if has_unkeyable_expression(
         xml,
-        _keyed_variables(project, layer),
+        functools.partial(_keyed_variables, project, layer),
         layer.subsetString() if isinstance(layer, QgsVectorLayer) else "",
     ):
         return False
@@ -1001,7 +1002,7 @@ def _static_frame_key(
     # An expression the key cannot vouch for (see `has_unkeyable_expression`)
     # in the item or a layer it draws: the key is made one that never matches.
     unkeyable = has_unkeyable_expression(
-        document.toString(), _keyed_variables(project, map_item)
+        document.toString(), functools.partial(_keyed_variables, project, map_item)
     )
     for layer in rendered_layers(map_item):
         style = QgsMapLayerStyle()
@@ -1010,7 +1011,7 @@ def _static_frame_key(
         add(style.xmlData())
         unkeyable = unkeyable or has_unkeyable_expression(
             style.xmlData(),
-            _keyed_variables(project, layer),
+            functools.partial(_keyed_variables, project, layer),
             layer.subsetString() if isinstance(layer, QgsVectorLayer) else "",
         )
         add(str(generations.get(layer.id(), 0)))
@@ -1025,7 +1026,9 @@ def _static_frame_key(
             add(overrides[layer_id])
             unkeyable = unkeyable or has_unkeyable_expression(
                 overrides[layer_id],
-                _keyed_variables(project, project.mapLayer(layer_id)),
+                functools.partial(
+                    _keyed_variables, project, project.mapLayer(layer_id)
+                ),
             )
     if unkeyable:
         add(uuid.uuid4().hex)
