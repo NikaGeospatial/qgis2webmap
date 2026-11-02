@@ -205,8 +205,10 @@ stage `SKIPPED`, which the verdict reports as INCOMPLETE):
 Runs on every push to `main`, every pull request, and (as a called workflow) on a
 release tag, where a red job stops the release.
 
-- `lint`, `compile`: ruff, translation catalogues, byte-compile. `mypy` is
-  advisory (it reports, it does not block).
+- `lint`, `compile`: ruff, translation catalogues, byte-compile.
+- `mypy`: `mypy nika_onlymap_exporter scripts`, gating. The checker targets
+  Python 3.10, the oldest the pinned mypy accepts; the plugin's own floor is
+  `requires-python` in `pyproject.toml`.
 - `build`: the zip, `verify_package.py`, and a second build that must be
   byte-identical to the first (the packager stamps a fixed date, from
   `SOURCE_DATE_EPOCH` or the commit time, and normalised modes).
@@ -215,13 +217,14 @@ release tag, where a red job stops the release.
   the site's rule set; `scripts/check_qt6.py` runs the site's Qt6 checker image
   and fails on its log regex (the checker itself exits 0 whatever it finds). To
   reproduce locally: build the zip, then `python scripts/scan_package.py dist/*.zip`.
-- `qgis42`: the unit, qgis and fixtures tiers on QGIS 4.2, in three shards from
-  `scripts/ci_shard.py` (the split `run_tests.py` uses), as a non-root user.
-  `zip-smoke42` installs the built zip and exports every template.
-- `compat344`: the `compat344` list in `tests/test_groups.json` plus a zip smoke
-  on QGIS 3.44.
-- `fixtures42` then `browser`: fixtures built on QGIS 4.2, then the browser tier
-  once per browser.
+- `qgis42` (three shards): the unit, qgis and fixtures tiers on QGIS 4.2, split
+  by `scripts/ci_shard.py` (the split `run_tests.py` uses), as a non-root user.
+- `zip-smoke42`: installs the built zip on QGIS 4.2 and exports every template.
+- `compat344` (two shards): the `compat344` list in `tests/test_groups.json` on
+  QGIS 3.44; the first shard also runs a zip smoke.
+- `fixtures42` then `browser`: fixtures built on QGIS 4.2 and handed over as
+  artifacts, then the browser tier once per browser (Chromium, Firefox, WebKit).
+  Chromium gates; Firefox and WebKit are advisory.
 
 Pins: third-party actions are commit SHAs with the release in a comment, Python
 tools are in `requirements-ci.txt`, and container images are digests with the tag

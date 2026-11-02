@@ -83,6 +83,47 @@ Three of these are not in issue #29's file list and are deliberate additions:
 The rule for new code: if it can be pure, make it pure. Push PyQGIS access to the
 edge so the logic underneath stays testable.
 
+## The cartograph path
+
+A cartograph is a print layout exported as one HTML page: the layout's paper,
+its text and furniture, and each map frame either live (an `<om-map>`) or an
+image. It reuses the web-map path for every live frame rather than having its
+own.
+
+```
+QgsPrintLayout
+    │
+    ▼  core/layout_reader.py (+ layout_reading.py, layout_contrast.py, atlas_reader.py)
+LayoutReading           ← frames still to render, furniture, atlas, contrast checks
+    │
+    ▼  core/cartograph_export.py: exporters/frame_raster.py, writers/onlymap_writer.py
+CartographSpec          ← core/cartograph_ir.py
+    │
+    ▼  writers/cartograph_writer.py
+<om-cartograph> page
+```
+
+| Module | Owns |
+|---|---|
+| `core/layout_reader.py` | Reading layout items into cartograph items; calls the three below |
+| `core/layout_reading.py` | The reading's shared types (`MapFrameReading`, `LayoutReading`, `FrameMode`) |
+| `core/layout_contrast.py` | Text contrast against what is behind it, reported to Fidelity |
+| `core/atlas_reader.py` | The layout's atlas: its spec, page count, and borrowed QGIS state |
+| `core/cartograph_export.py` | The one entry point (`prepare_cartograph` / `finish_cartograph`) for the dialog and Processing |
+| `core/layout_templates.py`, `core/template_designs.py` | Template page plans: arithmetic only, millimetre boxes out |
+| `core/template_registry.py` | Every template in picker order: `TEMPLATES`, `get_template`, `starter_templates` |
+| `core/canvas_cartograph.py`, `core/layout_builder.py` | Turning a plan or a spec into a QGIS print layout |
+| `ui/cartograph/` | The Cartograph tab: page preview, item controls, atlas, picker |
+
+## Shared helpers
+
+| Module | Owns |
+|---|---|
+| `translation.py` | `tr()` and `plural()`, importable from `core/`, `exporters/` and `processing/` without the UI; `ui/i18n.py` re-exports them and owns the active catalogue |
+| `core/translatable.py` | `N_()`, marking text for the catalogue without Qt |
+| `qt_compat.py` | The Qt 5 / Qt 6 and QGIS 3.44 / 4 switches more than one module needs (`QUndoCommand`, enum values, event positions, legend sync mode); a switch only one module needs stays beside its code |
+| `ui/help_page.py`, `ui/dialog_labels.py` | The Help tab's rendering, and the dialog's fixed choice labels |
+
 ## Why declarative markup, not generated JavaScript
 
 OnlyMapJS is driven by HTML custom elements — `<om-map>`, `<om-layer>`,
