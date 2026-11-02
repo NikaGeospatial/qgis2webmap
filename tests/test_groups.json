@@ -421,6 +421,7 @@
     {"target": "tests/qgis/test_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
     {"target": "tests/qgis/test_cartograph_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
     {"target": "tests/fixtures", "groups": ["export_pipeline", "rendering", "plugin", "templates"], "covers": "release gates on real fixture projects"},
+    {"target": "tests/qgis/test_dom_parse.py", "groups": ["rendering", "atlas"], "covers": "Qt5 XML parsing of saved styles"},
     {"target": "tests/qgis/test_settings_robustness.py", "groups": ["main_dialog"], "covers": "saved settings read as 0.3.0 read them"}
   ]
 }

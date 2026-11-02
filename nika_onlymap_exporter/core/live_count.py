@@ -70,7 +70,7 @@ from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QMetaType, QSizeF
 
 from ..ui.i18n import tr
-from .dom_parse import parse_dom
+from .dom_parse import read_dom
 from .frame_layers import rendered_layers
 
 #: On the number label: marks it as a Live count.
@@ -501,9 +501,7 @@ def _style_parts(
     """The renderer and scale limits a saved layer style (a map theme's or a
     frame's override) draws the layer with; the renderer is `None` when the
     style does not carry one."""
-    document = parse_dom(xml)
-    if document is None:
-        return None, False, 0.0, 0.0
+    document = read_dom(xml)
     root = document.documentElement()
     scaled = root.attribute("hasScaleBasedVisibilityFlag", "0") == "1"
     minimum = float(root.attribute("minScale", "0") or 0)
@@ -519,9 +517,7 @@ def _style_opacity(xml: str) -> float | None:
     """The layer opacity a saved layer style (a map theme's or a frame's
     override) carries; `None` when the style does not hold one, in which case
     the layer's own opacity is what the frame draws with."""
-    document = parse_dom(xml)
-    if document is None:
-        return None
+    document = read_dom(xml)
     element = document.documentElement().firstChildElement("layerOpacity")
     if element.isNull():
         return None
@@ -689,10 +685,8 @@ def prepare(layout: QgsLayout, number: QgsLayoutItemLabel) -> CountOutcome | Pre
         if styled is not None:
             renderer = styled
         # The scale limits are part of a style only when it carries them.
-        document = parse_dom(overrides[layer.id()])
-        if document is not None and document.documentElement().hasAttribute(
-            "hasScaleBasedVisibilityFlag"
-        ):
+        document = read_dom(overrides[layer.id()])
+        if document.documentElement().hasAttribute("hasScaleBasedVisibilityFlag"):
             scaled, minimum, maximum = s_scaled, s_min, s_max
     if renderer is None:
         source = layer.renderer()
