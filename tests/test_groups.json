@@ -366,7 +366,7 @@
      "owner": ["templates", "ui_layout"], "also": []},
     {"match": ["nika_onlymap_exporter/core/dom_parse.py"],
      "owner": ["rendering", "atlas"], "also": []},
-    {"match": ["nika_onlymap_exporter/core/settings.py", "nika_onlymap_exporter/core/setting_values.py", "nika_onlymap_exporter/core/portable_names.py", "nika_onlymap_exporter/core/translatable.py"],
+    {"match": ["nika_onlymap_exporter/core/settings.py", "nika_onlymap_exporter/core/portable_names.py", "nika_onlymap_exporter/core/translatable.py"],
      "owner": ["main_dialog", "ui_layout", "saving", "export_pipeline"], "also": []},
     {"match": ["nika_onlymap_exporter/ui/cartograph/*.py", "nika_onlymap_exporter/ui/account_button.py", "nika_onlymap_exporter/ui/fidelity_panel.py", "nika_onlymap_exporter/ui/fitted_label.py", "nika_onlymap_exporter/ui/handoff_dialog.py", "nika_onlymap_exporter/ui/links.py", "nika_onlymap_exporter/ui/reveal_file.py", "nika_onlymap_exporter/ui/theme.py", "nika_onlymap_exporter/ui/wheel_guard.py", "nika_onlymap_exporter/icons/*"],
      "owner": ["ui_layout"], "also": []},
@@ -420,6 +420,7 @@
     {"target": "tests/qgis/test_print_export.py", "groups": ["printing"], "covers": "printing"},
     {"target": "tests/qgis/test_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
     {"target": "tests/qgis/test_cartograph_print_series.py", "groups": ["printing", "atlas"], "covers": "printing"},
-    {"target": "tests/fixtures", "groups": ["export_pipeline", "rendering", "plugin", "templates"], "covers": "release gates on real fixture projects"}
+    {"target": "tests/fixtures", "groups": ["export_pipeline", "rendering", "plugin", "templates"], "covers": "release gates on real fixture projects"},
+    {"target": "tests/qgis/test_settings_robustness.py", "groups": ["main_dialog"], "covers": "saved settings read as 0.3.0 read them"}
   ]
 }
