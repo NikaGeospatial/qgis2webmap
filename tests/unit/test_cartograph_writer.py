@@ -28,7 +28,7 @@ from nika_onlymap_exporter.core.cartograph_ir import (
     ShapeSpec,
     TextSpec,
 )
-from nika_onlymap_exporter.packaging.asset_embedder import GZIP_SCRIPT_TYPE
+from nika_onlymap_exporter.packaging.asset_embedder import GZIP_LEVEL, GZIP_SCRIPT_TYPE
 from nika_onlymap_exporter.writers import cartograph_writer as writer
 from nika_onlymap_exporter.writers.cartograph_writer import (
     CartographRuntimeBundle,
@@ -172,20 +172,22 @@ class TestDocumentShape:
 class TestRuntimeEmbedding:
     def test_static_only_omits_the_core(self) -> None:
         doc = write_cartograph_html(_static_spec(), _runtime(with_core=False))
-        core_gz = base64.b64encode(gzip.compress(CORE_JS, 9, mtime=0)).decode()
+        core_gz = base64.b64encode(gzip.compress(CORE_JS, GZIP_LEVEL, mtime=0)).decode()
         assert core_gz not in doc
         assert "setCoreLoader" not in doc
         assert CORE_CSS not in doc
 
     def test_static_only_still_embeds_the_cartograph_runtime(self) -> None:
         doc = write_cartograph_html(_static_spec(), _runtime(with_core=False))
-        carto_gz = base64.b64encode(gzip.compress(CARTO_JS, 9, mtime=0)).decode()
+        carto_gz = base64.b64encode(
+            gzip.compress(CARTO_JS, GZIP_LEVEL, mtime=0)
+        ).decode()
         assert carto_gz in doc
         assert CARTO_CSS in doc
 
     def test_live_frame_embeds_the_core(self) -> None:
         doc = write_cartograph_html(_live_spec(), _runtime(with_core=True))
-        core_gz = base64.b64encode(gzip.compress(CORE_JS, 9, mtime=0)).decode()
+        core_gz = base64.b64encode(gzip.compress(CORE_JS, GZIP_LEVEL, mtime=0)).decode()
         assert core_gz in doc
         assert "setCoreLoader" in doc
         assert CORE_CSS in doc

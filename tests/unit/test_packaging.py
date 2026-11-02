@@ -149,7 +149,9 @@ class TestCompression:
 
         data = b'{"type":"FeatureCollection"}' * 200
         # The reference is built with the library directly, not via the cache.
-        expected = base64.b64encode(gzip.compress(data, 9, mtime=0)).decode("ascii")
+        expected = base64.b64encode(
+            gzip.compress(data, embedder.GZIP_LEVEL, mtime=0)
+        ).decode("ascii")
         monkeypatch.setattr(embedder, "_GZIP_CACHE", _CompressionCache(1 << 20))
         first = gzip_base64(data)
         calls: list[int] = []

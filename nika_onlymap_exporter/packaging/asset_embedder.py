@@ -40,7 +40,9 @@ DATA_COMPRESSION_THRESHOLD_BYTES = 2 * 1024 * 1024
 # nothing must be able to mistake base64 for JSON if load order ever changes.
 GZIP_SCRIPT_TYPE = "application/x-om-gzip"
 
-GZIP_LEVEL = 9
+# Level 6, not 9: on a large test project 9 took 2.24 s for 6.12 MB of data blocks
+# and 6 took 0.77 s for 6.24 MB (+2%), so 9 cost three times the time for 2%.
+GZIP_LEVEL = 6
 
 
 class _CompressionCache:
