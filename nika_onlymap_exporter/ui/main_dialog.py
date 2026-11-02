@@ -3725,6 +3725,9 @@ class MainDialog(QDialog):
         self._help_rendered = True
         # Markdown keeps one source of truth: the same files the website serves.
         self.help_browser.setDocument(render_help_document(self.help_browser))
+        # A browser hands its font to its document only when the font changes,
+        # and the dialog's font was set long before this document existed.
+        self.help_browser.document().setDefaultFont(self.help_browser.font())
         theme.recolour_document(self.help_browser.document(), self.theme)
 
     # ---- Buttons --------------------------------------------------------
