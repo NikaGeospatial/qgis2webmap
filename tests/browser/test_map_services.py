@@ -69,9 +69,15 @@ def services():
         yield running
 
 
-def _wms_layer(url: str, layers=("target",)) -> ExportLayer:
+def _wms_layer(url: str, layers=("target",), time: str | None = None) -> ExportLayer:
     template = wms_get_map_template(
-        url, "1.3.0", list(layers), [""] * len(layers), "image/png", "EPSG:3857"
+        url,
+        "1.3.0",
+        list(layers),
+        [""] * len(layers),
+        "image/png",
+        "EPSG:3857",
+        time=time,
     )
     return ExportLayer(
         layer_id="wms",
@@ -294,6 +300,30 @@ class TestWmsTiles:
         assert measured["crimson"] > 0
         assert measured["found"] == pytest.approx(measured["expected"], abs=2.5)
         assert measured["blue"] > 0
+
+    def test_a_wms_t_snapshot_asks_every_tile_for_its_time(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """A WMS-T layer exported at the time QGIS drew: every tile the map
+        asks for carries that TIME, and the layer draws in place."""
+        moment = "2020-03-05T00:00:00Z"
+        before = len(services.requests)
+        layer = _wms_layer(services.url("cors/wms"), time=moment)
+        entry = _export(runtime, tmp_path, layer)
+        _open(page, entry)
+        measured = _measure_drawn(page)
+
+        requests = [
+            request["params"]
+            for request in services.requests[before:]
+            if request["path"] == "/cors/wms"
+            and request["params"].get("REQUEST") == "GetMap"
+        ]
+        assert requests, "the map asked the WMS for nothing"
+        assert {params.get("TIME") for params in requests} == {moment}
+        assert _tile_errors(page) == []
+        assert measured["crimson"] > 0
+        assert measured["found"] == pytest.approx(measured["expected"], abs=1.5)
 
 
 class TestWmsFailures:
