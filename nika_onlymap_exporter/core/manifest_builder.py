@@ -2200,8 +2200,10 @@ def build_manifest(
 def _zoom_for_extent(width_degrees: float) -> float:
     """A starting zoom that fits the data's longitude span.
 
-    Approximate on purpose: the runtime settles the camera precisely once it has
-    measured the viewport. This only has to avoid opening somewhere useless.
+    Approximate: it fits the longitude span into one 512 px tile width and
+    ignores the latitude span and the viewport, and the runtime opens on this
+    zoom as written - it does not refit once it has measured the viewport. Tall
+    data can therefore open cropped.
     """
     if width_degrees <= 0:
         return 12.0
