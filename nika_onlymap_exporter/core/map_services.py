@@ -19,7 +19,9 @@ projection it does not offer draws nothing.
 The requests mirror QGIS's own (`QgsWmsProvider::createRequestUrlWMS` and
 `createTileRequestsWMTS`): the same GetMap address, parameters and
 TRANSPARENT rule, so the web map asks the service what QGIS asks it, in Web
-Mercator.
+Mercator. The legend picture is the one QGIS's legend shows
+(`QgsWmsProvider::getLegendGraphicUrl` and `getLegendGraphicFullURL`): the
+style's LegendURL, or a GetLegendGraphic request, from the same capabilities.
 
 Pure Python: no PyQGIS, no Qt, unit-tested in CI.
 
@@ -33,7 +35,7 @@ import math
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, quote, unquote
 
 # Codes that name Web Mercator. A service that offers only an older alias is
@@ -217,14 +219,29 @@ def _parse(document: bytes | None) -> ET.Element | None:
 
 
 @dataclass(frozen=True)
+class WmsStyle:
+    """One style a WMS layer offers: its name and its LegendURLs, as
+    `(format, address)` in the document's order."""
+
+    name: str
+    legend_urls: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
 class WmsCapabilities:
-    """What a WMS capabilities document says that a GetMap template needs."""
+    """What a WMS capabilities document says that a GetMap template, and the
+    layer's legend picture, need."""
 
     version: str
     get_map_url: str | None
     # Every named layer's CRS codes, inherited ones included (a WMS layer
     # inherits its parents' CRSs).
     layer_crs: dict[str, frozenset[str]]
+    # The service's GetLegendGraphic address, when it declares one.
+    get_legend_graphic_url: str | None = None
+    # Every named layer's styles, inherited ones included, and its title.
+    layer_styles: dict[str, tuple[WmsStyle, ...]] = field(default_factory=dict)
+    layer_titles: dict[str, str] = field(default_factory=dict)
 
     def offered_web_mercator(self, layers: Sequence[str]) -> str | None:
         """The Web Mercator code every one of `layers` offers, preferring
@@ -245,21 +262,21 @@ def parse_wms_capabilities(document: bytes | None) -> WmsCapabilities | None:
     capability = _child(root, "Capability")
     if capability is None:
         return None
-    get_map = None
     request = _child(capability, "Request")
-    get_map_element = _child(request, "GetMap") if request is not None else None
-    if get_map_element is not None:
-        for dcp in _children(get_map_element, "DCPType"):
-            http = _child(dcp, "HTTP")
-            get = _child(http, "Get") if http is not None else None
-            href = _href(_child(get, "OnlineResource")) if get is not None else None
-            if href:
-                get_map = href
-                break
+    # 1.3.0 declares GetLegendGraphic as the SLD extension's
+    # `sld:GetLegendGraphic`; local names make it the same element.
+    get_map = _get_address(request, "GetMap")
+    get_legend_graphic = _get_address(request, "GetLegendGraphic")
 
     layer_crs: dict[str, frozenset[str]] = {}
+    layer_styles: dict[str, tuple[WmsStyle, ...]] = {}
+    layer_titles: dict[str, str] = {}
 
-    def walk(layer: ET.Element, inherited: frozenset[str]) -> None:
+    def walk(
+        layer: ET.Element,
+        inherited: frozenset[str],
+        inherited_styles: tuple[WmsStyle, ...],
+    ) -> None:
         codes = set(inherited)
         for name in ("CRS", "SRS"):
             for element in _children(layer, name):
@@ -267,18 +284,73 @@ def parse_wms_capabilities(document: bytes | None) -> WmsCapabilities | None:
                 codes.update((element.text or "").split())
         own = frozenset(codes)
         name = _text(layer, "Name")
+        styles = list(inherited_styles)
+        if _child(layer, "Name") is not None:
+            # As QGIS inherits them: a parent's LegendURL that names a layer
+            # names this one instead.
+            styles = [_renamed_style(style, name) for style in styles]
+        for element in _children(layer, "Style"):
+            style = _parse_style(element)
+            # A style named like an inherited one replaces it, as QGIS does
+            # for the MapServer habit of repeating them.
+            styles = [kept for kept in styles if kept.name != style.name]
+            styles.append(style)
         if name:
             layer_crs[name] = own
+            layer_styles[name] = tuple(styles)
+            layer_titles[name] = _text(layer, "Title")
         for child in _children(layer, "Layer"):
-            walk(child, own)
+            walk(child, own, tuple(styles))
 
     for layer in _children(capability, "Layer"):
-        walk(layer, frozenset())
+        walk(layer, frozenset(), ())
     return WmsCapabilities(
         version=root.attrib.get("version", ""),
         get_map_url=get_map,
         layer_crs=layer_crs,
+        get_legend_graphic_url=get_legend_graphic,
+        layer_styles=layer_styles,
+        layer_titles=layer_titles,
     )
+
+
+def _get_address(request: ET.Element | None, operation: str) -> str | None:
+    """The HTTP GET address a WMS `<Request>` declares for `operation`."""
+    element = _child(request, operation) if request is not None else None
+    for dcp in _children(element, "DCPType") if element is not None else ():
+        http = _child(dcp, "HTTP")
+        get = _child(http, "Get") if http is not None else None
+        href = _href(_child(get, "OnlineResource")) if get is not None else None
+        if href:
+            return href
+    return None
+
+
+def _parse_style(element: ET.Element) -> WmsStyle:
+    legend_urls = tuple(
+        (_text(legend, "Format"), _href(_child(legend, "OnlineResource")) or "")
+        for legend in _children(element, "LegendURL")
+    )
+    return WmsStyle(_text(element, "Name"), legend_urls)
+
+
+def _renamed_style(style: WmsStyle, layer: str) -> WmsStyle:
+    """`style` inherited by `layer`: in each LegendURL with a query, a
+    `LAYER` (else `layer`) parameter names `layer` (`QgsWmsCapabilities::
+    parseLayer`, which moves it to the end of the query)."""
+    renamed = []
+    for image_format, href in style.legend_urls:
+        base, mark, query = href.partition("?")
+        parts = [part for part in query.split("&") if part]
+        if mark and query:
+            for key in ("LAYER", "layer"):
+                if any(part.partition("=")[0] == key for part in parts):
+                    parts = [p for p in parts if p.partition("=")[0] != key]
+                    parts.append(f"{key}={quote(layer, safe='')}")
+                    href = f"{base}?{'&'.join(parts)}"
+                    break
+        renamed.append((image_format, href))
+    return WmsStyle(style.name, tuple(renamed))
 
 
 def _query_value(text: str, safe: str = "") -> str:
@@ -348,6 +420,113 @@ def wms_get_map_template(
         ("BBOX", "{bbox-epsg-3857}"),
     ]
     return _join(base, pairs)
+
+
+def _legend_address(capabilities: WmsCapabilities, layer: str, style: str) -> str:
+    """Where QGIS asks for `layer`'s legend in `style`
+    (`QgsWmsProvider::getLegendGraphicUrl`), or `""` when nowhere.
+
+    The style's first image LegendURL - the "default" style's, or the first
+    style's, when the layer is drawn in the service's default - else the
+    service's GetLegendGraphic address.
+    """
+    found = ""
+    styles = capabilities.layer_styles.get(layer)
+    if styles is not None:
+        if style and style != "default":
+            chosen = next((s for s in styles if s.name == style), None)
+        else:
+            chosen = next((s for s in styles if s.name == "default"), None)
+            chosen = chosen or (styles[0] if styles else None)
+        if chosen is not None:
+            found = next(
+                (
+                    href
+                    for image_format, href in chosen.legend_urls
+                    if image_format.startswith("image/")
+                ),
+                "",
+            )
+    found = found or capabilities.get_legend_graphic_url or ""
+    return prepare_url(found) if found else ""
+
+
+def wms_legend_url(
+    capabilities: WmsCapabilities,
+    layer: str,
+    style: str,
+    image_format: str,
+    url: str | None = None,
+) -> str | None:
+    """The legend picture QGIS's legend shows for one WMS sublayer, or `None`
+    when QGIS has nowhere to ask for one.
+
+    `QgsWmsProvider::getLegendGraphicFullURL` without the contextual legend
+    (which follows the map's view): the address from `_legend_address` - or
+    `url`, the layer's own address, for a layer set to ignore the addresses
+    the capabilities give - with each GetLegendGraphic parameter the address
+    does not already carry, whatever its case. A LegendURL that is a plain
+    picture gets them too, as from QGIS, and its server ignores them. The
+    names are the same in WMS 1.1.1 and 1.3.0; VERSION is the capabilities'.
+    """
+    address = (
+        prepare_url(url)
+        if url is not None
+        else _legend_address(capabilities, layer, style)
+    )
+    if not address:
+        return None
+    return _legend_request(address, capabilities.version, layer, style, image_format)
+
+
+def _legend_request(
+    address: str, version: str, layer: str, style: str, image_format: str
+) -> str:
+    """`address` with each GetLegendGraphic parameter it does not already
+    carry, whatever its case (`QgsWmsProvider::getLegendGraphicFullURL`)."""
+    base, _, query = address.rstrip("?&").partition("?")
+    kept = parse_qsl(query, keep_blank_values=True)
+    present = {key.upper() for key, _ in kept}
+    pairs = [
+        (_query_value(key), _query_value(found, safe="/:,")) for key, found in kept
+    ]
+    for key, found, safe in (
+        ("SERVICE", "WMS", ""),
+        ("VERSION", version, ""),
+        # QGIS's own choice: the capabilities do not say which SLD version.
+        ("SLD_VERSION", "1.1.0", ""),
+        ("REQUEST", "GetLegendGraphic", ""),
+        ("FORMAT", image_format, "/"),
+        ("LAYER", layer, ""),
+        ("STYLE", style, ""),
+        ("TRANSPARENT", "true", ""),
+    ):
+        if key not in present:
+            pairs.append((key, _query_value(found, safe=safe)))
+    return _join(base, pairs)
+
+
+def wms_legend_urls(
+    capabilities: WmsCapabilities,
+    layers: Sequence[str],
+    styles: Sequence[str],
+    image_format: str,
+    url: str | None = None,
+) -> list[tuple[str, str]]:
+    """`(title, address)` of the legend picture of each of `layers` that has
+    one, in order; see `wms_legend_url`.
+
+    QGIS's own legend shows the first sublayer's picture only; the web map
+    draws them all, so it shows each one's, under the title the capabilities
+    give it (its name when they give none).
+    """
+    found: list[tuple[str, str]] = []
+    for index, layer in enumerate(layers):
+        style = styles[index] if index < len(styles) else ""
+        address = wms_legend_url(capabilities, layer, style, image_format, url)
+        if address is not None:
+            found.append((capabilities.layer_titles.get(layer) or layer, address))
+    return found
 
 
 # --------------------------------------------------------------------------
@@ -558,6 +737,62 @@ def wmts_tiles(
         # service never asked for would be a guess about its URLs.
         return WmtsRefusal("not imagery")
     return WmtsTiles(template, zooms[0], zooms[-1], tile_size)
+
+
+def wmts_legend_url(
+    document: bytes | None, layer: str, style: str, image_format: str, source: str
+) -> str | None:
+    """The legend picture QGIS's legend shows for a WMTS layer in `style`,
+    or `None` when the capabilities give it none.
+
+    `QgsWmsProvider::getLegendGraphicUrl` for a WMTS: the style's LegendURL
+    in the layer's format (the last such), else its first - a WMTS has no
+    GetLegendGraphic request to build one from. Asked as written when the
+    layer's `source` string reads as a WMTS address (`isUrlForWMTS`, on the
+    string as stored, so a KVP address QGIS stored encoded does not), and
+    otherwise with the GetLegendGraphic parameters, as QGIS asks it.
+    """
+    root = _parse(document)
+    contents = _child(root, "Contents") if root is not None else None
+    if contents is None:
+        return None
+    layer_element = next(
+        (
+            element
+            for element in _children(contents, "Layer")
+            if _text(element, "Identifier") == layer
+        ),
+        None,
+    )
+    if layer_element is None:
+        return None
+    style_element = next(
+        (
+            element
+            for element in _children(layer_element, "Style")
+            if _text(element, "Identifier") == style
+        ),
+        None,
+    )
+    if style_element is None:
+        return None
+    # QGIS reads the OWS form, `<legendURL>` with `<format>` and `<href>`
+    # children, then the first standard `<LegendURL format xlink:href>`.
+    legends = [
+        (_text(element, "format"), _text(element, "href"))
+        for element in _children(style_element, "legendURL")
+    ]
+    standard = _child(style_element, "LegendURL")
+    if standard is not None:
+        legends.append((standard.attrib.get("format", ""), _href(standard) or ""))
+    matching = [href for found, href in legends if found == image_format]
+    href = matching[-1] if matching else (legends[0][1] if legends else "")
+    if not href:
+        return None
+    if is_wmts_url(source):
+        return prepare_url(href).rstrip("?&")
+    version = root.attrib.get("version", "") if root is not None else ""
+    return _legend_request(prepare_url(href), version, layer, style, image_format)
 
 
 def parse_tile_dimensions(text: str) -> dict[str, str]:

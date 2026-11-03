@@ -11,6 +11,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import math
+from html import escape
+from urllib.parse import parse_qsl
 
 import pytest
 from fake_map_services import (
@@ -33,6 +35,9 @@ from nika_onlymap_exporter.core.map_services import (
     values,
     web_mercator_code,
     wms_get_map_template,
+    wms_legend_url,
+    wms_legend_urls,
+    wmts_legend_url,
     wmts_tiles,
 )
 
@@ -415,3 +420,265 @@ class TestImageTemplates:
                 BASE, "1.3.0", ["a"], [""], image_format, "EPSG:3857"
             )
             assert is_image_tile_template(template), image_format
+
+
+def _legend_capabilities(layers: str, request: str = "", version="1.3.0"):
+    """A WMS whose `<Capability>` holds `layers`, and `request` in its
+    `<Request>` (GetLegendGraphic, when a test needs one)."""
+    parsed = parse_wms_capabilities(
+        (
+            f"<WMS_Capabilities version='{version}' "
+            "xmlns='http://www.opengis.net/wms' "
+            "xmlns:xlink='http://www.w3.org/1999/xlink'><Capability>"
+            f"<Request>{request}</Request>{layers}</Capability></WMS_Capabilities>"
+        ).encode()
+    )
+    assert parsed is not None
+    return parsed
+
+
+def _legend_url(href: str, image_format: str = "image/png") -> str:
+    return (
+        f"<LegendURL><Format>{image_format}</Format><OnlineResource "
+        f"xlink:href='{escape(href)}'/></LegendURL>"
+    )
+
+
+def _style(name: str, *legend_urls: str) -> str:
+    return f"<Style><Name>{name}</Name>{''.join(legend_urls)}</Style>"
+
+
+GET_LEGEND_GRAPHIC = (
+    "<GetLegendGraphic><Format>image/png</Format><DCPType><HTTP><Get>"
+    f"<OnlineResource xlink:href='{BASE}?'/></Get></HTTP></DCPType>"
+    "</GetLegendGraphic>"
+)
+
+
+class TestWmsLegend:
+    """The legend picture QGIS's legend shows (`QgsWmsProvider::
+    getLegendGraphicUrl` and `getLegendGraphicFullURL`)."""
+
+    def test_130_builds_a_get_legend_graphic_request(self) -> None:
+        """The fake service's `sld:GetLegendGraphic`; `target`'s default
+        style has no LegendURL of its own."""
+        parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parsed is not None
+        assert wms_legend_url(parsed, "target", "", "image/png") == (
+            BASE + "?SERVICE=WMS&VERSION=1.3.0&SLD_VERSION=1.1.0"
+            "&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=target&STYLE="
+            "&TRANSPARENT=true"
+        )
+
+    def test_111_uses_the_same_names_and_its_own_version(self) -> None:
+        """GetLegendGraphic is the SLD profile's in both versions, so only
+        VERSION differs; no CRS or SRS, since no view is sent."""
+        parsed = parse_wms_capabilities(wms_capabilities_111(BASE).encode())
+        assert parsed is not None
+        url = wms_legend_url(parsed, "target", "", "image/png")
+        assert url is not None
+        params = dict(parse_qsl(url.partition("?")[2], keep_blank_values=True))
+        assert params["VERSION"] == "1.1.1"
+        assert params["LAYER"] == "target"
+        assert params["STYLE"] == ""
+        assert not {"SRS", "CRS", "BBOX", "LAYERS", "STYLES"} & set(params)
+
+    def test_the_chosen_styles_legend_url(self) -> None:
+        parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parsed is not None
+        url = wms_legend_url(parsed, "target", "outlined", "image/png")
+        assert url is not None
+        assert url.startswith(
+            "https://maps.example.org/legends/outlined.png?SERVICE=WMS&"
+        )
+        assert "&STYLE=outlined&" in url
+
+    def test_the_default_style_is_the_one_named_default_else_the_first(
+        self,
+    ) -> None:
+        named = _legend_capabilities(
+            "<Layer><Name>a</Name>"
+            + _style("first", _legend_url("https://h/first.png"))
+            + _style("default", _legend_url("https://h/default.png"))
+            + "</Layer>"
+        )
+        for drawn_in in ("", "default"):
+            url = wms_legend_url(named, "a", drawn_in, "image/png")
+            assert url is not None
+            assert url.startswith("https://h/default.png?")
+        unnamed = _legend_capabilities(
+            "<Layer><Name>a</Name>"
+            + _style("first", _legend_url("https://h/first.png"))
+            + _style("second", _legend_url("https://h/second.png"))
+            + "</Layer>"
+        )
+        url = wms_legend_url(unnamed, "a", "", "image/png")
+        assert url is not None
+        assert url.startswith("https://h/first.png?")
+
+    def test_only_an_image_legend_url_counts(self) -> None:
+        parsed = _legend_capabilities(
+            "<Layer><Name>a</Name>"
+            + _style(
+                "s",
+                _legend_url("https://h/legend.html", "text/html"),
+                _legend_url("https://h/legend.png"),
+            )
+            + "</Layer>"
+        )
+        url = wms_legend_url(parsed, "a", "s", "image/png")
+        assert url is not None
+        assert url.startswith("https://h/legend.png?")
+
+    def test_without_a_legend_url_the_get_legend_graphic_address(self) -> None:
+        """An unknown style, and a style without a LegendURL, fall back."""
+        parsed = _legend_capabilities(
+            "<Layer><Name>a</Name>" + _style("plain") + "</Layer>",
+            GET_LEGEND_GRAPHIC,
+        )
+        for style in ("plain", "nope"):
+            url = wms_legend_url(parsed, "a", style, "image/png")
+            assert url is not None
+            assert url.startswith(BASE + "?SERVICE=WMS&")
+            assert f"&STYLE={style}&" in url
+
+    def test_with_neither_there_is_no_legend(self) -> None:
+        """QGIS asks nowhere, and so does the map."""
+        parsed = _legend_capabilities("<Layer><Name>a</Name></Layer>")
+        assert wms_legend_url(parsed, "a", "", "image/png") is None
+
+    def test_a_legend_urls_own_parameters_are_kept_whatever_their_case(
+        self,
+    ) -> None:
+        """GeoServer writes its LegendURLs as GetLegendGraphic requests; QGIS
+        adds only what they lack, and decodes them first."""
+        href = (
+            "https://gs.example/wms?request=GetLegendGraphic&format=image%2Fpng"
+            "&width=20&height=20&layer=topp%3Astates"
+        )
+        parsed = _legend_capabilities(
+            "<Layer><Name>topp:states</Name>"
+            + _style("population", _legend_url(href))
+            + "</Layer>"
+        )
+        assert wms_legend_url(parsed, "topp:states", "population", "image/jpeg") == (
+            "https://gs.example/wms?request=GetLegendGraphic&format=image/png"
+            "&width=20&height=20&layer=topp:states&SERVICE=WMS&VERSION=1.3.0"
+            "&SLD_VERSION=1.1.0&STYLE=population&TRANSPARENT=true"
+        )
+
+    def test_an_inherited_legend_url_names_the_child(self) -> None:
+        """`QgsWmsCapabilities::parseLayer`: a parent's style is the child's,
+        its LegendURL's LAYER rewritten to the child's name."""
+        parsed = _legend_capabilities(
+            "<Layer><Name>parent</Name>"
+            + _style("s", _legend_url("https://h/legend?LAYER=parent&x=1"))
+            + "<Layer><Name>child</Name></Layer></Layer>"
+        )
+        url = wms_legend_url(parsed, "child", "s", "image/png")
+        assert url is not None
+        assert url.startswith("https://h/legend?x=1&LAYER=child&SERVICE=WMS&")
+
+    def test_a_childs_style_replaces_an_inherited_one_of_its_name(self) -> None:
+        parsed = _legend_capabilities(
+            "<Layer><Name>parent</Name>"
+            + _style("s", _legend_url("https://h/parent.png"))
+            + "<Layer><Name>child</Name>"
+            + _style("s", _legend_url("https://h/child.png"))
+            + "</Layer></Layer>"
+        )
+        url = wms_legend_url(parsed, "child", "s", "image/png")
+        assert url is not None
+        assert url.startswith("https://h/child.png?")
+
+    def test_names_and_format_are_encoded(self) -> None:
+        parsed = _legend_capabilities("", GET_LEGEND_GRAPHIC)
+        url = wms_legend_url(parsed, "Gebäude & Co", "rot/grün", "image/png; mode=8bit")
+        assert url is not None
+        assert "&LAYER=Geb%C3%A4ude%20%26%20Co&" in url
+        assert "&STYLE=rot%2Fgr%C3%BCn&" in url
+        assert "&FORMAT=image/png%3B%20mode%3D8bit&" in url
+
+    def test_a_layer_ignoring_the_capabilities_addresses_is_asked_at_its_own(
+        self,
+    ) -> None:
+        """`IgnoreGetMapUrl`: QGIS asks the layer's own address, LegendURL or not."""
+        parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parsed is not None
+        url = wms_legend_url(
+            parsed, "target", "outlined", "image/png", url="https://own.example/wms"
+        )
+        assert url is not None
+        assert url.startswith("https://own.example/wms?SERVICE=WMS&")
+
+    def test_one_picture_per_sublayer_under_its_title(self) -> None:
+        parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parsed is not None
+        found = wms_legend_urls(
+            parsed, ["target", "boundary"], ["outlined", ""], "image/png"
+        )
+        assert [title for title, _ in found] == ["Target area", "Boundary"]
+        assert "/legends/outlined.png?" in found[0][1]
+        assert "&LAYER=boundary&STYLE=&" in found[1][1]
+
+    def test_a_sublayer_without_a_legend_is_skipped(self) -> None:
+        parsed = _legend_capabilities(
+            "<Layer><Name>a</Name>"
+            + _style("s", _legend_url("https://h/a.png"))
+            + "</Layer><Layer><Name>b</Name></Layer>"
+        )
+        found = wms_legend_urls(parsed, ["a", "b"], ["s", ""], "image/png")
+        assert [title for title, _ in found] == ["a"]
+
+
+# How QGIS stores a WMTS layer's source: the address percent-encoded, so a
+# KVP capabilities address does not read as a WMTS one, and a RESTful one does.
+KVP_SOURCE = "layers=l&styles=s&tileMatrixSet=g&url=https://h/wmts%3FSERVICE%3DWMTS"
+REST_SOURCE = (
+    "layers=l&styles=s&tileMatrixSet=g&url=https://h/1.0.0/WMTSCapabilities.xml"
+)
+
+
+class TestWmtsLegend:
+    def test_the_styles_legend_url_as_qgis_asks_it(self) -> None:
+        """QGIS adds GetLegendGraphic's parameters unless the layer's source
+        reads as a WMTS address; VERSION is the WMTS's own."""
+        document = wmts_capabilities(WMTS).encode()
+        rest = wmts_legend_url(document, "target", "default", "image/png", REST_SOURCE)
+        assert rest == "https://tiles.example.org/legends/outlined.png"
+        kvp = wmts_legend_url(document, "target", "default", "image/png", KVP_SOURCE)
+        assert kvp == (
+            "https://tiles.example.org/legends/outlined.png?SERVICE=WMS"
+            "&VERSION=1.0.0&SLD_VERSION=1.1.0&REQUEST=GetLegendGraphic"
+            "&FORMAT=image/png&LAYER=target&STYLE=default&TRANSPARENT=true"
+        )
+
+    def _document(self, legends: str) -> bytes:
+        return (
+            "<Capabilities xmlns='http://www.opengis.net/wmts/1.0' "
+            "xmlns:ows='http://www.opengis.net/ows/1.1' "
+            "xmlns:xlink='http://www.w3.org/1999/xlink' version='1.0.0'>"
+            "<Contents><Layer><ows:Identifier>l</ows:Identifier><Style>"
+            f"<ows:Identifier>s</ows:Identifier>{legends}</Style></Layer>"
+            "</Contents></Capabilities>"
+        ).encode()
+
+    def test_the_layers_format_is_preferred(self) -> None:
+        document = self._document(
+            "<ows:legendURL><format>image/png</format><href>https://h/a.png</href>"
+            "</ows:legendURL><ows:legendURL><format>image/jpeg</format>"
+            "<href>https://h/b.jpg</href></ows:legendURL>"
+        )
+        jpeg = wmts_legend_url(document, "l", "s", "image/jpeg", REST_SOURCE)
+        assert jpeg == "https://h/b.jpg"
+        other = wmts_legend_url(document, "l", "s", "image/gif", REST_SOURCE)
+        assert other == "https://h/a.png"
+
+    def test_without_a_legend_url_or_the_style_there_is_none(self) -> None:
+        document = self._document("")
+        assert wmts_legend_url(document, "l", "s", "image/png", REST_SOURCE) is None
+        other_style = wmts_legend_url(
+            wmts_capabilities(WMTS).encode(), "target", "x", "image/png", REST_SOURCE
+        )
+        assert other_style is None
+        assert wmts_legend_url(None, "l", "s", "image/png", REST_SOURCE) is None

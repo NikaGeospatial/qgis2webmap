@@ -8,11 +8,16 @@ serves both, on 127.0.0.1 and a free port, from a thread:
   CORS header at all, the way the Sachsen-Anhalt ALKIS service of issue #2
   does. Everything else is the same under both.
 * `wms` answers WMS 1.3.0 and `wms111` answers WMS 1.1.1, each with layers
-  `target` (offered in EPSG:3857, EPSG:25832 and EPSG:4326) and `utm_only`
-  (EPSG:25832 only). An unknown layer gets a ServiceException, served with
-  status 200 as real servers do.
+  `target` (offered in EPSG:3857, EPSG:25832 and EPSG:4326), `boundary`
+  (the same) and `utm_only` (EPSG:25832 only). An unknown layer gets a
+  ServiceException, served with status 200 as real servers do.
+* Legends: both declare GetLegendGraphic, which draws `LEGEND_SIZES[layer]`.
+  `target` has the styles `default`, with no LegendURL, and `outlined`,
+  whose LegendURL is `legends/outlined.png` (`OUTLINED_LEGEND_SIZE`);
+  `boundary`'s GetLegendGraphic picture is tall, as long legends are.
 * `wmts` offers layer `target` on the `GoogleMapsCompatible` grid and on a
-  `UTM32` grid, by KVP GetTile and by a RESTful `ResourceURL`.
+  `UTM32` grid, by KVP GetTile and by a RESTful `ResourceURL`; its `default`
+  style's LegendURL is the same `legends/outlined.png`.
 
 Every image draws one thing: `TARGET_3857`, a rectangle given in Web
 Mercator metres, opaque crimson, on transparency. A tile therefore shows the
@@ -45,7 +50,14 @@ OTHER_CRS_RGBA = (30, 90, 200, 128)
 HALF_WORLD = math.pi * 6378137.0
 
 WMS_LAYERS = {"target": ("EPSG:3857", "EPSG:25832", "EPSG:4326")}
+WMS_LAYERS["boundary"] = WMS_LAYERS["target"]
 WMS_LAYERS["utm_only"] = ("EPSG:25832",)
+WMS_TITLES = {"target": "Target area", "boundary": "Boundary", "utm_only": "UTM only"}
+# The (width, height) of each layer's GetLegendGraphic picture, and of the
+# `outlined` style's LegendURL picture.
+LEGEND_SIZES = {"target": (64, 32), "boundary": (48, 600), "utm_only": (40, 20)}
+OUTLINED_LEGEND_SIZE = (40, 40)
+LEGEND_RGBA = (20, 120, 60, 255)
 
 
 def tile_bounds_3857(x: int, y: int, z: int) -> tuple[float, float, float, float]:
@@ -103,20 +115,36 @@ def draw_target(
     )
 
 
+def _styles(base: str, name: str, xlink: str = "") -> str:
+    """`target`'s two styles; no other layer declares any."""
+    if name != "target":
+        return ""
+    legends = base.rpartition("/")[0] + "/legends/outlined.png"
+    return (
+        "<Style><Name>default</Name><Title>Default</Title></Style>"
+        "<Style><Name>outlined</Name><Title>Outlined</Title>"
+        "<LegendURL width='40' height='40'><Format>image/png</Format>"
+        f"<OnlineResource {xlink}xlink:type='simple' xlink:href='{legends}'/>"
+        "</LegendURL></Style>"
+    )
+
+
 def wms_capabilities_130(base: str) -> str:
     layers = "".join(
-        f"<Layer queryable='0'><Name>{name}</Name><Title>{name}</Title>"
+        f"<Layer queryable='0'><Name>{name}</Name><Title>{WMS_TITLES[name]}</Title>"
         + "".join(f"<CRS>{crs}</CRS>" for crs in crs_list)
         + "<EX_GeographicBoundingBox><westBoundLongitude>5</westBoundLongitude>"
         "<eastBoundLongitude>16</eastBoundLongitude><southBoundLatitude>47"
         "</southBoundLatitude><northBoundLatitude>56</northBoundLatitude>"
-        "</EX_GeographicBoundingBox></Layer>"
+        "</EX_GeographicBoundingBox>"
+        f"{_styles(base, name)}</Layer>"
         for name, crs_list in WMS_LAYERS.items()
     )
     online = f"<OnlineResource xlink:type='simple' xlink:href='{base}?'/>"
     return (
         "<?xml version='1.0' encoding='UTF-8'?>"
         "<WMS_Capabilities version='1.3.0' xmlns='http://www.opengis.net/wms' "
+        "xmlns:sld='http://www.opengis.net/sld' "
         "xmlns:xlink='http://www.w3.org/1999/xlink'>"
         "<Service><Name>WMS</Name><Title>Fake WMS</Title>"
         f"{online}</Service><Capability><Request>"
@@ -124,21 +152,29 @@ def wms_capabilities_130(base: str) -> str:
         f"{online}</Get></HTTP></DCPType></GetCapabilities>"
         "<GetMap><Format>image/png</Format><Format>image/jpeg</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetMap>"
-        "</Request><Exception><Format>XML</Format></Exception>"
+        # 1.3.0 has no GetLegendGraphic of its own; it is the SLD profile's.
+        "<sld:GetLegendGraphic><Format>image/png</Format>"
+        f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType>"
+        "</sld:GetLegendGraphic></Request><Exception><Format>XML</Format></Exception>"
         "<Layer><Title>Fake</Title><CRS>EPSG:25832</CRS>"
         f"{layers}</Layer></Capability></WMS_Capabilities>"
     )
 
 
+_XLINK = "http://www.w3.org/1999/xlink"
+
+
 def wms_capabilities_111(base: str) -> str:
     layers = "".join(
-        f"<Layer queryable='0'><Name>{name}</Name><Title>{name}</Title>"
+        f"<Layer queryable='0'><Name>{name}</Name><Title>{WMS_TITLES[name]}</Title>"
         + "".join(f"<SRS>{crs}</SRS>" for crs in crs_list)
-        + "<LatLonBoundingBox minx='5' miny='47' maxx='16' maxy='56'/></Layer>"
+        + "<LatLonBoundingBox minx='5' miny='47' maxx='16' maxy='56'/>"
+        + _styles(base, name, xlink=f"xmlns:xlink='{_XLINK}' ")
+        + "</Layer>"
         for name, crs_list in WMS_LAYERS.items()
     )
     online = (
-        "<OnlineResource xmlns:xlink='http://www.w3.org/1999/xlink' "
+        f"<OnlineResource xmlns:xlink='{_XLINK}' "
         f"xlink:type='simple' xlink:href='{base}?'/>"
     )
     return (
@@ -150,6 +186,8 @@ def wms_capabilities_111(base: str) -> str:
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetCapabilities>"
         "<GetMap><Format>image/png</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetMap>"
+        "<GetLegendGraphic><Format>image/png</Format>"
+        f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetLegendGraphic>"
         "</Request><Exception><Format>application/vnd.ogc.se_xml</Format>"
         f"</Exception><Layer><Title>Fake</Title>{layers}</Layer>"
         "</Capability></WMT_MS_Capabilities>"
@@ -198,7 +236,9 @@ def wmts_capabilities(base: str) -> str:
         "<Layer><ows:Title>target</ows:Title><ows:Identifier>target</ows:Identifier>"
         "<ows:WGS84BoundingBox><ows:LowerCorner>5 47</ows:LowerCorner>"
         "<ows:UpperCorner>16 56</ows:UpperCorner></ows:WGS84BoundingBox>"
-        "<Style isDefault='true'><ows:Identifier>default</ows:Identifier></Style>"
+        "<Style isDefault='true'><ows:Identifier>default</ows:Identifier>"
+        "<LegendURL format='image/png' "
+        f"xlink:href='{base.rpartition('/')[0]}/legends/outlined.png'/></Style>"
         "<Format>image/png</Format>"
         "<TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>"
         "</TileMatrixSetLink><TileMatrixSetLink><TileMatrixSet>UTM32"
@@ -257,6 +297,13 @@ class _Handler(BaseHTTPRequestHandler):
             if request == "getmap":
                 self._get_map(params, service)
                 return
+            if request == "getlegendgraphic":
+                self._get_legend_graphic(params)
+                return
+        if service == "legends" and segments[2:] == ["outlined.png"]:
+            width, height = OUTLINED_LEGEND_SIZE
+            self._send(200, "image/png", png(width, height, lambda c, r: LEGEND_RGBA))
+            return
         if service == "wmts":
             if request == "getcapabilities":
                 self._send(200, "text/xml", wmts_capabilities(base).encode())
@@ -293,6 +340,15 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             body = png(width, height, lambda c, r: OTHER_CRS_RGBA)
         self._send(200, "image/png", body)
+
+    def _get_legend_graphic(self, params: dict[str, str]) -> None:
+        layer = params.get("LAYER", "")
+        if layer not in LEGEND_SIZES:
+            message = f"Layer '{layer}' is not defined"
+            self._send(200, "application/vnd.ogc.se_xml", _service_exception(message))
+            return
+        width, height = LEGEND_SIZES[layer]
+        self._send(200, "image/png", png(width, height, lambda c, r: LEGEND_RGBA))
 
     def _get_tile(self, matrix_set: str, matrix: str, row: str, column: str) -> None:
         if matrix_set != "GoogleMapsCompatible":
