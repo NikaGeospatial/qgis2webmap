@@ -26,8 +26,6 @@ Other ways in:
   (**Cmd+Alt+C** on macOS), opens the dialog straight on Cartograph (Beta).
 - In the layout designer, **Layout → Export as cartograph (HTML)...** does the
   same and selects the layout you have open.
-- On the web map, **Share → Make a cartograph...** builds a print layout from
-  the map canvas and switches over - see [one-click layouts](one-click-layout.md).
 
 ## The document model, in one paragraph
 
@@ -376,7 +374,7 @@ At the top right, reachable whatever the panel shows:
   on the canvas and in the browser, and check which legend classes become
   indistinguishable. Stays pressed while a simulation is on, and its tooltip
   names it.
-- **Save PDF…** (**Ctrl+P**) - saves every page of the selected layout as a PDF,
+- **Save PDF…** (**Ctrl+S**) - saves every page of the selected layout as a PDF,
   written by QGIS itself from a copy of the layout, so edits you made a moment ago
   are in it and nothing else changes. It asks where to save (suggesting the layout's
   name), needs no saved HTML file and opens no browser. Interactive frames are drawn
@@ -411,7 +409,7 @@ section, then the greyed NIKA rows.
 | **Show HTML in folder** | Opens the folder the HTML cartograph is in | Once the file exists |
 | **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
 
-**Ctrl+O** (Preview in browser) and **Ctrl+P** (Save PDF…) work from anywhere in the dialog, without opening
+**Ctrl+O** (Preview in browser) and **Ctrl+S** (Save PDF…) work from anywhere in the dialog, without opening
 the menu.
 
 Export PNG is **derived** from the cartograph rather than being

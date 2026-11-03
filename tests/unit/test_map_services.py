@@ -141,6 +141,30 @@ class TestWmsCapabilities:
     def test_anything_else_is_no_capabilities(self, document) -> None:
         assert parse_wms_capabilities(document) is None
 
+    def test_a_document_declaring_an_entity_is_refused(self) -> None:
+        """No capabilities document needs one; refusing it rules out entity
+        expansion from a crafted service before the parser sees it."""
+        document = (
+            '<?xml version="1.0"?><!DOCTYPE WMS_Capabilities ['
+            '<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;">]>'
+            + wms_capabilities_130(BASE).split("?>", 1)[-1]
+        )
+        assert parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parse_wms_capabilities(document.encode()) is None
+
+    def test_a_doctype_without_entities_still_reads(self) -> None:
+        """WMS 1.1.1 services often carry a DOCTYPE with an internal subset of
+        element declarations; that is not an entity and must not be refused."""
+        document = (
+            '<?xml version="1.0"?><!DOCTYPE WMT_MS_Capabilities SYSTEM '
+            '"http://schemas.opengis.net/wms/1.1.1/WMS_MS_Capabilities.dtd" '
+            "[<!ELEMENT VendorSpecificCapabilities EMPTY>]>"
+            + wms_capabilities_111(BASE).split("?>", 1)[-1]
+        )
+        parsed = parse_wms_capabilities(document.encode())
+        assert parsed is not None
+        assert parsed.offered_web_mercator(["target"]) == "EPSG:3857"
+
     def test_an_unlisted_layer_is_not_assumed(self) -> None:
         parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
         assert parsed is not None

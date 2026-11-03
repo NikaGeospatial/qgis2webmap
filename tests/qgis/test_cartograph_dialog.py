@@ -439,21 +439,6 @@ class TestOutputSwitch:
         finally:
             dialog.close()
 
-    def test_make_a_cartograph_share_row_flips_the_switch(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        from nika_onlymap_exporter.core.settings import DialogOutput
-
-        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
-        dialog = _dialog(project)
-        try:
-            dialog.share_actions["cartograph"].trigger()
-            assert dialog.state.output is DialogOutput.CARTOGRAPH
-        finally:
-            dialog.close()
-
-
-class TestFramesTab:
     def test_two_maps_get_their_defaults(self, qgis_app, project) -> None:
         layout = _add_layout(
             project,
@@ -1141,6 +1126,9 @@ class TestCartographShareMenu:
                 "browser behaviour."
             )
             assert row.shortcut().toString() == "Ctrl+O"
+            save = dialog._cartograph.cartograph_share_actions["save_pdf"]
+            assert save.shortcut().toString() == "Ctrl+S"
+            assert save.toolTip().endswith("(Ctrl+S)")
         finally:
             dialog.close()
 
@@ -1890,7 +1878,8 @@ class TestCanvasAndImport:
 
         dialog, _canvas = self._canvas_dialog(project)
         try:
-            dialog.share_actions["cartograph"].trigger()
+            dialog.open_on_cartograph()
+            dialog._cartograph.create_from_canvas()
             assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
             assert dialog._cartograph.current_layout_name().endswith(" \u2014 Daylight")
         finally:

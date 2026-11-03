@@ -71,13 +71,11 @@ Ask in the same words you would use with a colleague:
 
 ## Hand off to NIKA
 
-The plugin writes the request for you. In the dialog's **Share** menu, choose
-**Prepare enhancement prompt...** or **Prepare critique prompt...**, under
-**NIKA hand-off**. This is for web maps for now; on a
-[cartograph](cartograph-dialog.md#the-share-menu) the two rows are shown greyed
-out. A web map needs a **Save to** path on the Map tab - a new map has one from
-the start - and is written first if it is missing or out of date, so the prompt
-never points at a stale file.
+The plugin can write the request for you, but in this version the web map's
+**Share** menu does not offer the **Prepare enhancement prompt...** and
+**Prepare critique prompt...** rows, and on a
+[cartograph](cartograph-dialog.md#the-share-menu) they are shown greyed out.
+Until they return, write the request yourself as above.
 
 The **Hand off to NIKA** dialog that opens has three steps, top to bottom:
 

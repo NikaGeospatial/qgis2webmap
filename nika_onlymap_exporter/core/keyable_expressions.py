@@ -27,7 +27,9 @@ import functools
 import hashlib
 import re
 import threading
-import xml.etree.ElementTree as ElementTree
+
+# Parses QGIS's own layer XML only, and refuses entity declarations first.
+import xml.etree.ElementTree as ElementTree  # nosec B405
 from collections import OrderedDict
 from collections.abc import Callable, Collection, Iterator
 
@@ -560,8 +562,12 @@ def _add_reads(
 def expression_reads(xml: str) -> Reads | None:
     """The functions, `$` names and variables the expressions in `xml` read;
     None when `xml` is not readable XML."""
+    if "<!ENTITY" in xml:
+        # QGIS never writes entity declarations, so refusing them costs no
+        # real layer and rules out entity expansion from a crafted project.
+        return None
     try:
-        root = ElementTree.fromstring(xml)
+        root = ElementTree.fromstring(xml)  # nosec B314
     except ElementTree.ParseError:
         return None
     functions: set[str] = set()

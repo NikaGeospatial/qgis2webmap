@@ -55,6 +55,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   fill (such as `{s}`) is now refused with a reason instead of exported to
   request the token literally.
 - The OnlyMap runtime moves to 0.13.3.
+- The web map's **Share** menu is shorter: **Make a cartograph...** and the
+  two NIKA hand-off rows (**Prepare enhancement prompt...**, **Prepare
+  critique prompt...**) are gone. **New from template...** on Cartograph
+  still builds a layout from the map view.
+- **Show in file manager** opens the map file's folder straight away instead
+  of rebuilding the map first, as **Copy file path** already did.
+- In Cartograph, **Save PDF…** is **Ctrl+S** (it was **Ctrl+P**).
 - The runtime licence is shown once, at the first download: a later runtime
   version downloads without asking again.
 - The downloaded runtime is kept compressed on disk (about 2.8 MB), and older
@@ -65,6 +72,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   same.
 
 ### Fixed
+- A legend or layer list longer than half the map no longer runs past its
+  bottom edge and makes the whole page scroll: it stops at half the map's
+  height and scrolls inside its own panel.
 - On a relief map the imagery credit wraps to a second line, and the
   attribution above it sat underneath it. The attribution, and the preview's
   Host prompt, now keep clear of the credit at its measured height.

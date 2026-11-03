@@ -316,6 +316,39 @@
         background: var(--om-widget-bg, rgba(255, 255, 255, 0.75));
       }
 
+      /* A long legend or layer list scrolls inside its own panel instead of
+         running past the bottom of the map, where it made the whole page scroll.
+         The runtime's slot is an absolutely placed flex column inside a widget
+         layer that covers the map, so a percentage here is of the map's height;
+         a flex item that scrolls may shrink below its content, so the widget
+         takes what the slot leaves it. Half the map keeps room for the controls
+         in the bottom corners. Print is left alone: the page lays out there.
+
+         A scrolling box clips what is drawn outside it, which is where the
+         panel's shadow is, so the box wears the panel's own radius and shadow
+         (the runtime's `.omni-panel` values, and `LEGEND_STYLES`'): a panel that
+         fits looks exactly as before. The scrollbar is hidden: the wheel, a
+         touch drag and the keyboard still scroll the panel, and a bar down the
+         side of a small panel read as clutter. */
+      @media not print {
+        [data-om-widget-slot="top-start"],
+        [data-om-widget-slot="top-end"] {
+          max-height: 50%;
+        }
+        [data-om-widget-slot="top-start"] > om-widget,
+        [data-om-widget-slot="top-end"] > om-widget {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+          scrollbar-width: none;
+        }
+        [data-om-widget-slot="top-start"] > om-widget::-webkit-scrollbar,
+        [data-om-widget-slot="top-end"] > om-widget::-webkit-scrollbar {
+          display: none;
+        }
+      }
+
       /* Lift the runtime's provider attribution above our credit chip.
 
          The chip sits in the corner at `bottom: 12px` and the `bottom-end` slot

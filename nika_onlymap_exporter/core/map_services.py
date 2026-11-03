@@ -31,7 +31,9 @@ from __future__ import annotations
 
 import math
 import re
-import xml.etree.ElementTree as ET
+
+# Parses capabilities QGIS stored, and refuses entity declarations first.
+import xml.etree.ElementTree as ET  # nosec B405
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, quote, unquote
@@ -203,10 +205,13 @@ def _href(element: ET.Element | None) -> str | None:
 
 
 def _parse(document: bytes | None) -> ET.Element | None:
-    if not document:
+    if not document or b"<!ENTITY" in document:
+        # No WMS or WMTS capabilities document needs one, so refusing them
+        # costs no real service and rules out entity expansion from a crafted
+        # one.
         return None
     try:
-        return ET.fromstring(document)
+        return ET.fromstring(document)  # nosec B314
     except ET.ParseError:
         return None
 

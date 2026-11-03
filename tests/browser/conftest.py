@@ -524,6 +524,38 @@ def stacked_popups_map(runtime, tmp_path_factory):
     return result.entry_path
 
 
+@pytest.fixture(scope="session")
+def crowded_controls_map(runtime, tmp_path_factory):
+    """Thirty layers, so the legend and the layer switcher are each taller than
+    half of a laptop-height map: they used to run past its bottom edge and make
+    the whole page scroll."""
+    layers = tuple(
+        ExportLayer(
+            layer_id=f"crowd{i}",
+            name=f"Crowded layer {i}",
+            geometry_kind=GeometryKind.POINT,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson=STACKED_GEOJSON,
+            renderer=RendererSpec(
+                kind=RendererKind.SINGLE,
+                symbol=SymbolSpec(
+                    fill_color=Color(r=(8 * i) % 256, g=120, b=60), radius=6.0
+                ),
+            ),
+        )
+        for i in range(30)
+    )
+    project = ExportProject(
+        title="Crowded controls",
+        layers=layers,
+        extent=Extent(west=-0.5, south=50.7, east=0.5, north=51.3),
+    )
+    destination = tmp_path_factory.mktemp("crowded")
+    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    return result.entry_path
+
+
 # Straddles the antimeridian the way the QGIS Alaska sample does (-179.13 to
 # +179.78), but tightly, so the map opens centred on the seam itself. Pure red,
 # because the pixel check counts it and nothing else on the map is red.
