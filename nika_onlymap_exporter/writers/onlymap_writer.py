@@ -33,6 +33,7 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
+    switcher_basemaps,
     texture_credit,
 )
 from ..core.widget_colors import resolve_widget_colors
@@ -505,6 +506,9 @@ def _widget_color_block(project: ExportProject) -> str:
     scale_block = _chrome_scale_block(settings.chrome_scale, settings)
     if scale_block:
         blocks.append(scale_block)
+        stack_block = _top_left_stack_block(project)
+        if stack_block:
+            blocks.append(stack_block)
 
     size_block = _panel_size_block(settings)
     if size_block:
@@ -602,6 +606,7 @@ def _panel_size_block(settings: ExportSettings) -> str:
 _WIDGET_ORIGINS = {
     "legend": "top right",
     "layer-switcher": "top left",
+    "basemap-switcher": "top left",
     "zoom-controls": "bottom left",
     "scale-bar": "bottom left",
     "measure": "bottom left",
@@ -690,6 +695,33 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
         ]
     )
     return "\n".join(rules)
+
+
+def _top_left_stack_block(project: ExportProject) -> str:
+    """Scale the top-left corner as one, when it stacks more than one panel.
+
+    A transform moves nothing out of the way, so each panel scaled on its own
+    grew down over the one under it. The layer switcher was alone up there
+    until the basemap switcher joined it; with company, the corner's slot is
+    scaled from its corner instead, and the panels in it are not scaled again.
+    A narrow map that folds them into a drawer takes them out of the slot,
+    where each keeps its own scale. Empty for a corner with the switcher alone,
+    which keeps the rules it always had.
+    """
+    if not switcher_basemaps(project.settings):
+        return ""
+    scale = project.settings.chrome_scale
+    return "\n".join(
+        [
+            '      [data-om-widget-slot="top-start"] {',
+            f"        transform: scale({scale});",
+            "        transform-origin: top left;",
+            "      }",
+            '      [data-om-widget-slot="top-start"] > om-widget {',
+            "        transform: none;",
+            "      }",
+        ]
+    )
 
 
 def _measure_lift(scale: float, settings: ExportSettings) -> str:

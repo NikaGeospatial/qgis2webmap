@@ -1254,6 +1254,11 @@ class ExportSettings:
     # which is a privacy and longevity trade rather than a size one - tiles are
     # streamed, so the file does not grow at all.
     basemap: str = "none"
+    # A panel on the map that lets the reader switch the basemap to another of
+    # the keyless presets. Off by default: every preset it offers is one more
+    # third party the reader's browser can be sent to
+    # (`manifest_builder.switcher_basemaps`).
+    basemap_switcher: bool = False
     # A relief surface under the map, off by default and carrying the same cost
     # as a basemap: DEM tiles streamed from a third party on every open. It is
     # NOT read from the project, because it cannot be - a QGIS terrain is a local
@@ -1315,6 +1320,7 @@ class ExportSettings:
             "showAbstract": self.show_abstract,
             "titleCorner": self.title_corner.value,
             "basemap": self.basemap,
+            "basemapSwitcher": self.basemap_switcher,
             "terrain": self.terrain,
             "chromeScale": self.chrome_scale,
             "legendSize": [self.legend_width, self.legend_height],

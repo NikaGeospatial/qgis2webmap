@@ -440,6 +440,9 @@ DATA_FIELDS = (
     "map_name",
     "popup_on_hover",
     "basemap",
+    # It changes the Basemap rows `read_project` writes: they name every host
+    # the switcher can send a reader to.
+    "basemap_switcher",
     "terrain",
     "highlight_color",
     "quantize_precision",
@@ -518,6 +521,9 @@ class DialogState:
     # streamed - but it ends the "opens offline, contacts nobody" guarantee, so
     # it has to be chosen rather than inherited.
     basemap: str = "none"
+    # Off by default: each basemap it offers is another third party a reader's
+    # browser can be sent to, which the author should choose rather than get.
+    basemap_switcher: bool = False
     # Off by default for the same reason as the basemap, plus one of its own: it
     # tilts the map, which changes what the recipient sees first.
     terrain: str = "none"
@@ -661,6 +667,7 @@ class DialogState:
             show_abstract=self.show_abstract,
             title_corner=self.title_corner,
             basemap=self.basemap,
+            basemap_switcher=self.basemap_switcher,
             terrain=self.terrain,
             chrome_scale=self.chrome_scale,
             legend_width=self.legend_width,
@@ -724,6 +731,7 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
             state.basemap = str(widgets.get("basemap", "none") or "none")
+            state.basemap_switcher = bool(widgets.get("basemapSwitcher", False))
             state.terrain = str(widgets.get("terrain", "none") or "none")
             state.chrome_scale = _read_scale(widgets.get("chromeScale"))
             # Absent from a project saved before sizes could be set: Auto.
@@ -867,6 +875,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "showAbstract": state.show_abstract,
                 "titleCorner": state.title_corner.value,
                 "basemap": state.basemap,
+                "basemapSwitcher": state.basemap_switcher,
                 "terrain": state.terrain,
                 "chromeScale": state.chrome_scale,
                 "legendWidth": state.legend_width,

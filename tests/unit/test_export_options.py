@@ -21,6 +21,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     ExtentSource,
     GeometryKind,
+    OutputMode,
     OverlayCorner,
     PopupFieldSpec,
     PopupSpec,
@@ -416,6 +417,124 @@ class TestBasemap:
             if preset == "none":
                 continue
             assert basemap_note(preset) is not None, preset
+
+
+class TestBasemapSwitcher:
+    """A panel that lets the reader switch to another keyless basemap."""
+
+    @staticmethod
+    def _options(markup: str) -> list[str] | None:
+        import re
+
+        found = re.search(
+            r'<om-widget type="basemap-switcher" options="([^"]*)"', markup
+        )
+        return found.group(1).split() if found else None
+
+    def test_it_is_off_by_default(self) -> None:
+        assert DialogState().basemap_switcher is False
+        assert self._options(build_manifest(make_project(basemap="positron"))) is None
+
+    def test_a_file_opened_map_offers_every_preset_but_osm(self) -> None:
+        """OpenStreetMap's servers refuse a page opened from a file."""
+        for mode in (OutputMode.STANDALONE_HTML, OutputMode.SHARE_ZIP):
+            markup = build_manifest(
+                make_project(
+                    basemap="positron", basemap_switcher=True, output_mode=mode
+                )
+            )
+            assert self._options(markup) == [
+                "positron",
+                "dark-matter",
+                "voyager",
+                "liberty",
+                "bright",
+            ], mode
+
+    def test_a_folder_offers_osm_too(self) -> None:
+        markup = build_manifest(
+            make_project(
+                basemap="liberty", basemap_switcher=True, output_mode=OutputMode.FOLDER
+            )
+        )
+        assert self._options(markup) == [p for p in BASEMAP_PRESETS if p != "none"]
+        assert 'position="top-left"' in markup.split('type="basemap-switcher"')[1]
+
+    def test_a_chosen_osm_stays_in_the_list_from_a_file(self) -> None:
+        """The author was warned; the switcher must still show the map's own."""
+        markup = build_manifest(make_project(basemap="osm", basemap_switcher=True))
+        assert (self._options(markup) or [])[0] == "osm"
+
+    @pytest.mark.parametrize(
+        "settings",
+        [
+            {"basemap": "none"},
+            {"basemap": "positron", "terrain": "terrarium"},
+            {"basemap": "positron", "map_crs": "EPSG:27700", "map_crs_def": "+x"},
+        ],
+    )
+    def test_it_needs_a_flat_web_map_with_a_basemap(self, settings) -> None:
+        markup = build_manifest(make_project(basemap_switcher=True, **settings))
+        assert self._options(markup) is None
+
+    def test_the_network_list_is_every_host_offered(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import settings_network_hosts
+
+        def hosts(**settings) -> set[str]:
+            return set(settings_network_hosts(ExportSettings(**settings)))
+
+        assert hosts(basemap="positron") == {"openfreemap.org"}
+        assert hosts(basemap="positron", basemap_switcher=True) == {
+            "openfreemap.org",
+            "carto.com",
+        }
+        assert hosts(
+            basemap="positron", basemap_switcher=True, output_mode=OutputMode.FOLDER
+        ) == {"openfreemap.org", "carto.com", "openstreetmap.org"}
+
+    def test_the_note_names_every_host_a_reader_can_reach(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import basemap_notes
+
+        (note,) = basemap_notes(
+            ExportSettings(
+                basemap="voyager", basemap_switcher=True, output_mode=OutputMode.FOLDER
+            )
+        )
+        assert "from carto.com every time" in note
+        assert "openstreetmap.org or openfreemap.org" in note
+        (from_file,) = basemap_notes(
+            ExportSettings(basemap="voyager", basemap_switcher=True)
+        )
+        assert "openstreetmap.org" not in from_file
+        assert "openfreemap.org" in from_file
+
+    def test_osm_from_a_file_keeps_its_warning_and_names_the_rest(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import (
+            OSM_FILE_NOTE,
+            basemap_notes,
+        )
+
+        assert basemap_notes(ExportSettings(basemap="osm")) == (OSM_FILE_NOTE,)
+        warning, note = basemap_notes(
+            ExportSettings(basemap="osm", basemap_switcher=True)
+        )
+        assert warning == OSM_FILE_NOTE
+        assert "openfreemap.org or carto.com" in note
+
+    def test_scaled_it_grows_with_the_corner_not_over_the_switcher(self) -> None:
+        """Each panel scaled alone would grow down over the one under it."""
+        block = _widget_color_block(
+            make_project(basemap="positron", basemap_switcher=True, chrome_scale=2.0)
+        )
+        corner = block.split('[data-om-widget-slot="top-start"] {')[1].split("}")[0]
+        assert "transform: scale(2.0);" in corner
+        assert (
+            '[data-om-widget-slot="top-start"] > om-widget {\n        transform: none;'
+            in block
+        )
+        # Without the switcher the corner keeps the rules it always had.
+        alone = _widget_color_block(make_project(basemap="positron", chrome_scale=2.0))
+        assert 'data-om-widget-slot="top-start"' not in alone
 
 
 class TestChromeScale:

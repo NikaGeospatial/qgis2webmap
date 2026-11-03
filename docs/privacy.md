@@ -71,7 +71,9 @@ Nothing else about the export changes because of a basemap choice - no
 additional identifier travels with it, and the file is no larger. But the
 "nothing else is fetched" guarantee only holds with the basemap set to None,
 so the dialog warns in red when it is not, and the Fidelity tab names the
-provider.
+provider. With *Let readers switch basemap* ticked, a reader can switch to any
+of the other basemaps, so the Fidelity tab names every provider the switcher
+can reach.
 
 ## Popup pictures that are web addresses
 

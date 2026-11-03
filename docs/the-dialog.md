@@ -140,6 +140,17 @@ or Share ZIP export may see "Access blocked" tiles. The dialog warns under the
 basemap when you pick it for those types; choose **Liberty** instead - the same
 OpenStreetMap data, drawn a little differently - or export as a Folder.
 
+**Let readers switch basemap**, off by default, puts a Basemap panel in the
+map's top-left corner, under the layer switcher, listing every basemap above
+but None, with the map's own ticked; a reader picks another to switch to it.
+In a Standalone HTML or Share ZIP export it leaves out OpenStreetMap, which
+refuses maps opened from a file - unless OpenStreetMap is the basemap you
+chose. Each basemap a reader can switch to is another provider their browser
+may contact, so the Fidelity tab names every one of them. It needs a basemap
+to switch from, so it is greyed out while the basemap is None, and while
+**Ground surface** is on, because relief replaces the basemap with imagery
+draped over it.
+
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation
 shows, and fetches terrain tiles to do it. With a basemap chosen too, the

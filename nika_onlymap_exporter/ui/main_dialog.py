@@ -1132,6 +1132,13 @@ class MainDialog(QDialog):
         self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
         basemap_form.addRow(tr("Show behind the map"), self.basemap_combo)
 
+        self.basemap_switcher_check = QCheckBox(
+            tr("Let readers switch basemap"), basemap_box
+        )
+        self.basemap_switcher_check.setChecked(self.state.basemap_switcher)
+        self.basemap_switcher_check.toggled.connect(self._on_basemap_switcher_toggled)
+        basemap_form.addRow("", self.basemap_switcher_check)
+
         # Warning rather than help: this is the only setting that changes what
         # the *recipient's* machine does, and it cannot be undone after sending.
         self.basemap_warning = FittedLabel("", basemap_box)
@@ -1154,6 +1161,7 @@ class MainDialog(QDialog):
         self.terrain_warning.setWordWrap(True)
         basemap_form.addRow("", self.terrain_warning)
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         layout.addWidget(basemap_box)
 
         data_box = QGroupBox(tr("Data"), page)
@@ -1346,7 +1354,39 @@ class MainDialog(QDialog):
         # The terrain warning names the imagery draped over the relief, which
         # follows the basemap - so it changes when the basemap does.
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         self._fidelity_is_stale = True
+
+    def _on_basemap_switcher_toggled(self, value: bool) -> None:
+        self.state.basemap_switcher = value
+        self._fidelity_is_stale = True
+
+    def _update_basemap_switcher(self) -> None:
+        """Offer the switcher only where the map can switch basemap.
+
+        Not with no basemap, which has nothing to switch from, nor with relief,
+        which replaces the basemap with a picture of it. The tick is kept while
+        it is unavailable, as the export ignores it then
+        (`manifest_builder.switcher_basemaps`).
+        """
+        if self.state.basemap == "none":
+            reason = tr("Choose a basemap first.")
+        elif self.state.terrain != "none":
+            reason = tr(
+                "Not with a ground surface: relief replaces the basemap with "
+                "imagery draped over it, which readers cannot switch."
+            )
+        else:
+            reason = ""
+        self.basemap_switcher_check.setEnabled(not reason)
+        self.basemap_switcher_check.setToolTip(
+            reason
+            or tr(
+                "Adds a panel to the map listing the other basemaps, so readers "
+                "can pick one. Each loads its tiles from its own server, which "
+                "the Fidelity tab names."
+            )
+        )
 
     def _update_basemap_warning(self) -> None:
         """Warn under the basemap when OpenStreetMap will fail its recipients.
@@ -1378,6 +1418,7 @@ class MainDialog(QDialog):
         value = self.terrain_combo.currentData()
         self.state.terrain = value if isinstance(value, str) else "none"
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         self._fidelity_is_stale = True
 
     def _update_terrain_warning(self) -> None:

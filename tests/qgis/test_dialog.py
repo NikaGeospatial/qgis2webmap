@@ -557,6 +557,84 @@ class TestPanelSizes:
             dialog.close()
 
 
+class TestBasemapSwitcherCheckbox:
+    """The Map tab's "Let readers switch basemap", beside the basemap choice."""
+
+    def test_the_choice_round_trips_and_starts_off(self, project) -> None:
+        assert load_state(project).basemap_switcher is False
+        save_state(project, DialogState(basemap="positron", basemap_switcher=True))
+        state = load_state(project)
+        assert state.basemap_switcher is True
+        assert state.to_export_settings().basemap_switcher is True
+
+    def test_it_is_offered_only_where_the_map_can_switch(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            check = dialog.basemap_switcher_check
+            assert check.text() == "Let readers switch basemap"
+            assert not check.isChecked()
+            # No basemap: nothing to switch from.
+            assert not check.isEnabled()
+            assert check.toolTip() == "Choose a basemap first."
+            dialog.basemap_combo.setCurrentIndex(
+                dialog.basemap_combo.findData("positron")
+            )
+            assert check.isEnabled()
+            check.setChecked(True)
+            assert dialog.state.to_export_settings().basemap_switcher is True
+            # Relief replaces the basemap, so there is nothing to switch.
+            dialog.terrain_combo.setCurrentIndex(
+                dialog.terrain_combo.findData("terrarium")
+            )
+            assert not check.isEnabled()
+            assert "ground surface" in check.toolTip()
+            dialog.terrain_combo.setCurrentIndex(dialog.terrain_combo.findData("none"))
+            assert check.isEnabled() and check.isChecked()
+        finally:
+            dialog.close()
+
+    def test_switching_type_redraws_the_hosts_without_a_read(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """A Folder's switcher offers OpenStreetMap; a file's does not, so its
+        Basemap row stops naming openstreetmap.org - redrawn, not re-read."""
+        dialog = TestFidelityStrip()._dialog(project, make_memory_layer)
+        try:
+            dialog.basemap_combo.setCurrentIndex(
+                dialog.basemap_combo.findData("positron")
+            )
+            dialog.basemap_switcher_check.setChecked(True)
+            dialog.mode_buttons[OutputMode.FOLDER].click()
+            export, report = dialog._read_current_project(None)
+            signature = dialog.state.data_snapshot()
+            dialog._cached_export, dialog._cached_report = export, report
+            dialog._cached_signature = signature
+            dialog._show_fidelity(report, signature)
+
+            def basemap_rows() -> list[str]:
+                summary = dialog._fidelity_summary
+                return [
+                    row.detail
+                    for g in summary.groups
+                    for row in g.rows
+                    if "basemap tiles" in row.detail
+                ]
+
+            (row,) = basemap_rows()
+            assert "openstreetmap.org" in row and "carto.com" in row
+            reads: list[str] = []
+            dialog._start_job = lambda *a, **k: reads.append("read")
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
+            assert not dialog._fidelity_is_stale
+            (row,) = basemap_rows()
+            assert "openstreetmap.org" not in row and "carto.com" in row
+            assert reads == []
+        finally:
+            dialog.close()
+
+
 class TestShortWindows:
     """A short window scrolls a tab of stacked cards; it never crushes them."""
 

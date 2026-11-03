@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -356,8 +357,10 @@ def settings_network_hosts(settings: ExportSettings) -> tuple[str, ...]:
     projected map draws no basemap or terrain, a preset the runtime does not
     know is replaced by none, and while terrain is on the runtime swaps the
     basemap for its raster twin, so a vector basemap is not fetched at all.
-    This is the same set of hosts `basemap_note` and `terrain_note` name to the
-    author, so the dependency scan and the Fidelity report cannot disagree.
+    A basemap switcher adds the host of every basemap it offers, since a
+    reader can pick any of them. This is the same set of hosts `basemap_note`
+    and `terrain_note` name to the author, so the dependency scan and the
+    Fidelity report cannot disagree.
 
     Telemetry is left out on purpose: the runtime's anonymous usage report is
     not something the map needs to draw, so it is no dependency, and the map
@@ -372,8 +375,37 @@ def settings_network_hosts(settings: ExportSettings) -> tuple[str, ...]:
         hosts.append("unpkg.com")
         return tuple(dict.fromkeys(hosts))
     if settings.basemap in BASEMAP_PRESETS and settings.basemap != BASEMAP:
-        return (BASEMAP_HOSTS[settings.basemap],)
+        offered = switcher_basemaps(settings) or (settings.basemap,)
+        return tuple(dict.fromkeys(BASEMAP_HOSTS[preset] for preset in offered))
     return ()
+
+
+def switcher_basemaps(settings: ExportSettings) -> tuple[str, ...]:
+    """The basemaps the map's basemap switcher offers, or `()` for none.
+
+    Only on a map that has a basemap to switch from, is not projected (a
+    projected map draws none) and has no relief (which replaces the basemap
+    with a draped picture of it, so switching would not show). It offers the
+    keyless presets in `BASEMAP_PRESETS` order, the chosen one included, less
+    OpenStreetMap in the output types opened from a file, whose readers its
+    servers refuse (`OSM_FILE_NOTE`) - unless it is the chosen one, which the
+    author was already warned about and the switcher has to be able to show.
+    """
+    if not settings.basemap_switcher or settings.map_crs is not None:
+        return ()
+    if settings.basemap not in BASEMAP_PRESETS or settings.basemap == BASEMAP:
+        return ()
+    if settings.terrain != "none" and settings.terrain in TERRAIN_PRESETS:
+        return ()
+    return tuple(
+        preset
+        for preset in BASEMAP_PRESETS
+        if preset != BASEMAP
+        and (
+            preset == settings.basemap
+            or not osm_from_file(preset, settings.output_mode)
+        )
+    )
 
 
 # The output types a recipient opens straight from disk. OpenStreetMap's tile
@@ -398,19 +430,64 @@ def osm_from_file(basemap: str, mode: OutputMode) -> bool:
     return basemap == "osm" and mode in FILE_OPENED_MODES
 
 
-def basemap_note(basemap: str) -> str | None:
+def basemap_note(basemap: str, offered: Sequence[str] = ()) -> str | None:
     """What choosing this basemap costs the recipient, in plain terms.
 
-    `None` when there is nothing to say, which is the default case.
+    `offered` is what a basemap switcher offers (`switcher_basemaps`), whose
+    hosts a reader's browser contacts too when they switch. `None` when there
+    is nothing to say, which is the default case.
     """
     if not basemap or basemap == "none":
         return None
     host = BASEMAP_HOSTS.get(basemap, "a third-party tile server")
+    others = [
+        other
+        for other in dict.fromkeys(BASEMAP_HOSTS[preset] for preset in offered)
+        if other != host
+    ]
+    if not offered:
+        switch = ""
+    elif others:
+        switch = (
+            " Its basemap switcher lets readers change it, and switching can "
+            f"also contact {_or_list(others)}."
+        )
+    else:
+        switch = (
+            " Its basemap switcher lets readers change it, to basemaps from "
+            "the same server."
+        )
     return (
         f"The map loads basemap tiles from {host} every time it is opened. "
         "It will not work offline, and each recipient's browser will contact "
-        f"{host} directly. The exported file itself is no larger."
+        f"{host} directly.{switch} The exported file itself is no larger."
     )
+
+
+def _or_list(items: Sequence[str]) -> str:
+    """`a`, `a or b`, `a, b or c`."""
+    if len(items) <= 1:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} or {items[-1]}"
+
+
+def basemap_notes(settings: ExportSettings) -> tuple[str, ...]:
+    """The Fidelity report's Basemap rows for `settings`, in order.
+
+    OpenStreetMap from a file earns `OSM_FILE_NOTE` in place of the general
+    note; with a switcher the general note follows it, because it is the one
+    that names the other servers the switcher can reach.
+    """
+    offered = switcher_basemaps(settings)
+    notes: list[str] = []
+    if osm_from_file(settings.basemap, settings.output_mode):
+        notes.append(OSM_FILE_NOTE)
+        if not offered:
+            return tuple(notes)
+    note = basemap_note(settings.basemap, offered)
+    if note is not None:
+        notes.append(note)
+    return tuple(notes)
 
 
 def escape_attr(value: str) -> str:
@@ -1770,6 +1847,8 @@ def _popup_behavior(
 WIDGET_POSITIONS = {
     "legend": "top-right",
     "layer-switcher": "top-left",
+    # Under the layer switcher: the other list of what the map shows.
+    "basemap-switcher": "top-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
@@ -2104,6 +2183,15 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         widgets.append(
             f'{indent}<om-widget type="layer-switcher" '
             f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'
+        )
+    basemaps = switcher_basemaps(settings)
+    if basemaps:
+        # The runtime's own panel, one radio button per basemap under its own
+        # name, the map's current one ticked.
+        widgets.append(
+            f'{indent}<om-widget type="basemap-switcher" '
+            f'options="{" ".join(basemaps)}" '
+            f'position="{WIDGET_POSITIONS["basemap-switcher"]}"></om-widget>'
         )
     if settings.show_measure:
         widgets.append(

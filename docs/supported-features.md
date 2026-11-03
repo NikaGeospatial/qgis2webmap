@@ -550,3 +550,12 @@ prohibits bulk downloading and offline use of its tiles.
 
 The Fidelity tab names the provider you are depending on whenever a basemap is
 set.
+
+**Readers can switch basemap** if you tick *Let readers switch basemap* under
+the basemap. The map then carries a Basemap panel listing every basemap above,
+the one you chose ticked, and switching to another fetches that one's tiles
+from its own provider - so the Fidelity tab names every provider the panel can
+reach. A Standalone HTML or Share ZIP map leaves OpenStreetMap out of the list,
+since its servers refuse maps opened from a file (unless it is the basemap you
+chose). Not with relief, which drapes the basemap's imagery over the terrain
+instead of showing the basemap.

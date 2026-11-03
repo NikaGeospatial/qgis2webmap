@@ -24,6 +24,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
   the zoom controls, bottom left, and is not drawn in a cartograph's
   interactive frames.
+- **Let readers switch basemap**, a new switch under the basemap on the Map
+  tab, off by default: the map carries a Basemap panel, top left under the
+  layer switcher, listing the keyless basemaps with the map's own ticked. In a
+  Standalone HTML or Share ZIP map it leaves out OpenStreetMap, whose servers
+  refuse maps opened from a file. The Fidelity tab and the export's list of
+  network dependencies name every provider the panel can reach. Not available
+  with no basemap or with a ground surface.
 - **A width and a height for the legend and the layer switcher**, beside
   their switches on the Appearance tab: 140 to 600 pixels wide and 100 to
   1000 tall, and never bigger than the map, so the page does not scroll; on a
