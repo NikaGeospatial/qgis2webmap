@@ -249,3 +249,11 @@ class TestTheLists:
         assert not has_unkeyable_expression(
             _as_layer_xml(expression), lambda: {"q2w_keyed"}
         )
+
+    def test_layer_xml_declaring_an_entity_is_unkeyable(self) -> None:
+        """QGIS never writes one, so it is refused before parsing - and a layer
+        whose XML cannot be read is never reused from the cache."""
+        xml = _as_layer_xml('upper("name")')
+        assert not has_unkeyable_expression(xml, set)
+        crafted = '<!DOCTYPE maplayer [<!ENTITY a "x">]>' + xml
+        assert has_unkeyable_expression(crafted, set)
