@@ -297,6 +297,19 @@ stay empty in a map opened from a file and in **Preview in browser**, which
 serves the map from your own computer over `http://`, but draw once the map is
 published over `https://`, such as on NIKA hosting or GitHub Pages.
 
+### A raster read over the web (a COG) is empty in the map
+
+The rest of the map draws, but the raster stays blank. The map reads the parts
+of the file it draws straight from its server, from the reader's browser, so
+the server must allow web pages to read it (`Access-Control-Allow-Origin`,
+`*` for a map opened from a file) and to ask for parts of it (Range requests:
+`Access-Control-Allow-Headers: Range` and
+`Access-Control-Expose-Headers: Content-Range`). The browser's developer tools
+(Console) show the refused request; only the file's host can allow access. A
+file on `http://` is also blocked inside a map served over `https://`. If you
+cannot change the server, save a local copy (right-click the layer,
+**Export > Save As...**) and add the file instead: it is carried inside the map.
+
 ### Basemap tiles do not load for the recipient
 
 The tiles come from the provider's servers on every open, so the recipient needs
