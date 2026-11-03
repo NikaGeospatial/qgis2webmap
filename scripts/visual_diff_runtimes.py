@@ -465,7 +465,10 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page(viewport=VIEWPORT)
+        # Spelled out so the literal is checked as Playwright's `ViewportSize`.
+        page = browser.new_page(
+            viewport={"width": VIEWPORT["width"], "height": VIEWPORT["height"]}
+        )
         print(f"rendering {len(scenes())} scenes on {args.old.name} ...")
         old_shots = render(args.old, args.out / "old", page)
         print(f"rendering {len(scenes())} scenes on {args.new.name} ...")

@@ -87,7 +87,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-11-03
 
 ### Added
 - **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
