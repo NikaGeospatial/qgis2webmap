@@ -2,8 +2,9 @@
 
 Same rule as `export_project.py`: **not a second implementation**. It calls
 `core/cartograph_export.export_layout_to_cartograph`, the function the
-dialog's autosave runs in two halves, and owns only the translation from
-Processing parameters to that call's arguments.
+dialog's autosave runs in two halves, with the dialog's choices saved for the
+layout, and owns only the translation from Processing parameters to that
+call's arguments.
 
 **No threading.** A cartograph build reads, hides and renders the print
 layout's own items, which must happen on the GUI thread (see the
@@ -35,8 +36,10 @@ from ..core.cartograph_export import export_layout_to_cartograph
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.layout_reader import default_mode_for_map
 from ..core.license_policy import default_policy
+from ..core.print_settings import PrintSettings
 from ..core.settings import (
     DEFAULT_STATIC_DPI,
+    load_state,
     resolve_license_key,
 )
 from ..core.translatable import N_
@@ -96,6 +99,12 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             "unrotated map of vector layers or image tiles) and image "
             "otherwise; 'Frames' overrides that for every map on the "
             "layout.\n\n"
+            "The choices saved for the layout in Web → QGIS2WebMap by NIKA - "
+            "each map's frame and resolution, the Layers section's popup and "
+            "label choices, Print settings and the page's attribution - are "
+            "used here too. 'Frames' and the resolution set here replace every "
+            "map's saved choice; this window always sends them, while a script "
+            "or qgis_process run that leaves them out keeps the saved ones.\n\n"
             "Anything that cannot be translated exactly is reported in the log. "
             "If an item is Blocked (for example a second page, which is not "
             "exported), the export stops unless 'Export even if some items are "
@@ -127,7 +136,7 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString(
                 self.TITLE,
-                tr("Title (blank uses the project title)"),
+                tr("Title (blank uses the layout's title, then the project title)"),
                 optional=True,
             )
         )
@@ -159,8 +168,25 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
             self.parameterAsString(parameters, self.TITLE, context) or ""
         ).strip() or None
         dpi = self.parameterAsInt(parameters, self.DPI, context)
-        choice = FRAME_MODES[self.parameterAsEnum(parameters, self.FRAMES, context)][0]
-        frame_modes = _frame_modes(layout, choice)
+
+        # The dialog's choices for this layout, saved in the project, so a run
+        # builds what the dialog's Save does. `FRAMES` and `DPI`, when passed,
+        # replace every frame's saved choice; left out, the saved ones stand.
+        state = load_state(project)
+        saved = state.frame_choices(layout.name())
+        if parameters.get(self.FRAMES) is not None:
+            choice = FRAME_MODES[
+                self.parameterAsEnum(parameters, self.FRAMES, context)
+            ][0]
+            frame_modes = _frame_modes(layout, choice)
+        else:
+            frame_modes = {item_id: choice.mode for item_id, choice in saved.items()}
+        frame_dpis = (
+            {}
+            if parameters.get(self.DPI) is not None
+            else {item_id: choice.dpi for item_id, choice in saved.items()}
+        )
+        print_settings = PrintSettings.saved(state.cartograph_print.get(layout.name()))
 
         from ..packaging.runtime_manager import default_provider
 
@@ -185,13 +211,20 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
                 runtime,
                 report,
                 frame_modes=frame_modes,
+                frame_dpis=frame_dpis,
                 static_dpi=dpi,
+                # The saved Print settings' resolution, as the dialog's Save
+                # uses; with none, each frame keeps its own.
+                export_dpi=print_settings.dpi if print_settings else None,
                 title_override=title,
                 # Same key resolution as the web-map algorithm: environment,
                 # then whatever the dialog stored on this computer.
                 writer=OnlyMapWriter(
                     license_policy=default_policy(resolve_license_key())
                 ),
+                layer_settings=state.layers,
+                page=state.page_choice(layout.name()),
+                print_settings=print_settings,
             )
         except ValueError as exc:
             raise QgsProcessingException(str(exc)) from exc

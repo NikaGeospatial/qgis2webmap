@@ -30,8 +30,8 @@ from __future__ import annotations
 import json
 import re
 import traceback
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     QgsExpressionContextUtils,
@@ -56,6 +56,10 @@ from ..qt_compat import QUndoCommand
 from .layout_reader import TEXT_KIND_PROPERTY, _is_north_arrow
 from .page_style import parse_color
 from .page_theme import PageTheme, readable, theme_colours
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .cartograph_ir import CartographSpec
+    from .settings import PageChoice
 
 TITLE_VARIABLE = "project_title"
 #: The theme the layout wears now (a custom property on the layout).
@@ -449,6 +453,28 @@ def adopt_theme(layout: Any, theme_id: str) -> None:
 
 def current_theme(layout: Any) -> str:
     return str(layout.customProperty(THEME_PROPERTY, "default") or "default")
+
+
+def apply_page_choice(
+    spec: CartographSpec, page: PageChoice, layout: Any | None
+) -> CartographSpec:
+    """The Cartograph tab's title, attribution and theme on the page root.
+
+    `page` is what the dialog saved for the layout; the layout itself, while
+    it exists, gives the title and theme, so the web page says what the
+    preview and the PDF say. The dialog's builds and the Processing algorithm
+    both take the page from here.
+    """
+    if layout is not None and not sip.isdeleted(layout):
+        page = replace(
+            page, title=title_state(layout).value, theme=current_theme(layout)
+        )
+    return replace(
+        spec,
+        theme=page.theme or None,
+        title=page.title or spec.title,
+        attribution=page.attribution or spec.attribution,
+    )
 
 
 def _origin(layout: Any) -> dict[str, Style]:

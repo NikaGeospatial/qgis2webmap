@@ -70,6 +70,7 @@ from ...core.fidelity_summary import (
 from ...core.layout_identity import existing_key, layout_key
 from ...core.page_settings import (
     adopt_theme,
+    apply_page_choice,
     apply_theme,
     apply_theme_quietly,
     attribution_state,
@@ -1617,19 +1618,7 @@ class CartographController:
     ) -> CartographSpec:
         """The Cartograph tab's title, attribution and theme on the page root,
         for the layout called `name`."""
-        page = self.state.page_choice(name)
-        if layout is not None and not sip.isdeleted(layout):
-            # The layout is the one source: the web page says what the preview
-            # and the PDF say.
-            page = dataclasses.replace(
-                page, title=title_state(layout).value, theme=current_theme(layout)
-            )
-        return dataclasses.replace(
-            spec,
-            theme=page.theme or None,
-            title=page.title or spec.title,
-            attribution=page.attribution or spec.attribution,
-        )
+        return apply_page_choice(spec, self.state.page_choice(name), layout)
 
     def update_window_title(self) -> None:
         """The dialog's title names the cartograph file, per issue #3 S1."""
@@ -3455,15 +3444,11 @@ class CartographController:
     # ---- Print settings ----------------------------------------------------
 
     def _print_settings(self, name: str | None = None) -> PrintSettings | None:
-        text = self.state.cartograph_print.get(
-            self.state.cartograph_layout if name is None else name
+        return PrintSettings.saved(
+            self.state.cartograph_print.get(
+                self.state.cartograph_layout if name is None else name
+            )
         )
-        if not text:
-            return None
-        try:
-            return PrintSettings.from_json(text)
-        except ValueError:
-            return None
 
     def _layout_page_mm(self) -> tuple[float, float]:
         from qgis.core import QgsLayoutMeasurementConverter, QgsUnitTypes

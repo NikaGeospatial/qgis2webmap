@@ -79,7 +79,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   clustering and point names, the map name, the basemap and the rest of the
   Appearance tab - where it used to export every layer with the defaults. A
   title or map control passed to the algorithm still replaces the saved one,
-  and a project never opened in the dialog exports as before.
+  and a project never opened in the dialog exports as before. *Export print
+  layout to cartograph (Beta)* likewise uses the layout's saved Map frames
+  choices and resolutions, the Layers section's popup and label choices,
+  Print settings and Browser appearance fields; *Frames* and *Image frame
+  resolution*, when passed, replace every map's saved choice.
 
 ### Fixed
 - Labels on multi-part features land where QGIS draws them

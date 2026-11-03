@@ -156,6 +156,8 @@ from .legend_box_sync import apply_legend_changes
 from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
 from .map_services import is_image_tile_template
+from .page_settings import apply_page_choice
+from .print_settings import PrintSettings, apply_to_spec
 from .project_reader import (
     PendingProject,
     finish_project,
@@ -170,7 +172,7 @@ from .runtime_legend_fit import (
     fit_frame_legend_boxes,
     with_change_applied,
 )
-from .settings import LayerSettings
+from .settings import LayerSettings, PageChoice
 from .zoom_range import EQUATOR_METRES, WORLD_PIXELS_AT_ZOOM_0
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -1077,10 +1079,16 @@ def export_layout_to_cartograph(
     title_override: str | None = None,
     writer: OnlyMapWriter | None = None,
     layer_settings: Mapping[str, LayerSettings] | None = None,
+    page: PageChoice | None = None,
+    print_settings: PrintSettings | None = None,
 ) -> str:
     """Read `layout` and render it to a standalone cartograph HTML document,
     all on the calling thread -- which must be the GUI thread (see the module
-    docstring). `writer` as for `finish_cartograph_full`."""
+    docstring). `writer` as for `finish_cartograph_full`.
+
+    `page` and `print_settings` are the dialog's saved Cartograph tab fields
+    and Print settings for the layout, put on the page as the dialog's builds
+    put them; `title_override` still wins over the page's title."""
     prepared = prepare_cartograph(
         layout,
         project,
@@ -1092,6 +1100,13 @@ def export_layout_to_cartograph(
         export_dpi=export_dpi,
         title_override=title_override,
     )
+    if page is not None:
+        spec = apply_page_choice(prepared.spec, page, layout)
+        if title_override is not None:
+            spec = replace(spec, title=title_override)
+        prepared = replace(prepared, spec=spec)
+    if print_settings is not None:
+        prepared = replace(prepared, spec=apply_to_spec(prepared.spec, print_settings))
     prepared = prepare_live_reads(
         prepared, project, report, layer_settings=layer_settings
     )
