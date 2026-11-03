@@ -2744,11 +2744,11 @@ class MainDialog(QDialog):
         times = QLabel("\N{MULTIPLICATION SIGN}", page)
         row = QHBoxLayout()
         row.addWidget(check)
-        row.addStretch(1)
         for widget in (width, times, height):
             row.addWidget(widget)
             widget.setVisible(check.isChecked())
             check.toggled.connect(widget.setVisible)
+        row.addStretch(1)
         self.widget_sizes[key] = (width, height)
         return row
 
