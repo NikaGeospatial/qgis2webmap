@@ -454,13 +454,17 @@ class RepeatedLabels:
     """What repeating a layer's line labels came to.
 
     `neighbours` pairs the indexes of label points that follow each other along
-    one line, which `declutter` keeps from overlapping. `lines_capped` counts
+    one line, which `declutter` keeps from overlapping, and `extras` is the
+    indexes of every repeat but the one nearest each line's middle, which
+    `declutter` leaves out of the share of labels that must have room: they
+    are held to that pairwise instead. `lines_capped` counts
     the lines `MAX_LABELS_PER_LINE` spread wider, and `spread` is how many
     times the repeat distance was widened to keep the layer within
     `MAX_LABELS_PER_LAYER` (1 when it was not).
     """
 
     neighbours: tuple[tuple[int, int], ...] = ()
+    extras: frozenset[int] = frozenset()
     lines_capped: int = 0
     spread: float = 1.0
 
@@ -565,6 +569,7 @@ def build_label_collection_noting_repeats(
 
     features: list[dict[str, Any]] = []
     neighbours: list[tuple[int, int]] = []
+    extras: set[int] = set()
     capped_lines = 0
     for text, points, lines, width in labels:
         features.extend(_label_point(point, text) for point in points)
@@ -578,13 +583,15 @@ def build_label_collection_noting_repeats(
             neighbours.extend(
                 (index, index + 1) for index in range(first, len(features) - 1)
             )
+            extras.update(range(first, len(features)))
+            extras.discard(first + len(distances) // 2)
 
     if not features:
         return None, RepeatedLabels()
 
     return (
         {"type": "FeatureCollection", "features": features},
-        RepeatedLabels(tuple(neighbours), capped_lines, spread),
+        RepeatedLabels(tuple(neighbours), frozenset(extras), capped_lines, spread),
     )
 
 

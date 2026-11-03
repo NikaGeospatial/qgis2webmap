@@ -30,6 +30,7 @@ from .label_points import (
     RepeatedLabels,
     build_label_collection_noting_repeats,
 )
+from .zoom_range import WORLD_PIXELS_AT_ZOOM_0
 
 # A layer this small reads fine unclustered at any zoom.
 CLUSTER_MIN_POINTS = 100
@@ -217,7 +218,11 @@ def repeats_have_room(
     of one name; the greedy share in `label_min_zoom` would let a few long
     lines do that among many short ones, so every pair is held to it. Two
     boxes `dx` and `dy` apart in the unit world stop overlapping once one of
-    those gaps, times `256 * 2**zoom`, covers the box's width or height.
+    those gaps, times the world's width in pixels, covers the box's width or
+    height. That width is the runtime's own, `512 * 2**zoom`
+    (`zoom_range.WORLD_PIXELS_AT_ZOOM_0`), not the 256 the greedy share
+    counts in: exact here rather than a zoom cautious, so a lone line's
+    repeats have room at the view the map opens on.
     """
     zoom = 0
     for first, second in neighbours:
@@ -232,7 +237,7 @@ def repeats_have_room(
         ]
         if not gaps:
             return MAX_ZOOM
-        needed = math.ceil(math.log2(min(gaps) / 256.0))
+        needed = math.ceil(math.log2(min(gaps) / WORLD_PIXELS_AT_ZOOM_0))
         if needed >= MAX_ZOOM:
             return MAX_ZOOM
         zoom = max(zoom, needed)
@@ -317,7 +322,8 @@ def declutter_noting_stacks(
     Labels of a clustered layer wait until bubbles stop merging separate
     sites: a count bubble over several places wearing one place's name would
     be wrong. A stack at one spot never splits, and does not hold them back.
-    Labels repeated along a line wait until the repeats stop overlapping.
+    Labels repeated along a line wait until the repeats stop overlapping; the
+    share of labels that must have room counts each line once.
 
     A label limit at or below the layer's own minimum zoom changes nothing on
     the map, so it is left out rather than reported.
@@ -372,7 +378,14 @@ def declutter_noting_stacks(
                 )
                 for f in collection["features"]
             ]
-            labels = label_min_zoom(placed, font_px)
+            labels = label_min_zoom(
+                [
+                    label
+                    for index, label in enumerate(placed)
+                    if index not in repeated.extras
+                ],
+                font_px,
+            )
             room = repeats_have_room(placed, repeated.neighbours, font_px)
             if room is not None:
                 labels = max(labels or 0, room)

@@ -13,6 +13,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from nika_onlymap_exporter.core import declutter
@@ -239,6 +241,9 @@ class TestNeighbours:
         )
         assert _xs(built) == [1.0, 3.0, 5.0, 7.0, 9.0, 1.0, 3.0]
         assert repeated.neighbours == ((0, 1), (1, 2), (2, 3), (3, 4), (5, 6))
+        # Each line's label nearest its middle is the one the greedy share
+        # counts; the rest are held to their neighbours.
+        assert repeated.extras == {0, 1, 3, 4, 5}
         assert {f["properties"][LABEL_PROPERTY] for f in built["features"]} == {"X"}
 
 
@@ -268,11 +273,11 @@ class TestRepeatsWaitForRoom:
 
     def test_the_zoom_is_where_neighbours_stop_overlapping(self) -> None:
         # "Main" at 12 px is 4 * 0.6 * 12 + 4 = 32.8 px wide; two labels a
-        # degree apart on the equator are 1/360 of the world apart, so they
-        # clear each other once 256 * 2**zoom / 360 >= 32.8: zoom 6.
+        # degree apart on the equator are 1/360 of the runtime's 512 * 2**zoom
+        # pixel world apart, so they clear each other from zoom 5.
         labels = [(0.0, 0.0, "Main"), (1.0, 0.0, "Main")]
-        assert declutter.repeats_have_room(labels, [(0, 1)], 12.0) == 6
-        assert 256 * 2**6 / 360 >= 32.8 > 256 * 2**5 / 360
+        assert declutter.repeats_have_room(labels, [(0, 1)], 12.0) == 5
+        assert 512 * 2**5 / 360 >= 32.8 > 512 * 2**4 / 360
 
     def test_a_few_long_lines_cannot_smear_inside_the_fit_share(self) -> None:
         """255 short lines spread over the world and one long one whose
@@ -301,6 +306,35 @@ class TestRepeatsWaitForRoom:
         room = declutter.repeats_have_room(placed, repeated.neighbours, 12.0)
         assert room is not None and room > (without.label_min_zoom or 0)
         assert layer.label_min_zoom == room
+
+    def test_a_lone_roads_repeats_show_on_the_view_the_map_opens_on(self) -> None:
+        """A 10 km road at 50 degrees north, alone on its layer: the reader
+        fixes 250 px at the layer's reference view (its 10 km across 1000 px),
+        and the map opens on the road's span across 512 px
+        (`manifest_builder._zoom_for_extent`). Its labels must be there."""
+        span = 10_000 / (111_320 * math.cos(math.radians(50)))
+        per_pixel = 10.0 / math.cos(math.radians(50))  # Web Mercator metres
+        road = _line((0.0, 50.0), (span, 50.0), name="Main Road")
+        layer = ExportLayer(
+            layer_id="road",
+            name="Road",
+            geometry_kind=GeometryKind.LINE,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson=_collection(road),
+            renderer=RendererSpec(kind=RendererKind.SINGLE),
+            labeling=LabelingSpec(
+                enabled=True,
+                field_name="name",
+                font_size=13.3,
+                repeat=LineLabelRepeat(250 * per_pixel, per_pixel),
+            ),
+            popup=PopupSpec(enabled=False),
+        )
+        decluttered = declutter.declutter_layer(layer, default_font_px=12)
+        opening = math.log2(360.0 / span)
+        assert decluttered.label_min_zoom is not None
+        assert decluttered.label_min_zoom <= opening
 
     def test_unrepeated_layers_declutter_as_before(self) -> None:
         lines = [_line((i * 0.001, 0.0), (i * 0.001 + 0.0005, 0.0)) for i in range(50)]
