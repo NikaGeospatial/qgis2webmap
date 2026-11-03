@@ -85,6 +85,16 @@ Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data:
 Without it the markers do not appear and the rest of the map draws normally,
 which is easy to mistake for a data problem.
 
+A map with a WMS or WMTS layer also shows the legend picture that service
+draws, loaded from the service, so the policy has to allow images from its
+host too (here `https://maps.example.org`):
+
+```
+Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data: https://maps.example.org
+```
+
+Without it the legend lists the layer by name, with no picture.
+
 If your organisation cannot relax that policy, serve the map from its own page
 or subdomain with its own policy, and link or iframe it from the strict one.
 
