@@ -327,7 +327,9 @@
          A scrolling box clips what is drawn outside it, which is where the
          panel's shadow is, so the box wears the panel's own radius and shadow
          (the runtime's `.omni-panel` values, and `LEGEND_STYLES`'): a panel that
-         fits looks exactly as before. */
+         fits looks exactly as before. The scrollbar is hidden: the wheel, a
+         touch drag and the keyboard still scroll the panel, and a bar down the
+         side of a small panel read as clutter. */
       @media not print {
         [data-om-widget-slot="top-start"],
         [data-om-widget-slot="top-end"] {
@@ -339,6 +341,11 @@
           overscroll-behavior: contain;
           border-radius: 8px;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+          scrollbar-width: none;
+        }
+        [data-om-widget-slot="top-start"] > om-widget::-webkit-scrollbar,
+        [data-om-widget-slot="top-end"] > om-widget::-webkit-scrollbar {
+          display: none;
         }
       }
 
