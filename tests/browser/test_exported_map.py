@@ -1557,3 +1557,135 @@ class TestSizesOnTheGroundZoomWithTheMap:
         assert radii[high] / radii[low] == pytest.approx(
             2 ** (int(high) - int(low)), rel=0.04
         )
+
+
+@pytest.fixture(scope="module")
+def rule_based_map(tmp_path_factory):
+    """A map of squares drawn by a rule-based layer, and the colour QGIS draws
+    on top of each.
+
+    Built by `rule_based_fixture_builder.py` with real QGIS, since this tier's
+    interpreter has none; `QGIS_PYTHON` names QGIS's.
+    """
+    prebuilt = os.environ.get("RULE_BASED_FIXTURES_DIR")
+    if prebuilt:
+        expected = Path(prebuilt) / "expected.json"
+        if not expected.exists():
+            pytest.fail(f"RULE_BASED_FIXTURES_DIR has no expected.json: {prebuilt}")
+        return Path(prebuilt), json.loads(expected.read_text())
+    qgis_python = os.environ.get("QGIS_PYTHON")
+    if not qgis_python:
+        pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixture")
+    out_dir = tmp_path_factory.mktemp("rule-based")
+    builder = Path(__file__).resolve().parent / "rule_based_fixture_builder.py"
+    completed = subprocess.run(
+        [qgis_python, str(builder), str(out_dir)],
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    expected = out_dir / "expected.json"
+    assert expected.exists(), completed.stdout + completed.stderr
+    return out_dir, json.loads(expected.read_text())
+
+
+@pytest.fixture(scope="module")
+def served_rule_based_map(rule_based_map):
+    """The same map served over http from its folder, as a web host would."""
+    import functools
+    import threading
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    fixtures, expected = rule_based_map
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(fixtures))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/{expected['entry']}"
+    server.shutdown()
+    server.server_close()
+
+
+# The colour of the map's own snapshot at each `[lon, lat]`, as `#rrggbb`.
+COLOURS_AT = """
+async (points) => {
+  const el = document.querySelector('om-map');
+  const url = await el.snapshot();
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  // The snapshot may be at a device pixel ratio; `project` is in CSS pixels.
+  const ratio = img.width / el.getBoundingClientRect().width;
+  return points.map(([lon, lat]) => {
+    const [x, y] = el.project([lon, lat]);
+    const at = [Math.round(x * ratio), Math.round(y * ratio)];
+    const [r, g, b] = ctx.getImageData(at[0], at[1], 1, 1).data;
+    return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  });
+}
+"""
+
+# The legend widget's class rows under the layer, in its shadow root.
+LEGEND_ENTRIES = """
+() => {
+  const widget = document.querySelector('om-widget[type="legend"]');
+  const root = widget.shadowRoot || widget;
+  return [...root.querySelectorAll('.omni-legend-entry span:last-child')]
+    .map((span) => span.textContent.trim());
+}
+"""
+
+
+class TestARuleBasedLayerDrawsAsInQgis:
+    """Each square of a rule-based layer - nested rules, ELSE rules,
+    overlapping and switched-off ones - comes out in the colour QGIS draws on
+    top of it, measured from QGIS's own render of the same layer, and the
+    legend lists the rules by their labels."""
+
+    def _open(self, page, rule_based_map, served_rule_based_map, served: str):
+        fixtures, expected = rule_based_map
+        page.set_viewport_size({"width": 1000, "height": 600})
+        if served == "http":
+            page.goto(served_rule_based_map)
+            page.wait_for_function(
+                "() => customElements.get('om-map') !== undefined", timeout=30_000
+            )
+        else:
+            open_map(page, fixtures / expected["entry"])
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+        return expected
+
+    @pytest.mark.parametrize("served", ["file", "http"])
+    def test_every_square_has_the_colour_qgis_draws_on_top(
+        self, page, rule_based_map, served_rule_based_map, served
+    ) -> None:
+        expected = self._open(page, rule_based_map, served_rule_based_map, served)
+        squares = expected["squares"]
+        colours = page.evaluate(
+            COLOURS_AT, [[square["lon"], square["lat"]] for square in squares]
+        )
+        drawn_by_qgis = {s["colour"] for s in squares if s["colour"]}
+        for square, colour in zip(squares, colours, strict=True):
+            if square["colour"] is None:
+                # QGIS draws nothing there: no rule's colour may show.
+                assert colour not in drawn_by_qgis, (square, colour)
+            else:
+                assert colour == square["colour"], (square, colour)
+
+    def test_the_legend_lists_the_rules_by_their_labels(
+        self, page, rule_based_map, served_rule_based_map
+    ) -> None:
+        self._open(page, rule_based_map, served_rule_based_map, "file")
+        entries = page.evaluate(LEGEND_ENTRIES)
+        assert entries[:4] == ["Above 1", "Small x", "Other x", "Rest"]
