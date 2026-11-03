@@ -72,6 +72,7 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
+    QgsExpressionContext,
     QgsExpressionContextUtils,
     QgsFieldFormatter,
     QgsLayoutItemLegend,
@@ -922,6 +923,13 @@ def _qgis_values(tokens: Mapping[str, object]) -> Special:
             return True
         if isinstance(part, QgsFieldFormatter):
             add(("formatter", part.id()))
+            return True
+        if isinstance(part, QgsExpressionContext):
+            # A label expression's global, project and layer scopes
+            # (`layer_reader.LabelExpression`): the global and project
+            # variables are in the key (`_expression_variables`), and the
+            # layer's in its saved XML, part of the layer's token.
+            add(("expression-context", tuple(s.name() for s in part.scopes())))
             return True
         if isinstance(part, (QDateTime, QDate, QTime)):
             add((type(part).__name__, part.toString(Qt.DateFormat.ISODateWithMs)))

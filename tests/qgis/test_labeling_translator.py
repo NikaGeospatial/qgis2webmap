@@ -158,7 +158,8 @@ def _with_format(size: float, unit, buffer_size: float = 0.0, buffer_unit=None):
 
 
 class TestFieldExpressions:
-    """A label typed into the expression box as just a field is that field."""
+    """A label typed into the expression box as just a field is that field;
+    any other expression is worked out per feature at export."""
 
     def _expression_layer(self, expression: str):
         return labelled_layer(fieldName=expression, isExpression=True)
@@ -188,9 +189,24 @@ class TestFieldExpressions:
             '"no_such_field"',
         ],
     )
-    def test_anything_else_stays_unsupported(self, qgis_app, expression) -> None:
+    def test_anything_else_is_worked_out_at_export(self, qgis_app, expression) -> None:
+        """Into a property of its own, which the labels then read as a field
+        (`tests/qgis/test_expression_labels.py` checks the text)."""
         report = FidelityReportBuilder()
         spec = translate_labeling(self._expression_layer(expression), report)
+        assert spec.enabled is True
+        assert spec.expression == expression
+        assert spec.field_name == "label_text"
+        assert spec.character_set is None
+        assert not any(
+            item.status is FidelityStatus.UNSUPPORTED for item in report.items
+        )
+
+    def test_an_expression_that_does_not_parse_stays_unsupported(
+        self, qgis_app
+    ) -> None:
+        report = FidelityReportBuilder()
+        spec = translate_labeling(self._expression_layer('upper("name"'), report)
         assert spec.enabled is False
         assert any(item.status is FidelityStatus.UNSUPPORTED for item in report.items)
 

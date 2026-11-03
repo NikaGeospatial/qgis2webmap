@@ -123,8 +123,10 @@ def _read_every_field(layer, monkeypatch, **kwargs):
     """The read as it was: no field list, so every column is fetched."""
     real = layer_reader.snapshot_features
 
-    def every_field(layer, clip_extent, display_names=None, keep=None, scans=None):
-        return real(layer, clip_extent, display_names, scans=scans)
+    def every_field(
+        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+    ):
+        return real(layer, clip_extent, display_names, scans=scans, label=label)
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)
@@ -225,6 +227,33 @@ def test_the_source_is_asked_for_those_fields_only(wide_layer) -> None:
     assert len(expected) < len(wide_layer.fields()) - 30
 
 
+def test_an_expression_label_reads_its_fields_and_writes_only_its_text(
+    wide_layer, monkeypatch
+) -> None:
+    """Its fields are read, hidden or not, so it works out as it would from
+    every field; only the text it gives is written."""
+    settings = qgis_core.QgsPalLayerSettings()
+    settings.fieldName = '"secret" || \' / \' || "wide3"'
+    settings.isExpression = True
+    wide_layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+
+    expected = _read_every_field(wide_layer, monkeypatch)
+    found = _read(wide_layer)
+    assert found == expected
+    assert json.dumps(found.geojson) == json.dumps(expected.geojson)
+
+    pending = layer_reader.prepare_layer(
+        wide_layer, FidelityReportBuilder(), field_modes=FIELD_MODES
+    )
+    assert isinstance(pending, layer_reader.PendingLayer)
+    fields = wide_layer.fields()
+    read = {fields.at(index).name() for index in pending.features.attribute_indexes}
+    assert {"secret", "wide3"} <= read
+    properties = found.geojson["features"][0]["properties"]
+    assert properties["label_text"].startswith("secret ")
+    assert "secret" not in properties and "wide3" not in properties
+
+
 def test_a_layer_keeping_no_field_reads_and_writes_none(qgis_app, monkeypatch) -> None:
     """Nothing drawn from a field and no popup: no field is kept, so none is
     read - and the exporter, for which no list means every field, writes none."""
@@ -301,8 +330,10 @@ def test_joins_value_relations_and_unsaved_edits_read_alike(
 
     real = layer_reader.snapshot_features
 
-    def every_field(layer, clip_extent, display_names=None, keep=None, scans=None):
-        return real(layer, clip_extent, display_names, scans=scans)
+    def every_field(
+        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+    ):
+        return real(layer, clip_extent, display_names, scans=scans, label=label)
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)
@@ -407,8 +438,10 @@ def test_unsaved_edits_through_joins_and_expression_fields_read_alike(
 
     real = layer_reader.snapshot_features
 
-    def every_field(layer, clip_extent, display_names=None, keep=None, scans=None):
-        return real(layer, clip_extent, display_names, scans=scans)
+    def every_field(
+        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+    ):
+        return real(layer, clip_extent, display_names, scans=scans, label=label)
 
     try:
         pending = layer_reader.prepare_layer(
@@ -532,8 +565,10 @@ def test_an_atlas_on_fields_left_out_of_the_export(
 
     real = layer_reader.snapshot_features
 
-    def every_field(layer, clip_extent, display_names=None, keep=None, scans=None):
-        return real(layer, clip_extent, display_names, scans=scans)
+    def every_field(
+        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+    ):
+        return real(layer, clip_extent, display_names, scans=scans, label=label)
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)

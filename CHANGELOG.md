@@ -22,6 +22,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   an export with no QGIS map view to read the time from (Processing, a
   cartograph frame), a layer matched to the closest or whole range rather
   than the start or end of it, and a layer with a reference time.
+- **Labels from an expression** (concatenations, `CASE`, `format_number` and
+  any other QGIS expression) export, on web maps and in cartograph live
+  frames: the text is worked out for each feature at export, as QGIS works
+  it out, and saved with the map, so it shows the data as it was then. Only
+  the text is saved, not the fields the expression reads. Variables QGIS sets
+  only while drawing (`@map_scale`, atlas variables) have no value at export,
+  and the Fidelity tab says so. These layers used to export with no labels.
 
 ### Fixed
 - Labels on multi-part features land where QGIS draws them

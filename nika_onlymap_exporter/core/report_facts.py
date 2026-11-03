@@ -214,6 +214,8 @@ def _vector_facts(layer: ExportLayer) -> list[Fact]:
     labeling = layer.labeling
     if not labeling.enabled:
         facts.append(Fact("Labels", "No labels"))
+    elif labeling.expression:
+        facts.append(Fact("Labels", "Labels from an expression"))
     elif labeling.field_name:
         facts.append(Fact("Labels", f"Labels from '{labeling.field_name}'"))
     else:

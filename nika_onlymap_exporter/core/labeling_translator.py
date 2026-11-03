@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
     QgsExpression,
+    QgsExpressionContext,
+    QgsExpressionContextUtils,
     QgsExpressionNodeColumnRef,
     QgsFeatureRequest,
     QgsRuleBasedLabeling,
@@ -89,8 +91,9 @@ def _expression_field(expression: str, layer: QgsVectorLayer) -> str | None:
     """The field an expression is nothing but, `None` for anything else.
 
     Layers labelled from the expression box often hold only `"name"`, which
-    labels exactly as the field does. A function, a condition or a constant
-    needs a value per feature that the web map has no way to compute.
+    labels exactly as the field does, and is kept as that field. A function, a
+    condition or a constant is worked out per feature at export instead, since
+    the web map has no way to compute it.
     """
     parsed = QgsExpression(expression)
     if parsed.hasParserError():
@@ -100,6 +103,87 @@ def _expression_field(expression: str, layer: QgsVectorLayer) -> str | None:
         return None
     name = str(root.name())
     return name if name in layer.fields().names() else None
+
+
+#: The property a label worked out from an expression is written under in the
+#: exported data, with `_` added while a field of the layer has the name.
+EXPRESSION_LABEL_PROPERTY = "label_text"
+
+# The variables QGIS sets from the feature being evaluated, which the context
+# a label expression is worked out in has only once it is given the feature.
+_FEATURE_VARIABLES = frozenset({"feature", "id", "geometry"})
+
+# Functions whose answer is the moment or chance, not the feature.
+_MOMENT_FUNCTIONS = frozenset({"now", "rand", "randf", "uuid"})
+
+
+def label_expression_context(layer: QgsVectorLayer) -> QgsExpressionContext:
+    """The context QGIS works a label expression out in, short of a map:
+    the global, project and layer scopes. **GUI thread only.**"""
+    return QgsExpressionContext(
+        QgsExpressionContextUtils.globalProjectLayerScopes(layer)
+    )
+
+
+def expression_label_property(layer: QgsVectorLayer) -> str:
+    """A property name for expression label text that no field of `layer` has.
+
+    The popup lists the layer's fields, so a name none of them has is never
+    shown in it; the popup's own renames step around it, as around any field
+    the map draws with.
+    """
+    taken = set(layer.fields().names())
+    name = EXPRESSION_LABEL_PROPERTY
+    while name in taken:
+        name += "_"
+    return name
+
+
+def _report_expression_label(
+    parsed: QgsExpression,
+    layer: QgsVectorLayer,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> None:
+    """Say that the labels are worked out at export, and what of the
+    expression that cannot be."""
+    report.approximated(
+        subject,
+        "Labels come from an expression, which is worked out for each feature "
+        "when the map is exported and saved with it. The labels show the data "
+        "as it was then, and do not change if it changes afterwards.",
+        layer_id,
+    )
+    context = label_expression_context(layer)
+    unset = sorted(
+        name
+        for name in parsed.referencedVariables()
+        if name not in _FEATURE_VARIABLES and not context.hasVariable(name)
+    )
+    if unset:
+        names = ", ".join(f"@{name}" for name in unset)
+        report.approximated(
+            subject,
+            f"The label expression reads {names}, which QGIS sets only while "
+            "it draws a map, a layout or an atlas. There is none when the "
+            "labels are worked out at export, so the expression sees no value "
+            "there and the labels can differ from QGIS's.",
+            layer_id,
+        )
+    moments = sorted(
+        name.lower()
+        for name in parsed.referencedFunctions()
+        if name.lower() in _MOMENT_FUNCTIONS
+    )
+    if moments:
+        names = ", ".join(f"{name}()" for name in moments)
+        report.approximated(
+            subject,
+            f"The label expression uses {names}, so the labels keep the value "
+            "it gave at the moment of export.",
+            layer_id,
+        )
 
 
 def _single_rule_settings(
@@ -202,24 +286,33 @@ def translate_labeling(
         return LabelingSpec(enabled=False)
 
     field_name = settings.fieldName or None
+    expression = None
     if settings.isExpression and field_name:
-        field_name = _expression_field(field_name, layer)
-        if field_name is not None:
+        plain = _expression_field(field_name, layer)
+        if plain is not None:
             report.preserved(
                 subject,
-                f"The label expression is just the field '{field_name}', "
+                f"The label expression is just the field '{plain}', "
                 "translated as that field.",
                 layer_id,
             )
-    if settings.isExpression and field_name is None:
-        report.unsupported(
-            subject,
-            "Labels come from an expression rather than a single field. The "
-            "exporter translates field-based labels only, so labels will not "
-            "appear.",
-            layer_id,
-        )
-        return LabelingSpec(enabled=False)
+            field_name = plain
+        else:
+            # Anything else is worked out per feature as the features are read
+            # (`layer_reader.LabelExpression`), into a property of its own.
+            parsed = QgsExpression(field_name)
+            if parsed.hasParserError():
+                report.unsupported(
+                    subject,
+                    "The label expression cannot be read "
+                    f"({parsed.parserErrorString()}), so no labels appear, as "
+                    "in QGIS.",
+                    layer_id,
+                )
+                return LabelingSpec(enabled=False)
+            _report_expression_label(parsed, layer, report, subject, layer_id)
+            expression = field_name
+            field_name = expression_label_property(layer)
 
     if not field_name:
         return LabelingSpec(enabled=False)
@@ -251,8 +344,13 @@ def translate_labeling(
     # those labels would render blank: present, positioned, invisible.
     capitalization = read_capitalization(text_format)
 
+    # Expression labels have no field to scan: their text exists only once the
+    # features are read, and the page collects their characters from it then
+    # (`manifest_builder.build_label_element`).
     character_set = (
-        collect_character_set(layer, field_name, capitalization)
+        None
+        if expression is not None
+        else collect_character_set(layer, field_name, capitalization)
         if scans is None
         else scans.character_set(
             layer, field_name, capitalization, collect_character_set
@@ -306,6 +404,7 @@ def translate_labeling(
     return LabelingSpec(
         enabled=True,
         field_name=field_name,
+        expression=expression,
         font_family=font.family() if font else None,
         font_size=font_size,
         color=_color_from_qcolor(text_format.color()),
