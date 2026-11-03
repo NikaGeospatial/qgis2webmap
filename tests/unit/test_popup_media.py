@@ -343,7 +343,9 @@ class TestAttachPopupMedia:
         off = _layer(
             [PopupFieldSpec("photo", attachment=PICTURE)], [{"photo": "a.jpg"}], "off"
         )
-        off = dataclasses.replace(off, popup=PopupSpec(enabled=False))
+        off = dataclasses.replace(
+            off, popup=dataclasses.replace(off.popup, enabled=False)
+        )
         attach_popup_media([hidden, off], FidelityReportBuilder(), loader)
         assert loader.asked == []
 
