@@ -1134,7 +1134,9 @@ def _is_key_parameter(name: str) -> bool:
     return name.lower().replace("-", "").replace("_", "") in _KEY_PARAMETERS
 
 
-def _live_dependency(url: str, name: str) -> tuple[str, AssetDependency]:
+def _live_dependency(
+    url: str, name: str, what: str = "tile address"
+) -> tuple[str, AssetDependency]:
     """`url` without any access key, and the dependency a live layer on it is.
 
     A keyed address blocks the export: the key would travel with the map.
@@ -1159,7 +1161,7 @@ def _live_dependency(url: str, name: str) -> tuple[str, AssetDependency]:
         identifier=host if keyed else url,
         disposition=AssetDisposition.BLOCKING if keyed else AssetDisposition.REMOTE,
         note=(
-            f"The tile address for '{name}' on {host} carries an access key, and "
+            f"The {what} for '{name}' on {host} carries an access key, and "
             "a live layer travels with its address - so the key would be written "
             "into the map for anyone who receives it to copy. Use a keyless "
             "address, or untick the layer on the Layers tab."
@@ -1775,8 +1777,7 @@ def read_raster(
     # Before anything that would treat it as a file: a raster QGIS reads over
     # the web is never downloaded, so it is refused with one row saying why.
     if _is_network_path(path):
-        _refuse_remote_raster(layer, path, report)
-        return None
+        return _read_remote_raster(layer, path, report, group_path, visible)
 
     band_count = int(provider.bandCount())
     rescale_min, rescale_max = raster_rescale(layer)
@@ -1853,23 +1854,7 @@ def read_raster(
             layer_id,
         )
     elif bands is not None:
-        report.preserved(
-            f"Colours of '{name}'",
-            f"The layer is a {band_count}-band colour composite, so its own "
-            f"pixels are the colours you see. Bands {', '.join(str(b) for b in bands)} "
-            "are drawn in red, green and blue order as they are in QGIS.",
-            layer_id,
-        )
-        if not raster.has_rescale:
-            report.approximated(
-                f"Contrast of '{name}'",
-                "A composite has one contrast stretch per band and the map "
-                "takes a single pair, so the per-band stretch you set in QGIS "
-                "is not carried and the map stretches each band across its own "
-                "range. The image may look lighter or darker than it does in "
-                "QGIS.",
-                layer_id,
-            )
+        _report_composite_colours(report, raster, name, layer_id)
     else:
         # `raster_style` could not serialise the layer's styling. Rare, and it
         # means the map draws the values rather than the picture - which is the
@@ -1965,6 +1950,173 @@ def _refuse_remote_raster(
         f"This raster is read {where}, not from a file on this computer, and "
         "the export never downloads a raster from the network. " + _SAVE_A_LOCAL_COPY,
         layer.id(),
+    )
+
+
+def _report_composite_colours(
+    report: FidelityReportBuilder, raster: RasterSpec, name: str, layer_id: str
+) -> None:
+    """The colour rows of an RGB composite, which the map draws from its bands."""
+    bands = raster.bands or ()
+    report.preserved(
+        f"Colours of '{name}'",
+        f"The layer is a {raster.band_count}-band colour composite, so its own "
+        f"pixels are the colours you see. Bands {', '.join(str(b) for b in bands)} "
+        "are drawn in red, green and blue order as they are in QGIS.",
+        layer_id,
+    )
+    if not raster.has_rescale:
+        report.approximated(
+            f"Contrast of '{name}'",
+            "A composite has one contrast stretch per band and the map "
+            "takes a single pair, so the per-band stretch you set in QGIS "
+            "is not carried and the map stretches each band across its own "
+            "range. The image may look lighter or darker than it does in "
+            "QGIS.",
+            layer_id,
+        )
+
+
+# The compressions the web map was seen to decode from a remote COG in a
+# browser. OnlyMap 0.13.3 fails on LZW, ZSTD and LERC tiles in its decode
+# worker and the layer stays empty, so a remote COG using anything else is
+# refused. A file is converted on export, so this applies only to the web.
+_LIVE_COG_COMPRESSIONS = frozenset({"NONE", "DEFLATE", "JPEG", "WEBP"})
+
+
+def _remote_compression(url: str) -> str | None:
+    """The compression of the remote raster QGIS has open at `url`, upper case
+    and "NONE" for none, or `None` when it cannot be read.
+
+    Reopening reads the header GDAL already fetched when QGIS opened the layer,
+    from GDAL's own cache: no pixel is read, and with the header still cached
+    nothing is fetched at all (`test_remote_raster` counts the requests).
+    Always through `/vsicurl/`, as QGIS opens a bare address: GDAL given the
+    bare address would download the whole file.
+    """
+    from ..packaging.raster_cog import CogError, probe_raster
+
+    try:
+        probe = probe_raster("/vsicurl/" + url)
+    except CogError:
+        return None
+    if probe.open_error is not None:
+        return None
+    return (probe.compression or "NONE").upper()
+
+
+def _read_remote_raster(
+    layer: QgsRasterLayer,
+    path: str,
+    report: FidelityReportBuilder,
+    group_path: tuple[str, ...],
+    visible: bool,
+) -> ExportLayer | None:
+    """A raster QGIS reads over the web, as a live `COGLayer` or refused.
+
+    Never downloads the file: what is checked is what QGIS already knows
+    about the open layer, and the compression in the header GDAL fetched when
+    it was opened. The runtime draws the file's own pixels and does not
+    reproject, so only an RGB composite in Web Mercator that QGIS draws as the
+    file holds it is exported; a style QGIS draws from the values is baked
+    for a file, and baking would mean downloading the whole raster.
+    """
+    from urllib.parse import urlsplit
+
+    url = remote_raster_url(path)
+    if url is None:
+        _refuse_remote_raster(layer, path, report)
+        return None
+
+    layer_id = layer.id()
+    name = layer.name()
+    subject = f"Layer '{name}'"
+    provider = layer.dataProvider()
+    host = urlsplit(url).netloc.rpartition("@")[2]
+    bands, style_qml = raster_style(layer)
+    if style_qml is not None or bands is None:
+        report.unsupported(
+            subject,
+            f"This raster is read from {host} over the web, and QGIS draws its "
+            "colours from its values (a colour ramp, palette, grey stretch, "
+            "hillshade, transparency or colour adjustment), which the web map "
+            "can only show by rendering the whole file, and the export never "
+            "downloads a raster from the web. Only a 3-band colour composite "
+            "QGIS draws as the file holds it is exported as a live layer. "
+            + _SAVE_A_LOCAL_COPY,
+            layer_id,
+        )
+        return None
+
+    crs = layer.crs()
+    if crs.authid() != "EPSG:3857" or crs != provider.crs():
+        shown = crs.authid() or crs.description() or "an unknown CRS"
+        report.unsupported(
+            subject,
+            f"This raster is read from {host} over the web in {shown}, and the "
+            "web map draws a raster it reads over the web only in Web Mercator "
+            "(EPSG:3857). A file is reprojected on export, but the export never "
+            "downloads a raster from the web. " + _SAVE_A_LOCAL_COPY,
+            layer_id,
+        )
+        return None
+
+    compression = _remote_compression(url)
+    if compression is not None and compression not in _LIVE_COG_COMPRESSIONS:
+        report.unsupported(
+            subject,
+            f"This raster is read from {host} over the web and is "
+            f"{compression}-compressed, which the web map cannot decode yet, so "
+            "the layer would stay empty. A file is converted on export, but the "
+            "export never downloads a raster from the web. " + _SAVE_A_LOCAL_COPY,
+            layer_id,
+        )
+        return None
+
+    # A keyed address blocks the export, as a live tile layer's does.
+    url, dependency = _live_dependency(url, name, "file address")
+    raster = RasterSpec(
+        path=url,
+        src=url,
+        remote=True,
+        band_count=int(provider.bandCount()),
+        source_crs=crs.authid(),
+        extent=raster_extent(layer),
+        pixel_width=int(provider.xSize()),
+        pixel_height=int(provider.ySize()),
+        resolution_x=float(layer.rasterUnitsPerPixelX()),
+        resolution_y=float(layer.rasterUnitsPerPixelY()),
+        nodata=raster_nodata(layer),
+        bands=bands,
+    )
+    report.approximated(
+        subject,
+        f"Exported as a live Cloud Optimized GeoTIFF: the web map reads the "
+        f"parts of the file it draws from {host}, and nothing is carried inside "
+        "the map. The server must allow web pages to read the file (CORS) and "
+        "to ask for parts of it (Range requests), or this layer stays empty "
+        "while the rest of the map draws; a refused request shows in the "
+        "browser's developer tools.",
+        layer_id,
+    )
+    _report_composite_colours(report, raster, name, layer_id)
+    return ExportLayer(
+        layer_id=layer_id,
+        name=name,
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.SERVICE,
+        visible=visible,
+        opacity=float(layer.opacity()),
+        scale_range=scale_range(layer),
+        renderer=RendererSpec(
+            kind=RendererKind.UNSUPPORTED,
+            unsupported_reason="Raster layers carry no vector symbology.",
+        ),
+        popup=PopupSpec(enabled=False),
+        raster=raster,
+        attribution=read_attribution(layer),
+        group_path=group_path,
+        dependencies=(dependency,),
     )
 
 

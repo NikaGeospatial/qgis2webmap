@@ -799,6 +799,10 @@ class RasterSpec:
     #: band; empty when the file's own values stand. Applied by the bake, which
     #: is why a layer with any is baked even when it is an RGB composite.
     nodata_rules: tuple[NoDataRule, ...] = ()
+    #: Read over the web (`src` is its https address) rather than from a file:
+    #: nothing is converted or carried, and packaging leaves it alone. Set by
+    #: `layer_reader` for a remote COG it can draw from the file's own pixels.
+    remote: bool = False
 
     @property
     def reference(self) -> str:
@@ -820,6 +824,7 @@ class RasterSpec:
             "sourceCrs": self.source_crs,
             "crsAssigned": self.assigned_crs_wkt is not None,
             "nodataRules": len(self.nodata_rules),
+            "remote": self.remote,
             "bands": list(self.bands) if self.bands else None,
             # The QML itself is thousands of bytes of XML and would swamp a
             # snapshot meant to be read in a diff. Whether the colours are baked

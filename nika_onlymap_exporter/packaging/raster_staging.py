@@ -240,7 +240,12 @@ def stage_rasters(
     100 units to a total of `100 * n`, so a two-raster export moves 0-200 rather
     than twice from 0 to 100. `should_cancel` reaches GDAL unchanged.
     """
-    rasters = [layer for layer in project.layers if layer.raster is not None]
+    # A remote raster is read over the web by the map itself: nothing to stage.
+    rasters = [
+        layer
+        for layer in project.layers
+        if layer.raster is not None and not layer.raster.remote
+    ]
     if not rasters:
         return RasterStagingResult(project=project)
 
@@ -293,7 +298,7 @@ def stage_rasters(
     position = 0
 
     for layer in project.layers:
-        if layer.raster is None:
+        if layer.raster is None or layer.raster.remote:
             layers.append(layer)
             continue
 

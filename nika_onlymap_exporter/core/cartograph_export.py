@@ -1747,7 +1747,11 @@ def _embed_rasters(
     the frame; the rows `stage_rasters` writes say why. Without this a
     `<om-layer type="COGLayer">` would name the file on the author's machine.
     """
-    rasters = [layer for layer in export_project.layers if layer.raster is not None]
+    rasters = [
+        layer
+        for layer in export_project.layers
+        if layer.raster is not None and not layer.raster.remote
+    ]
     if not rasters:
         return export_project, ()
     key = _raster_embed_key(rasters)
@@ -1778,7 +1782,9 @@ def _embed_rasters(
         if layer.raster is not None and layer.layer_id in staged.rasters
         else layer
         for layer in export_project.layers
-        if layer.raster is None or layer.layer_id in staged.rasters
+        if layer.raster is None
+        or layer.raster.remote
+        or layer.layer_id in staged.rasters
     )
     return replace(export_project, layers=layers), staged.embedded
 

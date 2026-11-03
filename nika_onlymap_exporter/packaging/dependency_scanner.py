@@ -114,7 +114,7 @@ def raster_bytes(project: ExportProject) -> int:
 def _raster_layer_bytes(layer: ExportLayer) -> int:
     """One raster's source size; see `raster_bytes`. 0 when it cannot be read."""
     raster = layer.raster
-    if raster is None:
+    if raster is None or raster.remote:
         return 0
     recorded = next(
         (
@@ -201,7 +201,9 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
         return None
 
     names = [
-        layer.name for layer in project.exportable_layers if layer.raster is not None
+        layer.name
+        for layer in project.exportable_layers
+        if layer.raster is not None and not layer.raster.remote
     ]
     if not names:
         return None
@@ -334,7 +336,7 @@ def scan(
         raster_reason = standalone_raster_reason(project)
         if raster_reason is not None:
             for layer in project.exportable_layers:
-                if layer.raster is not None:
+                if layer.raster is not None and not layer.raster.remote:
                     report.approximated(
                         f"Layer '{layer.name}'", raster_reason, layer.layer_id
                     )

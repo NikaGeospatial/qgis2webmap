@@ -122,7 +122,9 @@ def zip_open_instruction(project: ExportProject) -> str:
     separate from `build_artifact` so the branch is testable without writing an
     artifact.
     """
-    if not any(layer.raster is not None for layer in project.layers):
+    if not any(
+        layer.raster is not None and not layer.raster.remote for layer in project.layers
+    ):
         return "Extract this zip, then open index.html."
     return (
         "Extract this zip, then serve the folder over HTTP -- upload it to a "
