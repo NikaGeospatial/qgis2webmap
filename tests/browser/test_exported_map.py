@@ -580,9 +580,8 @@ class TestTexturedTerrain:
     which is the exported file's whole contract with the runtime.
     """
 
-    def test_the_texture_and_offset_reach_the_elements(
-        self, page, textured_terrain_map
-    ) -> None:
+    @staticmethod
+    def _offline(page) -> None:
         page.route(
             "**/*",
             lambda route: (
@@ -599,6 +598,11 @@ class TestTexturedTerrain:
                 else route.continue_()
             ),
         )
+
+    def test_the_texture_and_offset_reach_the_elements(
+        self, page, textured_terrain_map
+    ) -> None:
+        self._offline(page)
         open_map(page, textured_terrain_map)
         require_webgl(page)
         get = "() => document.querySelector('om-map').getAttribute('%s')"
@@ -612,6 +616,53 @@ class TestTexturedTerrain:
                 "() => document.querySelector('om-layer').getAttribute('terrain')"
             )
             is None
+        )
+
+    def test_the_terrain_attribution_clears_a_wrapped_credit_chip(
+        self, page, textured_terrain_map
+    ) -> None:
+        """The relief's attribution sits wholly above the credit chip.
+
+        Relief credits "Terrain: Mapzen, NOAA ETOPO1, USGS & others" in the
+        runtime's `bottom-end` slot, and our chip carries the drape's imagery
+        credit, which wraps to two lines at the chip's max-width. The slot used
+        to be lifted by a height assumed from the markup - one line, once the
+        badge hides the OnlyMap row - so the attribution sat on the chip's top
+        border. It is lifted by the chip's measured height now.
+
+        Measured on the attribution itself, not the slot, and only once it has
+        text and the badge has shortened the chip: an empty control or a chip
+        still showing its OnlyMap row would pass without testing anything.
+        """
+        page.set_viewport_size({"width": 1280, "height": 800})
+        self._offline(page)
+        open_map(page, textured_terrain_map)
+        page.wait_for_selector("[data-om-badge]", timeout=30_000)
+        attribution = page.locator(
+            '[data-om-widget-slot="bottom-end"] [data-om-mandated-chrome="attribution"]'
+        )
+        page.wait_for_function(
+            """() => {
+                const el = document.querySelector(
+                  '[data-om-mandated-chrome="attribution"]');
+                return !!el && el.getBoundingClientRect().height > 0;
+            }""",
+            timeout=30_000,
+        )
+        next_frames(page)
+
+        credit = page.locator(".om-credit-data").bounding_box()
+        assert credit is not None
+        assert credit["height"] > 24, "the imagery credit no longer wraps"
+        assert not page.locator(".om-credit-row").is_visible()
+
+        chip = page.locator(".om-credit").bounding_box()
+        box = attribution.bounding_box()
+        assert chip is not None and box is not None
+        bottom = box["y"] + box["height"]
+        assert bottom <= chip["y"], (
+            f"the attribution reaches {bottom - chip['y']:.1f}px into the credit "
+            f"chip (attribution bottom {bottom:.1f}, chip top {chip['y']:.1f})"
         )
 
 

@@ -327,20 +327,40 @@
 
          The reservation has to clear the chip's *height*, and the chip grows
          upward from its anchor - so the value depends on how many lines it has.
-         `:has()` reads that off the markup rather than guessing: a data credit
-         is a second line. Measured in chromium at 12px/1.5: one line is a 36px
-         chip, two is 54px, and 8px of gap matches the runtime's own
-         `--om-widget-gap-y`.
+         `--om-credit-height` is that height as measured in the page (see the
+         script after the footer), because the line count cannot be read off the
+         markup: a data credit wraps at the chip's max-width - the imagery
+         credit of a relief map always does - and the chip, a line taller than
+         the markup said, reached into the attribution. 8px of gap matches the
+         runtime's own `--om-widget-gap-y`.
 
-         A very long attribution that wraps to a third line would reach into the
-         gap. Accepted rather than clipped: the data credit carries a licence
+         Without script, or until it has run, each rule falls back to the height
+         `:has()` reads off the markup, measured in chromium at 12px/1.5: one
+         line is a 36px chip, two is 54px, and a data credit is a second line.
+         Print keeps those fallbacks too - the chip is not in the corner there,
+         and a height measured on screen says nothing about the printed page.
+
+         The measured height only ever raises the slot above those fallbacks,
+         never lowers it: a chip holding just the OnlyMap row measures 33px, and
+         giving back those 3px would move an attribution that never overlapped.
+
+         A long data credit is never clipped to fit: it carries a licence
          obligation and must stay readable, and truncating it to protect a layout
-         is the wrong trade. */
+         is the wrong trade. Its height is reserved instead. */
+      @media not print {
+        :root {
+          --om-credit-height: var(--om-credit-measured);
+        }
+      }
       [data-om-widget-slot="bottom-end"] {
-        bottom: calc(12px + 36px + 8px) !important;
+        bottom: calc(
+          12px + max(var(--om-credit-height, 36px), 36px) + 8px
+        ) !important;
       }
       body:has(.om-credit-data) [data-om-widget-slot="bottom-end"] {
-        bottom: calc(12px + 54px + 8px) !important;
+        bottom: calc(
+          12px + max(var(--om-credit-height, 54px), 54px) + 8px
+        ) !important;
       }
 
       /* The same credit, twice, in opposite corners.
@@ -378,12 +398,14 @@
         display: none;
       }
       /* The chip's height follows what is left in it, so the slot above it has
-         to follow too - the offsets further up assume the OnlyMap row is there.
-         With the badge present the chip is one line of data credit, or nothing
-         at all. */
+         to follow too - the fallbacks further up assume the OnlyMap row is
+         there. With the badge present the chip is the data credit alone (one
+         line, unless it wraps), or nothing at all. */
       body:has([data-om-badge]):has(.om-credit-data)
         [data-om-widget-slot="bottom-end"] {
-        bottom: calc(12px + 36px + 8px) !important;
+        bottom: calc(
+          12px + max(var(--om-credit-height, 36px), 36px) + 8px
+        ) !important;
       }
       body:has([data-om-badge]):not(:has(.om-credit-data))
         [data-om-widget-slot="bottom-end"] {
@@ -455,6 +477,28 @@
           rel="noopener noreferrer"
         >NIKA</a></span>
     </footer>
+    <!--
+      Measures the credit chip for the attribution above it: the `bottom-end`
+      rule in the stylesheet reserves `--om-credit-height`. A ResizeObserver
+      rather than one reading, because the chip changes height after load - the
+      runtime's badge hides the OnlyMap row, a narrow window wraps the credit,
+      and a small screen expands the row on focus. A plain inline script, not a
+      module, so it runs as the parser reaches it and has measured before the
+      first paint; it needs no server, so file:// is the same. Without it the
+      stylesheet falls back to the heights it would assume anyway.
+    -->
+    <script>
+      (function () {
+        var chip = document.querySelector(".om-credit");
+        if (!chip || typeof ResizeObserver !== "function") return;
+        var root = document.documentElement.style;
+        new ResizeObserver(function () {
+          // Rounded up: a fractional height must not let the slot touch it.
+          var height = Math.ceil(chip.getBoundingClientRect().height);
+          root.setProperty("--om-credit-measured", height + "px");
+        }).observe(chip);
+      })();
+    </script>
 
 @PREVIEW_HOOK@
     <!--
