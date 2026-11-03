@@ -148,6 +148,7 @@
         "tests/qgis/test_attribute_representation.py",
         "tests/qgis/test_layer_reader.py",
         "tests/qgis/test_map_service_layers.py",
+        "tests/qgis/test_remote_raster.py",
         "tests/qgis/test_web_layer_sources.py",
         "tests/qgis/test_read_only_kept_fields.py",
         "tests/qgis/test_project_reader.py",

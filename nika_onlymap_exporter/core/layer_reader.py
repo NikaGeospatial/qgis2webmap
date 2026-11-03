@@ -1772,6 +1772,12 @@ def read_raster(
         )
         return None
 
+    # Before anything that would treat it as a file: a raster QGIS reads over
+    # the web is never downloaded, so it is refused with one row saying why.
+    if _is_network_path(path):
+        _refuse_remote_raster(layer, path, report)
+        return None
+
     band_count = int(provider.bandCount())
     rescale_min, rescale_max = raster_rescale(layer)
     bands, style_qml = raster_style(layer)
@@ -1896,6 +1902,69 @@ def read_raster(
         attribution=read_attribution(layer),
         group_path=group_path,
         dependencies=(dependency,),
+    )
+
+
+# GDAL's network file systems, and the bare addresses GDAL opens as /vsicurl/.
+_NETWORK_PREFIXES = (
+    "/vsicurl",
+    "/vsis3",
+    "/vsigs",
+    "/vsiaz",
+    "/vsiadls",
+    "/vsioss",
+    "/vsiswift",
+    "/vsihdfs",
+    "/vsiwebhdfs",
+    "http://",
+    "https://",
+    "ftp://",
+)
+
+
+def _is_network_path(path: str) -> bool:
+    """Whether GDAL reads `path` over the network rather than from a disk."""
+    lowered = path.lower()
+    return lowered.startswith(_NETWORK_PREFIXES) or "/vsicurl" in lowered
+
+
+def remote_raster_url(path: str) -> str | None:
+    """The http(s) address a web page can fetch for a raster GDAL reads as
+    `/vsicurl/https://...` or a bare `https://...`, or `None` for any other
+    source, including a cloud store or a file inside a remote archive."""
+    url = path[len("/vsicurl/") :] if path.startswith("/vsicurl/") else path
+    return url if url.lower().startswith(("http://", "https://")) else None
+
+
+_SAVE_A_LOCAL_COPY = (
+    "Save a local copy (right-click the layer, Export > Save As...) and add "
+    "the file instead, and it is carried inside the map. The layer is omitted "
+    "from the map."
+)
+
+
+def _refuse_remote_raster(
+    layer: QgsRasterLayer, path: str, report: FidelityReportBuilder
+) -> None:
+    """Refuse a raster QGIS reads over the web, without reading it.
+
+    The export carries a raster by converting the file, and never downloads
+    one from the web to do it. Drawing it live from its address is not done
+    yet, so the one outcome is a refusal that says how to export it.
+    """
+    from urllib.parse import urlsplit
+
+    url = remote_raster_url(path)
+    where = (
+        f"from {urlsplit(url).netloc} over the web"
+        if url
+        else (f"through GDAL from '{path}', a network location")
+    )
+    report.unsupported(
+        f"Layer '{layer.name()}'",
+        f"This raster is read {where}, not from a file on this computer, and "
+        "the export never downloads a raster from the network. " + _SAVE_A_LOCAL_COPY,
+        layer.id(),
     )
 
 

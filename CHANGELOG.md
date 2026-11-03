@@ -35,6 +35,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   request the token literally.
 
 ### Fixed
+- A raster QGIS reads over the web (a COG at `/vsicurl/https://...`, a bare
+  `https://` address, or a cloud store such as `/vsis3/`) is refused with one
+  Fidelity row saying to save a local copy (Export > Save As...), without
+  reading the file. It used to block the export as a missing file while also
+  listing it as exported as a Cloud Optimized GeoTIFF.
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
